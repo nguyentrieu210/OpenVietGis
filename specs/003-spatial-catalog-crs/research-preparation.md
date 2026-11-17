@@ -50,7 +50,7 @@ For every supported transformation record:
 - authority identifier or exact canonical definition, axis order and coordinate units;
 - datum and projection parameters, area of use, defined operation and any needed geodetic resources;
 - control pairs from an independent credible source, expected tolerance and acceptance evidence;
-- behavior for no matching operation/out-of-area, missing required transformation assets and incorrect metadata.
+- behavior for no matching operation/out-of-area, missing required transformation assets and demonstrably incorrect metadata. Explicitly declare axis ordering; reject known inconsistent fixtures or inputs, without claiming to identify mislabeled coordinates merely from plausible numeric values.
 - distinguish source declaration from physical storage and each response CRS. Preserve original source facts and do not select a storage CRS by roadmap alone.
 
 Storage strategy candidates for later ADR review if costly to reverse:
@@ -64,6 +64,7 @@ No winner is asserted here; planner must evaluate alongside R005 round-trip and 
 - Separate technical capability, lifecycle/availability, and actor permission. R004 can depend on read contract; do not advertise render or edit as shipped merely because a source is technically compatible.
 - Stable ordering, bounded page size, stale-revision behavior, null field semantics, explicit no-extent state, and safe non-disclosing errors.
 - Exact permission codes and roles must be reconciled with final R002 registry. Do not hardcode names or extend roles independently on R003 branch.
+- Catalog history must distinguish actor/action audit from actual changed-value evidence. Preserve safe old/new values, a metadata diff or an equivalent retrievable change representation with prior revision; exclude secrets and enforce resource scope.
 
 ## Exit gates
 

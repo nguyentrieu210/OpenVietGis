@@ -57,7 +57,7 @@ A GIS user inspects a finite, stable page of records from a Layer, including fea
 1. **Given** a readable Layer with more records than the page limit, **When** a user traverses the pages at a fixed source revision, **Then** each expected feature appears once and no unauthorized record appears.
 2. **Given** features contain known typed values and nulls, **When** they are read, **Then** the values retain their declared meanings and missing values are distinguishable from empty string and zero.
 3. **Given** source and requested read CRS differ and the transformation is supported, **When** the user reads transformed coordinates, **Then** the returned CRS and transformation identity are explicit, control-point tolerance is met and source coordinates are unchanged.
-4. **Given** an unsupported CRS, invalid axis order, unavailable transformation or changed source revision, **When** a read cannot be fulfilled reliably, **Then** the request fails with an actionable reason rather than returning mislabeled or silently inconsistent data.
+4. **Given** an unsupported or contradictory CRS declaration, a known violation of the declared axis convention, an unavailable transformation or a changed source revision, **When** a read cannot be fulfilled reliably, **Then** the request fails with an actionable reason rather than returning mislabeled or silently inconsistent data.
 
 ---
 
@@ -74,7 +74,7 @@ A Project member and manager can use their authorized catalog actions while anot
 1. **Given** an actor has read but not mutation authority, **When** they read authorized Layer metadata and try to register or retire a Layer, **Then** only the read succeeds.
 2. **Given** an actor cannot access another Project or Organization, **When** they request its source, Layer, feature, schema or extent by direct identifier or list, **Then** no protected identity, metadata, count or spatial extent is disclosed.
 3. **Given** a user's relevant access is revoked or a Project is no longer writable, **When** the user repeats the affected request, **Then** access is denied according to the governing Project and Organization lifecycle rules.
-4. **Given** an authorized actor changes Layer metadata, **When** the change commits, **Then** the actor, prior/current revision, affected resource, time and operation are recorded; a failed change leaves no partial resource or revision.
+4. **Given** an authorized actor changes Layer metadata, **When** the change commits, **Then** the actor, prior/current revision, affected resource, time, operation and actual changed values or equivalent safe change evidence are recorded; a failed change leaves no partial resource or revision.
 
 ---
 
@@ -96,7 +96,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 
 - Source CRS missing, unknown, ambiguous, contradictory or outside supported profile.
 - Empty source, invalid geometry, null geometry, null field, empty string, mixed geometry family or unsupported dimensions; never disguise unknown or unavailable metadata as a valid zero value.
-- Axis order confusion, meters versus degrees, geographic longitude range and extent wrap; unsupported cases must be reported explicitly.
+- Axis order confusion, meters versus degrees, geographic longitude range and extent wrap; known violations of declared coordinate conventions must be reported explicitly. Plausible values under more than one interpretation cannot reliably reveal mislabeled coordinates without independent evidence.
 - Duplicate display names are not identity collisions; a Layer/source reference uses stable identity, not a name.
 - A missing/stale/unreadable source or stale revision cannot be silently served as current.
 - Project moves between Workspaces may alter inherited authorization; they do not transfer Organization ownership.
@@ -125,12 +125,12 @@ A GIS professional can identify the exact supported coordinate reference definit
 
 #### CRS and spatial correctness
 
-- **FR-012**: A source and every coordinate-bearing read response MUST expose an unambiguous CRS identity, coordinate units and axis-order convention where applicable.
+- **FR-012**: A source and every coordinate-bearing read response MUST expose an unambiguous CRS identity, coordinate units and declared axis-order convention where applicable. Coordinate-bearing input MUST identify or follow the explicit convention of its declared profile; the system MUST NOT silently guess or swap axes.
 - **FR-013**: System MUST distinguish source CRS, stored CRS and response/display CRS, including cases where they coincide; R003 MUST NOT assign a missing CRS silently or overwrite coordinates as a side effect of reading.
 - **FR-014**: System MUST publish an explicit, finite supported CRS and transformation matrix: [NEEDS CLARIFICATION: Start with WGS84/Web Mercator plus explicitly chosen and validated VN-2000 profiles (recommended), or permit user-defined CRS parameters in R003 as well?]
 - **FR-015**: Supported transformations MUST identify the approved operation, applicability, units/axis order and declared tolerance; unknown or inadequate transformation accuracy MUST NOT be presented as validated.
 - **FR-016**: Supported CRS profiles MUST include Vietnam-first coverage, distinguishing datum, projection parameters and applicable region; a generic text label of VN-2000 alone MUST NOT satisfy an exact-CRS requirement.
-- **FR-017**: Missing, ambiguous or contradictory source CRS MUST prevent coordinate-dependent ready status until corrected through an explicit, attributable action; unsupported response CRS or transformation MUST fail explicitly.
+- **FR-017**: Missing, ambiguous or contradictory source CRS MUST prevent coordinate-dependent ready status until corrected through an explicit, attributable action; unsupported response CRS or transformation MUST fail explicitly. Known inconsistent declared axis, control-point or domain inputs MUST be rejected; plausible numeric values alone MUST NOT be treated as proof of a correctly labeled CRS or axis order.
 - **FR-018**: Each supported operation that changes coordinate values MUST have reproducible, independently sourced control-point verification; a round-trip through the same transformation is not sufficient by itself.
 - **FR-019**: Geometry metadata MUST distinguish empty, absent, invalid or unsupported geometry without silently changing the original feature.
 - **FR-020**: A reported extent MUST carry its own CRS and defined extent semantics; an empty dataset has no extent, not a fabricated bounding box.
@@ -152,7 +152,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 - **FR-030**: Cross-Organization references MUST be impossible and access MUST fail without disclosing whether protected identifiers exist; access within the same Organization MUST still obey Project grants.
 - **FR-031**: Current R002 lifecycle rules MUST govern reads/mutations of archived/deleted Projects, suspended Organizations and revoked actors; Workspace reassignment MUST NOT change Organization ownership.
 - **FR-032**: Human and supported machine actors MUST use the same permission semantics, subject to any credential ceiling and current access; hard-coded role-name shortcuts are prohibited.
-- **FR-033**: Material source registration, explicit CRS metadata corrections, schema changes when supported, Layer changes and retirements MUST have attributable, logically immutable change/revision evidence, including actor, time, operation, affected identifiers and prior/current revision information.
+- **FR-033**: Material source registration, explicit CRS metadata corrections, schema changes when supported, Layer changes and retirements MUST have attributable, logically immutable change/revision evidence, including actor, time, operation, affected identifiers, prior/current revision information and what actually changed: safe old/new values, a metadata diff or an equivalent retrievable change representation. Change evidence MUST omit secrets and must not disclose protected source data outside its authorized scope.
 - **FR-034**: A material mutation and its required revision evidence MUST complete consistently; interrupted or failed actions MUST leave no ready partial resource, orphan reference or successful change record.
 - **FR-035**: Competing changes based on a stale resource revision MUST fail with a clear conflict result unless a safe, explicitly specified mechanism preserves both changes.
 - **FR-036**: Users MUST receive a useful reason for unsupported, invalid, stale or unauthorized requests without disclosing another tenant's identifiers or protected data.
@@ -169,7 +169,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 - **Feature**: Identifiable source record with attributes and optional geometry, expressed with a declared CRS when coordinates are read.
 - **Schema/Extent Summary**: Field names/types/nullability, geometry families/dimensions, counts, extent and explicit unavailable/empty states.
 - **Capability**: Named supported operation, whose availability is distinct from current actor authority and resource status.
-- **Catalog Change/Revision**: Attributable history of meaningful resource changes, with prior/current revision and recoverable consistency.
+- **Catalog Change/Revision**: Attributable history of meaningful resource changes, with prior/current revision, safe changed-value evidence and recoverable consistency.
 
 ## Success Criteria *(mandatory)*
 
@@ -178,9 +178,9 @@ A GIS professional can identify the exact supported coordinate reference definit
 - **SC-001**: 100% of the chosen reference sources can be registered and inspected by an authorized user, with schema, count state, CRS and extent matching their independent expected metadata.
 - **SC-002**: At least one supported source can be represented by two distinct Layers without duplicating records; retiring either Layer leaves the other Layer and source accessible.
 - **SC-003**: For an unchanged reference dataset, paginated reads return 100% of expected feature identities exactly once; known attributes and null semantics match the reference.
-- **SC-004**: 100% of control points for each supported transformation meet the independently defined profile tolerance. Unknown, swapped-axis, contradictory or unvalidated CRS input must not falsely succeed.
+- **SC-004**: 100% of control points for each supported transformation meet the independently defined profile tolerance. All agreed negative fixtures with unknown, contradictory or unvalidated CRS declarations or demonstrable violations of the explicit axis convention (control-point mismatch or domain inconsistency) fail with an actionable reason. This criterion does not claim that plausible mislabeled coordinates can be identified from values alone.
 - **SC-005**: 100% of the agreed cross-tenant and cross-Project negative checks (list, detail, reference, feature, schema, extent and mutation; human and applicable machine actor) disclose no protected data and mutate no unauthorized resources.
-- **SC-006**: 100% of successful material catalog mutations retain expected actor, time, resource and prior/current revision; failed or stale operations leave no partial committed catalog state.
+- **SC-006**: 100% of successful material catalog mutations retain expected actor, time, resource, prior/current revision and inspectable safe evidence of the actual changed values; failed or stale operations leave no partial committed catalog state.
 - **SC-007**: On the agreed local reference environment, a catalog list/details read has p95 completion at most 1 second and a bounded 100-feature page has p95 completion at most 2 seconds under the proposed initial benchmark dataset (10,000 features across supported geometry families; profile to be finalized before planning). Measure after warm-up, with at least 100 operations and the same dataset/environment recorded.
 - **SC-008**: An independent R004 consumer can use catalog metadata and read a chosen feature from the reference data without needing physical storage details or unsupported operations.
 - **SC-009**: Restart and simulated interrupted registration checks preserve 100% of previously committed metadata/revisions and leave no ready partial registration.
