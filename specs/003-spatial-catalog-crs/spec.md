@@ -4,9 +4,17 @@
 
 **Created**: 2026-11-18
 
-**Status**: Draft — research/specify only; clarification and R002 acceptance required before implementation
+**Status**: Clarified draft — scope decisions accepted; research gates and R002 convergence required before plan/implementation
 
 **Input**: Parent roadmap: [ROADMAP.md, R003](../../ROADMAP.md#r003). Let authorized users register a spatial source, organize it into a reusable Layer within a Project, discover its schema, geometry and coordinate reference information, and read an explicitly supported reference dataset safely. Prepare the contract used by R004 Map Workspace and R005 Import & Export, without implementing either.
+
+## Clarifications
+
+### Session 2026-11-18
+
+- Q: Is the catalog Project-scoped or reusable across Projects in an Organization? → A: Project-scoped DataSource and Layer under explicit Organization ownership. Multiple Layers within one Project may share its source; cross-Project references and Organization-wide sharing are deferred.
+- Q: Which coordinate reference systems are supported in the first slice? → A: A finite explicit matrix consisting of WGS84, Web Mercator and a selected verified VN-2000 profile set. Unknown, unsupported or unvalidated systems and operations are rejected; arbitrary user-defined CRS parameters are deferred. Exact VN-2000 definitions, operations, applicable regions, independently sourced control points and tolerances remain research gates, not decisions made by this clarification.
+- Q: Which source registration mode is required before the import feature? → A: Register and read a pre-established platform-managed reference source populated by reproducible fixtures. Full file ingestion is R005; arbitrary database connections or external-source adapters are not part of R003.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -24,12 +32,13 @@ A GIS user working inside an authorized Project opens the catalog, registers an 
 2. **Given** a reference source has no reliable CRS, **When** registration is requested, **Then** the source cannot be reported ready for coordinate-dependent reads and the user receives an actionable reason; coordinates remain unchanged.
 3. **Given** the source is empty, **When** its metadata is requested, **Then** count is zero and extent is explicitly absent rather than a fabricated world extent.
 4. **Given** the supplied metadata conflicts with the actual geometry family, dimensions or CRS, **When** validation occurs, **Then** the catalog reports the mismatch and never silently coerces it.
+5. **Given** an arbitrary uploaded file or external database connection is offered for registration, **When** the user tries to use R003 registration, **Then** it is not accepted as a supported source; no file import or external-data credential is persisted.
 
 ---
 
 ### User Story 2 - Create and inspect a Layer (Priority: P1)
 
-A Project user creates a named Layer referencing a supported source and checks its independent identity, schema and available operations. The same source may be represented by multiple Layers within the authorized ownership boundary.
+A Project user creates a named Layer referencing a supported source and checks its independent identity, schema and available operations. The same source may be represented by multiple Layers within its owning Project; a different Project cannot reference that registered source.
 
 **Why this priority**: A Layer is a logical GIS work resource, not a synonym for a source, file, table, display engine or physical dataset.
 
@@ -37,10 +46,11 @@ A Project user creates a named Layer referencing a supported source and checks i
 
 **Acceptance Scenarios**:
 
-1. **Given** a ready source in the permitted scope, **When** an authorized user creates a Layer from it, **Then** the Layer has a stable identity, name, source reference, revision and explicit capability information.
+1. **Given** a ready source in the same Project, **When** an authorized user creates a Layer from it, **Then** the Layer has a stable identity, name, source reference, revision and explicit capability information.
 2. **Given** a source only supports read operations in R003, **When** its Layer is inspected, **Then** the available read operation is discoverable and unavailable operations such as edit, export and offline use are not falsely advertised.
-3. **Given** two Layers reference the same source within the selected ownership boundary, **When** one Layer is retired, **Then** the source and the other Layer remain intact.
+3. **Given** two Layers reference the same source within one Project, **When** one Layer is retired, **Then** the source and the other Layer remain intact.
 4. **Given** a Layer is referencing a ready source, **When** an authorized user lists Layer properties, **Then** source schema, CRS and availability remain distinguishable from Layer-specific metadata.
+5. **Given** an actor can manage two Projects in the same Organization, **When** they attempt to create a Layer in one Project referencing a registered source in the other, **Then** the reference is rejected and no cross-Project link is created.
 
 ---
 
@@ -89,7 +99,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 **Acceptance Scenarios**:
 
 1. **Given** two definitions share the VN-2000 datum but differ in projection details, **When** the user views the catalog metadata, **Then** the definitions remain distinguishable and neither is treated as a generic interchangeable VN-2000.
-2. **Given** a reference coordinate falls outside the validated transformation area or no accepted transformation exists, **When** the user requests a conversion, **Then** the system reports unsupported/unvalidated rather than silently approximating.
+2. **Given** a reference coordinate falls outside the validated transformation area, no accepted transformation exists or the caller supplies arbitrary user-defined CRS parameters, **When** the user requests a conversion, **Then** the system reports unsupported/unvalidated rather than silently approximating.
 3. **Given** independently sourced control points for a supported transformation, **When** the known coordinate pairs are compared, **Then** the error is within the declared profile-specific tolerance and the method and input evidence can be reproduced.
 
 ### Edge Cases
@@ -111,23 +121,23 @@ A GIS professional can identify the exact supported coordinate reference definit
 
 #### Scope and catalog semantics
 
-- **FR-001**: Authoritative ownership of each catalog resource MUST be explicit and linked to an Organization and its allowed resource scope.
-- **FR-002**: System MUST define the intended source ownership boundary: [NEEDS CLARIFICATION: Are source and Layer project-scoped initially (recommended), or are sources registered at Organization scope and reusable by multiple Projects with distinct sharing authority?]
+- **FR-001**: Authoritative ownership of each catalog resource MUST be explicit and linked to its Organization and owning Project.
+- **FR-002**: DataSource and Layer MUST be Project-scoped with explicit Organization ownership; references across Projects, including Projects in the same Organization, MUST be rejected. Organization-wide reusable source catalogs and separate source-sharing authority are out of R003 scope.
 - **FR-003**: Users with appropriate authority MUST be able to register, list, inspect and retire supported sources within the allowed scope.
 - **FR-004**: System MUST distinguish a DataSource, its optional original SourceAsset, a logical Layer and underlying feature data; source registration does not mean automatic import or an editable Layer.
 - **FR-005**: Each registered source MUST have a stable identifier, name, type, ownership, provenance, availability/validation state, revision and timestamps.
 - **FR-006**: Catalog metadata MUST expose available schema, geometry family/dimensions, feature count state, extent state, source CRS and actual readable coordinate CRS; unknown/unavailable values MUST be explicitly represented.
-- **FR-007**: The user MUST be able to register a supported reference source without a full file import workflow. [NEEDS CLARIFICATION: Limit R003 to pre-established, platform-managed reference sources (recommended), or include direct connection to an external spatial database this slice?]
+- **FR-007**: The user MUST be able to register and read supported pre-established, platform-managed reference sources populated by reproducible fixtures; registration does not ingest arbitrary uploaded files. Multi-format file import is R005; arbitrary external database connections, credentials and external-source adapters are out of R003 scope.
 - **FR-008**: System MUST validate source metadata against the reference data before marking it ready; invalid or inconsistent results MUST identify the reason and prevent unreliable operations.
 - **FR-009**: Authorized users MUST be able to create, list, inspect, rename and retire logical Layers without duplicating or mutating referenced feature data.
-- **FR-010**: System MUST permit more than one logical Layer referencing a single source within the selected allowed ownership boundary; retiring one Layer MUST NOT retire the source or another Layer.
+- **FR-010**: System MUST permit more than one logical Layer referencing a single source within the same owning Project; retiring one Layer MUST NOT retire the source or another Layer.
 - **FR-011**: A source MUST NOT be physically destroyed by a metadata/Layer retirement operation; retirement that would invalidate active Layers is either rejected with dependency guidance or governed by an explicit, approved later lifecycle workflow.
 
 #### CRS and spatial correctness
 
 - **FR-012**: A source and every coordinate-bearing read response MUST expose an unambiguous CRS identity, coordinate units and declared axis-order convention where applicable. Coordinate-bearing input MUST identify or follow the explicit convention of its declared profile; the system MUST NOT silently guess or swap axes.
 - **FR-013**: System MUST distinguish source CRS, stored CRS and response/display CRS, including cases where they coincide; R003 MUST NOT assign a missing CRS silently or overwrite coordinates as a side effect of reading.
-- **FR-014**: System MUST publish an explicit, finite supported CRS and transformation matrix: [NEEDS CLARIFICATION: Start with WGS84/Web Mercator plus explicitly chosen and validated VN-2000 profiles (recommended), or permit user-defined CRS parameters in R003 as well?]
+- **FR-014**: System MUST publish an explicit, finite supported CRS and transformation matrix covering documented WGS84 and Web Mercator definitions plus an explicitly selected and independently validated VN-2000 profile set. Unknown, unsupported or unvalidated definitions or operations MUST be rejected; arbitrary user-defined CRS parameters are out of scope. Exact VN-2000 definitions, applicable regions, transformation operations, independent control points and profile-specific tolerances MUST be finalized at the research gate before plan acceptance, without guessing from a geographic label.
 - **FR-015**: Supported transformations MUST identify the approved operation, applicability, units/axis order and declared tolerance; unknown or inadequate transformation accuracy MUST NOT be presented as validated.
 - **FR-016**: Supported CRS profiles MUST include Vietnam-first coverage, distinguishing datum, projection parameters and applicable region; a generic text label of VN-2000 alone MUST NOT satisfy an exact-CRS requirement.
 - **FR-017**: Missing, ambiguous or contradictory source CRS MUST prevent coordinate-dependent ready status until corrected through an explicit, attributable action; unsupported response CRS or transformation MUST fail explicitly. Known inconsistent declared axis, control-point or domain inputs MUST be rejected; plausible numeric values alone MUST NOT be treated as proof of a correctly labeled CRS or axis order.
@@ -149,7 +159,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 #### Ownership, permissions, revisions and recovery
 
 - **FR-029**: Every protected action MUST resolve current actor authority and the explicitly selected Organization and Project/resource relationship; authorization MUST enforce the selected resource scope consistently for catalog, detail, schema, extent, capability and feature reads.
-- **FR-030**: Cross-Organization references MUST be impossible and access MUST fail without disclosing whether protected identifiers exist; access within the same Organization MUST still obey Project grants.
+- **FR-030**: Cross-Organization references MUST be impossible and access MUST fail without disclosing whether protected identifiers exist; access within the same Organization MUST still obey Project grants; a Layer cannot reference a DataSource from another Project even if the actor has authority in both.
 - **FR-031**: Current R002 lifecycle rules MUST govern reads/mutations of archived/deleted Projects, suspended Organizations and revoked actors; Workspace reassignment MUST NOT change Organization ownership.
 - **FR-032**: Human and supported machine actors MUST use the same permission semantics, subject to any credential ceiling and current access; hard-coded role-name shortcuts are prohibited.
 - **FR-033**: Material source registration, explicit CRS metadata corrections, schema changes when supported, Layer changes and retirements MUST have attributable, logically immutable change/revision evidence, including actor, time, operation, affected identifiers, prior/current revision information and what actually changed: safe old/new values, a metadata diff or an equivalent retrievable change representation. Change evidence MUST omit secrets and must not disclose protected source data outside its authorized scope.
@@ -161,9 +171,9 @@ A GIS professional can identify the exact supported coordinate reference definit
 
 ### Key Entities
 
-- **DataSource**: Registered logical source of readable spatial records; owner, source kind, provenance, schema/geometry description, source/stored CRS, revision and lifecycle.
+- **DataSource**: Registered logical source of readable spatial records; explicit Organization and Project owner, source kind, provenance, schema/geometry description, source/stored CRS, revision and lifecycle.
 - **SourceAsset (reference only when applicable)**: Original immutable source artifact identity and provenance; not synonymous with DataSource or Layer. File ingestion is deferred to R005.
-- **Layer**: Logical work resource, independently identified and named, with source reference, permitted scope and revision; exposes capabilities.
+- **Layer**: Logical work resource, independently identified and named, with source reference in the same Project, explicit Organization and Project owner, and revision; exposes capabilities.
 - **CRS Definition/Profile**: Unambiguous definition, authority/code or approved unique identifier, datum, projection parameters where applicable, units, axes and region of applicability.
 - **Transformation Profile**: Approved source/target definitions, operation identity, expected accuracy/tolerance, area of use and verification evidence.
 - **Feature**: Identifiable source record with attributes and optional geometry, expressed with a declared CRS when coordinates are read.
@@ -179,7 +189,7 @@ A GIS professional can identify the exact supported coordinate reference definit
 - **SC-002**: At least one supported source can be represented by two distinct Layers without duplicating records; retiring either Layer leaves the other Layer and source accessible.
 - **SC-003**: For an unchanged reference dataset, paginated reads return 100% of expected feature identities exactly once; known attributes and null semantics match the reference.
 - **SC-004**: 100% of control points for each supported transformation meet the independently defined profile tolerance. All agreed negative fixtures with unknown, contradictory or unvalidated CRS declarations or demonstrable violations of the explicit axis convention (control-point mismatch or domain inconsistency) fail with an actionable reason. This criterion does not claim that plausible mislabeled coordinates can be identified from values alone.
-- **SC-005**: 100% of the agreed cross-tenant and cross-Project negative checks (list, detail, reference, feature, schema, extent and mutation; human and applicable machine actor) disclose no protected data and mutate no unauthorized resources.
+- **SC-005**: 100% of the agreed cross-tenant and cross-Project negative checks (list, detail, reference, feature, schema, extent and mutation; human and applicable machine actor) disclose no protected data and mutate no unauthorized resources; cross-Project source references fail even where the actor is authorized in both Projects.
 - **SC-006**: 100% of successful material catalog mutations retain expected actor, time, resource, prior/current revision and inspectable safe evidence of the actual changed values; failed or stale operations leave no partial committed catalog state.
 - **SC-007**: On the agreed local reference environment, a catalog list/details read has p95 completion at most 1 second and a bounded 100-feature page has p95 completion at most 2 seconds under the proposed initial benchmark dataset (10,000 features across supported geometry families; profile to be finalized before planning). Measure after warm-up, with at least 100 operations and the same dataset/environment recorded.
 - **SC-008**: An independent R004 consumer can use catalog metadata and read a chosen feature from the reference data without needing physical storage details or unsupported operations.
@@ -188,10 +198,10 @@ A GIS professional can identify the exact supported coordinate reference definit
 ## Assumptions
 
 - Target user is a GIS-capable person working in an authorized Project, initially on local deployment; no public/anonymous catalog or vertical module.
-- Prerequisite R002 is in progress at the base commit; its planned permission registry, actor context, Project lifecycle and tenant enforcement are inputs, not implemented or independently accepted behavior. **R003 implementation and convergence are blocked until R002 is converged and relevant contracts are reconciled.**
+- Prerequisite R002 is in progress at the base commit; its planned permission registry, actor context, Project lifecycle and tenant enforcement are inputs, not implemented or independently accepted behavior. **R003 plan/implementation and convergence are blocked until R002 is converged and relevant contracts are reconciled; scope clarification does not remove this gate.**
 - Existing accepted governance: Constitution, ADR-005 (spatial source of truth), ADR-006 (Layer/capabilities), ADR-007 (changes/revisions), ADR-010 (source artifact boundary), ADR-014 (explicit tenant context).
-- Reference profile to finalize in clarification/plan: dataset license/provenance, geometry types/dimensions, reference size, exact CRS IDs, independent control coordinates, operation tolerance and test environment. No claim of full nationwide cadastral accuracy until evidence is accepted.
-- Catalog metadata and basic feature reading are in scope; full map workspace, style/render engine, feature editor/undo/redo, arbitrary external-source services, multi-format file import/export, spatial query engine, processing jobs, CAD and offline are excluded.
+- Reference profile to finalize in the deferred research gate before plan acceptance: dataset license/provenance, geometry types/dimensions, reference size, exact CRS IDs, independent control coordinates, operation tolerance and test environment. No claim of full nationwide cadastral accuracy until evidence is accepted; arbitrary user-defined CRS parameters and unvalidated VN-2000 variants are not supported.
+- Catalog registration of pre-established platform-managed fixture sources and basic feature reading are in scope; full map workspace, style/render engine, feature editor/undo/redo, arbitrary external database connections and external-source services, multi-format file import/export, spatial query engine, processing jobs, CAD and offline are excluded.
 - Basic read consumer is not a promise that R004 rendering is already supported. R003 can be validated through catalog inspection and the documented read contract; no full Map Workspace UI.
 - Proposed benchmark size and timings are initial testable targets, not measurements or guarantees. Any changes require an explicit recorded decision before acceptance.
 - Retirement in R003 is non-destructive, not physical data purge.

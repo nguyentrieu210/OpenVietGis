@@ -11,7 +11,7 @@
 ## Cách đọc
 
 Đây là baseline phân rã sản phẩm thành các phần có đầu ra kiểm chứng được.
-**001 và 002 đã có spec; 003 có bản nháp nghiên cứu/đặc tả biệt lập, chưa được chấp nhận.** Các nhãn 004–015
+**001 và 002 đã có spec; 003 có bản nháp đặc tả biệt lập đã chốt phạm vi, chưa đủ điều kiện plan/implementation.** Các nhãn 004–015
 là thứ tự dự kiến cho nhóm năng lực, không khẳng định đã tạo 13 spec hay phải giữ
 mỗi nhóm trong đúng một vòng triển khai.
 
@@ -32,7 +32,7 @@ Mốc phát hành được đánh giá bằng kịch bản, không bằng số �
 | --- | --- | --- | --- | --- | --- |
 | **R001 / 001** | Platform Foundation: khung chạy được, luồng persistence và quality gates | Dữ liệu mẫu dùng một lần; không GIS/tenant/business semantics | — | done | [Spec](specs/001-platform-foundation/spec.md) · [Kết quả](specs/001-platform-foundation/tasks.md#implementation-validation-results) · [Roadmap link](specs/001-platform-foundation/roadmap-reference.md) |
 | **R002 / 002** | Identity, Organization & Tenancy: user/org, Workspace/Project, quyền, invite, service actor và bootstrap | GIS, public share, billing và triển khai enterprise thực tế nằm ngoài 002 | R001 | in-progress — spec/plan; chưa nghiệm thu implementation | [Spec](specs/002-identity-organization-tenancy/spec.md) · [Roadmap link](specs/002-identity-organization-tenancy/roadmap-reference.md) |
-| **R003 / 003** | Spatial Catalog & CRS: đăng ký nguồn/layer tenant-scoped, schema/extent/CRS/capability rõ, đọc được bộ dữ liệu tham chiếu | Layer khác SourceAsset/DB table; chưa làm bộ import đa định dạng hay editor hoàn chỉnh | R002 | in-progress — draft specify/research; chưa chốt quyết định, chặn implementation tới khi R002 nghiệm thu | [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md) |
+| **R003 / 003** | Spatial Catalog & CRS: nguồn/layer thuộc Project và Organization rõ ràng; đăng ký/đọc nguồn fixture; schema/extent/capability rõ; WGS84/Web Mercator và VN-2000 được xác minh | Layer khác SourceAsset/DB table; không chia sẻ nguồn xuyên Project, CRS tự định nghĩa, kết nối nguồn ngoài hay import đa định dạng/editor | R002 | in-progress — đã clarify phạm vi; chờ hợp đồng R002 nghiệm thu và bằng chứng CRS/fixture trước khi plan/implementation | [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md) |
 | **R004 / 004** | Map Workspace: mở Project, bản đồ nền, layer order/visibility, extent, chọn/xem feature và thuộc tính, lưu/mở lại cấu hình | Có đọc/query cơ bản và command/capability tối thiểu; query nâng cao ở R007, editor ở R006 | R003 | planned | Chưa tạo |
 | **R005 / 005** | Import & Export: đưa dữ liệu hỗ trợ vào Project và xuất kết quả để đối chiếu ở công cụ khác | Chốt ma trận định dạng/CRS; có provenance, change unit/revision, validation và recovery tối thiểu; CAD ở R012 | R003, R004 | planned | Chưa tạo |
 | **R006 / 006** | Editing & Change History: vẽ/sửa hình học và thuộc tính, kiểm tra, commit/cancel, history và phát hiện stale revision | Mở rộng nền change của R003/R005; không giữ DB transaction theo phiên vẽ dài; CAD chính xác nâng cao ở R012 | R005 | planned | Chưa tạo |
@@ -132,7 +132,7 @@ Dữ liệu mẫu của 001 không trở thành Project, Layer hay mô hình ngh
 
 ### R003
 
-Spatial Catalog & CRS. [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md). Đang nghiên cứu/đặc tả biệt lập; quyết định phạm vi và hợp đồng R002 phải được làm rõ trước khi plan/implementation.
+Spatial Catalog & CRS. [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md). Đã clarify phạm vi biệt lập; chờ hợp đồng R002 hội tụ và nghiên cứu CRS/fixture, control points, tolerance được chốt trước khi plan/implementation.
 
 ### R004
 

@@ -1,6 +1,6 @@
 # R003 Research and Grill Preparation
 
-**Status**: draft discussion aid; not a plan, not an implementation contract, not an accepted ADR.
+**Status**: Scope clarification accepted 2026-11-18; detailed research still pending. Not a plan, implementation contract or accepted ADR.
 
 **Base**: `98a65eb` on branch 003-spatial-catalog-crs; roadmap commit 0378506; R001 convergence commit e41639c.
 
@@ -17,19 +17,19 @@
 | ADR-014 | Accepted architecture; runtime pending | Explicit tenant, actor, scoped requests, RLS defense-in-depth |
 | R002 permission registry 0.2 | Planning baseline | project.read/edit/manage; scoped grants, service ceiling, live revocation |
 | R002 data model | Planning baseline | Organization direct ownership; optional Workspace; Project lifecycle |
-| R002 implementation | Not converged at base | Block R003 implementation, schema migrations and final contract until reconciliation |
+| R002 implementation | Not converged at base | Block R003 plan, implementation, schema migrations and final contract until reconciliation |
 
 One safe integration direction: R003 evaluates its own resource authorization at Project scope while reusing R002 actor/tenant context, rather than inventing a parallel authority system. No permission registry changes are accepted here.
 
-## Three decisions to clarify before plan
+## Three scope decisions accepted by owner
 
-| ID | Question | A — recommended first slice | B — larger alternative |
+| ID | Question | A — accepted first slice | B — deferred alternative |
 | --- | --- | --- | --- |
 | Q1 | Ownership/reuse model | Project-scoped source and Layer; multiple Layers can reference the same source within Project. Organization always explicit. | Organization-level source catalog with cross-Project reuse; introduces independent source grants, discovery and lifecycle dependency risk. |
 | Q2 | CRS support | Explicit finite matrix: WGS84, Web Mercator and chosen VN-2000 profile(s) verified by actual independent controls; reject unknown/unvalidated cases. | User-defined CRS definitions and transformation configuration, increasing correctness and operational risks. |
 | Q3 | Reference source mode | Register a pre-established platform-managed source populated by reproducible fixture, no file importer or arbitrary connection. | Connect to a user-supplied external spatial database now; expands credentials, connection policy, access and schema discovery scope. |
 
-Recommendations are not approvals. Record owner answers in spec and clarify checklist first. If Q1/Q2/Q3 change scope/dependencies, revise roadmap row before treating spec as ready.
+Owner confirmed A for Q1, Q2 and Q3 in the 2026-11-18 Grill session. These are binding scope boundaries for this draft, recorded in [spec.md](spec.md#clarifications). The specific supported VN-2000 definitions, coordinate operations, control points and tolerances are not selected by that approval. Independent source evidence and final R002 contracts remain required before planning.
 
 ## Technical investigation (sources, not final decisions)
 
@@ -38,7 +38,7 @@ Recommendations are not approvals. Record owner answers in spec and clarify chec
 - PROJ [CRS Explorer](https://crs-explorer.proj.org/) is a useful initial definition lookup. For VN-2000, verify actual authority identifiers, local central meridian, projection/scales and region against source documents, then select independently sourced control coordinates. Do not infer VN-2000 parameters from the current user's location, map appearance, or the name of a province alone.
 - Specific PostGIS/PROJ versions and functions must be checked against the lockfile and actual runtime at plan time in accordance with CLAUDE.md. This is preliminary research; no library choice or runtime implementation is authorized.
 
-## Draft data/CRS assessment to settle during clarification or planning
+## Deferred data/CRS assessment to settle at research gate
 
 ### Reference dataset
 
@@ -68,8 +68,8 @@ No winner is asserted here; planner must evaluate alongside R005 round-trip and 
 
 ## Exit gates
 
-1. User answers Q1–Q3.
-2. Review draft spec with final R002 contracts; record differences from base 98a65eb. Confirm tenancy, lifecycle, permissions and identity references.
-3. Select control points, CRS matrix, tolerance, reference fixtures and local benchmark environment.
-4. Resolve storage CRS/representation and revision granularity in plan/ADR if the choice is costly to reverse.
-5. Only after R002 convergence and recorded prerequisite acceptance may R003 implementation start. Do not merge this isolated branch over active R002; rebase/cherry-pick documentation by an integrating owner when appropriate.
+1. **Complete** — owner accepted A for Q1–Q3 (recorded in spec).
+2. **Pending** — review draft spec with final, converged R002 contracts; record differences from base 98a65eb. Confirm tenancy, lifecycle, permissions and identity references.
+3. **Pending** — select independently verified VN-2000 definitions, transformations, control points, complete CRS matrix, tolerances, reference fixtures and local benchmark environment.
+4. **Deferred to plan/ADR** — resolve storage CRS/representation and revision granularity if costly to reverse, only after the preceding prerequisites are accepted.
+5. Only after R002 convergence, contract reconciliation and research prerequisite acceptance may R003 planning start; implementation requires a subsequent approved plan/tasks workflow. Do not merge this isolated branch over active R002; rebase/cherry-pick documentation by an integrating owner when appropriate.
