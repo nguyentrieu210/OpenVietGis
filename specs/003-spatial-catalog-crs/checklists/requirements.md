@@ -35,3 +35,5 @@
 - R002 runtime and contract acceptance are prerequisite before planning or implementation. Reconcile its final permission registry and scope behavior.
 - Need independent CRS control points and accepted benchmark profile before final planning acceptance.
 - Independent requirements review: corrected SC-004 and related acceptance/CRS requirements to test declared axis conventions using known inconsistent inputs rather than promise impossible inference from plausible values. Corrected FR-033 and SC-006 to require safe evidence of actual changed values in addition to actor/revision metadata. Both findings addressed; Q1–Q3 have subsequently been accepted.
+
+- Cross-spec contract review: stable source/Layer/feature/field identities, distinct catalog/content/schema revision pins, bounded stable-ID detail and current permission-action mapping are explicit. R003's independent read-contract harness does not require R004 runtime. The finalized R002 contract, CRS evidence and verified-main integration gates remain open.
