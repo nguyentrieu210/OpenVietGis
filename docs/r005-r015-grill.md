@@ -1,6 +1,6 @@
 # R005–R015 research and Grill decision register
 
-Status: **Proposed, pending product-owner confirmation**. Documentation only; not a feature spec, plan, or implementation.
+Status: **Product owner approved the R005–R015 first-slice scope matrix on 2026-11-18**. Detailed implementation policy, reference data, benchmark and dependency gates remain open as identified below. Documentation only; not a feature spec, plan, or implementation.
 Base: verified main ea6db79; Product constitution and ROADMAP remain authoritative.
 Each owner must synchronize the current verified main before opening a feature branch. The dependency gates below are implementation gates, not permission to assume a draft contract is accepted.
 
