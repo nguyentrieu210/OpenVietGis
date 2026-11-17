@@ -15,19 +15,19 @@ Scope approved: R005–R015 first-slice matrix in [decision register](r005-r015-
 
 ## Draft coordination snapshot
 
-| R | Branch | Worktree | Phase at start of resumed run |
+| R | Branch | Worktree | Draft status |
 |---|---|---|---|
-| 005 | 005-import-export | C:/code/openvietgis-r005 | Existing draft, reverify then commit |
-| 006 | 006-editing-change-history | C:/code/openvietgis-r006 | Resolver confirmed RemoteSigned; resume draft |
-| 007 | 007-attribute-spatial-query | C:/code/openvietgis-r007 | Draft commit a2ebe26; reverify resolver |
-| 008 | 008-processing-jobs | C:/code/openvietgis-r008 | Queued, resume from clean worktree |
-| 009 | 009-cartography-output | C:/code/openvietgis-r009 | Existing draft, reverify then commit |
-| 010 | 010-external-sources | C:/code/openvietgis-r010 | Existing draft, reverify then commit |
-| 011 | 011-team-collaboration | C:/code/openvietgis-r011 | Queued, resume from clean worktree |
-| 012 | 012-cad-interoperability-precision | C:/code/openvietgis-r012 | Queued, resume from clean worktree |
-| 013 | 013-field-offline | C:/code/openvietgis-r013 | Queued, resume from clean worktree |
-| 014 | 014-module-framework | C:/code/openvietgis-r014 | Resume draft |
-| 015 | 015-production-readiness | C:/code/openvietgis-r015 | Resume draft |
+| 005 | 005-import-export | C:/code/openvietgis-r005 | Draft committed: c365fbf |
+| 006 | 006-editing-change-history | C:/code/openvietgis-r006 | Draft committed: 3ee50c3 |
+| 007 | 007-attribute-spatial-query | C:/code/openvietgis-r007 | Draft committed: a2ebe26; resolver reverified |
+| 008 | 008-processing-jobs | C:/code/openvietgis-r008 | Draft in progress |
+| 009 | 009-cartography-output | C:/code/openvietgis-r009 | Draft committed: 30c79dd |
+| 010 | 010-external-sources | C:/code/openvietgis-r010 | Draft committed: d7dfd9e |
+| 011 | 011-team-collaboration | C:/code/openvietgis-r011 | Draft in progress |
+| 012 | 012-cad-interoperability-precision | C:/code/openvietgis-r012 | Draft in progress |
+| 013 | 013-field-offline | C:/code/openvietgis-r013 | Draft in progress |
+| 014 | 014-module-framework | C:/code/openvietgis-r014 | Draft committed: 92ce97a |
+| 015 | 015-production-readiness | C:/code/openvietgis-r015 | Draft committed: 08e4017 |
 
 ## Next integration checkpoint
 
