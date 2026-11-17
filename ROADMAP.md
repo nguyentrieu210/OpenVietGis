@@ -11,12 +11,12 @@
 ## Cách đọc
 
 Đây là baseline phân rã sản phẩm thành các phần có đầu ra kiểm chứng được.
-**Chỉ 001 và 002 đã có spec trong repo tại thời điểm ghi nhận.** Các nhãn 003–015
+**001 và 002 đã có spec; 003 có bản nháp nghiên cứu/đặc tả biệt lập, chưa được chấp nhận.** Các nhãn 004–015
 là thứ tự dự kiến cho nhóm năng lực, không khẳng định đã tạo 13 spec hay phải giữ
 mỗi nhóm trong đúng một vòng triển khai.
 
 - ID **R001–R015** là khóa truy vết ổn định, không đổi tên khi nhánh/spec được chia hoặc đổi số.
-- 003 là ứng viên tiếp theo sau 002, không tự động được tạo bởi việc ghi roadmap.
+- 003 là ứng viên tiếp theo sau 002; chỉ nghiên cứu và đặc tả song song khi 002 chưa hội tụ.
 - Số hàng không tạo phụ thuộc ngầm. Chỉ cột **Phụ thuộc** quyết định thứ tự bắt buộc.
 - Nhóm quá lớn phải chia thành spec nhỏ hơn; giữ ID cha và bổ sung ID con cùng liên kết.
 - Roadmap điều phối WHAT, ranh giới và phụ thuộc. Thiết kế kỹ thuật nằm trong plan/ADR.
@@ -32,7 +32,7 @@ Mốc phát hành được đánh giá bằng kịch bản, không bằng số �
 | --- | --- | --- | --- | --- | --- |
 | **R001 / 001** | Platform Foundation: khung chạy được, luồng persistence và quality gates | Dữ liệu mẫu dùng một lần; không GIS/tenant/business semantics | — | done | [Spec](specs/001-platform-foundation/spec.md) · [Kết quả](specs/001-platform-foundation/tasks.md#implementation-validation-results) · [Roadmap link](specs/001-platform-foundation/roadmap-reference.md) |
 | **R002 / 002** | Identity, Organization & Tenancy: user/org, Workspace/Project, quyền, invite, service actor và bootstrap | GIS, public share, billing và triển khai enterprise thực tế nằm ngoài 002 | R001 | in-progress — spec/plan; chưa nghiệm thu implementation | [Spec](specs/002-identity-organization-tenancy/spec.md) · [Roadmap link](specs/002-identity-organization-tenancy/roadmap-reference.md) |
-| **R003 / 003** | Spatial Catalog & CRS: đăng ký nguồn/layer tenant-scoped, schema/extent/CRS/capability rõ, đọc được bộ dữ liệu tham chiếu | Layer khác SourceAsset/DB table; chưa làm bộ import đa định dạng hay editor hoàn chỉnh | R002 | planned | Chưa tạo |
+| **R003 / 003** | Spatial Catalog & CRS: đăng ký nguồn/layer tenant-scoped, schema/extent/CRS/capability rõ, đọc được bộ dữ liệu tham chiếu | Layer khác SourceAsset/DB table; chưa làm bộ import đa định dạng hay editor hoàn chỉnh | R002 | in-progress — draft specify/research; chưa chốt quyết định, chặn implementation tới khi R002 nghiệm thu | [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md) |
 | **R004 / 004** | Map Workspace: mở Project, bản đồ nền, layer order/visibility, extent, chọn/xem feature và thuộc tính, lưu/mở lại cấu hình | Có đọc/query cơ bản và command/capability tối thiểu; query nâng cao ở R007, editor ở R006 | R003 | planned | Chưa tạo |
 | **R005 / 005** | Import & Export: đưa dữ liệu hỗ trợ vào Project và xuất kết quả để đối chiếu ở công cụ khác | Chốt ma trận định dạng/CRS; có provenance, change unit/revision, validation và recovery tối thiểu; CAD ở R012 | R003, R004 | planned | Chưa tạo |
 | **R006 / 006** | Editing & Change History: vẽ/sửa hình học và thuộc tính, kiểm tra, commit/cancel, history và phát hiện stale revision | Mở rộng nền change của R003/R005; không giữ DB transaction theo phiên vẽ dài; CAD chính xác nâng cao ở R012 | R005 | planned | Chưa tạo |
@@ -132,7 +132,7 @@ Dữ liệu mẫu của 001 không trở thành Project, Layer hay mô hình ngh
 
 ### R003
 
-Spatial Catalog & CRS. Ứng viên spec tiếp theo; chi tiết phải được làm rõ trước khi tạo plan.
+Spatial Catalog & CRS. [Spec draft](specs/003-spatial-catalog-crs/spec.md) · [Research preparation](specs/003-spatial-catalog-crs/research-preparation.md). Đang nghiên cứu/đặc tả biệt lập; quyết định phạm vi và hợp đồng R002 phải được làm rõ trước khi plan/implementation.
 
 ### R004
 
