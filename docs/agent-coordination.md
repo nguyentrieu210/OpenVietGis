@@ -9,14 +9,18 @@ Scope approved: R005–R015 first-slice matrix in [decision register](r005-r015-
 - Each feature draft has its own branch and worktree from verified main ea6db79. New features must use current verified main; existing branches sync only at a clean checkpoint under the integration owner.
 - The product owner authorized the tracked Spec Kit PowerShell resolver/scaffold scripts with **process-only RemoteSigned**. The coordinator tested this on R006. Never use Bypass or modify machine/user policy; stop on a separate permission denial.
 - Continue approved work and review without repeat approval. Ask only for material unresolved product decisions, new scope, protected permission failures, or risk requiring user choice.
-- The current run is **Specify/Draft only**, not Plan/Tasks/Implement. Draft acceptance is not implementation convergence. Do not modify ROADMAP.md concurrently; integration owner controls shared files and merge gates.
+- The product owner has authorized full roadmap execution with parallel agents and autonomous continuation. Current checkpoint remains independent cross-spec review and prerequisite validation; only move a feature to Plan/Tasks/Implement after its dependency and research gates are accepted. Draft acceptance is not implementation convergence. Do not modify ROADMAP.md concurrently; integration owner controls shared files and merge gates.
 - Spec Kit active-feature state must remain isolated per worktree. Do not overwrite another agent's active changes. Preserve existing work; do not recreate worktrees.
-- Agent orchestration is resumable from this ledger even if the chat does not automatically wake; no claim of an unattended process.
+- Agent orchestration is resumable from this ledger. The user enabled an hourly OpenVietGIS Agent Coordinator Scheduled Task on 2026-11-18; actual Local MCP/tool availability must be checked at each run. The schedule does not guarantee continuous execution. Avoid overlap with other active workers.
 
 ## Draft coordination snapshot
 
 | R | Branch | Worktree | Draft status |
 |---|---|---|---|
+| 001 | main | C:/code/openvietgis-main | Foundation converged and integrated |
+| 002 | 002-identity-organization-tenancy | C:/code/openvietgis | Active dirty worktree, 30/115 tasks ticked at 01:52; owner independent, no takeover |
+| 003 | 003-spatial-catalog-crs | C:/code/openvietgis-r003 | Draft clarified: 3b8781c; R002 and evidence gates open |
+| 004 | 004-map-workspace | C:/code/openvietgis-r004 | Draft clarified: 4c32816; R003 dependency gate open |
 | 005 | 005-import-export | C:/code/openvietgis-r005 | Draft committed: c365fbf |
 | 006 | 006-editing-change-history | C:/code/openvietgis-r006 | Draft committed: 3ee50c3 |
 | 007 | 007-attribute-spatial-query | C:/code/openvietgis-r007 | Draft committed: a2ebe26; resolver reverified |
