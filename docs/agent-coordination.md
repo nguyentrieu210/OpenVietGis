@@ -20,15 +20,15 @@ Scope approved: R005–R015 first-slice matrix in [decision register](r005-r015-
 | 005 | 005-import-export | C:/code/openvietgis-r005 | Draft committed: c365fbf |
 | 006 | 006-editing-change-history | C:/code/openvietgis-r006 | Draft committed: 3ee50c3 |
 | 007 | 007-attribute-spatial-query | C:/code/openvietgis-r007 | Draft committed: a2ebe26; resolver reverified |
-| 008 | 008-processing-jobs | C:/code/openvietgis-r008 | Draft in progress |
+| 008 | 008-processing-jobs | C:/code/openvietgis-r008 | Draft committed: 7030e51 |
 | 009 | 009-cartography-output | C:/code/openvietgis-r009 | Draft committed: 30c79dd |
 | 010 | 010-external-sources | C:/code/openvietgis-r010 | Draft committed: d7dfd9e |
-| 011 | 011-team-collaboration | C:/code/openvietgis-r011 | Draft in progress |
-| 012 | 012-cad-interoperability-precision | C:/code/openvietgis-r012 | Draft in progress |
-| 013 | 013-field-offline | C:/code/openvietgis-r013 | Draft in progress |
+| 011 | 011-team-collaboration | C:/code/openvietgis-r011 | Draft committed: 533af9a |
+| 012 | 012-cad-interoperability-precision | C:/code/openvietgis-r012 | Draft committed: 751ef91 |
+| 013 | 013-field-offline | C:/code/openvietgis-r013 | Draft committed: cfdeed7 |
 | 014 | 014-module-framework | C:/code/openvietgis-r014 | Draft committed: 92ce97a |
 | 015 | 015-production-readiness | C:/code/openvietgis-r015 | Draft committed: 08e4017 |
 
 ## Next integration checkpoint
 
-Verify each exact commit and clean worktree, traceability and checklist. Record draft status separately from dependency acceptance; R002 through R005 critical path and downstream gates remain binding. No merge or implementation without separate integration review.
+Verified 2026-11-18: all 11 R005–R015 draft commits have parent ea6db79, clean worktrees, only files under their respective specs directories, and clean Git whitespace checks. All draft authors reported successful tracked template resolution under authorized process-only RemoteSigned; R007 was reverified by coordinator. No source code or shared ROADMAP changed, no feature branches merged. Independent cross-spec acceptance/research gates remain open. R002 actively implementing identity/tenant RLS and tests in its separate worktree; do not interfere. At R002 convergence and promotion to verified main, synchronize R003 from that baseline and complete its prerequisites/Plan/Tasks; thereafter R004 and R005 before dependent runtime slices. No downstream implementation without accepted prerequisite contracts and separate integration review.
