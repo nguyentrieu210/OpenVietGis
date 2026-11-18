@@ -57,6 +57,31 @@ Provisional transformation matrix permitted for **research/plan discussion only*
 
 This resolves the earlier uncertainty about whether any independent VN-2000 evidence was available. It does **not** close the projected-profile gate or authorize R003 planning before R002 is converged and promoted.
 
+## R002 contract reconciliation against authoritative candidate 9010a79
+
+This is a read-only reconciliation against the accepted R002 takeover candidate; it does not treat R002 as converged or promoted.
+
+R002 exposes the exact project-scoped permissions `project.read`, `project.edit` and `project.manage`, plus separate Project lifecycle permissions. Human and service actors resolve through the same authorization context; service credentials can only narrow effective permissions through their ceiling. Active Organization resolution is mandatory for both actor types and inaccessible tenant resources fail as not found.
+
+Proposed R003 action mapping, to be confirmed at plan time without adding new permission codes:
+
+| R003 action | Existing R002 permission |
+| --- | --- |
+| list/inspect DataSource or Layer; schema, extent, capability and bounded feature/detail reads | `project.read` |
+| register a supported source; create/rename Layer; correct attributable source/CRS catalog metadata | `project.edit` |
+| retire a Layer | `project.edit` |
+| retire a DataSource or perform a source-lifecycle action that can invalidate Layer references | `project.manage` |
+
+Rationale:
+- Viewer already receives `project.read`.
+- Editor and Contributor receive `project.edit` as well as read, which fits ordinary GIS content/catalog work.
+- Manager additionally receives `project.manage`, suitable for source-level lifecycle operations with wider dependency impact.
+- R003 must call the existing permission service with explicit Organization + Project context; it must not check role names.
+- Service principals must traverse the same permission path and credential ceiling as R002.
+- Organization `suspended`/`deleted` state blocks ordinary access. Project `archived`/`deleted` lifecycle must be rechecked for every R003 mutation/read policy; R003 does not invent a competing lifecycle state machine.
+
+The final plan must test direct-ID substitution and list filtering at DataSource, Layer, schema, extent, capability and feature-read boundaries using the R002 not-found/non-disclosure semantics.
+
 ## Deferred data/CRS assessment to settle at research gate
 
 ### Reference dataset
