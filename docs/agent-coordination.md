@@ -18,7 +18,7 @@ Scope approved: R005–R015 first-slice matrix in [decision register](r005-r015-
 | R | Branch | Worktree | Draft status |
 |---|---|---|---|
 | 001 | main | C:/code/openvietgis-main | Foundation converged and integrated |
-| 002 | takeover/002-identity-tenancy | C:/code/openvietgis-r002-takeover | P1 hardening code 61bacc6, checkpoint 4dd5e7e, clean; 77/115 checked; 173 Python tests, 66 integration + performance; security/CI/migration/UI partial; browser/T080 open; original 31c180e preserved |
+| 002 | takeover/002-identity-tenancy | C:/code/openvietgis-r002-takeover | local/remote 276c524, clean; 77/115 checked; 173 Python/66 integration+performance previously; public CI backend independent in progress; T080 open; original 31c180e preserved |
 | 003 | 003-spatial-catalog-crs | C:/code/openvietgis-r003 | Draft audited and revised: 6ae04e0; R002 and evidence gates open |
 | 004 | 004-map-workspace | C:/code/openvietgis-r004 | Draft audited and revised: 5cebe8e; R003 dependency gate open |
 | 005 | 005-import-export | C:/code/openvietgis-r005 | Draft audited and revised: ea96cfa |
@@ -94,3 +94,5 @@ Evidence: 104 backend unit/contract/tool/architecture tests, 39 integration test
 ## Public GitHub CI handoff — 2026-11-18
 
 Product owner explicitly created and authorized public repository https://github.com/nguyentrieu210/OpenVietGis for testing. Verified empty public destination and full reachable HEAD history: 70 commits scanned by Gitleaks, no unignored findings; no tracked/historical data dump, geospatial dataset or credential file (only synthetic runtime-role SQL). Published exactly verified main ea6db79 and takeover/002-identity-tenancy 4dd5e7e, default branch main. No local main merge, original dirty worktree untouched, no other worktrees pushed. First CI run 44215760562 (https://github.com/nguyentrieu210/OpenVietGis/actions/runs/44215760562) queued. Normal dependency age policy remains mandatory. Actual results pending; T080/T108 not accepted.
+
+2026-11-18 08:28 ICT: first GitHub CI 44215760562 completed failure solely at frozen JS install (two TanStack 5.108.0 entries rejected by normal minimumReleaseAge); Gitleaks success. Split independent backend job from Node/frontend E2E, retaining full gate categories and synthetic test DB/provider. Focused manifest 3 tests pass, Ruff/diff pass. Pushed only R002 commit 276c524. New run 44215960147 queued: https://github.com/nguyentrieu210/OpenVietGis/actions/runs/44215960147 . Check backend result even if frontend blocked. Do not rerun frontend before dependency eligibility (~20:44 ICT); no main promotion or P2. Keep future authorized pushes to explicit source branches, never dirty worktree or private ledger.
