@@ -116,7 +116,7 @@ No winner is asserted here; planner must evaluate alongside R005 round-trip and 
 ## Exit gates
 
 1. **Complete** — owner accepted A for Q1–Q3 (recorded in spec).
-2. **Pending** — review draft spec with final, converged R002 contracts; record differences from base 98a65eb. Confirm tenancy, lifecycle, permissions and identity references.
-3. **Pending** — select independently verified VN-2000 definitions, transformations, control points, complete CRS matrix, tolerances, reference fixtures and local benchmark environment.
-4. **Deferred to plan/ADR** — resolve storage CRS/representation, physical revision representation and atomic versioning mechanism if costly to reverse. Preserve the required semantic revision boundaries and explicit read pins; only proceed after the preceding prerequisites are accepted.
+2. **Blocked only by R002 acceptance** — review draft spec with final, converged R002 contracts; record differences from base 98a65eb. Confirm tenancy, lifecycle, permissions and identity references.
+3. **Complete for first slice** — select independently verified VN-2000 definitions, transformations, control points, complete CRS matrix, tolerances, reference fixtures and local benchmark environment.
+4. **Prepared for plan/ADR** — resolve storage CRS/representation, physical revision representation and atomic versioning mechanism if costly to reverse. Preserve the required semantic revision boundaries and explicit read pins; only proceed after the preceding prerequisites are accepted.
 5. Only after R002 convergence, contract reconciliation and research prerequisite acceptance may R003 planning start; implementation requires a subsequent approved plan/tasks workflow. The historical 003 branch shares an older base with R002 and contains shared ROADMAP changes. Do not merge it wholesale: after R002 is accepted and promoted, the integrating owner must transplant only the feature's `specs/003-*` documents onto current verified main and reconcile ROADMAP traceability separately.

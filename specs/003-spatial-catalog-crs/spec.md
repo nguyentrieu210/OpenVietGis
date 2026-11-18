@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-18
 
-**Status**: Clarified draft — scope decisions accepted; research gates and R002 convergence required before plan/implementation
+**Status**: Research-prepared draft — first-slice CRS/control/fixture research gates satisfied; R002 convergence and verified-main promotion still required before plan/implementation
 
 **Input**: Parent roadmap: [ROADMAP.md, R003](../../ROADMAP.md#r003). Let authorized users register a spatial source, organize it into a reusable Layer within a Project, discover its schema, geometry and coordinate reference information, and read an explicitly supported reference dataset safely. Prepare the contract used by R004 Map Workspace and R005 Import & Export, without implementing either.
 
@@ -199,9 +199,9 @@ A GIS professional can identify the exact supported coordinate reference definit
 ## Assumptions
 
 - Target user is a GIS-capable person working in an authorized Project, initially on local deployment; no public/anonymous catalog or vertical module.
-- Prerequisite R002 is in progress at the base commit; its planned permission registry, actor context, Project lifecycle and tenant enforcement are inputs, not implemented or independently accepted behavior. **R003 plan/implementation and convergence are blocked until R002 is converged, promoted to verified main and relevant contracts are reconciled; scope clarification does not remove this gate.** The integrating owner must transplant only the feature's specification documents onto the verified main baseline; this historical branch includes older shared/R002 planning history and is not eligible for wholesale merge.
+- Prerequisite R002 was incomplete at this historical branch base. Its current authoritative candidate now implements the permission registry, actor context, Project lifecycle and tenant enforcement and has been reconciled in R003 research, but it is not yet converged/promoted because the SC-013 unfamiliar-human acceptance gate remains open. **R003 plan/implementation and convergence remain blocked until R002 is converged and promoted to verified main.** The integrating owner must transplant only the feature's specification documents onto that verified main baseline; this historical branch is not eligible for wholesale merge.
 - Existing accepted governance: Constitution, ADR-005 (spatial source of truth), ADR-006 (Layer/capabilities), ADR-007 (changes/revisions), ADR-010 (source artifact boundary), ADR-014 (explicit tenant context).
-- Reference profile to finalize in the deferred research gate before plan acceptance: dataset license/provenance, geometry types/dimensions, reference size, exact CRS IDs, independent control coordinates, operation tolerance and test environment. No claim of full nationwide cadastral accuracy until evidence is accepted; arbitrary user-defined CRS parameters and unvalidated VN-2000 variants are not supported.
+- The first-slice research profile is now recorded in `crs-support-matrix.md`, `vn2000-control-evidence.md` and `reference-fixture-profile.md`: deterministic 10,000-feature 2D Point/LineString/Polygon fixtures, exact CRS identities, independent Quang Ninh VN-2000 controls, profile tolerances and benchmark environment. This is software acceptance evidence, not a claim of nationwide cadastral/survey accuracy; arbitrary user-defined CRS parameters and unvalidated VN-2000 transformation variants remain unsupported.
 - Catalog registration of pre-established platform-managed fixture sources and basic feature reading are in scope; full map workspace, style/render engine, feature editor/undo/redo, arbitrary external database connections and external-source services, multi-format file import/export, spatial query engine, processing jobs, CAD and offline are excluded.
 - Basic read consumer is not a promise that R004 rendering is already supported. R003 can be validated through catalog inspection and the documented read contract; no full Map Workspace UI.
 - Proposed benchmark size and timings are initial testable targets, not measurements or guarantees. Any changes require an explicit recorded decision before acceptance.
