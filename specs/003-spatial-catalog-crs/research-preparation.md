@@ -57,7 +57,7 @@ Provisional transformation matrix permitted for **research/plan discussion only*
 - selected verified VN-2000 first-slice profiles: EPSG:4756 geographic and EPSG:5899 TM-3 107-45 for the independently checked Quang Ninh control region; EPSG:5899 <-> EPSG:4756 and EPSG:5899 <-> EPSG:4326 use the 1 m fixture tolerance;
 - EPSG:3405 and EPSG:3406 remain definition candidates only for R003 research; coordinate-changing transforms stay **unvalidated** until comparable independent projected controls are accepted.
 
-This resolves the earlier uncertainty about whether any independent VN-2000 evidence was available. It does **not** close the projected-profile gate or authorize R003 planning before R002 is converged and promoted.
+This resolves the earlier uncertainty about whether any independent VN-2000 evidence was available and closes the first-slice projected control gap for EPSG:5899. The remaining hard-to-reverse technical recommendations are synthesized in [plan-preparation.md](plan-preparation.md). None of these artifacts authorize R003 planning before R002 is converged and promoted.
 
 ## R002 contract reconciliation against authoritative candidate 9010a79
 
