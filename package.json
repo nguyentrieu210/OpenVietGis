@@ -21,7 +21,7 @@
     "validate:integration": "uv run --project apps/api python -m tools.run_with_test_database pytest apps/api/tests/integration apps/api/tests/performance",
     "validate:e2e": "uv run --project apps/api python -m tools.run_with_test_database node node_modules/@playwright/test/cli.js test",
     "validate:e2e:bootstrap": "uv run --project apps/api python -m tools.run_with_test_database node node_modules/@playwright/test/cli.js test --config playwright.bootstrap.config.ts",
-    "validate": "pnpm validate:runtime && pnpm validate:ts && pnpm validate:py && pnpm validate:contracts && pnpm validate:scope && pnpm validate:arch && pnpm validate:docs && pnpm validate:integration && pnpm validate:e2e && pnpm validate:e2e:bootstrap",
+    "validate": "pnpm validate:runtime && pnpm validate:ts && pnpm validate:py && pnpm validate:contracts && pnpm validate:scope && pnpm validate:arch && pnpm validate:docs && pnpm validate:integration && pnpm validate:e2e && pnpm validate:e2e:bootstrap && uv run --project apps/api python tools/check_secret_surfaces.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json",
     "contracts:generate": "pnpm --filter @openvietgis/client-sdk generate:contracts",
     "validate:contracts": "uv run --project apps/api python tools/check_contracts.py && pnpm contracts:generate && git diff --exit-code -- packages/client-sdk/src/generated",
     "validate:scope": "uv run --project apps/api python tools/check_scope.py",

@@ -37,6 +37,9 @@ _PATTERNS = {
     "invitation-secret": re.compile(
         r"(?<![A-Za-z0-9_-])inv_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])"
     ),
+    "service-credential": re.compile(
+        r"(?<![A-Za-z0-9_-])ovgsvc[0-9a-fA-F]{32}_[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])"
+    ),
     "provider-jwt": re.compile(
         r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])"
     ),

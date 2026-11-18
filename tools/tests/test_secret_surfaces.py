@@ -29,6 +29,7 @@ JWT = "eyJsynthetic." + ("C" * 12) + "." + ("D" * 11) + "-"
         (f"E       assert '{INVITATION}' not in raw_metadata", "invitation-secret"),
         (f"E       +  where {SESSION} = cookie_value", "application-session"),
         (f"provider {JWT}", "provider-jwt"),
+        ("service ovgsvc" + "a" * 32 + "_" + "Z" * 43, "service-credential"),
         (f"Authorization: Bearer {CANARY}", "authorization-credential"),
         ("Authorization: Basic c3ludGhldGljOnRlc3Q=", "authorization-credential"),
         (

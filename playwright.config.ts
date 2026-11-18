@@ -7,6 +7,12 @@ export function makeConfig(bootstrap = false) {
   ...(bootstrap ? { testMatch: "**/bootstrap-service-identity.spec.ts" } :
     { testIgnore: "**/bootstrap-service-identity.spec.ts" }),
   timeout: 45_000,
+  reporter: [
+    ["list"],
+    ["json", { outputFile: bootstrap
+      ? "dist/security-evidence/playwright-bootstrap.json"
+      : "dist/security-evidence/playwright-p1.json" }]
+  ],
   use: {
     baseURL: "http://127.0.0.1:5178",
     trace: "off"

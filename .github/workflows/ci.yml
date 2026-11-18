@@ -128,6 +128,11 @@ jobs:
       - name: Validate Node runtime, frontend, generated contracts and browser E2E
         run: pnpm validate:runtime && pnpm validate:ts && pnpm validate:contracts && pnpm validate:e2e && pnpm validate:e2e:bootstrap
 
+      - name: Scan explicit synthetic test evidence
+        run: |
+          docker compose -f infra/dev/compose.yaml -f infra/dev/compose.identity.yaml logs --no-color keycloak > dist/security-evidence/keycloak.log
+          uv run --project apps/api python tools/check_secret_surfaces.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json dist/security-evidence/keycloak.log
+
   secrets:
     runs-on: ubuntu-latest
     permissions:
