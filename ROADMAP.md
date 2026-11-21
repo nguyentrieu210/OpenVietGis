@@ -177,6 +177,8 @@ Field & Offline.
 
 Module Framework & References.
 
+Child [Spec 019 — House Numbering Plugin](specs/019-house-numbering-plugin/spec.md): full Bình Hưng domain workflows, spec/plan/tasks complete; pure-domain unit tests passing (17), integrated implementation blocked until verified Core contracts and audit prerequisites pass. [Plan](specs/019-house-numbering-plugin/plan.md) | [Tasks](specs/019-house-numbering-plugin/tasks.md). No change to R014 completion status.
+
 ### R015
 
 Production & Commercial Readiness.

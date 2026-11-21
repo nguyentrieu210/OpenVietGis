@@ -94,5 +94,5 @@ All listed workstreams are target scope, not implementation claims. Each Core de
 - Intended child `specs/019-house-numbering-plugin/spec.md` under R014; 016–018 reserved by existing work.
 - `/speckit-specify` prerequisite attempted using required template resolver:
   `pwsh -File .specify/scripts/powershell/resolve-template.ps1 spec-template -Json`
-  Result: `pwsh: command not found`. The installed Spec Kit requires the resolver; cannot claim specification generated or checklist passed. Per skill, stop this step rather than bypass the resolver.
-- Next: provision supported PowerShell in approved VPS toolchain (or equivalent supported kit environment), resolve composed template, specify → clarify → plan → checklist → tasks → analyze. Update R014 child links and stage, then implement only once dependency gates are verified. No production deployment or code change performed.
+  Initial result: `pwsh: command not found`. Resolved with isolated checked PowerShell 7.6.10 under /opt/toolchains; template resolver, setup-plan, setup-tasks and check-prerequisites now pass. See child spec and plan at specs/019-house-numbering-plugin/.
+- Specify → clarify → plan → checklist → tasks → analyze completed for child 019; pure domain implementation and tests passed. Integrated implementation remains blocked by Core dependency gate; no production deployment or live code change performed.
