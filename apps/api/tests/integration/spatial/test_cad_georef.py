@@ -6,7 +6,9 @@ from sqlalchemy import text
 
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
-from tests.integration.spatial.test_sources import _client
+from tests.integration.spatial.test_layers import _path as _layer_path
+from tests.integration.spatial.test_sources import _client, _get
+from tests.integration.spatial.test_sources import _path as _source_path
 
 
 def _drawing() -> bytes:
@@ -83,8 +85,97 @@ def test_version_pinned_georeference(migrated_database):
             assert abs(row[1] - 11799995) < 1e-6 and abs(row[2] - 11800000) < 1e-6
             assert abs(row[3] - 1200000) < 1e-6 and abs(row[4] - 1200010) < 1e-6
             assert abs(row[5] - 50) < 1e-6
+        feature = summary["entity_mapping"][0]
+        links = owner.get(
+            base + "/links",
+            params={"source_id": published["source_id"], "feature_id": feature["feature_id"]},
+        )
+        assert links.status_code == 200, links.text
+        link = links.json()["items"][0]
+        assert link["document_id"] == file["id"] and link["version"] == 1
+        assert link["handle"] == feature["handle"] and link["original_revision"] is True
+        reverse = owner.get(path + "/links", params={"handle": feature["handle"]})
+        assert reverse.json()["items"] == [link]
+        assert owner.get(path + "/links", params={"handle": "FFFF"}).json()["items"] == []
+        # Explicit dual local placement, not a generic datum transformation.
+        vn = control | {
+            "crs_code": 5899,
+            "controls": [
+                [[0, 0], [439000, 2290000]],
+                [[10000, 0], [439000, 2290010]],
+                [[0, 5000], [438995, 2290000]],
+            ],
+            "web_controls": [
+                [[0, 0], [11929000, 2359000]],
+                [[10000, 0], [11929000, 2359010]],
+                [[0, 5000], [11928995, 2359000]],
+            ],
+        }
+        assert (
+            owner.post(path + "/inspect-georef", json=vn | {"web_controls": None}).status_code
+            == 422
+        )
+        wrong = vn | {
+            "web_controls": [
+                [[2, 0], [11800000, 1200000]],
+                *control["controls"][1:],
+            ]
+        }
+        assert owner.post(path + "/inspect-georef", json=wrong).status_code == 422
+        unrelated = vn | {"web_controls": control["controls"]}
+        assert owner.post(path + "/inspect-georef", json=unrelated).status_code == 422
+        inspected_vn = owner.post(path + "/inspect-georef", json=vn)
+        assert inspected_vn.status_code == 200, inspected_vn.text
+        details = inspected_vn.json()
+        assert details["inspection_fingerprint"] != inspection["inspection_fingerprint"]
+        native = details["entity_summary"]["placement"]["native_reference"]
+        assert native["crs_code"] == 5899
+        assert abs(details["entity_summary"]["native_placed_extent"]["min_x"] - 438995) < 1e-6
+        confirm_vn = vn | {
+            "layer_name": "VN local calibrated map",
+            "expected_sha256": file["sha256"],
+            "expected_inspection_fingerprint": details["inspection_fingerprint"],
+            "acknowledge_loss": True,
+        }
+        posted_vn = owner.post(path + "/import-georef", json=confirm_vn)
+        assert posted_vn.status_code == 201, posted_vn.text
+        assert posted_vn.json()["layer_id"] != published["layer_id"]
+        with get_admin_engine().begin() as conn:
+            checked = conn.execute(
+                text("""
+                SELECT ST_SRID(geometry), ST_XMin(geometry), ST_Area(geometry)
+                FROM spatial.reference_features WHERE source_id=:sid
+            """),
+                {"sid": posted_vn.json()["source_id"]},
+            ).one()
+            assert checked[0] == 3857
+            assert abs(checked[1] - 11928995) < 1e-6 and abs(checked[2] - 50) < 1e-6
+        vn_result = posted_vn.json()
+        source = _get(owner, _source_path(world), vn_result["source_id"])
+        displayed = owner.get(
+            f"{_layer_path(world)}/{vn_result['layer_id']}/features",
+            params={
+                "content_revision": source["content_revision"],
+                "schema_revision": source["schema_revision"],
+                "include_geometry": True,
+                "response_crs": 4326,
+            },
+        )
+        assert displayed.status_code == 200, displayed.text
+        geom = displayed.json()["items"][0]["geometry"]
+        assert geom["coordinate_reference"]["code"] == 4326
+        assert 107 < geom["coordinates"][0][0][0] < 108
+        assert 20 < geom["coordinates"][0][0][1] < 21
         fake = base + "/" + str(uuid4()) + "/versions/1/inspect-georef"
         assert owner.post(fake, json=control).status_code == 404
     with _client(world.wrong_user_id) as outsider:
         assert outsider.post(path + "/inspect-georef", json=control).status_code in (403, 404)
         assert outsider.post(path + "/import-georef", json=body).status_code in (403, 404)
+        assert outsider.get(
+            base + "/links",
+            params={"source_id": published["source_id"], "feature_id": feature["feature_id"]},
+        ).status_code in (403, 404)
+        assert outsider.get(path + "/links", params={"handle": feature["handle"]}).status_code in (
+            403,
+            404,
+        )

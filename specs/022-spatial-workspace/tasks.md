@@ -7,12 +7,12 @@
 - [x] T004 Implement engine-neutral session state and mode transition functions in packages/spatial-workspace/src/session.ts.
 ## US1 — Switch modes
 - [x] T005 [US1] Connect capability-aware mode switch to apps/web-next from the committed preflight candidate; integrated host browser smoke passed.
-- [ ] T006 [US1] Host context, draft guards, camera and persistent GIS selection wired; 3D pick identity displayed, bidirectional selection sync remains.
+- [ ] T006 [US1] Host context, draft guards, camera and persistent GIS selection wired; GIS ↔ 3D single-feature key/highlight and CAD version/handle navigation verified. Native CAD entity pick and camera synchronization remain gated.
 ## US2 — Lifecycle
 - [ ] T007 [US2] Coordinator bound to GIS, 3D, private CAD vault and dedicated-origin CAD editor adapter. Real pinned engine exercised with synthetic DXF; production engine provenance and release gate remain open.
 - [ ] T008 [US2] Integrated switching, CAD versions and revocation smoke passed in apps/web-next/spatial-mode-smoke.mjs; full failure-recovery regression remains.
 ## US3 — Interoperability
-- [ ] T009 [US3] Version-linked DXF control-point import implemented and PostGIS integration passed; explicit EPSG:3857 grid only, with inspection fingerprint, confirmation and provenance. Production CAD release and VN-2000/other CRS remain gated.
+- [ ] T009 [US3] Version-linked DXF control-point import and provenance lookup; with EPSG:3857 or controlled EPSG:5899 + independently known web pairs, both fits verified. Broader VN-2000 datum operations and production CAD release remain gated.
 - [x] T010 [US3] Reference polygon building fixture rendered in integrated browser with explicit height field and flat zero base.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.

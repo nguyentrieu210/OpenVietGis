@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ from openvietgis_api.config import get_settings
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.cad.domain import CadUnit
-from openvietgis_api.domains.cad.georeference import CadPlacement, Control, fit_placement
+from openvietgis_api.domains.cad.georeference import CadPlacement, Control, fit_web_placement
 
 router = APIRouter(tags=["cad-documents"])
 BASE = "/organizations/{organization_id}/projects/{project_id}/cad/documents"
@@ -284,9 +284,114 @@ def download_version(
     )
 
 
+def _linked_features(
+    session: Session,
+    ctx: AuthorizationContext,
+    *,
+    source_id: UUID | None = None,
+    feature_id: str | None = None,
+    document_id: UUID | None = None,
+    version: int | None = None,
+    handle: str | None = None,
+) -> list[dict[str, Any]]:
+    # Only immutable conversion provenance is authoritative, never editable feature attributes.
+    # The document, layer, source and live feature must still exist in this exact project.
+    filter_sql = (
+        "AND c.source_id=:src AND f.feature_id=:fid"
+        if source_id is not None
+        else "AND d.document_id=:doc AND d.version=:version AND upper(m.item->>'handle')=:handle"
+    )
+    rows = (
+        session.execute(
+            text(
+                """
+            SELECT d.document_id, d.version, d.filename, c.source_id, c.layer_id,
+                   f.feature_id, m.item->>'handle' AS handle, l.name AS layer_name,
+                   (c.content_revision=s.content_revision) AS original_revision
+            FROM cad.conversions c
+            JOIN cad.document_versions d ON d.organization_id=c.organization_id
+                AND d.project_id=c.project_id
+                AND d.document_id::text=c.entity_summary->>'cad_document_id'
+                AND d.version::text=c.entity_summary->>'cad_document_version'
+                AND d.sha256=c.sha256
+            JOIN spatial.layers l ON l.organization_id=c.organization_id
+                AND l.project_id=c.project_id AND l.id=c.layer_id
+                AND l.source_id=c.source_id AND l.lifecycle='active'
+            JOIN spatial.data_sources s ON s.organization_id=c.organization_id
+                AND s.project_id=c.project_id AND s.id=c.source_id AND s.lifecycle='active'
+                AND s.validation_state='ready'
+            CROSS JOIN LATERAL jsonb_array_elements(c.entity_summary->'entity_mapping') m(item)
+            JOIN spatial.reference_features f ON f.organization_id=c.organization_id
+                AND f.project_id=c.project_id AND f.source_id=c.source_id
+                AND f.feature_id=m.item->>'feature_id'
+            WHERE c.organization_id=:org AND c.project_id=:proj
+                AND c.direction='import' AND c.status='succeeded'
+                AND m.item->>'disposition' IN ('mapped','approximated')
+            """
+                + filter_sql
+                + " ORDER BY c.created_at,c.id LIMIT 101"
+            ),
+            {
+                "org": ctx.organization_id,
+                "proj": ctx.project_id,
+                "src": source_id,
+                "fid": feature_id,
+                "doc": document_id,
+                "version": version,
+                "handle": handle,
+            },
+        )
+        .mappings()
+        .all()
+    )
+    if len(rows) > 100:
+        raise HTTPException(409, "Too many linked conversions; narrow selection")
+    return [
+        {
+            **dict(row),
+            "document_id": str(row["document_id"]),
+            "source_id": str(row["source_id"]),
+            "layer_id": str(row["layer_id"]),
+        }
+        for row in rows
+    ]
+
+
+@router.get(BASE + "/links")
+def feature_cad_links(
+    organization_id: UUID,
+    project_id: UUID,
+    source_id: UUID,
+    feature_id: Annotated[str, Query(min_length=1, max_length=200)],
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_READ)
+    return {"items": _linked_features(session, ctx, source_id=source_id, feature_id=feature_id)}
+
+
+@router.get(BASE + "/{document_id}/versions/{version}/links")
+def cad_feature_links(
+    organization_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    version: int,
+    handle: Annotated[str, Query(pattern=r"^[0-9a-fA-F]{1,32}$")],
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_READ)
+    return {
+        "items": _linked_features(
+            session, ctx, document_id=document_id, version=version, handle=handle.upper()
+        )
+    }
+
+
 class GeorefRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
-    crs_code: Literal[3857]
+    crs_code: Literal[3857, 5899]
+    web_controls: tuple[Control, ...] | None = Field(default=None, min_length=3, max_length=100)
     units: CadUnit
     controls: tuple[Control, ...] = Field(min_length=3, max_length=100)
     tolerance_m: float = Field(ge=1e-6, le=1000)
@@ -327,12 +432,13 @@ def _placement(
         raise HTTPException(404, "CAD version not found")
     if row["format"] != "dxf":
         raise HTTPException(422, "Control-point import supports 2D DXF only")
-    placement = fit_placement(
+    placement = fit_web_placement(
         document_id=document_id,
         version=version,
         crs_code=body.crs_code,
         units=body.units,
         controls=body.controls,
+        web_controls=body.web_controls,
         tolerance_m=body.tolerance_m,
         max_scale_deviation=body.max_scale_deviation,
     )
@@ -357,7 +463,7 @@ def inspect_georef(
         filename=filename,
         payload=payload,
         units=body.units,
-        crs_code=body.crs_code,
+        crs_code=placement.crs_code,
         curve_tolerance_m=None,
         placement=placement,
     )
@@ -381,7 +487,7 @@ def import_georef(
         payload=payload,
         layer_name=body.layer_name,
         units=body.units,
-        crs_code=body.crs_code,
+        crs_code=placement.crs_code,
         acknowledge_loss=body.acknowledge_loss,
         expected_sha256=body.expected_sha256,
         expected_inspection_fingerprint=body.expected_inspection_fingerprint,

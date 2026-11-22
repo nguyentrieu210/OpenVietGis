@@ -3,7 +3,8 @@ import type {FootprintView} from "./footprint3d";
 import type {Map as MLMap} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number}>;
-export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void):Promise<PreparedEngine>{
+export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void};
+export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void):Promise<SelectableFootprintEngine>{
  if(signal.aborted)throw new DOMException("Aborted","AbortError");
  if(![camera.longitude,camera.latitude,camera.zoom,camera.bearing].every(Number.isFinite)||Math.abs(camera.longitude)>180||Math.abs(camera.latitude)>85||camera.zoom<0||camera.zoom>22)throw Error("Invalid camera");
  const {Map,NavigationControl}=await import("maplibre-gl");
@@ -11,6 +12,8 @@ export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,cam
  const surface=document.createElement("div");surface.className="ovg-footprint-3d";surface.style.cssText="position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:5";
  host.append(surface);
  let map:MLMap|null=null,disposed=false,active=false;
+ const ids=new Set(view.features.map(f=>f.properties.featureId));
+ const select=(featureId:string)=>{if(disposed||!map)return;const selected=ids.has(featureId)?featureId:"";map.setPaintProperty("building-extrusion","fill-extrusion-color",["case",["==",["get","featureId"],selected],"#f59e0b","#326dba"]);};
  const dispose=()=>{if(disposed)return;disposed=true;active=false;map?.remove();surface.remove()};
  try{
   map=new Map({container:surface,center:[camera.longitude,camera.latitude],zoom:camera.zoom,bearing:camera.bearing,pitch:58,maxPitch:75,attributionControl:false,style:{version:8,sources:{footprints:{type:"geojson",data:view}},layers:[
@@ -26,7 +29,7 @@ export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,cam
    signal.addEventListener("abort",abort,{once:true});m.on("load",loaded);m.on("error",failed);if(signal.aborted)abort();
   });
   if(signal.aborted)throw new DOMException("Aborted","AbortError");
-  map.on("click","building-extrusion",e=>{if(!active)return;const id=e.features?.[0]?.properties.featureId;if(typeof id==="string")onPick(id)});
-  return {activate(){if(disposed)throw Error("Disposed 3D surface");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize()},dispose};
+  map.on("click","building-extrusion",e=>{if(!active)return;const id=e.features?.[0]?.properties.featureId;if(typeof id==="string"&&ids.has(id)){select(id);onPick(id)}});
+  return {select,activate(){if(disposed)throw Error("Disposed 3D surface");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize()},dispose};
  }catch(error){dispose();throw error}
 }
