@@ -1,4 +1,5 @@
 packages:
   - "apps/web"
+  - "apps/web-next"
   - "packages/client-sdk"
   - "modules/*/frontend"

@@ -1,0 +1,10 @@
+/* Shared OpenVietGIS brand — cobalt, turquoise, champagne gold. */
+:root{--ovg-brand-ink:#10212a;--ovg-brand-cobalt:#1565a9;--ovg-brand-teal:#21a7a3;--ovg-brand-gold:#f5d478}
+.brand .brand-mark{width:40px;height:40px;flex:0 0 40px;object-fit:contain;display:block;background:none;border-radius:0}
+.brand .brand-wordmark b{font-weight:700;letter-spacing:-.45px}
+.brand .brand-wordmark small{color:#9bd4d0}
+.studio>.top{background:linear-gradient(110deg,#10212a,#153344 70%,#174050)}
+.live-login .login-visual{background:radial-gradient(ellipse at 94% 76%,#176b7170 0%,transparent 54%),linear-gradient(132deg,#10212a,#173746)}
+.login-visual .brand .brand-mark{width:54px;height:54px;flex-basis:54px}
+.login-visual .brand .brand-wordmark b{font-size:24px}
+@media(max-width:700px){.brand .brand-mark{width:35px;height:35px;flex-basis:35px}.login-visual .brand .brand-mark{width:44px;height:44px;flex-basis:44px}.login-visual .brand .brand-wordmark b{font-size:20px}}

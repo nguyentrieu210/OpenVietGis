@@ -196,6 +196,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organizations/{organization_id}/invitations/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["emailInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organizations/{organization_id}/invitations/{invitation_id}/revoke": {
         parameters: {
             query?: never;
@@ -1041,6 +1057,66 @@ export interface operations {
             };
             /** @description Insufficient invitation permission */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    emailInvitation: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-OpenVietGIS-CSRF": components["parameters"]["CsrfHeader"];
+            };
+            path: {
+                organization_id: components["parameters"]["OrganizationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    /**
+                     * @default member
+                     * @enum {string}
+                     */
+                    organization_role?: "member" | "guest" | "admin";
+                    resource_grant?: components["schemas"]["InvitationResourceGrant"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Invitation created and transport attempted; no raw secret returned */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        organization_id: string;
+                        /** @enum {string} */
+                        status: "pending";
+                        /** @enum {string} */
+                        delivery: "accepted_by_provider" | "rejected" | "unknown";
+                    };
+                };
+            };
+            /** @description Insufficient invitation permission */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Email service not configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

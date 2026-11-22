@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+from openvietgis_api.domains.extensions.external import EXTERNAL_PREFIX, validate_external_manifest
 from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 
 _EXT_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{1,99}$")
@@ -103,6 +104,18 @@ def validate_manifest_contract(
             f"expected {_SUPPORTED_API_RANGE!r}",
             code="INCOMPATIBLE_EXTENSION_API",
         )
+    if extension_key.startswith(EXTERNAL_PREFIX):
+        validate_external_manifest(
+            extension_key=extension_key,
+            permissions=permissions,
+            commands=commands or [],
+            capabilities=capabilities or [],
+            entity_schemas=entity_schemas,
+            ui_contributions=ui_contributions or [],
+        )
+        return
+    if any(isinstance(ui, dict) and "runtime" in ui for ui in (ui_contributions or [])):
+        raise PlatformValidationError("external runtime requires partner_ namespace")
     prefix = f"ext.{extension_key}."
     if len(permissions) > 64 or len(set(permissions)) != len(permissions):
         raise PlatformValidationError("duplicate or too many permission identifiers")

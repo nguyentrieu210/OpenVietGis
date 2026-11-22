@@ -11,6 +11,7 @@ services:
       - "127.0.0.1:18080:8080"
     volumes:
       - ./keycloak/realm-openvietgis.json:/opt/keycloak/data/import/realm-openvietgis.json:ro
+      - ./keycloak/themes/openvietgis:/opt/keycloak/themes/openvietgis:ro
     healthcheck:
       test:
         [

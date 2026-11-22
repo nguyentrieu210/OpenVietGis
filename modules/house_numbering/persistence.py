@@ -21,6 +21,7 @@ from openvietgis_api.module_sdk import (
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+from modules.house_numbering.address_prefix import canonical_prefix
 
 
 class HouseNumberingRepository:
@@ -452,6 +453,56 @@ class HouseNumberingRepository:
             },
         )
 
+    def validate_route_segments(self, source_id: UUID, feature_id: str, segments: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+        links = [{"source_id": str(source_id), "feature_id": feature_id}]
+        if segments:
+            links = [{"source_id": str(item["source_id"]), "feature_id": str(item["feature_id"]),
+                      "code": str(item.get("code") or "")} for item in segments]
+            if links[0]["source_id"] != str(source_id) or links[0]["feature_id"] != feature_id:
+                raise PlatformValidationError("first segment must be the primary linked feature", code="INVALID_ROUTE_SEGMENTS")
+        pairs = {(item["source_id"], item["feature_id"]) for item in links}
+        codes = [item.get("code") for item in links if item.get("code")]
+        if len(links)>200 or len(pairs)!=len(links) or len(set(codes))!=len(codes) or any(len(c)>160 for c in codes):
+            raise PlatformValidationError("duplicate or excessive route segments", code="INVALID_ROUTE_SEGMENTS")
+        # Serialize membership creation in project; prevent reusing an already linked segment.
+        self.session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+            {"key": f"house-numbering-segments:{self.project_id}"})
+        conflict = self.session.execute(text("""
+            SELECT 1 FROM house_numbering.routes r
+            CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_array_length(r.segments)>0 THEN r.segments
+              ELSE jsonb_build_array(jsonb_build_object('source_id',r.linked_source_id,'feature_id',r.linked_feature_id)) END) e(v)
+            JOIN jsonb_array_elements(CAST(:links AS jsonb)) l(v)
+              ON (e.v->>'source_id', e.v->>'feature_id')=(l.v->>'source_id',l.v->>'feature_id')
+            WHERE r.organization_id=:org AND r.project_id=:project
+              AND (jsonb_array_length(r.segments)>0 OR :grouped)
+            LIMIT 1
+        """),{"org":self.org_id,"project":self.project_id,"links":json.dumps(links),"grouped":bool(segments)}).first()
+        if conflict:
+            raise PlatformConflictError("segment is already linked to a route", code="ROUTE_SEGMENT_OCCUPIED")
+        if codes:
+            alias_conflict = self.session.execute(text("""
+                SELECT 1 FROM house_numbering.routes r
+                WHERE r.organization_id=:org AND r.project_id=:project AND (
+                  (r.source_label LIKE 'route-tree-import:%' AND substring(r.source_label from 19)=ANY(:codes))
+                  OR EXISTS (SELECT 1 FROM jsonb_array_elements(r.segments) e(v)
+                             WHERE e.v->>'code'=ANY(:codes)))
+                LIMIT 1
+            """),{"org":self.org_id,"project":self.project_id,"codes":codes}).first()
+            if alias_conflict:
+                raise PlatformConflictError("segment code is already linked to another route",code="ROUTE_SEGMENT_CODE_OCCUPIED")
+        # Resolve against Core under normal RLS, requiring all links ready and a single continuous path.
+        usable = self.session.execute(text("""
+            SELECT house_numbering.resolve_route_line(array_agg(f.geometry ORDER BY l.ord)) IS NOT NULL
+            FROM jsonb_array_elements(CAST(:links AS jsonb)) WITH ORDINALITY l(v,ord)
+            LEFT JOIN spatial.reference_features f ON f.organization_id=:org AND f.project_id=:project
+              AND f.source_id=(l.v->>'source_id')::uuid AND f.feature_id=l.v->>'feature_id'
+            LEFT JOIN spatial.data_sources s ON s.organization_id=:org AND s.project_id=:project AND s.id=f.source_id
+            HAVING bool_and(COALESCE(f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready',false))
+        """),{"org":self.org_id,"project":self.project_id,"links":json.dumps(links)}).scalar_one_or_none()
+        if not usable:
+            raise PlatformValidationError("route segments must form one continuous non-branching line in one CRS", code="ROUTE_SEGMENTS_DISCONNECTED")
+        return links if segments else []
+
     def create_route(
         self,
         *,
@@ -464,20 +515,27 @@ class HouseNumberingRepository:
         direction_state: str,
         source_label: str,
         status: str,
+        segments: list[dict[str, Any]] | None = None,
     ) -> RowMapping:
         self.prepare("edit")
-        self.spatial_feature(source_id, feature_id, expected={"ST_LineString"})
+        if prefix is not None:
+            try:
+                prefix = canonical_prefix(prefix)
+            except ValueError as exc:
+                raise PlatformValidationError("invalid alley prefix",code="INVALID_PREFIX") from exc
+        self.spatial_feature(source_id, feature_id, expected={"ST_LineString", "ST_MultiLineString"})
+        links = self.validate_route_segments(source_id, feature_id, segments)
         now = datetime.now(UTC)
         row = (
             self.session.execute(
                 text("""
                 INSERT INTO house_numbering.routes (
                     id,organization_id,project_id,name,route_type,parent_route_id,prefix,
-                    linked_source_id,linked_feature_id,direction_state,source_label,status,revision,
+                    linked_source_id,linked_feature_id,direction_state,source_label,status,revision,segments,
                     created_by_actor_id,updated_by_actor_id,created_at,updated_at
                 ) VALUES (
                     :id,:org,:project,:name,:rtype,:parent,:prefix,:source,:feature,
-                    :direction,:source_label,:status,1,:actor,:actor,:now,:now
+                    :direction,:source_label,:status,1,CAST(:segments AS jsonb),:actor,:actor,:now,:now
                 ) RETURNING *
             """),
                 {
@@ -493,6 +551,7 @@ class HouseNumberingRepository:
                     "direction": direction_state,
                     "source_label": source_label.strip(),
                     "status": status,
+                    "segments": json.dumps(links),
                     "actor": self.actor_id,
                     "now": now,
                 },
@@ -504,7 +563,7 @@ class HouseNumberingRepository:
             "house_numbering.route.create",
             "house_numbering_route",
             row["id"],
-            {"name": row["name"]},
+            {"name": row["name"], "segment_count": len(links) or 1},
         )
         return row
 
@@ -1273,17 +1332,15 @@ class HouseNumberingRepository:
         row = (
             self.session.execute(
                 text("""
-                SELECT r.id,r.prefix,r.direction_state,r.revision,
+                SELECT r.id,r.prefix,r.direction_state,r.revision,f.content_revision,
                        ST_SRID(f.geometry) AS srid,
                        ST_AsGeoJSON(
                            CASE WHEN r.direction_state='reverse' THEN ST_Reverse(f.geometry) ELSE f.geometry END
                        )::jsonb AS geometry
                 FROM house_numbering.routes r
-                JOIN spatial.reference_features f
-                  ON f.organization_id=r.organization_id AND f.project_id=r.project_id
-                 AND f.source_id=r.linked_source_id AND f.feature_id=r.linked_feature_id
+                JOIN house_numbering.route_lines f
+                  ON f.organization_id=r.organization_id AND f.project_id=r.project_id AND f.route_id=r.id
                 WHERE r.organization_id=:org AND r.project_id=:project AND r.id=:route
-                  AND f.geometry_state='present' AND ST_GeometryType(f.geometry)='ST_LineString'
             """),
                 {"org": self.org_id, "project": self.project_id, "route": route_id},
             )
@@ -1379,7 +1436,7 @@ class HouseNumberingRepository:
         *,
         operation_id: UUID,
         rule_id: UUID,
-        base_revisions: dict[str, int],
+        base_revisions: dict[str, Any],
         changes: list[dict[str, Any]],
         warnings: list[str],
         expires_at: datetime,
@@ -1515,6 +1572,14 @@ class HouseNumberingRepository:
                 raise PlatformConflictError(
                     "numbering preview is stale", code="STALE_PREVIEW"
                 )
+            geometry_key = f"route_geometry:{route_id}"
+            if geometry_key in base:
+                try:
+                    current_geometry_revision = self.route_geometry(route_id)["content_revision"]
+                except (PlatformNotFoundError, PlatformValidationError) as exc:
+                    raise PlatformConflictError("route geometry no longer usable",code="STALE_PREVIEW") from exc
+                if current_geometry_revision != base[geometry_key]:
+                    raise PlatformConflictError("route geometry changed since preview", code="STALE_PREVIEW")
             if building["eligibility"] == "ineligible":
                 raise PlatformConflictError(
                     "ineligible building cannot receive a number",

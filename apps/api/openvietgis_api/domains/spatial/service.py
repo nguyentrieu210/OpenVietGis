@@ -221,6 +221,7 @@ def build_mutation_evidence(
         expected_operation = CatalogOperation.REGISTER_SOURCE
         mutable_fields = {
             CatalogOperation.UPDATE_SOURCE: {"name", "catalog_revision"},
+            CatalogOperation.UPDATE_SCHEMA: {"schema_revision", "content_revision", "catalog_revision"},
             CatalogOperation.CORRECT_SOURCE_CRS: {
                 "name",
                 "source_crs",
@@ -601,7 +602,7 @@ def source_render_supported(source: DataSource) -> bool:
     )
     return (
         source.kind
-        in (SourceKind.REFERENCE_FIXTURE, SourceKind.IMPORTED_FILE, SourceKind.DERIVED_PROCESSING)
+        in (SourceKind.REFERENCE_FIXTURE, SourceKind.IMPORTED_FILE, SourceKind.DERIVED_PROCESSING, SourceKind.MANUAL)
         and source.geometry_family in SUPPORTED_FAMILIES
         and source.dimensions == GeometryDimensions.XY
         and source.feature_count is not None

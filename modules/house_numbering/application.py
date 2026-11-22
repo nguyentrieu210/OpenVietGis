@@ -362,7 +362,7 @@ class HouseNumberingService:
         rule = self.repo.get_rule(rule_id)
         changes: list[dict[str, Any]] = []
         warnings: list[str] = []
-        base: dict[str, int] = {}
+        base: dict[str, Any] = {}
         route_revisions: dict[UUID, int] = {}
 
         for building_id in building_ids:
@@ -402,6 +402,7 @@ class HouseNumberingService:
                 continue
             route_row = self.repo.get_route(route_id)
             route_revisions[route_id] = int(route_row["revision"])
+            base[f"route_geometry:{route_id}"] = route["content_revision"]
             base[f"building:{building_id}"] = int(building["revision"])
             changes.append(
                 {

@@ -19,6 +19,7 @@ from openvietgis_api.module_sdk import (
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 from sqlalchemy.orm import Session
 
+from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.application import HouseNumberingService
 from modules.house_numbering.documents import HouseNumberingDocumentService
 from modules.house_numbering.exports import HouseNumberingExportService
@@ -73,6 +74,13 @@ class AreaUpdate(BaseModel):
     feature_id: str | None = Field(default=None, max_length=128)
 
 
+class RouteSegmentLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_id: UUID
+    feature_id: str = Field(min_length=1, max_length=128)
+    code: str = Field(default="", max_length=160)
+
+
 class RouteCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=200)
@@ -83,6 +91,7 @@ class RouteCreate(BaseModel):
     feature_id: str = Field(min_length=1, max_length=128)
     direction_state: Literal["forward", "reverse"] = "forward"
     source_label: str = Field(default="manual", min_length=1, max_length=200)
+    segments: list[RouteSegmentLink] = Field(default_factory=list, max_length=200)
     status: Literal["draft", "confirmed"] = "draft"
 
     @field_validator("prefix")
@@ -90,18 +99,13 @@ class RouteCreate(BaseModel):
     def valid_prefix(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        stripped = value.strip()
-        if not stripped or any(
-            not part.isdigit() or int(part) <= 0 for part in stripped.split("/")
-        ):
-            raise ValueError("prefix must be positive slash-separated numbers")
-        return stripped
+        return canonical_prefix(value)
 
 
 class RouteImportLayer(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_id: UUID
-    mapping: dict[Literal["name", "code", "parent_code", "prefix", "route_type"], str]
+    mapping: dict[Literal["name", "code", "parent_code", "prefix", "route_type", "logical_code"], str]
     default_type: Literal["street", "alley"] = "street"
     direction_state: Literal["forward", "reverse"] = "forward"
 
@@ -128,6 +132,22 @@ class RouteUpdate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     direction_state: Literal["forward", "reverse"]
     status: Literal["draft", "confirmed"]
+
+
+class BuildingAssignmentPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_id: UUID | None = None
+    after_id: UUID | None = None
+    limit: int = Field(default=200, ge=1, le=500)
+    mapping: dict[Literal["road", "alley", "code"], str] = Field(
+        default_factory=lambda: {"road": "ten_duong", "alley": "hem", "code": "tuyen_id"}
+    )
+    max_distance_m: float = Field(default=80, ge=5, le=500)
+
+
+class BuildingAssignmentApply(BuildingAssignmentPreview):
+    preview_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+    assignments: dict[UUID, UUID] = Field(min_length=1, max_length=500)
 
 
 class BuildingCreate(BaseModel):
@@ -375,6 +395,32 @@ def list_buildings(
             route_id=route_id
         )
     }
+
+
+@router.post(f"{_PROJ}/building-assignment/preview")
+def preview_building_assignment(
+    organization_id: UUID,
+    project_id: UUID,
+    body: BuildingAssignmentPreview,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    from modules.house_numbering.building_assignment import BuildingRouteAssigner
+    service = _service(organization_id, project_id, auth, session)
+    return BuildingRouteAssigner(service.repo).preview(**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/apply")
+def apply_building_assignment(
+    organization_id: UUID,
+    project_id: UUID,
+    body: BuildingAssignmentApply,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    from modules.house_numbering.building_assignment import BuildingRouteAssigner
+    service = _service(organization_id, project_id, auth, session)
+    return BuildingRouteAssigner(service.repo).apply(**body.model_dump())
 
 
 @router.post(f"{_PROJ}/buildings", status_code=201)
@@ -948,6 +994,38 @@ def download_document(
         media_type=str(meta["content_type"]),
         headers={"Content-Disposition": f'attachment; filename="{meta["filename"]}"'},
     )
+
+
+class IntegrationAddress(BaseModel):
+    address_id: UUID
+    house_number: str
+    street: str | None
+    area: str | None
+    longitude: float
+    latitude: float
+
+
+class IntegrationAddressResult(BaseModel):
+    items: list[IntegrationAddress]
+    crs: Literal["EPSG:4326"] = "EPSG:4326"
+
+
+@router.get(f"{_PROJ}/integrations/v1/addresses", response_model=IntegrationAddressResult)
+def integration_address_lookup(
+    organization_id: UUID,
+    project_id: UUID,
+    response: Response,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    query: Annotated[str, Query(min_length=2, max_length=120)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> dict[str, object]:
+    """Look up approved addresses using an authenticated project credential."""
+    response.headers["Cache-Control"] = "no-store"
+    items = HouseNumberingExportService(
+        session, _ctx(organization_id, project_id, auth)
+    ).lookup_approved_addresses(query=query, limit=limit)
+    return {"items": items, "crs": "EPSG:4326"}
 
 
 @router.get(f"{_PROJ}/search")

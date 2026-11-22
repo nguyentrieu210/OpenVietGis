@@ -51,7 +51,7 @@ def _clear_project_claim(session: Session, state: _TransactionScope) -> None:
     # Clear the application proof before SQL. If SQL fails, the failed
     # transaction cannot carry an application authorization to another query.
     state.project_claim = None
-    session.execute(text("SELECT set_config('openvietgis.project_id', '', true)"))
+    session.execute(text("SELECT set_config('openvietgis.project_id', '', true), set_config('openvietgis.acl_internal', '', true)"))
 
 
 def _state(session: Session) -> _TransactionScope:

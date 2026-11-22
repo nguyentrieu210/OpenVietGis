@@ -84,6 +84,11 @@ Người dùng giữ mọi dữ liệu, quyền và chức năng sau khi thay fr
 - **FR-016** Bắt buộc kiểm thử browser thực, ảnh visual, trace API/capability và bảng coverage yêu cầu; không có mock-only release.
 - **FR-017** Rollout song song stage, không phá bản đang chạy; cutover/canary/rollback rõ.
 - **FR-018** Design system và pattern research có version, nguồn tham chiếu và điều kiện nghiệm thu; không dịch nguyên mẫu SaaS sang GIS.
+- **FR-019** Studio duy trì một map instance và một project context: mở công cụ bằng modal/drawer/panel/popover/dock, không chuyển trang, remount bản đồ hoặc reset viewport/selection/nháp ngoài thao tác chủ động. Auth, đổi project/tenant và quản trị nằm ngoài Studio.
+- **FR-020** Chọn trực tiếp từng điểm/đường/vùng trên canvas; kéo điểm hoặc chỉnh X/Y theo CRS rõ ràng, sửa vertex, snap và xem trước; đồng bộ inspector, bảng thuộc tính và selection. Hủy/Esc, undo/redo và save/revision phải có hành vi rõ.
+- **FR-021** Thêm dữ liệu, tạo lớp, tạo đối tượng mới bằng modal/draw tool ngay tại map; kiểm tra CRS/schema/quyền, trạng thái tiến trình/lỗi; thành công thì gắn layer/feature lên map đang mở, không mất trạng thái khác.
+- **FR-022** Query, CAD/COGO, phân tích, in/xuất và plugin chạy qua command registry và surfaces trong map; kết quả preview/highlight/layer, không điều hướng trang độc lập cho mỗi công cụ. Xem design-v2.md.
+- **FR-023** E2E kiểm tra route và identity của map instance không đổi khi mở/đóng công cụ; xác minh hình học lưu thật, rollback khi cancel, 403/409/CRS lỗi và bảo toàn viewport/layer/selection.
 ### Key Entities
 Account, Team/Organization, Workspace, Project, Invitation, MailDelivery, WorkspaceSession, LayerSelection, Command, ModuleManifest, UI preference.
 ### Edge Cases

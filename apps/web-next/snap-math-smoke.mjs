@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import {findScreenSnap} from "./src/SnapMath.ts";
+const a={a:[0,0],b:[20,0]},b={a:[10,-20],b:[10,20]};
+const r=(p,mode,segments=[a,b],origin)=>findScreenSnap(p,5,mode,segments.flatMap(s=>[s.a,s.b]),segments,origin);
+assert.deepEqual(r([9,2],"midpoint").point,[10,0]);
+assert.equal(r([9,2],"intersection").kind,"intersection");
+assert.deepEqual(r([9,2],"intersection").point,[10,0]);
+assert.deepEqual(r([7,2],"perpendicular",[a],[6,8]).point,[6,0]);
+assert.equal(r([7,2],"perpendicular",[a]),null);
+assert.equal(r([23,1],"vertex").kind,"vertex");
+assert.equal(r([100,100],"smart"),null);
+assert.equal(r([10,1],"smart").kind,"midpoint");
+assert.deepEqual(r([7,2],"edge",[a]).point,[7,0]);
+assert.equal(r([10,0],"intersection",[{a:[0,0],b:[10,0]},{a:[10,0],b:[10,10]}]),null);
+assert.equal(r([2,1],"perpendicular",[a],[-5,5]),null);
+console.log("Snap math: vertex, edge, midpoint, intersection, perpendicular, smart and tolerance passed");

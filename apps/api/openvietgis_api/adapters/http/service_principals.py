@@ -141,6 +141,46 @@ def revoke_service_principal(
     return Response(status_code=204)
 
 
+class ServiceCredentialMetadataResponse(BaseModel):
+    id: UUID
+    name: str
+    prefix: str
+    permission_ceiling: list[str] | None
+    created_at: datetime
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+
+
+@router.get(
+    "/organizations/{organization_id}/service-principals/"
+    "{service_principal_id}/credentials",
+    response_model=list[ServiceCredentialMetadataResponse],
+)
+def list_service_credentials(
+    organization_id: UUID,
+    service_principal_id: UUID,
+    response: Response,
+    authentication: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> list[dict[str, object]]:
+    require_human_permission(
+        session, authentication, organization_id, Permission.SERVICE_PRINCIPAL_MANAGE
+    )
+    context = context_for(authentication, organization_id=organization_id)
+    repo = SqlServicePrincipalRepository(session)
+    if repo.get_principal(
+        context=context, organization_id=organization_id,
+        service_principal_id=service_principal_id,
+    ) is None:
+        raise HTTPException(status_code=404, detail="service principal not found")
+    response.headers["Cache-Control"] = "no-store"
+    return repo.list_credential_metadata(
+        context=context, organization_id=organization_id,
+        service_principal_id=service_principal_id,
+    )
+
+
 @router.post(
     "/organizations/{organization_id}/service-principals/"
     "{service_principal_id}/credentials",
@@ -150,6 +190,7 @@ def issue_service_credential(
     organization_id: UUID,
     service_principal_id: UUID,
     payload: IssueServiceCredentialRequest,
+    response: Response,
     authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
@@ -176,6 +217,7 @@ def issue_service_credential(
         permission_ceiling=ceiling,
         expires_at=payload.expires_at,
     )
+    response.headers["Cache-Control"] = "no-store"
     return {
         "id": credential.id,
         "prefix": credential.prefix,
