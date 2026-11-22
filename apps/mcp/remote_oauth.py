@@ -26,10 +26,16 @@ class OidcConfig:
 
 
 class KeycloakVerifier(TokenVerifier):
-    def __init__(self, config: OidcConfig, signing_key=None):
+    def __init__(self, config: OidcConfig, signing_key=None, jwks_url=None):
         self.config = config
         if signing_key is None:
-            client = jwt.PyJWKClient(config.issuer.rstrip("/") + "/protocol/openid-connect/certs", timeout=5, lifespan=300)
+            public_url=config.issuer.rstrip("/") + "/protocol/openid-connect/certs"
+            if jwks_url is not None and not (
+                config.issuer=="https://openvietgis.cloud/realms/openvietgis" and
+                jwks_url=="http://127.0.0.1:18080/realms/openvietgis/protocol/openid-connect/certs"
+            ):
+                raise ValueError("Unexpected internal Keycloak JWKS endpoint")
+            client = jwt.PyJWKClient(jwks_url or public_url, timeout=5, lifespan=300)
             signing_key = lambda token: client.get_signing_key_from_jwt(token).key
         self.signing_key = signing_key
 

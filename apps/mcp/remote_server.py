@@ -126,4 +126,4 @@ def create_remote(config, identity=None, workspace=None, verifier=None):
 def create_from_env():
     config=OidcConfig(os.environ["OVG_OIDC_ISSUER"],os.environ["OVG_MCP_RESOURCE"],
         frozenset(c.strip() for c in os.environ["OVG_MCP_OAUTH_CLIENTS"].split(",") if c.strip()))
-    return create_remote(config)
+    return create_remote(config,verifier=KeycloakVerifier(config,jwks_url=os.environ.get("OVG_OIDC_JWKS_URL")))
