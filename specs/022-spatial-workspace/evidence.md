@@ -1,0 +1,5 @@
+# Foundation checkpoint — 2026-11-23
+Base main: e0db0e2 (origin/main verified); branch feature/022-spatial-workspace. Spec Kit resolver, plan setup, task setup and prerequisites returned success. Spec quality checklist: 5/5. T001–T004 completed; T005–T012 open.
+- TDD: initial missing-module test failed as expected; after implementation Node 26.13.1 suite 11/11 passed, strict TS typecheck passed, git diff --check passed.
+- Coverage: default scope, denied mode, dirty and pending save, lazy activation semantics, failed load/retry, revoked capability at completion, dirty edits during load, stale/rapid callbacks, cancellation, scope reset, copied scope.
+- Limits: this is a pure controller, not an integrated browser feature or security boundary. No server, renderer, permissions, deployment or data changes. Spec 020 shell is untracked on shared main and actively edited. Must integrate only on reviewed committed 020 baseline and run real browser/API and convergence gates. No feature completion claim.
