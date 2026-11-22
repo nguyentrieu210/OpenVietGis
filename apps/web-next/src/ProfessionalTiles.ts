@@ -1,5 +1,5 @@
 import {useEffect,useRef} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import {getSpatialFeature,type ApiClient,type SpatialLayer} from "@openvietgis/client-sdk";
 import type {Geometry} from "geojson";
 import {featureKey,type StudioRow} from "./studio-contract";

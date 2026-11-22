@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState,type RefObject} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import type {Feature,FeatureCollection,Geometry} from "geojson";
 import {ApiClient,ApiError,getMap,saveMap,listMapHistory,getMapDisplayExtent,renameSpatialLayer,retireSpatialLayer,commitChangeset,loadCsrfToken,listChangesets,revertChangeset,type Changeset,type ProjectMap,type MapHistoryPage,type SaveMapInput,type MapStyle,type SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioData,StudioRow} from "./studio-contract";

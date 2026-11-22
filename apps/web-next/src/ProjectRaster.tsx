@@ -1,5 +1,5 @@
 import React,{useCallback,useEffect,useRef,useState} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
 import {Modal} from "./studio-ui";
 import {GisIcon} from "./GisIcon";

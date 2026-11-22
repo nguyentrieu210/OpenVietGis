@@ -47,3 +47,44 @@ def test_business_map_ui_cannot_import_renderer_types_or_dynamic_api(tmp_path: P
         violations = find_scope_violations(tmp_path)
         assert len(violations) == 1
         assert "outside the MapEngine adapter" in violations[0]
+
+
+def test_studio_renderer_adapter_is_narrowly_scoped(tmp_path: Path) -> None:
+    root = tmp_path / "apps/web-next/src"
+    root.mkdir(parents=True)
+    (root / "map-surface.ts").write_text(
+        'export { Map } from "maplibre-gl";', encoding="utf-8"
+    )
+    (root / "MapWorkspace.tsx").write_text(
+        'import { Map } from "./map-surface";', encoding="utf-8"
+    )
+    assert find_scope_violations(tmp_path) == []
+
+    (root / "MapWorkspace.tsx").write_text(
+        'import { Map } from "maplibre-gl";', encoding="utf-8"
+    )
+    assert len(find_scope_violations(tmp_path)) == 1
+
+
+def test_3d_adapter_does_not_grant_renderer_access_to_coordinator(tmp_path: Path) -> None:
+    root = tmp_path / "packages/spatial-workspace/src"
+    root.mkdir(parents=True)
+    adapter = root / "maplibre3d.ts"
+    adapter.write_text('const engine = import("maplibre-gl");', encoding="utf-8")
+    assert find_scope_violations(tmp_path) == []
+
+    (root / "coordinator.ts").write_text(
+        'import type { Map } from "maplibre-gl";', encoding="utf-8"
+    )
+    assert len(find_scope_violations(tmp_path)) == 1
+
+
+def test_renderer_owner_still_rejects_vertical_dependencies(tmp_path: Path) -> None:
+    root = tmp_path / "apps/web-next/src"
+    root.mkdir(parents=True)
+    (root / "map-surface.ts").write_text(
+        'import "maplibre-gl"; import "house-number";', encoding="utf-8"
+    )
+    violations = find_scope_violations(tmp_path)
+    assert len(violations) == 1
+    assert "house-numbering vertical" in violations[0]
