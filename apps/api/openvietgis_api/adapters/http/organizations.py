@@ -190,7 +190,7 @@ def list_organization_members(
         organization_id, context=context_for(authentication, organization_id=organization_id)
     )
     profiles = {
-        row["id"]: row
+        row["id"]: dict(row)
         for row in session.execute(
             text("""SELECT u.id,u.display_name,u.email_snapshot
         FROM identity.users u JOIN org.organization_memberships m ON m.user_id=u.id

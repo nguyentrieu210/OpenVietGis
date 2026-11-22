@@ -10,7 +10,7 @@ import tempfile
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -36,6 +36,12 @@ BASE = "/organizations/{organization_id}/projects/{project_id}/raster"
 WORKER = Path(__file__).resolve().parents[1] / "formats" / "raster_worker.py"
 LIMIT = 32 * 1024 * 1024
 gate = threading.BoundedSemaphore(1)
+
+
+class RasterWorkerOptions(TypedDict, total=False):
+    user: int
+    group: int
+    extra_groups: list[int]
 
 
 def stage(upload: UploadFile, target: Path, limit: int = LIMIT) -> None:
@@ -86,7 +92,7 @@ def analyze_raster(
             worker = root / "worker.py"
             shutil.copyfile(WORKER, worker)
             worker.chmod(0o644)
-            opts = {}
+            opts: RasterWorkerOptions = {}
             if os.geteuid() == 0:
                 import pwd
 
@@ -386,7 +392,7 @@ def store_raster(
             for script in (WORKER, PERSIST):
                 shutil.copyfile(script, root / script.name)
                 (root / script.name).chmod(0o644)
-            opts = {}
+            opts: RasterWorkerOptions = {}
             if os.geteuid() == 0:
                 import pwd
 
@@ -598,7 +604,7 @@ def raster_report(
             for script in (WORKER, PERSIST):
                 shutil.copyfile(script, root / script.name)
                 (root / script.name).chmod(0o644)
-            opts = {}
+            opts: RasterWorkerOptions = {}
             if os.geteuid() == 0:
                 import pwd
 

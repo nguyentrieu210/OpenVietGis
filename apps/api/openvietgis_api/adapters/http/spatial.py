@@ -667,7 +667,9 @@ def preview_geometry(
         if len(payload.feature_ids) != 1 or len(payload.blade) < 2:
             raise HTTPException(422, "Choose one feature and draw a cutting line")
         validate_ready_geometry(
-            NativeGeometry(type="LineString", coordinates=payload.blade, srid=4326)
+            NativeGeometry(
+                type="LineString", coordinates=tuple(tuple(p) for p in payload.blade), srid=4326
+            )
         )
         expression = "ST_Split(ST_Collect(geometry), ST_SetSRID(ST_GeomFromGeoJSON(:blade),4326))"
         # ST_Collect of a single geometry is multi; use the original geometry instead.

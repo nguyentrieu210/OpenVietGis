@@ -6,8 +6,8 @@ import math
 import sys
 from pathlib import Path
 
-import raster_worker
-from osgeo import ogr
+import raster_worker  # type: ignore[import-not-found]  # Copied sibling worker.
+from osgeo import ogr  # type: ignore[import-not-found]  # System GDAL.
 from raster_worker import NODATA, epsg_ref, gdal, np, opened, osr
 
 raster_worker.PIXELS = 20_000_000

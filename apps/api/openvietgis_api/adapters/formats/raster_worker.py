@@ -14,7 +14,7 @@ resource.setrlimit(
 os.environ.update(PROJ_NETWORK="OFF", OPENBLAS_NUM_THREADS="1", GDAL_NUM_THREADS="1")
 # Apply resource and environment restrictions before initializing native libraries.
 import numpy as np  # noqa: E402
-from osgeo import gdal, osr  # noqa: E402
+from osgeo import gdal, osr  # type: ignore[import-not-found]  # noqa: E402
 
 gdal.UseExceptions()
 gdal.SetConfigOption("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")

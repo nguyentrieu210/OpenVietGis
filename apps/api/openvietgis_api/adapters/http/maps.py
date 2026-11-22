@@ -158,7 +158,7 @@ def get_map(
             ).scalars()
         }
         config = wire.get("configuration")
-        if config:
+        if isinstance(config, dict):
             config["layers"] = [
                 layer_record
                 for layer_record in config.get("layers", [])

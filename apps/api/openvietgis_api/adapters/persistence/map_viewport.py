@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import chain
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import text
@@ -286,7 +287,9 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             if first is None:
                 raise MapReadUnavailableError("missing render snapshot summary")
             self._validate_summary(
-                params["expected_count"], first["snapshot_count"], first["snapshot_valid"]
+                cast(int, params["expected_count"]),
+                first["snapshot_count"],
+                first["snapshot_valid"],
             )
 
             def features() -> Iterator[RenderFeature]:
@@ -344,7 +347,7 @@ class SqlMapViewportRepository(SqlSpatialRepository):
                 .one()
             )
             self._validate_summary(
-                params["expected_count"], row["snapshot_count"], row["snapshot_valid"]
+                cast(int, params["expected_count"]), row["snapshot_count"], row["snapshot_valid"]
             )
             if row["west"] is None:
                 return {"context": wire, "state": "empty", "bounds": None}
