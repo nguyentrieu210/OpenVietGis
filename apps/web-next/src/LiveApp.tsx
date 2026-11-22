@@ -28,6 +28,8 @@ import {AccountMenu} from "./AccountMenu";
 import {DeveloperPortal} from "./DeveloperPortal";
 import {ExternalPluginHub} from "./ExternalPluginHub";
 import {AiCopilotPanel} from "./AiCopilotPanel";
+import {executeWorkspace} from "./ai-copilot/workspace-actions";
+import {renderAiLayout} from "./ai-copilot/layout-export";
 import {shareGeometry,partnerOverlay,type PartnerMapBridge,type PartnerOverlay,type PartnerTool} from "./partner-map-bridge";
 import {listPartnerContributions,type SavedPartnerContribution} from "@openvietgis/client-sdk";
 import {WorkspacePicker} from "./WorkspacePicker";
@@ -154,10 +156,14 @@ function LiveStudio({org,project,expire,extension,openManager,moduleName,account
      view:()=>{const m=getMap(),c=m.getCenter().wrap(),b=m.getBounds();return {crs:"EPSG:4326",center:[c.lng,c.lat],bbox:[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],zoom:m.getZoom()}},
      selection:()=>{const m=getMap();const layerView=row&&workspace.layerViews[row.layer.id];if(!row||!visible.some(r=>r.key===row.key)||!row.layer.capabilities.some(c=>c.name==="feature_read"&&c.actor_authorized&&c.available)||(layerView&&(m.getZoom()<layerView.minZoom||m.getZoom()>=layerView.maxZoom)))throw Error("Chọn một đối tượng đang hiển thị và có quyền đọc.");return {crs:"EPSG:4326",geometry:shareGeometry(row.geometry)}},
      navigate:target=>{const m=getMap();fit.current="full";m.easeTo({center:[target.longitude,target.latitude],zoom:target.zoom,duration:500});},
-     overlay:input=>{getMap();setPartnerOverlayData(input)},clearOverlay:()=>setPartnerOverlayData(null)
+     overlay:input=>{getMap();setPartnerOverlayData(input)},clearOverlay:()=>setPartnerOverlayData(null),
+     workspace:async(method,args,checkDeadline)=>{
+       const guard=(seconds=0)=>{checkDeadline(seconds);if(partnerBridge.current!==bridge||special||drawer||rasterBusy)throw Error("Không gian GIS đã thay đổi hoặc đang bận.");getMap()};
+       return executeWorkspace({client,org,pid,guard,refresh,visibility:(id,show)=>{setHidden(prev=>{const next=new Set(prev);show?next.delete(id):next.add(id);return next})},select:(layer,ids)=>{const rows=visible.filter(r=>r.layer.id===layer&&ids.includes(r.feature.feature_id));if(rows.length!==new Set(ids).size)throw Error("Đối tượng không có trong vùng đang hiển thị");setSelection(new Set(rows.map(r=>r.key)));setSelected(rows[0]?.key??"")},overlay:input=>{const validated=partnerOverlay(input);if(!validated)throw Error("Hình học overlay không hợp lệ");setPartnerOverlayData(validated)},renderLayout:(document,format,check)=>renderAiLayout(getMap(),document,format,data.layers.filter(l=>!hidden.has(l.id)).map(l=>({name:l.name,color:toolkit.styleFor(l).color})),check)},method,args);
+     }
    };partnerBridge.current=bridge;
    return()=>{if(partnerBridge.current===bridge)partnerBridge.current=null};
- },[partnerBridge,ready,loading,busy,data,row,visible,workspace.layerViews,toolkit.modeRef,advanced.activeRef,pro.activeRef]);
+ },[partnerBridge,ready,loading,busy,data,row,visible,workspace.layerViews,toolkit.modeRef,advanced.activeRef,pro.activeRef,special,drawer,rasterBusy,hidden,org,pid]);
  useEffect(()=>{
    const m=map.current;if(!ready||!m)return;
    const entries:{key:string;overlay:PartnerOverlay}[]=[];

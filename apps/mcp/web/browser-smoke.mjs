@@ -11,14 +11,14 @@ try{
  let command=null,acked=[],closed=false,checks=0;
  await page.route(origin+"/fixture",route=>route.fulfill({contentType:"text/html",body:`<!doctype html><meta charset="utf-8"><div id="toolbar"></div><script type="module">${script}
  let center=[106,10],zoom=5;
- const close=mountAiCopilot(document.querySelector("#toolbar"),{organizationId:"org",projectId:"project",getBridge:()=>({view:()=>({crs:"EPSG:4326",center,zoom,bbox:[0,0,1,1]}),selection:()=>({crs:"EPSG:4326",geometry:{type:"Point",coordinates:[106,10]}}),navigate:({longitude,latitude,zoom:z})=>{center=[longitude,latitude];zoom=z;window.moved={center,zoom}}})});
+ const close=mountAiCopilot(document.querySelector("#toolbar"),{organizationId:"org",projectId:"project",getBridge:()=>({view:()=>({crs:"EPSG:4326",center,zoom,bbox:[0,0,1,1]}),selection:()=>({crs:"EPSG:4326",geometry:{type:"Point",coordinates:[106,10]}}),navigate:({longitude,latitude,zoom:z})=>{center=[longitude,latitude];zoom=z;window.moved={center,zoom}},workspace:async(method,params)=>{window.executed={method,params};return {id:"fixture-receipt"}}})});
  window.unmount=close;
  </script>`}));
  await page.route(origin+"/ai-copilot/sessions**",async route=>{
   const r=route.request(),p=new URL(r.url()).pathname,body=r.postDataJSON();
   assert.equal(r.headers()["x-ovg-ai"],"1");
   if(p.endsWith("/sessions")){
-    assert.deepEqual(body,{organization_id:"org",project_id:"project"});
+    assert.deepEqual(body,{organization_id:"org",project_id:"project",workspace_version:2});
     return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}});
   }
   assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
@@ -46,6 +46,19 @@ try{
  await page.getByText(/Đã thực hiện lệnh AI/).waitFor();
  assert.deepEqual(await page.evaluate(()=>window.moved),{center:[105.8,21],zoom:12});
  assert.ok(checks>0);
+ const mutation={id:"three",method:"gis_changeset",params:{layer_id:"layer-fixture",operations:[{op_type:"delete",feature_id:"feature-1"}]},expires_in:40};
+ command=mutation;
+ await page.getByText("GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",{exact:true}).waitFor();
+ assert.match(await page.locator('[data-ai="details"]').textContent(),/feature-1/);
+ await page.getByRole("button",{name:"Từ chối",exact:true}).click();
+ await page.getByText(/Đã từ chối/).waitFor();
+ assert.equal(await page.evaluate(()=>window.executed),undefined);
+ command={...mutation,id:"four"};
+ await page.getByText("GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",{exact:true}).waitFor();
+ await page.getByRole("button",{name:"Đồng ý một lần",exact:true}).click();
+ await page.getByText(/Đã thực hiện lệnh AI/).waitFor();
+ assert.deepEqual(await page.evaluate(()=>window.executed),{method:"gis_changeset",params:mutation.params});
+ assert.deepEqual(acked.at(-1),{ok:true,result:{id:"fixture-receipt"}});
  await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();
  await page.waitForTimeout(100);
  assert.ok(closed);

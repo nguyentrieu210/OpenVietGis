@@ -20,10 +20,13 @@ from live_bridge import BridgeError
 from remote_oauth import KeycloakVerifier,OidcConfig,SCOPE
 from remote_workspace import GisIdentity,OwnedBridge
 
-def create_remote(config, identity=None, workspace=None, verifier=None):
+def create_remote(config, identity=None, workspace=None, verifier=None, full_tools=False):
     origin=f"{urlsplit(config.resource).scheme}://{urlsplit(config.resource).netloc}"
     identity=identity or GisIdentity(config.issuer)
-    workspace=workspace or OwnedBridge()
+    from live_bridge import BridgeStore
+    workspace=workspace or OwnedBridge(BridgeStore(allow_workspace=full_tools))
+    if full_tools and not workspace.store.allow_workspace:
+        raise ValueError("Full workspace store not enabled")
     verifier=verifier or KeycloakVerifier(config)
     mcp=MCPServer("OpenVietGIS Live",token_verifier=verifier,auth=AuthSettings(
         issuer_url=AnyHttpUrl(config.issuer),resource_server_url=AnyHttpUrl(config.resource),
@@ -53,6 +56,19 @@ def create_remote(config, identity=None, workspace=None, verifier=None):
         """Move the connected live camera with approval. No persistent changes."""
         return await operate("map_navigate",{"longitude":longitude,"latitude":latitude,"zoom":zoom})
 
+    if full_tools:
+        from workspace_tools import register
+        register(mcp,operate)
+
+        @mcp.tool(annotations=ToolAnnotations(read_only_hint=True,destructive_hint=False),structured_output=True)
+        async def gis_operation_status(operation_ticket:str)->dict[str,Any]:
+            """Read state/result of an advanced operation ticket. Terminal result consumed once. Never resubmit a timed-out write without inspecting GIS."""
+            token=get_access_token()
+            if token is None or not token.subject or not token.expires_at or token.expires_at<=__import__("time").time():
+                raise ValueError("OAuth authentication required")
+            try:return workspace.operation_status(token.subject,operation_ticket)
+            except BridgeError as e:raise ValueError(str(e)) from None
+
     def browser_guard(request):
         if request.headers.get("origin")!=origin or request.headers.get("x-ovg-ai")!="1":
             raise BridgeError(403,"Trusted GIS origin required")
@@ -68,7 +84,7 @@ def create_remote(config, identity=None, workspace=None, verifier=None):
         cookie=browser_guard(request)
         data=await body(request)
         owner=await identity.owner(cookie,data.get("organization_id"),data.get("project_id"))
-        return JSONResponse(workspace.create(owner),status_code=201)
+        return JSONResponse(workspace.create(owner,(data.get("workspace_version") if full_tools and type(data.get("workspace_version")) is int and data.get("workspace_version") in (1,2) else 0)),status_code=201)
 
     async def current(request):
         cookie=browser_guard(request)
@@ -126,4 +142,4 @@ def create_remote(config, identity=None, workspace=None, verifier=None):
 def create_from_env():
     config=OidcConfig(os.environ["OVG_OIDC_ISSUER"],os.environ["OVG_MCP_RESOURCE"],
         frozenset(c.strip() for c in os.environ["OVG_MCP_OAUTH_CLIENTS"].split(",") if c.strip()))
-    return create_remote(config)
+    return create_remote(config,verifier=KeycloakVerifier(config,jwks_url=os.environ.get("OVG_OIDC_JWKS_URL")),full_tools=os.environ.get("OVG_MCP_FULL_TOOLS")=="1")

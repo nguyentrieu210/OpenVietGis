@@ -1,0 +1,9 @@
+# Production MCP sidecar evidence — 2026-11-23
+
+- Release: `6688d93`, isolated runtime `/opt/openvietgis-mcp-runtime/6688d93`.
+- Service: `openvietgis-mcp-public.service`, non-root, loopback 9188, enabled and active. Existing stage 9187 remains separate.
+- Canonical endpoint: `https://openvietgis.cloud/mcp`. Public anonymous access produces an OAuth challenge; protected-resource discovery returns the correct resource, issuer, and `gis:live` scope. Nginx configuration tested; backup `openvietgis.cloud.conf.before-mcp-6688d93` available.
+- Existing Keycloak realm `openvietgis`: dedicated public Claude client `openvietgis-mcp-claude`, exact callback `https://claude.ai/api/mcp/auth_callback`, code+PKCE S256, explicit consent, no direct/implicit/service grants; `gis:live` scope carries the exact MCP audience. The default `basic` client scope supplies the subject.
+- Real disposable-user browser authorization-code and PKCE flow completed, actual signed token validated for issuer, subject, audience, authorized client, expiry, scope; then HTTPS Nginx endpoint `tools/list` with the real token returned exactly `gis_live_navigate`, `gis_live_selection`, `gis_live_view`. Disposable account cleanup completed. Callback intercepted locally; no real Claude account involved.
+- Main frontend has an existing `AiCopilotPanel` wrapper gated on resource metadata, map readiness and `project.read`. Its JavaScript matches the branch module. TypeScript and Vite production build succeeded in an isolated output directory (211 modules). Production frontend predates the wrapper; it must be released through the approved frontend checkpoint. Do not promote unrelated dirty main work to expose this panel.
+- No production authenticated real-project operation or actual Claude account connector has been verified. The three tools require a same-subject paired workspace and explicit browser approval. GIS persistent edits are not exposed.
