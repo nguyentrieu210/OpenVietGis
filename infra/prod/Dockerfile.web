@@ -8,6 +8,8 @@ COPY apps/web ./apps/web
 COPY apps/web-next ./apps/web-next
 COPY modules ./modules
 RUN pnpm validate:runtime && pnpm install --frozen-lockfile && pnpm --filter @openvietgis/web-next build
+# Vite copies public files with source modes; the nginx worker must read them.
+RUN chmod -R a+rX /app/apps/web-next/dist
 
 FROM nginx:1.27-alpine
 COPY infra/prod/nginx.conf /etc/nginx/conf.d/default.conf
