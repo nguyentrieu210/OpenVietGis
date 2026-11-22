@@ -23,18 +23,21 @@ DB = Annotated[Session, Depends(get_db_session, scope="function")]
 Status = Literal["todo", "in_progress", "done"]
 Priority = Literal["low", "normal", "high"]
 WHERE = "organization_id=:o AND project_id=:p"
-MESSAGE_COLS = "id,author_id,author_name,body,created_at"
-TASK_COLS = "id,creator_id,creator_name,assignee_id,assignee_name,title,description,status,priority,due_date,longitude,latitude,revision,created_at,updated_at"
+MESSAGE_COLS = "id,author_id,author_name,body,created_at,recipient_id"
+TASK_COLS = "id,creator_id,creator_name,assignee_id,assignee_name,title,description,status,priority,due_date,longitude,latitude,revision,created_at,updated_at,source_message_id"
 
 class MessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     body: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+
+    recipient_id: UUID | None = None
 
 class TaskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
     description: str = Field(default="", max_length=2000)
     assignee_id: UUID
+    source_message_id: UUID | None = None
     priority: Priority = "normal"
     due_date: date | None = None
     longitude: float | None = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
@@ -89,19 +92,27 @@ def members(organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB
 
 @router.get(BASE + "/messages")
 def messages(organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB, response: Response,
-             limit: Annotated[int, Query(ge=1, le=100)] = 100):
-    scope(session, auth, organization_id, project_id)
+             limit: Annotated[int, Query(ge=1, le=100)] = 100, peer: UUID | None = None):
+    ctx = scope(session, auth, organization_id, project_id)
     response.headers["Cache-Control"] = "no-store"
-    rows = session.execute(text(f"SELECT {MESSAGE_COLS} FROM collaboration.messages WHERE {WHERE} ORDER BY created_at DESC,id DESC LIMIT :limit"),
-                           {"o": organization_id, "p": project_id, "limit": limit}).mappings().all()
+    condition = " AND recipient_id IS NULL" if peer is None else (
+        " AND ((author_id=:actor AND recipient_id=:peer) OR (author_id=:peer AND recipient_id=:actor))"
+    )
+    rows = session.execute(text(f"SELECT {MESSAGE_COLS} FROM collaboration.messages WHERE {WHERE}{condition} ORDER BY created_at DESC,id DESC LIMIT :limit"),
+                           {"o": organization_id, "p": project_id, "limit": limit, "actor": ctx.actor.actor_id, "peer": peer}).mappings().all()
     return {"items": [dict(r) for r in reversed(rows)]}
 
 @router.post(BASE + "/messages", status_code=201)
 def post_message(organization_id: UUID, project_id: UUID, body: MessageRequest, auth: WriteAuth, session: DB):
     ctx = scope(session, auth, organization_id, project_id, write=True)
-    row = session.execute(text(f"""INSERT INTO collaboration.messages(organization_id,project_id,id,author_id,author_name,body)
-      VALUES(:o,:p,:id,:actor,:name,:body) RETURNING {MESSAGE_COLS}"""),
-      {"o": organization_id, "p": project_id, "id": uuid4(), "actor": ctx.actor.actor_id, "name": ctx.actor.display_name[:200], "body": body.body}).mappings().one()
+    if body.recipient_id is not None and (
+        body.recipient_id == ctx.actor.actor_id
+        or not any(r["id"] == body.recipient_id for r in eligible(session, organization_id, project_id))
+    ):
+        raise HTTPException(422, "Recipient must be another unrestricted project editor")
+    row = session.execute(text(f"""INSERT INTO collaboration.messages(organization_id,project_id,id,author_id,author_name,body,recipient_id)
+      VALUES(:o,:p,:id,:actor,:name,:body,:recipient_id) RETURNING {MESSAGE_COLS}"""),
+      {"o": organization_id, "p": project_id, "id": uuid4(), "actor": ctx.actor.actor_id, "name": ctx.actor.display_name[:200], "body": body.body, "recipient_id": body.recipient_id}).mappings().one()
     return dict(row)
 
 @router.get(BASE + "/tasks")
@@ -120,9 +131,14 @@ def create_task(organization_id: UUID, project_id: UUID, body: TaskRequest, auth
     member = next((r for r in eligible(session, organization_id, project_id) if r["id"] == body.assignee_id), None)
     if member is None:
         raise HTTPException(422, "Assignee must be an active unrestricted project editor")
+    if body.source_message_id is not None:
+        public_message = session.execute(text(f"SELECT id FROM collaboration.messages WHERE {WHERE} AND id=:source AND recipient_id IS NULL"),
+            {"o": organization_id, "p": project_id, "source": body.source_message_id}).scalar_one_or_none()
+        if public_message is None:
+            raise HTTPException(422, "Only a project message can be linked to a project task")
     rid = uuid4()
-    row = session.execute(text(f"""INSERT INTO collaboration.tasks(organization_id,project_id,id,creator_id,creator_name,assignee_id,assignee_name,title,description,priority,due_date,longitude,latitude)
-      VALUES(:o,:p,:id,:actor,:name,:assignee_id,:assignee_name,:title,:description,:priority,:due_date,:longitude,:latitude)
+    row = session.execute(text(f"""INSERT INTO collaboration.tasks(organization_id,project_id,id,creator_id,creator_name,assignee_id,assignee_name,title,description,priority,due_date,longitude,latitude,source_message_id)
+      VALUES(:o,:p,:id,:actor,:name,:assignee_id,:assignee_name,:title,:description,:priority,:due_date,:longitude,:latitude,:source_message_id)
       RETURNING {TASK_COLS}"""),
       {"o": organization_id, "p": project_id, "id": rid, "actor": ctx.actor.actor_id, "name": ctx.actor.display_name[:200], "assignee_name": member["display_name"], **body.model_dump()}).mappings().one()
     audit(session, ctx, rid, "collaboration.task.create", {"assignee_id": str(body.assignee_id), "revision": 1})
@@ -143,3 +159,28 @@ def change_task(organization_id: UUID, project_id: UUID, task_id: UUID, body: St
         raise HTTPException(409, "Task revision changed; refresh and retry")
     audit(session, ctx, task_id, "collaboration.task.status", {"before": previous["status"], "after": body.status, "revision": row["revision"]})
     return dict(row)
+
+@router.get(BASE + "/notifications")
+def notifications(organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB, response: Response):
+    ctx = scope(session, auth, organization_id, project_id)
+    response.headers["Cache-Control"] = "no-store"
+    args = {"o": organization_id, "p": project_id, "actor": ctx.actor.actor_id}
+    query = """FROM collaboration.tasks t LEFT JOIN collaboration.task_notification_reads r
+      ON r.organization_id=t.organization_id AND r.project_id=t.project_id AND r.task_id=t.id AND r.user_id=:actor
+      WHERE t.organization_id=:o AND t.project_id=:p AND t.assignee_id=:actor AND t.creator_id<>:actor"""
+    rows = session.execute(text("SELECT t.id,t.title,t.creator_name,t.created_at,r.read_at " + query +
+        " ORDER BY (r.read_at IS NULL) DESC,t.created_at DESC,t.id LIMIT 100"), args).mappings().all()
+    count = session.execute(text("SELECT count(*) " + query + " AND r.read_at IS NULL"), args).scalar_one()
+    return {"items": [dict(r) for r in rows], "unread": count}
+
+
+@router.post(BASE + "/notifications/{task_id}/read")
+def read_notification(organization_id: UUID, project_id: UUID, task_id: UUID, auth: WriteAuth, session: DB):
+    ctx = scope(session, auth, organization_id, project_id, write=True)
+    args = {"o": organization_id, "p": project_id, "id": task_id, "actor": ctx.actor.actor_id}
+    exists = session.execute(text(f"SELECT id FROM collaboration.tasks WHERE {WHERE} AND id=:id AND assignee_id=:actor AND creator_id<>:actor"), args).scalar_one_or_none()
+    if exists is None:
+        raise HTTPException(404, "Notification not found")
+    session.execute(text("""INSERT INTO collaboration.task_notification_reads(organization_id,project_id,task_id,user_id)
+      VALUES(:o,:p,:id,:actor) ON CONFLICT DO NOTHING"""), args)
+    return {"read": True}

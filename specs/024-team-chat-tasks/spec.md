@@ -2,11 +2,11 @@
 Parent: [R011](../../ROADMAP.md#r011). Dependencies: R002 project permissions, R011 collaboration schema and audit, GIS access restrictions from the pinned integrated candidate.
 
 ## Requirements
-- Project chat: authenticated full-scope human members read; editors post plain text. Latest 100 messages, manual refresh and 5-second polling while panel open. Messages are append-only and attributed.
+- Project chat: authenticated full-scope human members read; editors post plain text. Latest 100 messages, manual refresh and commit-driven SSE. See [V2 contract](v2-realtime.md) for private chat, notifications and Kanban. Messages are append-only and attributed.
 - Project tasks: editors create tasks and assign eligible active editors; all full-scope readers can view project tasks, filter My tasks, and see due date, priority, status and creator.
 - Creator or assignee can change status using expected revision; audit every creation/status change. No destructive deletion in V1.
 - Optionally attach an explicitly confirmed WGS84 map position to a task; navigate to that position without changing spatial data.
-- Project/organization isolation at API and FORCE RLS; restricted GIS members and service principals denied. CSRF for writes. No DMs, file uploads, push notifications or unrestricted map feature sharing in this slice.
+- Project/organization isolation at API and FORCE RLS; restricted GIS members and service principals denied. CSRF for writes. Private project DMs and in-app notifications are covered in V2. No file uploads, external push notifications or unrestricted map feature sharing.
 - Actual public launch requires integration with concurrent CAD migration and release gates.
 
 ## Acceptance
