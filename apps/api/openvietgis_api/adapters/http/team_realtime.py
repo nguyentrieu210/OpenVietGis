@@ -1,4 +1,5 @@
 """Commit-delivered SSE invalidations for project chat, tasks and private receipts."""
+
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +30,8 @@ def matches(payload: str, org: UUID, project: UUID, actor: UUID) -> bool:
     try:
         event = json.loads(payload)
         return (
-            event["o"] == str(org) and event["p"] == str(project)
+            event["o"] == str(org)
+            and event["p"] == str(project)
             and (event["a"] is None or str(actor) in (event["a"], event["b"]))
         )
     except (TypeError, ValueError, KeyError):
@@ -55,11 +57,17 @@ async def stream(request: Request, org: UUID, project: UUID, actor: UUID) -> Asy
         return
     async with _slots:
         settings = get_settings()
-        dsn = make_url(settings.runtime_db_url).set(drivername="postgresql").render_as_string(hide_password=False)
+        dsn = (
+            make_url(settings.runtime_db_url)
+            .set(drivername="postgresql")
+            .render_as_string(hide_password=False)
+        )
         # Authenticate prior to LISTEN and before initial refresh, then every
         # relevant commit or heartbeat. Payload contains no user-facing content.
         try:
-            async with await psycopg.AsyncConnection.connect(dsn, autocommit=True, connect_timeout=5) as conn:
+            async with await psycopg.AsyncConnection.connect(
+                dsn, autocommit=True, connect_timeout=5
+            ) as conn:
                 await conn.execute("LISTEN " + CHANNEL)
                 if not await anyio.to_thread.run_sync(still_allowed, request, org, project, actor):
                     yield "event: revoked\ndata: {}\n\n"
@@ -69,13 +77,17 @@ async def stream(request: Request, org: UUID, project: UUID, actor: UUID) -> Asy
                 while not await request.is_disconnected():
                     relevant = False
                     kind = "change"
-                    async for notice in conn.notifies(timeout=max(0.01, heartbeat-time.monotonic()), stop_after=1):
+                    async for notice in conn.notifies(
+                        timeout=max(0.01, heartbeat - time.monotonic()), stop_after=1
+                    ):
                         relevant = matches(notice.payload, org, project, actor)
                         if relevant and json.loads(notice.payload).get("kind") == "spatial_change":
                             kind = "spatial_change"
                     if not relevant and time.monotonic() < heartbeat:
                         continue
-                    if not await anyio.to_thread.run_sync(still_allowed, request, org, project, actor):
+                    if not await anyio.to_thread.run_sync(
+                        still_allowed, request, org, project, actor
+                    ):
                         yield "event: revoked\ndata: {}\n\n"
                         return
                     if relevant:
@@ -95,5 +107,9 @@ def events(organization_id: UUID, project_id: UUID, request: Request, auth: Read
     return StreamingResponse(
         stream(request, organization_id, project_id, ctx.actor.actor_id),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+        headers={
+            "Cache-Control": "no-store, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )

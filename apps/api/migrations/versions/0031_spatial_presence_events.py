@@ -1,4 +1,5 @@
 """Notify project clients after a GIS changeset commits."""
+
 from alembic import op
 
 revision = "0031_spatial_presence_events"
