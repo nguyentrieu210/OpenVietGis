@@ -9,10 +9,10 @@
 - [x] T005 [US1] Connect capability-aware mode switch to apps/web-next from the committed preflight candidate; integrated host browser smoke passed.
 - [ ] T006 [US1] Host context, draft guards, camera and persistent GIS selection wired; 3D pick identity displayed, bidirectional selection sync remains.
 ## US2 — Lifecycle
-- [ ] T007 [US2] Coordinator bound to real GIS and 3D adapters and private CAD vault. Direct CAD engine adapter remains gated.
+- [ ] T007 [US2] Coordinator bound to GIS, 3D, private CAD vault and dedicated-origin CAD editor adapter. Real pinned engine exercised with synthetic DXF; production engine provenance and release gate remain open.
 - [ ] T008 [US2] Integrated switching, CAD versions and revocation smoke passed in apps/web-next/spatial-mode-smoke.mjs; full failure-recovery regression remains.
 ## US3 — Interoperability
-- [ ] T009 [US3] CAD protocol/georeference, actual 3D, project vault and server permission checks implemented/verified. Deployed CAD engine isolation and linked georeferenced geometry import remain gated.
+- [ ] T009 [US3] Version-linked DXF control-point import implemented and PostGIS integration passed; explicit EPSG:3857 grid only, with inspection fingerprint, confirmation and provenance. Production CAD release and VN-2000/other CRS remain gated.
 - [x] T010 [US3] Reference polygon building fixture rendered in integrated browser with explicit height field and flat zero base.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.
