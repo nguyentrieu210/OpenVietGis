@@ -14,7 +14,7 @@ const username=process.env.OVG_TEST_USERNAME,password=process.env.OVG_TEST_PASSW
 if(!username?.startsWith("mcp-smoke-")||!password)throw Error("Disposable test identity required");
 const verifier=randomBytes(48).toString("base64url"),challenge=createHash("sha256").update(verifier).digest("base64url"),state=randomBytes(24).toString("base64url");
 const auth=new URL(issuer+"/protocol/openid-connect/auth");
-for(const [k,v] of Object.entries({client_id:client,redirect_uri:callback,response_type:"code",scope:"openid gis:live",state,code_challenge:challenge,code_challenge_method:"S256",resource}))auth.searchParams.set(k,v);
+for(const [k,v] of Object.entries({client_id:client,redirect_uri:callback,response_type:"code",scope:client==="openvietgis-mcp-chatgpt"?"openid email offline_access gis:live":"openid gis:live",state,code_challenge:challenge,code_challenge_method:"S256",resource}))auth.searchParams.set(k,v);
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--host-resolver-rules=MAP openvietgis.cloud 127.0.0.1, MAP claude.ai ~NOTFOUND, MAP chatgpt.com ~NOTFOUND","--no-proxy-server"]});
 try{
  const context=await browser.newContext();
@@ -41,7 +41,20 @@ try{
  const child=spawn("curl",["--silent","--show-error","--fail-with-body","--resolve","openvietgis.cloud:443:127.0.0.1","--header","Content-Type: application/x-www-form-urlencoded","--data-binary","@-",issuer+"/protocol/openid-connect/token"],{stdio:["pipe","pipe","pipe"]});
  const chunks=[];child.stdout.on("data",d=>chunks.push(d));child.stdin.end(data.toString());
  const rc=await new Promise(r=>child.on("close",r));assert.equal(rc,0,"Token exchange failed");
- const token=JSON.parse(Buffer.concat(chunks).toString()).access_token;assert.ok(token);
+ const tokenResponse=JSON.parse(Buffer.concat(chunks).toString()),token=tokenResponse.access_token;assert.ok(token);
+ if(client==="openvietgis-mcp-chatgpt"){
+   assert.ok(tokenResponse.refresh_token,"ChatGPT offline_access must include a refresh token");
+   const refreshData=new URLSearchParams({grant_type:"refresh_token",client_id:client,refresh_token:tokenResponse.refresh_token,resource});
+   const refresh=spawn("curl",["--silent","--show-error","--fail-with-body","--resolve","openvietgis.cloud:443:127.0.0.1","--header","Content-Type: application/x-www-form-urlencoded","--data-binary","@-",issuer+"/protocol/openid-connect/token"],{stdio:["pipe","pipe","pipe"]});
+   const refreshed=[];refresh.stdout.on("data",d=>refreshed.push(d));refresh.stdin.end(refreshData.toString());
+   assert.equal(await new Promise(r=>refresh.on("close",r)),0,"ChatGPT refresh failed");
+   const rotated=JSON.parse(Buffer.concat(refreshed).toString());
+   assert.ok(rotated.access_token&&rotated.refresh_token,"ChatGPT refresh response incomplete");
+   const py=fileURLToPath(new URL("../.venv/bin/python",import.meta.url)),helper=fileURLToPath(new URL("./verify-keycloak-token.py",import.meta.url));
+   const check=spawn(py,[helper],{stdio:["pipe","inherit","inherit"]});check.stdin.end(rotated.access_token);
+   assert.equal(await new Promise(r=>check.on("close",r)),0,"Refreshed ChatGPT access token rejected");
+   console.log("PASS ChatGPT requested scopes and refresh grant");
+ }
  const py=fileURLToPath(new URL("../.venv/bin/python",import.meta.url)),helper=fileURLToPath(new URL("./verify-keycloak-token.py",import.meta.url));
  const verify=spawn(py,[helper],{stdio:["pipe","inherit","inherit"]});verify.stdin.end(token);
  assert.equal(await new Promise(r=>verify.on("close",r)),0,"Actual signed token failed resource validation");
