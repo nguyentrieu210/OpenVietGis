@@ -40,8 +40,10 @@ def test_fixture_smoke_rejects_octet_stream_module_worker() -> None:
             200, text='OpenVietGIS<script src="/assets/index-fixture.js"></script>'
         )
 
-    with httpx.Client(
-        base_url="https://localhost:8000", transport=httpx.MockTransport(handle)
-    ) as client:
-        with pytest.raises(RuntimeError, match="worker must be served as JavaScript"):
-            check(client, "https://localhost:8000")
+    with (
+        httpx.Client(
+            base_url="https://localhost:8000", transport=httpx.MockTransport(handle)
+        ) as client,
+        pytest.raises(RuntimeError, match="worker must be served as JavaScript"),
+    ):
+        check(client, "https://localhost:8000")
