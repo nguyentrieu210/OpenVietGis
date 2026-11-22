@@ -43,7 +43,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listServiceCredentials"];
         put?: never;
         post: operations["issueServiceCredential"];
         delete?: never;
@@ -129,6 +129,21 @@ export interface components {
             description?: string | null;
             /** @enum {string} */
             status: "active" | "revoked";
+        };
+        ServiceCredentialMetadata: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            prefix: string;
+            permission_ceiling: string[] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            expires_at: string | null;
+            /** Format: date-time */
+            last_used_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
         };
         ServiceCredentialIssued: {
             /** Format: uuid */
@@ -249,6 +264,43 @@ export interface operations {
         responses: {
             /** @description Principal revoked; credentials no longer authorize */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listServiceCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: components["parameters"]["OrganizationId"];
+                service_principal_id: components["parameters"]["ServicePrincipalId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential metadata only; secret and hash are never returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServiceCredentialMetadata"][];
+                };
+            };
+            /** @description Service principal management permission required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Principal not found in this organization */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

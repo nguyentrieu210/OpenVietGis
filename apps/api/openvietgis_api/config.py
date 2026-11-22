@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,11 +37,17 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False
     session_ttl_seconds: int = Field(default=28_800, ge=300, le=604_800)
     artifact_store_dir: str = "/tmp/openvietgis-artifacts"
+    marketplace_catalog_path: str | None = None
+    marketplace_operator_public_key: str | None = None
+    marketplace_reviewer_user_ids: list[UUID] = Field(default_factory=list)
 
     application_session_secret: SecretStr
     csrf_secret: SecretStr
     bootstrap_secret: SecretStr
     oidc_providers: dict[str, OidcProviderSettings] = Field(default_factory=dict)
+    resend_api_key: SecretStr | None = None
+    invitation_from_email: str | None = None
+    invitation_web_path: str = "/rewrite/?live=1"
 
     @model_validator(mode="after")
     def validate_proposed_production_profile(self) -> Settings:

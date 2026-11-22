@@ -301,9 +301,8 @@ class HouseNumberingDocumentService:
                 FROM house_numbering.buildings b
                 LEFT JOIN house_numbering.routes r
                   ON r.organization_id=b.organization_id AND r.project_id=b.project_id AND r.id=b.route_id
-                LEFT JOIN spatial.reference_features rf
-                  ON rf.organization_id=r.organization_id AND rf.project_id=r.project_id
-                 AND rf.source_id=r.linked_source_id AND rf.feature_id=r.linked_feature_id
+                LEFT JOIN house_numbering.route_lines rf
+                  ON rf.organization_id=r.organization_id AND rf.project_id=r.project_id AND rf.route_id=r.id
                 LEFT JOIN spatial.reference_features bf
                   ON bf.organization_id=b.organization_id AND bf.project_id=b.project_id
                  AND bf.source_id=b.linked_source_id AND bf.feature_id=b.linked_feature_id

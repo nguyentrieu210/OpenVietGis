@@ -657,6 +657,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "authlib" },
+    { name = "cryptography" },
     { name = "ezdxf" },
     { name = "fastapi" },
     { name = "itsdangerous" },
@@ -684,6 +685,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = "==1.20.1" },
     { name = "authlib", specifier = "==1.9.8" },
+    { name = "cryptography", specifier = "==50.0.2" },
     { name = "ezdxf", specifier = ">=1.4.5" },
     { name = "fastapi", specifier = "==0.163.1" },
     { name = "itsdangerous", specifier = "==2.2.0" },

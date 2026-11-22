@@ -203,6 +203,7 @@ export interface operations {
             query?: {
                 mode?: "login" | "link";
                 return_to?: string;
+                prompt?: "login";
             };
             header?: never;
             path: {

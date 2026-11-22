@@ -34,6 +34,7 @@ class _OidcClient(Protocol):
         redirect_uri: str,
         *,
         state: str,
+        **kwargs: Any,
     ) -> Response: ...
 
     async def authorize_access_token(self, request: Request) -> Mapping[str, Any]: ...
@@ -82,9 +83,14 @@ class OidcProviderRegistry:
         provider_name: str,
         redirect_uri: str,
         state: str,
+        prompt: str | None = None,
+        action: str | None = None,
     ) -> Response:
         client = self._get_client(provider_name)
-        return await client.authorize_redirect(request, redirect_uri, state=state)
+        params = {"prompt": "login"} if prompt == "login" else {}
+        if action == "UPDATE_PASSWORD" and provider_name == "keycloak":
+            params["kc_action"] = action
+        return await client.authorize_redirect(request, redirect_uri, state=state, **params)
 
     async def complete_login(
         self,

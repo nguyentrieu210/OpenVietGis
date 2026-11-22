@@ -586,6 +586,28 @@ class SqlServicePrincipalRepository:
             },
         )
 
+    def list_credential_metadata(
+        self,
+        *,
+        context: AuthorizationContext,
+        organization_id: UUID,
+        service_principal_id: UUID,
+    ) -> list[dict[str, object]]:
+        require_member_context(self._session, context, organization_id)
+        # Never select the credential hash or a recoverable secret for the portal.
+        rows = self._session.execute(
+            text("""
+                SELECT id, name, prefix, permission_ceiling, created_at,
+                       expires_at, last_used_at, revoked_at
+                FROM org.service_credentials
+                WHERE organization_id=:organization_id
+                  AND service_principal_id=:service_principal_id
+                ORDER BY created_at DESC, id
+            """),
+            {"organization_id": organization_id, "service_principal_id": service_principal_id},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def get_credential(
         self,
         *,

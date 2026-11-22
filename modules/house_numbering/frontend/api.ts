@@ -34,6 +34,7 @@ export type HouseNumberingRoute = {
   status: "draft" | "confirmed";
   revision: number;
   building_count?: number;
+  segments?: { source_id: string; feature_id: string; code?: string }[];
 };
 
 export type HouseNumberingBuilding = {
@@ -305,6 +306,7 @@ export function createHouseNumberingRoute(
     feature_id: string;
     direction_state: "forward" | "reverse";
     source_label: string;
+    segments?: { source_id: string; feature_id: string; code?: string }[];
     status: "draft" | "confirmed";
   }
 ) {

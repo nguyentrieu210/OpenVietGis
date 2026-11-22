@@ -54,6 +54,18 @@ export function revokeServicePrincipal(
   );
 }
 
+export type ServiceCredentialMetadata = components["schemas"]["ServiceCredentialMetadata"];
+
+export function listServiceCredentials(
+  client: ApiClient,
+  organizationId: string,
+  principalId: string
+): Promise<ServiceCredentialMetadata[]> {
+  return client.request<ServiceCredentialMetadata[]>(
+    principalPath(organizationId, principalId) + "/credentials"
+  );
+}
+
 export function issueServiceCredential(
   client: ApiClient,
   organizationId: string,

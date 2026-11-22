@@ -1,0 +1,28 @@
+# Install as /etc/systemd/system/openvietgis-webhook@.service only after
+# provisioning a dedicated non-login openvietgis-webhook user and private env.
+[Unit]
+Description=OpenVietGIS outbound journal worker (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=openvietgis-webhook
+Group=openvietgis-webhook
+EnvironmentFile=/etc/openvietgis/webhooks/%i.env
+Environment=RELAY_STATE_DB=/var/lib/openvietgis-webhooks/%i/events.sqlite3
+StateDirectory=openvietgis-webhooks/%i
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/openvietgis/packages/plugin-sdk/native_webhook_worker.py
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

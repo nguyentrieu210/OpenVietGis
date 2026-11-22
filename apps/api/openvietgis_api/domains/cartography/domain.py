@@ -25,6 +25,9 @@ class StyleMode(StrEnum):
 class PaperSize(StrEnum):
     A4 = "A4"
     A3 = "A3"
+    A2 = "A2"
+    A1 = "A1"
+    A0 = "A0"
 
 
 class Orientation(StrEnum):
@@ -189,7 +192,9 @@ def paper_dimensions_px(
 ) -> tuple[int, int]:
     """Return physical print canvas size in pixels (bounded to keep exports responsive)."""
     # Physical mm: A4 = 210x297, A3 = 297x420; compute pixel dimensions for 150 or 300 DPI
-    mm_w, mm_h = (210.0, 297.0) if paper_size == PaperSize.A4 else (297.0, 420.0)
+    mm_w, mm_h = {PaperSize.A4:(210.,297.),PaperSize.A3:(297.,420.),PaperSize.A2:(420.,594.),PaperSize.A1:(594.,841.),PaperSize.A0:(841.,1189.)}[paper_size]
+    if paper_size in (PaperSize.A0,PaperSize.A1,PaperSize.A2) and dpi != 150:
+        raise PlatformValidationError("Large paper formats require 150 dpi", code="INVALID_DPI")
     if orientation == Orientation.LANDSCAPE:
         mm_w, mm_h = mm_h, mm_w
     # The finite size/DPI profile is bounded to at most 4961 × 3508 pixels.

@@ -659,7 +659,7 @@ components:
         organization_id: {"type":"string","format":"uuid"}
         project_id: {"type":"string","format":"uuid"}
         name: {"type":"string","minLength":1,"maxLength":200}
-        kind: {"type":"string","enum":["reference_fixture","imported_file","derived_processing"]}
+        kind: {"type":"string","enum":["reference_fixture","imported_file","derived_processing","manual"]}
         provenance: {"$ref":"#/components/schemas/Provenance"}
         lifecycle: {"type":"string","enum":["active","retired"]}
         validation_state: {"type":"string","enum":["ready","invalid","not_ready"]}
@@ -961,6 +961,7 @@ components:
             - "register_source"
             - "import_source"
             - "update_source"
+            - "update_schema"
             - "correct_source_crs"
             - "retire_source"
             - "create_layer"

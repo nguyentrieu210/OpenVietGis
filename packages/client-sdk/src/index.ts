@@ -35,3 +35,5 @@ export type {
 } from "./generated/import-export";
 export * from "./transfers";
 export * from "./platform";
+export * from "./external-plugins";
+export * from "./marketplace-developers";

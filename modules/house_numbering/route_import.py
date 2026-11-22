@@ -3,15 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections import Counter
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
-
-_PREFIX = re.compile(r"[1-9][0-9]*(?:/[1-9][0-9]*)*\Z")
+from modules.house_numbering.address_prefix import canonical_prefix
 _LIMIT = 5000
 
 
@@ -20,8 +18,7 @@ def _value(value: Any) -> str:
 
 
 def _prefix(parent: str, value: str) -> str:
-    if not _PREFIX.fullmatch(value):
-        raise ValueError("invalid_prefix")
+    value = canonical_prefix(value)
     if not parent:
         if "/" in value:
             raise ValueError("prefix_must_be_one_level")
@@ -31,6 +28,39 @@ def _prefix(parent: str, value: str) -> str:
     if value.rsplit("/", 1)[0] != parent:
         raise ValueError("prefix_does_not_follow_parent")
     return value
+
+
+def group_routes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Opt-in grouping by logical code; never merge by name or proximity alone."""
+    groups: dict[tuple[str,str], list[dict[str, Any]]] = {}
+    raw_counts = Counter(r["code"] for r in rows)
+    aliases: dict[str, str] = {}
+    for row in rows:
+        logical = row.get("logical_code") or ""
+        logical_id = logical or row["code"]
+        if raw_counts[row["code"]] != 1 or not row["code"]:
+            row["errors"].append("duplicate_or_empty_code")
+        aliases[row["code"]] = logical_id
+        groups.setdefault(("group",logical_id) if logical else ("single",row["key"]), []).append(row)
+    result = []
+    for members in groups.values():
+        first = dict(members[0])
+        first["errors"] = sorted(set(e for row in members for e in row["errors"]))
+        group = first.get("logical_code")
+        if group:
+            first["code"] = group
+            first["segments"] = [{"source_id": r["source_id"], "feature_id": r["feature_id"], "code": r["code"]} for r in members]
+            first["segment_revisions"] = [r["content_revision"] for r in members]
+            consistency = {(r["name"],r["route_type"],aliases.get(r["parent_code"],r["parent_code"]),r["prefix"],r["direction_state"]) for r in members}
+            if len(consistency)!=1:
+                first["errors"].append("inconsistent_logical_route")
+            if len(members)>200:
+                first["errors"].append("too_many_segments")
+            if group in aliases and aliases[group]!=group:
+                first["errors"].append("duplicate_or_empty_code")
+        first["parent_code"] = aliases.get(first["parent_code"],first["parent_code"])
+        result.append(first)
+    return result
 
 
 def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -46,6 +76,13 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
     by_feature: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for r in existing:
         by_feature.setdefault((str(r["linked_source_id"]), str(r["linked_feature_id"])), []).append(r)
+        for segment in r.get("segments") or []:
+            segment_key = (str(segment["source_id"]),str(segment["feature_id"]))
+            if segment_key != (str(r["linked_source_id"]),str(r["linked_feature_id"])):
+                by_feature.setdefault(segment_key, []).append(r)
+            code = segment.get("code")
+            if code and all(old["id"] != r["id"] for old in by_saved_code.get(code, [])):
+                by_saved_code.setdefault(code, []).append(r)
     states: dict[str, int] = {}
     stack: list[dict[str, Any]] = []
     result: list[dict[str, Any]] = []
@@ -66,12 +103,14 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
             errors.append("duplicate_or_empty_code")
         if not r["name"] or len(r["name"]) > 200:
             errors.append("invalid_name")
-        found = by_feature.get((r["source_id"], r["feature_id"]), [])
+        refs = r.get("segments") or [{"source_id": r["source_id"],"feature_id":r["feature_id"]}]
+        found = list({str(old["id"]):old for ref in refs for old in by_feature.get((ref["source_id"],ref["feature_id"]),[])}.values())
         if len(found) > 1:
             errors.append("multiple_existing_routes")
         if len(found) == 1:
             r["existing_id"] = str(found[0]["id"])
-        if any(str(old["id"]) != r.get("existing_id") for old in by_saved_code.get(r["code"], [])):
+        aliases = [r["code"]] + [s["code"] for s in r.get("segments") or [] if s.get("code")]
+        if any(str(old["id"]) != r.get("existing_id") for alias in aliases for old in by_saved_code.get(alias, [])):
             errors.append("duplicate_or_empty_code")
         if r["route_type"] not in {"street", "alley"}:
             errors.append("invalid_route_type")
@@ -119,7 +158,8 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
             if (old["name"] != r["name"] or old["route_type"] != r["route_type"]
                 or (old["prefix"] or None) != r.get("resolved_prefix")
                 or (str(old["parent_route_id"]) if old["parent_route_id"] else None) != parent_id
-                or old["direction_state"] != r["direction_state"]):
+                or old["direction_state"] != r["direction_state"]
+                or (old.get("segments") or []) != (r.get("segments") or [])):
                 errors.append("existing_route_conflict")
             r["existing_revision"] = old["revision"]
         stack.pop()
@@ -198,18 +238,36 @@ class RouteTreeImporter:
                 kind = read("route_type", layer["default_type"]).lower()
                 aliases = {"đường": "street", "duong": "street", "hẻm": "alley", "hem": "alley", "ngách": "alley", "ngach": "alley", "nhánh": "alley", "nhanh": "alley"}
                 kind = aliases.get(kind, kind)
-                override = overrides.get(key, {})
-                parent = override.get("parent_code", parent)
-                prefix = override.get("prefix", prefix)
                 errors = []
-                if f["geometry_state"] != "present" or f["geometry_type"] != "ST_LineString" or not f["srid"]:
+                if f["geometry_state"] != "present" or f["geometry_type"] not in {"ST_LineString","ST_MultiLineString"} or not f["srid"]:
                     errors.append("invalid_line_geometry")
                 rows.append({"key": key, "source_id": source, "feature_id": feature,
-                    "content_revision": f["content_revision"], "code": code, "name": read("name"),
+                    "content_revision": f["content_revision"], "code": code, "logical_code":read("logical_code"), "name": read("name"), "geometry_type":f["geometry_type"],
                     "parent_code": parent, "prefix": prefix, "route_type": kind,
                     "direction_state": layer["direction_state"], "errors": errors})
         existing = [dict(r) for r in self.repo.list_routes()]
-        planned = plan_routes(rows, existing)
+        grouped = group_routes(rows)
+        aliases = {row["code"]:row.get("logical_code") or row["code"] for row in rows}
+        for row in grouped:
+            override = overrides.get(row["key"], {})
+            parent = override.get("parent_code", row["parent_code"])
+            row["parent_code"] = aliases.get(parent,parent)
+            row["prefix"] = override.get("prefix",row["prefix"])
+        planned = plan_routes(grouped, existing)
+        for row in planned:
+            if row["state"]=="ready" and (row.get("segments") or row.get("geometry_type")=="ST_MultiLineString"):
+                try:
+                    self.repo.validate_route_segments(UUID(row["source_id"]),row["feature_id"],row.get("segments"))
+                except (PlatformValidationError,PlatformConflictError):
+                    row["errors"].append("invalid_route_segments")
+                    row["state"]="error"
+        # Propagate geometry failures to descendants before apply.
+        by_key={row["key"]:row for row in planned}
+        for row in planned:
+            parent=by_key.get(row.get("parent_key"))
+            if parent and parent["state"]=="error":
+                if "parent_has_errors" not in row["errors"]:row["errors"].append("parent_has_errors")
+                row["state"]="error"
         # Candidate suggestions only: geometric adjacency is not proof of address parentage.
         unresolved = [r for r in planned if r["route_type"] == "alley" and not r["parent_code"] and not r.get("existing_id") and "invalid_line_geometry" not in r["errors"]]
         if unresolved:
@@ -261,7 +319,7 @@ class RouteTreeImporter:
             parent = ids.get(r.get("parent_key")) if r.get("parent_key") else UUID(r["parent_id"]) if r.get("parent_id") else None
             created = self.repo.create_route(name=r["name"], route_type=r["route_type"], parent_route_id=parent,
                 prefix=r["resolved_prefix"], source_id=UUID(r["source_id"]), feature_id=r["feature_id"],
-                direction_state=r["direction_state"], source_label=f'route-tree-import:{r["code"]}', status="draft")
+                direction_state=r["direction_state"], source_label=f'route-tree-import:{r["code"]}', status="draft", segments=r.get("segments"))
             ids[r["key"]] = created["id"]
         self.session.commit()
         return {"created": plan["ready"], "existing": plan["existing"]}

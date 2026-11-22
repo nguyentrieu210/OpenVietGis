@@ -491,8 +491,11 @@ class SqlSpatialRepository:
         self._assert_owner(context, source)
         if source.lifecycle != Lifecycle.ACTIVE or source.catalog_revision != 1:
             raise SpatialValidationError("invalid initial source lifecycle or revision")
-        fixture = get_reference_fixture(source.reference_key)
-        if fixture is None:
+        fixture = get_reference_fixture(source.reference_key) if source.kind == SourceKind.REFERENCE_FIXTURE else None
+        if source.kind == SourceKind.MANUAL:
+            if features or source.source_asset_id is not None or not source.readable or source.feature_count != 0:
+                raise SpatialValidationError("manual source must be initially empty and ready")
+        elif fixture is None:
             raise SpatialUnknownReferenceKeyError("unknown reference fixture")
         verify_source_pins(source, fields, features)
         inserted = self._session.execute(
@@ -607,6 +610,9 @@ class SqlSpatialRepository:
                 ),
             },
         )
+        # Manual sources are empty by construction; their pins were verified above.
+        if fixture is None:
+            return
         # Verify actual persisted facts under the same scoped runtime transaction.
         checked = validate_persisted_reference_source(
             self._session,

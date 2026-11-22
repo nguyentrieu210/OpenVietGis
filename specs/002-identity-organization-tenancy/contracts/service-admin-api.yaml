@@ -53,6 +53,22 @@ paths:
       responses:
         "204": { description: Principal revoked; credentials no longer authorize }
   /organizations/{organization_id}/service-principals/{service_principal_id}/credentials:
+    get:
+      operationId: listServiceCredentials
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/ServicePrincipalId"
+      responses:
+        "200":
+          description: Credential metadata only; secret and hash are never returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ServiceCredentialMetadata" }
+        "403": { description: Service principal management permission required }
+        "404": { description: Principal not found in this organization }
     post:
       operationId: issueServiceCredential
       security: [{ sessionCookie: [] }]
@@ -191,6 +207,20 @@ components:
         name: { type: string }
         description: { type: [string, "null"] }
         status: { type: string, enum: [active, revoked] }
+    ServiceCredentialMetadata:
+      type: object
+      required: [id, name, prefix, permission_ceiling, created_at, expires_at, last_used_at, revoked_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string }
+        permission_ceiling:
+          type: [array, "null"]
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
     ServiceCredentialIssued:
       type: object
       required: [id, prefix, secret]

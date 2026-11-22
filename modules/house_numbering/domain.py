@@ -12,6 +12,7 @@ import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from modules.house_numbering.address_prefix import canonical_prefix
 
 
 class DomainError(ValueError):
@@ -31,7 +32,6 @@ _STATES = {
 }
 _LOCKED = {"certificate", "submitted", "approved", "reserved"}
 _NUMBER = re.compile(r"([1-9][0-9]*)(?:([A-Z]+)|-([1-9][0-9]*))?")
-_PREFIX = re.compile(r"[1-9][0-9]*(?:/[1-9][0-9]*)*")
 
 
 def _finite(value: float, *, name: str) -> None:
@@ -114,9 +114,12 @@ def _rank_letters(rank: int) -> str:
 
 
 def _prefix(prefix: str) -> str:
-    if prefix and not _PREFIX.fullmatch(prefix):
-        raise DomainError("invalid alley prefix")
-    return prefix + "/" if prefix else ""
+    if not prefix:
+        return ""
+    try:
+        return canonical_prefix(prefix) + "/"
+    except ValueError as exc:
+        raise DomainError("invalid alley prefix") from exc
 
 
 def _parse(number: str, prefix: str, style: str) -> tuple[int, int] | None:

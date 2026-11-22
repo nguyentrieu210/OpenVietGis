@@ -16,6 +16,7 @@ export interface Changeset {
   id: string;
   source_id: string;
   actor_display_snapshot: string;
+  actor_id?: string;
   operation_id: string;
   base_content_revision: string;
   resulting_content_revision: string;
@@ -104,7 +105,7 @@ export interface PrintLayout {
   id: string;
   name: string;
   title: string;
-  paper_size: "A4" | "A3";
+  paper_size: "A0" | "A1" | "A2" | "A3" | "A4";
   orientation: "portrait" | "landscape";
   crs_code: number;
   attribution: string;
@@ -415,11 +416,12 @@ export function revertChangeset(
   projectId: string,
   changesetId: string,
   operationId: string,
-  csrf: string
+  csrf: string,
+  summary?: string
 ): Promise<Changeset> {
   return client.request<Changeset>(
     `${projBase(orgId, projectId)}/changesets/${encodeURIComponent(changesetId)}/revert`,
-    { method: "POST", body: JSON.stringify({ operation_id: operationId }), headers: csrfHeaders(csrf) }
+    { method: "POST", body: JSON.stringify({ operation_id: operationId, ...(summary ? { summary } : {}) }), headers: csrfHeaders(csrf) }
   );
 }
 

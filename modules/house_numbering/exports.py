@@ -109,6 +109,43 @@ class HouseNumberingExportService:
             result.append(item)
         return result
 
+    def lookup_approved_addresses(self, *, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Version-one integration projection: approved addresses only, no household data."""
+        self.repo.prepare("read")
+        q = query.strip()
+        if not 2 <= len(q) <= 120 or not 1 <= limit <= 100:
+            raise PlatformValidationError("query length must be 2..120 and limit 1..100")
+        rows = self.session.execute(
+            text("""
+                SELECT b.id AS address_id,n.number_text AS house_number,
+                       r.name AS street,a.name AS area,
+                       ST_X(ST_Transform(ST_PointOnSurface(f.geometry),4326)) AS longitude,
+                       ST_Y(ST_Transform(ST_PointOnSurface(f.geometry),4326)) AS latitude
+                FROM house_numbering.address_numbers n
+                JOIN house_numbering.buildings b
+                  ON b.organization_id=n.organization_id AND b.project_id=n.project_id
+                 AND b.id=n.building_id AND b.state='active'
+                LEFT JOIN house_numbering.routes r
+                  ON r.organization_id=b.organization_id AND r.project_id=b.project_id
+                 AND r.id=n.route_id
+                LEFT JOIN house_numbering.areas a
+                  ON a.organization_id=b.organization_id AND a.project_id=b.project_id
+                 AND a.id=b.area_id
+                JOIN spatial.reference_features f
+                  ON f.organization_id=b.organization_id AND f.project_id=b.project_id
+                 AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
+                WHERE n.organization_id=:org AND n.project_id=:project
+                  AND n.kind='approved' AND n.retired_at IS NULL
+                  AND f.geometry IS NOT NULL AND NOT ST_IsEmpty(f.geometry)
+                  AND strpos(lower(concat_ws(' ',n.number_text,r.name,a.name)),lower(:q))>0
+                ORDER BY CASE WHEN n.number_text=:q THEN 0 ELSE 1 END,
+                         r.name,n.number_text,b.id
+                LIMIT :limit
+            """),
+            {"org": self.org, "project": self.project, "q": q, "limit": limit},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def search(
         self,
         *,
