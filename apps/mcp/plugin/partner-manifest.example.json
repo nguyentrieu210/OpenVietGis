@@ -1,0 +1,27 @@
+{
+  "extension_key": "partner_ai_copilot",
+  "version": "1.0.0",
+  "api_compatibility": "1.x",
+  "display_name": "AI Copilot",
+  "description": "Live MCP map workspace with explicit user consent",
+  "permissions": [],
+  "commands": [],
+  "capabilities": [
+    "host_context",
+    "map_view",
+    "map_selection",
+    "map_navigate"
+  ],
+  "entity_schemas": {},
+  "ui_contributions": [
+    {
+      "id": "partner_panel",
+      "slot": "project_panel",
+      "label": "Kết nối AI",
+      "route_suffix": "/partner",
+      "runtime": "sandboxed_iframe",
+      "url": "https://plugins.example.com/v1/index.html",
+      "sdk_version": "1.0"
+    }
+  ]
+}
