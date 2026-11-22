@@ -1,0 +1,5 @@
+<!doctype html><html><meta charset="utf-8"><title>Mock CAD protocol fixture</title><p id="result">waiting</p><button id="dirty">Simulate integrity failure</button><script>
+const send=(type,fields={})=>parent.postMessage({source:"opencadstudio-embed",type,...fields},location.origin);
+window.addEventListener("message",e=>{if(e.origin!==location.origin||e.source!==parent||e.data?.source!=="opencadstudio-host")return;const d=e.data;if(d.type==="ocs:open"&&d.readOnly===true&&d.buffer instanceof ArrayBuffer&&d.buffer.byteLength===4){document.querySelector("#result").textContent=d.name+" readonly";send("ocs:loaded",{name:d.name})}});
+document.querySelector("#dirty").onclick=()=>send("ocs:dirty",{dirty:true});send("ocs:ready");
+</script></html>

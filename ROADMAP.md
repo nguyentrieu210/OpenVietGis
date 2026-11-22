@@ -143,6 +143,11 @@ Spatial Catalog & CRS: implemented and converged for internal integration on ver
 
 Map Workspace.
 
+- **R004-A — Unified Spatial Workspace**: [Spec 022](specs/022-spatial-workspace/spec.md). In progress (Spec Kit; isolated candidate). Dependencies: R002, R003, R004, R006, R012; integrate after Spec 020 candidate is reviewed and committed. Shared project/session, capability-aware GIS/CAD/3D mode switching, safe draft handling and lazy engine lifecycle. No new CAD or 3D engine promised by this slice.
+- **R012-A — CAD Bridge** (planned): authorized linking and explicit georeferencing of native CAD assets; depends on R004-A, R003, R005, R012.
+- **R004-B — 3D Viewer** (planned): actual geographic 3D engine adapter, bounded first workflow using project data; depends on R004-A, R003 and R010. Terrain/model support follows measured acceptance; not part of R004-A.
+
+
 ### R005
 
 Import & Export.
