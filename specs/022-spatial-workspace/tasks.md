@@ -6,14 +6,14 @@
 - [x] T003 Test scope identity, transition safety, blocked edits/unavailable capabilities and stale completions in packages/spatial-workspace/tests/session.test.mjs.
 - [x] T004 Implement engine-neutral session state and mode transition functions in packages/spatial-workspace/src/session.ts.
 ## US1 — Switch modes
-- [ ] T005 [US1] Connect the implemented capability-aware accessible mode switch `packages/spatial-workspace/src/ModeSwitch.tsx` to apps/web-next after reviewed 020 baseline. Component Chromium fixture passed; host not wired.
-- [ ] T006 [US1] Bind active host context, draft guards, camera and selection in apps/web-next/src/LiveApp.tsx.
+- [x] T005 [US1] Connect capability-aware mode switch to apps/web-next from the committed preflight candidate; integrated host browser smoke passed.
+- [ ] T006 [US1] Host context, draft guards, camera and persistent GIS selection wired; 3D pick identity displayed, bidirectional selection sync remains.
 ## US2 — Lifecycle
-- [ ] T007 [US2] Bind implemented `packages/spatial-workspace/src/coordinator.ts` to real adapters in apps/web-next/src/LiveApp.tsx; lifecycle unit suite passed, host wiring remains.
-- [ ] T008 [US2] Verify actual browser mode switching and failure recovery in apps/web-next/spatial-mode-smoke.mjs.
+- [ ] T007 [US2] Coordinator bound to real GIS and 3D adapters and private CAD vault. Direct CAD engine adapter remains gated.
+- [ ] T008 [US2] Integrated switching, CAD versions and revocation smoke passed in apps/web-next/spatial-mode-smoke.mjs; full failure-recovery regression remains.
 ## US3 — Interoperability
-- [ ] T009 [US3] Adapter candidate implemented: `packages/spatial-workspace/src/cad-georeference.ts`, `cad-embed.ts`, `footprint3d.ts`, `maplibre3d.ts`; see `contracts/cad-3d-adapters.md`. CAD protocol fixture and real MapLibre 3D fixture passed. Project asset linkage, deployed CAD engine isolation and server authorization still pending.
-- [ ] T010 [US3] Validate reference building fixture in apps/web-next/spatial-mode-smoke.mjs once adapters are ready.
+- [ ] T009 [US3] CAD protocol/georeference, actual 3D, project vault and server permission checks implemented/verified. Deployed CAD engine isolation and linked georeferenced geometry import remain gated.
+- [x] T010 [US3] Reference polygon building fixture rendered in integrated browser with explicit height field and flat zero base.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.
 - [ ] T012 Run full convergence and review; gate promotion in specs/022-spatial-workspace/evidence.md.
