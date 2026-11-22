@@ -34,6 +34,6 @@ MCP tests use fixture credentials; not actual Claude OAuth authorization. Spatia
 - Complete exact candidate integration/production-profile checks, cross-tenant access, backup + artifact recovery, large data benchmarks and required independent human observation gates.
 - Keep Model Builder, raster/remote sensing, and Layout Designer as existing candidate capabilities; expand only after exact source acceptance.
 
-A candidate browser run of AI Copilot and Layout Designer using a loopback Vite preview and synthetic API fixtures exceeded the 120-second connector deadline. Complete output was not captured; neither browser check is counted as passing. Repeat each independently with captured results.
+The initial combined browser run exceeded its deadline. Subsequent independent AI Copilot browser testing on the current workspace route reproduced an out-of-viewport Connect button caused by the scrollable toolbar clipping the popup. Both first-party stylesheet copies now use a fixed, bounded, scrollable viewport panel. Rebuilt and retested: PASS on synthetic API fixtures for service disabled, restricted project, authenticated session (no copied token), denial, actual map navigation/view, and disconnect. This is not real Keycloak/Claude OAuth acceptance. Independent Layout Designer browser output is still pending.
 
 The preflight is deliberately fail-closed. No readiness claim or public release is authorized by this record.
