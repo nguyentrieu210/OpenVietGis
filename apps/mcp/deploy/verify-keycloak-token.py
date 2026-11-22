@@ -21,4 +21,11 @@ async def main():
             print("Verifier error type:",type(exc).__name__,str(exc)[:150])
         raise SystemExit("Actual Keycloak token rejected")
     print("PASS actual Keycloak Authorization Code + PKCE, scope and signed resource audience verified")
+    import json, subprocess
+    request={"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}
+    headers=f"Authorization: Bearer {raw}\nAccept: application/json, text/event-stream\nMcp-Method: tools/list\nMCP-Protocol-Version: 2026-07-28\n"
+    response=subprocess.run(["curl","--silent","--show-error","--fail","--resolve","openvietgis.cloud:443:127.0.0.1","--header","@-","--header","Content-Type: application/json","--data-binary",json.dumps(request),config.resource],input=headers,text=True,capture_output=True,check=True)
+    names={tool["name"] for tool in json.loads(response.stdout)["result"]["tools"]}
+    assert names=={"gis_live_view","gis_live_selection","gis_live_navigate"},names
+    print("PASS production HTTPS MCP tools/list:",", ".join(sorted(names)))
 asyncio.run(main())
