@@ -47,7 +47,7 @@ try{
    else if(p.endsWith("/collaboration/notifications/t1/read")&&method==="POST"){reads.add("t1");body={read:true};push()}
    else if(p.endsWith("/collaboration/messages")&&method==="POST"){assert.equal(req.headers()["x-openvietgis-csrf"],"fixture-csrf");body={id:"m"+messages.length,author_id:actor,author_name:members.find(m=>m.id===actor).display_name,created_at:new Date().toISOString(),...req.postDataJSON()};messages.push(body);push()}
    else if(p.endsWith("/collaboration/tasks")&&method==="GET")body={items:u.searchParams.has("mine")?tasks.filter(t=>t.assignee_id===actor):tasks};
-   else if(p.endsWith("/collaboration/tasks")&&method==="POST"){const payload=req.postDataJSON();assert.equal(payload.assignee_id,"member");assert.equal(payload.priority,"high");assert.equal(typeof payload.longitude,"number");assert.equal(typeof payload.latitude,"number");assert.equal(payload.source_message_id,"m0");body={...payload,id:"t1",creator_id:actor,creator_name:"Quản lý",assignee_name:"Khảo sát viên",status:"todo",revision:1};tasks=[body];push()}
+   else if(p.endsWith("/collaboration/tasks")&&method==="POST"){const payload=req.postDataJSON();assert.equal(payload.assignee_id,"member");assert.equal(payload.priority,"high");assert.equal(typeof payload.longitude,"number");assert.equal(typeof payload.latitude,"number");const source=messages.filter(m=>m.body==="Kiểm tra lô 4 <script>"&&!m.recipient_id);assert.equal(source.length,1,JSON.stringify(messages.map(m=>({id:m.id,body:m.body,recipient_id:m.recipient_id}))));assert.equal(payload.source_message_id,source[0].id);body={...payload,id:"t1",creator_id:actor,creator_name:"Quản lý",assignee_name:"Khảo sát viên",status:"todo",revision:1};tasks=[body];push()}
    else if(p.endsWith("/collaboration/tasks/t1")&&method==="PATCH"){const payload=req.postDataJSON();assert.equal(payload.revision,1);assert.equal(payload.status,"done");body={...tasks[0],status:"done",revision:2};tasks=[body];push()}
    else return route.fulfill({status:404,json:{}});
    return route.fulfill({json:body});
@@ -70,7 +70,8 @@ try{
  const panel=page.getByRole("complementary",{name:"Cộng tác dự án"});
  await panel.getByRole("textbox",{name:"Tin nhắn"}).fill("Kiểm tra lô 4 <script>");
  await panel.getByRole("button",{name:"Gửi",exact:true}).click();
- await panel.getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
+ await panel.locator(".team-collab-message").getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
+ assert.equal(messages.filter(m=>m.body==="Kiểm tra lô 4 <script>").length,1,"public message must not be submitted twice");
  await panel.getByText("Realtime · Đã kết nối",{exact:false}).waitFor();
  // Simulate a commit by another client; there is no manual refresh.
  messages.push({id:"remote",author_id:"member",author_name:"Khảo sát viên",body:"Tin mới qua SSE",created_at:new Date().toISOString(),recipient_id:null});push();
@@ -78,10 +79,10 @@ try{
  await panel.getByLabel("Cuộc trò chuyện").selectOption("member");
  await panel.getByRole("textbox",{name:"Tin nhắn"}).fill("Riêng tư");
  await panel.getByRole("button",{name:"Gửi",exact:true}).click();
- await panel.getByText("Riêng tư",{exact:true}).waitFor();
+ await panel.locator(".team-collab-message").getByText("Riêng tư",{exact:true}).waitFor();
  assert.equal(await panel.getByRole("button",{name:/Tạo việc từ tin nhắn/}).count(),0);
  await panel.getByLabel("Cuộc trò chuyện").selectOption("");
- await panel.getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
+ await panel.locator(".team-collab-message").getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
  await panel.locator("article").filter({hasText:"Kiểm tra lô 4 <script>"}).getByRole("button",{name:/Tạo việc từ tin nhắn/}).click();
  await panel.getByLabel("Tiêu đề").fill("Khảo sát lô 4");
  await panel.getByLabel("Giao cho").selectOption("member");
@@ -92,7 +93,7 @@ try{
  await panel.getByRole("button",{name:"Việc của tôi",exact:true}).click();
  await panel.getByText("Chưa có công việc.",{exact:true}).waitFor();
  actor="member";await page.reload({waitUntil:"domcontentloaded"});await toggle.waitFor({timeout:25000});await toggle.click();
- await panel.getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
+ await panel.locator(".team-collab-message").getByText("Kiểm tra lô 4 <script>",{exact:true}).waitFor();
  await panel.getByRole("button",{name:/Thông báo \(1\)/}).click();
  await panel.getByText("Khảo sát lô 4",{exact:true}).waitFor();
  await panel.getByRole("button",{name:"Đánh dấu đã đọc"}).click();

@@ -168,7 +168,7 @@ def _save(
             metadata={"version": expected + 1, "sha256": digest, "byte_size": size},
             created_at=datetime.now(UTC),
         )
-        result = _wire(row)
+        result = _wire(dict(row))
     except Exception:
         session.rollback()
         store.delete_object(key)
@@ -193,7 +193,7 @@ def list_documents(
         ),
         {"org": organization_id, "proj": project_id},
     ).mappings()
-    return {"items": [_wire(r) for r in rows]}
+    return {"items": [_wire(dict(r)) for r in rows]}
 
 
 @router.post(BASE, status_code=201)
@@ -244,7 +244,7 @@ def list_versions(
     )
     if not rows:
         raise HTTPException(404, "CAD document not found")
-    return {"items": [_wire(r) for r in rows]}
+    return {"items": [_wire(dict(r)) for r in rows]}
 
 
 @router.get(BASE + "/{document_id}/versions/{version}/download")
