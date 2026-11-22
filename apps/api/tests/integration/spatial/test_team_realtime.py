@@ -77,16 +77,24 @@ def test_sse_pushes_committed_changes(migrated_database):
                     assert response.status_code == 200, response.read()
                     events = (line for line in response.iter_lines() if line.startswith("event: "))
                     assert next(events) == "event: ready"
-                    start = time.monotonic()
                     result = owner.post(base+"/messages",json={"body":"SSE immediate"})
                     assert result.status_code == 201,result.text
+                    start = time.monotonic()  # measure after the REST mutation/commit
                     assert next(events) == "event: change"
                     assert time.monotonic()-start < 4
-                    start = time.monotonic()
                     result = owner.post(base+"/tasks",json={"title":"SSE task","assignee_id":str(world.owner_user_id)})
                     assert result.status_code == 201,result.text
+                    start = time.monotonic()  # measure after the REST mutation/commit
                     assert next(events) == "event: change"
                     assert time.monotonic()-start < 4
+                    root = base.removesuffix("/collaboration")
+                    layer = owner.post(root+"/layers/manual", json={"operation_id":str(uuid4()),"name":"SSE spatial","geometry_family":"Point","fields":[{"field_id":"nm","name":"Name","type":"text","nullable":False}]})
+                    assert layer.status_code == 201, layer.text
+                    layer = layer.json()
+                    src = owner.get(root+"/layers/"+layer["layer_id"]).json()["source"]
+                    result = owner.post(root+"/sources/"+layer["source_id"]+"/changesets",json={"operation_id":str(uuid4()),"base_content_revision":src["content_revision"],"base_schema_revision":src["schema_revision"],"summary":"Live spatial change","operations":[{"op_type":"create","feature_id":"A","geometry":{"type":"Point","coordinates":[106.5,10.7]},"properties":{"nm":"A"}}]})
+                    assert result.status_code == 201, result.text
+                    assert next(events) == "event: spatial_change"
         assert not matches('{"o":"x","p":"y","a":null,"b":null}', world.organization_id,world.project_id,world.owner_user_id)
     finally:
         server.should_exit=True

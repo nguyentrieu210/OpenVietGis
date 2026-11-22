@@ -22,6 +22,7 @@ const push=()=>{for(const res of streams)res.write("event: change\ndata: {}\n\n"
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}}),errors=[];
+ page.setDefaultNavigationTimeout(60000);
  page.on("pageerror",e=>errors.push(e.message));
  const org="fixture-org",pid="fixture-project";let actor="owner",restricted=false,messages=[],tasks=[],reads=new Set();
  const members=[{id:"owner",display_name:"Quản lý"},{id:"member",display_name:"Khảo sát viên"}];
@@ -53,7 +54,19 @@ try{
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
  const toggle=page.getByRole("button",{name:/Cộng tác/});
- await page.goto(url,{waitUntil:"domcontentloaded"});await toggle.waitFor({timeout:25000});await toggle.click();
+ let socket;
+ await page.routeWebSocket("**/collaboration/presence",ws=>{socket=ws;ws.onMessage(()=>{});ws.send(JSON.stringify({type:"presence",self_id:"a",users:[{id:"a",actor:"owner",name:"Quản lý",color:"#2563eb",cursor:null,view:null},{id:"b",actor:"member",name:"Khảo sát viên",color:"#059669",cursor:[106,14],view:[106,14,8,0,0]}]}))});
+ await page.goto(url,{waitUntil:"domcontentloaded"});await toggle.waitFor({timeout:25000});
+ const live=page.getByRole("button",{name:/^● Live/});await live.click();
+ await page.locator(".live-cursor").getByText("Khảo sát viên").waitFor();
+ const follow=page.getByRole("button",{name:/Khảo sát viên · Theo dõi/});await follow.click();
+ await page.getByRole("button",{name:/Khảo sát viên · Đang theo dõi/}).waitFor();
+ socket.send(JSON.stringify({type:"presence",self_id:"a",users:[{id:"a",actor:"owner",name:"Quản lý",color:"#2563eb",cursor:null,view:null}]}));
+ await page.locator(".live-cursor").waitFor({state:"detached"});
+ for(const res of streams)res.write("event: spatial_change\ndata: {}\n\n");
+ await page.getByText("Đã đồng bộ thay đổi bản đồ từ đồng nghiệp",{exact:true}).waitFor();
+ assert.equal(await live.getAttribute("aria-pressed"),"true");await live.click();
+ await toggle.click();
  const panel=page.getByRole("complementary",{name:"Cộng tác dự án"});
  await panel.getByRole("textbox",{name:"Tin nhắn"}).fill("Kiểm tra lô 4 <script>");
  await panel.getByRole("button",{name:"Gửi",exact:true}).click();

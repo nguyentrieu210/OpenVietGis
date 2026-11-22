@@ -10,12 +10,12 @@ type Member={id:string;display_name:string};
 type Task={id:string;title:string;description:string;status:Status;priority:Priority;creator_id:string;creator_name:string;assignee_id:string;assignee_name:string;due_date:string|null;longitude:number|null;latitude:number|null;revision:number;source_message_id?:string|null};
 type Notice={id:string;title:string;creator_name:string;created_at:string;read_at:string|null};
 type Position={longitude:number;latitude:number};
-type Props={client:ApiClient;org:string;pid:string;accountId:string;canWrite:boolean;getPosition:()=>Position|null;navigate:(p:Position)=>void};
+type Props={client:ApiClient;org:string;pid:string;accountId:string;canWrite:boolean;getPosition:()=>Position|null;navigate:(p:Position)=>void;onSpatialChange?:()=>void};
 const statuses:Record<Status,string>={todo:"Cần làm",in_progress:"Đang làm",done:"Hoàn thành"};
 const priorities:Record<Priority,string>={low:"Thấp",normal:"Bình thường",high:"Cao"};
 function errorText(e:unknown){return e instanceof ApiError?({401:"Phiên đăng nhập đã hết hạn.",403:"Bạn không có quyền trong dự án.",409:"Công việc đã thay đổi. Vui lòng tải lại.",422:"Dữ liệu hoặc người nhận việc không hợp lệ."} as Record<number,string>)[e.status]??"Lỗi máy chủ: "+e.status:e instanceof Error?e.message:"Không thể kết nối."}
 
-export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition,navigate}:Props){
+export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition,navigate,onSpatialChange}:Props){
  const [open,setOpen]=useState(false),[tab,setTab]=useState<Tab>("chat"),[messages,setMessages]=useState<Message[]>([]),[tasks,setTasks]=useState<Task[]>([]),[members,setMembers]=useState<Member[]>([]);
  const [body,setBody]=useState(""),[title,setTitle]=useState(""),[description,setDescription]=useState(""),[assignee,setAssignee]=useState(accountId),[due,setDue]=useState(""),[priority,setPriority]=useState<Priority>("normal"),[position,setPosition]=useState<Position|null>(null),[creating,setCreating]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loaded,setLoaded]=useState(false);
  const [peer,setPeer]=useState(""),[notices,setNotices]=useState<Notice[]>([]),[unread,setUnread]=useState(0),[live,setLive]=useState(false),[revoked,setRevoked]=useState(false),[board,setBoard]=useState(false),[source,setSource]=useState<Message|null>(null);
@@ -37,12 +37,15 @@ export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition
   }catch(e){if(ac.signal.aborted||current!==generation.current)return;if(e instanceof ApiError&&(e.status===401||e.status===403)){setMessages([]);setTasks([]);setMembers([]);setNotices([]);setUnread(0);setRevoked(true)}setError(errorText(e))}
  },[base,client,canWrite,tab,peer,open]);
  const latest=useRef(refresh);latest.current=refresh;
+ const spatial=useRef(onSpatialChange);spatial.current=onSpatialChange;
  // One server-push subscription per mounted project. No interval polling.
  useEffect(()=>{
   setRevoked(false);setLive(false);let timer:ReturnType<typeof setTimeout>|undefined;
   const es=new EventSource("/api/v1"+base+"/events",{withCredentials:true});
   const push=()=>{if(timer!==undefined)clearTimeout(timer);timer=setTimeout(()=>{timer=undefined;void latest.current()},50)};
-  es.addEventListener("ready",()=>{setLive(true);push()});
+  let connected=false;
+  es.addEventListener("ready",()=>{setLive(true);push();if(connected)spatial.current?.();connected=true});
+  es.addEventListener("spatial_change",()=>spatial.current?.());
   es.addEventListener("change",push);
   es.addEventListener("unavailable",()=>setLive(false));
   es.addEventListener("revoked",()=>{es.close();requestRef.current?.abort();generation.current++;setLive(false);setRevoked(true);setMessages([]);setTasks([]);setMembers([]);setNotices([]);setUnread(0);setBody("");setDescription("");setTitle("");setSource(null);setError("Quyền truy cập đã thay đổi. Hãy tải lại dự án.")});

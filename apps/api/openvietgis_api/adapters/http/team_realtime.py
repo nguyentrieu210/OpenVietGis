@@ -68,15 +68,18 @@ async def stream(request: Request, org: UUID, project: UUID, actor: UUID) -> Asy
                 heartbeat = time.monotonic() + 15
                 while not await request.is_disconnected():
                     relevant = False
+                    kind = "change"
                     async for notice in conn.notifies(timeout=max(0.01, heartbeat-time.monotonic()), stop_after=1):
                         relevant = matches(notice.payload, org, project, actor)
+                        if relevant and json.loads(notice.payload).get("kind") == "spatial_change":
+                            kind = "spatial_change"
                     if not relevant and time.monotonic() < heartbeat:
                         continue
                     if not await anyio.to_thread.run_sync(still_allowed, request, org, project, actor):
                         yield "event: revoked\ndata: {}\n\n"
                         return
                     if relevant:
-                        yield "event: change\ndata: {}\n\n"
+                        yield f"event: {kind}\ndata: {{}}\n\n"
                     else:
                         yield ": heartbeat\n\n"
                     heartbeat = time.monotonic() + 15
