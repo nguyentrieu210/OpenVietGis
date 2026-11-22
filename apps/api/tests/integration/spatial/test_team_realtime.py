@@ -95,6 +95,9 @@ def test_sse_pushes_committed_changes(migrated_database):
                     result = owner.post(root+"/sources/"+layer["source_id"]+"/changesets",json={"operation_id":str(uuid4()),"base_content_revision":src["content_revision"],"base_schema_revision":src["schema_revision"],"summary":"Live spatial change","operations":[{"op_type":"create","feature_id":"A","geometry":{"type":"Point","coordinates":[106.5,10.7]},"properties":{"nm":"A"}}]})
                     assert result.status_code == 201, result.text
                     assert next(events) == "event: spatial_change"
+                    result=owner.post(base+"/comments",json={"source_id":layer["source_id"],"feature_id":"A","body":"SSE comment"})
+                    assert result.status_code==201,result.text
+                    assert next(events) == "event: change"
                     lease={"source_id":layer["source_id"],"feature_id":"A","token":str(uuid4())}
                     result=owner.post(base+"/edit-locks",json=lease)
                     assert result.status_code == 200,result.text
