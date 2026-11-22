@@ -1,0 +1,67 @@
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#10283c;background:#f6f9fb}
+*{box-sizing:border-box}
+body{margin:0;background:#f6f9fb}
+.ovg-landing{min-height:100vh;background:linear-gradient(180deg,#f8fbfd 0,#eef5f7 100%);color:#123047}
+.ovg-landing a{text-decoration:none}
+.ovg-landing-header{height:76px;max-width:1240px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between}
+.ovg-brand{display:flex;gap:11px;align-items:center;color:#123047}
+.ovg-brand-mark,.ovg-login-logo{display:grid;place-items:center;width:42px;height:42px;border-radius:11px;background:#0b5f58;color:white;font-weight:850;letter-spacing:.06em;box-shadow:0 8px 18px #0b5f5822}
+.ovg-brand strong{display:block;font-size:16px}
+.ovg-brand small{display:block;color:#6d8190;font-size:11px;margin-top:2px}
+.ovg-landing-header nav{display:flex;gap:26px;align-items:center}
+.ovg-landing-header nav a{color:#526b7c;font-size:14px;font-weight:650}
+.ovg-landing-header nav a:last-child{padding:9px 16px;border:1px solid #b9c9d3;border-radius:8px;color:#123047;background:#fff}
+.ovg-hero{max-width:1240px;margin:0 auto;padding:82px 28px 92px;display:grid;grid-template-columns:1.03fr .97fr;gap:72px;align-items:center}
+.ovg-eyebrow{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.18em;color:#0b7168}
+.ovg-hero h1{font-size:54px;line-height:1.06;letter-spacing:-.045em;margin:16px 0 20px;max-width:690px;color:#0d2a40}
+.ovg-hero-lead{font-size:18px;line-height:1.7;color:#5d7484;max-width:650px;margin:0}
+.ovg-hero-actions{display:flex;gap:12px;margin:30px 0 34px}
+.ovg-primary-link,.ovg-secondary-link{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:0 21px;border-radius:9px;font-weight:750;font-size:14px}
+.ovg-primary-link{background:#0b665e;color:#fff;box-shadow:0 10px 25px #0b665e2f}
+.ovg-secondary-link{background:#fff;color:#21455d;border:1px solid #c8d6df}
+.ovg-proof-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:610px}
+.ovg-proof-row span{padding:13px 14px;border-left:2px solid #8fc8c2}
+.ovg-proof-row b{display:block;font-size:13px}
+.ovg-proof-row small{display:block;color:#78909f;margin-top:3px;font-size:11px}
+.ovg-map-preview{border:1px solid #cad9df;border-radius:18px;background:#fff;box-shadow:0 28px 70px #254b5b1f;overflow:hidden;transform:rotate(.2deg)}
+.ovg-map-toolbar{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid #dce6ea;font-size:12px;font-weight:750}
+.ovg-map-status{color:#27745e}
+.ovg-map-stage-preview{height:390px;position:relative;overflow:hidden;background:linear-gradient(145deg,#d8e8df,#adcfc2 55%,#d6e7df)}
+.ovg-map-grid{position:absolute;inset:0;background-image:linear-gradient(#ffffff26 1px,transparent 1px),linear-gradient(90deg,#ffffff26 1px,transparent 1px);background-size:34px 34px}
+.ovg-map-road{position:absolute;background:#f3efe2;border:5px solid #ffffffa8;box-shadow:0 0 0 1px #8b9f9470}
+.ovg-road-a{width:570px;height:18px;left:-90px;top:180px;transform:rotate(-15deg)}
+.ovg-road-b{width:430px;height:14px;right:-120px;top:238px;transform:rotate(38deg)}
+.ovg-map-shape{position:absolute;border:2px solid #0f766e;background:#1f9d8d2b}
+.ovg-shape-a{left:130px;top:82px;width:142px;height:110px;clip-path:polygon(8% 12%,80% 0,100% 54%,72% 100%,0 86%)}
+.ovg-shape-b{right:64px;bottom:64px;width:122px;height:88px;clip-path:polygon(0 18%,68% 0,100% 60%,58% 100%,12% 78%)}
+.ovg-map-pin{position:absolute;width:18px;height:18px;border:4px solid #fff;border-radius:50%;background:#e05252;box-shadow:0 2px 10px #1a334866}
+.ovg-pin-a{left:224px;top:137px}.ovg-pin-b{right:111px;bottom:104px}
+.ovg-map-layer-card{position:absolute;left:16px;bottom:16px;width:180px;padding:12px;border:1px solid #cbd8dc;border-radius:9px;background:#ffffffed;box-shadow:0 8px 18px #294b5a26;display:grid;gap:7px;font-size:11px}
+.ovg-map-layer-card strong{font-size:12px}.ovg-map-layer-card span{color:#526d79}
+.ovg-map-coordinates{position:absolute;right:14px;bottom:12px;padding:5px 8px;background:#173d4ccc;color:#fff;border-radius:5px;font-size:10px}
+.ovg-feature-section{padding:84px 28px 92px;background:#fff;border-top:1px solid #dde7eb;border-bottom:1px solid #dde7eb}
+.ovg-section-heading,.ovg-feature-grid{max-width:1184px;margin-left:auto;margin-right:auto}
+.ovg-section-heading{display:flex;align-items:end;justify-content:space-between;gap:32px;margin-bottom:38px}
+.ovg-section-heading h2{font-size:35px;letter-spacing:-.025em;max-width:660px;margin:10px 0 0;color:#153248}
+.ovg-feature-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.ovg-feature-grid article{padding:24px;border:1px solid #dbe5ea;border-radius:12px;background:#fbfdfe}
+.ovg-feature-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;background:#e4f2ef;color:#0b7168;font-size:11px;font-weight:800}
+.ovg-feature-grid h3{font-size:16px;margin:22px 0 9px}.ovg-feature-grid p{font-size:13px;line-height:1.65;color:#6b808e;margin:0}
+.ovg-workflow{max-width:1184px;margin:0 auto;padding:92px 0;display:grid;grid-template-columns:.72fr 1.28fr;gap:80px}
+.ovg-workflow h2{font-size:35px;letter-spacing:-.025em;margin:12px 0 0}
+.ovg-workflow ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+.ovg-workflow li{display:flex;align-items:center;gap:16px;padding:17px;border:1px solid #cfdee4;border-radius:11px;background:#fff}
+.ovg-workflow li>b{color:#0b7168}.ovg-workflow li strong,.ovg-workflow li small{display:block}.ovg-workflow li small{margin-top:4px;color:#7b8f9c}
+.ovg-login-section{padding:88px max(28px,calc((100vw - 1184px)/2));display:grid;grid-template-columns:1fr 440px;gap:100px;align-items:center;background:#0e2c40;color:#f6fbfd}
+.ovg-login-copy h2{font-size:38px;margin:12px 0 14px}.ovg-login-copy p{color:#b6cbd7;line-height:1.7;max-width:600px}.ovg-login-copy ul{padding-left:18px;color:#d7e5eb;line-height:2}
+.ovg-login-card{background:#fff;color:#18364a;border-radius:16px;padding:30px;box-shadow:0 22px 55px #0719235c}
+.ovg-login-logo{margin-bottom:20px}.ovg-login-card h2{font-size:24px;margin:0 0 8px}.ovg-login-card>p{color:#6d8290;margin:0 0 22px}
+.ovg-provider-list{display:grid;gap:10px}.ovg-provider-button{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:9px;background:#0b665e;color:#fff;font-weight:750}
+.ovg-provider-icon{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#ffffff1f}
+.ovg-login-state,.ovg-login-error{padding:11px 12px;border-radius:8px;margin-bottom:12px;font-size:13px}.ovg-login-state{background:#eef6f6}.ovg-login-error{background:#fff0ef;color:#9b3d3a}
+.ovg-login-note{display:block;color:#8496a2;margin-top:16px;line-height:1.5}
+.ovg-auth-loading{min-height:100vh;display:grid;place-items:center;align-content:center;gap:14px;background:#f3f7f9;color:#607887;font:14px system-ui}.ovg-auth-loading p{margin:0}.ovg-auth-loading .ovg-login-logo{margin:0}
+.ovg-landing-footer{max-width:1240px;margin:0 auto;padding:30px 28px;display:flex;justify-content:space-between;align-items:center;color:#718692;font-size:12px}
+.ovg-landing-footer .ovg-brand-mark{width:34px;height:34px;font-size:11px}
+@media(max-width:900px){.ovg-landing-header nav{display:none}.ovg-hero{grid-template-columns:1fr;padding-top:48px}.ovg-hero h1{font-size:42px}.ovg-feature-grid{grid-template-columns:1fr 1fr}.ovg-workflow{padding:70px 28px;grid-template-columns:1fr}.ovg-login-section{grid-template-columns:1fr;gap:42px}.ovg-login-card{max-width:520px}.ovg-map-stage-preview{height:330px}}
+@media(max-width:580px){.ovg-hero h1{font-size:36px}.ovg-proof-row,.ovg-feature-grid,.ovg-workflow ol{grid-template-columns:1fr}.ovg-map-preview{display:none}.ovg-landing-footer{align-items:flex-start;gap:20px;flex-direction:column}}

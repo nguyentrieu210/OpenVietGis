@@ -1,0 +1,12 @@
+.ovg-account-menu{position:relative;z-index:40;font:12px/1.4 Inter,ui-sans-serif,system-ui,sans-serif;color:#173247}
+.org-topbar .ovg-account-menu,.gis-header .ovg-account-menu,.ovg-toolbar .ovg-account-menu{color:#f2f8fb}
+.ovg-account-menu>summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;border:1px solid #ffffff26;border-radius:9px;padding:5px 8px;background:#ffffff0d;color:inherit}
+.ovg-account-menu>summary::-webkit-details-marker{display:none}
+.ovg-account-avatar{display:grid;place-items:center;width:29px;height:29px;border-radius:50%;background:#0d7167;color:#fff;font-size:10px;font-weight:850;letter-spacing:.03em}
+.ovg-account-name{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.ovg-account-caret{font-size:13px;opacity:.7}
+.ovg-account-dropdown{position:absolute;right:0;top:calc(100% + 8px);width:270px;background:#fff;border:1px solid #d5e1e6;border-radius:11px;box-shadow:0 18px 45px #1737472b;padding:8px;color:#18364a}
+.ovg-account-profile{padding:10px 11px 12px;border-bottom:1px solid #e5ecef}.ovg-account-profile strong,.ovg-account-profile small{display:block}.ovg-account-profile small{margin-top:3px;color:#7a8e9a;overflow:hidden;text-overflow:ellipsis}
+.ovg-account-dropdown nav{display:grid;padding:6px 0}.ovg-account-dropdown nav a{padding:9px 11px;border-radius:7px;text-decoration:none;color:#294b5f}.ovg-account-dropdown nav a:hover{background:#f0f6f7;color:#0b665e}
+.ovg-signout-button{width:100%;border:0;border-top:1px solid #e5ecef;background:#fff;color:#a33d38;font:inherit;font-weight:800;text-align:left;padding:11px;border-radius:0 0 7px 7px;cursor:pointer}.ovg-signout-button:hover{background:#fff4f3}.ovg-signout-button:disabled{opacity:.55;cursor:default}
+.ovg-account-dropdown p{margin:7px 10px 4px;color:#9c3e39;font-size:11px}
