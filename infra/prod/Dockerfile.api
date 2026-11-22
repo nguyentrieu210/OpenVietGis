@@ -9,8 +9,8 @@ COPY apps/api/pyproject.toml apps/api/uv.lock /app/apps/api/
 COPY apps/api /app/apps/api
 COPY modules /app/modules
 COPY tools/migrate_official_modules.py /app/tools/migrate_official_modules.py
-RUN uv sync --project /app/apps/api --frozen --no-dev
-RUN chmod -R a+rX /app/apps/api \
+RUN uv sync --project /app/apps/api --locked --no-dev
+RUN chmod -R a+rX /app/apps/api /app/modules /app/tools \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts
 
