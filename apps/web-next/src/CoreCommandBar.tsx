@@ -37,7 +37,7 @@ export function CoreCommandBar(host:Host){
  }
  const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut});latest.current={execute,escape,focus,clear,shortcut:host.shortcut};
  useEffect(()=>{const key=(e:KeyboardEvent)=>{
-  if(e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
+  if(document.querySelector("[data-ovg-alternate-active]")||e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
   const t=e.target as HTMLElement|null,own=t===ref.current,modal=!!document.querySelector('[aria-modal="true"]'),otherForm=editable(t)&&!own,button=!!t?.closest("button,a,[role=button]");
   if(e.key==="Escape"){if(document.querySelector(".core-ribbon-menu-fixed")||modal)return;e.preventDefault();latest.current.escape();return}
   if(modal||otherForm||e.altKey)return;
@@ -50,7 +50,7 @@ export function CoreCommandBar(host:Host){
   if((e.key==="Enter"||e.key===" ")&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
   if(/^[a-zA-Z0-9?@.,+-]$/.test(e.key)){e.preventDefault();e.stopPropagation();setValue(e.key.toUpperCase());setCursor(-1);setHighlight(-1);setHelp(false);latest.current.focus()}
  };window.addEventListener("keydown",key,true);return()=>window.removeEventListener("keydown",key,true)},[]);
- useEffect(()=>{const run=(e:Event)=>{const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
+ useEffect(()=>{const run=(e:Event)=>{if(document.querySelector("[data-ovg-alternate-active]"))return;const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
  useEffect(()=>{const menu=(e:MouseEvent)=>{const target=e.target as HTMLElement;if(!target?.closest(".qgis-map-region .maplibregl-canvas")||document.querySelector('[aria-modal="true"]'))return;e.preventDefault();void latest.current.execute("");};document.addEventListener("contextmenu",menu);return()=>document.removeEventListener("contextmenu",menu)},[]);
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);

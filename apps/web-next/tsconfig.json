@@ -12,6 +12,7 @@
       "DOM.Iterable"
     ],
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
     "paths": {"geojson": ["./node_modules/maplibre-gl/../@types/geojson/index.d.ts", "../../node_modules/.pnpm/@types+geojson@7946.0.16/node_modules/@types/geojson/index.d.ts"]},
     "types": [
