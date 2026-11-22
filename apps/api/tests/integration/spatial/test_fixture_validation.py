@@ -264,7 +264,17 @@ def test_persisted_integrity_mismatch_fails_closed(migrated_database: None, tamp
         key = "reference_correctable_crs"
         fixture = REFERENCE_FIXTURES[key]
         original = validate_reference_candidate(session, fixture, _candidate(world, key))
-        if tamper != "missing":
+        if tamper == "feature_id":
+            # The runtime role cannot rename an existing primary key. Seed an
+            # independently constructed wrong row instead (same count and EWKB).
+            _insert(
+                session,
+                replace(
+                    original,
+                    features=(replace(original.features[0], feature_id="unexpected-id"),),
+                ),
+            )
+        elif tamper != "missing":
             _insert(session, original)
         statements = {
             "attributes": """
@@ -283,10 +293,6 @@ def test_persisted_integrity_mismatch_fails_closed(migrated_database: None, tamp
             """,
             "pins": """
                 UPDATE spatial.reference_features SET content_revision=repeat('a',64)
-                WHERE source_id=:source
-            """,
-            "feature_id": """
-                UPDATE spatial.reference_features SET feature_id='unexpected-id'
                 WHERE source_id=:source
             """,
             "extra": """
