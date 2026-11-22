@@ -64,9 +64,17 @@ def test_reject_symlink_and_traversal(tmp_path: Path) -> None:
             _verify_references([{"storage_key": key, "required": False}], {})
 
 
-@pytest.mark.parametrize("has_documents", [False, True])
+@pytest.mark.parametrize(
+    ("revision", "has_documents"),
+    [
+        ("0019_extension_history", False),
+        ("0029_cad_documents", True),
+        ("0032_unified_collaboration", True),
+        ("0032_unified_collaboration", False),
+    ],
+)
 def test_inventory_includes_immutable_cad_versions(
-    monkeypatch, has_documents: bool
+    monkeypatch, revision: str, has_documents: bool
 ) -> None:
     from tools import backup_restore as recovery
 
@@ -85,7 +93,7 @@ def test_inventory_includes_immutable_cad_versions(
         "byte_size": 20,
     }
     checks = {
-        "revision": "0029_cad_documents" if has_documents else "0019_extension_history",
+        "revision": revision,
         "inconsistent_publications": 0,
     }
 
@@ -97,11 +105,16 @@ def test_inventory_includes_immutable_cad_versions(
         if "to_regclass('cad.document_versions')" in query:
             return "t" if has_documents else "f"
         if recovery._CAD_DOCUMENT_ARTIFACT_QUERY in query:
-            assert has_documents
+            if not has_documents:
+                raise RuntimeError("Missing CAD document table")
             return json.dumps([version])
         pytest.fail(f"Unexpected inventory query: {query}")
 
     monkeypatch.setattr(recovery, "_sql", sql)
+    if revision == "0032_unified_collaboration" and not has_documents:
+        with pytest.raises(RuntimeError, match="Missing CAD document table"):
+            recovery._inventory("fixture", "fixture", "fixture")
+        return
     refs, actual_checks = recovery._inventory("fixture", "fixture", "fixture")
     assert actual_checks == checks
     assert refs == ([version, legacy] if has_documents else [legacy])

@@ -414,7 +414,10 @@ def _inventory(container: str, user: str, database: str) -> tuple[list, dict]:
         )
         == "t"
     )
-    if has_cad_documents or checks["revision"] == "0029_cad_documents":
+    if has_cad_documents or checks["revision"] in {
+        "0029_cad_documents",
+        "0032_unified_collaboration",
+    }:
         # An unexpectedly missing table on the current schema fails closed.
         references += json.loads(
             _sql(
