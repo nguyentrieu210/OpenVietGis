@@ -15,6 +15,7 @@
 - [ ] T009 [US3] Version-linked DXF control-point import and provenance lookup; with EPSG:3857 or controlled EPSG:5899 + independently known web pairs, both fits verified. Broader VN-2000 datum operations and production CAD release remain gated.
 - [x] T010 [US3] Reference polygon building fixture rendered in integrated browser with explicit height field and flat zero base.
 - [x] T013 [US3] Project-scoped DEM terrain preview with declared metre vertical reference, GIS relative heights, and session-local static GLB/GLTF placement; real API and browser evidence captured.
+- [x] T014 [US3] Project-scoped GLB/GLTF catalog, immutable original bytes, versioned fixed placement, source linkage, shared read and optimistic edit conflict; real API and browser checks passed.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.
 - [ ] T012 Run full convergence and review; gate promotion in specs/022-spatial-workspace/evidence.md.
