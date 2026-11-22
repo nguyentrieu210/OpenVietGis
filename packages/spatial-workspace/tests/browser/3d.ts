@@ -1,0 +1,11 @@
+import {footprint3d} from "../../src/footprint3d";
+import {setWorkerUrl} from "maplibre-gl";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+setWorkerUrl(workerUrl);
+import {prepareFootprint3d} from "../../src/maplibre3d";
+const status=document.querySelector("#status")!;
+const surface=document.querySelector<HTMLElement>("#surface")!;
+const controller=new AbortController();
+const geometry={type:"Polygon" as const,coordinates:[[[106.9,11.5],[106.9004,11.5],[106.9004,11.5003],[106.9,11.5003],[106.9,11.5]]]};
+const view=footprint3d([{id:"fixture-warehouse",geometry,baseMetres:0,heightMetres:12}],"EPSG:4326","relative-flat-reference");
+prepareFootprint3d(surface,view,{longitude:106.9002,latitude:11.50015,zoom:17,bearing:25},controller.signal,id=>status.textContent=id).then(engine=>{engine.activate();status.textContent="real WebGL 3D ready";const btn=document.createElement("button");btn.textContent="Dispose";btn.onclick=()=>{engine.dispose();status.textContent="disposed"};document.body.append(btn)}).catch(error=>{console.error(error);status.textContent="render failed: "+String(error)});

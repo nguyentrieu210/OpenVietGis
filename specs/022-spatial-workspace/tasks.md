@@ -12,7 +12,7 @@
 - [ ] T007 [US2] Bind implemented `packages/spatial-workspace/src/coordinator.ts` to real adapters in apps/web-next/src/LiveApp.tsx; lifecycle unit suite passed, host wiring remains.
 - [ ] T008 [US2] Verify actual browser mode switching and failure recovery in apps/web-next/spatial-mode-smoke.mjs.
 ## US3 — Interoperability
-- [ ] T009 [US3] Verify asset linkage, server authorization, CRS and real engine readiness in follow-on R012-A and R004-B contracts under specs/.
+- [ ] T009 [US3] Adapter candidate implemented: `packages/spatial-workspace/src/cad-georeference.ts`, `cad-embed.ts`, `footprint3d.ts`, `maplibre3d.ts`; see `contracts/cad-3d-adapters.md`. CAD protocol fixture and real MapLibre 3D fixture passed. Project asset linkage, deployed CAD engine isolation and server authorization still pending.
 - [ ] T010 [US3] Validate reference building fixture in apps/web-next/spatial-mode-smoke.mjs once adapters are ready.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.
