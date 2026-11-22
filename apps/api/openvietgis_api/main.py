@@ -14,6 +14,7 @@ from openvietgis_api.adapters.http import (
     team_chat,
     team_realtime,
     team_presence,
+    team_locks,
     editing,
     extensions,
     marketplace,
@@ -108,6 +109,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(team_chat.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(team_realtime.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(team_presence.router)
+    api_v1.include_router(team_locks.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(field.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(extensions.router,dependencies=[Depends(project_access_guard)])

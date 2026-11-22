@@ -176,7 +176,7 @@ External Sources.
 
 Team Collaboration.
 
-- [R011-2 — Project Chat & Tasks](specs/024-team-chat-tasks/spec.md): project messages, assigned tasks and map pins; depends on R002/R011 and integrated GIS ACL candidate. Implementation candidate; release validation pending.
+- [R011-2 — Project Chat & Tasks](specs/024-team-chat-tasks/spec.md): project messages, assigned tasks and map pins; depends on R002/R011 and integrated GIS ACL candidate. Implementation candidate; release validation pending. [V4 feature edit leases](specs/024-team-chat-tasks/v4-feature-locks.md) extends R006 changeset conflict protection with renewable per-feature locks.
 
 ### R012
 

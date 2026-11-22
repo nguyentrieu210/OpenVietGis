@@ -95,6 +95,13 @@ def test_sse_pushes_committed_changes(migrated_database):
                     result = owner.post(root+"/sources/"+layer["source_id"]+"/changesets",json={"operation_id":str(uuid4()),"base_content_revision":src["content_revision"],"base_schema_revision":src["schema_revision"],"summary":"Live spatial change","operations":[{"op_type":"create","feature_id":"A","geometry":{"type":"Point","coordinates":[106.5,10.7]},"properties":{"nm":"A"}}]})
                     assert result.status_code == 201, result.text
                     assert next(events) == "event: spatial_change"
+                    lease={"source_id":layer["source_id"],"feature_id":"A","token":str(uuid4())}
+                    result=owner.post(base+"/edit-locks",json=lease)
+                    assert result.status_code == 200,result.text
+                    assert next(events) == "event: lock_change"
+                    result=owner.post(base+"/edit-locks/release",json=lease)
+                    assert result.status_code == 200,result.text
+                    assert next(events) == "event: lock_change"
         assert not matches('{"o":"x","p":"y","a":null,"b":null}', world.organization_id,world.project_id,world.owner_user_id)
     finally:
         server.should_exit=True
