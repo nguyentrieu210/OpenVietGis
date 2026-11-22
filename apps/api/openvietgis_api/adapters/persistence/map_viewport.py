@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import chain
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import text
-from openvietgis_api.adapters.persistence.gis_access import scoped
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.persistence.gis_access import scoped
 from openvietgis_api.adapters.persistence.spatial_repository import (
     SqlSpatialRepository,
     _read_native_wkb,
@@ -167,9 +168,15 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             response_crs=4326,
         )
         source = detail.source
-        expected_count=source.feature_count
-        if scoped(self._session,context):
-            expected_count=self._session.execute(text("SELECT count(*) FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj AND source_id=:src"),{"org":context.organization_id,"proj":context.project_id,"src":source.id}).scalar_one()
+        expected_count = source.feature_count
+        if scoped(self._session, context):
+            expected_count = self._session.execute(
+                text(
+                    "SELECT count(*) FROM spatial.reference_features WHERE "
+                    "organization_id=:org AND project_id=:proj AND source_id=:src"
+                ),
+                {"org": context.organization_id, "proj": context.project_id, "src": source.id},
+            ).scalar_one()
         if (
             source.kind
             not in (
@@ -280,7 +287,9 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             if first is None:
                 raise MapReadUnavailableError("missing render snapshot summary")
             self._validate_summary(
-                params["expected_count"], first["snapshot_count"], first["snapshot_valid"]
+                cast(int, params["expected_count"]),
+                first["snapshot_count"],
+                first["snapshot_valid"],
             )
 
             def features() -> Iterator[RenderFeature]:
@@ -338,7 +347,7 @@ class SqlMapViewportRepository(SqlSpatialRepository):
                 .one()
             )
             self._validate_summary(
-                params["expected_count"], row["snapshot_count"], row["snapshot_valid"]
+                cast(int, params["expected_count"]), row["snapshot_count"], row["snapshot_valid"]
             )
             if row["west"] is None:
                 return {"context": wire, "state": "empty", "bounds": None}

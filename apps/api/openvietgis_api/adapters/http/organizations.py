@@ -7,8 +7,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.authorization import context_for
@@ -186,13 +186,26 @@ def list_organization_members(
     require_human_permission(
         session, authentication, organization_id, Permission.ORGANIZATION_MANAGE_MEMBERS
     )
-    items=SqlTenancyRepository(session).list_memberships(
+    items = SqlTenancyRepository(session).list_memberships(
         organization_id, context=context_for(authentication, organization_id=organization_id)
     )
-    profiles={row["id"]:row for row in session.execute(text("""SELECT u.id,u.display_name,u.email_snapshot
+    profiles = {
+        row["id"]: dict(row)
+        for row in session.execute(
+            text("""SELECT u.id,u.display_name,u.email_snapshot
         FROM identity.users u JOIN org.organization_memberships m ON m.user_id=u.id
-        WHERE m.organization_id=:org"""),{"org":organization_id}).mappings()}
-    return [serialize_membership(item)|{"display_name":profiles.get(item.user_id,{}).get("display_name"),"email_snapshot":profiles.get(item.user_id,{}).get("email_snapshot")} for item in items]
+        WHERE m.organization_id=:org"""),
+            {"org": organization_id},
+        ).mappings()
+    }
+    return [
+        serialize_membership(item)
+        | {
+            "display_name": profiles.get(item.user_id, {}).get("display_name"),
+            "email_snapshot": profiles.get(item.user_id, {}).get("email_snapshot"),
+        }
+        for item in items
+    ]
 
 
 @router.patch("/organizations/{organization_id}/members/{membership_id}")
