@@ -1,0 +1,22 @@
+{
+  "name": "gis:live",
+  "description": "Request consented commands in the currently connected GIS workspace",
+  "protocol": "openid-connect",
+  "attributes": {
+    "include.in.token.scope": "true",
+    "display.on.consent.screen": "true",
+    "consent.screen.text": "Operate the connected GIS map after each user approval"
+  },
+  "protocolMappers": [
+    {
+      "name": "MCP resource audience",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper",
+      "config": {
+        "included.custom.audience": "https://openvietgis.cloud/mcp",
+        "access.token.claim": "true",
+        "id.token.claim": "false"
+      }
+    }
+  ]
+}
