@@ -6,10 +6,10 @@
 - [x] T003 Test scope identity, transition safety, blocked edits/unavailable capabilities and stale completions in packages/spatial-workspace/tests/session.test.mjs.
 - [x] T004 Implement engine-neutral session state and mode transition functions in packages/spatial-workspace/src/session.ts.
 ## US1 — Switch modes
-- [ ] T005 [US1] Connect a capability-aware accessible mode switch in apps/web-next/src/SpatialModeSwitch.tsx after reviewed 020 baseline.
+- [ ] T005 [US1] Connect the implemented capability-aware accessible mode switch `packages/spatial-workspace/src/ModeSwitch.tsx` to apps/web-next after reviewed 020 baseline. Component Chromium fixture passed; host not wired.
 - [ ] T006 [US1] Bind active host context, draft guards, camera and selection in apps/web-next/src/LiveApp.tsx.
 ## US2 — Lifecycle
-- [ ] T007 [US2] Bind lazy adapter loading, teardown, scope cancellation and error handling in apps/web-next/src/LiveApp.tsx.
+- [ ] T007 [US2] Bind implemented `packages/spatial-workspace/src/coordinator.ts` to real adapters in apps/web-next/src/LiveApp.tsx; lifecycle unit suite passed, host wiring remains.
 - [ ] T008 [US2] Verify actual browser mode switching and failure recovery in apps/web-next/spatial-mode-smoke.mjs.
 ## US3 — Interoperability
 - [ ] T009 [US3] Verify asset linkage, server authorization, CRS and real engine readiness in follow-on R012-A and R004-B contracts under specs/.
