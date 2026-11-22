@@ -39,7 +39,7 @@ function CadVault({client,path,initial,canEdit,onBusy,expire,onImported}:{client
  <div className="ovg-cad-columns"><div><h3>Bản vẽ ({docs.length})</h3>{!docs.length&&<p>Chưa có bản vẽ trong dự án.</p>}{docs.map(d=><button className="ovg-cad-doc" aria-pressed={selected===d.id} disabled={busy} key={d.id} onClick={()=>void task(()=>history(d.id))}>{d.filename}<small>v{d.version} · {(d.byte_size/1024).toFixed(1)} KiB</small></button>)}</div><div><h3>Lịch sử phiên bản</h3>{!current&&<p>Chọn bản vẽ để xem lịch sử.</p>}{current&&canEdit&&<label>Lưu phiên bản mới <input type="file" accept={"."+current.format} disabled={busy||current.version>=20} onChange={e=>{const f=e.target.files?.[0];e.target.value="";if(f)save(f,current)}}/></label>}{versions.map(v=><div className="ovg-cad-version" key={v.version}><span>v{v.version} · {v.filename}<small>{new Date(v.created_at).toLocaleString("vi-VN")}</small></span><button disabled={busy||!relayOrigin} title={!relayOrigin?"Cần cấu hình relay CAD đã kiểm duyệt":undefined} onClick={()=>{onBusy(true);setEditor({doc:v,writable:canEdit&&current?.version===v.version&&v.version<20})}}>{canEdit&&current?.version===v.version&&v.version<20?"Mở & sửa":"Xem CAD"}</button>{canEdit&&v.format==="dxf"&&<button disabled={busy} onClick={()=>{onBusy(true);setGeoref(v)}}>Định vị → GIS</button>}<button disabled={busy} onClick={()=>download(v)}>Tải xuống</button></div>)}</div></div>
  <p role="status">{busy?"Đang xử lý…":message}</p></section>;
 }
-type Props={scope:ProjectScope;client:ApiClient;canRead:boolean;canEdit:boolean;blocked:boolean;rows:StudioRow[];camera:()=>MLMap|null;expire:()=>void;onCadImport:()=>void;children:ReactNode};
+type Props={scope:ProjectScope;client:ApiClient;canRead:boolean;canEdit:boolean;blocked:boolean;rows:StudioRow[];camera:()=>MLMap|null;expire:()=>void;onCadImport:()=>void;onModeChange?:(mode:SpatialMode)=>void;children:ReactNode};
 export function SpatialWorkspace(props:Props){
  const {scope,client,rows}=props;
  const path="/organizations/"+encodeURIComponent(scope.organizationId)+"/projects/"+encodeURIComponent(scope.projectId)+"/cad/documents";
@@ -69,6 +69,7 @@ export function SpatialWorkspace(props:Props){
  useEffect(()=>{if(cadPublished&&!cadBusy){setCadPublished(false);void controller.current?.switchTo("gis").then(()=>latest.current.props.onCadImport())}},[cadPublished,cadBusy]);
  useEffect(()=>{if(session.active==="gis")requestAnimationFrame(()=>props.camera()?.resize())},[session.active]);
  const active=session.active;
+ useEffect(()=>{props.onModeChange?.(active)},[active,props.onModeChange]);
  return <div className="ovg-spatial-workspace">
  <div className="ovg-spatial-top"><SpatialModeSwitch session={session} capabilities={{gis:allowed,cad:capability("cad"),"3d":capability("3d")}} onSelect={m=>void controller.current?.switchTo(m)}/><label>Chiều cao 3D (m) <select disabled={active!=="gis"||!props.canRead||!!session.pending} value={field} onChange={e=>setField(e.target.value)}><option value="">Chọn trường số</option>{props.canRead&&options.map(o=><option key={o.key} value={o.key}>{o.label}</option>)}</select></label></div>
  <div className="ovg-spatial-body"><div style={{display:active==="gis"?"contents":"none"}} inert={active!=="gis"}>{props.children}</div>

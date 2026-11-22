@@ -176,6 +176,8 @@ External Sources.
 
 Team Collaboration.
 
+- [R011-2 — Project Chat & Tasks](specs/024-team-chat-tasks/spec.md): project messages, assigned tasks and map pins; depends on R002/R011 and integrated GIS ACL candidate. Implementation candidate; release validation pending.
+
 ### R012
 
 CAD Interoperability & Precision.
