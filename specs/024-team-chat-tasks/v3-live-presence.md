@@ -11,4 +11,4 @@
 - Backend collaboration suite: 5 tests passed (presence validation, authenticated two-peer presence, cross-origin/unauthorized rejection, existing chat/tasks and SSE).
 - TypeScript/Vite production build succeeded.
 - Browser smoke reached new live-cursor, follow, departure and spatial refresh assertions successfully; full regression initially timed out on subsequent account reload under concurrent VPS build load.
-- Spatial changeset SSE integration added; release validation requires its passing result and complete browser regression.
+- Spatial changeset SSE integration passed: a real committed GIS edit emitted spatial_change on a live authenticated event stream. Release validation still requires complete browser regression.
