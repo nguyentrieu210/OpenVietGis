@@ -491,9 +491,18 @@ class SqlSpatialRepository:
         self._assert_owner(context, source)
         if source.lifecycle != Lifecycle.ACTIVE or source.catalog_revision != 1:
             raise SpatialValidationError("invalid initial source lifecycle or revision")
-        fixture = get_reference_fixture(source.reference_key) if source.kind == SourceKind.REFERENCE_FIXTURE else None
+        fixture = (
+            get_reference_fixture(source.reference_key)
+            if source.kind == SourceKind.REFERENCE_FIXTURE
+            else None
+        )
         if source.kind == SourceKind.MANUAL:
-            if features or source.source_asset_id is not None or not source.readable or source.feature_count != 0:
+            if (
+                features
+                or source.source_asset_id is not None
+                or not source.readable
+                or source.feature_count != 0
+            ):
                 raise SpatialValidationError("manual source must be initially empty and ready")
         elif fixture is None:
             raise SpatialUnknownReferenceKeyError("unknown reference fixture")
@@ -917,19 +926,28 @@ class SqlSpatialRepository:
         return source
 
     def transform_features(
-        self, *, context: AuthorizationContext, source: DataSource,
-        features: Sequence[ReferenceFeature], target_code: int,
+        self,
+        *,
+        context: AuthorizationContext,
+        source: DataSource,
+        features: Sequence[ReferenceFeature],
+        target_code: int,
     ) -> tuple[NativeGeometry, ...]:
         current = self._pinned_source(
-            context=context, source_id=source.id,
-            content_revision=source.content_revision, schema_revision=source.schema_revision,
+            context=context,
+            source_id=source.id,
+            content_revision=source.content_revision,
+            schema_revision=source.schema_revision,
         )
         if current != source:
             raise SpatialValidationError("transform source snapshot disagrees")
         return transform_response_geometries(
             self._session,
             scope=self._scope(context, permission=Permission.PROJECT_READ),
-            source=current, features=features, target_code=target_code, decode=_read_native_wkb,
+            source=current,
+            features=features,
+            target_code=target_code,
+            decode=_read_native_wkb,
         )
 
     def read_features(

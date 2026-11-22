@@ -1,7 +1,6 @@
 """R006 RLS-enforced PostGIS repository for atomic feature editing & change history."""
 
 from __future__ import annotations
-from openvietgis_api.adapters.persistence.gis_access import enable_internal_edit,feature_allowed,verify_edit,deny
 
 import json
 from collections.abc import Sequence
@@ -13,6 +12,12 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.persistence.gis_access import (
+    deny,
+    enable_internal_edit,
+    feature_allowed,
+    verify_edit,
+)
 from openvietgis_api.adapters.persistence.scope_helper import (
     append_project_audit,
     prepare_project_scope,
@@ -173,8 +178,9 @@ class SqlEditingRepository:
         assert context.organization_id is not None and context.project_id is not None
         assert context.actor.actor_id is not None
         org_id, project_id = context.organization_id, context.project_id
-        restricted=enable_internal_edit(self._session,context,source_id)
-        if restricted and reverted_from_changeset_id is not None: deny()
+        restricted = enable_internal_edit(self._session, context, source_id)
+        if restricted and reverted_from_changeset_id is not None:
+            deny()
         clean_op_id = validate_operation_id(operation_id)
         clean_summary = summary.strip()[:500] or "Feature changeset"
         if len(operations) > 2000:
@@ -231,8 +237,18 @@ class SqlEditingRepository:
                     code="OPERATION_ID_CONFLICT",
                 )
             if restricted:
-                replay=self._session.execute(text("""SELECT feature_id,op_type,before_geometry_wkb AS before_wkb,after_geometry_wkb AS after_wkb,before_properties AS before_props,after_properties AS after_props FROM editing.changeset_operations WHERE organization_id=:org AND project_id=:proj AND changeset_id=:cid"""),{"org":org_id,"proj":project_id,"cid":existing["id"]}).mappings()
-                for item in replay: verify_edit(self._session,context,source_id,item)
+                replay = self._session.execute(
+                    text(
+                        "SELECT feature_id,op_type,before_geometry_wkb AS "
+                        "before_wkb,after_geometry_wkb AS after_wkb,before_prope"
+                        "rties AS before_props,after_properties AS after_props "
+                        "FROM editing.changeset_operations WHERE "
+                        "organization_id=:org AND project_id=:proj AND changeset_id=:cid"
+                    ),
+                    {"org": org_id, "proj": project_id, "cid": existing["id"]},
+                ).mappings()
+                for item in replay:
+                    verify_edit(self._session, context, source_id, item)
             return _changeset_from_row(
                 existing, self._load_operations(org_id, project_id, existing["id"])
             )
@@ -309,8 +325,21 @@ class SqlEditingRepository:
                 .first()
             )
 
-            if restricted and cur_row is not None and not feature_allowed(self._session,context,source_id,fid,cur_row["attributes"],cur_row["geom_wkb"]): deny()
-            if restricted and cur_row is None and op.op_type!=EditOpType.CREATE: deny()
+            if (
+                restricted
+                and cur_row is not None
+                and not feature_allowed(
+                    self._session,
+                    context,
+                    source_id,
+                    fid,
+                    cur_row["attributes"],
+                    cur_row["geom_wkb"],
+                )
+            ):
+                deny()
+            if restricted and cur_row is None and op.op_type != EditOpType.CREATE:
+                deny()
             if op.op_type == EditOpType.CREATE:
                 if cur_row is not None:
                     raise PlatformConflictError(
@@ -384,7 +413,8 @@ class SqlEditingRepository:
                 fingerprint.append({"op": "delete", "fid": fid})
 
         if restricted:
-            for item in prepared_ops: verify_edit(self._session,context,source_id,item)
+            for item in prepared_ops:
+                verify_edit(self._session, context, source_id, item)
         if all(
             item["op_type"] == "update"
             and item["before_wkb"] == item["after_wkb"]

@@ -135,14 +135,19 @@ def list_invitations(
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> list[dict[str, object]]:
     require_human_permission(session, authentication, organization_id, Permission.INVITATION_MANAGE)
-    rows = session.execute(text("""
-        SELECT id, target_email_normalized AS email, organization_role,
-            resource_project_id AS project_id, resource_role,
-            CASE WHEN status = 'pending' AND expires_at <= now() THEN 'expired' ELSE status END AS status,
-            expires_at, created_at
-        FROM org.invitations WHERE organization_id = :org AND target_kind = 'email'
-        ORDER BY created_at DESC LIMIT 100
-    """), {"org": organization_id}).mappings()
+    rows = session.execute(
+        text(
+            "\n        SELECT id, target_email_normalized AS email, "
+            "organization_role,\n            resource_project_id AS "
+            "project_id, resource_role,\n            CASE WHEN "
+            "status = 'pending' AND expires_at <= now() THEN "
+            "'expired' ELSE status END AS status,\n            "
+            "expires_at, created_at\n        FROM org.invitations "
+            "WHERE organization_id = :org AND target_kind = "
+            "'email'\n        ORDER BY created_at DESC LIMIT 100\n    "
+        ),
+        {"org": organization_id},
+    ).mappings()
     return [dict(row) for row in rows]
 
 
@@ -269,11 +274,16 @@ def check_invitation(
     authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, str]:
-    return {"status": _service(session).check_recipient(
-        actor=authentication.actor, user_id=human_actor_id(authentication),
-        organization_id=payload.organization_id, invitation_id=payload.invitation_id,
-        secret=payload.secret, identity_link_id=authentication.identity_link_id,
-    )}
+    return {
+        "status": _service(session).check_recipient(
+            actor=authentication.actor,
+            user_id=human_actor_id(authentication),
+            organization_id=payload.organization_id,
+            invitation_id=payload.invitation_id,
+            secret=payload.secret,
+            identity_link_id=authentication.identity_link_id,
+        )
+    }
 
 
 @router.post("/invitations/accept", response_model=None)

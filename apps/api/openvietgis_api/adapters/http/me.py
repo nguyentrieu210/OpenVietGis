@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import base64
+from io import BytesIO
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-import base64
-from io import BytesIO
 from PIL import Image
-from sqlalchemy import text
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.security import (
@@ -123,41 +123,62 @@ class AvatarRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     data_url: str = Field(max_length=150000)
 
+
 def _human_avatar_id(authentication: AuthenticatedRequest) -> UUID:
     if authentication.actor.actor_type != "human":
-        raise HTTPException(status_code=403,detail="human identity required")
+        raise HTTPException(status_code=403, detail="human identity required")
     return _user_id(authentication)
 
+
 @router.get("/me/avatar")
-def get_avatar(response: Response, authentication: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
-               session: Annotated[Session, Depends(get_db_session, scope="function")]) -> dict:
-    uid=_human_avatar_id(authentication)
-    response.headers["Cache-Control"]="private, no-store"
-    value=session.execute(text("SELECT data_url FROM identity.user_avatars WHERE user_id=:uid"),{"uid":uid}).scalar_one_or_none()
-    return {"data_url":value}
+def get_avatar(
+    response: Response,
+    authentication: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict:
+    uid = _human_avatar_id(authentication)
+    response.headers["Cache-Control"] = "private, no-store"
+    value = session.execute(
+        text("SELECT data_url FROM identity.user_avatars WHERE user_id=:uid"), {"uid": uid}
+    ).scalar_one_or_none()
+    return {"data_url": value}
+
 
 @router.put("/me/avatar")
-def put_avatar(payload: AvatarRequest, authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
-               session: Annotated[Session, Depends(get_db_session, scope="function")]) -> dict:
-    uid=_human_avatar_id(authentication)
+def put_avatar(
+    payload: AvatarRequest,
+    authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict:
+    uid = _human_avatar_id(authentication)
     try:
-        raw=base64.b64decode(payload.data_url.removeprefix("data:image/jpeg;base64,"), validate=True)
-        if not payload.data_url.startswith("data:image/jpeg;base64,"): raise ValueError()
-        image=Image.open(BytesIO(raw),formats=["JPEG"])
-        if image.width!=192 or image.height!=192: raise ValueError()
-        out=BytesIO()
-        image.convert("RGB").save(out,format="JPEG",quality=85)
-        value="data:image/jpeg;base64,"+base64.b64encode(out.getvalue()).decode("ascii")
+        raw = base64.b64decode(
+            payload.data_url.removeprefix("data:image/jpeg;base64,"), validate=True
+        )
+        if not payload.data_url.startswith("data:image/jpeg;base64,"):
+            raise ValueError()
+        image = Image.open(BytesIO(raw), formats=["JPEG"])
+        if image.width != 192 or image.height != 192:
+            raise ValueError()
+        out = BytesIO()
+        image.convert("RGB").save(out, format="JPEG", quality=85)
+        value = "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode("ascii")
     except (ValueError, OSError, Image.DecompressionBombError):
-        raise HTTPException(status_code=422,detail="avatar must be a valid 192x192 JPEG")
-    session.execute(text("""INSERT INTO identity.user_avatars(user_id,data_url) VALUES(:uid,:data)
-        ON CONFLICT(user_id) DO UPDATE SET data_url=excluded.data_url,updated_at=now()"""),{"uid":uid,"data":value})
+        raise HTTPException(status_code=422, detail="avatar must be a valid 192x192 JPEG") from None
+    session.execute(
+        text("""INSERT INTO identity.user_avatars(user_id,data_url) VALUES(:uid,:data)
+        ON CONFLICT(user_id) DO UPDATE SET data_url=excluded.data_url,updated_at=now()"""),
+        {"uid": uid, "data": value},
+    )
     session.commit()
-    return {"data_url":value}
+    return {"data_url": value}
 
-@router.delete("/me/avatar",status_code=204)
-def remove_avatar(authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
-                  session: Annotated[Session, Depends(get_db_session, scope="function")]) -> None:
-    uid=_human_avatar_id(authentication)
-    session.execute(text("DELETE FROM identity.user_avatars WHERE user_id=:uid"),{"uid":uid})
+
+@router.delete("/me/avatar", status_code=204)
+def remove_avatar(
+    authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> None:
+    uid = _human_avatar_id(authentication)
+    session.execute(text("DELETE FROM identity.user_avatars WHERE user_id=:uid"), {"uid": uid})
     session.commit()

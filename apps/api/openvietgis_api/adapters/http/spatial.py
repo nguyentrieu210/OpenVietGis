@@ -6,13 +6,12 @@ wire contract and exposes only logical metadata, never a physical binding.
 """
 
 from __future__ import annotations
-from openvietgis_api.adapters.persistence.gis_access import filtered_layer_wire
 
 import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal, Self
-from uuid import UUID, NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import (
@@ -33,6 +32,7 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
+from openvietgis_api.adapters.persistence.gis_access import filtered_layer_wire
 from openvietgis_api.adapters.persistence.spatial_repository import SqlSpatialRepository
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.spatial.crs import (
@@ -75,13 +75,17 @@ def list_crs_profiles(
 ) -> dict[str, object]:
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
     SqlSpatialRepository(session).prepare_scope(
-        context=context, permission=Permission.PROJECT_READ, mutation=False,
+        context=context,
+        permission=Permission.PROJECT_READ,
+        mutation=False,
     )
     return {
-        "organization_id": organization_id, "project_id": project_id,
+        "organization_id": organization_id,
+        "project_id": project_id,
         "profiles": [profile.to_wire() for profile in CRS_PROFILES],
         "transformations": [profile.to_wire() for profile in TRANSFORMATION_PROFILES],
     }
+
 
 SourceName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 ReferenceKey = Annotated[
@@ -434,7 +438,7 @@ def list_layers(
     return {
         "organization_id": organization_id,
         "project_id": project_id,
-        "items": [filtered_layer_wire(session,context,_layer(detail)) for detail in page.items],
+        "items": [filtered_layer_wire(session, context, _layer(detail)) for detail in page.items],
         "next_after_id": page.next_after_id,
     }
 
@@ -473,60 +477,131 @@ class ManualLayerRequest(BaseModel):
 
 @router.post(_LAYER_PATH + "/manual", operation_id="createManualSpatialLayer", status_code=201)
 def create_manual_layer(
-    organization_id: UUID, project_id: UUID, payload: ManualLayerRequest,
+    organization_id: UUID,
+    project_id: UUID,
+    payload: ManualLayerRequest,
     authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
     from fastapi import HTTPException
+
     from openvietgis_api.domains.spatial.domain import (
-        DataSource, Layer, SourceKind, Lifecycle, ValidationState, SchemaState,
-        GeometryFamily, GeometryDimensions, FeatureCountState, ExtentState, FieldType,
         CatalogOperation,
+        DataSource,
+        ExtentState,
+        FeatureCountState,
+        FieldType,
+        GeometryDimensions,
+        GeometryFamily,
+        Layer,
+        Lifecycle,
+        SchemaState,
+        SourceKind,
+        ValidationState,
     )
-    from openvietgis_api.domains.spatial.service import derive_source_pins, build_mutation_evidence
+    from openvietgis_api.domains.spatial.service import build_mutation_evidence, derive_source_pins
 
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
     repo = SqlSpatialRepository(session)
     repo.prepare_scope(context=context, permission=Permission.PROJECT_EDIT, mutation=True)
-    if len({f.field_id for f in payload.fields}) != len(payload.fields) or len({f.name for f in payload.fields}) != len(payload.fields):
+    if len({f.field_id for f in payload.fields}) != len(payload.fields) or len(
+        {f.name for f in payload.fields}
+    ) != len(payload.fields):
         raise HTTPException(422, "Field identifiers and names must be unique")
     _safe_name(payload.name)
     for f in payload.fields:
         _safe_name(f.name)
-    digest = hashlib.sha256((payload.model_dump_json() + str(context.actor.actor_id)).encode()).hexdigest()
+    digest = hashlib.sha256(
+        (payload.model_dump_json() + str(context.actor.actor_id)).encode()
+    ).hexdigest()
     key = "manual_" + payload.operation_id.hex
     layer_id = uuid5(NAMESPACE_URL, f"openvietgis/{organization_id}/{project_id}/{key}/layer")
     existing = repo.find_source_by_reference_key(context=context, reference_key=key)
     if existing is not None:
         layer = repo.get_layer(context=context, layer_id=layer_id)
-        if existing.kind != SourceKind.MANUAL or existing.manifest_digest != digest or layer is None or layer.lifecycle != Lifecycle.ACTIVE:
+        if (
+            existing.kind != SourceKind.MANUAL
+            or existing.manifest_digest != digest
+            or layer is None
+            or layer.lifecycle != Lifecycle.ACTIVE
+        ):
             raise HTTPException(409, "Operation identifier already used")
-        return {"source_id": existing.id, "layer_id": layer.id, "operation_id": payload.operation_id}
+        return {
+            "source_id": existing.id,
+            "layer_id": layer.id,
+            "operation_id": payload.operation_id,
+        }
     now = datetime.now(UTC)
     source_id = uuid5(NAMESPACE_URL, f"openvietgis/{organization_id}/{project_id}/{key}/source")
     source = DataSource(
-        id=source_id, organization_id=organization_id, project_id=project_id, name=payload.name,
-        kind=SourceKind.MANUAL, reference_key=key, fixture_version="manual-v1", manifest_digest=digest,
-        source_asset_id=None, lifecycle=Lifecycle.ACTIVE, validation_state=ValidationState.READY,
-        validation_reason=None, source_crs=4326, stored_crs=4326, schema_state=SchemaState.KNOWN,
-        geometry_family=GeometryFamily(payload.geometry_family), dimensions=GeometryDimensions.XY,
-        feature_count_state=FeatureCountState.KNOWN, feature_count=0, extent_state=ExtentState.EMPTY,
-        extent=None, catalog_revision=1, content_revision="0"*64, schema_revision="0"*64,
-        created_at=now, updated_at=now, retired_at=None,
+        id=source_id,
+        organization_id=organization_id,
+        project_id=project_id,
+        name=payload.name,
+        kind=SourceKind.MANUAL,
+        reference_key=key,
+        fixture_version="manual-v1",
+        manifest_digest=digest,
+        source_asset_id=None,
+        lifecycle=Lifecycle.ACTIVE,
+        validation_state=ValidationState.READY,
+        validation_reason=None,
+        source_crs=4326,
+        stored_crs=4326,
+        schema_state=SchemaState.KNOWN,
+        geometry_family=GeometryFamily(payload.geometry_family),
+        dimensions=GeometryDimensions.XY,
+        feature_count_state=FeatureCountState.KNOWN,
+        feature_count=0,
+        extent_state=ExtentState.EMPTY,
+        extent=None,
+        catalog_revision=1,
+        content_revision="0" * 64,
+        schema_revision="0" * 64,
+        created_at=now,
+        updated_at=now,
+        retired_at=None,
     )
-    fields = tuple(SourceField(organization_id, project_id, source_id, f.field_id, f.name, i,
-        FieldType(f.type), f.nullable, "0"*64) for i, f in enumerate(payload.fields))
+    fields = tuple(
+        SourceField(
+            organization_id,
+            project_id,
+            source_id,
+            f.field_id,
+            f.name,
+            i,
+            FieldType(f.type),
+            f.nullable,
+            "0" * 64,
+        )
+        for i, f in enumerate(payload.fields)
+    )
     pinned = derive_source_pins(source, fields, ())
     repo.insert_source(pinned.source, pinned.fields, (), context=context)
-    evidence = build_mutation_evidence(context=context, prior=None, current=pinned.source,
-        operation=CatalogOperation.REGISTER_SOURCE, now=now)
+    evidence = build_mutation_evidence(
+        context=context,
+        prior=None,
+        current=pinned.source,
+        operation=CatalogOperation.REGISTER_SOURCE,
+        now=now,
+    )
     repo.append_change(evidence.change, evidence.audit, context=context)
-    layer = Layer(id=layer_id, organization_id=organization_id, project_id=project_id,
-        source_id=source_id, name=payload.name, lifecycle=Lifecycle.ACTIVE,
-        layer_revision=1, created_at=now, updated_at=now, retired_at=None)
+    layer = Layer(
+        id=layer_id,
+        organization_id=organization_id,
+        project_id=project_id,
+        source_id=source_id,
+        name=payload.name,
+        lifecycle=Lifecycle.ACTIVE,
+        layer_revision=1,
+        created_at=now,
+        updated_at=now,
+        retired_at=None,
+    )
     repo.insert_layer(layer, context=context)
-    evidence = build_mutation_evidence(context=context, prior=None, current=layer,
-        operation=CatalogOperation.CREATE_LAYER, now=now)
+    evidence = build_mutation_evidence(
+        context=context, prior=None, current=layer, operation=CatalogOperation.CREATE_LAYER, now=now
+    )
     repo.append_change(evidence.change, evidence.audit, context=context)
     return {"source_id": source_id, "layer_id": layer_id, "operation_id": payload.operation_id}
 
@@ -542,59 +617,104 @@ class GeometryPreviewRequest(BaseModel):
 
 @router.post(_LAYER_PATH + "/{layer_id}/geometry-preview", operation_id="previewSpatialGeometry")
 def preview_geometry(
-    organization_id: UUID, project_id: UUID, layer_id: UUID, payload: GeometryPreviewRequest,
+    organization_id: UUID,
+    project_id: UUID,
+    layer_id: UUID,
+    payload: GeometryPreviewRequest,
     authentication: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
     from fastapi import HTTPException
+    from sqlalchemy.exc import DBAPIError
+
     from openvietgis_api.domains.spatial.domain import (
-        SourceKind, Lifecycle, NativeGeometry, validate_ready_geometry,
+        Lifecycle,
+        NativeGeometry,
+        SourceKind,
+        validate_ready_geometry,
     )
     from openvietgis_api.domains.spatial.service import validate_feature_id
-    from sqlalchemy.exc import DBAPIError
+
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
     repo = SqlSpatialRepository(session)
     repo.prepare_scope(context=context, permission=Permission.PROJECT_EDIT, mutation=True)
     layer = repo.get_layer(context=context, layer_id=layer_id, lock=True)
-    source = repo.get_source(context=context, source_id=layer.source_id, lock=True) if layer else None
-    if not layer or layer.lifecycle != Lifecycle.ACTIVE or not source or not source.readable or source.kind == SourceKind.REFERENCE_FIXTURE or source.stored_crs != 4326:
+    source = (
+        repo.get_source(context=context, source_id=layer.source_id, lock=True) if layer else None
+    )
+    if (
+        not layer
+        or layer.lifecycle != Lifecycle.ACTIVE
+        or not source
+        or not source.readable
+        or source.kind == SourceKind.REFERENCE_FIXTURE
+        or source.stored_crs != 4326
+    ):
         raise HTTPException(422, "Layer is not editable in EPSG:4326")
-    if (source.content_revision, source.schema_revision) != (payload.content_revision, payload.schema_revision):
+    if (source.content_revision, source.schema_revision) != (
+        payload.content_revision,
+        payload.schema_revision,
+    ):
         raise HTTPException(409, "Source has changed; reload")
     family = source.geometry_family.value
-    if family not in ("LineString", "Polygon") or len(set(payload.feature_ids)) != len(payload.feature_ids):
+    if family not in ("LineString", "Polygon") or len(set(payload.feature_ids)) != len(
+        payload.feature_ids
+    ):
         raise HTTPException(422, "Choose distinct line or polygon features")
     for feature_id in payload.feature_ids:
         validate_feature_id(feature_id)
     if payload.action == "split":
         if len(payload.feature_ids) != 1 or len(payload.blade) < 2:
             raise HTTPException(422, "Choose one feature and draw a cutting line")
-        validate_ready_geometry(NativeGeometry(type="LineString", coordinates=payload.blade, srid=4326))
+        validate_ready_geometry(
+            NativeGeometry(type="LineString", coordinates=payload.blade, srid=4326)
+        )
         expression = "ST_Split(ST_Collect(geometry), ST_SetSRID(ST_GeomFromGeoJSON(:blade),4326))"
         # ST_Collect of a single geometry is multi; use the original geometry instead.
-        expression = "ST_Split((array_agg(geometry))[1], ST_SetSRID(ST_GeomFromGeoJSON(:blade),4326))"
+        expression = (
+            "ST_Split((array_agg(geometry))[1], ST_SetSRID(ST_GeomFromGeoJSON(:blade),4326))"
+        )
     else:
         if len(payload.feature_ids) < 2 or payload.blade:
             raise HTTPException(422, "Choose two or more adjacent features")
         expression = "ST_UnaryUnion(ST_Collect(geometry))"
         if family == "LineString":
             expression = "ST_LineMerge(" + expression + ")"
-    params = {"org": organization_id, "project": project_id, "source": source.id,
-              "ids": payload.feature_ids, "count": len(payload.feature_ids),
-              "blade": json.dumps({"type":"LineString","coordinates":payload.blade})}
-    sql = """WITH selected AS (
-        SELECT geometry FROM spatial.reference_features WHERE organization_id=:org AND project_id=:project
-        AND source_id=:source AND feature_id=ANY(:ids) AND geometry_state='present'
-    ), result AS (SELECT """ + expression + """ AS g FROM selected HAVING count(*)=:count),
-    parts AS (SELECT (ST_Dump(g)).geom AS g FROM result)
-    SELECT ST_AsGeoJSON(g,15) AS geo, ST_IsValid(g) AND NOT ST_IsEmpty(g) AS valid FROM parts LIMIT 17"""
+    params = {
+        "org": organization_id,
+        "project": project_id,
+        "source": source.id,
+        "ids": payload.feature_ids,
+        "count": len(payload.feature_ids),
+        "blade": json.dumps({"type": "LineString", "coordinates": payload.blade}),
+    }
+    sql = (
+        (
+            "WITH selected AS (\n        SELECT geometry FROM "
+            "spatial.reference_features WHERE organization_id=:org "
+            "AND project_id=:project\n        AND source_id=:source "
+            "AND feature_id=ANY(:ids) AND geometry_state='present'\n "
+            "   ), result AS (SELECT "
+        )
+        + expression
+        + (
+            " AS g FROM selected HAVING count(*)=:count),\n    parts "
+            "AS (SELECT (ST_Dump(g)).geom AS g FROM result)\n    "
+            "SELECT ST_AsGeoJSON(g,15) AS geo, ST_IsValid(g) AND "
+            "NOT ST_IsEmpty(g) AS valid FROM parts LIMIT 17"
+        )
+    )
     # For merge, reject disconnected output instead of silently dropping components.
     try:
         rows = session.execute(text(sql), params).mappings().all()
     except DBAPIError as exc:
         raise HTTPException(422, "Geometry operation could not be computed") from exc
-    if (payload.action == "merge" and len(rows) != 1) or (payload.action == "split" and not 2 <= len(rows) <= 16):
-        raise HTTPException(422, "Cut must cross the feature; merge must form a single connected geometry")
+    if (payload.action == "merge" and len(rows) != 1) or (
+        payload.action == "split" and not 2 <= len(rows) <= 16
+    ):
+        raise HTTPException(
+            422, "Cut must cross the feature; merge must form a single connected geometry"
+        )
     geometries = []
     for record in rows:
         if not record["valid"]:
@@ -602,9 +722,15 @@ def preview_geometry(
         geometry = json.loads(record["geo"])
         if geometry["type"] != family:
             raise HTTPException(422, "Result geometry family is incompatible")
-        validate_ready_geometry(NativeGeometry(type=family, coordinates=geometry["coordinates"], srid=4326))
+        validate_ready_geometry(
+            NativeGeometry(type=family, coordinates=geometry["coordinates"], srid=4326)
+        )
         geometries.append(geometry)
-    return {"source_id": source.id, "content_revision": source.content_revision, "geometries": geometries}
+    return {
+        "source_id": source.id,
+        "content_revision": source.content_revision,
+        "geometries": geometries,
+    }
 
 
 @router.get(_LAYER_PATH + "/{layer_id}", operation_id="getSpatialLayer")
@@ -616,7 +742,11 @@ def get_layer(
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
-    return filtered_layer_wire(session,context,_layer(_layer_service(session).get_layer(context=context, layer_id=layer_id)))
+    return filtered_layer_wire(
+        session,
+        context,
+        _layer(_layer_service(session).get_layer(context=context, layer_id=layer_id)),
+    )
 
 
 @router.patch(_LAYER_PATH + "/{layer_id}", operation_id="renameSpatialLayer")

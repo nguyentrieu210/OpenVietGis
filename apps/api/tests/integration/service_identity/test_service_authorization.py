@@ -123,9 +123,10 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
         with _client_for_user(a.member_user_id) as member:
             assert member.get(metadata_url).status_code == 403
         with _client_for_user(b.owner_user_id) as other:
-            assert other.get(
-                f"{root_b}/service-principals/{principal_id}/credentials"
-            ).status_code == 404
+            assert (
+                other.get(f"{root_b}/service-principals/{principal_id}/credentials").status_code
+                == 404
+            )
         secret = issued.json()["secret"]
         assert secret.startswith("ovgsvc")
         assert "secret_hash" not in issued.text
@@ -150,7 +151,9 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
             assert isinstance(activity.json()["items"], list)
             journal = service.get(f"{root_a}/projects/{a.project_id}/integrations/events")
             assert journal.status_code == 200, journal.text
-            denied_journal = service.get(f"{root_a}/projects/{unscoped_project_id}/integrations/events")
+            denied_journal = service.get(
+                f"{root_a}/projects/{unscoped_project_id}/integrations/events"
+            )
             assert denied_journal.status_code == 403, denied_journal.text
             denied_activity = service.get(
                 f"{root_a}/projects/{unscoped_project_id}/collaboration/activities"
@@ -178,8 +181,7 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
         assert last_used_at is not None
 
         revoked = owner.post(
-            f"{root_a}/service-principals/{principal_id}/credentials/"
-            f"{credential_id}/revoke"
+            f"{root_a}/service-principals/{principal_id}/credentials/{credential_id}/revoke"
         )
         assert revoked.status_code == 204
         assert owner.get(metadata_url).json()[0]["revoked_at"] is not None
@@ -195,9 +197,7 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
         assert second.status_code == 201
         second_secret = second.json()["secret"]
 
-        principal_revoke = owner.post(
-            f"{root_a}/service-principals/{principal_id}/revoke"
-        )
+        principal_revoke = owner.post(f"{root_a}/service-principals/{principal_id}/revoke")
         assert principal_revoke.status_code == 204
         with _service_client(second_secret) as service:
             assert service.get(f"{root_a}/projects/{a.project_id}").status_code == 401
@@ -243,9 +243,7 @@ def test_revoke_between_credential_lookup_and_use_denies_stale_authentication(
     original = SqlServicePrincipalRepository.get_credential_for_authentication
 
     def pause_after_lookup(self, *, organization_id, credential_id):
-        resolved = original(
-            self, organization_id=organization_id, credential_id=credential_id
-        )
+        resolved = original(self, organization_id=organization_id, credential_id=credential_id)
         if resolved is not None:
             looked_up.set()
             assert resume.wait(timeout=15), "credential lookup was not resumed"
@@ -258,7 +256,9 @@ def test_revoke_between_credential_lookup_and_use_denies_stale_authentication(
     )
     with _client_for_user(world.owner_user_id) as owner:
         principal_id, credential_id, secret = _issue_manager_credential(
-            owner, root, world.project_id,
+            owner,
+            root,
+            world.project_id,
         )
         revoke_path = f"{root}/service-principals/{principal_id}"
         if not revoke_principal:
@@ -289,10 +289,7 @@ def test_revoke_between_credential_lookup_and_use_denies_stale_authentication(
 
         with get_admin_engine().connect() as connection:
             credential = connection.execute(
-                text(
-                    "SELECT revoked_at, last_used_at "
-                    "FROM org.service_credentials WHERE id=:id"
-                ),
+                text("SELECT revoked_at, last_used_at FROM org.service_credentials WHERE id=:id"),
                 {"id": credential_id},
             ).one()
             assert credential.last_used_at is None
@@ -335,7 +332,9 @@ def test_service_credential_use_holds_org_lock_before_project_mutation(
     )
     with _client_for_user(world.owner_user_id) as owner:
         principal_id, credential_id, secret = _issue_manager_credential(
-            owner, root, world.project_id,
+            owner,
+            root,
+            world.project_id,
         )
 
         def service_edit():
@@ -355,10 +354,7 @@ def test_service_credential_use_holds_org_lock_before_project_mutation(
                 with get_admin_engine().connect() as connection:
                     with pytest.raises(OperationalError) as caught:
                         connection.execute(
-                            text(
-                                "SELECT id FROM org.organizations "
-                                "WHERE id=:id FOR UPDATE NOWAIT"
-                            ),
+                            text("SELECT id FROM org.organizations WHERE id=:id FOR UPDATE NOWAIT"),
                             {"id": world.organization_id},
                         )
                     assert getattr(caught.value.orig, "sqlstate", None) == "55P03"
@@ -385,8 +381,7 @@ def test_service_principal_management_is_human_admin_only(
         assert created.status_code == 201
         principal_id = created.json()["id"]
         assert any(
-            item["id"] == principal_id
-            for item in owner.get(f"{root}/service-principals").json()
+            item["id"] == principal_id for item in owner.get(f"{root}/service-principals").json()
         )
 
         grant = owner.post(
