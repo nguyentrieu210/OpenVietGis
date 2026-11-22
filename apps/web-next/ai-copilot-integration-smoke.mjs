@@ -42,7 +42,7 @@ try{
    return route.fulfill({json:body});
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
- const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.getByRole("button",{name:/^◈ Plugin/}).waitFor({timeout:25000})};
+ const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.locator(".qgis-map-region canvas").first().waitFor({timeout:25000});await page.getByLabel("Dòng lệnh GIS").waitFor({timeout:10000})};
  const button=page.getByRole("button",{name:"AI Copilot",exact:true});
  await open();await page.waitForFunction(()=>document.querySelector(".ai-copilot-host")!==null,{}, {timeout:25000});
  await page.waitForTimeout(500);assert.equal(metadataChecks,1);assert.equal(await button.count(),0);assert.equal(sessionCalls,0);

@@ -34,6 +34,7 @@ RENDERER_MANIFESTS = {
     "apps/web/package.json",
     "apps/web-next/package.json",
     "apps/web-next/tsconfig.json",
+    "packages/spatial-workspace/package.json",
 }
 RENDERER_IMPORT = re.compile(
     r"""(?:from\s*|import\s*(?:\(\s*)?)["']maplibre-gl(?:/[^"']*)?["']"""

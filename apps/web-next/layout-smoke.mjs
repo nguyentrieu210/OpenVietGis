@@ -1,7 +1,11 @@
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
+import {mkdtemp,readFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+const artifacts=process.env.OVG_LAYOUT_ARTIFACT_DIR??await mkdtemp(join(tmpdir(),"ovg-layout-smoke-"));
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
-const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4176/rewrite/?live=1";
+const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4176/app";
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
  const org="fixture-org",pid="fixture-project",layer=(i)=>({id:"layer"+i,source_id:"source"+i,name:"Khảo sát số nhà · Phần 0"+i,lifecycle:"active",layer_revision:1,capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"edit",available:true,actor_authorized:true,technical_supported:true}],source:{feature_count:i===1?1500:100,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:i===2?"LineString":"Point",dimensions:"XY",fields:[{field_id:"fld_name",name:"Tên hiển thị",type:"text",nullable:false},{field_id:"fld_num",name:"Số",type:"integer",nullable:true}]}}});
@@ -61,7 +65,7 @@ try{
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
  await page.goto(url,{waitUntil:"domcontentloaded"});
- await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000}); console.log("PASS fixture workspace and 200 features");
  assert.equal(pluginCalls,0);assert.equal(chunkCalls,0);
  assert.equal(await page.getByRole("button",{name:"Địa bàn",exact:true}).count(),0);
 
@@ -73,7 +77,7 @@ try{
  page.on("dialog",d=>d.accept());
  await command("LAYOUT");
  const layout=page.getByRole("dialog",{name:"Layout Designer",exact:true});
- await layout.waitFor();
+ await layout.waitFor(); console.log("PASS Layout Designer opened");
  await layout.getByRole("button",{name:"⬇ Xuất PDF"}).waitFor();
  try{await page.waitForFunction(()=>document.querySelector(".layout-print-sheet image")?.getAttribute("href")?.startsWith("data:image/png"),{},{timeout:40000})}catch(error){console.error("Layout diagnostic:",await layout.locator("footer").innerText(),errors);throw error}
  await layout.getByRole("button",{name:"＋ Khung bản đồ",exact:true}).click();
@@ -83,19 +87,19 @@ try{
  await layout.getByRole("button",{name:"Lưu",exact:true}).click();
  await layout.getByText("Đã lưu layout vào dự án").waitFor();
  assert.equal(layoutStore[0].document.items.filter(x=>x.kind==="map").length,2);
- assert.equal(layoutStore[0].document.items.filter(x=>x.kind==="map")[1].camera.zoom,16);
+ assert.equal(layoutStore[0].document.items.filter(x=>x.kind==="map")[1].camera.zoom,16); console.log("PASS independent map frames and saved template");
  const [file]=await Promise.all([page.waitForEvent("download",{timeout:90000}),layout.getByRole("button",{name:"⬇ Xuất PDF"}).click()]);
- await file.saveAs("/tmp/ovg-layout-smoke.pdf");
+ await file.saveAs(join(artifacts,"layout.pdf"));
  await layout.getByText(/Đã tạo PDF/).waitFor();
  assert.equal(await layout.locator(".layout-print-sheet image").count(),2);
- const {readFile}=await import("node:fs/promises");const pdf=await readFile("/tmp/ovg-layout-smoke.pdf");assert.match(pdf.toString("latin1"),/\/MediaBox \[0 0 841\.8898 595\.2756\]/);
+ const pdf=await readFile(join(artifacts,"layout.pdf"));assert.match(pdf.toString("latin1"),/\/MediaBox \[0 0 841\.8898 595\.2756\]/);
  // Keep 300 DPI map rendering affordable on software-only CI while retaining full A4 output.
  for(const frame of [0,1]){await layout.getByRole("button",{name:"Khung bản đồ",exact:true}).nth(frame).click();await layout.getByLabel("Rộng (mm)").fill("50");await layout.getByLabel("Cao (mm)").fill("50")}
- await layout.getByLabel("DPI",{exact:true}).selectOption("300");const [pngFile]=await Promise.all([page.waitForEvent("download",{timeout:90000}),layout.getByRole("button",{name:"PNG",exact:true}).click()]);await pngFile.saveAs("/tmp/ovg-layout-smoke.png");const png=await readFile("/tmp/ovg-layout-smoke.png");assert.equal(png.readUInt32BE(16),Math.round(297*300/25.4));assert.equal(png.readUInt32BE(20),Math.round(210*300/25.4));const phys=png.indexOf("pHYs");assert.ok(phys>0);assert.equal(png.readUInt32BE(phys+4),Math.round(300/.0254));assert.equal(png.readUInt32BE(phys+8),Math.round(300/.0254));assert.equal(png[phys+12],1);
+ await layout.getByLabel("DPI",{exact:true}).selectOption("300");const [pngFile]=await Promise.all([page.waitForEvent("download",{timeout:90000}),layout.getByRole("button",{name:"PNG",exact:true}).click()]);await pngFile.saveAs(join(artifacts,"layout.png"));const png=await readFile(join(artifacts,"layout.png"));assert.equal(png.readUInt32BE(16),Math.round(297*300/25.4));assert.equal(png.readUInt32BE(20),Math.round(210*300/25.4));const phys=png.indexOf("pHYs");assert.ok(phys>0);assert.equal(png.readUInt32BE(phys+4),Math.round(300/.0254));assert.equal(png.readUInt32BE(phys+8),Math.round(300/.0254));assert.equal(png[phys+12],1);
  await layout.getByText(/Đã tạo PNG/).waitFor();
  await layout.getByRole("textbox",{name:"Tên layout"}).fill("Kiểm thử v2");await layout.getByRole("button",{name:"Lưu",exact:true}).click();await layout.getByText("Đã lưu layout vào dự án").waitFor();assert.equal(layoutStore[0].revision,2);
  await layout.getByRole("button",{name:"Đóng Layout Designer"}).click();
- await command("LAYOUT");await layout.waitFor();
+ await command("LAYOUT");await layout.waitFor(); console.log("PASS Layout Designer opened");
  await layout.getByRole("button",{name:"Lưu",exact:true}).waitFor();await layout.getByLabel("Layout đã lưu").selectOption("layout-test");
  await page.waitForFunction(()=>document.querySelectorAll(".layout-print-sheet image").length===2,{},{timeout:65000});
  assert.deepEqual(errors,[]); console.log("Layout UI: two independent frames, save/reopen, PDF download passed");
