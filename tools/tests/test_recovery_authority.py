@@ -130,6 +130,22 @@ def test_current_only_grant_or_user_not_imported() -> None:
     )
 
 
+@pytest.mark.parametrize("current_policy", [None, "changed-policy"])
+def test_changed_or_missing_gis_policy_quarantines_all(
+    current_policy: str | None,
+) -> None:
+    historical = _baseline() | {"gis_access": "old-policy"}
+    current = _baseline()
+    if current_policy is not None:
+        current["gis_access"] = current_policy
+    assert safe_human_authority(historical, current) == ([], [])
+    assert safe_human_authority(current, historical) == ([], [])
+    assert safe_human_authority(historical, deepcopy(historical)) == (
+        [_id(1), _id(2)],
+        [_id(8), _id(9)],
+    )
+
+
 def test_duplicate_invalid_ids_fail_closed() -> None:
     current = _baseline()
     current["users"].append(deepcopy(current["users"][0]))
