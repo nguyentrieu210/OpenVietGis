@@ -56,7 +56,7 @@ class GisIdentity:
 class OwnedSession:
     owner: Owner
     ai_key: str = field(repr=False)
-    full_workspace: bool = False
+    full_workspace: int = 0
 
 
 class OwnedBridge:
@@ -109,6 +109,15 @@ class OwnedBridge:
                 raise BridgeError(404,"Open and connect your GIS workspace first")
             return matches[0]
 
+    def operation_status(self,subject,ticket):
+        from advanced_tools import LONG
+        sid,key=self.for_subject(subject)
+        with self.store.lock:
+            session=self.store._get(sid,key,"ai")
+            if not session.command or session.command.id!=ticket or session.command.method not in LONG:
+                raise BridgeError(404,"Operation ticket unavailable in this workspace")
+            return self.store.result(sid,key,ticket)
+
     async def execute(self,subject,method,params,token_expiry):
         sid,key=self.for_subject(subject)
         if token_expiry<=time.time():
@@ -117,9 +126,14 @@ class OwnedBridge:
             from workspace_tools import METHODS as WORKSPACE_METHODS
             if method in WORKSPACE_METHODS and (sid not in self.owned or not self.owned[sid].full_workspace):
                 raise BridgeError(409,"Update the GIS tab to connect full workspace tools")
+            from advanced_tools import TOOLS,LONG
+            if method in TOOLS and self.owned[sid].full_workspace<2:
+                raise BridgeError(409,"Update the GIS tab to connect advanced workspace tools")
             cid=self.store.submit(sid,key,method,params)["command_id"]
             c=self.store.sessions[sid].command
             c.expires=min(c.expires,self.store.clock()+max(0,token_expiry-time.time()))
+            if method in LONG:
+                return {"state":"queued","operation_ticket":cid,"expires_in":max(0,round(c.expires-self.store.clock())),"next":"Wait for GIS approval, then call gis_operation_status. Do not resubmit while pending."}
         deadline=time.monotonic()+43
         try:
             while time.monotonic()<deadline:

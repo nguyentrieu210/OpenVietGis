@@ -30,7 +30,7 @@ async def main():
     from workspace_tools import METHODS
     expected={"gis_live_view","gis_live_selection","gis_live_navigate"}
     if os.getenv("OVG_EXPECT_FULL_TOOLS")=="1":
-        expected|=METHODS
+        expected|=METHODS|{"gis_operation_status"}
     assert names==expected,names
     print("PASS production HTTPS MCP tools/list:",", ".join(sorted(names)))
 asyncio.run(main())

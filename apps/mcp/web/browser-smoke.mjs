@@ -18,7 +18,7 @@ try{
   const r=route.request(),p=new URL(r.url()).pathname,body=r.postDataJSON();
   assert.equal(r.headers()["x-ovg-ai"],"1");
   if(p.endsWith("/sessions")){
-    assert.deepEqual(body,{organization_id:"org",project_id:"project",workspace_version:1});
+    assert.deepEqual(body,{organization_id:"org",project_id:"project",workspace_version:2});
     return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}});
   }
   assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");

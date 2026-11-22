@@ -1,11 +1,12 @@
 import {ApiClient,getSpatialLayer,listSpatialLayers,readSpatialFeatures,getSpatialFeature,commitChangeset,revertChangeset,loadCsrfToken,getEffectivePermissions,type SpatialLayer} from "@openvietgis/client-sdk";
 import type {Geometry} from "geojson";
+import {advancedMethods,advancedWrites,executeAdvanced} from "./advanced-actions";
 type Params=Record<string,unknown>;
 type Pin={layer_id:string;content_revision:string;schema_revision:string;feature_ids?:string[]};
 type Overlay={title:string;geojson:{type:"FeatureCollection";features:{type:"Feature";geometry:Geometry;properties:Record<string,never>}[]}};
-type Host={client:ApiClient;org:string;pid:string;guard:()=>void;refresh:()=>void;visibility:(id:string,visible:boolean)=>void;select:(layer:string,ids:string[])=>void;overlay:(data:Overlay)=>void};
-const mutations=new Set(["gis_changeset","gis_revert","gis_create_layer","gis_schema"]);
-const allowed=new Set([...mutations,"gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_export"]);
+type Host={client:ApiClient;org:string;pid:string;guard:(minSeconds?:number)=>void;refresh:()=>void;visibility:(id:string,visible:boolean)=>void;select:(layer:string,ids:string[])=>void;overlay:(data:Overlay)=>void;renderLayout?:(document:unknown,format:"pdf"|"png",guard:()=>void)=>Promise<{bytes:number;filename:string}>};
+const mutations=new Set([...advancedWrites,"gis_changeset","gis_revert","gis_create_layer","gis_schema"]);
+const allowed=new Set([...advancedMethods,...mutations,"gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_export"]);
 const uuid=(v:unknown)=>{if(typeof v!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v))throw Error("ID không hợp lệ");return v};
 const fid=(v:unknown)=>{if(typeof v!=="string"||!/^[A-Za-z0-9_-]{1,128}$/.test(v))throw Error("FID không hợp lệ");return v};
 function output(v:unknown){if(!v||typeof v!=="object"||Array.isArray(v)||new TextEncoder().encode(JSON.stringify(v)).length>80000)throw Error("Kết quả quá lớn; giảm giới hạn truy vấn");return v}
@@ -17,6 +18,7 @@ export async function executeWorkspace(h:Host,method:string,p:Params){
  if(!permissions.permissions.includes("project.read")||mutations.has(method)&&!permissions.permissions.includes("project.edit"))throw Error("Không có quyền thao tác");
  const access=await h.client.request<{restricted:boolean}>(base+"/access/mine");
  if(access.restricted!==false)throw Error("Không hỗ trợ tài khoản GIS giới hạn");
+ if(advancedMethods.has(method))return output(await executeAdvanced(h,method,p));
  async function layer(id:unknown){const l=await getSpatialLayer(h.client,h.org,h.pid,uuid(id));if(l.lifecycle!=="active")throw Error("Lớp không hoạt động");return l}
  async function pinned(raw:unknown,edit=false):Promise<SpatialLayer>{
    if(!raw||typeof raw!=="object")throw Error("Thiếu revision pin");

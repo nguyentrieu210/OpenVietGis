@@ -37,7 +37,7 @@ def test_full_tool_discovery_and_approved_changeset_relay():
         listed=client.post("/mcp",json={"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":meta}},headers=rpc_headers|{"Mcp-Method":"tools/list"})
         assert listed.status_code==200,listed.text
         tools={t["name"]:t for t in listed.json()["result"]["tools"]}
-        assert set(tools)==METHODS|{"gis_live_view","gis_live_selection","gis_live_navigate"}
+        assert set(tools)==METHODS|{"gis_live_view","gis_live_selection","gis_live_navigate","gis_operation_status"}
         assert tools["gis_changeset"]["annotations"]["destructiveHint"] is True
         s=client.post("/ai-copilot/sessions",headers=browser,json={"organization_id":ORG,"project_id":PROJECT,"workspace_version":1}).json()
         base="/ai-copilot/sessions/"+s["session_id"]; headers=browser|{"X-OVG-Bridge":s["browser_token"]}

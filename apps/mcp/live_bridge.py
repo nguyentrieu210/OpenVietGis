@@ -170,7 +170,8 @@ class BridgeStore:
             if self.clock() - s.last_command < 2:
                 raise BridgeError(429, "Try again after two seconds")
             s.last_command = self.clock()
-            c = s.command = Command(secrets.token_urlsafe(18), method, params, self.clock() + COMMAND_TTL)
+            from advanced_tools import LONG
+            c = s.command = Command(secrets.token_urlsafe(18), method, params, min(s.expires,self.clock() + LONG.get(method,COMMAND_TTL)))
             return {"command_id": c.id}
 
     def check_claimed(self, sid, token, cid):

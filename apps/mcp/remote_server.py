@@ -60,6 +60,15 @@ def create_remote(config, identity=None, workspace=None, verifier=None, full_too
         from workspace_tools import register
         register(mcp,operate)
 
+        @mcp.tool(annotations=ToolAnnotations(read_only_hint=True,destructive_hint=False),structured_output=True)
+        async def gis_operation_status(operation_ticket:str)->dict[str,Any]:
+            """Read state/result of an advanced operation ticket. Terminal result consumed once. Never resubmit a timed-out write without inspecting GIS."""
+            token=get_access_token()
+            if token is None or not token.subject or not token.expires_at or token.expires_at<=__import__("time").time():
+                raise ValueError("OAuth authentication required")
+            try:return workspace.operation_status(token.subject,operation_ticket)
+            except BridgeError as e:raise ValueError(str(e)) from None
+
     def browser_guard(request):
         if request.headers.get("origin")!=origin or request.headers.get("x-ovg-ai")!="1":
             raise BridgeError(403,"Trusted GIS origin required")
@@ -75,7 +84,7 @@ def create_remote(config, identity=None, workspace=None, verifier=None, full_too
         cookie=browser_guard(request)
         data=await body(request)
         owner=await identity.owner(cookie,data.get("organization_id"),data.get("project_id"))
-        return JSONResponse(workspace.create(owner,full_tools and data.get("workspace_version")==1),status_code=201)
+        return JSONResponse(workspace.create(owner,(data.get("workspace_version") if full_tools and type(data.get("workspace_version")) is int and data.get("workspace_version") in (1,2) else 0)),status_code=201)
 
     async def current(request):
         cookie=browser_guard(request)

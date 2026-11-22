@@ -12,7 +12,8 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
   const setReview=(cmd)=>{
     command=cmd;show("review",!!cmd);
     if(cmd){
-      const names={map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON"};
+      show("panel",true);
+      const names={map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON",gis_raster_layers:"Đọc lớp raster",gis_raster_process:"GHI DỮ LIỆU: xử lý raster",gis_raster_report:"Báo cáo raster",gis_raster_download:"Tải GeoTIFF",gis_processing_run:"GHI DỮ LIỆU: chạy xử lý vector",gis_processing_job:"Đọc trạng thái processing",gis_models:"Đọc mô hình xử lý",gis_model_save:"GHI DỮ LIỆU: lưu mô hình",gis_model_run:"GHI DỮ LIỆU: chạy toàn bộ mô hình",gis_layouts:"Đọc layout",gis_layout_save:"GHI DỮ LIỆU: lưu layout",gis_layout_export:"Xuất layout PDF/PNG/JSON",gis_plugins:"Đọc danh mục plugin",gis_plugin_activate:"QUẢN TRỊ: bật plugin",gis_plugin_disable:"QUẢN TRỊ: tắt plugin",gis_plugin_records:"Đọc bản ghi plugin",gis_plugin_create:"GHI DỮ LIỆU: tạo bản ghi plugin",gis_plugin_update:"GHI DỮ LIỆU: sửa bản ghi plugin"};
       get("command").textContent=names[cmd.method]||"Lệnh không hỗ trợ";
       const details=get("details");details.textContent=JSON.stringify(cmd.params??{},null,2);details.hidden=!Object.keys(cmd.params??{}).length;
     }
@@ -40,7 +41,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     get("connect").disabled=true;
     try{
       if(!getBridge())throw Error("Bản đồ chưa sẵn sàng");
-      const s=await req("",null,{organization_id:organizationId,project_id:projectId,...(typeof getBridge()?.workspace==="function"?{workspace_version:1}:{})});
+      const s=await req("",null,{organization_id:organizationId,project_id:projectId,...(typeof getBridge()?.workspace==="function"?{workspace_version:2}:{})});
       if(disposed){void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});return}
       active=s;++epoch;show("connect",false);show("close",true);
       status("Đã kết nối phiên này · 15 phút");
@@ -58,7 +59,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
       if(data.command&&!command&&!submitting){
         const c=data.command;
         const basic=["map_view","map_selection","map_navigate"].includes(c.method);
-        const full=["gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_changeset","gis_revert","gis_create_layer","gis_schema","gis_export"].includes(c.method)&&typeof getBridge()?.workspace==="function";
+        const full=["gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_changeset","gis_revert","gis_create_layer","gis_schema","gis_export","gis_raster_layers","gis_raster_process","gis_raster_report","gis_raster_download","gis_processing_run","gis_processing_job","gis_models","gis_model_save","gis_model_run","gis_layouts","gis_layout_save","gis_layout_export","gis_plugins","gis_plugin_activate","gis_plugin_disable","gis_plugin_records","gis_plugin_create","gis_plugin_update"].includes(c.method)&&typeof getBridge()?.workspace==="function";
         if((basic||full)&&c.expires_in>2){
           setReview({...c,deadline:performance.now()+c.expires_in*1000});
         }
@@ -87,7 +88,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
           bridge.navigate({longitude,latitude,zoom});result=null;
         }else if(c.method.startsWith("gis_")&&typeof bridge.workspace==="function"){
           if(permission.expires_in<15)throw Error("Không đủ thời gian thực hiện lệnh; hãy yêu cầu lại");
-          result=await bridge.workspace(c.method,c.params??{},()=>{if(disposed||active!==s||e!==epoch||performance.now()>=c.deadline)throw Error("Phiên lệnh AI đã hết hạn hoặc bị ngắt");});
+          result=await bridge.workspace(c.method,c.params??{},(minSeconds=0)=>{if(disposed||active!==s||e!==epoch||performance.now()+minSeconds*1000>=c.deadline)throw Error("Phiên lệnh AI đã hết hạn, bị ngắt hoặc không đủ thời gian");});
         }else throw Error("Lệnh không hỗ trợ");
         ok=true;
       }

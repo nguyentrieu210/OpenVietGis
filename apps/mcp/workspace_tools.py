@@ -120,6 +120,8 @@ class Export(Pin):
 MODELS={"gis_create_layer":ManualLayer,"gis_schema":Schema,"gis_export":Export,"gis_layers":Layers,"gis_features":Features,"gis_feature":Feature,"gis_query":Query,"gis_changeset":Changeset,
         "gis_geometry_preview":Preview,"gis_topology":Topology,"gis_overlay":Overlay,
         "gis_layer_visibility":Visibility,"gis_select":Select,"gis_revert":Revert}
+from advanced_tools import TOOLS as ADVANCED_TOOLS
+MODELS.update({name:spec[0] for name,spec in ADVANCED_TOOLS.items()})
 METHODS=frozenset(MODELS)
 def validate(method, params):
     from live_bridge import BridgeError
@@ -163,4 +165,6 @@ def register(mcp,operate):
     tool("gis_layer_visibility",Visibility,"Show or hide a project layer in the current workspace.",False)
     tool("gis_select",Select,"Select loaded, visible objects by layer and pinned feature IDs.",False)
     tool("gis_changeset",Changeset,"Atomically create, update or delete up to 100 features on one editable layer. WGS84 geometry; properties replace the full attribute map. Use current pins and a stable unique operation UUID. Requires explicit GIS approval.",False,True)
+    for name,(model,description,readonly,destructive) in ADVANCED_TOOLS.items():
+        tool(name,model,description,readonly,destructive)
     tool("gis_revert",Revert,"Revert a specific GIS changeset using a new operation UUID. Requires explicit GIS approval and server authorization.",False,True)
