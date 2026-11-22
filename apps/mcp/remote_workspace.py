@@ -56,6 +56,7 @@ class GisIdentity:
 class OwnedSession:
     owner: Owner
     ai_key: str = field(repr=False)
+    full_workspace: bool = False
 
 
 class OwnedBridge:
@@ -70,7 +71,7 @@ class OwnedBridge:
             if sid not in self.store.sessions:
                 del self.owned[sid]
 
-    def create(self, owner):
+    def create(self, owner, full_workspace=False):
         with self.store.lock:
             self._prune()
             # A fresh explicit connection replaces the old tab for this identity.
@@ -79,7 +80,7 @@ class OwnedBridge:
                     del self.owned[sid]
                     del self.store.sessions[sid]
             data=self.store.create()
-            self.owned[data["session_id"]]=OwnedSession(owner,data.pop("ai_token"))
+            self.owned[data["session_id"]]=OwnedSession(owner,data.pop("ai_token"),full_workspace)
             return data
 
     def owned_by(self,sid,owner,browser_token):
@@ -113,6 +114,9 @@ class OwnedBridge:
         if token_expiry<=time.time():
             raise BridgeError(401,"OAuth token expired")
         with self.store.lock:
+            from workspace_tools import METHODS as WORKSPACE_METHODS
+            if method in WORKSPACE_METHODS and (sid not in self.owned or not self.owned[sid].full_workspace):
+                raise BridgeError(409,"Update the GIS tab to connect full workspace tools")
             cid=self.store.submit(sid,key,method,params)["command_id"]
             c=self.store.sessions[sid].command
             c.expires=min(c.expires,self.store.clock()+max(0,token_expiry-time.time()))

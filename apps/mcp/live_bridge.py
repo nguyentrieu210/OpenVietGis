@@ -101,7 +101,8 @@ class Session:
 
 
 class BridgeStore:
-    def __init__(self, clock=time.monotonic):
+    def __init__(self, clock=time.monotonic, allow_workspace=False):
+        self.allow_workspace = allow_workspace
         self.clock = clock
         self.sessions: dict[str, Session] = {}
         self.lock = threading.RLock()
@@ -159,7 +160,11 @@ class BridgeStore:
         with self.lock:
             s = self._get(sid, token, "ai")
             self._expire_command(s)
-            params = command_params(method, params)
+            from workspace_tools import METHODS as WORKSPACE_METHODS, validate
+            if self.allow_workspace and method in WORKSPACE_METHODS:
+                params = validate(method, params)
+            else:
+                params = command_params(method, params)
             if s.command and s.command.state in {"queued", "claimed", "done", "denied"}:
                 raise BridgeError(409, "Previous command still pending or unread")
             if self.clock() - s.last_command < 2:
@@ -196,7 +201,8 @@ class BridgeStore:
                 raise BridgeError(409, "Command unavailable")
             if type(ok) is not bool:
                 raise BridgeError(422, "Invalid acknowledgement")
-            c.result = clean_result(c.method, result) if ok else None
+            from workspace_tools import METHODS as WORKSPACE_METHODS, result as workspace_result
+            c.result = (workspace_result(result) if c.method in WORKSPACE_METHODS else clean_result(c.method, result)) if ok else None
             c.state = "done" if ok else "denied"
             return {"accepted": True}
 

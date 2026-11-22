@@ -26,6 +26,11 @@ async def main():
     headers=f"Authorization: Bearer {raw}\nAccept: application/json, text/event-stream\nMcp-Method: tools/list\nMCP-Protocol-Version: 2026-07-28\n"
     response=subprocess.run(["curl","--silent","--show-error","--fail","--resolve","openvietgis.cloud:443:127.0.0.1","--header","@-","--header","Content-Type: application/json","--data-binary",json.dumps(request),config.resource],input=headers,text=True,capture_output=True,check=True)
     names={tool["name"] for tool in json.loads(response.stdout)["result"]["tools"]}
-    assert names=={"gis_live_view","gis_live_selection","gis_live_navigate"},names
+    import os
+    from workspace_tools import METHODS
+    expected={"gis_live_view","gis_live_selection","gis_live_navigate"}
+    if os.getenv("OVG_EXPECT_FULL_TOOLS")=="1":
+        expected|=METHODS
+    assert names==expected,names
     print("PASS production HTTPS MCP tools/list:",", ".join(sorted(names)))
 asyncio.run(main())
