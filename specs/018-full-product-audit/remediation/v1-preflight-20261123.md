@@ -34,4 +34,6 @@ MCP tests use fixture credentials; not actual Claude OAuth authorization. Spatia
 - Complete exact candidate integration/production-profile checks, cross-tenant access, backup + artifact recovery, large data benchmarks and required independent human observation gates.
 - Keep Model Builder, raster/remote sensing, and Layout Designer as existing candidate capabilities; expand only after exact source acceptance.
 
+A candidate browser run of AI Copilot and Layout Designer using a loopback Vite preview and synthetic API fixtures exceeded the 120-second connector deadline. Complete output was not captured; neither browser check is counted as passing. Repeat each independently with captured results.
+
 The preflight is deliberately fail-closed. No readiness claim or public release is authorized by this record.
