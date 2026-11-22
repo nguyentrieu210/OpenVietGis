@@ -26,6 +26,45 @@ import { ProjectToolbar } from "./ProjectToolbar";
 
 type HubTab = "external" | "collab" | "cad" | "field" | "extensions" | "ops";
 
+function platformStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    loading: "Đang tải",
+    ready: "Sẵn sàng",
+    pending: "Đang chờ",
+    approved: "Đã phê duyệt",
+    rejected: "Đã từ chối",
+    queued: "Đang chờ",
+    active: "Đang xử lý",
+    succeeded: "Thành công",
+    completed: "Hoàn tất",
+    failed: "Thất bại",
+    cancelled: "Đã hủy",
+    canceled: "Đã hủy"
+  };
+  return labels[status] ?? status;
+}
+
+function eventKindLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    changeset_created: "Tạo bộ thay đổi",
+    changeset_committed: "Ghi nhận bộ thay đổi",
+    review_requested: "Yêu cầu duyệt",
+    review_decided: "Đã duyệt thay đổi",
+    comment_added: "Thêm bình luận"
+  };
+  return labels[kind] ?? kind;
+}
+
+function cadDirectionLabel(direction: string): string {
+  const labels: Record<string, string> = {
+    import: "Nhập",
+    export: "Xuất",
+    dxf_to_layer: "DXF → Lớp",
+    layer_to_dxf: "Lớp → DXF"
+  };
+  return labels[direction] ?? direction.toUpperCase();
+}
+
 export function PlatformHubPage() {
   const { organizationId = "", projectId = "" } = useParams();
   const qc = useQueryClient();
@@ -139,9 +178,9 @@ export function PlatformHubPage() {
 
         {tab === "ops" && (
           <section className="ovg-card" data-testid="ops-readiness-panel">
-            <h2>R015 Vận hành Production & Năng lực phát hành</h2>
+            <h2>R015 Vận hành sản xuất & Năng lực phát hành</h2>
             <p>
-              <strong>Trạng thái sẵn sàng:</strong> {readyQ.data?.status ?? "loading"} ·{" "}
+              <strong>Trạng thái sẵn sàng:</strong> {readyQ.data?.status ? platformStatusLabel(readyQ.data.status) : "Đang tải"} ·{" "}
               <strong>PostGIS:</strong> {readyQ.data?.postgis_version ?? "—"} ·{" "}
               <strong>Gói cấu hình:</strong> {entQ.data?.plan_tier ?? "self_host_community"} (tách biệt phân quyền R002)
             </p>
@@ -174,10 +213,10 @@ export function PlatformHubPage() {
 
         {tab === "external" && (
           <section className="ovg-card">
-            <h2>R010 Nguồn dữ liệu ngoài (Allowlist chống SSRF)</h2>
+            <h2>R010 Nguồn dữ liệu ngoài (Danh sách cho phép chống SSRF)</h2>
             <div className="ovg-form-row">
               <label>
-                Tên miền được phép (Allowlist)
+                Tên miền được phép
                 <input value={extHost} onChange={(e) => setExtHost(e.target.value)} />
               </label>
               <button
@@ -205,25 +244,25 @@ export function PlatformHubPage() {
                       },
                       csrf
                     );
-                    setNotice(`Allowlisted ${extHost} and registered read-only WMS connection.`);
+                    setNotice(`Đã thêm ${extHost} vào danh sách cho phép và đăng ký kết nối WMS chỉ đọc.`);
                     await qc.invalidateQueries({ queryKey: ["hub", organizationId] });
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed.");
+                    setError(err instanceof Error ? err.message : "Không thành công.");
                   }
                 }}
               >
-                Thêm Allowlist & Kết nối
+                Thêm vào danh sách cho phép & kết nối
               </button>
               <label style={{ flex: 1 }}>
-                Endpoint URL
+                URL điểm cuối
                 <input value={extUrl} onChange={(e) => setExtUrl(e.target.value)} />
               </label>
             </div>
-            <p>Allowlisted Hosts: {(allowlistQ.data?.items ?? []).map((h) => h.hostname).join(", ") || "None"}</p>
+            <p>Máy chủ trong danh sách cho phép: {(allowlistQ.data?.items ?? []).map((h) => h.hostname).join(", ") || "Không có"}</p>
             <ul>
               {(extConnsQ.data?.items ?? []).map((c) => (
                 <li key={c.id}>
-                  <strong>{c.name}</strong> ({c.protocol}, read-only) — {c.endpoint_url}
+                  <strong>{c.name}</strong> ({c.protocol}, chỉ đọc) — {c.endpoint_url}
                 </li>
               ))}
             </ul>
@@ -232,12 +271,12 @@ export function PlatformHubPage() {
 
         {tab === "collab" && (
           <section className="ovg-card">
-            <h2>R011 Cộng tác nhóm & Duyệt thay đổi sau Commit</h2>
+            <h2>R011 Cộng tác nhóm & Duyệt thay đổi sau ghi nhận</h2>
             <h3>Yêu cầu duyệt thay đổi ({reviewsQ.data?.items.length ?? 0})</h3>
             <ul>
               {(reviewsQ.data?.items ?? []).map((r) => (
                 <li key={r.id}>
-                  Changeset <code>{r.changeset_id.slice(0, 8)}</code> — <strong>{r.status}</strong>{" "}
+                  Bộ thay đổi <code>{r.changeset_id.slice(0, 8)}</code> — <strong>{platformStatusLabel(r.status)}</strong>{" "}
                   {r.status === "pending" && (
                     <button
                       type="button"
@@ -249,13 +288,13 @@ export function PlatformHubPage() {
                           organizationId,
                           projectId,
                           r.id,
-                          { status: "approved", decision_note: "Approved in UI" },
+                          { status: "approved", decision_note: "Đã phê duyệt trên giao diện" },
                           csrf
                         );
                         await qc.invalidateQueries({ queryKey: ["hub", organizationId, projectId] });
                       }}
                     >
-                      Approve
+                      Phê duyệt
                     </button>
                   )}
                 </li>
@@ -265,7 +304,7 @@ export function PlatformHubPage() {
             <ul>
               {(actsQ.data?.items ?? []).map((a) => (
                 <li key={a.id}>
-                  [{a.event_kind}] {a.actor_display}: {a.summary}
+                  [{eventKindLabel(a.event_kind)}] {a.actor_display}: {a.summary}
                 </li>
               ))}
             </ul>
@@ -314,7 +353,7 @@ export function PlatformHubPage() {
                       `Tọa độ điểm tính được: (${res.endpoint[0].toFixed(4)}, ${res.endpoint[1].toFixed(4)})`
                     );
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "COGO computation failed.");
+                    setError(err instanceof Error ? err.message : "Tính toán COGO không thành công.");
                   }
                 }}
               >
@@ -322,12 +361,12 @@ export function PlatformHubPage() {
               </button>
             </div>
             {cogoOut && <p className="ovg-notice">{cogoOut}</p>}
-            <h3>CAD Conversions ({cadQ.data?.items.length ?? 0})</h3>
+            <h3>Chuyển đổi CAD ({cadQ.data?.items.length ?? 0})</h3>
             <ul>
               {(cadQ.data?.items ?? []).map((c) => (
                 <li key={c.id}>
-                  {c.direction.toUpperCase()} {c.filename} ({c.cad_format}, EPSG:{c.crs_code}) —{" "}
-                  {c.status}
+                  {cadDirectionLabel(c.direction)} {c.filename} ({c.cad_format}, EPSG:{c.crs_code}) —{" "}
+                  {platformStatusLabel(c.status)}
                 </li>
               ))}
             </ul>
@@ -364,10 +403,10 @@ export function PlatformHubPage() {
                       },
                       csrf
                     );
-                    setNotice(`Created offline GeoPackage ${pk.name} (${pk.feature_count} features).`);
+                    setNotice(`Đã tạo GeoPackage ngoại tuyến ${pk.name} (${pk.feature_count} đối tượng).`);
                     await qc.invalidateQueries({ queryKey: ["hub", organizationId, projectId, "field"] });
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Package build failed.");
+                    setError(err instanceof Error ? err.message : "Tạo gói dữ liệu không thành công.");
                   }
                 }}
               >
@@ -377,13 +416,13 @@ export function PlatformHubPage() {
             <ul>
               {(fieldQ.data?.items ?? []).map((p) => (
                 <li key={p.id}>
-                  <strong>{p.name}</strong> ({p.feature_count} features, expires {p.expires_at}) —{" "}
+                  <strong>{p.name}</strong> ({p.feature_count} đối tượng, hết hạn {p.expires_at}) —{" "}
                   <a
                     href={offlinePackageDownloadUrl(organizationId, projectId, p.id)}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Download .gpkg
+                    Tải xuống .gpkg
                   </a>
                 </li>
               ))}
@@ -393,9 +432,9 @@ export function PlatformHubPage() {
 
         {tab === "extensions" && (
           <section className="ovg-card">
-            <h2>R014 Nền tảng Module mở rộng động (Manifest)</h2>
+            <h2>R014 Nền tảng mô-đun mở rộng động (Manifest)</h2>
             <p>
-              Số Manifest Module đã đăng ký trong tổ chức:{" "}
+              Số manifest mô-đun đã đăng ký trong tổ chức:{" "}
               <strong>{extManifestsQ.data?.items.length ?? 0}</strong>
             </p>
             <ul>

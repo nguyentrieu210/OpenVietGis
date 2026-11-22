@@ -21,7 +21,7 @@ export function QueryWorkbenchPage() {
   const [val, setVal] = useState("");
   const [refLayerId, setRefLayerId] = useState("");
   const [predicate, setPredicate] = useState("intersects");
-  const [queryName, setQueryName] = useState("Saved Filter");
+  const [queryName, setQueryName] = useState("Bộ lọc đã lưu");
   const [result, setResult] = useState<LayerQueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +65,7 @@ export function QueryWorkbenchPage() {
       );
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Query execution failed.");
+      setError(err instanceof Error ? err.message : "Thực thi truy vấn không thành công.");
     }
   }
 
@@ -83,7 +83,7 @@ export function QueryWorkbenchPage() {
       );
       await qc.invalidateQueries({ queryKey: ["r007", organizationId, projectId, "saved"] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save query.");
+      setError(err instanceof Error ? err.message : "Không thể lưu truy vấn.");
     }
   }
 
@@ -206,7 +206,7 @@ export function QueryWorkbenchPage() {
           <ul>
             {(savedQuery.data?.items ?? []).map((q) => (
               <li key={q.id}>
-                <strong>{q.name}</strong> — Layer <code>{q.layer_id}</code>
+                <strong>{q.name}</strong> — Lớp <code>{q.layer_id}</code>
               </li>
             ))}
           </ul>

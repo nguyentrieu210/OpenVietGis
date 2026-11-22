@@ -54,7 +54,7 @@ export function InvitationIssuePanel({ organizationId, workspaces, projects, onA
       setSubject("");
     } catch (error) {
       // Never display raw response bodies; the response may contain a one-time secret.
-      setError("Unable to issue invitation.");
+      setError("Không thể gửi lời mời.");
       await onAccessError(error);
     } finally {
       setPending(false);
@@ -72,9 +72,9 @@ export function InvitationIssuePanel({ organizationId, workspaces, projects, onA
       await loadCsrfToken(apiClient);
       await revokeInvitation(apiClient, organizationId, revokeId.trim());
       setRevokeId("");
-      setMessage("Invitation revoked.");
+      setMessage("Đã thu hồi lời mời.");
     } catch (error) {
-      setError("Unable to revoke invitation.");
+      setError("Không thể thu hồi lời mời.");
       await onAccessError(error);
     } finally {
       setPending(false);
@@ -83,7 +83,7 @@ export function InvitationIssuePanel({ organizationId, workspaces, projects, onA
 
   return (
     <section>
-      <h2>Invitations</h2>
+      <h2>Lời mời</h2>
       <form onSubmit={(event) => void issue(event)}>
         <label>Recipient type
           <select value={kind} onChange={(event) => {
@@ -91,44 +91,44 @@ export function InvitationIssuePanel({ organizationId, workspaces, projects, onA
             setTarget("");
             setSubject("");
           }}>
-            <option value="email">Verified email</option>
-            <option value="user">User ID</option>
-            <option value="external_identity">External identity</option>
+            <option value="email">Email đã xác minh</option>
+            <option value="user">Mã người dùng</option>
+            <option value="external_identity">Danh tính bên ngoài</option>
           </select>
         </label>
-        <label>{kind === "email" ? "Recipient email" : kind === "user" ? "Recipient user ID" : "Identity issuer"}
+        <label>{kind === "email" ? "Email người nhận" : kind === "user" ? "Mã người dùng nhận lời mời" : "Nhà phát hành danh tính"}
           <input required type={kind === "email" ? "email" : kind === "external_identity" ? "url" : "text"}
             value={target} onChange={(event) => setTarget(event.target.value)} />
         </label>
         {kind === "external_identity" ? (
-          <label>Identity subject<input required value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
+          <label>Định danh người dùng<input required value={subject} onChange={(event) => setSubject(event.target.value)} /></label>
         ) : null}
         <label>Organization role
           <select value={role} onChange={(event) => setRole(event.target.value as InvitationCreate["organization_role"])}>
-            <option value="guest">Guest</option>
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
+            <option value="guest">Khách</option>
+            <option value="member">Thành viên</option>
+            <option value="admin">Quản trị viên</option>
           </select>
         </label>
-        <label><input type="checkbox" checked={withGrant} onChange={(event) => setWithGrant(event.target.checked)} /> Include resource grant</label>
-        {withGrant ? <ResourceScopeFields label="Invitation resource access" value={scope} onChange={setScope} workspaces={workspaces} projects={projects} /> : null}
-        <p>Expires in 24 hours. The secret is shown once and will not be saved by this page.</p>
-        <button type="submit" disabled={pending || (withGrant && !resourceGrant)}>Issue invitation</button>
+        <label><input type="checkbox" checked={withGrant} onChange={(event) => setWithGrant(event.target.checked)} /> Kèm quyền truy cập tài nguyên</label>
+        {withGrant ? <ResourceScopeFields label="Quyền tài nguyên trong lời mời" value={scope} onChange={setScope} workspaces={workspaces} projects={projects} /> : null}
+        <p>Hết hạn sau 24 giờ. Mã bí mật chỉ hiển thị một lần và không được lưu trên trang này.</p>
+        <button type="submit" disabled={pending || (withGrant && !resourceGrant)}>Gửi lời mời</button>
       </form>
       {issued ? (
         <section aria-label="Issued invitation">
-          <p>Share the invitation details privately with the intended recipient. They must sign in and open the invitation acceptance page.</p>
+          <p>Chia sẻ thông tin lời mời riêng cho đúng người nhận. Người nhận cần đăng nhập và mở trang chấp nhận lời mời.</p>
           <label>Invitation handoff
             <textarea readOnly rows={5} value={JSON.stringify({
               organization_id: issued.organization_id, invitation_id: issued.id, secret: issued.secret
             })} />
           </label>
-          <button type="button" onClick={() => setIssued(null)}>Hide one-time secret</button>
+          <button type="button" onClick={() => setIssued(null)}>Ẩn mã bí mật dùng một lần</button>
         </section>
       ) : null}
       <form onSubmit={(event) => void revoke(event)}>
-        <label>Invitation ID to revoke<input required value={revokeId} onChange={(event) => setRevokeId(event.target.value)} /></label>
-        <button type="submit" disabled={pending}>Revoke invitation</button>
+        <label>Mã lời mời cần thu hồi<input required value={revokeId} onChange={(event) => setRevokeId(event.target.value)} /></label>
+        <button type="submit" disabled={pending}>Thu hồi lời mời</button>
       </form>
       {message ? <p role="status">{message}</p> : null}
       {error ? <p role="alert">{error}</p> : null}

@@ -13,8 +13,10 @@ import { Link, useParams } from "react-router-dom";
 
 import { apiClient } from "../../app/api";
 import { currentProtectedData, protectedQueryOptions } from "../../app/protected-query";
+import { AccountMenu } from "../auth/AccountMenu";
 import { FreshAccount } from "../auth/FreshAccount";
 import { BootstrapPage } from "./BootstrapPage";
+import "./organization-home.css";
 
 function slugify(value: string): string {
   return value
@@ -22,6 +24,16 @@ function slugify(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function organizationRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    owner: "Chủ sở hữu",
+    admin: "Quản trị viên",
+    member: "Thành viên",
+    guest: "Khách"
+  };
+  return labels[role] ?? role;
 }
 
 function OrganizationList({ organizationId, account }: { organizationId: string | undefined; account: CurrentUser }) {
@@ -74,94 +86,116 @@ function OrganizationList({ organizationId, account }: { organizationId: string 
   }
 
   return (
-    <main style={{ maxWidth: 880, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <header>
-        <p style={{ textTransform: "uppercase", letterSpacing: "0.12em" }}>OpenVietGIS</p>
-        <h1>{activeOrganization ? activeOrganization.name : "Tổ chức"}</h1>
-        <p>
-          Đăng nhập với tài khoản <strong>{account.display_name}</strong>.{" "}
-          <Link to="/identity">Tài khoản & Phiên</Link>{" "}
-          <Link to="/invitations/accept">Chấp nhận lời mời</Link>
-        </p>
+    <div className="org-shell">
+      <header className="org-topbar">
+        <div className="org-topbar-brand">
+          <span className="org-topbar-mark">OVG</span>
+          <span>OpenVietGIS</span>
+        </div>
+        <div className="org-topbar-actions">
+          <AccountMenu />
+        </div>
       </header>
 
-      <section aria-labelledby="organization-switcher-title">
-        <h2 id="organization-switcher-title">Danh sách tổ chức của bạn</h2>
-        <ul data-testid="organization-list">
-          {visibleOrganizations.map((organization) => (
-            <li key={organization.id}>
-              <Link
-                to={"/organizations/" + organization.id}
-                aria-current={organization.id === organizationId ? "page" : undefined}
-              >
-                {organization.name}
-              </Link>{" "}
-              — {organization.role}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section aria-labelledby="create-organization-title">
-        <h2 id="create-organization-title">Tạo tổ chức mới</h2>
-        <form onSubmit={submit}>
-          <label>
-            Name
-            <input
-              aria-label="Organization name"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                if (!slug) setSlug(slugify(event.target.value));
-              }}
-              required
-            />
-          </label>
-          <label>
-            Slug
-            <input
-              aria-label="Organization slug"
-              value={slug}
-              onChange={(event) => setSlug(event.target.value)}
-              required
-            />
-          </label>
-          <button type="submit" disabled={create.isPending}>
-            {create.isPending ? "Đang tạo…" : "Tạo tổ chức"}
-          </button>
-        </form>
-        {create.error instanceof ApiError && create.error.status === 409 ? (
-          <p role="alert">
-            The installation must be initialized before creating another organization.
-          </p>
-        ) : create.error ? (
-          <p role="alert">Organization creation failed.</p>
-        ) : null}
-      </section>
-
-      {activeOrganization ? (
-        <section aria-labelledby="active-organization-title">
-          <h2 id="active-organization-title">Tổ chức đang chọn</h2>
-          <p>
-            <Link to={"/organizations/" + activeOrganization.id + "/workspaces"}>
-              Workspaces
-            </Link>{" "}
-            <Link to={"/organizations/" + activeOrganization.id + "/projects"}>
-              Projects
-            </Link>{" "}
-            <Link to={"/organizations/" + activeOrganization.id + "/membership"}>
-              Membership and access
-            </Link>
-          </p>
-          <dl data-testid="active-organization">
-            <dt>ID</dt>
-            <dd>{activeOrganization.id}</dd>
-            <dt>Role</dt>
-            <dd>{activeOrganization.role}</dd>
-          </dl>
+      <main className="org-page">
+        <section className="org-hero">
+          <div>
+            <span className="org-eyebrow">Không gian làm việc</span>
+            <h1>{activeOrganization ? activeOrganization.name : "Tổ chức của bạn"}</h1>
+            <p>Chọn tổ chức để quản lý dự án, dữ liệu GIS và quyền truy cập.</p>
+          </div>
         </section>
-      ) : null}
-    </main>
+
+        <div className="org-grid">
+          <div style={{ display: "grid", gap: 20 }}>
+            <section className="org-card">
+              <h2>Tổ chức của bạn</h2>
+              <p className="org-card-sub">Các tổ chức mà tài khoản hiện tại có quyền truy cập.</p>
+              {visibleOrganizations.length ? (
+                <ul className="org-list" data-testid="organization-list">
+                  {visibleOrganizations.map((organization) => (
+                    <li key={organization.id} className={organization.id === organizationId ? "is-active" : ""}>
+                      <Link
+                        to={"/organizations/" + organization.id}
+                        aria-current={organization.id === organizationId ? "page" : undefined}
+                      >
+                        {organization.name}
+                      </Link>
+                      <span className="org-role">{organizationRoleLabel(organization.role)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : <div className="org-empty">Chưa có tổ chức nào được cấp cho tài khoản này.</div>}
+            </section>
+
+            {activeOrganization ? (
+              <section className="org-card" aria-labelledby="active-organization-title">
+                <h2 id="active-organization-title">Làm việc với {activeOrganization.name}</h2>
+                <p className="org-card-sub">Đi nhanh tới các khu vực quản trị và dữ liệu chính.</p>
+                <div className="org-shortcuts">
+                  <Link className="org-shortcut" to={"/organizations/" + activeOrganization.id + "/projects"}>
+                    <strong>Dự án</strong>
+                    <small>Bản đồ, lớp dữ liệu và công cụ GIS</small>
+                  </Link>
+                  <Link className="org-shortcut" to={"/organizations/" + activeOrganization.id + "/workspaces"}>
+                    <strong>Không gian làm việc</strong>
+                    <small>Sắp xếp dự án theo nhóm làm việc</small>
+                  </Link>
+                  <Link className="org-shortcut" to={"/organizations/" + activeOrganization.id + "/membership"}>
+                    <strong>Thành viên & phân quyền</strong>
+                    <small>Quản lý người dùng và quyền truy cập</small>
+                  </Link>
+                </div>
+                <dl className="org-meta" data-testid="active-organization">
+                  <dt>Vai trò</dt>
+                  <dd>{organizationRoleLabel(activeOrganization.role)}</dd>
+                  <dt>Mã tổ chức</dt>
+                  <dd>{activeOrganization.id}</dd>
+                </dl>
+              </section>
+            ) : null}
+          </div>
+
+          <aside className="org-card">
+            <h2>Tạo tổ chức mới</h2>
+            <p className="org-card-sub">Tạo một không gian quản trị độc lập cho nhóm hoặc đơn vị mới.</p>
+            <form className="org-form" onSubmit={submit}>
+              <label>
+                Tên tổ chức
+                <input
+                  aria-label="Tên tổ chức"
+                  value={name}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    if (!slug) setSlug(slugify(event.target.value));
+                  }}
+                  placeholder="Ví dụ: Trung tâm GIS"
+                  required
+                />
+              </label>
+              <label>
+                Mã định danh
+                <input
+                  aria-label="Mã định danh tổ chức"
+                  value={slug}
+                  onChange={(event) => setSlug(event.target.value)}
+                  placeholder="trung-tam-gis"
+                  required
+                />
+              </label>
+              <button className="org-primary-btn" type="submit" disabled={create.isPending}>
+                {create.isPending ? "Đang tạo…" : "Tạo tổ chức"}
+              </button>
+            </form>
+            {create.error instanceof ApiError && create.error.status === 409 ? (
+              <p className="org-alert" role="alert">Hệ thống phải được khởi tạo trước khi tạo thêm tổ chức.</p>
+            ) : create.error ? (
+              <p className="org-alert" role="alert">Không thể tạo tổ chức.</p>
+            ) : null}
+          </aside>
+        </div>
+      </main>
+    </div>
   );
 }
 

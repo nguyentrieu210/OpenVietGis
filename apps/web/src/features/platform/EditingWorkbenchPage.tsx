@@ -12,6 +12,24 @@ import { useParams } from "react-router-dom";
 import { apiClient } from "../../app/api";
 import { ProjectToolbar } from "./ProjectToolbar";
 
+function sourceKindLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    imported_file: "Tệp đã nhập",
+    external_connection: "Nguồn kết nối ngoài",
+    reference_fixture: "Nguồn tham chiếu"
+  };
+  return labels[kind] ?? kind;
+}
+
+function editOperationLabel(kind: string): string {
+  const labels: Record<string, string> = {
+    create: "tạo mới",
+    update: "cập nhật",
+    delete: "xóa"
+  };
+  return labels[kind] ?? kind;
+}
+
 interface DraftOp {
   op_type: "create" | "update" | "delete";
   feature_id: string;
@@ -29,7 +47,7 @@ export function EditingWorkbenchPage() {
     '{"type":"Point","coordinates":[105.85,21.02]}'
   );
   const [propsJson, setPropsJson] = useState("{}");
-  const [summary, setSummary] = useState("Interactive feature edit");
+  const [summary, setSummary] = useState("Chỉnh sửa đối tượng tương tác");
   const [draft, setDraft] = useState<DraftOp[]>([]);
   const [redoStack, setRedoStack] = useState<DraftOp[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -66,9 +84,9 @@ export function EditingWorkbenchPage() {
       }
       setDraft((prev) => [...prev, op]);
       setRedoStack([]);
-      setNotice(`Staged ${op.op_type} for feature ${op.feature_id} in local draft.`);
+      setNotice(`Đã đưa thao tác ${editOperationLabel(op.op_type)} đối tượng ${op.feature_id} vào bản nháp cục bộ.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Invalid JSON payload.");
+      setError(err instanceof Error ? err.message : "Nội dung JSON không hợp lệ.");
     }
   }
 
@@ -109,13 +127,13 @@ export function EditingWorkbenchPage() {
       );
       setDraft([]);
       setRedoStack([]);
-      setNotice(`Đã lưu đợt thay đổi ${cs.id} (rev ${cs.resulting_content_revision.slice(0, 12)}).`);
+      setNotice(`Đã lưu đợt thay đổi ${cs.id} (phiên bản ${cs.resulting_content_revision.slice(0, 12)}).`);
       await qc.invalidateQueries({ queryKey: ["r006", organizationId, projectId] });
     } catch (err) {
       setError(
         err instanceof Error
-          ? `${err.message} (Local draft preserved — refresh source to reapply.)`
-          : "Commit failed; local draft preserved."
+          ? `${err.message} (Bản nháp cục bộ vẫn được giữ — hãy tải lại nguồn để áp dụng lại.)`
+          : "Không thể lưu thay đổi; bản nháp cục bộ vẫn được giữ."
       );
     }
   }
@@ -132,10 +150,10 @@ export function EditingWorkbenchPage() {
         `ui-rev-${Date.now()}`,
         csrf
       );
-      setNotice(`Reverted changeset ${cs.id} via new changeset ${rev.id}.`);
+      setNotice(`Đã hoàn nguyên bộ thay đổi ${cs.id} thông qua bộ thay đổi mới ${rev.id}.`);
       await qc.invalidateQueries({ queryKey: ["r006", organizationId, projectId] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Revert failed.");
+      setError(err instanceof Error ? err.message : "Hoàn nguyên không thành công.");
     }
   }
 
@@ -162,7 +180,7 @@ export function EditingWorkbenchPage() {
               >
                 {editableSources.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name} ({s.kind}, EPSG:{s.stored_crs?.code ?? 'N/A'})
+                    {s.name} ({sourceKindLabel(s.kind)}, EPSG:{s.stored_crs?.code ?? 'Không có'})
                   </option>
                 ))}
               </select>
@@ -179,7 +197,7 @@ export function EditingWorkbenchPage() {
               </select>
             </label>
             <label>
-              Mã đối tượng (Feature ID)
+              Mã đối tượng
               <input value={featureId} onChange={(e) => setFeatureId(e.target.value)} />
             </label>
           </div>
@@ -225,7 +243,7 @@ export function EditingWorkbenchPage() {
               onClick={() => void saveChangeset()}
               disabled={!activeSource || draft.length === 0}
             >
-              Lưu thay đổi (Commit)
+              Lưu thay đổi
             </button>
           </div>
         </section>
@@ -257,7 +275,7 @@ export function EditingWorkbenchPage() {
                       className="ovg-btn ovg-btn-secondary"
                       onClick={() => void handleRevert(cs)}
                     >
-                      Revert
+                      Hoàn nguyên
                     </button>
                   </td>
                 </tr>

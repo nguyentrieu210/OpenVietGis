@@ -1,7 +1,7 @@
 import type { MapStyle, MapViewpoint } from "@openvietgis/client-sdk";
 import type { Bounds } from "./workspace";
 
-export type BasemapId = "grid" | "osm" | "satellite" | "hybrid" | "topo" | "dark";
+export type BasemapId = "grid" | "osm" | "satellite" | "hybrid" | "google-satellite" | "google-hybrid" | "topo" | "dark";
 
 export interface BasemapOption {
   id: BasemapId;
@@ -9,8 +9,10 @@ export interface BasemapOption {
 }
 
 export const BASEMAP_OPTIONS: BasemapOption[] = [
-  { id: "hybrid", label: "Vệ tinh + Nhãn" },
-  { id: "satellite", label: "Ảnh vệ tinh" },
+  { id: "google-hybrid", label: "Google Hybrid (Vệ tinh + Nhãn)" },
+  { id: "google-satellite", label: "Vệ tinh Google" },
+  { id: "hybrid", label: "Vệ tinh Esri + Nhãn" },
+  { id: "satellite", label: "Vệ tinh Esri" },
   { id: "osm", label: "Đường phố (OSM)" },
   { id: "topo", label: "Địa hình (Topo)" },
   { id: "dark", label: "Nền tối" },

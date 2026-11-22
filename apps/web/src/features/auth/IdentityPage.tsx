@@ -74,31 +74,31 @@ function IdentityDetails({ account }: { account: CurrentUser }) {
   return (
     <main style={{ maxWidth: 800, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
       <p>
-        <Link to="/">← Organizations</Link>
+        <Link to="/">← Tổ chức</Link>
       </p>
-      <h1>Identity & session</h1>
+      <h1>Danh tính & phiên đăng nhập</h1>
       <p>
         {account.display_name}
         {account.email_snapshot ? " — " + account.email_snapshot : ""}
       </p>
 
-      <h2>Linked identities</h2>
-      {links.fetchStatus !== "idle" || links.isPending ? <p>Checking linked identities…</p> : !currentLinks ? <p role="alert">Unable to load linked identities.</p> : null}
+      <h2>Danh tính đã liên kết</h2>
+      {links.fetchStatus !== "idle" || links.isPending ? <p>Đang kiểm tra danh tính đã liên kết…</p> : !currentLinks ? <p role="alert">Không thể tải danh tính đã liên kết.</p> : null}
       <ul>
         {currentLinks?.map((link) => (
           <li key={link.id}>
             {link.issuer} / {link.subject}
             {currentLinks.length > 1 ? (
               <button type="button" disabled={unlink.isPending || signOut.isPending} onClick={() => unlink.mutate(link.id)}>
-                Unlink
+                Hủy liên kết
               </button>
             ) : null}
           </li>
         ))}
       </ul>
 
-      <h2>Link another identity</h2>
-      {providers.fetchStatus !== "idle" || providers.isPending ? <p>Checking identity providers…</p> : !currentProviders ? <p role="alert">Unable to load identity providers.</p> : null}
+      <h2>Liên kết thêm danh tính</h2>
+      {providers.fetchStatus !== "idle" || providers.isPending ? <p>Đang kiểm tra nhà cung cấp danh tính…</p> : !currentProviders ? <p role="alert">Không thể tải nhà cung cấp danh tính.</p> : null}
       {currentLinks && !signOut.isPending && !unlink.isPending && currentProviders?.map((provider) => (
         <p key={provider.id}>
           <a
@@ -108,7 +108,7 @@ function IdentityDetails({ account }: { account: CurrentUser }) {
               "?mode=link&return_to=/identity"
             }
           >
-            Link {provider.display_name}
+            Liên kết {provider.display_name}
           </a>
         </p>
       ))}
@@ -116,8 +116,8 @@ function IdentityDetails({ account }: { account: CurrentUser }) {
       <button type="button" onClick={() => signOut.mutate()} disabled={signOut.isPending || unlink.isPending}>
         Đăng xuất
       </button>
-      {unlink.error ? <p role="alert">Unable to unlink identity.</p> : null}
-      {signOut.error ? <p role="alert">Unable to sign out.</p> : null}
+      {unlink.error ? <p role="alert">Không thể hủy liên kết danh tính.</p> : null}
+      {signOut.error ? <p role="alert">Không thể đăng xuất.</p> : null}
     </main>
   );
 }

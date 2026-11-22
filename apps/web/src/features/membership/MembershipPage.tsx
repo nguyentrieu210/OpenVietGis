@@ -15,6 +15,26 @@ import { FreshAccount } from "../auth/FreshAccount";
 import { InvitationIssuePanel } from "../invitations/InvitationIssuePanel";
 import { initialScope, ResourceScopeFields, selectedGrant } from "./ResourceScopeFields";
 
+function membershipRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    owner: "Chủ sở hữu", admin: "Quản trị viên", member: "Thành viên", guest: "Khách",
+    manager: "Quản lý", editor: "Biên tập viên", contributor: "Cộng tác viên", viewer: "Người xem"
+  };
+  return labels[role] ?? role;
+}
+function membershipStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: "Đang hoạt động", suspended: "Tạm khóa", revoked: "Đã thu hồi"
+  };
+  return labels[status] ?? status;
+}
+function grantScopeLabel(scope: string): string {
+  const labels: Record<string, string> = {
+    organization: "Tổ chức", workspace: "Không gian làm việc", project: "Dự án"
+  };
+  return labels[scope] ?? scope;
+}
+
 function MemberAdministration({ organizationId, userId, permissions }: {
   organizationId: string;
   userId: string;
@@ -103,7 +123,7 @@ function MemberAdministration({ organizationId, userId, permissions }: {
   const grantAccess = useMutation({
     mutationFn: async () => {
       const grant = selectedGrant(scope, availableWorkspaces, availableProjects);
-      if (!grant || !canSubmitGrant) throw new Error("Missing grant target");
+      if (!grant || !canSubmitGrant) throw new Error("Thiếu đối tượng cần cấp quyền");
       await loadCsrfToken(apiClient);
       await createResourceGrant(apiClient, organizationId, {
         ...grant, subject_kind: "membership", subject_id: membershipId
@@ -133,57 +153,57 @@ function MemberAdministration({ organizationId, userId, permissions }: {
     <>
       {canManageMembers ? (
         <section>
-          <h2>Members</h2>
-          {members.fetchStatus !== "idle" || members.isPending ? <p>Loading members…</p> : !currentMembers ? <p role="alert">Unable to load members.</p> : null}
+          <h2>Thành viên</h2>
+          {members.fetchStatus !== "idle" || members.isPending ? <p>Đang tải thành viên…</p> : !currentMembers ? <p role="alert">Không thể tải danh sách thành viên.</p> : null}
           <ul data-testid="member-list">
             {availableMembers.map((member) => (
               <li key={member.id} data-testid={"member-" + member.id}>
-                {member.user_id}{member.user_id === userId ? " (you)" : ""} — {member.role} — {member.status}{" "}
+                {member.user_id}{member.user_id === userId ? " (bạn)" : ""} — {membershipRoleLabel(member.role)} — {membershipStatusLabel(member.status)}{" "}
                 {member.status === "active" ? (
-                  <button type="button" disabled={changeMember.isPending} onClick={() => changeMember.mutate({ id: member.id, change: { status: "suspended" } })}>Suspend</button>
+                  <button type="button" disabled={changeMember.isPending} onClick={() => changeMember.mutate({ id: member.id, change: { status: "suspended" } })}>Tạm khóa</button>
                 ) : member.status === "suspended" ? (
-                  <button type="button" disabled={changeMember.isPending} onClick={() => changeMember.mutate({ id: member.id, change: { status: "active" } })}>Restore</button>
+                  <button type="button" disabled={changeMember.isPending} onClick={() => changeMember.mutate({ id: member.id, change: { status: "active" } })}>Khôi phục</button>
                 ) : null}
                 {member.status !== "revoked" ? (
                   <button type="button" disabled={changeMember.isPending} onClick={() => {
-                    if (window.confirm("Revoke this membership?")) changeMember.mutate({ id: member.id, change: { status: "revoked" } });
-                  }}>Revoke</button>
+                    if (window.confirm("Bạn có chắc muốn thu hồi thành viên này?")) changeMember.mutate({ id: member.id, change: { status: "revoked" } });
+                  }}>Thu hồi</button>
                 ) : null}
               </li>
             ))}
           </ul>
-          {changeMember.error ? <p role="alert">Unable to change membership. The server enforces Owner and lifecycle rules.</p> : null}
+          {changeMember.error ? <p role="alert">Không thể thay đổi tư cách thành viên. Hệ thống đang áp dụng quy tắc Chủ sở hữu và vòng đời tài khoản.</p> : null}
         </section>
       ) : null}
 
       {canManageGrants ? (
         <section>
-          <h2>Resource grants</h2>
+          <h2>Phân quyền tài nguyên</h2>
           <form onSubmit={submitGrant}>
-            <label>Membership
+            <label>Thành viên
               <select required value={availableMembers.some((member) => member.id === membershipId && member.status === "active") ? membershipId : ""} onChange={(event) => setMembershipId(event.target.value)}>
-                <option value="">Select member</option>
+                <option value="">Chọn thành viên</option>
                 {availableMembers.filter((member) => member.status === "active").map((member) => (
-                  <option key={member.id} value={member.id}>{member.user_id} — {member.role}</option>
+                  <option key={member.id} value={member.id}>{member.user_id} — {membershipRoleLabel(member.role)}</option>
                 ))}
               </select>
             </label>
-            <ResourceScopeFields label="Grant resource access" value={scope} onChange={setScope} workspaces={availableWorkspaces} projects={availableProjects} />
-            <button type="submit" disabled={grantAccess.isPending || !canSubmitGrant}>Create grant</button>
+            <ResourceScopeFields label="Cấp quyền truy cập tài nguyên" value={scope} onChange={setScope} workspaces={availableWorkspaces} projects={availableProjects} />
+            <button type="submit" disabled={grantAccess.isPending || !canSubmitGrant}>Cấp quyền</button>
           </form>
-          {grants.fetchStatus !== "idle" || grants.isPending ? <p>Loading grants…</p> : null}
-          {grants.error || members.error || workspaces.error || projects.error ? <p role="alert">Unable to load grant resources.</p> : null}
+          {grants.fetchStatus !== "idle" || grants.isPending ? <p>Đang tải phân quyền…</p> : null}
+          {grants.error || members.error || workspaces.error || projects.error ? <p role="alert">Không thể tải tài nguyên phân quyền.</p> : null}
           <ul data-testid="resource-grant-list">
             {currentGrants?.map((grant) => (
               <li key={grant.id}>
-                {grant.subject_id} — {grant.role} — {grant.scope_kind} {grant.workspace_id ?? grant.project_id ?? ""} — {grant.revoked_at ? "revoked" : "active"}{" "}
+                {grant.subject_id} — {membershipRoleLabel(grant.role)} — {grantScopeLabel(grant.scope_kind)} {grant.workspace_id ?? grant.project_id ?? ""} — {grant.revoked_at ? "Đã thu hồi" : "Đang hoạt động"}{" "}
                 {!grant.revoked_at ? (
-                  <button type="button" disabled={revokeAccess.isPending} onClick={() => revokeAccess.mutate(grant.id)}>Revoke grant</button>
+                  <button type="button" disabled={revokeAccess.isPending} onClick={() => revokeAccess.mutate(grant.id)}>Thu hồi quyền</button>
                 ) : null}
               </li>
             ))}
           </ul>
-          {grantAccess.error || revokeAccess.error ? <p role="alert">Unable to update grant.</p> : null}
+          {grantAccess.error || revokeAccess.error ? <p role="alert">Không thể cập nhật phân quyền.</p> : null}
         </section>
       ) : null}
 
@@ -191,7 +211,7 @@ function MemberAdministration({ organizationId, userId, permissions }: {
         <InvitationIssuePanel organizationId={organizationId} workspaces={availableWorkspaces} projects={availableProjects} onAccessError={refreshAfterError} />
       ) : null}
       {!canManageMembers && !canManageGrants && !canManageInvitations ? (
-        <p>You do not have permission to administer this organization.</p>
+        <p>Bạn không có quyền quản trị tổ chức này.</p>
       ) : null}
     </>
   );
@@ -208,10 +228,10 @@ function OrganizationMembership({ organizationId, userId }: { organizationId: st
 
   return (
     <main style={{ maxWidth: 960, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <Link to={"/organizations/" + encodeURIComponent(organizationId)}>← Organization</Link>
+      <Link to={"/organizations/" + encodeURIComponent(organizationId)}>← Tổ chức</Link>
       <h1>Thành viên & Phân quyền</h1>
-      {effective.fetchStatus !== "idle" || effective.isPending ? <p>Checking organization permissions…</p> : !current ? (
-        <p role="alert">Unable to load organization access.</p>
+      {effective.fetchStatus !== "idle" || effective.isPending ? <p>Đang kiểm tra quyền của tổ chức…</p> : !current ? (
+        <p role="alert">Không thể tải quyền truy cập tổ chức.</p>
       ) : (
         <MemberAdministration organizationId={organizationId} userId={userId} permissions={current.permissions} />
       )}
@@ -221,7 +241,7 @@ function OrganizationMembership({ organizationId, userId }: { organizationId: st
 
 export function MembershipPage() {
   const { organizationId } = useParams();
-  if (!organizationId) return <p role="alert">Organization context is missing.</p>;
+  if (!organizationId) return <p role="alert">Thiếu ngữ cảnh tổ chức.</p>;
   return (
     <FreshAccount key={organizationId}>
       {(account) => <OrganizationMembership key={organizationId + ":" + account.id} organizationId={organizationId} userId={account.id} />}

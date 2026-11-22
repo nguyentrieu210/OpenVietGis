@@ -13,6 +13,28 @@ import { useParams } from "react-router-dom";
 import { apiClient } from "../../app/api";
 import { ProjectToolbar } from "./ProjectToolbar";
 
+function processingStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    queued: "Đang chờ",
+    active: "Đang xử lý",
+    succeeded: "Thành công",
+    completed: "Hoàn tất",
+    failed: "Thất bại",
+    cancelled: "Đã hủy",
+    canceled: "Đã hủy"
+  };
+  return labels[status] ?? status;
+}
+
+function algorithmLabel(id: string): string {
+  const labels: Record<string, string> = {
+    buffer: "Vùng đệm",
+    clip: "Cắt lớp",
+    dissolve: "Gộp vùng"
+  };
+  return labels[id] ?? id;
+}
+
 export function ProcessingWorkbenchPage() {
   const { organizationId = "", projectId = "" } = useParams();
   const qc = useQueryClient();
@@ -21,7 +43,7 @@ export function ProcessingWorkbenchPage() {
   const [overlayLayerId, setOverlayLayerId] = useState("");
   const [distance, setDistance] = useState("500");
   const [groupField, setGroupField] = useState("");
-  const [outputName, setOutputName] = useState("Derived Processing Layer");
+  const [outputName, setOutputName] = useState("Lớp kết quả xử lý");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,10 +92,10 @@ export function ProcessingWorkbenchPage() {
         },
         csrf
       );
-      setNotice(`Job ${job.id} hoàn tất (${job.status}, ${job.feature_count ?? 0} features).`);
+      setNotice(`Tác vụ ${job.id} hoàn tất (${processingStatusLabel(job.status)}, ${job.feature_count ?? 0} đối tượng).`);
       await qc.invalidateQueries({ queryKey: ["r008", organizationId, projectId] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Processing failed.");
+      setError(err instanceof Error ? err.message : "Xử lý không thành công.");
     }
   }
 
@@ -116,7 +138,7 @@ export function ProcessingWorkbenchPage() {
               <label>
                 Lớp phủ cắt (Overlay)
                 <select value={overlayLayerId} onChange={(e) => setOverlayLayerId(e.target.value)}>
-                  <option value="">Select overlay</option>
+                  <option value="">Chọn lớp chồng phủ</option>
                   {layers.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
@@ -163,10 +185,10 @@ export function ProcessingWorkbenchPage() {
             <tbody>
               {(jobsQuery.data?.items ?? []).map((j) => (
                 <tr key={j.id}>
-                  <td>{j.algorithm_id}</td>
+                  <td>{algorithmLabel(j.algorithm_id)}</td>
                   <td>{j.output_name}</td>
                   <td>
-                    <span className="ovg-badge">{j.status}</span>
+                    <span className="ovg-badge">{processingStatusLabel(j.status)}</span>
                   </td>
                   <td>{j.feature_count ?? "—"}</td>
                   <td>{j.engine_version}</td>

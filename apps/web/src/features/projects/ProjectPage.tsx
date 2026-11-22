@@ -22,6 +22,15 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function projectStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: "Đang hoạt động",
+    archived: "Đã lưu trữ",
+    deleted: "Đã xóa"
+  };
+  return labels[status] ?? status;
+}
+
 function OrganizationProjects({ organizationId, userId }: { organizationId: string; userId: string }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -97,9 +106,9 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
         workspaces.isPending || workspaces.fetchStatus !== "idle");
     return (
       <main>
-        <Link to="/">← Organizations</Link>
+        <Link to="/">← Tổ chức</Link>
         <h1>Dự án</h1>
-        {checking ? <p>Checking project access…</p> : <p role="alert">Unable to load project access.</p>}
+        {checking ? <p>Đang kiểm tra quyền truy cập dự án…</p> : <p role="alert">Không thể tải quyền truy cập dự án.</p>}
       </main>
     );
   }
@@ -107,16 +116,16 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
   return (
     <main style={{ maxWidth: 960, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
       <p>
-        <Link to={"/organizations/" + organizationId}>← Organization</Link>{" "}
+        <Link to={"/organizations/" + organizationId}>← Tổ chức</Link>{" "}
         <Link to={"/organizations/" + organizationId + "/workspaces"}>Không gian làm việc</Link>
       </p>
       <h1>Dự án</h1>
 
       <form onSubmit={submit}>
         <label>
-          Project name
+          Tên dự án
           <input
-            aria-label="Project name"
+            aria-label="Tên dự án"
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -126,22 +135,22 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
           />
         </label>
         <label>
-          Project slug
+          Mã định danh dự án
           <input
-            aria-label="Project slug"
+            aria-label="Mã định danh dự án"
             value={slug}
             onChange={(event) => setSlug(event.target.value)}
             required
           />
         </label>
         <label>
-          Project workspace
+          Không gian làm việc
           <select
-            aria-label="Project workspace"
+            aria-label="Không gian làm việc của dự án"
             value={workspaceId}
             onChange={(event) => setWorkspaceId(event.target.value)}
           >
-            <option value="">Ungrouped</option>
+            <option value="">Chưa phân nhóm</option>
             {visibleWorkspaces.map((workspace) => (
               <option key={workspace.id} value={workspace.id}>
                 {workspace.name}
@@ -150,28 +159,28 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
           </select>
         </label>
         <button type="submit" disabled={create.isPending}>
-          Create project
+          Tạo dự án
         </button>
       </form>
 
-      {create.error ? <p role="alert">Unable to create project.</p> : null}
-      {update.error ? <p role="alert">Unable to update project.</p> : null}
+      {create.error ? <p role="alert">Không thể tạo dự án.</p> : null}
+      {update.error ? <p role="alert">Không thể cập nhật dự án.</p> : null}
 
       <ul data-testid="project-list">
         {visibleProjects.map((project) => {
           const moveTarget = moveTargets[project.id] ?? project.workspace_id ?? "";
           return (
             <li key={project.id} data-testid={"project-" + project.id}>
-              <strong>{project.name}</strong> — {project.status} — workspace{" "}
-              {project.workspace_id ?? "none"}{" "}
+              <strong>{project.name}</strong> — {projectStatusLabel(project.status)} — không gian làm việc{" "}
+              {project.workspace_id ?? "chưa phân nhóm"}{" "}
               {project.status !== "deleted" ? (
                 <><Link to={"/organizations/" + encodeURIComponent(organizationId) + "/projects/" + encodeURIComponent(project.id) + "/spatial"}>Danh mục Dữ liệu</Link>{" · "}<Link to={"/organizations/" + encodeURIComponent(organizationId) + "/projects/" + encodeURIComponent(project.id) + "/map"}>Mở Bản đồ</Link></>
               ) : null}
               <div>
                 <label>
-                  Workspace for {project.name}
+                  Không gian làm việc của {project.name}
                   <select
-                    aria-label={"Workspace for " + project.name}
+                    aria-label={"Không gian làm việc của " + project.name}
                     value={moveTarget}
                     onChange={(event) =>
                       setMoveTargets((current) => ({
@@ -180,7 +189,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
                       }))
                     }
                   >
-                    <option value="">Ungrouped</option>
+                    <option value="">Chưa phân nhóm</option>
                     {visibleWorkspaces.map((workspace) => (
                       <option key={workspace.id} value={workspace.id}>
                         {workspace.name}
@@ -199,7 +208,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
                     })
                   }
                 >
-                  Move {project.name}
+                  Chuyển nhóm {project.name}
                 </button>
                 <button
                   type="button"
@@ -210,7 +219,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
                     })
                   }
                 >
-                  Ungroup {project.name}
+                  Bỏ khỏi nhóm {project.name}
                 </button>
                 {project.status === "active" ? (
                   <button
@@ -222,7 +231,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
                       })
                     }
                   >
-                    Archive {project.name}
+                    Lưu trữ {project.name}
                   </button>
                 ) : project.status === "archived" ? (
                   <button
@@ -234,7 +243,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
                       })
                     }
                   >
-                    Restore {project.name}
+                    Khôi phục {project.name}
                   </button>
                 ) : null}
               </div>
@@ -248,7 +257,7 @@ function OrganizationProjects({ organizationId, userId }: { organizationId: stri
 
 export function ProjectPage() {
   const { organizationId } = useParams();
-  if (!organizationId) return <p role="alert">Organization context is missing.</p>;
+  if (!organizationId) return <p role="alert">Thiếu ngữ cảnh tổ chức.</p>;
   return (
     <FreshAccount key={organizationId}>
       {(account) => (

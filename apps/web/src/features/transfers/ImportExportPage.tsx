@@ -36,10 +36,35 @@ const CRS_OPTIONS = [
 
 const ENCODING_OPTIONS = ["utf-8", "windows-1258", "cp1252", "latin-1"];
 
+function jobKindLabel(kind: string): string {
+  return kind === "import" ? "Nhập dữ liệu" : kind === "export" ? "Xuất dữ liệu" : kind;
+}
+
+function jobStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    queued: "Đang chờ",
+    active: "Đang xử lý",
+    succeeded: "Thành công",
+    recoverable_failed: "Lỗi có thể thử lại",
+    failed: "Thất bại",
+    cancelled: "Đã hủy",
+    canceled: "Đã hủy"
+  };
+  return labels[status] ?? status;
+}
+
+function geometryFamilyLabel(value: string): string {
+  const labels: Record<string, string> = {
+    Point: "Điểm", LineString: "Đường", Polygon: "Vùng",
+    MultiPoint: "Đa điểm", MultiLineString: "Đa đường", MultiPolygon: "Đa vùng"
+  };
+  return labels[value] ?? value;
+}
+
 function errText(err: unknown): string {
   if (err instanceof TransferApiError) return `${err.code}: ${err.detail}`;
   if (err instanceof Error) return err.message;
-  return "Transfer operation failed.";
+  return "Thao tác nhập/xuất không thành công.";
 }
 
 function TransfersWorkspace({
@@ -116,10 +141,10 @@ function TransfersWorkspace({
       setTargetCrs(res.inspection.target_crs ? String(res.inspection.target_crs) : "");
       setDeclaredEncoding(res.inspection.resolved_encoding ?? "");
       const stem = file.name.replace(/\.[^.]+$/, "");
-      setSourceName(stem || "Imported Source");
-      setLayerName(stem || "Imported Layer");
+      setSourceName(stem || "Nguồn dữ liệu đã nhập");
+      setLayerName(stem || "Lớp dữ liệu đã nhập");
       setApprovedImportConversions([]);
-      setImportNotice(`Uploaded ${res.asset.filename} (${res.asset.detected_format}).`);
+      setImportNotice(`Đã tải lên ${res.asset.filename} (${res.asset.detected_format}).`);
     } catch (err) {
       setImportNotice(errText(err));
     } finally {
@@ -143,8 +168,8 @@ function TransfersWorkspace({
       setInspection(res);
       setImportNotice(
         res.inspection.confirmable
-          ? "Inspection passed. Ready to confirm import."
-          : "Inspection completed with issues to resolve."
+          ? "Kiểm tra dữ liệu đạt yêu cầu. Có thể xác nhận nhập dữ liệu."
+          : "Đã kiểm tra dữ liệu nhưng còn vấn đề cần xử lý."
       );
     } catch (err) {
       setImportNotice(errText(err));
@@ -172,7 +197,7 @@ function TransfersWorkspace({
         inspection_fingerprint: inspection.inspection.inspection_fingerprint
       });
       setImportNotice(
-        `Import succeeded: Layer ${job.target_layer_id} (${job.result_report?.feature_count ?? 0} features).`
+        `Nhập dữ liệu thành công: lớp ${job.target_layer_id} (${job.result_report?.feature_count ?? 0} đối tượng).`
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [...scopePrefix, "layers"] }),
@@ -201,7 +226,7 @@ function TransfersWorkspace({
         output_crs: exportCrs
       });
       setExportPreview(preview);
-      setExportNotice("Export preview ready for pinned revision.");
+      setExportNotice("Đã tạo bản xem trước cho đúng phiên bản dữ liệu được cố định.");
     } catch (err) {
       setExportNotice(errText(err));
     } finally {
@@ -226,7 +251,7 @@ function TransfersWorkspace({
         preview_fingerprint: exportPreview.preview_fingerprint
       });
       setExportNotice(
-        `Export succeeded: ${job.artifact?.filename ?? "artifact ready"} (SHA-256 ${job.artifact?.sha256.slice(0, 12)}…).`
+        `Xuất dữ liệu thành công: ${job.artifact?.filename ?? "tệp đã sẵn sàng"} (SHA-256 ${job.artifact?.sha256.slice(0, 12)}…).`
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [...scopePrefix, "layers"] }),
@@ -259,33 +284,32 @@ function TransfersWorkspace({
     <main className="transfers-page" data-testid="transfers-page">
       <header className="transfers-header">
         <div>
-          <Link to={`/organizations/${organizationId}/projects`}>← Projects</Link>
+          <Link to={`/organizations/${organizationId}/projects`}>← Dự án</Link>
           <h1>
-            {project.name} <small>Import &amp; Export</small>
+            {project.name} <small>Nhập / Xuất dữ liệu</small>
           </h1>
         </div>
         <nav className="transfers-nav">
           <Link to={`/organizations/${organizationId}/projects/${projectId}/spatial`}>
-            Spatial catalog
+            Danh mục GIS
           </Link>
           <Link to={`/organizations/${organizationId}/projects/${projectId}/map`}>
-            Map workspace
+            Không gian bản đồ
           </Link>
         </nav>
       </header>
 
       <div className="transfers-grid">
-        <section className="transfers-card" aria-label="Import vector dataset">
-          <h2>Import Vector Layer</h2>
+        <section className="transfers-card" aria-label="Nhập dữ liệu vector">
+          <h2>Nhập lớp dữ liệu vector</h2>
           {!writable ? (
             <p className="transfers-muted">
-              Read-only access: importing new sources requires Project edit authority on an active
-              Project.
+              Chỉ có quyền xem: để nhập nguồn dữ liệu mới, bạn cần quyền chỉnh sửa trên một dự án đang hoạt động.
             </p>
           ) : (
             <>
               <label className="transfers-field">
-                <span>Dataset file (.gpkg, .geojson, .zip Shapefile)</span>
+                <span>Tệp dữ liệu (.gpkg, .geojson, .zip Shapefile)</span>
                 <input
                   type="file"
                   data-testid="import-file-input"
@@ -301,35 +325,35 @@ function TransfersWorkspace({
               {inspection ? (
                 <div className="transfers-inspection" data-testid="import-inspection">
                   <p>
-                    <strong>Format:</strong> {inspection.asset.detected_format} ·{" "}
+                    <strong>Định dạng:</strong> {inspection.asset.detected_format} ·{" "}
                     <strong>SHA-256:</strong>{" "}
                     <code>{inspection.asset.sha256.slice(0, 16)}…</code>
                   </p>
                   <div className="transfers-form-row">
                     <label>
-                      <span>Member</span>
+                      <span>Thành phần dữ liệu</span>
                       <select
                         data-testid="import-member-select"
                         value={selectedMember}
                         onChange={e => setSelectedMember(e.target.value)}
                       >
-                        <option value="">Choose member…</option>
+                        <option value="">Chọn thành phần dữ liệu…</option>
                         {inspection.inspection.members.map(m => (
                           <option key={m.name} value={m.name} disabled={!m.eligible}>
-                            {m.name} ({m.geometry_family}, {m.feature_count} features
+                            {m.name} ({geometryFamilyLabel(m.geometry_family)}, {m.feature_count} đối tượng
                             {m.eligible ? "" : ` — ${m.reason}`})
                           </option>
                         ))}
                       </select>
                     </label>
                     <label>
-                      <span>Source CRS</span>
+                      <span>Hệ tọa độ nguồn (CRS)</span>
                       <select
                         data-testid="import-source-crs"
                         value={declaredCrs}
                         onChange={e => setDeclaredCrs(e.target.value)}
                       >
-                        <option value="">Auto / File CRS</option>
+                        <option value="">Tự động / theo CRS trong tệp</option>
                         {CRS_OPTIONS.map(o => (
                           <option key={o.code} value={String(o.code)}>
                             {o.label}
@@ -338,13 +362,13 @@ function TransfersWorkspace({
                       </select>
                     </label>
                     <label>
-                      <span>Target CRS</span>
+                      <span>Hệ tọa độ đích (CRS)</span>
                       <select
                         data-testid="import-target-crs"
                         value={targetCrs}
                         onChange={e => setTargetCrs(e.target.value)}
                       >
-                        <option value="">Keep source CRS</option>
+                        <option value="">Giữ nguyên CRS nguồn</option>
                         {CRS_OPTIONS.map(o => (
                           <option key={o.code} value={String(o.code)}>
                             {o.label}
@@ -353,13 +377,13 @@ function TransfersWorkspace({
                       </select>
                     </label>
                     <label>
-                      <span>Text Encoding</span>
+                      <span>Mã hóa ký tự</span>
                       <select
                         data-testid="import-encoding"
                         value={declaredEncoding}
                         onChange={e => setDeclaredEncoding(e.target.value)}
                       >
-                        <option value="">Auto (.cpg / UTF-8)</option>
+                        <option value="">Tự động (.cpg / UTF-8)</option>
                         {ENCODING_OPTIONS.map(enc => (
                           <option key={enc} value={enc}>
                             {enc}
@@ -373,7 +397,7 @@ function TransfersWorkspace({
                     disabled={importBusy}
                     onClick={() => void handleReinspect()}
                   >
-                    Re-inspect
+                    Kiểm tra lại
                   </button>
 
                   {inspection.inspection.findings.length > 0 ? (
@@ -388,7 +412,7 @@ function TransfersWorkspace({
 
                   <div className="transfers-form-row">
                     <label>
-                      <span>New Source Name</span>
+                      <span>Tên nguồn dữ liệu mới</span>
                       <input
                         type="text"
                         data-testid="import-source-name"
@@ -397,7 +421,7 @@ function TransfersWorkspace({
                       />
                     </label>
                     <label>
-                      <span>New Layer Name</span>
+                      <span>Tên lớp dữ liệu mới</span>
                       <input
                         type="text"
                         data-testid="import-layer-name"
@@ -419,7 +443,7 @@ function TransfersWorkspace({
                     }
                     onClick={() => void handleConfirmImport()}
                   >
-                    Confirm Import ({inspection.inspection.feature_count} features)
+                    Xác nhận nhập ({inspection.inspection.feature_count} đối tượng)
                   </button>
                 </div>
               ) : null}
@@ -432,11 +456,11 @@ function TransfersWorkspace({
           ) : null}
         </section>
 
-        <section className="transfers-card" aria-label="Export fixed revision">
-          <h2>Export Fixed Revision</h2>
+        <section className="transfers-card" aria-label="Xuất dữ liệu theo phiên bản cố định">
+          <h2>Xuất dữ liệu theo phiên bản cố định</h2>
           <div className="transfers-form-row">
             <label>
-              <span>Layer</span>
+              <span>Lớp dữ liệu</span>
               <select
                 data-testid="export-layer-select"
                 value={exportLayerId}
@@ -447,17 +471,17 @@ function TransfersWorkspace({
                   if (chosen?.source.stored_crs?.code) setExportCrs(chosen.source.stored_crs.code);
                 }}
               >
-                <option value="">Choose exportable Layer…</option>
+                <option value="">Chọn lớp có thể xuất…</option>
                 {exportableLayers.map(l => (
                   <option key={l.id} value={l.id}>
-                    {l.name} ({l.source.feature_count ?? 0} features, EPSG:
+                    {l.name} ({l.source.feature_count ?? 0} đối tượng, EPSG:
                     {l.source.stored_crs?.code ?? "?"})
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              <span>Output Format</span>
+              <span>Định dạng đầu ra</span>
               <select
                 data-testid="export-format-select"
                 value={exportFormat}
@@ -468,13 +492,13 @@ function TransfersWorkspace({
                   setExportPreview(null);
                 }}
               >
-                <option value="geopackage">GeoPackage (.gpkg — preferred lossless)</option>
+                <option value="geopackage">GeoPackage (.gpkg — khuyến nghị, bảo toàn dữ liệu tốt nhất)</option>
                 <option value="geojson">RFC 7946 GeoJSON (.geojson — EPSG:4326)</option>
                 <option value="shapefile_zip">ZIP Shapefile (.zip)</option>
               </select>
             </label>
             <label>
-              <span>Output CRS</span>
+              <span>Hệ tọa độ đầu ra (CRS)</span>
               <select
                 data-testid="export-crs-select"
                 value={exportCrs}
@@ -501,15 +525,15 @@ function TransfersWorkspace({
             disabled={!activeExportLayer || exportBusy}
             onClick={() => void handlePreviewExport()}
           >
-            Preview Export
+            Xem trước dữ liệu xuất
           </button>
 
           {exportPreview ? (
             <div className="transfers-inspection" data-testid="export-preview">
               <p>
-                <strong>Pinned Content Revision:</strong>{" "}
+                <strong>Phiên bản nội dung cố định:</strong>{" "}
                 <code>{exportPreview.content_revision.slice(0, 16)}…</code> ·{" "}
-                <strong>Features:</strong> {exportPreview.feature_count}
+                <strong>Số đối tượng:</strong> {exportPreview.feature_count}
               </p>
               {exportPreview.disclosures.length > 0 ? (
                 <ul className="transfers-findings">
@@ -529,14 +553,14 @@ function TransfersWorkspace({
                               );
                             }}
                           />
-                          Approve this representational difference
+                          Chấp nhận khác biệt biểu diễn này
                         </label>
                       ) : null}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="transfers-muted">Lossless profile: no representational loss.</p>
+                <p className="transfers-muted">Chế độ bảo toàn: không phát hiện mất mát biểu diễn.</p>
               )}
               <button
                 type="button"
@@ -545,7 +569,7 @@ function TransfersWorkspace({
                 disabled={exportBusy || !exportApprovalsMet}
                 onClick={() => void handleConfirmExport()}
               >
-                Confirm Export
+                Xác nhận xuất dữ liệu
               </button>
             </div>
           ) : null}
@@ -558,26 +582,26 @@ function TransfersWorkspace({
       </div>
 
       <section className="transfers-card" aria-label="Lịch sử tác vụ Nhập / Xuất">
-        <h2>Durable Import &amp; Export Jobs</h2>
+        <h2>Lịch sử tác vụ Nhập / Xuất</h2>
         {jobs.length === 0 ? (
-          <p className="transfers-muted">No transfer jobs recorded in this Project yet.</p>
+          <p className="transfers-muted">Chưa có tác vụ nhập/xuất nào được ghi nhận trong dự án này.</p>
         ) : (
           <table className="transfers-table" data-testid="transfer-jobs-table">
             <thead>
               <tr>
-                <th>Kind</th>
-                <th>Status</th>
-                <th>Actor</th>
-                <th>Revision / Provenance</th>
-                <th>Output / Actions</th>
+                <th>Loại tác vụ</th>
+                <th>Trạng thái</th>
+                <th>Người thực hiện</th>
+                <th>Phiên bản / Nguồn gốc</th>
+                <th>Đầu ra / Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {jobs.map(job => (
                 <tr key={job.id} data-testid={`job-row-${job.id}`}>
-                  <td>{job.kind}</td>
+                  <td>{jobKindLabel(job.kind)}</td>
                   <td>
-                    <span className={`job-badge job-${job.status}`}>{job.status}</span>
+                    <span className={`job-badge job-${job.status}`}>{jobStatusLabel(job.status)}</span>
                   </td>
                   <td>{job.actor_display_snapshot}</td>
                   <td>
@@ -596,7 +620,7 @@ function TransfersWorkspace({
                           href={artifactDownloadUrl(organizationId, projectId, job.artifact.id)}
                           download={job.artifact.filename}
                         >
-                          Download {job.artifact.filename}
+                          Tải xuống {job.artifact.filename}
                         </a>
                         <small>
                           SHA-256 <code>{job.artifact.sha256.slice(0, 12)}…</code> ·{" "}
@@ -605,17 +629,17 @@ function TransfersWorkspace({
                       </div>
                     ) : job.target_layer_id ? (
                       <Link to={`/organizations/${organizationId}/projects/${projectId}/map`}>
-                        Open in Map
+                        Mở trên bản đồ
                       </Link>
                     ) : null}
                     {job.status === "recoverable_failed" ? (
                       <button type="button" onClick={() => void handleJobAction(job.id, "retry")}>
-                        Retry
+                        Thử lại
                       </button>
                     ) : null}
                     {job.status === "queued" || job.status === "active" ? (
                       <button type="button" onClick={() => void handleJobAction(job.id, "cancel")}>
-                        Cancel
+                        Hủy
                       </button>
                     ) : null}
                   </td>
@@ -662,12 +686,12 @@ function ProtectedTransfers({
     const error = projectQuery.error || permissionQuery.error;
     return (
       <main className="transfers-page">
-        <Link to={`/organizations/${organizationId}/projects`}>← Projects</Link>
-        <h1>Import &amp; Export</h1>
+        <Link to={`/organizations/${organizationId}/projects`}>← Dự án</Link>
+        <h1>Nhập / Xuất dữ liệu</h1>
         <p role={error ? "alert" : "status"}>
           {error
-            ? "Current Project transfer access is unavailable."
-            : "Checking current Project transfer access…"}
+            ? "Không thể truy cập chức năng nhập/xuất của dự án hiện tại."
+            : "Đang kiểm tra quyền nhập/xuất của dự án…"}
         </p>
       </main>
     );
@@ -687,7 +711,7 @@ function ProtectedTransfers({
 export function ImportExportPage() {
   const { organizationId, projectId } = useParams();
   if (!organizationId || !projectId) {
-    return <p role="alert">Project context is missing.</p>;
+    return <p role="alert">Thiếu ngữ cảnh dự án.</p>;
   }
   return (
     <FreshAccount key={`${organizationId}:${projectId}`}>

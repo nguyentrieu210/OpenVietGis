@@ -31,6 +31,15 @@ import { FeatureInspector } from "./FeatureInspector";
 import { CatalogHistoryPanel } from "./CatalogHistoryPanel";
 import { canReadHistory, historyPrefix } from "./catalog-history";
 
+function stateLabel(value: string): string {
+  const labels: Record<string, string> = {
+    active: "Đang hoạt động", archived: "Đã lưu trữ", deleted: "Đã xóa",
+    ready: "Sẵn sàng", pending: "Đang chờ", invalid: "Không hợp lệ",
+    known: "Đã xác định", unavailable: "Không khả dụng", empty: "Rỗng"
+  };
+  return labels[value] ?? value;
+}
+
 const fixtureSuggestions = [
   "reference_points_4326", "reference_lines_4326", "reference_polygons_4326",
   "reference_points_3857", "reference_points_4756", "reference_points_5899",
@@ -40,22 +49,22 @@ const fixtureSuggestions = [
 function safeError(error: unknown): string {
   if (error instanceof SpatialApiError) {
     switch (error.code) {
-      case "STALE_LAYER_REVISION": return "The Layer changed. Review the latest revision before retrying.";
-      case "SOURCE_NOT_READY": return "The source is not ready for Layer creation.";
-      case "STALE_CATALOG_REVISION": return "The source changed. Review the latest revision before retrying.";
-      case "ACTIVE_LAYER_DEPENDENCIES": return "Retire active Layers before retiring the source.";
-      case "SOURCE_ALREADY_REGISTERED": return "This reference is already registered in this Project, including retired sources.";
-      case "PROJECT_NOT_WRITABLE": return "This Project is read-only.";
-      case "UNKNOWN_REFERENCE_KEY": return "This logical reference key is not allowlisted.";
-      case "CRS_CORRECTION_UNVERIFIED": return "Independent evidence does not verify the proposed declaration.";
-      case "NO_CHANGES": return "No material change was provided.";
-      default: return "The spatial operation could not be completed.";
+      case "STALE_LAYER_REVISION": return "Lớp dữ liệu đã thay đổi. Hãy kiểm tra phiên bản mới nhất trước khi thử lại.";
+      case "SOURCE_NOT_READY": return "Nguồn dữ liệu chưa sẵn sàng để tạo lớp.";
+      case "STALE_CATALOG_REVISION": return "Nguồn dữ liệu đã thay đổi. Hãy kiểm tra phiên bản mới nhất trước khi thử lại.";
+      case "ACTIVE_LAYER_DEPENDENCIES": return "Cần ngừng sử dụng các lớp đang hoạt động trước khi ngừng nguồn dữ liệu.";
+      case "SOURCE_ALREADY_REGISTERED": return "Tham chiếu này đã được đăng ký trong dự án, kể cả nguồn đã ngừng sử dụng.";
+      case "PROJECT_NOT_WRITABLE": return "Dự án này đang ở chế độ chỉ đọc.";
+      case "UNKNOWN_REFERENCE_KEY": return "Khóa tham chiếu logic này chưa nằm trong danh sách cho phép.";
+      case "CRS_CORRECTION_UNVERIFIED": return "Bằng chứng độc lập chưa xác minh được khai báo đề xuất.";
+      case "NO_CHANGES": return "Không có thay đổi thực chất nào được cung cấp.";
+      default: return "Không thể hoàn tất thao tác không gian.";
     }
   }
   if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
-    return "Current access does not permit this operation.";
+    return "Quyền hiện tại không cho phép thực hiện thao tác này.";
   }
-  return "The spatial operation could not be completed.";
+  return "Không thể hoàn tất thao tác không gian.";
 }
 
 function CRSDescription({ label, crs }: {
@@ -67,8 +76,8 @@ function CRSDescription({ label, crs }: {
       <dt>{label}</dt>
       <dd>{crs ? <>
         EPSG:{crs.code} — {crs.name} ({crs.disposition})<br />
-        Native order: {crs.native_axes.join(", ")}; application order: X {crs.x_axis}, Y {crs.y_axis} ({crs.unit})
-      </> : "Unknown"}</dd>
+        Thứ tự trục gốc: {crs.native_axes.join(", ")}; thứ tự trong ứng dụng: X {crs.x_axis}, Y {crs.y_axis} ({crs.unit})
+      </> : "Không xác định"}</dd>
     </div>
   );
 }
@@ -76,40 +85,40 @@ function CRSDescription({ label, crs }: {
 function SourceMetadata({ source }: { source: SpatialSource }) {
   const extent = source.extent;
   return (
-    <section aria-label="Source metadata" style={{ overflowWrap: "anywhere" }}>
+    <section aria-label="Thông tin nguồn dữ liệu" style={{ overflowWrap: "anywhere" }}>
       <h2>{source.name}</h2>
       <dl>
-        <dt>Source ID</dt><dd>{source.id}</dd>
-        <dt>Validation</dt><dd>{source.validation_state}</dd>
+        <dt>Mã nguồn dữ liệu</dt><dd>{source.id}</dd>
+        <dt>Trạng thái kiểm tra</dt><dd>{stateLabel(source.validation_state)}</dd>
         {source.validation_reason ? <>
-          <dt>Reason</dt><dd>{source.validation_reason.code}: {source.validation_reason.message}</dd>
+          <dt>Lý do</dt><dd>{source.validation_reason.code}: {source.validation_reason.message}</dd>
         </> : null}
-        <CRSDescription label="Declared CRS" crs={source.source_crs} />
-        <CRSDescription label="Stored native CRS" crs={source.stored_crs} />
-        <dt>Feature count</dt><dd>{source.feature_count_state === "known" ? source.feature_count : "Unavailable"}</dd>
-        <dt>Native extent</dt>
+        <CRSDescription label="CRS khai báo" crs={source.source_crs} />
+        <CRSDescription label="CRS gốc đang lưu" crs={source.stored_crs} />
+        <dt>Số đối tượng</dt><dd>{source.feature_count_state === "known" ? source.feature_count : "Không khả dụng"}</dd>
+        <dt>Phạm vi gốc</dt>
         <dd>{extent ? <>
           ({extent.min_x}, {extent.min_y}) – ({extent.max_x}, {extent.max_y})<br />
           EPSG:{extent.coordinate_reference.code}, {extent.coordinate_reference.unit}, X/Y
-        </> : source.extent_state === "empty" ? "Empty source (no extent)" : "Unavailable"}</dd>
-        <dt>Schema</dt><dd>{source.schema.state} — {source.schema.geometry_family}, {source.schema.dimensions}</dd>
-        <dt>Reference key</dt><dd>{source.provenance.reference_key}</dd>
-        <dt>Fixture version</dt><dd>{source.provenance.fixture_version}</dd>
-        <dt>Manifest digest</dt><dd><code>{source.provenance.manifest_digest}</code></dd>
-        <dt>Catalog revision</dt><dd>{source.catalog_revision}</dd>
-        <dt>Content revision</dt><dd><code>{source.content_revision}</code></dd>
-        <dt>Schema revision</dt><dd><code>{source.schema_revision}</code></dd>
+        </> : source.extent_state === "empty" ? "Nguồn rỗng (không có phạm vi)" : "Không khả dụng"}</dd>
+        <dt>Lược đồ</dt><dd>{stateLabel(source.schema.state)} — {source.schema.geometry_family}, {source.schema.dimensions}</dd>
+        <dt>Khóa tham chiếu</dt><dd>{source.provenance.reference_key}</dd>
+        <dt>Phiên bản dữ liệu mẫu</dt><dd>{source.provenance.fixture_version}</dd>
+        <dt>Mã băm manifest</dt><dd><code>{source.provenance.manifest_digest}</code></dd>
+        <dt>Phiên bản danh mục</dt><dd>{source.catalog_revision}</dd>
+        <dt>Phiên bản nội dung</dt><dd><code>{source.content_revision}</code></dd>
+        <dt>Phiên bản lược đồ</dt><dd><code>{source.schema_revision}</code></dd>
       </dl>
-      <h3>Fields</h3>
-      {source.schema.state === "unavailable" ? <p>Schema unavailable.</p> :
-      source.schema.fields.length === 0 ? <p>No fields.</p> :
+      <h3>Trường dữ liệu</h3>
+      {source.schema.state === "unavailable" ? <p>Không có lược đồ dữ liệu.</p> :
+      source.schema.fields.length === 0 ? <p>Không có trường dữ liệu.</p> :
         <div style={{ overflowX: "auto" }}>
           <table>
-            <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Nullable</th></tr></thead>
+            <thead><tr><th>ID</th><th>Tên</th><th>Kiểu</th><th>Cho phép rỗng</th></tr></thead>
             <tbody>{source.schema.fields.map(field => (
               <tr key={field.field_id}>
                 <td>{field.field_id}</td><td>{field.name}</td><td>{field.type}</td>
-                <td>{field.nullable ? "Yes" : "No"}</td>
+                <td>{field.nullable ? "Có" : "Không"}</td>
               </tr>
             ))}</tbody>
           </table>
@@ -200,9 +209,9 @@ function LayerPanel({ organizationId, projectId, accountId, source, writable }: 
     setSelected(id); setRename(""); setConfirmRetire(false); command.reset();
   }
   return (
-    <section aria-label="Layer catalog" style={{ borderTop: "1px solid #aaa", marginTop: 32, paddingTop: 16 }}>
-      <h2>Layers</h2>
-      <p>Multiple Layers can reference one registered source without copying feature data.</p>
+    <section aria-label="Danh mục lớp dữ liệu" style={{ borderTop: "1px solid #aaa", marginTop: 32, paddingTop: 16 }}>
+      <h2>Lớp dữ liệu</h2>
+      <p>Nhiều lớp có thể cùng tham chiếu một nguồn đã đăng ký mà không cần sao chép dữ liệu đối tượng.</p>
       {writable ? (
         <form onSubmit={event => {
           event.preventDefault();
@@ -211,9 +220,9 @@ function LayerPanel({ organizationId, projectId, accountId, source, writable }: 
           }
         }}>
           <fieldset disabled={!editable || source?.validation_state !== "ready"}>
-            <legend>Create a Layer from the selected source</legend>
-            <p>{source ? source.name + " — " + source.validation_state : "Select a ready source above."}</p>
-            <label>Layer name{" "}
+            <legend>Tạo lớp từ nguồn đang chọn</legend>
+            <p>{source ? source.name + " — " + source.validation_state : "Hãy chọn một nguồn ở trạng thái sẵn sàng phía trên."}</p>
+            <label>Tên lớp{" "}
               <input value={name} onChange={event => setName(event.target.value)} required maxLength={200} />
             </label>{" "}
             <button type="submit" disabled={!name.trim()}>Tạo lớp mới</button>
@@ -222,71 +231,71 @@ function LayerPanel({ organizationId, projectId, accountId, source, writable }: 
       ) : null}
       {command.error ? <p role="alert">{safeError(command.error)}</p> : null}
       {!layers ? <p role={listQuery.error ? "alert" : "status"}>
-        {listQuery.error ? "Unable to load current Layer access." : "Checking Layer access…"}
+        {listQuery.error ? "Không thể tải quyền truy cập lớp hiện tại." : "Đang kiểm tra quyền truy cập lớp…"}
       </p> : <>
         {layers.items.length ? (
-          <ul aria-label="Registered Layers">
+          <ul aria-label="Các lớp đã đăng ký">
             {layers.items.map(layer => (
               <li key={layer.id}>
                 <button type="button" onClick={() => choose(layer.id)}
                   disabled={command.isPending} aria-pressed={selected === layer.id}>
-                  {layer.name} — {layer.source.name} — revision {layer.layer_revision}
+                  {layer.name} — {layer.source.name} — phiên bản {layer.layer_revision}
                 </button>
               </li>
             ))}
           </ul>
-        ) : <p>No active Layers.</p>}
+        ) : <p>Không có lớp đang hoạt động.</p>}
         <button type="button" disabled={command.isPending || history.length === 0} onClick={() => {
           setCursor(history[history.length - 1]); setHistory(history.slice(0, -1)); choose(null);
-        }}>Previous Layers</button>{" "}
+        }}>Trang lớp trước</button>{" "}
         <button type="button" disabled={command.isPending || !layers.next_after_id} onClick={() => {
           if (layers.next_after_id) {
             setHistory([...history, cursor]); setCursor(layers.next_after_id); choose(null);
           }
-        }}>Next Layers</button>
+        }}>Trang lớp sau</button>
         {selected !== null ? !detail ? <p role={detailQuery.error ? "alert" : "status"}>
-          {detailQuery.error ? "Unable to load current Layer access." : "Checking Layer metadata…"}
+          {detailQuery.error ? "Không thể tải quyền truy cập lớp hiện tại." : "Đang kiểm tra thông tin lớp…"}
         </p> : (
-          <section aria-label="Layer metadata">
+          <section aria-label="Thông tin lớp dữ liệu">
             <h3>{detail.name}</h3>
             <dl style={{ overflowWrap: "anywhere" }}>
-              <dt>Layer ID</dt><dd>{detail.id}</dd>
-              <dt>Layer revision</dt><dd>{detail.layer_revision}</dd>
-              <dt>Source</dt><dd>{detail.source.name} ({detail.source_id})</dd>
-              <dt>Source state</dt><dd>{detail.source.validation_state}</dd>
+              <dt>Mã lớp</dt><dd>{detail.id}</dd>
+              <dt>Phiên bản lớp</dt><dd>{detail.layer_revision}</dd>
+              <dt>Nguồn dữ liệu</dt><dd>{detail.source.name} ({detail.source_id})</dd>
+              <dt>Trạng thái nguồn</dt><dd>{stateLabel(detail.source.validation_state)}</dd>
             </dl>
-            <h4>Capabilities</h4>
+            <h4>Khả năng</h4>
             <div style={{ overflowX: "auto" }}>
               <table>
-                <thead><tr><th>Operation</th><th>Supported</th><th>Available</th><th>Required permission</th><th>Authorized</th></tr></thead>
+                <thead><tr><th>Thao tác</th><th>Được hỗ trợ</th><th>Khả dụng</th><th>Quyền yêu cầu</th><th>Được cấp quyền</th></tr></thead>
                 <tbody>{detail.capabilities.map(capability => (
                   <tr key={capability.name}>
-                    <td>{capability.name}</td><td>{capability.technical_supported ? "Yes" : "No"}</td>
-                    <td>{capability.available ? "Yes" : "No"}</td><td>{capability.required_permission ?? "None"}</td>
-                    <td>{capability.actor_authorized ? "Yes" : "No"}</td>
+                    <td>{capability.name}</td><td>{capability.technical_supported ? "Có" : "Không"}</td>
+                    <td>{capability.available ? "Có" : "Không"}</td><td>{capability.required_permission ?? "Không yêu cầu"}</td>
+                    <td>{capability.actor_authorized ? "Có" : "Không"}</td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
             <details>
-              <summary>Current source schema, CRS and revisions</summary>
+              <summary>Lược đồ, CRS và phiên bản hiện tại của nguồn</summary>
               <SourceMetadata source={detail.source} />
             </details>
             {writable ? <fieldset disabled={!editable}>
-              <legend>Layer metadata controls</legend>
+              <legend>Điều khiển thông tin lớp</legend>
               <form onSubmit={event => {
                 event.preventDefault();
                 if (editable && rename.trim()) command.mutate({ kind: "rename", layer: detail, name: rename.trim() });
               }}>
-                <label>New Layer name{" "}
+                <label>New Tên lớp{" "}
                   <input value={rename} onChange={event => setRename(event.target.value)} required maxLength={200} />
                 </label>{" "}
-                <button type="submit" disabled={!rename.trim()}>Rename Layer</button>
+                <button type="submit" disabled={!rename.trim()}>Đổi tên lớp</button>
               </form>
-              {!confirmRetire ? <button type="button" onClick={() => setConfirmRetire(true)}>Retire Layer</button> : <>
-                <p>Retirement hides this Layer. Its source and other Layers remain unchanged.</p>
-                <button type="button" onClick={() => command.mutate({ kind: "retire", layer: detail })}>Confirm Layer retirement</button>{" "}
-                <button type="button" onClick={() => setConfirmRetire(false)}>Cancel</button>
+              {!confirmRetire ? <button type="button" onClick={() => setConfirmRetire(true)}>Ngừng sử dụng lớp</button> : <>
+                <p>Ngừng sử dụng sẽ ẩn lớp này. Nguồn dữ liệu và các lớp khác không bị thay đổi.</p>
+                <button type="button" onClick={() => command.mutate({ kind: "retire", layer: detail })}>Xác nhận ngừng sử dụng lớp</button>{" "}
+                <button type="button" onClick={() => setConfirmRetire(false)}>Hủy</button>
               </>}
             </fieldset> : null}
           </section>
@@ -394,45 +403,45 @@ function CatalogView({ organizationId, projectId, accountId }: {
   return (
     <main style={{ maxWidth: 1100, margin: "32px auto", padding: "0 16px", fontFamily: "system-ui, sans-serif" }}>
       <p><Link to={"/organizations/" + encodeURIComponent(organizationId) + "/projects"}>← Danh sách Dự án</Link></p>
-      <h1>Spatial source catalog</h1>
-      <p>Register and inspect trusted reference fixtures. No uploads or external data connections.</p>
+      <h1>Danh mục nguồn dữ liệu không gian</h1>
+      <p>Đăng ký và kiểm tra các nguồn tham chiếu tin cậy.</p>
       {!project || !hasProjectAccess || !catalog ? (
         <p role={projectQuery.error || listQuery.error || (project && !hasProjectAccess) ? "alert" : "status"}>
-          {project && !hasProjectAccess ? "Current Project scope is unavailable." :
-            projectQuery.error || listQuery.error ? "Unable to load current Project access." : "Checking Project access…"}
+          {project && !hasProjectAccess ? "Phạm vi dự án hiện tại không khả dụng." :
+            projectQuery.error || listQuery.error ? "Không thể tải quyền truy cập dự án hiện tại." : "Đang kiểm tra quyền truy cập dự án…"}
         </p>
       ) : (
         <>
-          <p><strong>{project.name}</strong> · {project.status}</p>
-          {project.status === "archived" ? <p>Archived Project — read-only.</p> : null}
+          <p><strong>{project.name}</strong> · {stateLabel(project.status)}</p>
+          {project.status === "archived" ? <p>Dự án đã lưu trữ — chỉ đọc.</p> : null}
           {project.status === "active" ? (
             <form onSubmit={register}>
               <fieldset disabled={!writable}>
-                <legend>Register a reference source</legend>
-                <label>Logical reference key{" "}
+                <legend>Đăng ký nguồn tham chiếu</legend>
+                <label>Khóa tham chiếu logic{" "}
                   <input value={referenceKey} onChange={event => setReferenceKey(event.target.value)}
                     list="reference-fixtures" required pattern="[a-z0-9_]+" maxLength={100} />
                 </label>
                 <datalist id="reference-fixtures">
                   {fixtureSuggestions.map(key => <option key={key} value={key} />)}
                 </datalist>
-                {" "}<label>Source name{" "}
+                {" "}<label>Tên nguồn dữ liệu{" "}
                   <input value={newName} onChange={event => setNewName(event.target.value)}
                     required maxLength={200} />
                 </label>
-                {" "}<button type="submit" disabled={!newName.trim()}>Register</button>
+                {" "}<button type="submit" disabled={!newName.trim()}>Đăng ký</button>
               </fieldset>
             </form>
           ) : null}
           {command.error ? <p role="alert">{safeError(command.error)}</p> : null}
-          <h2>Registered sources</h2>
-          {catalog.items.length === 0 ? <p>No active sources.</p> : (
-            <ul aria-label="Registered sources">
+          <h2>Nguồn dữ liệu đã đăng ký</h2>
+          {catalog.items.length === 0 ? <p>Không có nguồn đang hoạt động.</p> : (
+            <ul aria-label="Nguồn dữ liệu đã đăng ký">
               {catalog.items.map(source => (
                 <li key={source.id}>
                   <button type="button" onClick={() => selectSource(source.id)}
                     disabled={command.isPending} aria-pressed={selected === source.id}>
-                    {source.name} — {source.validation_state}
+                    {source.name} — {stateLabel(source.validation_state)}
                   </button>
                 </li>
               ))}
@@ -441,28 +450,28 @@ function CatalogView({ organizationId, projectId, accountId }: {
           <div>
             <button type="button" disabled={command.isPending || history.length === 0} onClick={() => {
               setAfterId(history[history.length - 1]); setHistory(history.slice(0, -1)); selectSource(null);
-            }}>Previous</button>{" "}
+            }}>Trang trước</button>{" "}
             <button type="button" disabled={command.isPending || !catalog.next_after_id} onClick={() => {
               if (catalog.next_after_id) {
                 setHistory([...history, afterId]); setAfterId(catalog.next_after_id); selectSource(null);
               }
-            }}>Next</button>
+            }}>Trang sau</button>
           </div>
           {selected !== null ? !detail ? <p role={detailQuery.error ? "alert" : "status"}>
-            {detailQuery.error ? "Unable to load current source access." : "Checking source metadata…"}
+            {detailQuery.error ? "Không thể tải quyền truy cập nguồn hiện tại." : "Đang kiểm tra thông tin nguồn…"}
           </p> : <>
             <SourceMetadata source={detail} />
             {project.status === "active" ? (
               <fieldset disabled={!writable}>
-                <legend>Source metadata controls</legend>
+                <legend>Điều khiển thông tin nguồn</legend>
                 <form onSubmit={event => {
                   event.preventDefault();
                   if (rename.trim()) command.mutate({ kind: "rename", source: detail, name: rename.trim() });
                 }}>
-                  <label>New source name{" "}
+                  <label>Tên nguồn mới{" "}
                     <input value={rename} onChange={event => setRename(event.target.value)} maxLength={200} required />
                   </label>{" "}
-                  <button type="submit" disabled={!rename.trim()}>Rename</button>
+                  <button type="submit" disabled={!rename.trim()}>Đổi tên</button>
                 </form>
                 {detail.validation_state !== "ready" ? (
                   <form onSubmit={event => {
@@ -472,18 +481,18 @@ function CatalogView({ organizationId, projectId, accountId }: {
                       declaration: { authority: "EPSG", code: Number(crs), coordinate_order: "xy" }
                     });
                   }}>
-                    <label>Correct declared CRS (independent evidence required){" "}
+                    <label>Sửa CRS khai báo (cần bằng chứng độc lập){" "}
                       <select value={crs} onChange={event => setCrs(event.target.value)}>
                         {[4326, 3857, 4756, 5899].map(code => <option key={code} value={code}>EPSG:{code}</option>)}
                       </select>
-                    </label>{" "}<button type="submit">Verify and correct</button>
+                    </label>{" "}<button type="submit">Xác minh và sửa</button>
                   </form>
                 ) : null}
-                {!confirmRetire ? <button type="button" onClick={() => setConfirmRetire(true)}>Retire source</button> :
+                {!confirmRetire ? <button type="button" onClick={() => setConfirmRetire(true)}>Ngừng sử dụng nguồn</button> :
                   <div>
-                    <p>Retirement hides this source from ordinary reads. Active Layers must be retired first.</p>
-                    <button type="button" onClick={() => command.mutate({ kind: "retire", source: detail })}>Confirm retirement</button>{" "}
-                    <button type="button" onClick={() => setConfirmRetire(false)}>Cancel</button>
+                    <p>Ngừng sử dụng sẽ ẩn nguồn này khỏi truy cập thông thường. Các lớp đang hoạt động phải được ngừng trước.</p>
+                    <button type="button" onClick={() => command.mutate({ kind: "retire", source: detail })}>Xác nhận ngừng sử dụng</button>{" "}
+                    <button type="button" onClick={() => setConfirmRetire(false)}>Hủy</button>
                   </div>
                 }
               </fieldset>
@@ -501,7 +510,7 @@ function CatalogView({ organizationId, projectId, accountId }: {
 
 export function SpatialCatalogPage() {
   const { organizationId, projectId } = useParams();
-  if (!organizationId || !projectId) return <p role="alert">Project context is missing.</p>;
+  if (!organizationId || !projectId) return <p role="alert">Thiếu ngữ cảnh dự án.</p>;
   return (
     <FreshAccount key={organizationId + ":" + projectId}>
       {account => <CatalogView

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { AccountMenu } from "../auth/AccountMenu";
 import "./platform.css";
 
 interface ProjectToolbarProps {
@@ -37,8 +38,9 @@ export function ProjectToolbar({
           In ấn (R009)
         </Link>
         <Link to={`${base}/platform-hub`} className={active === "hub" ? "active" : ""}>
-          Nền tảng (R010–R015)
+          Công cụ nâng cao
         </Link>
+        <AccountMenu />
       </nav>
     </header>
   );

@@ -16,6 +16,10 @@ import { ProcessingWorkbenchPage } from "../features/platform/ProcessingWorkbenc
 import { CartographyWorkbenchPage } from "../features/platform/CartographyWorkbenchPage";
 import { PlatformHubPage } from "../features/platform/PlatformHubPage";
 
+const routerBasename = window.location.pathname === "/dev" || window.location.pathname.startsWith("/dev/")
+  ? "/dev"
+  : undefined;
+
 export const router = createBrowserRouter([
   { path: "/", element: <OrganizationHome /> },
   { path: "/organizations/:organizationId", element: <OrganizationHome /> },
@@ -32,4 +36,4 @@ export const router = createBrowserRouter([
   { path: "/organizations/:organizationId/membership", element: <MembershipPage /> },
   { path: "/invitations/accept", element: <InvitationAcceptPage /> },
   { path: "/identity", element: <IdentityPage /> }
-]);
+], routerBasename ? { basename: routerBasename } : {});

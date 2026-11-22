@@ -21,6 +21,13 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
+function workspaceStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    active: "Đang hoạt động", archived: "Đã lưu trữ", deleted: "Đã xóa"
+  };
+  return labels[status] ?? status;
+}
+
 function OrganizationWorkspaces({ organizationId, userId }: { organizationId: string; userId: string }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -80,9 +87,9 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
     const checking = !workspaces.error && (workspaces.isPending || workspaces.fetchStatus !== "idle");
     return (
       <main>
-        <Link to="/">← Organizations</Link>
+        <Link to="/">← Tổ chức</Link>
         <h1>Không gian làm việc</h1>
-        {checking ? <p>Checking workspace access…</p> : <p role="alert">Unable to load workspace access.</p>}
+        {checking ? <p>Đang kiểm tra quyền truy cập không gian làm việc…</p> : <p role="alert">Không thể tải quyền truy cập không gian làm việc.</p>}
       </main>
     );
   }
@@ -90,7 +97,7 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
   return (
     <main style={{ maxWidth: 880, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
       <p>
-        <Link to={"/organizations/" + organizationId}>← Organization</Link>{" "}
+        <Link to={"/organizations/" + organizationId}>← Tổ chức</Link>{" "}
         <Link to={"/organizations/" + organizationId + "/projects"}>Dự án</Link>
       </p>
       <h1>Không gian làm việc</h1>
@@ -122,13 +129,13 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
         </button>
       </form>
 
-      {create.error ? <p role="alert">Unable to create workspace.</p> : null}
-      {changeStatus.error ? <p role="alert">Unable to change workspace status.</p> : null}
+      {create.error ? <p role="alert">Không thể tạo không gian làm việc.</p> : null}
+      {changeStatus.error ? <p role="alert">Không thể thay đổi trạng thái không gian làm việc.</p> : null}
 
       <ul data-testid="workspace-list">
         {visibleWorkspaces.map((workspace) => (
           <li key={workspace.id} data-testid={"workspace-" + workspace.id}>
-            <strong>{workspace.name}</strong> — {workspace.status}{" "}
+            <strong>{workspace.name}</strong> — {workspaceStatusLabel(workspace.status)}{" "}
             {workspace.status === "active" ? (
               <button
                 type="button"
@@ -139,7 +146,7 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
                   })
                 }
               >
-                Archive {workspace.name}
+                Lưu trữ {workspace.name}
               </button>
             ) : workspace.status === "archived" ? (
               <button
@@ -151,7 +158,7 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
                   })
                 }
               >
-                Restore {workspace.name}
+                Khôi phục {workspace.name}
               </button>
             ) : null}
             <button
@@ -163,7 +170,7 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
                 })
               }
             >
-              Delete {workspace.name}
+              Xóa {workspace.name}
             </button>
           </li>
         ))}
@@ -175,7 +182,7 @@ function OrganizationWorkspaces({ organizationId, userId }: { organizationId: st
 
 export function WorkspacePage() {
   const { organizationId } = useParams();
-  if (!organizationId) return <p role="alert">Organization context is missing.</p>;
+  if (!organizationId) return <p role="alert">Thiếu ngữ cảnh tổ chức.</p>;
   return (
     <FreshAccount key={organizationId}>
       {(account) => (

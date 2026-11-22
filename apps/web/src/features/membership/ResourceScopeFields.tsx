@@ -29,31 +29,31 @@ export function ResourceScopeFields({ label, value, onChange, workspaces, projec
   return (
     <fieldset>
       <legend>{label}</legend>
-      <label>Scope
+      <label>Phạm vi
         <select value={value.scope} onChange={(event) => onChange({
           ...value, scope: event.target.value as ScopeSelection["scope"], resourceId: ""
         })}>
-          <option value="organization">Organization</option>
-          <option value="workspace">Workspace</option>
-          <option value="project">Project</option>
+          <option value="organization">Tổ chức</option>
+          <option value="workspace">Không gian làm việc</option>
+          <option value="project">Dự án</option>
         </select>
       </label>
       {value.scope !== "organization" ? (
-        <label>Resource
+        <label>Tài nguyên
           <select required value={(value.scope === "workspace" ? workspaces : projects).some((item) => item.id === value.resourceId && item.status === "active") ? value.resourceId : ""} onChange={(event) => onChange({ ...value, resourceId: event.target.value })}>
-            <option value="">Select resource</option>
+            <option value="">Chọn tài nguyên</option>
             {(value.scope === "workspace" ? workspaces : projects).filter((item) => item.status === "active").map((item) => (
               <option key={item.id} value={item.id}>{item.name}</option>
             ))}
           </select>
         </label>
       ) : null}
-      <label>Resource role
+      <label>Vai trò trên tài nguyên
         <select value={value.role} onChange={(event) => onChange({ ...value, role: event.target.value as ScopeSelection["role"] })}>
-          <option value="viewer">Viewer</option>
-          <option value="contributor">Contributor</option>
-          <option value="editor">Editor</option>
-          <option value="manager">Manager</option>
+          <option value="viewer">Người xem</option>
+          <option value="contributor">Cộng tác viên</option>
+          <option value="editor">Biên tập viên</option>
+          <option value="manager">Quản lý</option>
         </select>
       </label>
     </fieldset>

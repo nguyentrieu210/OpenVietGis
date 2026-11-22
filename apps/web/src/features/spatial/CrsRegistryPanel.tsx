@@ -10,22 +10,22 @@ export function CrsRegistryPanel({ scope }: { scope: CrsScope }) {
     ...protectedQueryOptions });
   const registry = currentProtectedData(query);
   if (!registry) return <p role={query.error ? "alert" : "status"}>{query.error
-    ? "Unable to verify current CRS profile access." : "Checking current CRS profiles…"}</p>;
-  if (!crsRegistryMatchesScope(scope, registry)) return <p role="alert">CRS profiles do not match the current Project.</p>;
-  return <section aria-label="Coordinate reference support">
-    <h2>Coordinate reference support</h2>
-    <p>Application coordinates use X/Y order. Native EPSG axes and units are listed separately.</p>
-    <details><summary>CRS definitions and approved operations</summary>
-      <div style={{ overflowX: "auto" }}><table aria-label="CRS definitions"><thead><tr>
-        <th>CRS</th><th>Native axes</th><th>Application X/Y</th><th>Unit</th><th>Support</th><th>Area</th>
+    ? "Không thể xác minh quyền truy cập cấu hình CRS hiện tại." : "Đang kiểm tra cấu hình CRS hiện tại…"}</p>;
+  if (!crsRegistryMatchesScope(scope, registry)) return <p role="alert">Các cấu hình CRS không khớp với dự án hiện tại.</p>;
+  return <section aria-label="Hỗ trợ hệ tọa độ (CRS)">
+    <h2>Hỗ trợ hệ tọa độ (CRS)</h2>
+    <p>Tọa độ trong ứng dụng sử dụng thứ tự X/Y. Trục và đơn vị gốc theo EPSG được hiển thị riêng.</p>
+    <details><summary>Định nghĩa CRS và phép chuyển đổi được phê duyệt</summary>
+      <div style={{ overflowX: "auto" }}><table aria-label="Định nghĩa CRS"><thead><tr>
+        <th>CRS</th><th>Trục gốc</th><th>X/Y trong ứng dụng</th><th>Đơn vị</th><th>Mức hỗ trợ</th><th>Khu vực áp dụng</th>
       </tr></thead><tbody>{registry.profiles.map(profile => <tr key={profile.code}>
         <th>EPSG:{profile.code} — {profile.name}</th><td>{profile.native_axes.join(", ")}</td>
         <td>{profile.x_axis}, {profile.y_axis}</td><td>{profile.unit}</td>
-        <td>{profile.disposition === "definition_only" ? "Definition only" : "Readable"}</td><td>{profile.area_of_use}</td>
+        <td>{profile.disposition === "definition_only" ? "Chỉ có định nghĩa" : "Có thể đọc"}</td><td>{profile.area_of_use}</td>
       </tr>)}</tbody></table></div>
-      <ul aria-label="Approved direct operations">{registry.transformations.map(edge => <li key={edge.operation_id}>
-        EPSG:{edge.source_code} → EPSG:{edge.target_code}: {edge.method}; tolerance {edge.tolerance} {edge.tolerance_unit}.
-        {" "}{edge.validated_area} Evidence: {edge.evidence_id}.
+      <ul aria-label="Các phép chuyển đổi trực tiếp đã phê duyệt">{registry.transformations.map(edge => <li key={edge.operation_id}>
+        EPSG:{edge.source_code} → EPSG:{edge.target_code}: {edge.method}; dung sai {edge.tolerance} {edge.tolerance_unit}.
+        {" "}{edge.validated_area} Bằng chứng: {edge.evidence_id}.
       </li>)}</ul>
     </details>
   </section>;

@@ -38,7 +38,7 @@ function AcceptForm({ userId }: { userId: string }) {
       await queryClient.invalidateQueries({ queryKey: ["my-organizations", userId] });
       await navigate("/organizations/" + encodeURIComponent(result.membership.organization_id));
     } catch (error) {
-      setError("Unable to accept invitation. Verify the details and sign in with the intended identity.");
+      setError("Không thể chấp nhận lời mời. Hãy kiểm tra thông tin và đăng nhập đúng tài khoản người nhận.");
       setHandoff("");
       if (error instanceof ApiError && error.status === 401) {
         await queryClient.invalidateQueries({ queryKey: ["me"] });
@@ -50,14 +50,14 @@ function AcceptForm({ userId }: { userId: string }) {
 
   return (
     <main style={{ maxWidth: 800, margin: "40px auto", fontFamily: "system-ui, sans-serif" }}>
-      <Link to="/">← Organizations</Link>
-      <h1>Accept invitation</h1>
-      <p>Paste the private invitation details after signing in as the intended recipient. The secret is sent only in the protected request body.</p>
+      <Link to="/">← Tổ chức</Link>
+      <h1>Chấp nhận lời mời</h1>
+      <p>Sau khi đăng nhập đúng tài khoản người nhận, hãy dán thông tin lời mời riêng tư. Mã bí mật chỉ được gửi trong nội dung yêu cầu được bảo vệ.</p>
       <form onSubmit={(event) => void submit(event)}>
         <label>Invitation handoff
           <textarea rows={5} required autoComplete="off" spellCheck={false} value={handoff} onChange={(event) => setHandoff(event.target.value)} />
         </label>
-        <button type="submit" disabled={pending}>Accept invitation</button>
+        <button type="submit" disabled={pending}>Chấp nhận lời mời</button>
       </form>
       {error ? <p role="alert">{error}</p> : null}
     </main>

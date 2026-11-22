@@ -88,6 +88,22 @@ const RASTER_LAYERS: Record<
       attribution: "© CARTO"
     }
   ],
+  "google-satellite": [
+    {
+      id: "bm-google-satellite",
+      tiles: ["https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"],
+      maxzoom: 20,
+      attribution: "© Google"
+    }
+  ],
+  "google-hybrid": [
+    {
+      id: "bm-google-hybrid",
+      tiles: ["https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"],
+      maxzoom: 20,
+      attribution: "© Google"
+    }
+  ],
   topo: [
     {
       id: "bm-topo",

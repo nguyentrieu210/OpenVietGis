@@ -17,15 +17,15 @@ import {
 
 function readError(error: unknown): string {
   if (error instanceof SpatialApiError && error.code === "SOURCE_NOT_READY") {
-    return "The source is no longer ready for feature reads.";
+    return "Nguồn dữ liệu không còn sẵn sàng để đọc đối tượng.";
   }
   if (error instanceof ApiError && [401, 403, 404].includes(error.status)) {
-    return "Current access does not permit this feature read.";
+    return "Quyền hiện tại không cho phép đọc đối tượng này.";
   }
   if (error instanceof SpatialApiError && error.code === "TRANSFORMATION_OUT_OF_AREA") {
-    return "This geometry is outside the validated area or trusted evidence for the selected coordinate operation. Choose the native CRS or another supported operation.";
+    return "Hình học nằm ngoài khu vực đã xác minh cho phép chuyển đổi tọa độ đang chọn. Hãy chọn CRS gốc hoặc phép chuyển đổi khác được hỗ trợ.";
   }
-  return "Unable to load current feature data.";
+  return "Không thể tải dữ liệu đối tượng hiện tại.";
 }
 
 function FeatureDetail({
@@ -33,11 +33,11 @@ function FeatureDetail({
 }: { feature: SpatialFeature; fields: SpatialSource["schema"]["fields"] }) {
   const geometry = feature.geometry;
   return (
-    <section aria-label="Selected feature detail">
-      <h4>Feature {feature.feature_id}</h4>
+    <section aria-label="Chi tiết đối tượng đã chọn">
+      <h4>Đối tượng {feature.feature_id}</h4>
       <div style={{ overflowX: "auto" }}>
         <table>
-          <thead><tr><th>Field ID</th><th>Name</th><th>Type</th><th>Value</th></tr></thead>
+          <thead><tr><th>Mã trường</th><th>Tên</th><th>Kiểu</th><th>Giá trị</th></tr></thead>
           <tbody>{fields.map(field => (
             <tr key={field.field_id}>
               <th scope="row">{field.field_id}</th><td>{field.name}</td><td>{field.type}</td>
@@ -46,14 +46,14 @@ function FeatureDetail({
           ))}</tbody>
         </table>
       </div>
-      <p>Geometry state: {feature.geometry_state}</p>
+      <p>Trạng thái hình học: {feature.geometry_state}</p>
       {geometry ? (
         <details>
-          <summary>{geometry.type} response geometry</summary>
+          <summary>{geometry.type} — hình học phản hồi</summary>
           <p>
             EPSG:{geometry.coordinate_reference.code}, X {geometry.coordinate_reference.x_axis},
             {" "}Y {geometry.coordinate_reference.y_axis} ({geometry.coordinate_reference.unit}).
-            Explicit X/Y coordinates; not GeoJSON.
+            Tọa độ X/Y tường minh; không phải GeoJSON.
           </p>
           <pre style={{ overflow: "auto", maxHeight: 240 }}>{JSON.stringify(geometry.coordinates, null, 2)}</pre>
         </details>
@@ -97,8 +97,8 @@ function CurrentFeatureInspector({
   if (blocked !== detailBlocked) setDetailBlocked(blocked);
   if (blocked) {
     return <>
-      <p role="alert">The selected feature or Layer is unavailable. Reload current Layer metadata and restart before showing feature data.</p>
-      <button type="button" onClick={() => reloadMetadata(true)}>Revalidate Layer and restart</button>
+      <p role="alert">Đối tượng hoặc lớp đã chọn không còn khả dụng. Hãy tải lại thông tin lớp trước khi xem dữ liệu.</p>
+      <button type="button" onClick={() => reloadMetadata(true)}>Xác thực lại lớp và tải lại</button>
     </>;
   }
   const stale = isStaleFeaturePin(pageQuery.error) || isStaleFeaturePin(detailQuery.error);
@@ -106,8 +106,8 @@ function CurrentFeatureInspector({
   // show an older cached page or detail while retrying the other.
   if (stale) {
     return <>
-      <p role="alert">The content or schema changed. Reload current metadata and restart from the first page.</p>
-      <button type="button" onClick={() => reloadMetadata()}>Reload revisions and restart</button>
+      <p role="alert">Nội dung hoặc lược đồ đã thay đổi. Hãy tải lại thông tin hiện tại và bắt đầu từ trang đầu.</p>
+      <button type="button" onClick={() => reloadMetadata()}>Tải lại phiên bản và bắt đầu lại</button>
     </>;
   }
   if (detailQuery.error instanceof ApiError && [401, 403].includes(detailQuery.error.status)) {
@@ -116,11 +116,11 @@ function CurrentFeatureInspector({
   const page = currentProtectedData(pageQuery);
   if (!page) {
     return <p role={pageQuery.error ? "alert" : "status"}>
-      {pageQuery.error ? readError(pageQuery.error) : "Checking current feature page access…"}
+      {pageQuery.error ? readError(pageQuery.error) : "Đang kiểm tra quyền truy cập trang đối tượng…"}
     </p>;
   }
   if (!featureResponseMatchesScope(scope, page.context)) {
-    return <p role="alert">The feature page does not match current revisions and scope.</p>;
+    return <p role="alert">Trang đối tượng không khớp với phiên bản và phạm vi hiện tại.</p>;
   }
 
   const detail = currentProtectedData(detailQuery);
@@ -130,25 +130,25 @@ function CurrentFeatureInspector({
   return (
     <>
       <p style={{ overflowWrap: "anywhere" }}>
-        {page.context.transformation ? "Transformed" : "Native"} EPSG:{crs?.code} — X {crs?.x_axis}, Y {crs?.y_axis} ({crs?.unit}).<br />
-        Content revision: <code>{scope.contentRevision}</code><br />
-        Schema revision: <code>{scope.schemaRevision}</code>
+        {page.context.transformation ? "Đã chuyển đổi" : "Gốc"} EPSG:{crs?.code} — X {crs?.x_axis}, Y {crs?.y_axis} ({crs?.unit}).<br />
+        Phiên bản nội dung: <code>{scope.contentRevision}</code><br />
+        Phiên bản lược đồ: <code>{scope.schemaRevision}</code>
       </p>
       {page.context.transformation ? <p role="status">
-        Operation: {page.context.transformation.operation_id}. Evidence: {page.context.transformation.evidence_id}.
-        {" "}Tolerance: {page.context.transformation.tolerance} {page.context.transformation.tolerance_unit}.
-        {" "}{page.context.transformation.validated_area} Native storage is unchanged.
+        Phép chuyển đổi: {page.context.transformation.operation_id}. Bằng chứng: {page.context.transformation.evidence_id}.
+        {" "}Dung sai: {page.context.transformation.tolerance} {page.context.transformation.tolerance_unit}.
+        {" "}{page.context.transformation.validated_area} Gốc storage is unchanged.
       </p> : null}
-      <p>Values use exact JSON representation: strings are quoted, null is distinct from empty text.</p>
+      <p>Giá trị hiển thị theo JSON chính xác: chuỗi có dấu ngoặc kép, null khác với chuỗi rỗng.</p>
       {page.items.length ? (
         <div style={{ overflowX: "auto" }}>
           <table aria-label="Pinned feature page">
             <thead><tr>
-              <th>Feature ID</th>
+              <th>Mã đối tượng</th>
               {fields.map(field => (
                 <th key={field.field_id}>{field.name}<br /><small>{field.field_id} — {field.type}</small></th>
               ))}
-              <th>Geometry state</th>
+              <th>Trạng thái hình học</th>
             </tr></thead>
             <tbody>{page.items.map(feature => (
               <tr key={feature.feature_id}>
@@ -166,25 +166,25 @@ function CurrentFeatureInspector({
             ))}</tbody>
           </table>
         </div>
-      ) : <p>No features on this page.</p>}
-      <p role="status">Page {state.history.length + 1} — {page.items.length} feature(s).</p>
+      ) : <p>Không có đối tượng nào trên trang này.</p>}
+      <p role="status">Trang {state.history.length + 1} — {page.items.length} đối tượng.</p>
       <button type="button" disabled={!state.history.length}
-        onClick={() => setTraversal(previousFeaturePage(state))}>Previous features</button>{" "}
+        onClick={() => setTraversal(previousFeaturePage(state))}>Trang đối tượng trước</button>{" "}
       <button type="button" disabled={page.next_after_feature_id === null}
-        onClick={() => setTraversal(nextFeaturePage(state, page.next_after_feature_id))}>Next features</button>
+        onClick={() => setTraversal(nextFeaturePage(state, page.next_after_feature_id))}>Trang đối tượng sau</button>
       {state.selected !== null ? (
-        <section aria-label="Feature selection">
-          <p>Selected feature: <code>{state.selected}</code>{" "}
-            <button type="button" onClick={() => setTraversal(selectFeature(state, null))}>Clear selection</button>
+        <section aria-label="Vùng chọn đối tượng">
+          <p>Đối tượng đang chọn: <code>{state.selected}</code>{" "}
+            <button type="button" onClick={() => setTraversal(selectFeature(state, null))}>Bỏ chọn</button>
           </p>
           {matchingDetail ? <FeatureDetail feature={detail.feature} fields={fields} /> :
             <p role={detailQuery.error || detail ? "alert" : "status"}>
               {detailQuery.error ? readError(detailQuery.error)
-                  : detail ? "The feature detail does not match the selected ID and current revisions."
-                    : "Checking current feature detail access…"}
+                  : detail ? "Chi tiết đối tượng không khớp với mã đang chọn và phiên bản hiện tại."
+                    : "Đang kiểm tra quyền truy cập chi tiết đối tượng…"}
             </p>}
         </section>
-      ) : <p>Select a feature ID to inspect its exact attributes and response geometry.</p>}
+      ) : <p>Chọn mã đối tượng để xem chính xác thuộc tính và hình học phản hồi.</p>}
     </>
   );
 }
@@ -209,15 +209,15 @@ export function FeatureInspector({
   if (layer.id !== layerId || layer.organization_id !== organizationId ||
       layer.project_id !== projectId || layer.source_id !== layer.source.id ||
       layer.source.organization_id !== organizationId || layer.source.project_id !== projectId) {
-    return <p role="alert">Current Layer scope does not match the requested Layer.</p>;
+    return <p role="alert">Phạm vi lớp hiện tại không khớp với lớp được yêu cầu.</p>;
   }
   if (!canReadFeatures(layer) || !layer.source.stored_crs) {
-    return <p role="status">Feature inspection is not available for this Layer.</p>;
+    return <p role="status">Không thể kiểm tra đối tượng của lớp này.</p>;
   }
 
   if (!registry || !crsRegistryMatchesScope(registryScope, registry)) {
     return <p role={registryQuery.error ? "alert" : "status"}>{registryQuery.error
-      ? "Unable to verify current CRS profile access." : "Checking current CRS profiles…"}</p>;
+      ? "Không thể xác minh quyền truy cập cấu hình CRS hiện tại." : "Đang kiểm tra cấu hình CRS hiện tại…"}</p>;
   }
   const nativeCrs = layer.source.stored_crs.code;
   const responseOptions = availableResponseCrs(registry, nativeCrs);
@@ -235,11 +235,11 @@ export function FeatureInspector({
   if (state !== traversal) setTraversal(state);
 
   return (
-    <section aria-label="Feature inspector" style={{ borderTop: "1px solid #aaa", paddingTop: 16, marginTop: 16 }}>
-      <h3>Feature inspector</h3>
-      <label>Response coordinate reference{" "}
+    <section aria-label="Kiểm tra đối tượng" style={{ borderTop: "1px solid #aaa", paddingTop: 16, marginTop: 16 }}>
+      <h3>Kiểm tra đối tượng</h3>
+      <label>Hệ tọa độ phản hồi{" "}
         <select value={responseCrs} onChange={event => setTargetCrs(Number(event.target.value))}>
-          {responseOptions.map(code => <option key={code} value={code}>EPSG:{code}{code === nativeCrs ? " (native)" : " (approved operation)"}</option>)}
+          {responseOptions.map(code => <option key={code} value={code}>EPSG:{code}{code === nativeCrs ? " (gốc)" : " (phép chuyển đổi đã duyệt)"}</option>)}
         </select>
       </label>
       <CurrentFeatureInspector key={[scope.responseCrs, scope.contentRevision, scope.schemaRevision].join(":")} scope={scope} fields={layer.source.schema.fields}
