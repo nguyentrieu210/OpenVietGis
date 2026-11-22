@@ -1,10 +1,12 @@
 import type {PreparedEngine} from "./coordinator";
 import type {FootprintView} from "./footprint3d";
 import type {Map as MLMap} from "maplibre-gl";
+import {customMeshLayer,terrainMesh,modelMesh,type PlacedModel} from "./mesh-layer";
+import type {TerrainGrid} from "./terrain";
 import "maplibre-gl/dist/maplibre-gl.css";
 export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number}>;
 export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void};
-export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void):Promise<SelectableFootprintEngine>{
+export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void,extras?:{terrain?:TerrainGrid;model?:PlacedModel}):Promise<SelectableFootprintEngine>{
  if(signal.aborted)throw new DOMException("Aborted","AbortError");
  if(![camera.longitude,camera.latitude,camera.zoom,camera.bearing].every(Number.isFinite)||Math.abs(camera.longitude)>180||Math.abs(camera.latitude)>85||camera.zoom<0||camera.zoom>22)throw Error("Invalid camera");
  const {Map,NavigationControl}=await import("maplibre-gl");
@@ -29,6 +31,9 @@ export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,cam
    signal.addEventListener("abort",abort,{once:true});m.on("load",loaded);m.on("error",failed);if(signal.aborted)abort();
   });
   if(signal.aborted)throw new DOMException("Aborted","AbortError");
+  if(extras?.terrain)map.addLayer(customMeshLayer("project-dem",terrainMesh(extras.terrain)),"footprint-ground");
+  if(extras?.model)map.addLayer(customMeshLayer("local-model",modelMesh(extras.model)));
+  if(extras?.terrain||extras?.model)map.triggerRepaint();
   map.on("click","building-extrusion",e=>{if(!active)return;const id=e.features?.[0]?.properties.featureId;if(typeof id==="string"&&ids.has(id)){select(id);onPick(id)}});
   return {select,activate(){if(disposed)throw Error("Disposed 3D surface");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize()},dispose};
  }catch(error){dispose();throw error}

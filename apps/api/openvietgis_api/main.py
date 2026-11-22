@@ -32,6 +32,7 @@ from openvietgis_api.adapters.http import (
     processing_models,
     professional,
     raster,
+    terrain,
     projects,
     queries,
     service_principals,
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(processing_models.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(professional.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(raster.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(terrain.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cartography.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(layout_designer.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(external_sources.router,dependencies=[Depends(project_access_guard)])

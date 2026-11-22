@@ -9,6 +9,9 @@
     "./session": "./src/session.ts",
     "./ModeSwitch": "./src/ModeSwitch.tsx",
     "./footprint3d": "./src/footprint3d.ts",
+    "./terrain": "./src/terrain.ts",
+    "./gltf": "./src/gltf.ts",
+    "./mesh-layer": "./src/mesh-layer.ts",
     "./maplibre3d": "./src/maplibre3d.ts"
   },
   "scripts": {
