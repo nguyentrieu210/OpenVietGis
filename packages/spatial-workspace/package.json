@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./coordinator": "./src/coordinator.ts",
+    "./cad-editor": "./src/cad-editor.ts",
     "./session": "./src/session.ts",
     "./ModeSwitch": "./src/ModeSwitch.tsx",
     "./footprint3d": "./src/footprint3d.ts",

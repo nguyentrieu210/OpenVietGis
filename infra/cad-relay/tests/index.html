@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><title>CAD relay synthetic fixture</title></head><body><p id="status">starting</p><script>
+const channel="a".repeat(32),origin="http://127.0.0.1:4281",frame=document.createElement("iframe"),status=document.getElementById("status");
+frame.style.cssText="width:1000px;height:700px;border:0";
+frame.setAttribute("sandbox","allow-scripts allow-same-origin");
+window.events=[];
+const send=(type,fields={},transfer=[])=>frame.contentWindow.postMessage({source:"ovg-cad-host",channel,type,...fields},origin,transfer);
+window.addEventListener("message",async e=>{
+ if(e.origin!==origin||e.source!==frame.contentWindow||e.data?.source!=="ovg-cad-relay"||e.data.channel!==channel)return;
+ const d=e.data;window.events.push(d.type+":"+(d.code||""));
+ status.textContent=window.events.join(" | ");
+ if(d.type==="ready"){
+  const input=await (await fetch("/fixture.dxf")).arrayBuffer();
+  send("open",{name:"fixture.dxf",readOnly:false,buffer:input},[input]);
+ }else if(d.type==="loaded"){send("request-save",{format:"dxf"})}
+ else if(d.type==="save"){window.saveBytes=d.buffer.byteLength;window.savedFormat=d.format;send("saved",{saveId:d.saveId,ok:true});status.textContent+=" | bytes="+window.saveBytes}
+});
+frame.src=origin+"/relay.html#"+channel;document.body.append(frame);
+</script></body></html>

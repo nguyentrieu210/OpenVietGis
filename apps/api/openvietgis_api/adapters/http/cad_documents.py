@@ -1,14 +1,15 @@
-"""Native CAD file vault. Does not parse, execute, publish, or georeference drawings."""
+"""Native CAD file vault and explicit version-pinned 2D DXF placement."""
 
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,7 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
+from openvietgis_api.adapters.persistence.cad_repository import SqlCadRepository
 from openvietgis_api.adapters.persistence.scope_helper import (
     append_project_audit,
     prepare_project_scope,
@@ -27,6 +29,8 @@ from openvietgis_api.adapters.storage.local_object_store import LocalObjectStore
 from openvietgis_api.config import get_settings
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.authorization.permissions import Permission
+from openvietgis_api.domains.cad.domain import CadUnit
+from openvietgis_api.domains.cad.georeference import CadPlacement, Control, fit_placement
 
 router = APIRouter(tags=["cad-documents"])
 BASE = "/organizations/{organization_id}/projects/{project_id}/cad/documents"
@@ -278,3 +282,117 @@ def download_version(
             "X-Content-SHA256": row["sha256"],
         },
     )
+
+
+class GeorefRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    crs_code: Literal[3857]
+    units: CadUnit
+    controls: tuple[Control, ...] = Field(min_length=3, max_length=100)
+    tolerance_m: float = Field(ge=1e-6, le=1000)
+    max_scale_deviation: float = Field(ge=0, le=0.2)
+
+
+class GeorefImportRequest(GeorefRequest):
+    layer_name: str = Field(min_length=1, max_length=200)
+    expected_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_inspection_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
+    acknowledge_loss: Literal[True]
+
+
+def _placement(
+    session: Session,
+    ctx: AuthorizationContext,
+    document_id: UUID,
+    version: int,
+    body: GeorefRequest,
+) -> tuple[str, bytes, CadPlacement]:
+    row = (
+        session.execute(
+            text(
+                "SELECT filename,format,storage_key,sha256 FROM cad.document_versions "
+                f"WHERE {WHERE} AND document_id=:doc AND version=:version"
+            ),
+            {
+                "org": ctx.organization_id,
+                "proj": ctx.project_id,
+                "doc": document_id,
+                "version": version,
+            },
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(404, "CAD version not found")
+    if row["format"] != "dxf":
+        raise HTTPException(422, "Control-point import supports 2D DXF only")
+    placement = fit_placement(
+        document_id=document_id,
+        version=version,
+        crs_code=body.crs_code,
+        units=body.units,
+        controls=body.controls,
+        tolerance_m=body.tolerance_m,
+        max_scale_deviation=body.max_scale_deviation,
+    )
+    payload = _store().get_bytes(row["storage_key"], expected_sha256=row["sha256"])
+    return str(row["filename"]), payload, placement
+
+
+@router.post(BASE + "/{document_id}/versions/{version}/inspect-georef")
+def inspect_georef(
+    organization_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    version: int,
+    body: GeorefRequest,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_EDIT)
+    filename, payload, placement = _placement(session, ctx, document_id, version, body)
+    return SqlCadRepository(session, Path(get_settings().artifact_store_dir)).inspect_dxf(
+        context=ctx,
+        filename=filename,
+        payload=payload,
+        units=body.units,
+        crs_code=body.crs_code,
+        curve_tolerance_m=None,
+        placement=placement,
+    )
+
+
+@router.post(BASE + "/{document_id}/versions/{version}/import-georef", status_code=201)
+def import_georef(
+    organization_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    version: int,
+    body: GeorefImportRequest,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_EDIT)
+    filename, payload, placement = _placement(session, ctx, document_id, version, body)
+    record = SqlCadRepository(session, Path(get_settings().artifact_store_dir)).import_cad(
+        context=ctx,
+        filename=filename,
+        payload=payload,
+        layer_name=body.layer_name,
+        units=body.units,
+        crs_code=body.crs_code,
+        acknowledge_loss=body.acknowledge_loss,
+        expected_sha256=body.expected_sha256,
+        expected_inspection_fingerprint=body.expected_inspection_fingerprint,
+        placement=placement,
+    )
+    return {
+        "id": str(record.id),
+        "layer_id": str(record.layer_id),
+        "source_id": str(record.source_id),
+        "sha256": record.sha256,
+        "content_revision": record.content_revision,
+        "entity_summary": record.entity_summary,
+        "loss_report": record.loss_report,
+    }

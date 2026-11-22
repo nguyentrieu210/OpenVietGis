@@ -22,6 +22,7 @@ from openvietgis_api.adapters.storage.local_object_store import LocalObjectStore
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.cad.domain import CadConversionRecord, CadUnit
+from openvietgis_api.domains.cad.georeference import CadPlacement, place_features
 from openvietgis_api.domains.editing.domain import geometry_to_wkt, validate_geometry_payload
 from openvietgis_api.domains.platform_errors import (
     PlatformConflictError,
@@ -62,10 +63,38 @@ def _conv_from_row(row: RowMapping) -> CadConversionRecord:
 
 
 def _inspection_fingerprint(
-    digest: str, units: CadUnit, crs_code: int, tolerance: float | None
+    digest: str,
+    units: CadUnit,
+    crs_code: int,
+    tolerance: float | None,
+    placement: CadPlacement | None = None,
 ) -> str:
-    profile = ["dxf-2d-bounded-v1", digest, units.value, crs_code, tolerance]
+    profile: list[Any] = ["dxf-2d-bounded-v1", digest, units.value, crs_code, tolerance]
+    if placement is not None:
+        profile.append(placement.metadata())
     return hashlib.sha256(json.dumps(profile, allow_nan=False).encode()).hexdigest()
+
+
+def _apply_placement(
+    features: list[dict[str, Any]],
+    summary: dict[str, Any],
+    placement: CadPlacement | None,
+    units: CadUnit,
+    crs_code: int,
+    curve_tolerance_m: float | None,
+) -> None:
+    if placement is None:
+        summary["spatial_mapping"] = "caller_asserted_projected_grid_xy_scaled_to_meters"
+        return
+    if placement.units != units or crs_code != 3857 or curve_tolerance_m is not None:
+        raise PlatformValidationError(
+            "Unsupported control-point placement profile", code="CAD_GEOREFERENCE_INVALID"
+        )
+    summary["spatial_mapping"] = "control_point_similarity_grid_metres"
+    summary["cad_document_id"] = str(placement.document_id)
+    summary["cad_document_version"] = placement.version
+    summary["placement"] = placement.metadata()
+    summary["placed_extent"] = place_features(features, placement)
 
 
 class SqlCadRepository:
@@ -82,6 +111,7 @@ class SqlCadRepository:
         units: CadUnit,
         crs_code: int,
         curve_tolerance_m: float | None,
+        placement: CadPlacement | None = None,
     ) -> dict[str, Any]:
         prepare_project_scope(self._session, context, permission=Permission.PROJECT_EDIT)
         if not filename.lower().endswith(".dxf"):
@@ -98,6 +128,7 @@ class SqlCadRepository:
         family, features, summary, report = parse_dxf_2d(
             payload, units=units, curve_tolerance_m=curve_tolerance_m
         )
+        _apply_placement(features, summary, placement, units, crs_code, curve_tolerance_m)
         for feat in features:
             validate_geometry_payload(feat["geometry"], GeometryFamily(family))
         # The same PostGIS geometry predicate as the eventual publication, without
@@ -116,11 +147,10 @@ class SqlCadRepository:
         digest = hashlib.sha256(payload).hexdigest()
         summary["drawing_sha256"] = digest
         summary["crs_code"] = crs_code
-        summary["spatial_mapping"] = "caller_asserted_projected_grid_xy_scaled_to_meters"
         return {
             "sha256": digest,
             "inspection_fingerprint": _inspection_fingerprint(
-                digest, units, crs_code, curve_tolerance_m
+                digest, units, crs_code, curve_tolerance_m, placement
             ),
             "published": False,
             "geometry_valid": True,
@@ -141,6 +171,7 @@ class SqlCadRepository:
         acknowledge_loss: bool = False,
         expected_sha256: str | None = None,
         expected_inspection_fingerprint: str | None = None,
+        placement: CadPlacement | None = None,
     ) -> CadConversionRecord:
         prepare_project_scope(self._session, context, permission=Permission.PROJECT_EDIT)
         assert context.organization_id is not None and context.project_id is not None
@@ -219,10 +250,11 @@ class SqlCadRepository:
         family, features, entity_summary, loss_report = parse_dxf_2d(
             payload, units=units, curve_tolerance_m=curve_tolerance_m
         )
+        _apply_placement(features, entity_summary, placement, units, crs_code, curve_tolerance_m)
         for feature in features:
             validate_geometry_payload(feature["geometry"], GeometryFamily(family))
         inspection_fingerprint = _inspection_fingerprint(
-            sha256_hex, units, crs_code, curve_tolerance_m
+            sha256_hex, units, crs_code, curve_tolerance_m, placement
         )
         if (
             expected_inspection_fingerprint is not None
@@ -247,8 +279,31 @@ class SqlCadRepository:
         entity_summary["drawing_sha256"] = sha256_hex
         entity_summary["inspection_fingerprint"] = inspection_fingerprint
         entity_summary["crs_code"] = crs_code
-        entity_summary["spatial_mapping"] = "caller_asserted_projected_grid_xy_scaled_to_meters"
         loss_report["acknowledged"] = acknowledge_loss
+        if placement is not None:
+            if expected_inspection_fingerprint != inspection_fingerprint or not acknowledge_loss:
+                raise PlatformValidationError(
+                    "Inspect and confirm control-point placement",
+                    code="CAD_GEOREFERENCE_CONFIRM_REQUIRED",
+                )
+            # Serialize retries of the same immutable version/placement profile.
+            self._session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                {"key": f"cad-georef:{org_id}:{project_id}:{inspection_fingerprint}"},
+            )
+            prior = (
+                self._session.execute(
+                    text("""SELECT * FROM cad.conversions
+                WHERE organization_id=:org AND project_id=:proj AND direction='import'
+                AND status='succeeded' AND entity_summary->>'inspection_fingerprint'=:fingerprint
+                ORDER BY created_at LIMIT 1"""),
+                    {"org": org_id, "proj": project_id, "fingerprint": inspection_fingerprint},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if prior is not None:
+                return _conv_from_row(prior)
 
         # Publish as a new project-owned spatial source & layer (kind='derived_processing')
         out_source_id = uuid4()
@@ -435,7 +490,16 @@ class SqlCadRepository:
             action="cad.dxf.import",
             resource_type="data_source",
             resource_id=out_source_id,
-            metadata={"filename": filename[:255], "crs_code": crs_code, "units": units.value},
+            metadata={"filename": filename[:255], "crs_code": crs_code, "units": units.value}
+            | (
+                {
+                    "cad_document_id": str(placement.document_id),
+                    "cad_document_version": placement.version,
+                    "inspection_fingerprint": inspection_fingerprint,
+                }
+                if placement
+                else {}
+            ),
             created_at=now,
         )
 
