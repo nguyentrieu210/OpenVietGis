@@ -185,6 +185,8 @@ Module Framework & References.
 
 Child [Spec 019 — House Numbering Plugin](specs/019-house-numbering-plugin/spec.md): isolated technical candidate implemented and automated-verified across dynamic module UI, PostGIS workflows, browser/mobile, security, 10k/100k performance and DB+artifact recovery. [Plan](specs/019-house-numbering-plugin/plan.md) | [Tasks](specs/019-house-numbering-plugin/tasks.md) | [Convergence evidence](specs/019-house-numbering-plugin/evidence/convergence.md).
 
+Child [Spec 021 — AI Copilot / MCP](specs/021-ai-copilot/spec.md): isolated read-only MCP adapter candidate, 12 automated mock/protocol tests passed (R002, R003, R004, R014); authorized real-project verification, live workspace pairing and OAuth release remain open. [Plan](specs/021-ai-copilot/plan.md) | [Tasks](specs/021-ai-copilot/tasks.md).
+
 ### R015
 
 Production & Commercial Readiness.
