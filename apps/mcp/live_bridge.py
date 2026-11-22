@@ -168,6 +168,24 @@ class BridgeStore:
             c = s.command = Command(secrets.token_urlsafe(18), method, params, self.clock() + COMMAND_TTL)
             return {"command_id": c.id}
 
+    def check_claimed(self, sid, token, cid):
+        with self.lock:
+            s = self._get(sid, token, "browser")
+            self._expire_command(s)
+            c = s.command
+            if not c or c.id != cid or c.state != "claimed":
+                raise BridgeError(409, "Command unavailable")
+            return {"authorized": True, "expires_in": max(0, c.expires - self.clock())}
+
+    def cancel(self, sid, token, cid):
+        with self.lock:
+            try:
+                s = self._get(sid, token, "ai")
+            except BridgeError:
+                return
+            if s.command and s.command.id == cid:
+                s.command = None
+
     def ack(self, sid, token, cid, ok, result):
         with self.lock:
             s = self._get(sid, token, "browser")

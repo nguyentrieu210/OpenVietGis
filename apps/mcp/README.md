@@ -11,7 +11,7 @@ Configure a compatible local MCP host to launch that command with protected vari
 Use a separate credential for each project and revoke it when no longer needed.
 
 AI provider login is managed by the MCP host. This adapter does not supply a model
-or convert model subscriptions into API keys. Remote user OAuth and production deployment are later release gates.
+or convert model subscriptions into API keys. A separate remote OAuth candidate is available below; production deployment remains gated.
 
 ## Live workspace candidate (OpenCAD-style)
 The separate live MCP server needs no GIS service credential. The user opens the approved
@@ -39,6 +39,20 @@ Run the web-next Vite fixture on 4198 with base /rewrite/, then
 The smoke routes the example HTTPS partner host to the loopback relay and mocks GIS data;
 it runs a real local stdio MCP client and real MapLibre host consent/navigation.
 OVG_BRIDGE_DEV=1 permits loopback HTTP only for this fixture.
+
+## Remote OAuth candidate
+The first-party panel removes manual pairing keys. It validates the logged-in GIS account,
+linked Keycloak subject and unrestricted project.read via the existing Core API before
+creating a tab session or acknowledging an operation. The remote Streamable HTTP server
+validates Keycloak RS256 access tokens with a dedicated audience, approved client and scope.
+The token subject can only address its own connected tab. No web session token is exposed to AI.
+Each approved operation rechecks current Core authorization and command expiry. The previous
+local/partner plugin mode remains independent.
+
+27 backend/MCP tests and a first-party browser fixture passed. The HTTP tests use signed
+fixture tokens; they are not evidence of a real Claude OAuth login. See deploy/README.md
+for dedicated Keycloak client/scope, Nginx locations and first-party UI integration.
+The canonical /mcp route is not enabled yet.
 
 ## Public release — NOT enabled
 The sample manifest is illustrative: the catalog requires a separately approved external

@@ -3,4 +3,4 @@
 2. Read-only client using configured project service credential and existing REST routes.
 3. Official MCP Python SDK stdio tool surface; isolated tests and lockfile.
 4. Browser session pairing via existing approved Partner SDK host bridge; short-lived capability relay with explicit consent. Isolated single-process candidate, no Core changes.
-5. Later: authenticated public issuance, remote OAuth, deployment and security review. No production change in either candidate slice.
+5. Remote OAuth candidate: existing Keycloak issuer, dedicated resource audience, approved client and scope; same-origin GIS account and project authorization for first-party pairing. No production route until real IdP and merged UI acceptance, review and deployment gates.

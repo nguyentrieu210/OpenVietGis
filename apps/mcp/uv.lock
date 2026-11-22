@@ -312,6 +312,9 @@ source = { virtual = "." }
 dependencies = [
     { name = "httpx" },
     { name = "mcp" },
+    { name = "pyjwt", extra = ["crypto"] },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -323,6 +326,9 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "mcp", specifier = ">=2,<3" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10,<3" },
+    { name = "starlette", specifier = ">=1,<2" },
+    { name = "uvicorn", specifier = ">=0.38,<1" },
 ]
 
 [package.metadata.requires-dev]
