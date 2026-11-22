@@ -14,3 +14,8 @@ Raster processing/reports/download, processing run, model run, and layout export
 
 ## Frontend
 The adapter sources in apps/mcp/web correspond to apps/web-next/src/ai-copilot in frontend. Layout export uses existing LayoutRender helpers; LiveStudio supplies the live map and current visible layer legend. Default production frontend is independent of the AI preview.
+
+## Deployment evidence 2026-11-23
+- Public MCP sidecar `acd712c` active on port 9188; actual disposable-user Keycloak code+PKCE and HTTPS discovery returned all 36 tools. Anonymous MCP request returned 401.
+- 33 Python tests passed. TypeScript and isolated Vite build passed. Real MapLibre browser integration with mocked Core API passed on both isolated preview and public `https://openvietgis.cloud/rewrite/copilot.html?live=1&v=acd712c`: rejected raster write without API mutation, approved multipart raster, DAG step, plugin activation and actual A4 PDF download verified MediaBox.
+- Only dedicated copilot HTML and additive content-hashed assets published; default `rewrite/index.html` unchanged. Old copilot HTML retained at `/opt/openvietgis-mcp-runtime/acd712c/rollback-copilot.html`; previous sidecar configuration backed up as `50-full-workspace.conf.before-acd712c`. No mutation of actual production project data was used in tests; live Claude account end-to-end operation remains user acceptance.
