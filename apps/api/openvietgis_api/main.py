@@ -11,6 +11,7 @@ from openvietgis_api.adapters.http import (
     cartography,
     layout_designer,
     collaboration,
+    team_chat,
     editing,
     extensions,
     marketplace,
@@ -102,6 +103,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(layout_designer.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(external_sources.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(collaboration.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(team_chat.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(field.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(extensions.router,dependencies=[Depends(project_access_guard)])
