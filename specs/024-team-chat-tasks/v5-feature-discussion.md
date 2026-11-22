@@ -10,4 +10,4 @@
 ## Evidence
 
 - Real PostgreSQL integration validated project isolation, mentions and receipts, comment-to-task conversion, direct feature assignment, existing message isolation, historical comments after deletion, pin count and scoped-user denial. Existing lease and realtime tests passed; final real SSE network test verified committed feature comments broadcast.
-- TypeScript/Vite production build succeeded. Previous collaboration browser smoke passed; final extended smoke covers selected feature discussion, mention picker, pin reopening and linked task/notification flow. The collaboration panel uses a body portal to avoid inspector stacking conflicts.
+- TypeScript/Vite production build succeeded. Previous collaboration browser smoke passed; the final extended browser smoke also passed, covering selected feature discussion, mention picker, pin reopening and linked task/notification flow. The collaboration panel uses a body portal to avoid inspector stacking conflicts.
