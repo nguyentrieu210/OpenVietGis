@@ -32,6 +32,15 @@ def create_remote(config, identity=None, workspace=None, verifier=None, full_too
         issuer_url=AnyHttpUrl(config.issuer),resource_server_url=AnyHttpUrl(config.resource),
         required_scopes=[SCOPE],validate_token_resource=True))
 
+    def bridge_failure(error: BridgeError) -> dict[str,Any]:
+        # Expected workspace failures are actionable results, not internal MCP exceptions.
+        if error.status==404 and str(error)=="Open and connect your GIS workspace first":
+            return {"ok":False,"state":"workspace_not_connected","code":"WORKSPACE_NOT_CONNECTED",
+                    "message":"Chưa kết nối phiên bản đồ OpenVietGIS với tài khoản AI này.",
+                    "action":"Mở OpenVietGIS, đăng nhập cùng tài khoản, chọn dự án, nhấn AI Copilot → Kết nối AI và giữ tab bản đồ mở. Sau đó gọi lại lệnh.",
+                    "url":origin}
+        return {"ok":False,"state":"failed","code":"GIS_WORKSPACE_ERROR","message":str(error),"status":error.status}
+
     async def operate(method,params):
         token=get_access_token()
         if token is None or not token.subject or not token.expires_at:
@@ -39,7 +48,7 @@ def create_remote(config, identity=None, workspace=None, verifier=None, full_too
         try:
             return await workspace.execute(token.subject,method,params,token.expires_at)
         except BridgeError as e:
-            raise ValueError(str(e)) from None
+            return bridge_failure(e)
 
     @mcp.tool(annotations=ToolAnnotations(read_only_hint=True,destructive_hint=False),structured_output=True)
     async def gis_live_view()->dict[str,Any]:
@@ -67,7 +76,7 @@ def create_remote(config, identity=None, workspace=None, verifier=None, full_too
             if token is None or not token.subject or not token.expires_at or token.expires_at<=__import__("time").time():
                 raise ValueError("OAuth authentication required")
             try:return workspace.operation_status(token.subject,operation_ticket)
-            except BridgeError as e:raise ValueError(str(e)) from None
+            except BridgeError as e:return bridge_failure(e)
 
     def browser_guard(request):
         if request.headers.get("origin")!=origin or request.headers.get("x-ovg-ai")!="1":

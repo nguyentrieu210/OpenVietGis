@@ -61,6 +61,25 @@ class FakeIdentity:
             raise BridgeError(403,"Invalid scope")
         return Owner(USER,"alice",org,project)
 
+def test_disconnected_workspace_returns_actionable_result():
+    from live_bridge import BridgeStore
+    store=OwnedBridge(BridgeStore(allow_workspace=True))
+    # Another user's connected tab must never satisfy this authenticated request.
+    store.create(Owner(USER,"bob",ORG,PROJECT),2)
+    headers={"Accept":"application/json, text/event-stream","MCP-Protocol-Version":"2026-07-28",
+        "Authorization":"Bearer "+signed(),"Mcp-Method":"tools/call"}
+    meta={"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}
+    with TestClient(create_remote(CONFIG,identity=FakeIdentity(),workspace=store,verifier=VERIFIER,full_tools=True),base_url=ORIGIN) as client:
+        for name,args in [("gis_layers",{"request":{}}),("gis_plugins",{"request":{}}),("gis_live_view",{}),("gis_operation_status",{"operation_ticket":"missing"})]:
+            rpc={"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"_meta":meta,"name":name,"arguments":args}}
+            response=client.post("/mcp",json=rpc,headers=headers|{"Mcp-Name":name})
+            assert response.status_code==200,response.text
+            content=response.json()["result"]["structuredContent"]
+            assert content["ok"] is False and content["code"]=="WORKSPACE_NOT_CONNECTED"
+            assert content["url"]==ORIGIN and "Kết nối AI" in content["action"]
+        assert store.for_subject("bob")
+
+
 def test_remote_http_mcp_and_workspace():
     store=OwnedBridge()
     browser={"Origin":ORIGIN,"X-OVG-AI":"1","Cookie":"ovg_session=alice-cookie"}
