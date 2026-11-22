@@ -866,9 +866,7 @@ _OBSERVE_SQL = """
            ST_GeometryType(a.geometry) AS family, ST_SRID(a.geometry) AS srid,
            ST_Zmflag(a.geometry) AS zm, ST_NDims(a.geometry) AS ndims,
            ST_IsValid(a.geometry, 0) AS valid, ST_NPoints(a.geometry) AS point_count,
-           e.feature_id IS NOT NULL
-             AND ST_AsEWKB(a.geometry) IS NOT DISTINCT FROM ST_AsEWKB(e.geometry)
-               AS exact_geometry,
+           ST_AsEWKB(a.geometry) AS native_ewkb,
            (
                SELECT array_agg(
                    ARRAY[ST_X(dp.geom), ST_Y(dp.geom), ST_Z(dp.geom), ST_M(dp.geom)]
@@ -882,16 +880,25 @@ _CANDIDATE_SQL = (
     _EXPECTED_SQL
     + _OBSERVE_SQL
     + """
-    FROM expected AS a JOIN expected AS e ON e.feature_id=a.feature_id
+    FROM expected AS a
     ORDER BY a.feature_id COLLATE "C"
 """
 )
-_PERSISTED_SQL = (
+# Avoid a join between an unanalysed freshly populated table and a JSON
+# recordset (estimated at 100 rows), which can choose a quadratic nested loop.
+# Read both ordered streams in the same transaction; compare exact native EWKB
+# and feature IDs, including NULL and empty geometries, before validation.
+_EXPECTED_EWKB_SQL = (
     _EXPECTED_SQL
-    + _OBSERVE_SQL
+    + """
+    SELECT feature_id, ST_AsEWKB(geometry) AS native_ewkb
+    FROM expected ORDER BY feature_id COLLATE "C"
+"""
+)
+_PERSISTED_SQL = (
+    _OBSERVE_SQL
     + """
     FROM spatial.reference_features AS a
-    LEFT JOIN expected AS e ON e.feature_id=a.feature_id
     WHERE a.organization_id=:org AND a.project_id=:project AND a.source_id=:source
     ORDER BY a.feature_id COLLATE "C"
 """
@@ -902,14 +909,17 @@ def _observe(
     session: Session, pinned: PinnedSource, scope: Mapping[str, UUID] | None = None
 ) -> Sequence[RowMapping]:
     try:
-        return (
-            session.execute(
-                text(_CANDIDATE_SQL if scope is None else _PERSISTED_SQL),
-                dict(scope or {}) | {"records": _native_input(pinned)},
-            )
-            .mappings()
-            .all()
-        )
+        records = {"records": _native_input(pinned)}
+        if scope is None:
+            return session.execute(text(_CANDIDATE_SQL), records).mappings().all()
+        expected = session.execute(text(_EXPECTED_EWKB_SQL), records).all()
+        actual = session.execute(text(_PERSISTED_SQL), dict(scope)).mappings().all()
+        if len(actual) != len(expected) or any(
+            (row["feature_id"], row["native_ewkb"]) != tuple(original)
+            for row, original in zip(actual, expected, strict=True)
+        ):
+            raise _integrity()
+        return actual
     except SQLAlchemyError:
         # Unexpected engine/parser/SQL faults are not an accepted negative
         # fixture. Caller owns transaction rollback; never expose raw SQL.
@@ -1039,7 +1049,6 @@ def _verified_observations(
             or row["geometry_state"] != feature.geometry_state.value
             or row["content_revision"] != feature.content_revision
             or row["schema_revision"] != feature.schema_revision
-            or not row["exact_geometry"]
             or not isinstance(attrs, dict)
             or set(attrs) != set(field_by_id)
         ):
