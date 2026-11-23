@@ -13,7 +13,9 @@
     "./gltf": "./src/gltf.ts",
     "./mesh-layer": "./src/mesh-layer.ts",
     "./mesh-picking": "./src/mesh-picking.ts",
-    "./maplibre3d": "./src/maplibre3d.ts"
+    "./maplibre3d": "./src/maplibre3d.ts",
+    "./tileset": "./src/tileset.ts",
+    "./tiles3d": "./src/tiles3d.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
