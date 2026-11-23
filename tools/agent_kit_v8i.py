@@ -158,13 +158,13 @@ def run_agent(root: Path, track: str, engine: str, execute: bool, timeout: int) 
         command = [
             "codex",
             "--no-daemon",
+            "--ask-for-approval",
+            "never",
             "exec",
             "-C",
             str(path),
             "--sandbox",
             "workspace-write",
-            "--ask-for-approval",
-            "never",
             "--ephemeral",
             "-",
         ]
