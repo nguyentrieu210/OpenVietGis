@@ -1,10 +1,18 @@
 """Opt-in Windows V8i receiver and manual, reviewed R026 geometry writeback."""
 from __future__ import annotations
 
-import json
+# PyInstaller's windowed bootloader intentionally removes console streams.
+# Ensure optional COM/Win32 libraries don't crash while inspecting stderr.
 import os
-import queue
 import sys
+if getattr(sys, "frozen", False):
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+
+import json
+import queue
 import threading
 import tkinter as tk
 from pathlib import Path
