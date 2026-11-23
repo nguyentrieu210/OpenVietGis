@@ -12,6 +12,7 @@ import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from modules.house_numbering.address_prefix import canonical_prefix
 
 
 class DomainError(ValueError):
@@ -31,7 +32,6 @@ _STATES = {
 }
 _LOCKED = {"certificate", "submitted", "approved", "reserved"}
 _NUMBER = re.compile(r"([1-9][0-9]*)(?:([A-Z]+)|-([1-9][0-9]*))?")
-_PREFIX = re.compile(r"[1-9][0-9]*(?:/[1-9][0-9]*)*")
 
 
 def _finite(value: float, *, name: str) -> None:
@@ -114,9 +114,12 @@ def _rank_letters(rank: int) -> str:
 
 
 def _prefix(prefix: str) -> str:
-    if prefix and not _PREFIX.fullmatch(prefix):
-        raise DomainError("invalid alley prefix")
-    return prefix + "/" if prefix else ""
+    if not prefix:
+        return ""
+    try:
+        return canonical_prefix(prefix) + "/"
+    except ValueError as exc:
+        raise DomainError("invalid alley prefix") from exc
 
 
 def _parse(number: str, prefix: str, style: str) -> tuple[int, int] | None:
@@ -158,6 +161,7 @@ def suggest_number(
     prefix: str = "",
     distance: float = 0.0,
     existing_id: str | None = None,
+    batch_before_first: bool = False,
 ) -> Suggestion:
     """Propose a route-side number without modifying any input.
 
@@ -220,6 +224,9 @@ def suggest_number(
         return result(free_base(1 if parity else 2), "empty_route_side")
     if previous is None:
         assert following is not None
+        if batch_before_first:
+            number = free_base(1 if parity else 2, following[0])
+            return result(number, "before_first" if number else "no_number_before_first")
         candidate = following[0] - 2
         while candidate > 0:
             number = _format(candidate, 0, prefix_text, rule.suffix_style)

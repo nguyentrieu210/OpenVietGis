@@ -1,4 +1,5 @@
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Depends
+from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -8,12 +9,17 @@ from openvietgis_api.adapters.http import (
     bootstrap,
     cad,
     cartography,
+    layout_designer,
     collaboration,
     editing,
     extensions,
+    marketplace,
+    marketplace_developers,
+    partner_platform,
     external_sources,
     field,
     grants,
+    gis_access,
     health,
     invitations,
     map_viewport,
@@ -22,6 +28,9 @@ from openvietgis_api.adapters.http import (
     ops,
     organizations,
     processing,
+    processing_models,
+    professional,
+    raster,
     projects,
     queries,
     service_principals,
@@ -74,26 +83,34 @@ def create_app() -> FastAPI:
     api_v1.include_router(me.router)
     api_v1.include_router(organizations.router)
     api_v1.include_router(workspaces.router)
-    api_v1.include_router(projects.router)
+    api_v1.include_router(projects.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(grants.router)
+    api_v1.include_router(gis_access.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(invitations.router)
     api_v1.include_router(service_principals.router)
-    api_v1.include_router(spatial.router)
-    api_v1.include_router(maps.router)
-    api_v1.include_router(map_viewport.router)
-    api_v1.include_router(transfers.router)
-    api_v1.include_router(editing.router)
-    api_v1.include_router(queries.router)
-    api_v1.include_router(processing.router)
-    api_v1.include_router(cartography.router)
-    api_v1.include_router(external_sources.router)
-    api_v1.include_router(collaboration.router)
-    api_v1.include_router(cad.router)
-    api_v1.include_router(field.router)
-    api_v1.include_router(extensions.router)
+    api_v1.include_router(spatial.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(maps.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(map_viewport.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(transfers.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(editing.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(queries.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(processing.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(processing_models.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(professional.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(raster.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(cartography.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(layout_designer.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(external_sources.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(collaboration.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(cad.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(field.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(extensions.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(partner_platform.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(marketplace.router)
+    api_v1.include_router(marketplace_developers.router)
     api_v1.include_router(ops.router)
     for module_runtime in discover_official_module_runtimes():
-        api_v1.include_router(module_runtime.router)
+        api_v1.include_router(module_runtime.router,dependencies=[Depends(project_access_guard)])
     app.include_router(api_v1)
     install_error_handlers(app)
     return app

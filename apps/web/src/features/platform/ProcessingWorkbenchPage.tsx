@@ -9,7 +9,7 @@ import {
 } from "@openvietgis/client-sdk";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../app/api";
 import { ProjectToolbar } from "./ProjectToolbar";
 
@@ -38,7 +38,9 @@ function algorithmLabel(id: string): string {
 export function ProcessingWorkbenchPage() {
   const { organizationId = "", projectId = "" } = useParams();
   const qc = useQueryClient();
-  const [algo, setAlgo] = useState<"buffer" | "clip" | "dissolve">("buffer");
+  const [search] = useSearchParams();
+  const requested = search.get("algorithm");
+  const [algo, setAlgo] = useState<"buffer" | "clip" | "dissolve">(requested === "clip" || requested === "dissolve" ? requested : "buffer");
   const [inputLayerId, setInputLayerId] = useState("");
   const [overlayLayerId, setOverlayLayerId] = useState("");
   const [distance, setDistance] = useState("500");

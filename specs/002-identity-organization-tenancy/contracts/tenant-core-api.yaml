@@ -335,6 +335,42 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/InvitationIssued" }
         "403": { description: Insufficient invitation permission }
+  /organizations/{organization_id}/invitations/email:
+    post:
+      operationId: emailInvitation
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/OrganizationId"
+        - $ref: "#/components/parameters/CsrfHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                organization_role: { type: string, enum: [member, guest, admin], default: member }
+                resource_grant:
+                  oneOf:
+                    - { $ref: "#/components/schemas/InvitationResourceGrant" }
+                    - { type: "null" }
+      responses:
+        "201":
+          description: Invitation created and transport attempted; no raw secret returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, organization_id, status, delivery]
+                properties:
+                  id: { type: string, format: uuid }
+                  organization_id: { type: string, format: uuid }
+                  status: { type: string, enum: [pending] }
+                  delivery: { type: string, enum: [accepted_by_provider, rejected, unknown] }
+        "403": { description: Insufficient invitation permission }
+        "503": { description: Email service not configured }
   /organizations/{organization_id}/invitations/{invitation_id}/revoke:
     post:
       operationId: revokeInvitation

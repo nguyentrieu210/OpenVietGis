@@ -45,6 +45,7 @@ class SourceKind(StrEnum):
     REFERENCE_FIXTURE = "reference_fixture"
     IMPORTED_FILE = "imported_file"
     DERIVED_PROCESSING = "derived_processing"
+    MANUAL = "manual"
 
 
 class Lifecycle(StrEnum):
@@ -138,6 +139,7 @@ class CatalogOperation(StrEnum):
     EDIT_FEATURES = "edit_features"
     PROCESSING_PUBLISH = "processing_publish"
     UPDATE_SOURCE = "update_source"
+    UPDATE_SCHEMA = "update_schema"
     CORRECT_SOURCE_CRS = "correct_source_crs"
     RETIRE_SOURCE = "retire_source"
     CREATE_LAYER = "create_layer"
@@ -867,6 +869,7 @@ _SOURCE_OPERATIONS = frozenset(
         CatalogOperation.REGISTER_SOURCE,
         CatalogOperation.IMPORT_SOURCE,
         CatalogOperation.UPDATE_SOURCE,
+        CatalogOperation.UPDATE_SCHEMA,
         CatalogOperation.CORRECT_SOURCE_CRS,
         CatalogOperation.RETIRE_SOURCE,
         CatalogOperation.REFRESH_REFERENCE_FIXTURE,

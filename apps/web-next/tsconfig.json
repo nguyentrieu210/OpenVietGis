@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {"geojson": ["./node_modules/maplibre-gl/../@types/geojson/index.d.ts", "../../node_modules/.pnpm/@types+geojson@7946.0.16/node_modules/@types/geojson/index.d.ts"]},
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "src"
+  ]
+}

@@ -7,6 +7,7 @@ from itertools import chain
 from uuid import UUID
 
 from sqlalchemy import text
+from openvietgis_api.adapters.persistence.gis_access import scoped
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -166,6 +167,9 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             response_crs=4326,
         )
         source = detail.source
+        expected_count=source.feature_count
+        if scoped(self._session,context):
+            expected_count=self._session.execute(text("SELECT count(*) FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj AND source_id=:src"),{"org":context.organization_id,"proj":context.project_id,"src":source.id}).scalar_one()
         if (
             source.kind
             not in (
@@ -175,8 +179,8 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             )
             or source.dimensions != GeometryDimensions.XY
             or source.geometry_family not in SUPPORTED_FAMILIES
-            or source.feature_count is None
-            or source.feature_count > MAX_RENDER_SOURCE_FEATURES
+            or expected_count is None
+            or expected_count > MAX_RENDER_SOURCE_FEATURES
         ):
             raise SpatialUnsupportedTransformationError("source exceeds supported render profile")
         if source.stored_crs != 4326:
@@ -193,7 +197,7 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             "schema": schema_revision,
             "native_srid": source.stored_crs,
             "geometry_type": "ST_" + source.geometry_family.value,
-            "expected_count": source.feature_count,
+            "expected_count": expected_count,
         }
         return source, wire, ctes, params
 
@@ -276,7 +280,7 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             if first is None:
                 raise MapReadUnavailableError("missing render snapshot summary")
             self._validate_summary(
-                source.feature_count, first["snapshot_count"], first["snapshot_valid"]
+                params["expected_count"], first["snapshot_count"], first["snapshot_valid"]
             )
 
             def features() -> Iterator[RenderFeature]:
@@ -334,7 +338,7 @@ class SqlMapViewportRepository(SqlSpatialRepository):
                 .one()
             )
             self._validate_summary(
-                source.feature_count, row["snapshot_count"], row["snapshot_valid"]
+                params["expected_count"], row["snapshot_count"], row["snapshot_valid"]
             )
             if row["west"] is None:
                 return {"context": wire, "state": "empty", "bounds": None}

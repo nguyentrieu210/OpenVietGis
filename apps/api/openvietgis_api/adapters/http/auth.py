@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from secrets import compare_digest, token_urlsafe
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from authlib.integrations.base_client import OAuthError  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -69,6 +70,8 @@ async def begin_login(
     settings: Annotated[Settings, Depends(get_settings)],
     mode: Literal["login", "link"] = Query(default="login"),
     return_to: str | None = Query(default=None),
+    prompt: Literal["login"] | None = Query(default=None),
+    action: Literal["password"] | None = Query(default=None),
 ) -> Response:
     state = token_urlsafe(32)
     transaction = {
@@ -91,6 +94,13 @@ async def begin_login(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         transaction["user_id"] = str(authentication.actor.actor_id)
         transaction["session_id"] = str(authentication.session_id)
+    if action == "password":
+        if provider != "keycloak" or mode != "login":
+            raise HTTPException(status_code=400, detail="invalid account action")
+        authentication = await run_in_threadpool(authenticate_request, request, session, settings)
+        if authentication.actor.actor_id is None or authentication.session_id is None:
+            raise HTTPException(status_code=401)
+        transaction.update(action="password", user_id=str(authentication.actor.actor_id), session_id=str(authentication.session_id), return_to="/app")
     redirect_uri = (
         settings.api_public_base_url.rstrip("/")
         + f"/api/v1/auth/callback/{provider}"
@@ -101,6 +111,8 @@ async def begin_login(
             provider_name=provider,
             redirect_uri=redirect_uri,
             state=state,
+            **({"prompt": "login"} if prompt == "login" and mode == "login" else {}),
+            **({"action": "UPDATE_PASSWORD"} if action == "password" else {}),
         )
     except OidcProviderNotFoundError as exc:
         raise HTTPException(status_code=400, detail="unknown identity provider") from exc
@@ -129,6 +141,9 @@ async def complete_login(
     ):
         raise HTTPException(status_code=400, detail="invalid OIDC transaction")
     request.session.pop("ovg_oidc_transaction")
+    if request.query_params.get("error") == "access_denied" and transaction.get("mode") == "login":
+        path = "/app?auth_complete=1&password_result=cancelled" if transaction.get("action") == "password" else "/?auth_cancelled=1"
+        return RedirectResponse(settings.web_base_url.rstrip("/") + path, status_code=302)
     try:
         claims = await _registry(settings).complete_login(
             request,
@@ -161,6 +176,13 @@ def _complete_verified_login(
     )
 
     try:
+        if transaction.get("action") == "password":
+            authentication = authenticate_request(request, session, settings)
+            identity = SqlIdentityRepository(session).find_by_external_identity(issuer=claims.issuer, subject=claims.subject)
+            same = (identity is not None and str(identity[0].id) == transaction.get("user_id") and str(authentication.actor.actor_id) == transaction.get("user_id") and str(authentication.session_id) == transaction.get("session_id"))
+            action_status = request.query_params.get("kc_action_status")
+            outcome = "success" if same and action_status == "success" else "cancelled" if same and action_status == "cancelled" else "unconfirmed"
+            return RedirectResponse(settings.web_base_url.rstrip("/") + "/app?auth_complete=1&password_result=" + outcome, status_code=302)
         if transaction["mode"] == "link":
             # Reauthenticate after provider verification. Logout, expiry, unlinking,
             # a different session for the same user, or an account switch invalidate
@@ -238,4 +260,27 @@ def logout(
     if authentication.session_id is not None:
         SqlIdentityRepository(session).revoke_web_session(authentication.session_id)
     request.session.clear()
-    response.delete_cookie(settings.session_cookie_name, path="/")
+    response.delete_cookie(settings.session_cookie_name, path="/", secure=settings.session_cookie_secure, httponly=True, samesite="lax")
+    response.headers["Cache-Control"] = "no-store"
+
+    # The production Keycloak realm is reverse-proxied on the web origin.
+    # Discard that browser's realm cookies too; otherwise a new authorization
+    # request may resume the previous SSO account after app session revocation.
+    # Do not touch any other origin, realm, or Google account cookies.
+    provider = settings.oidc_providers.get("keycloak")
+    if provider:
+        issuer = urlsplit(provider.issuer)
+        web = urlsplit(settings.web_base_url)
+        api = urlsplit(settings.api_public_base_url)
+        if (
+            (issuer.scheme, issuer.netloc) == (web.scheme, web.netloc) == (api.scheme, api.netloc)
+            and issuer.path.rstrip("/").startswith("/realms/")
+        ):
+            realm_path = issuer.path.rstrip("/")
+            for cookie in (
+                "KEYCLOAK_IDENTITY", "KEYCLOAK_SESSION", "KEYCLOAK_IDENTITY_LEGACY",
+                "KEYCLOAK_SESSION_LEGACY", "KEYCLOAK_REMEMBER_ME", "AUTH_SESSION_ID",
+                "AUTH_SESSION_ID_LEGACY", "KC_AUTH_SESSION_HASH", "KC_RESTART",
+            ):
+                for path in (realm_path + "/", realm_path):
+                    response.delete_cookie(cookie, path=path, secure=issuer.scheme == "https", httponly=True, samesite="lax")

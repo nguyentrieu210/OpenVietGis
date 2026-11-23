@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenVietGIS Partner SDK demo</title>
+<style>body{font:16px system-ui;padding:24px;color:#18354b}button{padding:10px;margin:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#eff6fa;padding:12px}label{display:inline-flex;flex-direction:column;margin:4px}input{max-width:140px;padding:6px}</style>
+<h1>Plugin đối tác mẫu</h1><p>Không có API key trong iframe. GIS chỉ chia sẻ tọa độ hoặc điều hướng sau khi người dùng xác nhận.</p>
+<pre id="status">Đang kết nối…</pre>
+<button id="notice" disabled>Gửi thông báo</button>
+<button id="view" disabled>Đọc vùng bản đồ</button>
+<button id="selection" disabled>Đọc hình học đối tượng</button>
+<button id="overlay" disabled>Vẽ lớp tạm</button><button id="tool" disabled>Thêm công cụ</button>
+<div><label>Kinh độ<input id="longitude" type="number" value="106.6" step="any" min="-180" max="180"></label><label>Vĩ độ<input id="latitude" type="number" value="10.6" step="any" min="-85" max="85"></label><label>Zoom<input id="zoom" type="number" value="15" step="any" min="0" max="22"></label><button id="navigate" disabled>Điều hướng</button></div>
+<script src="../openvietgis-partner.js"></script><script>
+OpenVietGISPartner.connect().then(async sdk=>{
+  const status=document.querySelector("#status");
+  status.textContent=sdk.capabilities.includes("host_context")?JSON.stringify(await sdk.getContext(),null,2):"SDK connected";
+  const bind=(id,cap,run)=>{
+    const btn=document.querySelector(id);btn.disabled=!sdk.capabilities.includes(cap);
+    btn.onclick=async()=>{btn.disabled=true;status.textContent="Đang chờ GIS xác nhận…";try{const result=await run();status.textContent=JSON.stringify(result,null,2)??"Thành công"}catch(e){status.textContent=e.message}finally{btn.disabled=false}};
+  };
+  bind("#notice","host_notice",()=>sdk.notice("Plugin đã kết nối."));
+  bind("#view","map_view",()=>sdk.getMapView());
+  bind("#selection","map_selection",()=>sdk.getSelection());
+  bind("#overlay","map_overlay",()=>sdk.setMapOverlay({title:"Điểm demo",geojson:{type:"FeatureCollection",features:[{type:"Feature",geometry:{type:"Point",coordinates:[document.querySelector("#longitude").valueAsNumber,document.querySelector("#latitude").valueAsNumber]},properties:{}}]}}));
+  bind("#tool","tool_register",()=>sdk.registerTool({id:"demo",label:"Công cụ demo"}));
+  sdk.onToolClick(id=>{status.textContent="GIS Studio đã bấm công cụ: "+id});
+  bind("#navigate","map_navigate",()=>sdk.navigateMap({longitude:document.querySelector("#longitude").valueAsNumber,latitude:document.querySelector("#latitude").valueAsNumber,zoom:document.querySelector("#zoom").valueAsNumber}));
+}).catch(e=>document.querySelector("#status").textContent=e.message);
+</script></html>

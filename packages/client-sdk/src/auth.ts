@@ -31,7 +31,7 @@ export async function loadCsrfToken(client: ApiClient): Promise<string> {
 }
 
 export function getCurrentUser(client: ApiClient): Promise<CurrentUser> {
-  return client.request<CurrentUser>("/me");
+  return client.request<CurrentUser>("/me", { cache: "no-store" });
 }
 
 export function listIdentityLinks(client: ApiClient): Promise<IdentityLink[]> {

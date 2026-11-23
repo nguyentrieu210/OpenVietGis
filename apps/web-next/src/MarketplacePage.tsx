@@ -1,0 +1,14 @@
+import React,{useEffect,useState} from "react";
+import {ApiClient,listMarketplace,type MarketplaceRelease} from "@openvietgis/client-sdk";
+import {Brand} from "./Brand";
+import "./marketplace-page.css";
+const api=new ApiClient({baseUrl:"/api/v1"});
+const names:Record<string,string>={host_context:"Ngữ cảnh SDK",host_notice:"Thông báo",map_view:"Vùng bản đồ",map_selection:"Hình học đang chọn",map_navigate:"Điều hướng",map_overlay:"Lớp bản đồ",tool_register:"Công cụ"};
+export function MarketplacePage(){
+ const [items,setItems]=useState<MarketplaceRelease[]>([]),[query,setQuery]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(false);
+ useEffect(()=>{let live=true;listMarketplace(api).then(r=>{if(live)setItems(r.items)}).catch(()=>{if(live)setError(true)}).finally(()=>{if(live)setLoading(false)});return()=>{live=false}},[]);
+ const visible=items.filter(r=>[r.manifest.display_name,r.publisher_name,r.manifest.description].join(" ").toLocaleLowerCase("vi-VN").includes(query.trim().toLocaleLowerCase("vi-VN")));
+ return <main className="marketplace-page"><header><a href="/"><Brand/></a><a className="market-link" href="/app">Vào GIS Studio →</a></header><section className="market-intro"><small>OPENVIETGIS · DEVELOPER ECOSYSTEM</small><h1>Plugin Marketplace</h1><p>Khám phá các tiện ích GIS do đối tác phát triển, được duyệt và ký xác thực trước khi phân phối. Cài đặt vào tổ chức và kích hoạt theo dự án.</p><input aria-label="Tìm plugin" placeholder="Tìm theo plugin, nhà phát triển…" value={query} onChange={e=>setQuery(e.target.value)}/></section>
+ <section className="market-grid" aria-label="Danh mục plugin">{loading?<p>Đang tải danh mục…</p>:error?<p role="alert">Không thể xác minh danh mục. Vui lòng thử lại sau.</p>:!visible.length?<div className="market-empty"><h2>{items.length?"Không tìm thấy plugin":"Chưa có bản phát hành công khai"}</h2><p>{items.length?"Thử từ khóa khác.":"Danh mục chỉ hiển thị các phiên bản đã được đơn vị vận hành duyệt."}</p></div>:visible.map(r=><article className="market-card" key={r.manifest.extension_key+":"+r.manifest.version}><span className="market-verified">✓ Đã ký và duyệt</span><h2>{r.manifest.display_name}</h2><p className="market-publisher">{r.publisher_name} · v{r.manifest.version}</p><p>{r.manifest.description}</p><div className="market-caps">{r.manifest.capabilities.map(c=><span key={c}>{names[c]??c}</span>)}</div><a href="/app" className="market-link">Cài đặt trong GIS Studio →</a></article>)}</section>
+ <section className="market-dev"><h2>Phát triển plugin của bạn</h2><p>Đối tác tạo giao diện tại máy chủ riêng, khai báo quyền SDK, ký manifest bằng khóa Ed25519, gửi đơn vị vận hành duyệt phát hành. Không cần sửa GIS Core.</p><p>Marketplace xác minh chữ ký manifest; nội dung từ URL đối tác vẫn cần được đánh giá tin cậy.</p><a className="market-link" href="/?developer=1">Mở Developer Portal →</a></section></main>
+}

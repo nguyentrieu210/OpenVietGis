@@ -1,0 +1,23 @@
+# Project raster catalog and large-raster processing
+
+- Raster is part of GIS Core, independent of the house-numbering plugin.
+- `GET/POST /api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers`: list/import a single calculated band. POST is multipart (file, optional second file, method, name, band_a, band_b) and CSRF-protected.
+- `GET .../layers/{layer_id}/tiles/{z}/{x}/{y}.png`: authenticated XYZ PNG. `GET .../file`: original-grid calculated single-band COG. `DELETE .../layers/{layer_id}`: project editor-only, cascades saved tiles. Source files outside the project are unchanged.
+- The small synchronous preview endpoint remains capped at two million pixels. Persistent calculation is blockwise, 512-by-512 windows, max 20 million pixels, 16 source bands; up to 64 MiB per source file / 96 MiB combined. Hillshade computes one-pixel overlap between blocks. Index bands must have identical CRS, dimensions, extent, resolution, and pixel grid.
+- Persisted outputs use Float32 (one band or RGB three bands), retained native pixel grid/CRS, tracked NoData, Web Mercator XYZ pyramid capped at 192 tiles; zoom beyond the stored pyramid overzooms rather than implying additional data. Supported validated CRS: EPSG:4326, 3857, 32601–32660, 32701–32760.
+- Each project has at most 32 raster layers and 512 MiB combined derived COG+tiles (128 MiB per layer; 64 MiB COG). Original source imagery is not saved by this workflow. Neither mosaicking, automatic resampling nor national-scale raster jobs are implemented here.
+- Project read/edit authorization and database RLS apply to every route. GIS object-scoped accounts are denied until raster-specific access rules exist. Tiles, downloads and responses are not assumed public. Create/delete audited. Visibility and opacity are personal workspace preferences; storage is shared by eligible project members.
+- Worker uses isolated temporary paths, constrained process memory, CPU, timeout and supported driver, no remote input. Atomic database persistence after successful processing; no data changes on worker error.
+- Survey: optional planar Bowditch adjustment uses distance-proportional corrections to a known closing point, shows original/adjusted E,N, corrections and relative closure precision. No datum conversion or survey certification implied.
+
+Evidence: integration test `test_persistent_raster.py` generates a 4000 × 4000 EPSG:32648 input with known NDVI 0.5, verifies stored catalog, file and tile authorization and deletion. Existing preview and professional/editor regression tests remain relevant.
+
+## Advanced raster operations
+- The same multipart POST endpoint now accepts exactly one primary `file` or `source_id` (project raster UUID). Optional second/third input can be file or `second_id` / `third_id`, otherwise the referenced band is read from A. All multi-input grids/CRS must match. Stored sources are read under project scope and rechecked before committing the derived layer. Existing stored RGB outputs retain three bands; legacy single-band outputs remain supported.
+- `calculator` uses `formula` (max 200 characters / 64 AST nodes): A and optional B, finite constants, + - * /, comparisons (0/1), abs, sqrt, natural log, min/max. AST interpreter only; no arbitrary Python, eval, indexing, attribute access or powers. Invalid arithmetic and source NoData propagate.
+- `rgb` selects bands A/B/C (each optionally from its own aligned input). Three Float32 physical-value channels preserved in COG, channel statistics and min–max tile stretch. All three must be valid for an output pixel.
+- `change`: B (later) minus A (earlier), symmetric red/white/green ramp; both must have matching grids and comparable units. This is numerical difference, not automatic scene discovery or cloud masking.
+- `clip`: select one band, supply a WGS84 Polygon/MultiPolygon geometry with at most 5000 vertices, valid topology, no antimeridian crossing. Native CRS crop snaps to original pixel grid; rasterization uses pixel center, holes and off-polygon areas are NoData. Frontend accepts a selected vector polygon, map viewport or pasted GeoJSON.
+- All result layers are separate, audited, and subject to unchanged project quotas. Metadata records method, stored IDs/bands, formula or clip geometry and per-channel stats. RGB output has `output_bands=3`.
+- Frontend aliases `RASTERCALC`, `RGB`, `RASTERCLIP`, `CHANGE` appear in Processing Toolbox, command line, ribbon, and the raster algorithm selector.
+- Verified using `test_raster_advanced.py` known numeric arrays, actual COG checks, polygon/hole rasterization, project-scoped persisted inputs, and expression rejection; professional smoke exercises frontend submissions.

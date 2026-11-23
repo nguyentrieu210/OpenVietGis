@@ -230,6 +230,29 @@ def test_r006_editing_changesets_conflicts_validation_and_revert(migrated_databa
         assert set(by_id.keys()) == {"p1", "p2"}
         assert by_id["p1"]["attributes"]["code"] == "A1"
 
+        # Redo by reverting the just-written undo changeset, preserving the audit log.
+        undo_data = reverted.json()
+        redo_payload = {"operation_id": "cs-redo-1", "summary": "REDO · " + undo_data["id"]}
+        redo = client.post(f"{base}/changesets/{undo_data['id']}/revert", json=redo_payload)
+        assert redo.status_code == 201, redo.text
+        assert redo.json()["reverted_from_changeset_id"] == undo_data["id"]
+        assert redo.json()["summary"] == redo_payload["summary"]
+        replay = client.post(f"{base}/changesets/{undo_data['id']}/revert", json=redo_payload)
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["id"] == redo.json()["id"]
+        journal = client.get(f"{base}/integrations/events", params={"limit": 2})
+        assert journal.status_code == 200, journal.text
+        page = journal.json()
+        assert [e["event_kind"] for e in page["items"]] == ["changeset.committed", "changeset.reverted"]
+        tail = client.get(f"{base}/integrations/events", params={"after": page["next_after_sequence"]})
+        assert tail.status_code == 200, tail.text
+        assert [e["id"] for e in tail.json()["items"]] == [redo.json()["id"]]
+        q_redo = client.post(f"{base}/layers/{imp['target_layer_id']}/query", json={"limit": 50, "offset": 0})
+        assert q_redo.status_code == 200, q_redo.text
+        redo_features = {f["feature_id"]: f for f in q_redo.json()["items"]}
+        assert set(redo_features) == {"p1", "p3"}
+        assert redo_features["p1"]["attributes"]["code"] == "A1-UPDATED"
+
         # 6. Snap helper endpoint
         snap = client.post(
             f"{base}/editing/snap",

@@ -8,6 +8,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
+from sqlalchemy import text
+from openvietgis_api.adapters.persistence.gis_access import scoped
 
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
@@ -144,7 +146,14 @@ def get_map(
 ) -> dict[str, object]:
     response.headers["Cache-Control"] = "no-store"
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
-    return MapService(SqlMapRepository(session)).get_map(context=context).to_wire()
+    wire=MapService(SqlMapRepository(session)).get_map(context=context).to_wire()
+    if scoped(session,context):
+        allowed={str(x) for x in session.execute(text("SELECT id FROM spatial.layers WHERE organization_id=:org AND project_id=:proj"),{"org":organization_id,"proj":project_id}).scalars()}
+        config=wire.get("configuration")
+        if config:
+            config["layers"]=[l for l in config.get("layers",[]) if str(l.get("layer_id")) in allowed]
+            config["default_viewpoint"]=None
+    return wire
 
 
 @router.put(_PATH, operation_id="saveMap")

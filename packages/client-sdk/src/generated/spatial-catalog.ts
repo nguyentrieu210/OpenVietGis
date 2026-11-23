@@ -293,7 +293,7 @@ export interface components {
             project_id: string;
             name: string;
             /** @enum {string} */
-            kind: "reference_fixture" | "imported_file" | "derived_processing";
+            kind: "reference_fixture" | "imported_file" | "derived_processing" | "manual";
             provenance: components["schemas"]["Provenance"];
             /** @enum {string} */
             lifecycle: "active" | "retired";
@@ -509,7 +509,7 @@ export interface components {
             actor_id: string;
             actor_display_snapshot: string;
             /** @enum {string} */
-            operation: "register_source" | "import_source" | "update_source" | "correct_source_crs" | "retire_source" | "create_layer" | "rename_layer" | "retire_layer" | "refresh_reference_fixture";
+            operation: "register_source" | "import_source" | "update_source" | "update_schema" | "correct_source_crs" | "retire_source" | "create_layer" | "rename_layer" | "retire_layer" | "refresh_reference_fixture";
             /** Format: date-time */
             created_at: string;
             /** Format: uuid */

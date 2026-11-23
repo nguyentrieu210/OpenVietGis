@@ -1,0 +1,14 @@
+import React from "react";
+import {createRoot} from "react-dom/client";
+import * as maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+import "./style.css";
+import {LiveApp} from "./LiveApp";
+import {AuthComplete} from "./Landing";
+import {MarketplacePage} from "./MarketplacePage";
+import {PublisherPortal} from "./PublisherPortal";
+maplibregl.setWorkerUrl(workerUrl+"?mime=2");
+maplibregl.setWorkerCount(1);
+const params=new URLSearchParams(location.search);
+createRoot(document.getElementById("root")!).render(params.get("auth_complete")==="1"?<AuthComplete/>:params.get("marketplace")==="1"?<MarketplacePage/>:params.get("developer")==="1"?<PublisherPortal/>:<LiveApp/>);

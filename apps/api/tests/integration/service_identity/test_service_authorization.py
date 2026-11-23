@@ -112,6 +112,20 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
         )
         assert issued.status_code == 201, issued.text
         credential_id = issued.json()["id"]
+        metadata_url = f"{root_a}/service-principals/{principal_id}/credentials"
+        metadata = owner.get(metadata_url)
+        assert metadata.status_code == 200, metadata.text
+        assert metadata.headers["cache-control"] == "no-store"
+        assert metadata.json()[0]["id"] == credential_id
+        assert metadata.json()[0]["permission_ceiling"] == ["project.read"]
+        assert "secret" not in metadata.json()[0]
+        assert "secret_hash" not in metadata.text
+        with _client_for_user(a.member_user_id) as member:
+            assert member.get(metadata_url).status_code == 403
+        with _client_for_user(b.owner_user_id) as other:
+            assert other.get(
+                f"{root_b}/service-principals/{principal_id}/credentials"
+            ).status_code == 404
         secret = issued.json()["secret"]
         assert secret.startswith("ovgsvc")
         assert "secret_hash" not in issued.text
@@ -131,6 +145,17 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
             allowed = service.get(f"{root_a}/projects/{a.project_id}")
             assert allowed.status_code == 200, allowed.text
             assert allowed.json()["id"] == str(a.project_id)
+            activity = service.get(f"{root_a}/projects/{a.project_id}/collaboration/activities")
+            assert activity.status_code == 200, activity.text
+            assert isinstance(activity.json()["items"], list)
+            journal = service.get(f"{root_a}/projects/{a.project_id}/integrations/events")
+            assert journal.status_code == 200, journal.text
+            denied_journal = service.get(f"{root_a}/projects/{unscoped_project_id}/integrations/events")
+            assert denied_journal.status_code == 403, denied_journal.text
+            denied_activity = service.get(
+                f"{root_a}/projects/{unscoped_project_id}/collaboration/activities"
+            )
+            assert denied_activity.status_code == 403, denied_activity.text
 
             denied_edit = service.patch(
                 f"{root_a}/projects/{a.project_id}",
@@ -157,6 +182,7 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
             f"{credential_id}/revoke"
         )
         assert revoked.status_code == 204
+        assert owner.get(metadata_url).json()[0]["revoked_at"] is not None
 
         with _service_client(secret) as service:
             after_revoke = service.get(f"{root_a}/projects/{a.project_id}")

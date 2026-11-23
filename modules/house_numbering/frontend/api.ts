@@ -34,6 +34,7 @@ export type HouseNumberingRoute = {
   status: "draft" | "confirmed";
   revision: number;
   building_count?: number;
+  segments?: { source_id: string; feature_id: string; code?: string }[];
 };
 
 export type HouseNumberingBuilding = {
@@ -305,6 +306,7 @@ export function createHouseNumberingRoute(
     feature_id: string;
     direction_state: "forward" | "reverse";
     source_label: string;
+    segments?: { source_id: string; feature_id: string; code?: string }[];
     status: "draft" | "confirmed";
   }
 ) {
@@ -351,6 +353,11 @@ export function listHouseNumberingBuildings(
   return client.request<{ items: HouseNumberingBuilding[] }>(
     `${base(orgId, projectId)}/buildings${qs}`
   );
+}
+export type NumberingTarget = Pick<HouseNumberingBuilding, "id" | "route_id" | "parcel_ref" | "eligibility">;
+export function listNumberingTargets(client: ApiClient, orgId: string, projectId: string, routeId: string, descendants: boolean) {
+  const qs = new URLSearchParams({route_id: routeId, include_descendants: String(descendants)});
+  return client.request<{items: NumberingTarget[]; total: number; truncated: boolean}>(`${base(orgId, projectId)}/numbering-targets?${qs}`);
 }
 export function createHouseNumberingBuilding(
   client: ApiClient,

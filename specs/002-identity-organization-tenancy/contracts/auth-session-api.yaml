@@ -34,6 +34,10 @@ paths:
           name: return_to
           required: false
           schema: { type: string }
+        - in: query
+          name: prompt
+          required: false
+          schema: { type: string, enum: [login] }
       responses:
         "302": { description: Redirect to configured OIDC provider }
         "400": { description: Unknown provider or invalid return target }

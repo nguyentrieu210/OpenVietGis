@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import {traverse,inverse,polygonMetrics,bowditch} from "./src/SurveyMath.ts";
+const start=[500000,1200000],legs=traverse(start,[{distance:100,azimuth:90},{distance:50,azimuth:0},{distance:100,azimuth:270},{distance:50,azimuth:180}]);
+assert.equal(legs.at(-1).total,300);assert.ok(inverse(start,legs.at(-1).point).distance<1e-7);
+assert.equal(inverse(start,[500100,1200000]).azimuth,90);
+assert.equal(inverse(start,start).azimuth,null);
+assert.deepEqual(polygonMetrics([[500000,1200000],[500100,1200000],[500100,1200050],[500000,1200050]]),{area:5000,perimeter:300});
+assert.throws(()=>polygonMetrics([[0,0],[10,10],[10,0],[0,10]]),/tự giao/);
+assert.throws(()=>traverse(start,[{distance:-1,azimuth:10}]));
+const adjusted=bowditch([0,0],[{distance:100,azimuth:90},{distance:100,azimuth:0}],[99,99]);assert.ok(adjusted.residual<1e-8);assert.ok(Math.abs(adjusted.adjusted[0].cE+.5)<1e-8);assert.ok(Math.abs(adjusted.adjusted[0].cN+.5)<1e-8);assert.ok(adjusted.relativePrecision>141&&adjusted.relativePrecision<142);
+console.log("Survey calculations: traverse, closure, azimuth, area, self-intersection passed");

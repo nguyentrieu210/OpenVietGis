@@ -14,6 +14,14 @@ export function createInvitation(client: ApiClient, organizationId: string, inpu
   });
 }
 
+export type EmailInvitationCreate = operations["emailInvitation"]["requestBody"]["content"]["application/json"];
+export type EmailInvitationIssued = operations["emailInvitation"]["responses"][201]["content"]["application/json"];
+export function emailInvitation(client: ApiClient, organizationId: string, input: EmailInvitationCreate): Promise<EmailInvitationIssued> {
+  return client.request<EmailInvitationIssued>("/organizations/" + encodeURIComponent(organizationId) + "/invitations/email", {
+    method: "POST", body: JSON.stringify(input)
+  });
+}
+
 export function revokeInvitation(client: ApiClient, organizationId: string, invitationId: string): Promise<void> {
   return client.requestWithoutBody("/organizations/" + encodeURIComponent(organizationId) + "/invitations/" + encodeURIComponent(invitationId) + "/revoke", {
     method: "POST"
