@@ -45,6 +45,7 @@ from openvietgis_api.adapters.http import (
     terrain,
     tilesets,
     transfers,
+    v8i_bridge,
     workspaces,
 )
 from openvietgis_api.adapters.http.errors import install_error_handlers
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(collaboration.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad_documents.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(v8i_bridge.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(model_vault.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(saved_scenes.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(terrain.router, dependencies=[Depends(project_access_guard)])
