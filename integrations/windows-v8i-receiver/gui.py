@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -13,6 +14,7 @@ from receiver import Connection, ReceiverError, default_inbox, receive_layer
 from outbound import CadSyncError, bind_selected, draft_outbound, receipt
 from sync_transport import preview_cloud, commit_approved
 from v8i_probe import ProbeError, probe
+from diagnostics import DiagnosticError, inspect_v8i
 
 
 class App:
@@ -61,6 +63,7 @@ class App:
         self.connect_button.pack(side="left", padx=(0, 8))
         self.receive_button = ttk.Button(actions, text="Nhận dữ liệu từ OpenVietGIS", command=self.receive)
         self.receive_button.pack(side="left", padx=(0, 8))
+        ttk.Button(actions, text="Chẩn đoán COM", command=self.diagnose_v8i).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text="Mở thư mục", command=self.open_inbox).pack(side="left")
         extra = ttk.Frame(frame)
         extra.grid(row=9, column=0, columnspan=3, sticky="w", pady=(5, 12))
@@ -221,6 +224,15 @@ class App:
                 self.events.put(("error", str(exc)))
         threading.Thread(target=job, daemon=True).start()
 
+    def diagnose_v8i(self) -> None:
+        try:
+            report = inspect_v8i()
+            self.write(f"COM: {report['scanned']} đối tượng; {report['candidate_simple_entities']} đơn giản; "
+                       f"{report['unsupported_or_unhandled']} chưa hỗ trợ. Loại: {report['entity_type_counts']}")
+            self.write("Kiểm tra này chỉ đọc, CHƯA xác minh CRS/đơn vị hoặc tính đúng hình học trên V8i.")
+        except DiagnosticError as exc:
+            self.write("Chẩn đoán không đạt: " + str(exc))
+
     def receive(self) -> None:
         if self.busy:
             return
@@ -308,5 +320,12 @@ def main() -> None:
     root.mainloop()
 
 
+def self_test() -> int:
+    from selftest import run
+    return run()
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        raise SystemExit(self_test())
     main()
