@@ -325,8 +325,8 @@ components:
         direction: {type: string, enum: [pull_only, push_only, bidirectional_manual, bidirectional_auto]}
         state: {type: string, enum: [draft, disabled, active, paused, revoked, error]}
         revision: {type: integer, minimum: 0}
-        writes_allowed: {type: boolean, const: false, description: 'Draft defaults only; active may report true after independent permission gate.'}
-        deletes_allowed: {type: boolean, const: false, description: 'Default policy. Separate approved contract revision needed to enable.'}
+        writes_allowed: {type: boolean, description: 'False by default; true only if an independently authorized active binding grants current writes.'}
+        deletes_allowed: {type: boolean, description: 'False by default; enabling requires a separate approved policy with per-run delete review.'}
         last_sync_at: {type: [string, 'null'], format: date-time}
         capability_status: {type: string, enum: [verified, read_only, candidate, offline]}
     SyncPreview:
