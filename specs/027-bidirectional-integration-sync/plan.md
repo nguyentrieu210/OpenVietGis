@@ -65,8 +65,9 @@ specs/027-bidirectional-integration-sync/
   tasks.md
   quickstart.md
 apps/api/
-  src/             # extend existing domains/routes after verifying actual boundaries
-  tests/           # real PostGIS/RLS and fault injection
+  openvietgis_api/  # extend existing domains/routes after verifying actual boundaries
+  migrations/       # reviewed schema migrations and tenant RLS
+  tests/            # real PostGIS/RLS and fault injection
 apps/web-next/src/ # extend existing Integration Hub
 packages/client-sdk/src/ # typed binding/preview/run client
 integrations/qgis_plugin/ # extend verified QGIS agent only
