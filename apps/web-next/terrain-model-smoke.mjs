@@ -1,0 +1,50 @@
+import {chromium} from "@playwright/test";
+import assert from "node:assert/strict";
+import {glbFixture,terrainFixture} from "../../packages/spatial-workspace/tests/terrain-model-fixture.mjs";
+const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+try{
+ const page=await browser.newPage({viewport:{width:1380,height:900}}),errors=[],grid=terrainFixture();let restricted=false,requested=0;
+ page.on("pageerror",e=>{errors.push(e.message);console.error(e.message)});
+ const org="fixture-org",pid="fixture-project",id="source1",dem=grid.source_id,[l,b,r,t]=grid.extent;
+ const ll=(x,y)=>[x*180/20037508.342789244,Math.atan(Math.sinh(y*Math.PI/20037508.342789244))*180/Math.PI];
+ const feature={feature_id:"building",geometry_state:"present",attributes:{height_m:12},geometry:{type:"Polygon",coordinates:[[ll(l+20,t-20),ll(l+40,t-20),ll(l+40,t-40),ll(l+20,t-40),ll(l+20,t-20)]],coordinate_reference:{code:4326}}};
+ const layer={id:"layer1",source_id:id,name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
+ const raster={id:dem,name:grid.name,method:"band",width:3,height:3,epsg:3857,bands:1,output_bands:1,bounds:[...ll(l,b),...ll(r,t)],legend:[-5,15],maxzoom:18,tile_count:1,byte_size:50,created_at:"2026-01-01",stats:{valid:8,nodata:1,min:-5,max:15,mean:5,std:5}};
+ await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
+ await page.route("**/api/v1/**",async route=>{
+  const p=new URL(route.request().url()).pathname;let body;
+  if(p.endsWith("/me"))body={id:"fixture",display_name:"Terrain Test",status:"active"};
+  else if(p.endsWith("/auth/providers"))body=[];
+  else if(p.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
+  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
+  else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Terrain project",status:"active"}];
+  else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
+  else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
+  else if(p.endsWith("/raster/layers"))body={items:[raster]};
+  else if(p.endsWith("/terrain-preview")){const o=route.request().postDataJSON();assert.deepEqual(o,{elevation_unit:"metre",vertical_reference:"local",reference_label:"Synthetic",acknowledge_dem:true});requested++;body=grid}
+  else if(p.includes("/raster/layers/")&&p.includes("/tiles/"))return route.fulfill({status:404,body:""});
+  else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
+  else if(p.endsWith("/features"))body={context:{source_id:id,project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
+  else body={items:[],next_after_id:null};
+  return route.fulfill({json:body});
+ });
+ await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ const modes=page.getByRole("group",{name:"Chế độ không gian"});await modes.waitFor({timeout:30000});
+ await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});await page.locator(".live-table-row").first().click({noWaitAfter:true});
+ await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
+ await page.getByLabel("Raster địa hình").selectOption(dem);
+ await page.getByLabel("Tên mốc/hệ cao độ").fill("Synthetic");
+ await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
+ await page.getByLabel("Gắn mô hình vào đối tượng GIS đang chọn").setInputFiles({name:"fixture.glb",mimeType:"model/gltf-binary",buffer:Buffer.from(glbFixture())});
+ await page.getByText(/fixture.glb · 12 tam giác/).waitFor();
+ await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
+ await page.getByText(/fixture.glb · mô hình phiên/).waitFor();
+ assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
+ assert.equal(errors.length,0,errors.join("\n"));console.log("PASS project UI terrain profile, local GLB upload, polygon elevation, WebGL and revocation");
+}finally{await browser.close()}

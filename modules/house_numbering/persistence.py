@@ -26,6 +26,7 @@ from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.numbering_audit import find_tree_collisions
 
 
+
 class HouseNumberingRepository:
     def __init__(self, session: Session, context: AuthorizationContext) -> None:
         self.session = session

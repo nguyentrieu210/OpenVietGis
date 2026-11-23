@@ -254,7 +254,9 @@ def test_native_correction_verifies_existing_manifest_and_leaves_rows_unchanged(
         session.rollback()
 
 
-@pytest.mark.parametrize("tamper", ["attributes", "geometry", "schema", "missing", "pins"])
+@pytest.mark.parametrize(
+    "tamper", ["attributes", "geometry", "schema", "missing", "pins", "feature_id", "extra"]
+)
 def test_persisted_integrity_mismatch_fails_closed(migrated_database: None, tamper: str) -> None:
     world = seed_access_world()
     with get_session_factory()() as session:
@@ -262,7 +264,17 @@ def test_persisted_integrity_mismatch_fails_closed(migrated_database: None, tamp
         key = "reference_correctable_crs"
         fixture = REFERENCE_FIXTURES[key]
         original = validate_reference_candidate(session, fixture, _candidate(world, key))
-        if tamper != "missing":
+        if tamper == "feature_id":
+            # The runtime role cannot rename an existing primary key. Seed an
+            # independently constructed wrong row instead (same count and EWKB).
+            _insert(
+                session,
+                replace(
+                    original,
+                    features=(replace(original.features[0], feature_id="unexpected-id"),),
+                ),
+            )
+        elif tamper != "missing":
             _insert(session, original)
         statements = {
             "attributes": """
@@ -282,6 +294,15 @@ def test_persisted_integrity_mismatch_fails_closed(migrated_database: None, tamp
             "pins": """
                 UPDATE spatial.reference_features SET content_revision=repeat('a',64)
                 WHERE source_id=:source
+            """,
+            "extra": """
+                INSERT INTO spatial.reference_features (
+                    organization_id, project_id, source_id, feature_id, attributes,
+                    geometry, geometry_state, content_revision, schema_revision
+                )
+                SELECT organization_id, project_id, source_id, 'unexpected-id', attributes,
+                    geometry, geometry_state, content_revision, schema_revision
+                FROM spatial.reference_features WHERE source_id=:source
             """,
         }
         if tamper in statements:

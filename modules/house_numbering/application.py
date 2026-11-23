@@ -16,6 +16,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from modules.house_numbering.batch_numbering import build_route_plan
 from modules.house_numbering.domain import (
     Address,
     DomainError,
@@ -24,7 +25,6 @@ from modules.house_numbering.domain import (
     suggest_number,
 )
 from modules.house_numbering.persistence import HouseNumberingRepository
-from modules.house_numbering.batch_numbering import build_route_plan
 from modules.house_numbering.numbering_audit import audit_route_numbering, summarize_audit, find_tree_collisions
 
 

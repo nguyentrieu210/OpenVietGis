@@ -60,6 +60,22 @@ SELECT json_build_object(
 """
 
 
+# Hash the complete policy envelope, not just organization-level grants.
+# A changed fine-grained rule, group or scoped membership must never be
+# restored as historical authority. Scope values remain inside PostgreSQL.
+GIS_AUTHORITY_QUERY = """
+SELECT encode(sha256(convert_to(COALESCE(string_agg(
+  encode(sha256(convert_to(jsonb_build_array(kind, row_data)::text, 'UTF8')), 'hex'),
+  '' ORDER BY kind, row_data::text), ''), 'UTF8')), 'hex')
+FROM (
+  SELECT 'scoped' AS kind, to_jsonb(s) AS row_data FROM gis_access.scoped_members s
+  UNION ALL SELECT 'group', to_jsonb(g) FROM gis_access.groups g
+  UNION ALL SELECT 'group_member', to_jsonb(m) FROM gis_access.group_members m
+  UNION ALL SELECT 'rule', to_jsonb(r) FROM gis_access.rules r
+) policy;
+"""
+
+
 def _indexed(snapshot: dict[str, Any], kind: str) -> dict[str, Any]:
     rows = snapshot[kind]
     result = {}
@@ -82,6 +98,11 @@ def safe_human_authority(
     by the operator, never inferred from the historical dump.
     """
     if current is None:
+        return [], []
+    # A differing or missing fine-grained policy fingerprint means the
+    # historical permission graph cannot be proven safe. Quarantine all
+    # human authority until it has been independently re-established.
+    if restored.get("gis_access") != current.get("gis_access"):
         return [], []
     old_users, new_users = (_indexed(x, "users") for x in (restored, current))
     old_orgs, new_orgs = (_indexed(x, "organizations") for x in (restored, current))

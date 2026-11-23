@@ -1,0 +1,2 @@
+# Plan
+Use modular monolith / existing collaboration schema, project scope guard, session+CSRF, audit and RLS. Add two tables and project-facing API. Implement a dock in web-next, using existing SDK client and MapLibre navigation. No external messaging service. Use optimistic revision for updates, bounded queries. Integration candidate is preflight c4337e2 (descendant of main). Migration branches must converge with independently developed CAD migration before deployment. Rollback only after backup; downgrade removes new tables, never touch existing collaboration records.

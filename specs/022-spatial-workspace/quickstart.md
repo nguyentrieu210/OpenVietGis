@@ -1,0 +1,3 @@
+# Validation
+Run Node 26: `node --test packages/spatial-workspace/tests/session.test.mjs`.
+After reviewed 020 baseline is available, wire host and run frontend typecheck/build and existing browser regression suite. On an authorized fixture: open project -> select layer/feature -> switch allowed mode -> return GIS, assert unchanged camera and selection. Verify unavailable modes explain why, dirty or save-pending blocks switching, loading failure retains GIS, and tenant change revokes pending requests. Test in real browser plus denied API calls. Do not declare complete until browser and cross-mode fixture evidence exist.

@@ -64,6 +64,65 @@ def test_reject_symlink_and_traversal(tmp_path: Path) -> None:
             _verify_references([{"storage_key": key, "required": False}], {})
 
 
+@pytest.mark.parametrize(
+    ("revision", "has_documents"),
+    [
+        ("0019_extension_history", False),
+        ("0029_cad_documents", True),
+        ("0032_unified_collaboration", True),
+        ("0032_unified_collaboration", False),
+    ],
+)
+def test_inventory_includes_immutable_cad_versions(
+    monkeypatch, revision: str, has_documents: bool
+) -> None:
+    from tools import backup_restore as recovery
+
+    legacy = {
+        "storage_key": "z/old",
+        "kind": "cad",
+        "required": True,
+        "sha256": "a" * 64,
+        "byte_size": 10,
+    }
+    version = {
+        "storage_key": "a/version",
+        "kind": "cad_document",
+        "required": True,
+        "sha256": "b" * 64,
+        "byte_size": 20,
+    }
+    checks = {
+        "revision": revision,
+        "inconsistent_publications": 0,
+    }
+
+    def sql(container, user, database, query):
+        if recovery._ARTIFACT_QUERY in query:
+            return json.dumps([legacy])
+        if recovery._DB_CHECK in query:
+            return json.dumps(checks)
+        if "to_regclass('cad.document_versions')" in query:
+            return "t" if has_documents else "f"
+        if recovery._CAD_DOCUMENT_ARTIFACT_QUERY in query:
+            if not has_documents:
+                raise RuntimeError("Missing CAD document table")
+            return json.dumps([version])
+        pytest.fail(f"Unexpected inventory query: {query}")
+
+    monkeypatch.setattr(recovery, "_sql", sql)
+    if revision == "0032_unified_collaboration" and not has_documents:
+        with pytest.raises(RuntimeError, match="Missing CAD document table"):
+            recovery._inventory("fixture", "fixture", "fixture")
+        return
+    refs, actual_checks = recovery._inventory("fixture", "fixture", "fixture")
+    assert actual_checks == checks
+    assert refs == ([version, legacy] if has_documents else [legacy])
+    if has_documents:
+        with pytest.raises(RuntimeError, match="missing or corrupt"):
+            _verify_references(refs, {"z/old": {"sha256": "a" * 64, "byte_size": 10}})
+
+
 def test_required_database_reference_cannot_be_missing() -> None:
     reference = {
         "storage_key": "assets/sample.bin",

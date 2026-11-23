@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import chain
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import text

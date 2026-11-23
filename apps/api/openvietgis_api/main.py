@@ -8,33 +8,42 @@ from openvietgis_api.adapters.http import (
     auth,
     bootstrap,
     cad,
+    cad_documents,
     cartography,
-    layout_designer,
     collaboration,
     editing,
     extensions,
-    marketplace,
-    marketplace_developers,
-    partner_platform,
     external_sources,
     field,
     grants,
     gis_access,
     health,
     invitations,
+    layout_designer,
     map_viewport,
     maps,
+    marketplace,
+    marketplace_developers,
     me,
+    model_vault,
     ops,
     organizations,
+    partner_platform,
     processing,
     processing_models,
     professional,
-    raster,
     projects,
     queries,
+    raster,
+    saved_scenes,
     service_principals,
     spatial,
+    team_chat,
+    team_locks,
+    team_presence,
+    team_realtime,
+    terrain,
+    tilesets,
     transfers,
     workspaces,
 )
@@ -103,6 +112,15 @@ def create_app() -> FastAPI:
     api_v1.include_router(external_sources.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(collaboration.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(cad_documents.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(model_vault.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(saved_scenes.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(terrain.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(tilesets.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(team_chat.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(team_locks.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(team_presence.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(team_realtime.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(field.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(extensions.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(partner_platform.router,dependencies=[Depends(project_access_guard)])
