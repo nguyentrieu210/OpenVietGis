@@ -1,10 +1,10 @@
-"""Bounded 2D control-point similarity placement (grid metres, EPSG:3857 only)."""
+"""Bounded local 2D control placement; no inferred datum transformation."""
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, NoReturn
 from uuid import UUID
 
 from openvietgis_api.domains.cad.domain import UNIT_TO_METERS, CadUnit
@@ -13,9 +13,11 @@ from openvietgis_api.domains.platform_errors import PlatformValidationError
 Point = tuple[float, float]
 Control = tuple[Point, Point]
 GRID_LIMIT = 20037508.342789244
+LOCAL_RADIUS_M = 10000.0
+EARTH_RADIUS_M = 6378137.0
 
 
-def _fail(reason: str) -> None:
+def _fail(reason: str) -> NoReturn:
     raise PlatformValidationError(reason, code="CAD_GEOREFERENCE_INVALID")
 
 
@@ -36,6 +38,9 @@ class CadPlacement:
     tolerance_m: float
     max_scale_deviation: float
     residuals: tuple[float, ...]
+    crs_code: int = 3857
+    native_reference: CadPlacement | None = None
+    local_radius_m: float | None = None
 
     def transform_m(self, p: Point) -> Point:
         if not _valid(p):
@@ -44,16 +49,21 @@ class CadPlacement:
         y = (p[1] - self.origin_m[1]) * self.scale
         c, s = math.cos(self.rotation), math.sin(self.rotation)
         result = (self.translation[0] + c * x - s * y, self.translation[1] + s * x + c * y)
-        if not _valid(result, GRID_LIMIT):
-            _fail("Placed geometry outside EPSG:3857 grid")
+        if not _grid_valid(result, self.crs_code):
+            _fail("Placed geometry outside declared grid bounds")
+        if (
+            self.local_radius_m is not None
+            and math.dist(result, self.translation) > self.local_radius_m
+        ):
+            _fail("Local VN-2000 placement exceeds supported control-centre radius")
         return result
 
     def metadata(self) -> dict[str, Any]:
-        return {
+        result = {
             "algorithm": "similarity-grid-2d-v1",
             "cad_document_id": str(self.document_id),
             "cad_document_version": self.version,
-            "crs_code": 3857,
+            "crs_code": self.crs_code,
             "units": self.units.value,
             "controls": self.controls,
             "origin_m": self.origin_m,
@@ -67,6 +77,19 @@ class CadPlacement:
             "residuals_grid_m": self.residuals,
             "survey_grade": False,
         }
+        if self.local_radius_m is not None:
+            result["local_radius_grid_m"] = self.local_radius_m
+        if self.native_reference is not None:
+            result["native_reference"] = self.native_reference.metadata()
+            result["reference_method"] = "independent-paired-control-fits"
+        return result
+
+
+def _grid_valid(p: Point, crs_code: int) -> bool:
+    if crs_code == 3857:
+        return _valid(p, GRID_LIMIT)
+    # A broad numeric sanity envelope, not proof of EPSG area or datum accuracy.
+    return crs_code == 5899 and _valid(p) and 100000 <= p[0] <= 900000 and 0 <= p[1] <= 3000000
 
 
 def fit_placement(
@@ -79,10 +102,10 @@ def fit_placement(
     tolerance_m: float,
     max_scale_deviation: float,
 ) -> CadPlacement:
-    if crs_code != 3857 or not 1 <= version <= 20:
-        _fail("Initial placement supports explicit EPSG:3857 grid metres only")
+    if crs_code not in (3857, 5899) or not 1 <= version <= 20:
+        _fail("Unsupported explicit grid profile")
     if not 3 <= len(controls) <= 100 or any(
-        not _valid(d) or not _valid(p, GRID_LIMIT) for d, p in controls
+        not _valid(d) or not _grid_valid(p, crs_code) for d, p in controls
     ):
         _fail("3–100 finite control point pairs required")
     if not math.isfinite(tolerance_m) or not 1e-6 <= tolerance_m <= 1000:
@@ -123,6 +146,7 @@ def fit_placement(
         tolerance_m,
         max_scale_deviation,
         (0.0,),
+        crs_code=crs_code,
     )
     residuals = tuple(
         math.dist(provisional.transform_m((d[0] * u, d[1] * u)), p) for d, p in controls
@@ -141,6 +165,62 @@ def fit_placement(
         tolerance_m,
         max_scale_deviation,
         residuals,
+        crs_code=crs_code,
+    )
+
+
+def fit_web_placement(
+    *,
+    document_id: UUID,
+    version: int,
+    crs_code: int,
+    units: CadUnit,
+    controls: tuple[Control, ...],
+    web_controls: tuple[Control, ...] | None,
+    tolerance_m: float,
+    max_scale_deviation: float,
+) -> CadPlacement:
+    base = fit_placement(
+        document_id=document_id,
+        version=version,
+        crs_code=crs_code,
+        units=units,
+        controls=controls,
+        tolerance_m=tolerance_m,
+        max_scale_deviation=max_scale_deviation,
+    )
+    if crs_code == 3857:
+        if web_controls is not None:
+            _fail("Redundant web controls for EPSG:3857")
+        return base
+    if web_controls is None or tuple(d for d, _ in controls) != tuple(d for d, _ in web_controls):
+        _fail("VN-2000 requires matching surveyed/reference web control pairs")
+    web = fit_placement(
+        document_id=document_id,
+        version=version,
+        crs_code=3857,
+        units=units,
+        controls=web_controls,
+        tolerance_m=tolerance_m,
+        max_scale_deviation=max_scale_deviation,
+    )
+    # Coarse location sanity check only. It rejects grossly unrelated control grids,
+    # never derives a datum transform or validates survey-grade accuracy.
+    for (_, (e, n)), (_, (web_e, web_n)) in zip(controls, web_controls, strict=True):
+        lat = math.atan(math.sinh(web_n / EARTH_RADIUS_M))
+        lon = web_e / EARTH_RADIUS_M
+        approximate_e = 500000 + EARTH_RADIUS_M * (lon - math.radians(107.75)) * math.cos(lat)
+        approximate_n = EARTH_RADIUS_M * lat
+        if abs(approximate_e - e) > 150000 or abs(approximate_n - n) > 150000:
+            _fail("VN-2000 and web control positions are grossly inconsistent")
+    # Independent local placements only; bound every placed vertex and control.
+    for fitted in (base, web):
+        if any(math.dist(p, fitted.translation) > LOCAL_RADIUS_M for _, p in fitted.controls):
+            _fail("Local VN-2000 control span exceeds the 10 km radius")
+    return replace(
+        web,
+        native_reference=replace(base, local_radius_m=LOCAL_RADIUS_M),
+        local_radius_m=LOCAL_RADIUS_M,
     )
 
 

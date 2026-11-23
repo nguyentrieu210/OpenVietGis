@@ -1,5 +1,7 @@
 # Dedicated-origin OpenCAD bridge and version-pinned georeference (candidate)
 
+025 extension: see [spatial-linkage.md](spatial-linkage.md) for paired native/web controls and object linkage; the original 3857-only contract below describes the prior checkpoint.
+
 ## Safety boundary
 - Editor is disabled when VITE_OVG_CAD_RELAY_ORIGIN is absent or not an exact HTTPS origin (loopback HTTP is accepted for synthetic testing). It must differ from the GIS origin. Never embed the CAD release in the authenticated GIS origin.
 - GIS fetches and hashes the version before handing the bytes to a sandboxed cross-origin relay. No access token, CSRF token, project identifier or API path is sent to the relay. The relay and engine accept only the pinned source window/origin, a fresh channel identifier, protocol/version/capabilities, bounded bytes and permitted messages. The untrusted editor cannot itself authorize writes.

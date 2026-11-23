@@ -94,6 +94,13 @@ def _apply_placement(
     summary["cad_document_id"] = str(placement.document_id)
     summary["cad_document_version"] = placement.version
     summary["placement"] = placement.metadata()
+    if placement.native_reference is not None:
+        # Verify native bounds for every vertex before publishing the independently fitted web view.
+        from copy import deepcopy
+
+        summary["native_placed_extent"] = place_features(
+            deepcopy(features), placement.native_reference
+        )
     summary["placed_extent"] = place_features(features, placement)
 
 
