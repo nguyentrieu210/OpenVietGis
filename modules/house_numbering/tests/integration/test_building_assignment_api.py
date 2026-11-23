@@ -60,3 +60,29 @@ def test_assignment_prefers_address_over_nearest_and_never_overwrites(migrated_d
         assert after[buildings["b2"]]["route_id"]==main["id"]
         assert after[buildings["b3"]]["route_id"] is None
         assert after[buildings["b4"]]["route_id"]==main["id"]
+        pending=seed("pending","LINESTRING(0 50,100 50)","LineString",{"route_code":"legacy","review_reason":"parent_required;invalid_prefix","parent_code":"missing","ten":"Hẻm 77"})
+        s=seed("b5","POINT(50 52)","Point",{"ten_duong":"Nguyễn Văn Linh","hem":"77","tuyen_id":"legacy"})
+        b5=client.post(module+"/buildings",json={"source_id":str(s),"feature_id":"b5"}).json()["id"]
+        s2=seed("b6","POINT(30 5)","Point",{"ten_duong":"Nguyễn Văn Linh","hem":""})
+        b6=client.post(module+"/buildings",json={"source_id":str(s2),"feature_id":"b6"}).json()["id"]
+        audit=client.post(module+"/building-assignment/audit",json={"group":"parent_missing","limit":100})
+        assert audit.status_code==200,audit.text
+        report=audit.json()
+        assert report["total"]==3
+        assert sum(g["count"] for g in report["groups"])==3
+        assert report["items"][0]["building_id"]==b5
+        assert report["items"][0]["pending"][0]["source_id"]==str(pending)
+        cluster=report["clusters"][0]["key"]
+        clustered=client.post(module+"/building-assignment/audit",json={"group":"parent_missing","cluster":cluster}).json()
+        assert [x["building_id"] for x in clustered["items"]]==[b5]
+        ready=client.post(module+"/building-assignment/audit",json={"group":"ready"}).json()
+        assert [x["building_id"] for x in ready["items"]]==[b6]
+        scoped=client.post(module+"/building-assignment/preview",json={"building_ids":[b6],"strict":True,"limit":100})
+        assert scoped.status_code==200,scoped.text
+        assert scoped.json()["counts"]["high"]==1
+        assert scoped.json()["items"][0]["building_id"]==b6
+        assert client.post(module+"/building-assignment/preview",json={"building_ids":[b5,b5],"limit":100}).status_code==422
+        assert client.post(module+"/building-assignment/preview",json={"building_ids":[buildings["b1"]],"limit":100}).status_code==409
+        apply=client.post(module+"/building-assignment/apply",json={"building_ids":[b6],"limit":100,"strict":True,"preview_token":scoped.json()["preview_token"],"assignments":{b6:main["id"]}})
+        assert apply.status_code==200,apply.text
+        assert client.post(module+"/building-assignment/audit",json={}).json()["total"]==2

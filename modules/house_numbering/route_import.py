@@ -10,6 +10,8 @@ from uuid import UUID
 from sqlalchemy import text
 from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 from modules.house_numbering.address_prefix import canonical_prefix
+from modules.house_numbering.route_recovery import address_label, recover_parent_evidence, selection_rows, survey_evidence
+from modules.house_numbering.route_topology import merge_options, apply_merges, parent_tasks, append_parent_features
 _LIMIT = 5000
 
 
@@ -44,8 +46,11 @@ def group_routes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         groups.setdefault(("group",logical_id) if logical else ("single",row["key"]), []).append(row)
     result = []
     for members in groups.values():
+        if members[0].get("recovery_group"):
+            members = sorted(members,key=lambda r:r["key"])
         first = dict(members[0])
         first["errors"] = sorted(set(e for row in members for e in row["errors"]))
+        first["review_reason"] = "; ".join(sorted({r["review_reason"] for r in members if r.get("review_reason")}))
         group = first.get("logical_code")
         if group:
             first["code"] = group
@@ -135,6 +140,7 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
                 parent_prefix = p["prefix"] or ""
                 parent_type = p["route_type"]
                 r["parent_key"] = None
+                r["parent_revision"] = p["revision"]
             else:
                 errors.append("parent_not_found")
         if r["route_type"] == "street":
@@ -173,6 +179,7 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
             raise PlatformValidationError("Cây tuyến quá sâu", code="ROUTE_DEPTH_LIMIT") from exc
 
     occupied: dict[tuple[str, str], str] = {}
+    new_occupied: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for old in existing:
         if old["prefix"] and old["parent_route_id"]:
             occupied[(str(old["parent_route_id"]), old["prefix"])] = str(old["id"])
@@ -184,7 +191,11 @@ def plan_routes(rows: list[dict[str, Any]], existing: list[dict[str, Any]]) -> l
         if key in occupied:
             r["errors"].append("duplicate_sibling_prefix")
         else:
-            occupied[key] = r["key"]
+            new_occupied.setdefault(key, []).append(r)
+    for duplicates in new_occupied.values():
+        if len(duplicates) > 1:
+            for duplicate in duplicates:
+                duplicate["errors"].append("duplicate_sibling_prefix")
     by_key = {r["key"]: r for r in result}
     for r in result:
         parent_key = r.get("parent_key")
@@ -201,7 +212,7 @@ class RouteTreeImporter:
         self.repo = repo
         self.session = repo.session
 
-    def preview(self, layers: list[dict[str, Any]], overrides: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    def preview(self, layers: list[dict[str, Any]], overrides: dict[str, dict[str, Any]], merge_groups: list[str] | None = None, parent_features: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         self.repo.prepare("edit")
         params = {"org": self.repo.org_id, "project": self.repo.project_id}
         rows: list[dict[str, Any]] = []
@@ -244,75 +255,96 @@ class RouteTreeImporter:
                 rows.append({"key": key, "source_id": source, "feature_id": feature,
                     "content_revision": f["content_revision"], "code": code, "logical_code":read("logical_code"), "name": read("name"), "geometry_type":f["geometry_type"],
                     "parent_code": parent, "prefix": prefix, "route_type": kind,
-                    "direction_state": layer["direction_state"], "errors": errors})
+                    "direction_state": layer["direction_state"], "errors": errors,
+                    "review_reason": _value(attrs.get("review_reason")) or ("review_required" if attrs.get("import_state") == "review_required" else "")})
         existing = [dict(r) for r in self.repo.list_routes()]
+        merges = merge_options(self.session, params, rows, existing)
+        apply_merges(rows, existing, merges, merge_groups or [])
+        if parent_features:
+            if len(rows) + len(parent_features) > _LIMIT:
+                raise PlatformValidationError("Quá giới hạn tuyến mỗi đợt",code="ROUTE_IMPORT_LIMIT")
+            append_parent_features(self.session, params, rows, existing, parent_features)
         grouped = group_routes(rows)
         aliases = {row["code"]:row.get("logical_code") or row["code"] for row in rows}
         for row in grouped:
             override = overrides.get(row["key"], {})
             parent = override.get("parent_code", row["parent_code"])
             row["parent_code"] = aliases.get(parent,parent)
+            locked_identity = bool(row.get("manual_parent") or row.get("recovery_group"))
+            if locked_identity and any(override.get(field) is not None and override[field]!=row[field] for field in ("name","prefix","route_type")):
+                raise PlatformValidationError("Không đổi đường dẫn của nhóm ghép hoặc tuyến cha bổ sung; hãy bỏ nhóm và xem lại",code="RECOVERY_IDENTITY_LOCKED")
             row["prefix"] = override.get("prefix",row["prefix"])
+            for field in ("name", "route_type"):
+                if override.get(field) is not None:
+                    row[field] = override[field]
+            row["reviewed"] = bool(override.get("reviewed", False))
+        # A previously recovered review feature is already linked. Its saved
+        # route is authoritative, even when the legacy attributes are obsolete.
+        # Only exact link sets qualify; do not hide conflicting grouped links.
+        existing_by_feature = {}
+        for saved in existing:
+            key = (str(saved["linked_source_id"]), str(saved["linked_feature_id"]))
+            existing_by_feature.setdefault(key, []).append(saved)
+        for row in grouped:
+            if not row.get("review_reason"):
+                continue
+            matches = existing_by_feature.get((row["source_id"], row["feature_id"]), [])
+            if len(matches) != 1:
+                continue
+            old = matches[0]
+            if (old.get("segments") or []) != (row.get("segments") or []):
+                continue
+            row.update(name=old["name"], route_type=old["route_type"],
+                       parent_code=str(old["parent_route_id"]) if old["parent_route_id"] else "",
+                       prefix=old["prefix"] or "", direction_state=old["direction_state"], reviewed=True)
         planned = plan_routes(grouped, existing)
         for row in planned:
-            if row["state"]=="ready" and (row.get("segments") or row.get("geometry_type")=="ST_MultiLineString"):
+            if row.get("review_reason") and not row.get("existing_id"):
+                if not row["reviewed"]:
+                    row["errors"].append("review_required")
+                if row["route_type"] == "street" and address_label(row["name"]):
+                    row["errors"].append("review_alley_type_required")
+                if row["errors"]:
+                    row["state"] = "error"
+        for row in planned:
+            # Explicit recovery groups already passed the batched merge geometry check;
+            # create_route repeats membership and topology checks transactionally on apply.
+            if not row.get("existing_id") and not row.get("recovery_group") and (row.get("segments") or row.get("manual_parent") or row.get("geometry_type")=="ST_MultiLineString"):
                 try:
                     self.repo.validate_route_segments(UUID(row["source_id"]),row["feature_id"],row.get("segments"))
                 except (PlatformValidationError,PlatformConflictError):
                     row["errors"].append("invalid_route_segments")
                     row["state"]="error"
-        # Propagate geometry failures to descendants before apply.
-        by_key={row["key"]:row for row in planned}
+        # Evidence is advisory until the operator explicitly confirms the row.
+        recover_parent_evidence(self.session, params, planned, existing)
+        survey_evidence(self.session, params, planned, existing)
+        # Propagate all parent errors (including post-plan geometry and review failures).
+        by_key = {row["key"]: row for row in planned}
         for row in planned:
-            parent=by_key.get(row.get("parent_key"))
-            if parent and parent["state"]=="error":
-                if "parent_has_errors" not in row["errors"]:row["errors"].append("parent_has_errors")
-                row["state"]="error"
-        # Candidate suggestions only: geometric adjacency is not proof of address parentage.
-        unresolved = [r for r in planned if r["route_type"] == "alley" and not r["parent_code"] and not r.get("existing_id") and "invalid_line_geometry" not in r["errors"]]
-        if unresolved:
-            candidates = {r["key"]: r["code"] for r in planned if r["route_type"] == "street" or r["prefix"]}
-            for old in existing:
-                if old["linked_source_id"] and old["linked_feature_id"]:
-                    candidates.setdefault(f'{old["linked_source_id"]}:{old["linked_feature_id"]}', str(old["id"]))
-            selected = list(candidates)
-            for r in unresolved[:200]:
-                matches = self.session.execute(text("""
-                    WITH child AS (
-                      SELECT ST_Transform(geometry,4326)::geography AS g,
-                             ST_Transform(ST_StartPoint(geometry),4326)::geography AS a,
-                             ST_Transform(ST_EndPoint(geometry),4326)::geography AS b
-                      FROM spatial.reference_features WHERE organization_id=:org AND project_id=:project
-                        AND source_id=:source AND feature_id=:feature AND geometry_state='present'
-                    ), candidates AS (
-                      SELECT f.source_id::text || ':' || f.feature_id AS key,
-                             ST_Transform(f.geometry,4326)::geography AS g
-                      FROM spatial.reference_features f
-                      WHERE f.organization_id=:org AND f.project_id=:project AND f.geometry_state='present'
-                        AND ST_GeometryType(f.geometry)='ST_LineString' AND ST_SRID(f.geometry)>0
-                        AND f.source_id::text || ':' || f.feature_id = ANY(:keys)
-                    )
-                    SELECT key, LEAST(ST_Distance(child.a,c.g),ST_Distance(child.b,c.g)) AS distance
-                    FROM child CROSS JOIN candidates c
-                    WHERE key<>:childkey AND (ST_DWithin(child.a,c.g,8) OR ST_DWithin(child.b,c.g,8))
-                    ORDER BY distance,key LIMIT 5
-                """), {**params, "source": r["source_id"], "feature": r["feature_id"], "keys": selected, "childkey": r["key"]}).mappings().all()
-                r["parent_suggestions"] = [{"code": candidates[m["key"]], "distance_m": round(float(m["distance"]), 2)} for m in matches]
-        digest = hashlib.sha256(json.dumps(planned, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
-        return {"preview_token": digest, "items": planned, "ready": sum(r["state"] == "ready" for r in planned),
+            parent = by_key.get(row.get("parent_key"))
+            if parent and parent["state"] == "error":
+                if "parent_has_errors" not in row["errors"]:
+                    row["errors"].append("parent_has_errors")
+                row["state"] = "error"
+        from modules.house_numbering.geometry_review import stage_eligible
+        for row in planned:
+            row["geometry_stage_eligible"]=stage_eligible(row)
+        tasks = parent_tasks(planned, existing)
+        digest = hashlib.sha256(json.dumps({"items":planned,"merge_options":merges,"missing_parents":tasks}, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+        return {"preview_token": digest, "items": planned, "merge_options":merges, "missing_parents":tasks, "ready": sum(r["state"] == "ready" for r in planned),
                 "existing": sum(r["state"] == "existing" for r in planned), "errors": sum(r["state"] == "error" for r in planned)}
 
-    def apply(self, layers: list[dict[str, Any]], overrides: dict[str, dict[str, Any]], token: str) -> dict[str, Any]:
+    def apply(self, layers: list[dict[str, Any]], overrides: dict[str, dict[str, Any]], token: str, selected_keys: list[str] | None = None, merge_groups: list[str] | None = None, parent_features: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         self.repo.prepare("edit")
         self.session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
                              {"key": f"house-numbering-route-import:{self.repo.project_id}"})
-        plan = self.preview(layers, overrides)
+        plan = self.preview(layers, overrides, merge_groups, parent_features)
         if plan["preview_token"] != token:
             raise PlatformConflictError("Dữ liệu đã thay đổi, hãy xem trước lại", code="STALE_ROUTE_IMPORT")
-        if plan["errors"]:
-            raise PlatformValidationError("Cần xử lý toàn bộ lỗi trước khi áp dụng", code="ROUTE_IMPORT_ERRORS")
+        selected = selection_rows(plan, selected_keys)
         ids: dict[str, UUID] = {}
-        for r in plan["items"]:
+        created_count = 0
+        for r in selected:
             if r.get("existing_id"):
                 ids[r["key"]] = UUID(r["existing_id"])
                 continue
@@ -321,5 +353,6 @@ class RouteTreeImporter:
                 prefix=r["resolved_prefix"], source_id=UUID(r["source_id"]), feature_id=r["feature_id"],
                 direction_state=r["direction_state"], source_label=f'route-tree-import:{r["code"]}', status="draft", segments=r.get("segments"))
             ids[r["key"]] = created["id"]
+            created_count += 1
         self.session.commit()
-        return {"created": plan["ready"], "existing": plan["existing"]}
+        return {"created": created_count, "existing": plan["existing"], "remaining": plan["ready"] + plan["errors"] - created_count}

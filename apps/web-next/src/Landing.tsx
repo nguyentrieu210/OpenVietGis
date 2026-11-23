@@ -5,7 +5,7 @@ import "./landing.css";
 import {LandingSwarm} from "./LandingSwarm";
 
 const client=new ApiClient({baseUrl:"/api/v1"});
-export const appPath="/app";
+export const appPath=location.pathname==="/rewrite/copilot.html"?"/rewrite/copilot.html":"/app";
 const loginUrl=(provider:string)=>"/api/v1/auth/login/"+encodeURIComponent(provider)+"?return_to="+encodeURIComponent("/app?auth_complete=1")+"&prompt=login";
 type Mode="login"|"register";
 

@@ -18,7 +18,7 @@ const tabs=[
  {id:"search",label:"Tra cứu & bàn giao",detail:"Tìm kiếm, xuất dữ liệu và bàn giao"}
 ] as const;
 type Tab=typeof tabs[number]["id"];
-type Props={organizationId:string;projectId:string;initialTab?:Tab;handoffSource?:string;handoffFeature?:string;onGoto:(source:string,feature:string)=>void};
+type Props={organizationId:string;projectId:string;initialTab?:Tab;handoffSource?:string|undefined;handoffFeature?:string|undefined;onGoto:(source:string,feature:string)=>void};
 export function StudioWorkbench({organizationId,projectId,initialTab="registry",handoffSource,handoffFeature,onGoto}:Props){
  const [tab,setTab]=useState<Tab>(initialTab);
  const current=tabs.find(t=>t.id===tab)!;

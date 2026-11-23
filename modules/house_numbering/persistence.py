@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from typing import Any
@@ -1377,6 +1378,62 @@ class HouseNumberingRepository:
         ).one()
         return float(row[0]), float(row[1])
 
+    def numbering_buildings(self, ids: list[UUID]) -> list[dict[str, Any]]:
+        self.prepare("read")
+        return [dict(row) for row in self.session.execute(text("""
+            SELECT b.*, EXISTS (
+                SELECT 1 FROM house_numbering.address_numbers n
+                WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
+                  AND n.building_id=b.id AND n.retired_at IS NULL
+                  AND n.kind IN ('submitted','approved','reserved','proposed')
+            ) AS protected_number
+            FROM house_numbering.buildings b
+            WHERE b.organization_id=:org AND b.project_id=:project
+              AND b.id=ANY(CAST(:ids AS uuid[]))
+        """), {"org":self.org_id,"project":self.project_id,"ids":ids}).mappings()]
+
+    def numbering_route_snapshot(self, route_id: UUID) -> str:
+        self.prepare("read")
+        params={"org":self.org_id,"project":self.project_id,"route":route_id}
+        buildings=self.session.execute(text("""
+            SELECT b.id,b.revision,f.content_revision,f.geometry_state,s.lifecycle,s.validation_state
+            FROM house_numbering.buildings b
+            LEFT JOIN spatial.reference_features f
+              ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+            LEFT JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+            WHERE b.organization_id=:org AND b.project_id=:project AND b.route_id=:route AND b.state='active'
+            ORDER BY b.id
+        """),params).mappings().all()
+        numbers=self.session.execute(text("""
+            SELECT id,building_id,revision,number_text,kind,side,measure_m FROM house_numbering.address_numbers
+            WHERE organization_id=:org AND project_id=:project AND route_id=:route AND retired_at IS NULL
+            ORDER BY id
+        """),params).mappings().all()
+        payload=[[dict(row) for row in rows] for rows in (buildings,numbers)]
+        return hashlib.sha256(json.dumps(payload,default=str,sort_keys=True).encode()).hexdigest()
+
+    def numbering_targets(self,route_id: UUID, include_descendants: bool, limit: int=5000) -> dict[str, Any]:
+        self.get_route(route_id)
+        rows=self.session.execute(text("""
+            WITH RECURSIVE tree(id) AS (
+                SELECT CAST(:route AS uuid)
+                UNION SELECT r.id FROM house_numbering.routes r JOIN tree t ON r.parent_route_id=t.id
+                WHERE r.organization_id=:org AND r.project_id=:project AND :descendants
+            )
+            SELECT b.id,b.route_id,b.parcel_ref,b.eligibility,count(*) OVER () AS total
+            FROM house_numbering.buildings b JOIN tree t ON t.id=b.route_id
+            WHERE b.organization_id=:org AND b.project_id=:project AND b.state='active'
+              AND b.eligibility!='ineligible'
+              AND NOT EXISTS (
+                SELECT 1 FROM house_numbering.address_numbers n WHERE n.organization_id=b.organization_id
+                  AND n.project_id=b.project_id AND n.building_id=b.id AND n.retired_at IS NULL
+                  AND n.kind IN ('proposed','submitted','approved','reserved')
+              )
+            ORDER BY b.route_id,b.id LIMIT :limit
+        """),{"org":self.org_id,"project":self.project_id,"route":route_id,"descendants":include_descendants,"limit":limit}).mappings().all()
+        total=int(rows[0]["total"]) if rows else 0
+        return {"items":[{k:v for k,v in dict(row).items() if k!="total"} for row in rows],"total":total,"truncated":total>limit}
+
     def building_points_for_route(
         self, route_id: UUID, target_crs: int
     ) -> list[dict[str, Any]]:
@@ -1391,10 +1448,11 @@ class HouseNumberingRepository:
                 JOIN spatial.reference_features f
                   ON f.organization_id=b.organization_id AND f.project_id=b.project_id
                  AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
+                JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
                 LEFT JOIN LATERAL (
                     SELECT * FROM house_numbering.address_numbers n
                     WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
-                      AND n.building_id=b.id AND n.retired_at IS NULL
+                      AND n.building_id=b.id AND n.route_id=b.route_id AND n.retired_at IS NULL
                     ORDER BY CASE n.kind
                         WHEN 'approved' THEN 1 WHEN 'submitted' THEN 2 WHEN 'reserved' THEN 3
                         WHEN 'proposed' THEN 4 WHEN 'certificate' THEN 5 WHEN 'survey' THEN 6
@@ -1402,6 +1460,9 @@ class HouseNumberingRepository:
                 ) n ON true
                 WHERE b.organization_id=:org AND b.project_id=:project
                   AND b.route_id=:route AND b.state='active' AND f.geometry_state='present'
+                  AND s.lifecycle='active' AND s.validation_state='ready'
+                  AND ST_SRID(f.geometry)>0 AND NOT ST_IsEmpty(f.geometry)
+                  AND ST_GeometryType(f.geometry) IN ('ST_Point','ST_Polygon','ST_MultiPolygon')
             """),
                 {
                     "org": self.org_id,
@@ -1561,48 +1622,42 @@ class HouseNumberingRepository:
         base = dict(preview["base_revisions"])
         changes = [dict(item) for item in preview["candidate_changes"]]
         results: list[RowMapping] = []
+        if len({change["building_id"] for change in changes}) != len(changes) or len({(change["route_id"],change["number"]) for change in changes}) != len(changes):
+            raise PlatformConflictError("duplicate in numbering preview", code="NUMBER_OCCUPIED")
+        for route_id in sorted({UUID(str(change["route_id"])) for change in changes}):
+            route = self.get_route(route_id, for_update=True)
+            if int(route["revision"]) != int(base[f"route:{route_id}"]):
+                raise PlatformConflictError("route changed since preview", code="STALE_PREVIEW")
+            geometry_key = f"route_geometry:{route_id}"
+            try:
+                current_geometry_revision = self.route_geometry(route_id)["content_revision"]
+            except (PlatformNotFoundError, PlatformValidationError) as exc:
+                raise PlatformConflictError("route geometry no longer usable",code="STALE_PREVIEW") from exc
+            if geometry_key in base and current_geometry_revision != base[geometry_key]:
+                raise PlatformConflictError("route geometry changed since preview", code="STALE_PREVIEW")
+            snapshot_key=f"route_snapshot:{route_id}"
+            if snapshot_key in base and self.numbering_route_snapshot(route_id) != base[snapshot_key]:
+                raise PlatformConflictError("route addresses or building geometry changed since preview",code="STALE_PREVIEW")
         for change in changes:
             building_id = UUID(str(change["building_id"]))
             route_id = UUID(str(change["route_id"]))
             building = self.get_building(building_id, for_update=True)
-            route = self.get_route(route_id, for_update=True)
-            if int(building["revision"]) != int(base[f"building:{building_id}"]) or int(
-                route["revision"]
-            ) != int(base[f"route:{route_id}"]):
-                raise PlatformConflictError(
-                    "numbering preview is stale", code="STALE_PREVIEW"
-                )
-            geometry_key = f"route_geometry:{route_id}"
-            if geometry_key in base:
-                try:
-                    current_geometry_revision = self.route_geometry(route_id)["content_revision"]
-                except (PlatformNotFoundError, PlatformValidationError) as exc:
-                    raise PlatformConflictError("route geometry no longer usable",code="STALE_PREVIEW") from exc
-                if current_geometry_revision != base[geometry_key]:
-                    raise PlatformConflictError("route geometry changed since preview", code="STALE_PREVIEW")
+            if int(building["revision"]) != int(base[f"building:{building_id}"]) or building["route_id"] != route_id or building["state"] != "active":
+                raise PlatformConflictError("building changed since preview", code="STALE_PREVIEW")
             if building["eligibility"] == "ineligible":
-                raise PlatformConflictError(
-                    "ineligible building cannot receive a number",
-                    code="INELIGIBLE_BUILDING",
-                )
-            occupied = self.session.execute(
-                text("""
-                    SELECT 1 FROM house_numbering.address_numbers
-                    WHERE organization_id=:org AND project_id=:project AND route_id=:route
-                      AND number_text=:number AND retired_at IS NULL
-                      AND kind IN ('submitted','approved','reserved') LIMIT 1
-                """),
-                {
-                    "org": self.org_id,
-                    "project": self.project_id,
-                    "route": route_id,
-                    "number": change["number"],
-                },
-            ).first()
+                raise PlatformConflictError("ineligible building cannot receive a number",code="INELIGIBLE_BUILDING")
+            # Never silently replace a current proposal or a protected number, even
+            # if it was created on another route after the preview.
+            occupied = self.session.execute(text("""
+                SELECT 1 FROM house_numbering.address_numbers
+                WHERE organization_id=:org AND project_id=:project AND retired_at IS NULL AND (
+                    (building_id=:building AND kind IN ('proposed','submitted','approved','reserved'))
+                    OR (route_id=:route AND number_text=:number AND building_id IS DISTINCT FROM :building)
+                ) LIMIT 1
+            """),{"org":self.org_id,"project":self.project_id,"building":building_id,
+                   "route":route_id,"number":change["number"]}).first()
             if occupied is not None:
-                raise PlatformConflictError(
-                    "number became occupied", code="NUMBER_OCCUPIED"
-                )
+                raise PlatformConflictError("number became occupied or building already numbered",code="NUMBER_OCCUPIED")
             now = datetime.now(UTC)
             self.session.execute(
                 text("""

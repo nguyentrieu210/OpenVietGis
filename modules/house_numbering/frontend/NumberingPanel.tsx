@@ -1,7 +1,8 @@
 import {
   createHouseNumberingRule,
   inspectHouseNumberingLocation,
-  listHouseNumberingBuildings,
+  listNumberingTargets,
+  type NumberingTarget,
   listHouseNumberingRoutes,
   listHouseNumberingRules,
   previewHouseNumbering,
@@ -23,10 +24,14 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
     () => listHouseNumberingRoutes(hnClient, organizationId, projectId),
     [organizationId, projectId]
   );
-  const buildings = useReloadable(
-    () => listHouseNumberingBuildings(hnClient, organizationId, projectId),
-    [organizationId, projectId]
-  );
+  const [scopeRoute, setScopeRoute] = useState("");
+  const [descendants, setDescendants] = useState(true);
+  const [targets, setTargets] = useState<NumberingTarget[]>([]);
+  const [total, setTotal] = useState(0);
+  const [truncated, setTruncated] = useState(false);
+  const [page, setPage] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const routeNames = new Map((routes.data?.items ?? []).map(r => [r.id,r.name]));
   const [routeId, setRouteId] = useState("");
   const [ruleId, setRuleId] = useState("");
   const [x, setX] = useState("0");
@@ -41,8 +46,20 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
   const [authority, setAuthority] = useState("");
 
   async function mutate(action: () => Promise<void>) {
-    setError(null); setNotice(null);
+    setError(null); setNotice(null); setBusy(true);
     try { await withCsrf(action); } catch (err) { setError(await uiError(err)); }
+    finally { setBusy(false); }
+  }
+
+  function resetScope() {
+    setTargets([]); setTotal(0); setTruncated(false); setPage(0); setSelected([]); setPreview(null);
+  }
+  async function loadTargets() {
+    resetScope();
+    const result = await listNumberingTargets(hnClient, organizationId, projectId, scopeRoute, descendants);
+    setTargets(result.items); setTotal(result.total); setTruncated(result.truncated);
+    setSelected(result.items.map(b => b.id));
+    setNotice(`Đã chọn ${result.items.length} nhà đủ điều kiện trong cây tuyến. Chưa ghi số.`);
   }
 
   return <>
@@ -67,7 +84,7 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
       <h2>Kiểm tra vị trí trên tuyến</h2>
       <div className="hn-form">
         <label>Tuyến<select value={routeId} onChange={(e) => setRouteId(e.target.value)}><option value="">Chọn tuyến</option>{(routes.data?.items ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</select></label>
-        <label>Rule<select value={ruleId} onChange={(e) => setRuleId(e.target.value)}><option value="">Chọn rule</option>{(rules.data?.items ?? []).map((r) => <option key={r.id} value={r.id}>{r.version} · {r.status}</option>)}</select></label>
+        <label>Rule<select value={ruleId} disabled={busy} onChange={(e) => {setRuleId(e.target.value); setPreview(null);}}><option value="">Chọn rule</option>{(rules.data?.items ?? []).map((r) => <option key={r.id} value={r.id}>{r.version} · {r.status}</option>)}</select></label>
         <label>X<input value={x} onChange={(e) => setX(e.target.value)} /></label>
         <label>Y<input value={y} onChange={(e) => setY(e.target.value)} /></label>
         <label>EPSG<input value={crs} onChange={(e) => setCrs(e.target.value)} /></label>
@@ -82,28 +99,49 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
     </section>
 
     <section className="hn-card">
-      <h2>Preview / Apply hàng loạt</h2>
-      <div className="hn-checks">
-        {(buildings.data?.items ?? []).map((b) => <label key={b.id}>
-          <input type="checkbox" checked={selected.includes(b.id)} onChange={(e) => setSelected((current) => e.target.checked ? [...current, b.id] : current.filter((id) => id !== b.id))} />
-          {b.parcel_ref ?? b.id.slice(0, 8)} · {b.eligibility}
-        </label>)}
-      </div>
+      <h2>Đánh số hàng loạt theo cây tuyến</h2>
+      <p className="hn-muted">Chọn tuyến cha để xử lý cả cây tuyến con. Giữ nguyên số đã đề xuất hoặc được cấp; nhà chưa liên kết tuyến không được đánh số.</p>
       <div className="hn-form">
-        <button className="hn-btn" type="button" disabled={!ruleId || selected.length === 0} onClick={() => void mutate(async () => {
-          const result = await previewHouseNumbering(hnClient, organizationId, projectId, {
-            building_ids: selected, rule_id: ruleId, operation_id: crypto.randomUUID()
-          });
-          setPreview(result); setNotice(`Preview ${result.candidate_changes.length} thay đổi; chưa ghi dữ liệu.`);
-        })}>Preview</button>
-        <button className="hn-btn" type="button" disabled={!preview || Boolean(preview.applied_at)} onClick={() => void mutate(async () => {
-          if (!preview) return;
-          await applyHouseNumberingPreview(hnClient, organizationId, projectId, preview.id);
-          setNotice("Đã apply số đề xuất nguyên tử."); setPreview({ ...preview, applied_at: new Date().toISOString() }); await buildings.reload();
-        })}>Apply</button>
+        <label>Tuyến gốc<select disabled={busy} value={scopeRoute} onChange={e => {setScopeRoute(e.target.value); resetScope();}}>
+          <option value="">Chọn tuyến</option>{(routes.data?.items ?? []).map(r => <option key={r.id} value={r.id}>{r.name} {r.prefix ? `· ${r.prefix}` : ""}</option>)}
+        </select></label>
+        <label><input type="checkbox" disabled={busy} checked={descendants} onChange={e => {setDescendants(e.target.checked); resetScope();}}/> Bao gồm tuyến con</label>
+        <button className="hn-btn" type="button" disabled={!scopeRoute || busy} onClick={() => void mutate(loadTargets)}>Tải và chọn nhà chưa đánh số</button>
       </div>
-      {preview && <table className="hn-table"><thead><tr><th>Building</th><th>Số cũ</th><th>Số đề xuất</th><th>Bên / lý trình</th><th>Lý do</th></tr></thead><tbody>{preview.candidate_changes.map((c) => <tr key={c.building_id}><td>{c.building_id.slice(0, 8)}</td><td>{c.old_number ?? "—"}</td><td><strong>{c.number}</strong></td><td>{c.side ?? "?"} / {c.measure.toFixed(1)}m</td><td>{c.reason}</td></tr>)}</tbody></table>}
-      {preview?.warnings?.length ? <div className="hn-warning">{preview.warnings.join(" · ")}</div> : null}
+      <p>Đã chọn {selected.length.toLocaleString()} / {total.toLocaleString()} nhà.</p>
+      {truncated && <p className="hn-warning">Giới hạn mỗi lô 5.000 nhà. Sau khi lưu, tải lại để tiếp tục lô kế tiếp hoặc chọn tuyến con.</p>}
+      {!!targets.length && <>
+        <div className="hn-form">
+          <button className="hn-btn" type="button" disabled={busy} onClick={() => {setSelected(targets.map(b=>b.id)); setPreview(null);}}>Chọn tất cả trong lô</button>
+          <button className="hn-btn" type="button" disabled={busy} onClick={() => {setSelected([]);setPreview(null);}}>Bỏ chọn</button>
+          <button className="hn-btn" type="button" disabled={page===0 || busy} onClick={() => setPage(p=>p-1)}>Trang trước</button>
+          <span>Trang {page+1}/{Math.ceil(targets.length/50)}</span>
+          <button className="hn-btn" type="button" disabled={(page+1)*50>=targets.length || busy} onClick={() => setPage(p=>p+1)}>Trang sau</button>
+        </div>
+        <div className="hn-checks">{targets.slice(page*50,(page+1)*50).map(b=><label key={b.id}>
+          <input type="checkbox" disabled={busy} checked={selected.includes(b.id)} onChange={e=>{setPreview(null);setSelected(current=>e.target.checked?[...current,b.id]:current.filter(id=>id!==b.id));}}/>
+          {b.parcel_ref ?? b.id.slice(0,8)} · {routeNames.get(b.route_id ?? "") ?? "Tuyến"} · {b.eligibility}
+        </label>)}</div>
+      </>}
+      {!ruleId && <p className="hn-warning">Chọn quy tắc ở phần Kiểm tra vị trí trên tuyến trước khi lập phương án.</p>}
+      <div className="hn-form">
+        <button className="hn-btn" type="button" disabled={!ruleId || !selected.length || busy} onClick={()=>void mutate(async()=>{
+          setPreview(null);
+          const result=await previewHouseNumbering(hnClient,organizationId,projectId,{building_ids:selected,rule_id:ruleId,operation_id:crypto.randomUUID()});
+          setPreview(result);setNotice(`Phương án gồm ${result.candidate_changes.length} số đề xuất và ${result.warnings?.length ?? 0} nhà cần rà soát. Chưa ghi dữ liệu.`);
+        })}>Lập phương án đánh số</button>
+        <button className="hn-btn" type="button" disabled={!preview || !preview.candidate_changes.length || !!preview.applied_at || busy} onClick={()=>{
+          if(!preview || !window.confirm(`Lưu ${preview.candidate_changes.length} số đề xuất? Đây chưa phải cấp số chính thức.`)) return;
+          void mutate(async()=>{
+            await applyHouseNumberingPreview(hnClient,organizationId,projectId,preview.id);
+            setPreview({...preview,applied_at:new Date().toISOString()});
+            setNotice("Đã lưu số đề xuất. Tải lại cây tuyến để tiếp tục.");
+          });
+        }}>Xác nhận lưu số đề xuất</button>
+      </div>
+      {busy && <p>Đang xử lý…</p>}
+      {preview && <><p>{preview.candidate_changes.length} số đề xuất · hiển thị tối đa 200 dòng.</p><div style={{maxHeight:"460px",overflow:"auto"}}><table className="hn-table"><thead><tr><th>Nhà</th><th>Tuyến</th><th>Số cũ</th><th>Số đề xuất</th><th>Bên / lý trình</th><th>Lý do</th></tr></thead><tbody>{preview.candidate_changes.slice(0,200).map(c=><tr key={c.building_id}><td>{c.building_id.slice(0,8)}</td><td>{routeNames.get(c.route_id) ?? c.route_id.slice(0,8)}</td><td>{c.old_number ?? "—"}</td><td><strong>{c.number}</strong></td><td>{c.side ?? "?"} / {c.measure.toFixed(1)}m</td><td>{c.reason}</td></tr>)}</tbody></table></div></>}
+      {preview?.warnings?.length ? <details className="hn-warning"><summary>{preview.warnings.length} nhà cần rà soát (tối đa 200 hiển thị)</summary><ul>{preview.warnings.slice(0,200).map((w,i)=><li key={i}>{w}</li>)}</ul></details> : null}
       {notice && <div className="hn-ok">{notice}</div>}{error && <div className="hn-error">{error}</div>}
     </section>
   </>;

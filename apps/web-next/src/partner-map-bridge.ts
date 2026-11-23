@@ -11,6 +11,8 @@ export type PartnerMapBridge = {
   navigate:(target:NavigateTarget)=>void;
   overlay:(data:PartnerOverlay)=>void;
   clearOverlay:()=>void;
+  /** First-party only; never forwarded by the third-party partner RPC. */
+  workspace?:(method:string,args:Record<string,unknown>,guard:(minSeconds?:number)=>void)=>Promise<unknown>;
 };
 export function navigateTarget(value:unknown):NavigateTarget|null {
   if (!value || typeof value!=="object") return null;

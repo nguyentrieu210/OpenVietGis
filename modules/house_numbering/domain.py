@@ -161,6 +161,7 @@ def suggest_number(
     prefix: str = "",
     distance: float = 0.0,
     existing_id: str | None = None,
+    batch_before_first: bool = False,
 ) -> Suggestion:
     """Propose a route-side number without modifying any input.
 
@@ -223,6 +224,9 @@ def suggest_number(
         return result(free_base(1 if parity else 2), "empty_route_side")
     if previous is None:
         assert following is not None
+        if batch_before_first:
+            number = free_base(1 if parity else 2, following[0])
+            return result(number, "before_first" if number else "no_number_before_first")
         candidate = following[0] - 2
         while candidate > 0:
             number = _format(candidate, 0, prefix_text, rule.suffix_style)

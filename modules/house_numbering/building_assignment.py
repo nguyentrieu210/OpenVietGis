@@ -19,7 +19,8 @@ def normalize(value: Any) -> str:
 
 
 def road_name(value: Any) -> str:
-    return re.sub(r"^(duong|street)\s+", "", normalize(value))
+    name = re.sub(r"^(duong|street)\s+", "", normalize(value))
+    return "quoc lo 50" if name in {"ql50","ql 50","quoc lo 50"} else name
 
 
 def alley_name(value: Any) -> str:
@@ -72,6 +73,16 @@ class RouteIndex:
         by_code = self.codes.get(key, set()) if key else set()
         candidates = self.aliases.get((name, branch), set()) if branch else self.names.get(name, set()) if name else set()
         if key:
+            # A reviewed alias is only valid for its exact original code, road and
+            # full prefix. Never override a real canonical address or another code.
+            if len(by_code)==1 and not candidates and name and alley_mapped:
+                rid=next(iter(by_code))
+                route=self.routes[rid]
+                if branch==alley_name(route.get("prefix")) and any(
+                    alias.get("code")==key and alias.get("normalized_road")==name and alias.get("alley")==branch
+                    for alias in route.get("reviewed_aliases") or []
+                ):
+                    return by_code, "exact_code"
             if not by_code:
                 return candidates, "unknown_code"
             if name or branch:
@@ -131,13 +142,15 @@ class BuildingRouteAssigner:
         self.session = repo.session
 
     def preview(self, *, source_id: UUID | None, after_id: UUID | None, limit: int,
-                mapping: dict[str, str], max_distance_m: float) -> dict[str, Any]:
+                mapping: dict[str, str], max_distance_m: float, strict: bool = False, building_ids: list[UUID] | None = None) -> dict[str, Any]:
         self.repo.prepare("edit")
         self.repo.prepare("read")
+        if building_ids is not None and (len(set(building_ids)) != len(building_ids) or len(building_ids)>limit or after_id is not None):
+            raise PlatformValidationError("Lô công trình không hợp lệ",code="INVALID_ASSIGNMENT_BATCH")
         params = {"org": self.repo.org_id, "project": self.repo.project_id,
-                  "source": source_id, "after": after_id, "limit": limit + 1}
+                  "source": source_id, "after": after_id, "limit": limit + 1,"building_ids":building_ids}
         routes = [dict(r) for r in self.session.execute(text("""
-            SELECT r.id,r.name,r.route_type,r.parent_route_id,r.prefix,r.source_label,r.status,r.revision,r.segments,
+            SELECT r.id,r.name,r.route_type,r.parent_route_id,r.prefix,r.source_label,r.status,r.revision,r.segments,r.reviewed_aliases,
                    f.content_revision
             FROM house_numbering.routes r JOIN house_numbering.route_lines f
                 ON (f.organization_id,f.project_id,f.route_id)=(r.organization_id,r.project_id,r.id)
@@ -159,8 +172,11 @@ class BuildingRouteAssigner:
             WHERE b.organization_id=:org AND b.project_id=:project AND b.state='active' AND b.route_id IS NULL
                 AND (CAST(:source AS uuid) IS NULL OR b.linked_source_id=:source)
                 AND (CAST(:after AS uuid) IS NULL OR b.id>:after)
+                AND (CAST(:building_ids AS uuid[]) IS NULL OR b.id=ANY(CAST(:building_ids AS uuid[])))
             ORDER BY b.id LIMIT :limit
         """), params).mappings().all()
+        if building_ids is not None and len(data)!=len(building_ids):
+            raise PlatformConflictError("Danh sách công trình đã thay đổi, hãy phân nhóm lại",code="STALE_ASSIGNMENT")
         page = data[:limit]
         rows, matched, pairs = [], {}, []
         for b in page:
@@ -168,6 +184,12 @@ class BuildingRouteAssigner:
             road, alley, code = (a.get(mapping.get(k, "")) for k in ("road", "alley", "code"))
             rid = str(b["id"])
             ids, reason = index.match(road, alley, code, bool(mapping.get("alley") and mapping["alley"] in a))
+            if strict and (not road_name(road) or not mapping.get("alley") or mapping["alley"] not in a):
+                ids, reason = set(), "incomplete_address"
+            if strict and (road_name(road) in {"chua ro ten","chua co ten","khong ten"} or "nuoc thai" in road_name(road)):
+                ids,reason=set(),"non_address_route"
+            if strict and (len(ids) != 1 or reason not in {"exact_code","exact_address"}):
+                ids = set()
             matched[rid] = (ids, reason)
             if b["geometry_usable"] and not b["locked"]:
                 pairs.extend({"building_id":rid, "route_id":v} for v in sorted(ids)[:20])
@@ -177,7 +199,7 @@ class BuildingRouteAssigner:
                          "geometry_usable":b["geometry_usable"], "locked":b["locked"]})
         ids = [r["building_id"] for r in rows if r["geometry_usable"] and not r["locked"]]
         distances: dict[str, dict[str, float]] = defaultdict(dict)
-        if ids:
+        if ids and (not strict or pairs):
             queries = self.session.execute(text("""
                 WITH buildings AS MATERIALIZED (
                   SELECT b.id,ST_Transform(ST_PointOnSurface(f.geometry),4326)::geography g
@@ -192,7 +214,7 @@ class BuildingRouteAssigner:
                 ), nearest AS (
                   SELECT b.id building_id,c.id route_id,c.distance FROM buildings b CROSS JOIN LATERAL (
                     SELECT r.id,ST_Distance(b.g,r.g) distance FROM routes r
-                    WHERE ST_DWithin(b.g,r.g,:max_distance) ORDER BY distance,r.id LIMIT 5
+                    WHERE NOT :strict AND ST_DWithin(b.g,r.g,:max_distance) ORDER BY distance,r.id LIMIT 5
                   ) c
                 ), candidates AS (
                   SELECT b.id AS building_id,r.id AS route_id, ST_Distance(b.g,r.g) AS distance
@@ -200,11 +222,15 @@ class BuildingRouteAssigner:
                   JOIN buildings b ON b.id=p.building_id JOIN routes r ON r.id=p.route_id
                 )
                 SELECT * FROM nearest UNION SELECT * FROM candidates
-            """), {"org":self.repo.org_id,"project":self.repo.project_id,"ids":ids,"route_ids":sorted(index.root),
-                   "pairs":json.dumps(pairs),"max_distance":max_distance_m}).mappings().all()
+            """), {"org":self.repo.org_id,"project":self.repo.project_id,"ids":ids,"route_ids":sorted({p["route_id"] for p in pairs}) if strict else sorted(index.root),
+                   "pairs":json.dumps(pairs),"max_distance":max_distance_m,"strict":strict}).mappings().all()
             for q in queries:
                 distances[str(q["building_id"])][str(q["route_id"])] = float(q["distance"])
         result = [score_candidates(index,r,*matched[r["building_id"]],distances[r["building_id"]],max_distance_m) for r in rows]
+        if strict:
+            for row in result:
+                if row["confidence"] not in {"high","blocked"}:
+                    row.update(confidence="unmatched",suggested_route_id=None,candidates=[])
         counts = {k:sum(r["confidence"]==k for r in result) for k in ("high","medium","low","conflict","unmatched","blocked")}
         token = hashlib.sha256(json.dumps(result,sort_keys=True,ensure_ascii=False,separators=(",",":")).encode()).hexdigest()
         return {"items":result,"counts":counts,"preview_token":token,"next_after_id":str(page[-1]["id"]) if len(data)>limit else None}
@@ -221,6 +247,8 @@ class BuildingRouteAssigner:
             row = by_id.get(str(bid))
             if not row or row["confidence"] in {"blocked","unmatched"} or not any(c["route_id"]==str(route_id) for c in row["candidates"]):
                 raise PlatformValidationError("Tuyến chưa được đề xuất cho công trình hoặc công trình bị khóa",code="INVALID_ASSIGNMENT")
+            if kwargs.get("strict") and (row["confidence"] != "high" or row["suggested_route_id"] != str(route_id)):
+                raise PlatformValidationError("Chế độ tự động chỉ cho phép tuyến khớp chắc chắn",code="INVALID_ASSIGNMENT")
             # Repo locks building row, checks revision and prevents official-number changes.
             current = self.repo.get_building(bid,for_update=True)
             if current["route_id"] is not None or current["revision"] != row["revision"]:
