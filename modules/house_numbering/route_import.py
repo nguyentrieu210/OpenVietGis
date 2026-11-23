@@ -318,6 +318,8 @@ class RouteTreeImporter:
         # Evidence is advisory until the operator explicitly confirms the row.
         recover_parent_evidence(self.session, params, planned, existing)
         survey_evidence(self.session, params, planned, existing)
+        from modules.house_numbering.address_verification import apply_staged_reviews
+        apply_staged_reviews(self.repo, planned)
         # Propagate all parent errors (including post-plan geometry and review failures).
         by_key = {row["key"]: row for row in planned}
         for row in planned:

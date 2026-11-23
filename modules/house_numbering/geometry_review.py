@@ -18,9 +18,10 @@ def stage_eligible(row: dict[str,Any]) -> bool:
     connected=[x for x in row.get("parent_suggestions",[]) if x.get("address_match") and x.get("connected")]
     return bool(row.get("state")=="error" and not row.get("existing_id")
         and row.get("route_type")=="alley" and row.get("resolved_prefix") and row.get("parent_id")
-        and "review_survey_address_conflict" in errors
-        and errors <= {"review_survey_address_conflict","review_required"}
-        and evidence.get("address_conflicts",0)>0 and evidence.get("referenced")==evidence.get("unassigned")
+        and bool(errors.intersection({"review_survey_address_conflict","review_stage_stale"}))
+        and errors <= {"review_survey_address_conflict","review_required","review_address_pending","review_stage_stale"}
+        and (evidence.get("address_conflicts",0)>0 or "review_stage_stale" in errors)
+        and evidence.get("referenced")==evidence.get("unassigned")
         and parent.get("address_match") and parent.get("connected") and parent.get("state")=="existing"
         and str(parent.get("code"))==str(row["parent_id"])
         and not row.get("parent_search_truncated") and len(connected)==1)
