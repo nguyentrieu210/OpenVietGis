@@ -143,6 +143,9 @@ def test_version_pinned_georeference(migrated_database, tmp_path):
         )
         assert reverse3d.status_code == 200, reverse3d.text
         assert reverse3d.json() == picked.json()
+        (tmp_path / "drawing.dxf").write_bytes(
+            owner.get(base + "/" + file["id"] + "/versions/1/download").content
+        )
         manifest = owner.get(tile_path + "/tileset.json").json()
         for name, value in (
             ("record.json", record),

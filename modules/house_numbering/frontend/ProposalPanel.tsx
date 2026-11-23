@@ -1,5 +1,8 @@
 import {
   createHouseNumberingProposal,
+  getHouseNumberingProposal,
+  listHouseNumberingProposals,
+  houseNumberingProposalPacketUrl,
   listHouseNumberingBuildingLineage,
   listHouseNumberingBuildings,
   listHouseNumberingRoutes,
@@ -30,6 +33,13 @@ export function ProposalPanel({ organizationId, projectId }: Props) {
     () => listHouseNumberingBuildings(hnClient, organizationId, projectId),
     [organizationId, projectId]
   );
+
+  const [queueStatus,setQueueStatus] = useState<"all"|"draft"|"submitted"|"approved">("all");
+  const [queueOffset,setQueueOffset] = useState(0);
+  const [qrOffset,setQrOffset] = useState(0);
+  const queue=useReloadable(()=>listHouseNumberingProposals(hnClient,organizationId,projectId,{
+    ...(queueStatus==="all"?{}:{status:queueStatus}),offset:queueOffset,limit:100
+  }),[organizationId,projectId,queueStatus,queueOffset]);
 
   const [routeId, setRouteId] = useState("");
   const [ruleId, setRuleId] = useState("");
@@ -74,8 +84,19 @@ export function ProposalPanel({ organizationId, projectId }: Props) {
         }
       );
       setProposal(updated);
-      setNotice(`Proposal: ${updated.status}.`);
+      setQrOffset(0);
+      await queue.reload();
+      setNotice(`Phương án chuyển sang trạng thái: ${updated.status}.`);
     });
+  }
+
+  async function openProposal(id:string){
+    setError(null);
+    try{
+      const result=await getHouseNumberingProposal(hnClient,organizationId,projectId,id);
+      setProposal(result.proposal);setQrOffset(0);
+      setNotice(`Đã mở lại phương án ${id.slice(0,8)} · ${result.items.length} hồ sơ.`);
+    }catch(err){setError(await uiError(err));}
   }
 
   async function updatePlaque() {
@@ -170,6 +191,23 @@ export function ProposalPanel({ organizationId, projectId }: Props) {
   return (
     <>
       <section className="hn-card">
+        <h2>Hàng đợi trình duyệt số nhà</h2>
+        <p className="hn-muted">Mở lại phương án do đồng nghiệp lập, xem tình trạng trình duyệt và tải hồ sơ. Phê duyệt yêu cầu quyền quản lý dự án và quy tắc có căn cứ.</p>
+        <div className="hn-form">
+          <label>Trạng thái<select aria-label="Lọc phương án" value={queueStatus} onChange={e=>{setQueueStatus(e.target.value as typeof queueStatus);setQueueOffset(0)}}>
+            <option value="all">Tất cả</option><option value="draft">Dự thảo</option><option value="submitted">Chờ duyệt</option><option value="approved">Đã duyệt nội bộ</option>
+          </select></label>
+          <button className="hn-btn secondary" type="button" onClick={()=>void queue.reload()}>Tải lại hàng đợi</button>
+        </div>
+        {queue.error && <p className="hn-error">Không tải được hàng đợi: {String(queue.error)}</p>}
+        <div style={{maxHeight:230,overflow:"auto"}}><table className="hn-table"><thead><tr><th>Phương án</th><th>Trạng thái</th><th>Hồ sơ</th><th>Quy tắc</th><th></th></tr></thead><tbody>{(queue.data?.items??[]).map(r=><tr key={r.id}>
+          <td><code>{r.id.slice(0,8)}</code></td><td>{r.status}</td><td>{r.item_count}</td><td>{r.rule_version}</td>
+          <td><button className="hn-btn secondary" type="button" onClick={()=>void openProposal(r.id)}>Mở để xử lý</button></td>
+        </tr>)}</tbody></table></div>
+        <div className="hn-actions"><button type="button" className="hn-btn secondary" disabled={queueOffset===0} onClick={()=>setQueueOffset(Math.max(0,queueOffset-100))}>Trước</button>
+          <span>Từ {queueOffset+1}</span><button className="hn-btn secondary" type="button" disabled={queue.data?.next_offset==null} onClick={()=>setQueueOffset(queue.data?.next_offset??queueOffset)}>Sau</button></div>
+      </section>
+      <section className="hn-card">
         <h2>Phương án và phê duyệt</h2>
         <div className="hn-form">
           <label>
@@ -234,7 +272,9 @@ export function ProposalPanel({ organizationId, projectId }: Props) {
                   }
                 );
                 setProposal(result.proposal);
-                setNotice("Đã tạo draft proposal.");
+                setQrOffset(0);
+                await queue.reload();
+                setNotice("Đã tạo phương án dự thảo. Có thể trình duyệt hoặc tải tài liệu đối soát.");
               })
             }
           >
@@ -292,6 +332,21 @@ export function ProposalPanel({ organizationId, projectId }: Props) {
             {proposal.revision}
           </p>
         ) : null}
+        {proposal&&<div style={{borderTop:"1px solid #cbd5e1",paddingTop:12,marginTop:12}}>
+          <h3>Hồ sơ xuất theo phương án</h3>
+          <p className="hn-warning">Bản quyết định PDF luôn đóng dấu chữ “DỰ THẢO – CHƯA KÝ”, kể cả khi quy trình đã duyệt nội bộ. Chỉ cơ quan có thẩm quyền mới được ký và ban hành văn bản chính thức.</p>
+          <div className="hn-actions">
+            <a className="hn-btn secondary" href={houseNumberingProposalPacketUrl(organizationId,projectId,proposal.id,"decision")}>In dự thảo quyết định PDF</a>
+            <a className="hn-btn secondary" href={houseNumberingProposalPacketUrl(organizationId,projectId,proposal.id,"register")}>Xuất danh sách số nhà Excel</a>
+            <a className="hn-btn secondary" href={houseNumberingProposalPacketUrl(organizationId,projectId,proposal.id,"appendix",{offset:qrOffset,limit:24})}>In phụ lục PDF (24 hồ sơ)</a>
+          </div>
+          {proposal.status==="approved" ? <>
+            <p className="hn-muted">Mẫu biển QR chỉ lấy số nhà đã duyệt và còn hiệu lực. QR trỏ tới bản đồ GIS nội bộ, yêu cầu tài khoản có quyền truy cập.</p>
+            <div className="hn-form"><label>Trang in QR (24 biển/trang tải)<input aria-label="Lô QR bắt đầu từ" type="number" min={0} step={24} value={qrOffset} onChange={e=>setQrOffset(Math.max(0,Number(e.target.value)||0))}/></label>
+              <a className="hn-btn secondary" href={houseNumberingProposalPacketUrl(organizationId,projectId,proposal.id,"plates",{offset:qrOffset,limit:24})}>Tải tem QR PDF</a>
+            </div>
+          </> : <p className="hn-warning">Chỉ mở chức năng tem QR sau khi phê duyệt phương án bằng quy tắc authoritative.</p>}
+        </div>}
       </section>
 
       <section className="hn-card">

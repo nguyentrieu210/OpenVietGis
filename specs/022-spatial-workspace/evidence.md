@@ -58,3 +58,18 @@ Base main: e0db0e2 (origin/main verified); branch feature/022-spatial-workspace.
 - Disposable PostGIS fresh migration through 0031: 3/3 integration PASS (named scene plus vault and terrain). Actual manual polygon with numeric field, imported GeoTIFF DEM, two models, verified old placement after newer model revision, create/revise/history, stale 409, invalid refs/camera/datum, member read and scoped/outsider denial. Additional final fresh DB run 1/1 PASS including removal of synthetic DEM causing 409 on open while history retained. Ruff PASS.
 - 33/33 package tests PASS; package/web TypeScript and Vite build PASS. Integrated Chromium mock-API + actual WebGL smoke PASS: save v1/v2, simulate newer model revision, reload/open historical scene v1, restore exact model version, visibility flags and camera (verified recapture), revocation. Previous multi-model scene browser smoke PASS.
 - No 3D Tiles/LOD, public sharing, feature geometry snapshot, deletion UI, or certified absolute vertical transform; source field/data remain live by design. No main merge, production migration or deployment; full convergence and CAD trust gate still open.
+
+
+## Feature 034 CAD Live Selection Bridge candidate — 2026-11-23
+- Branch `feature/034-cad-live-selection`, [spec and engine gate](cad-live-selection.md). Optional `selection` negotiated on the existing cross-origin relay, exact DXF handle checks and revalidation using project-owned conversion provenance. GIS/3D actions blocked while editor dirty/saving. Old engine without selection retains manual entry; engine release remains separate and unapproved.
+- Real candidate relay + mock protocol browser, actual SpatialWorkspace + PostGIS-exported fixture browser, existing CAD save/georeference regression, strict TS, 36/36 package tests and isolated Vite build passed. No production rollout or main merge.
+
+
+## Feature 034 native-source follow-on
+- Engine source branch `/opt/opencadstudio` commit `775dac9`; negotiated focus message now carries active basename, no GIS credentials. GIS relay tested against engine-capable mock and old-capability fixture with exact name check. Rust/WASM compilation and actual engine click remain the last release gate; no production deployment.
+
+## 034 native WASM check / release gate
+- The CAD VPS source branch compiled successfully with `cargo check --locked
+  --target wasm32-unknown-unknown --bin OpenCADStudio`; the release bundling
+  step was intentionally stopped under memory pressure. No compiled candidate
+  was deployed, and live engine selection remains unverified in Chromium.

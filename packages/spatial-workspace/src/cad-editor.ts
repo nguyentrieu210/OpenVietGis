@@ -3,16 +3,18 @@
  * boundary: no GIS token, cookies, project identifiers or API URLs.
  */
 export type CadFormat="dwg"|"dxf";
-export type CadEditorHandle={requestSave():void;dispose():void};
+export type CadEditorHandle={requestSave():void;requestSelect(handle:string):boolean;readonly supportsSelection:boolean;dispose():void};
 type OpenInput={origin:string;name:string;bytes:ArrayBuffer;readOnly:boolean};
 type Events={
  onDirty(dirty:boolean):void;
  onSaving(saving:boolean):void;
  onSave(bytes:ArrayBuffer,format:CadFormat):Promise<void>;
  onError(message:string):void;
+ onSelection?(handle:string|null):void;
 };
 const max=25*1024*1024;
 const caps=["dwg","dxf","readOnly","save","saveId","dirty"];
+export const isCadHandle=(v:unknown):v is string=>typeof v==="string"&&/^[0-9a-fA-F]{1,32}$/.test(v);
 export function cadRelayOrigin(value:unknown):string|null{
  if(typeof value!=="string"||!value)return null;
  try{const u=new URL(value);return u.origin===value&&u.origin!==location.origin&&(u.protocol==="https:"||(u.protocol==="http:"&&u.hostname==="127.0.0.1"))?u.origin:null}catch{return null}
@@ -26,7 +28,7 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
  frame.title="OpenCAD Studio · "+input.name;
  frame.referrerPolicy="no-referrer";frame.setAttribute("sandbox","allow-scripts allow-same-origin");
  frame.style.cssText="display:block;width:100%;height:100%;border:0;background:#1e1e1e";
- let disposed=false,ready=false,loaded=false,saving=false,requested=false,loads=0;
+ let disposed=false,ready=false,loaded=false,saving=false,requested=false,loads=0,selectionSupported=false;
  const seen=new Set<string>();
  let resolveReady:(handle:CadEditorHandle)=>void,rejectReady:(error:Error)=>void;
  const promise=new Promise<CadEditorHandle>((resolve,reject)=>{resolveReady=resolve;rejectReady=reject});
@@ -37,7 +39,10 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
  function dispose(){if(disposed)return;disposed=true;clearTimeout(timer);clearRequest();signal.removeEventListener("abort",abort);window.removeEventListener("message",receive);frame.remove()}
  function fail(message:string){const wasLoaded=loaded;dispose();if(wasLoaded){events.onError(message);events.onSaving(false)}else rejectReady(Error(message))}
  function abort(){fail("CAD editor closed")}
- const handle:CadEditorHandle={dispose,requestSave(){
+ const handle:CadEditorHandle={dispose,get supportsSelection(){return selectionSupported},requestSelect(value){
+  if(disposed||!loaded||!selectionSupported||!isCadHandle(value)||value.length>16||!/[1-9a-f]/i.test(value))return false;
+  send("select",{handle:value.toUpperCase()});return true;
+ },requestSave(){
   if(disposed||!loaded||input.readOnly||saving||requested)return;
   requested=true;events.onSaving(true);send("request-save",{format});
   saveTimer=setTimeout(()=>{clearRequest();events.onSaving(false);events.onError("CAD chưa trả về bản lưu. Hãy thử lại.")},30000);
@@ -52,9 +57,11 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
   if(disposed||e.origin!==origin||e.source!==frame.contentWindow)return;
   const d=e.data;if(!d||d.source!=="ovg-cad-relay"||d.channel!==channel)return;
   if(d.type==="ready"&&!ready&&d.version==="2026.46"&&Array.isArray(d.capabilities)&&caps.every(c=>d.capabilities.includes(c))){
-   ready=true;send("open",{name:input.name,readOnly:input.readOnly,buffer:input.bytes},[input.bytes]);
+   ready=true;selectionSupported=d.capabilities.includes("selection");send("open",{name:input.name,readOnly:input.readOnly,buffer:input.bytes},[input.bytes]);
   }else if(d.type==="loaded"&&ready&&!loaded&&d.name===input.name){
    loaded=true;clearTimeout(timer);resolveReady(handle);
+  }else if(d.type==="selection"&&loaded&&selectionSupported&&(d.handle===null||isCadHandle(d.handle))){
+   events.onSelection?.(d.handle===null?null:d.handle.toUpperCase());
   }else if(d.type==="dirty"&&ready&&typeof d.dirty==="boolean"){
    if(input.readOnly&&d.dirty){fail("Read-only CAD modified");return}
    events.onDirty(d.dirty||saving);

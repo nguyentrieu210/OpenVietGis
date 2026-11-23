@@ -4,6 +4,7 @@
  const parentOrigin=window.OVG_CAD_PARENT_ORIGIN, release="2026.46";
  const channel=location.hash.slice(1);
  const cap=["dwg","dxf","readOnly","save","saveId","dirty"];
+ const validHandle=value=>typeof value==="string"&&/^[a-fA-F0-9]{1,16}$/.test(value)&&/[1-9a-f]/i.test(value);
  const MAX=25*1024*1024;
  const isOrigin=value=>{try{const u=new URL(value);return u.origin===value&&(u.protocol==="https:"||(u.protocol==="http:"&&u.hostname==="127.0.0.1"))}catch{return false}};
  if(!isOrigin(parentOrigin)||parentOrigin===location.origin||parent===self||!/^([a-f0-9]{32})$/.test(channel))return;
@@ -11,7 +12,7 @@
  iframe.title="OpenCAD Studio";
  iframe.referrerPolicy="no-referrer";
  iframe.setAttribute("sandbox","allow-scripts allow-same-origin");
- let ready=false,opened=false,loaded=false,readOnly=true,filename="",format="",pending="";
+ let ready=false,opened=false,loaded=false,readOnly=true,filename="",format="",pending="",supportsSelection=false;
  const bytes=b=>b instanceof ArrayBuffer&&b.byteLength>0&&b.byteLength<=MAX;
  const name=n=>typeof n==="string"&&n.length<=180&&/^[^/\\\x00-\x1f\x7f]+\.(dwg|dxf)$/i.test(n);
  const id=s=>typeof s==="string"&&/^save-[0-9]{1,20}$/.test(s);
@@ -26,6 +27,8 @@
     toEngine("ocs:open",{name:filename,buffer:d.buffer,readOnly},[d.buffer]);
    }else if(d.type==="request-save"&&loaded&&!readOnly&&!pending&&d.format===format){
     toEngine("ocs:request-save",{format});
+   }else if(d.type==="select"&&loaded&&supportsSelection&&validHandle(d.handle)){
+    toEngine("ocs:select",{name:filename,handle:d.handle.toUpperCase()});
    }else if(d.type==="saved"&&pending&&d.saveId===pending&&typeof d.ok==="boolean"){
     const saveId=pending;pending="";
     toEngine("ocs:saved",{saveId,ok:d.ok,name:filename,error:d.ok?"":"Project save failed"});
@@ -34,9 +37,11 @@
   }
   if(e.origin!==location.origin||e.source!==iframe.contentWindow||d.source!=="opencadstudio-embed")return;
   if(d.type==="ocs:ready"&&!ready&&d.version===release&&Array.isArray(d.capabilities)&&cap.every(x=>d.capabilities.includes(x))){
-   ready=true;toParent("ready",{version:release,capabilities:cap});
+   ready=true;supportsSelection=d.capabilities.includes("selection");toParent("ready",{version:release,capabilities:supportsSelection?[...cap,"selection"]:cap});
   }else if(d.type==="ocs:loaded"&&opened&&!loaded&&d.name===filename){
    loaded=true;toParent("loaded",{name:filename});
+  }else if(d.type==="ocs:selection"&&loaded&&supportsSelection&&d.name===filename&&(d.handle===null||validHandle(d.handle))){
+   toParent("selection",{handle:d.handle===null?null:d.handle.toUpperCase()});
   }else if(d.type==="ocs:dirty"&&opened&&typeof d.dirty==="boolean"){
    if(readOnly&&d.dirty){fail("read_only");return}toParent("dirty",{dirty:d.dirty});
   }else if(d.type==="ocs:save"&&loaded&&id(d.saveId)){

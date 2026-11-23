@@ -224,6 +224,18 @@ def test_house_numbering_us1_us3_real_postgis(migrated_database: None) -> None:
         assert proposal.status_code == 201, proposal.text
         proposal_id = proposal.json()["proposal"]["id"]
         assert proposal.json()["proposal"]["status"] == "draft"
+        queue=client.get(f"{module_base}/proposals?status=draft")
+        assert queue.status_code==200,queue.text
+        assert any(row["id"]==proposal_id and row["item_count"]==1 for row in queue.json()["items"])
+        assert client.get(f"{module_base}/proposals?status=unknown").status_code==422
+        draft_pdf=client.get(f"{module_base}/proposals/{proposal_id}/packets/decision")
+        assert draft_pdf.status_code==200 and draft_pdf.content.startswith(b"%PDF")
+        import zipfile,io
+        registry=client.get(f"{module_base}/proposals/{proposal_id}/packets/register")
+        assert registry.status_code==200 and zipfile.is_zipfile(io.BytesIO(registry.content))
+        appendix=client.get(f"{module_base}/proposals/{proposal_id}/packets/appendix")
+        assert appendix.status_code==200 and appendix.content.startswith(b"%PDF")
+        assert client.get(f"{module_base}/proposals/{proposal_id}/packets/plates").status_code==409
 
         submitted = client.post(
             f"{module_base}/proposals/{proposal_id}/transition",
@@ -242,6 +254,12 @@ def test_house_numbering_us1_us3_real_postgis(migrated_database: None) -> None:
         )
         assert approved.status_code == 200, approved.text
         assert approved.json()["status"] == "approved"
+        approved_queue=client.get(f"{module_base}/proposals?status=approved")
+        assert approved_queue.status_code==200
+        assert any(row["id"]==proposal_id for row in approved_queue.json()["items"])
+        plates=client.get(f"{module_base}/proposals/{proposal_id}/packets/plates")
+        assert plates.status_code==200 and plates.content.startswith(b"%PDF"),plates.text[:300] if plates.status_code!=200 else ""
+        assert client.get(f"{module_base}/proposals/{proposal_id}/packets/plates?offset=50").status_code==422
 
         recheck = client.post(
             f"{module_base}/inspect",

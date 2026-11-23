@@ -41,6 +41,7 @@ import "./workspace-picker.css";
 import "./header-status.css";
 import {Landing,appPath} from "./Landing";
 import {readInvitation,InviteAccept,InviteTeam,clearInvitation} from "./InviteFlow";
+import {captureHouseQrFocus,readHouseQrFocus,clearHouseQrFocus} from "./HouseQrLink";
 const client=new ApiClient({baseUrl:"/api/v1"});
 const msg=(e:unknown)=>e instanceof ApiError?e.status===401?"Phiên đăng nhập đã hết hạn.":e.status===403?"Bạn không có quyền thực hiện thao tác này.":e.status===409?"Dữ liệu đã thay đổi hoặc có xung đột. Hãy kiểm tra lại.":"API trả về HTTP "+e.status:e instanceof Error?e.message:"Không thể thực hiện thao tác.";
 const slug=(name:string)=>name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)+"-"+crypto.randomUUID().slice(0,6);
@@ -48,6 +49,7 @@ const colors=["#7253cc","#2879d2","#24a48c","#e6a13b","#cc6a96","#72a6a2"];
 const empty:FeatureCollection={type:"FeatureCollection",features:[]};
 
 export function LiveApp(){
+ useEffect(()=>{captureHouseQrFocus(location.search)},[]);
  const [invitation,setInvitation]=useState(readInvitation),[preferredOrg,setPreferredOrg]=useState(""),[preferredProject,setPreferredProject]=useState("");
  const [user,setUser]=useState<CurrentUser|null>(null),[providers,setProviders]=useState<IdentityProviderSummary[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
  const [workspace,setWorkspace]=useState(()=>location.pathname!=="/");
@@ -68,8 +70,8 @@ export function LiveApp(){
 function Tenant({user,expire,preferredOrg,preferredProject,signOut}:{user:CurrentUser;expire:()=>void;preferredOrg:string;preferredProject:string;signOut:()=>Promise<void>}){
  const [orgs,setOrgs]=useState<MyOrganization[]>([]),[projects,setProjects]=useState<Project[]>([]),[org,setOrg]=useState(""),[project,setProject]=useState(""),[dialog,setDialog]=useState<"org"|"project"|"team"|"developer"|null>(null),[name,setName]=useState(""),[members,setMembers]=useState<Awaited<ReturnType<typeof listOrganizationMembers>>>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const fail=(e:unknown)=>{if(e instanceof ApiError&&e.status===401)expire();setError(msg(e))};
- useEffect(()=>{let alive=true;listMyOrganizations(client).then(v=>{if(alive){setOrgs(v);setOrg(v.find(x=>x.id===preferredOrg&&(!x.status||x.status==="active"))?.id??v.find(x=>!x.status||x.status==="active")?.id??"")}}).catch(fail);return()=>{alive=false}},[]);
- useEffect(()=>{setProjects([]);setProject("");setDialog(null);if(!org)return;let alive=true;listProjects(client,org).then(v=>{if(alive){setProjects(v);setProject(v.find(x=>x.id===preferredProject&&x.status==="active")?.id??v.find(x=>x.status==="active")?.id??"")}}).catch(fail);return()=>{alive=false}},[org]);
+ useEffect(()=>{let alive=true;listMyOrganizations(client).then(v=>{if(alive){setOrgs(v);setOrg(v.find(x=>x.id===readHouseQrFocus()?.organizationId&&(!x.status||x.status==="active"))?.id??v.find(x=>x.id===preferredOrg&&(!x.status||x.status==="active"))?.id??v.find(x=>!x.status||x.status==="active")?.id??"")}}).catch(fail);return()=>{alive=false}},[]);
+ useEffect(()=>{setProjects([]);setProject("");setDialog(null);if(!org)return;let alive=true;listProjects(client,org).then(v=>{if(alive){setProjects(v);setProject(v.find(x=>x.id===readHouseQrFocus()?.projectId&&x.status==="active")?.id??v.find(x=>x.id===preferredProject&&x.status==="active")?.id??v.find(x=>x.status==="active")?.id??"")}}).catch(fail);return()=>{alive=false}},[org]);
  const doCreate=async(e:FormEvent)=>{e.preventDefault();if(!name.trim()||busy)return;setBusy(true);setError("");try{await loadCsrfToken(client);if(dialog==="org"){const r=await createOrganization(client,{name:name.trim(),slug:slug(name)});setOrgs(await listMyOrganizations(client));setOrg(r.organization.id)}else if(dialog==="project"){const r=await createProject(client,org,{name:name.trim(),slug:slug(name)});setProjects(await listProjects(client,org));setProject(r.id)}setDialog(null);setName("")}catch(e){fail(e)}finally{setBusy(false)}};
  const [accessDraft,setAccessDraft]=useState<ScopeDraft|undefined>();
  const openTeam=(scope?:ScopeDraft)=>{setAccessDraft(scope);setMembers([]);setError("");setDialog("team");if(["owner","admin"].includes(orgs.find(o=>o.id===org)?.role??""))listOrganizationMembers(client,org).then(setMembers).catch(fail)};
@@ -189,10 +191,10 @@ function LiveStudio({org,project,expire,extension,openManager,moduleName,account
  const toggle=(ids:string[])=>setHidden(prev=>{const next=new Set(prev),hide=ids.some(id=>!prev.has(id));for(const id of ids)hide?next.add(id):next.delete(id);return next});
  const showTable=(l?:SpatialLayer)=>{setTableScope(l?.id??"");setTable(true)};const switchMouse=(mode:"pan"|"select")=>{if(advanced.activeRef.current||pro.activeRef.current)return;toolkit.cancelSketch();setMouseMode(mode);if(map.current)map.current.getCanvas().style.cursor=mode==="pan"?"grab":""};
  const search=async(e:FormEvent)=>{e.preventDefault();if(!query.trim())return;setResults([]);setDrawer("search");const term=query.trim().toLocaleLowerCase("vi");try{setResults(contribution.search?await contribution.search(query.trim()):data.rows.filter(r=>Object.values(r.feature.attributes).map(v=>String(v??"")).join(" ").toLocaleLowerCase("vi").includes(term)).slice(0,100).map(r=>({key:r.key,label:label(r),detail:r.layer.name})))}catch(e){fail(e)}};
- const openTileFeature=async(identity:SourceFeatureRef,signal:AbortSignal)=>{
+ const openTileFeature=async(identity:SourceFeatureRef,signal:AbortSignal,qrTarget=false)=>{
   const base="/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(pid)+"/layers/"+encodeURIComponent(identity.layer_id);
   const pin=(l:SpatialLayer)=>l.id===identity.layer_id&&l.organization_id===org&&l.project_id===pid&&l.source_id===identity.source_id&&l.lifecycle==="active"&&(identity.layer_revision===undefined||l.layer_revision===identity.layer_revision)&&(identity.content_revision===undefined||l.source.content_revision===identity.content_revision)&&(identity.schema_revision===undefined||l.source.schema_revision===identity.schema_revision);
-  const allowed=()=>{const v=tileDataRef.current;return alive.current&&!signal.aborted&&v.spatialRead&&!v.loading&&!v.extension&&v.data.restricted===false&&v.data.permissions.includes("project.read")};
+  const allowed=()=>{const v=tileDataRef.current;return alive.current&&!signal.aborted&&v.spatialRead&&!v.loading&&(!v.extension||qrTarget)&&v.data.restricted===false&&v.data.permissions.includes("project.read")};
   if(!allowed())return false;
   const layer=await client.request<SpatialLayer>(base,{signal,cache:"no-store"});if(!allowed()||!pin(layer))return false;
   const detail=await client.request<SpatialFeatureDetail>(base+"/features/"+encodeURIComponent(identity.feature_id)+"?"+new URLSearchParams({content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,include_geometry:"true",response_crs:"4326"}),{signal,cache:"no-store"});
@@ -203,6 +205,31 @@ function LiveStudio({org,project,expire,extension,openManager,moduleName,account
   const bounds=new ml.LngLatBounds();for(const point of (g.type==="Point"?[g.coordinates]:g.type==="LineString"?g.coordinates:g.coordinates.flat()))bounds.extend([point[0]!,point[1]!]);if(bounds.isEmpty())return false;
   fit.current="full";setData(d=>({...d,layers:d.layers.some(l=>l.id===layer.id)?d.layers:[...d.layers,layer],rows:[...d.rows.filter(x=>x.key!==key),r]}));setHidden(old=>{const next=new Set(old);next.delete(layer.id);return next});setSelected(key);toolkit.setLayerId(layer.id);map.current?.jumpTo({center:bounds.getCenter(),zoom:Math.max(17,map.current.getZoom())});setNotice("Đã chọn chính xác đối tượng GIS liên kết. Bộ lọc hiện tại được giữ nguyên.");return true;
  };
+ const qrAttempted=useRef(false);
+ useEffect(()=>{
+   if(qrAttempted.current||loading||!ready||!spatialRead)return;
+   const focus=readHouseQrFocus();
+   if(!focus||focus.organizationId!==org||focus.projectId!==pid)return;
+   qrAttempted.current=true;
+   const key=featureKey(focus.sourceId,focus.featureId);
+   const target=data.rows.find(r=>r.key===key);
+   if(target?.geometry){
+     fit.current="full";
+     setHidden(h=>{const v=new Set(h);v.delete(target.layer.id);return v});
+     goto(key);
+     setNotice("Đã mở công trình từ QR theo quyền truy cập GIS.");
+     clearHouseQrFocus();
+     return;
+   }
+   const layer=data.layers.find(l=>l.source_id===focus.sourceId&&l.lifecycle==="active"&&
+     l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized));
+   if(!layer){setNotice("Không tìm thấy lớp nhà hoặc bạn không có quyền đọc dữ liệu QR.");clearHouseQrFocus();return;}
+   const controller=new AbortController();
+   void openTileFeature({layer_id:layer.id,source_id:focus.sourceId,feature_id:focus.featureId},controller.signal,true)
+     .then(ok=>setNotice(ok?"Đã mở công trình từ QR theo quyền truy cập GIS.":"Không thể mở công trình từ QR: không đủ quyền hoặc đối tượng đã thay đổi."))
+     .catch(()=>setNotice("Không thể tra cứu đối tượng từ QR trên bản đồ."))
+     .finally(clearHouseQrFocus);
+ },[loading,ready,spatialRead,org,pid,data.rows,data.layers]);
  return <SpatialWorkspace key={accountId+":"+org+":"+pid} scope={{accountId,organizationId:org,projectId:pid}} client={client} canRead={spatialRead&&!extension&&!loading&&data.restricted===false&&data.permissions.includes("project.read")} canEdit={spatialEdit&&data.permissions.includes("project.edit")} blocked={!!draft||toolkit.editingTool||!!advanced.mode||!!pro.panel||!!special||!!drawer||busy||rasterBusy||running.current} rows={visible} rasters={raster.items} camera={()=>map.current} expire={expire} onCadImport={()=>{fit.current="none";setNotice("Đã tạo lớp GIS từ phiên bản CAD.");refresh()}} selectedKey={selected} selectedSourceRow={row} onClearSelection={()=>setSelected("")} onOpenTileFeature={openTileFeature} onSelectRow={key=>{const linked=visible.find(r=>r.key===key);if(linked){setSelected(key);toolkit.setLayerId(linked.layer.id)}}}><CoreRibbon commands={commands}/><QgisTools storageKey={workspaceKey+":tools"} mapHost={toolbarHost} commands={commands} pan={()=>switchMouse("pan")} select={()=>switchMouse("select")} mouseMode={mouseMode} mode={toolkit.mode} table={table} openLayer={()=>open("layer")} refresh={()=>{contribution.reset?.();setHidden(new Set());fit.current="none";refresh()}} openTable={()=>{setTableScope("");setTable(t=>!t)}} editing={!!draft||toolkit.editingTool||!!advanced.mode||!!pro.panel} snap={workspace.snap.enabled} ortho={ortho} performance={performance}/><div className="toolbar qgis-plugin-toolbar"><button className="plugin-tool" onClick={openManager} disabled={!!draft||busy||!!advanced.mode||!!pro.panel}>◈ Plugin{extension?" · Đang mở":""}</button>{moduleName&&<span className="studio-module-tag">{moduleName}</span>}{contribution.toolbar}{ready&&!loading&&data.restricted===false&&data.permissions.includes("project.read")&&<AiCopilotPanel org={org} pid={pid} bridge={partnerBridge}/>} {partnerTools.map(t=><button className="plugin-tool partner-tool" key={t.id} onClick={t.run} disabled={busy||!!draft||!!advanced.mode||!!pro.panel} title="Công cụ do plugin đối tác cung cấp">Đối tác · {t.label}</button>)}</div>
  <div className="work qgis-work">{toolkit.showLayers&&<QgisLayerDock raster={raster} openRaster={()=>{if(!busy&&!draft&&!advanced.mode&&!pro.panel&&!special&&!toolkit.editingTool)launchSpecial("band")}} layers={toolkit.ordered} groups={groups} hidden={hidden} active={toolkit.activeLayer} styleFor={toolkit.styleFor} layerColor={(l,fallback)=>workspace.layerViews[l.id]?.renderer==="single"?fallback:workspace.layerViews[l.id]?.renderer==="categorized"?(layerCategories[l.id]?.[0]?.color??fallback):contribution.layerColor?.(l,fallback)??fallback} categories={layerCategories} views={workspace.layerViews} legend={contribution.legend} project={project.name} loading={loading} saveStatus={toolkit.saveStatus} select={toolkit.setLayerId} toggle={toggle} showAll={()=>{setHidden(new Set());raster.all(true)}} hideAll={()=>{setHidden(new Set(data.layers.map(l=>l.id)));raster.all(false)}} zoom={l=>void toolkit.zoomLayer(l)} settings={toolkit.settings} manageAccess={openAccess?l=>requestAccess(l.id):undefined} exportScoped={data.restricted?exportScoped:undefined} remove={removeLayer} restricted={!!data.restricted} canRemove={!data.restricted&&data.permissions.includes("project.edit")&&!busy&&!draft&&!advanced.activeRef.current&&!pro.activeRef.current} move={toolkit.moveLayer} reorder={toolkit.reorderLayers} attrs={showTable} add={()=>open("layer")} catalog={()=>toolkit.open("spatial")} external={()=>toolkit.open("external")} save={()=>toolkit.saveConfiguration(false)} canWrite={toolkit.canWrite&&!busy} close={()=>toolkit.setShowLayers(false)} loadSources={async()=>(await listSpatialSources(client,org,pid,{limit:100})).items.filter(x=>x.lifecycle==="active")} width={workspace.width} resize={width=>updatePrefs({width})} prefs={workspace} updatePrefs={updatePrefs} selectSentinelMonth={selectSentinelMonth} sentinelBusy={sentinelBusy} sentinelError={sentinelError}/>}<div className="qgis-canvas"><div className="qgis-main-row"><div className="qgis-map-region" ref={setToolbarHost}><div className="map" ref={container}/><LayerLabels map={map} ready={ready} rows={visible} views={workspace.layerViews}/>
  <div className="live-map-top"><form onSubmit={search}><input aria-label="Tìm kiếm" placeholder={contribution.searchPlaceholder??"Tìm đối tượng GIS…"} value={query} onChange={e=>setQuery(e.target.value)}/><button>⌕</button></form>{ready&&data.restricted===false&&data.permissions.includes("project.read")&&<AiCopilotPanel org={org} pid={pid} bridge={partnerBridge}/>} {loading&&<span className="panel live-loading">Đang tải {data.rows.length.toLocaleString("vi-VN")} / {data.layers.reduce((n,l)=>n+(l.source.feature_count??0),0).toLocaleString("vi-VN")} đối tượng…</span>}</div>{contribution.panel}

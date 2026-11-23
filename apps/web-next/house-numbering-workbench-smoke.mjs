@@ -36,7 +36,7 @@ try{
  await dialog.waitFor();
  const tabs=[
  ["Địa bàn & công trình","Cấu trúc địa bàn"],
- ["Đánh số hàng loạt","Preview / Apply hàng loạt"],
+ ["Đánh số hàng loạt","Đánh số hàng loạt theo cây tuyến"],
  ["Phương án","Phương án và phê duyệt"],
  ["Nhập & đối soát","Nhập nguồn chứng cứ"],
  ["Khảo sát & tiến độ","Khảo sát hiện trường offline"],

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.application import HouseNumberingService
 from modules.house_numbering.documents import HouseNumberingDocumentService
+from modules.house_numbering.proposal_packet import HouseNumberingProposalPacket
 from modules.house_numbering.exports import HouseNumberingExportService
 from modules.house_numbering.imports import HouseNumberingImporter
 from modules.house_numbering.privacy import HouseNumberingPrivateData
@@ -842,6 +843,35 @@ def create_proposal(
     return _service(organization_id, project_id, auth, session).create_proposal(
         **body.model_dump()
     )
+
+
+@router.get(f"{_PROJ}/proposals")
+def list_proposals(
+    organization_id: UUID, project_id: UUID,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    status: Literal["draft", "submitted", "approved"] | None = None,
+    offset: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=100),
+) -> dict[str, Any]:
+    return HouseNumberingProposalPacket(
+        session, context_for(auth, organization_id=organization_id, project_id=project_id)
+    ).list(status=status, offset=offset, limit=limit)
+
+
+@router.get(f"{_PROJ}/proposals/{{proposal_id}}/packets/{{kind}}")
+def download_proposal_packet(
+    organization_id: UUID, project_id: UUID, proposal_id: UUID,
+    kind: Literal["decision", "register", "appendix", "plates"],
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    offset: int = Query(default=0, ge=0), limit: int = Query(default=24, ge=1, le=100),
+) -> Response:
+    media_type, filename, data = HouseNumberingProposalPacket(
+        session, context_for(auth, organization_id=organization_id, project_id=project_id)
+    ).download(proposal_id, kind, offset=offset, limit=limit)
+    return Response(content=data, media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                 "Cache-Control": "private, no-store"})
 
 
 @router.get(f"{_PROJ}/proposals/{{proposal_id}}")

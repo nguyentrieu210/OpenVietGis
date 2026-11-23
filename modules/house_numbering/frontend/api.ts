@@ -952,3 +952,40 @@ export function listHouseNumberingPrivateHouseholds(
     `${base(orgId, projectId)}/buildings/${encodeURIComponent(buildingId)}/private-households?purpose=${encodeURIComponent(purpose)}`
   );
 }
+
+export type HouseNumberingProposalListItem = HouseNumberingProposal & {
+  rule_version: string;
+  rule_status: "draft" | "authoritative";
+  authority_ref: string | null;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+  submitted_at: string | null;
+  decided_at: string | null;
+};
+
+export function listHouseNumberingProposals(
+  client: ApiClient, orgId: string, projectId: string,
+  options: { status?: "draft" | "submitted" | "approved"; offset?: number; limit?: number } = {}
+) {
+  const params = new URLSearchParams();
+  if (options.status) params.set("status", options.status);
+  params.set("offset", String(options.offset ?? 0));
+  params.set("limit", String(options.limit ?? 100));
+  return client.request<{items: HouseNumberingProposalListItem[]; next_offset: number | null}>(
+    `${base(orgId, projectId)}/proposals?${params.toString()}`
+  );
+}
+
+export function houseNumberingProposalPacketUrl(
+  orgId: string, projectId: string, proposalId: string,
+  kind: "decision" | "register" | "appendix" | "plates", options: {offset?: number; limit?: number} = {}
+) {
+  const params = new URLSearchParams();
+  if (kind === "plates" || kind === "appendix") {
+    params.set("offset", String(options.offset ?? 0));
+    params.set("limit", String(options.limit ?? 24));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return `/api/v1${base(orgId, projectId)}/proposals/${encodeURIComponent(proposalId)}/packets/${kind}${suffix}`;
+}
