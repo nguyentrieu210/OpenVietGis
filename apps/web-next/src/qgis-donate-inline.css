@@ -1,0 +1,48 @@
+/* Correct the decorative contour art: never participate in document flow. */
+.landing-page .landing-hero{position:relative;isolation:isolate;overflow:hidden}
+.landing-page .atlas-contours{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0;pointer-events:none;opacity:.26}
+.landing-page .landing-hero>.landing-container{position:relative;z-index:1}
+/* Public, always-visible VietQR: first viewport on desktop, below hero copy on phones. */
+.landing-page .hero-grid{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.06fr) 210px;gap:22px;align-items:center;min-height:515px}
+.landing-page .landing-hero h1{font-size:clamp(40px,4.15vw,66px);letter-spacing:-2.8px}
+.landing-page .landing-hero p{font-size:15px}
+.qgis-inline-donate{box-sizing:border-box;min-width:0;padding:18px 15px 15px;border:1px solid #caddbc;border-radius:16px;background:#ffffffee;box-shadow:0 12px 32px #294c211a;display:flex;flex-direction:column;align-items:center;text-align:center;color:#284b29}
+.qgis-inline-tag{color:#589632;font-size:9px;font-weight:850;letter-spacing:.6px;white-space:nowrap}
+.landing-page .qgis-inline-donate h2{color:#27482c;font-size:16px;font-weight:820;letter-spacing:-.5px;line-height:1.24;margin:9px 0 13px}
+.qgis-inline-donate img{display:block;width:min(156px,100%);height:auto;aspect-ratio:1;object-fit:contain;border-radius:7px;border:1px solid #e4ebdf;padding:5px;background:#fff;box-sizing:border-box}
+.qgis-inline-bank{margin:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.qgis-inline-bank b{font-size:11px;color:#3d713d}
+.qgis-inline-bank span{font-size:9px;font-weight:720;letter-spacing:.2px}
+.qgis-inline-bank strong{font-size:13px;color:#27442a;letter-spacing:.15px}
+.landing-page .qgis-inline-donate button{width:100%;border:1px solid #5a9633;background:#5a9633;color:white;font-size:11px;font-weight:750;padding:10px 5px;border-radius:7px;cursor:pointer}
+.landing-page .qgis-inline-donate button:hover{background:#447927}
+.qgis-inline-donate>small{font-size:9px;color:#84917d;margin-top:9px}
+@media(max-width:1100px) and (min-width:801px){
+ .landing-page .hero-grid{grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr) 190px;gap:14px}
+ .landing-page .landing-hero h1{font-size:clamp(39px,4.3vw,55px)}
+ .qgis-inline-donate{padding:15px 10px}
+ .qgis-inline-donate img{width:min(138px,100%)}
+ .landing-page .landing-hero p{font-size:14px}
+}
+@media(max-width:800px){
+ .landing-page .hero-grid{grid-template-columns:1fr;gap:20px;min-height:0}
+ .landing-page .hero-grid>.hero-copy{order:1}
+ .landing-page .hero-grid>.qgis-inline-donate{order:2}
+ .landing-page .hero-grid>.map-showcase{order:3}
+ .qgis-inline-donate{width:min(100%,580px);flex-direction:row;flex-wrap:wrap;gap:8px 16px;align-items:center;text-align:left;padding:14px;margin-inline:auto}
+ .qgis-inline-donate img{order:0;flex:0 0 126px;width:126px;height:126px}
+ .qgis-inline-donate .qgis-inline-tag,.qgis-inline-donate h2{display:none}
+ .qgis-inline-bank{align-items:flex-start;text-align:left;margin:0;gap:6px;flex:1 1 150px}
+ .qgis-inline-bank b{font-size:12px}
+ .qgis-inline-bank span{font-size:10px}
+ .qgis-inline-bank strong{font-size:14px}
+ .landing-page .qgis-inline-donate button{flex:1 1 150px;width:auto;max-width:none}
+ .qgis-inline-donate>small{flex:1 0 100%;margin-top:0;text-align:center}
+}
+@media(max-width:480px){
+ .landing-page .landing-hero h1{font-size:clamp(38px,9.5vw,49px);letter-spacing:-1.8px}
+ .qgis-inline-donate{gap:7px 11px}
+ .qgis-inline-donate img{width:121px;height:121px;flex-basis:121px}
+ .qgis-inline-bank{gap:4px;flex-basis:140px}
+ .landing-page .qgis-inline-donate button{font-size:11px}
+}

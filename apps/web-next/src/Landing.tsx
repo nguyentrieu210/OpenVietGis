@@ -3,6 +3,8 @@ import {ApiClient,getCurrentUser} from "@openvietgis/client-sdk";
 import {Brand} from "./Brand";
 import "./landing.css";
 import "./qgis-landing.css";
+import "./qgis-donate-inline.css";
+import "./qgis-home-fidelity.css";
 
 const client=new ApiClient({baseUrl:"/api/v1"});
 export const appPath=location.pathname==="/rewrite/copilot.html"?"/rewrite/copilot.html":"/app";
@@ -72,15 +74,16 @@ export function Landing({provider,error,invitation,authenticated,onAuth,onWorksp
  <section className="landing-hero">
  <svg className="atlas-contours" viewBox="0 0 1450 760" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none">{Array.from({length:20},(_,i)=><path key={i} d={`M${-180+i*21} 780 C ${-220+i*46} ${400-i*5} ${250+i*19} ${820-i*29} ${280+i*39} ${400-i*13} S ${560+i*36} ${-40+i*8} ${900+i*36} ${80-i*16} S ${1300+i*12} ${300-i*12} 1550 ${-80+i*26}`} stroke={i%5===0?"#70bca6":"#3b786e"} strokeWidth={i%5===0?1.2:.7}/>)}</g></svg>
  <div className="landing-container hero-grid"><div className="hero-copy">
-  <div className="landing-kicker"><span><i/> FREE &amp; OPEN SOURCE GIS</span><span className="kicker-separator"/> Made in Vietnam</div>
-  <h1>Bản đồ cho<br/><span>mọi người.</span><br/>Không giới hạn.</h1>
-  <p>Khám phá, biên tập, phân tích và chia sẻ dữ liệu không gian trên một nền tảng WebGIS mở. Tự do học hỏi, phát triển plugin và cùng cộng đồng kiến tạo.</p>
+  <div className="landing-kicker"><span><i/> FREE AND OPEN SOURCE</span><span className="kicker-separator"/> WEBGIS VIỆT NAM</div>
+  <h1>Không gian.<br/><span>Không giới hạn.</span><br/>OpenVietGIS.</h1>
+  <p>Nền tảng bản đồ số dành cho mọi người. Biên tập GIS, phân tích không gian, tích hợp plugin và cộng tác trực tuyến — tự do phát triển, không rào cản.</p>
   <div className="hero-actions"><button className="landing-primary landing-large" onClick={()=>authenticated?onWorkspace():open("login")}>{authenticated?"Mở không gian làm việc":"Dùng OpenVietGIS miễn phí"} <span>↗</span></button><a href="https://github.com/nguyentrieu210/OpenVietGis" target="_blank" rel="noopener noreferrer" className="landing-secondary qgis-github-link">Xem mã nguồn GitHub ↗</a></div>
   <div className="hero-proof"><span><i>✓</i> Mã nguồn mở</span><span><i>✓</i> Bản đồ &amp; dữ liệu GIS</span><span><i>✓</i> Cộng đồng cùng phát triển</span></div>
   {invitation&&<div className="landing-invite"><b>Bạn có lời mời tham gia tổ chức.</b><button onClick={()=>open("login")}>Tiếp tục lời mời →</button><button onClick={onDismissInvitation}>Bỏ qua</button></div>}
- </div><MapPreview/></div>
+ </div><div className="qgis-portrait-scene"><div className="qgis-portrait-glow" aria-hidden="true"/><figure className="qgis-portrait-card"><img src={(import.meta.env.PROD?"/rewrite/brand/author-portrait.webp":import.meta.env.BASE_URL+"brand/author-portrait.webp")} alt="Chân dung tác giả phát triển OpenVietGIS" width="300" height="353" loading="eager"/><figcaption><small>NGƯỜI PHÁT TRIỂN</small><b>Nguyễn Trọng Triệu</b></figcaption></figure></div><aside className="qgis-inline-donate" aria-label="Ủng hộ OpenVietGIS bằng VietQR"><span className="qgis-inline-tag">♡ ỦNG HỘ MÃ NGUỒN MỞ</span><h2>Đồng hành cùng<br/>OpenVietGIS</h2><img src={(import.meta.env.PROD?"/rewrite/brand/donate-qr.png":import.meta.env.BASE_URL+"brand/donate-qr.png")} width="156" height="156" loading="eager" alt="Mã QR VietinBank để ủng hộ OpenVietGIS" /><div className="qgis-inline-bank"><b>VietinBank</b><span>NGUYEN TRONG TRIEU</span><strong>1058884065355</strong></div><button type="button" onClick={showDonate}>Xem mã QR lớn ↗</button><small>Hoàn toàn tự nguyện</small></aside></div>
  <div className="landing-container hero-bottom"><span><i className="atlas-live-dot"/> GIS trực quan · Dùng thử bản đồ tương tác</span><span className="hero-bottom-line"/><span>Point &nbsp; / &nbsp; Line &nbsp; / &nbsp; Polygon</span></div>
  </section>
+ <section className="qgis-product-preview"><div className="landing-container qgis-preview-grid"><div className="qgis-preview-intro"><span className="landing-section-kicker">CÔNG CỤ TRỰC QUAN</span><h2>GIS trong tầm tay.<br/>Mọi nơi, mọi lúc.</h2><p>Trực tiếp quản lý lớp dữ liệu, xem thuộc tính và thao tác trên bản đồ. Thử bật/tắt lớp trong bản demo bên cạnh.</p><a href="/app" className="qgis-preview-link">Mở không gian WebGIS ↗</a></div><MapPreview/></div></section>
  <section className="landing-features landing-container" id="features"><div className="section-copy"><div><span className="landing-section-kicker">CÔNG CỤ GIS</span><h2>Không gian dữ liệu.<br/><span className="qgis-heading-accent">Tự do sáng tạo.</span></h2></div><p>Từ biên tập bản đồ đến phân tích không gian và mở rộng bằng plugin. Một công cụ mở, nhiều cách ứng dụng.</p></div><div className="feature-grid">
  {([["layers","Lớp dữ liệu","Nhập, quản lý và hiển thị điểm, đường, vùng.","#e3f5ee","#087b64"],["edit","Biên tập bản đồ","Chọn đối tượng, sửa tọa độ và xem thuộc tính.","#e8f1ff","#2465ad"],["team","Tổ chức & dự án","Phân quyền, mời thành viên và cộng tác theo dự án.","#fff3da","#9b691a"],["plugin","Mở rộng nghiệp vụ","Bổ sung phân hệ chuyên sâu theo nhu cầu.","#e7f3f6","#247f91"]] as const).map(([icon,title,description,bg,color],i)=><article key={title} className="landing-feature"><div className="feature-top"><span className="feature-icon" style={{background:bg,color}}>{icon==="layers"?<svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></svg>:icon==="edit"?<svg viewBox="0 0 24 24"><path d="M4 20h4l12-12-4-4L4 16v4ZM13 7l4 4"/></svg>:icon==="team"?<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6m1 3a5 5 0 0 1 3 5"/></svg>:<svg viewBox="0 0 24 24"><path d="M12 3v5m0 8v5M3 12h5m8 0h5M8 8h8v8H8z"/></svg>}</span><small>0{i+1}</small></div><h3>{title}</h3><p>{description}</p></article>)}
  </div></section>
