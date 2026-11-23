@@ -81,8 +81,8 @@ async def stream(request: Request, org: UUID, project: UUID, actor: UUID) -> Asy
                         timeout=max(0.01, heartbeat - time.monotonic()), stop_after=1
                     ):
                         relevant = matches(notice.payload, org, project, actor)
-                        if relevant and json.loads(notice.payload).get("kind") == "spatial_change":
-                            kind = "spatial_change"
+                        if relevant and json.loads(notice.payload).get("kind") in ("spatial_change", "lock_change"):
+                            kind = json.loads(notice.payload)["kind"]
                     if not relevant and time.monotonic() < heartbeat:
                         continue
                     if not await anyio.to_thread.run_sync(
