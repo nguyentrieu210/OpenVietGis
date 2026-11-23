@@ -466,10 +466,76 @@ def test_integration_hub_qgis_sync_preview_push_and_gis_acl(
     root = _root(world)
 
     with _client(world.owner_user_id) as admin, _client(world.member_user_id) as member:
-        source_id = _register(
-            admin, _source_path(world), "reference_points_5899", "Sync VN-2000"
+        # Editable manual layer (EPSG:4326) with 4 seeded features for real R006 changeset sync.
+        r_manual = admin.post(
+            f"{root}/layers/manual",
+            json={
+                "operation_id": str(uuid4()),
+                "name": "Sync Layer",
+                "geometry_family": "Point",
+                "fields": [
+                    {
+                        "field_id": "fld_feature_code",
+                        "name": "Code",
+                        "type": "text",
+                        "nullable": False,
+                    },
+                    {
+                        "field_id": "fld_name",
+                        "name": "Name",
+                        "type": "text",
+                        "nullable": False,
+                    },
+                    {
+                        "field_id": "fld_note",
+                        "name": "Note",
+                        "type": "text",
+                        "nullable": True,
+                    },
+                ],
+            },
+        )
+        assert r_manual.status_code == 201, r_manual.text
+        manual_payload = r_manual.json()
+        layer_id = str(manual_payload["layer_id"])
+        source_id = str(manual_payload["source_id"])
+
+        r_layer_info = admin.get(f"{root}/layers/{layer_id}")
+        assert r_layer_info.status_code == 200, r_layer_info.text
+        init_src = r_layer_info.json()["source"]
+        seed_ops = [
+            {
+                "op_type": "create",
+                "feature_id": f"HVS-QN{idx}",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [106.60 + idx * 0.01, 10.70 + idx * 0.01],
+                },
+                "properties": {
+                    "fld_feature_code": f"HVS-QN{idx}",
+                    "fld_name": f"Station {idx}",
+                    "fld_note": f"Initial note {idx}",
+                },
+            }
+            for idx in range(1, 5)
+        ]
+        r_seed = admin.post(
+            f"{root}/sources/{source_id}/changesets",
+            json={
+                "operation_id": str(uuid4()),
+                "base_content_revision": init_src["content_revision"],
+                "base_schema_revision": init_src["schema_revision"],
+                "summary": "Seed editable layer for QGIS sync",
+                "operations": seed_ops,
+            },
+        )
+        assert r_seed.status_code == 201, r_seed.text
+
+        # Also register a read-only reference fixture to verify SOURCE_READ_ONLY fail-closed.
+        ref_source_id = _register(
+            admin, _source_path(world), "reference_points_5899", "ReadOnly Fixture VN-2000"
         )["resource_id"]
-        layer_id = _create(admin, world, source_id, "Sync Layer")["resource_id"]
+        ref_layer_id = _create(admin, world, ref_source_id, "ReadOnly Fixture Layer")["resource_id"]
 
         export_url = (
             f"{root}/integration-hub/adapters/qgis/layers/{layer_id}/export?format=geopackage"
@@ -578,13 +644,13 @@ def test_integration_hub_qgis_sync_preview_push_and_gis_acl(
             (
                 "HVS-QN5",
                 new_attrs,
-                NativeGeometry("Point", (438500.0, 2291500.0), 5899),
+                NativeGeometry("Point", (106.66, 10.76), 4326),
             )
         )
 
         edited_gpkg, _ext, _media = write_geopackage(
             layer_name="Sync Layer",
-            crs_code=5899,
+            crs_code=4326,
             geometry_family="Point",
             field_mappings=field_mappings,
             features=modified_features,
@@ -686,7 +752,7 @@ def test_integration_hub_qgis_sync_preview_push_and_gis_acl(
         qn1_attr_attrs["fld_note"] = "Unauthorized attribute edit"
         attr_edit_gpkg, _, _ = write_geopackage(
             layer_name="Sync Layer",
-            crs_code=5899,
+            crs_code=4326,
             geometry_family="Point",
             field_mappings=field_mappings,
             features=[("HVS-QN1", qn1_attr_attrs, qn1.geometry)],
@@ -722,7 +788,7 @@ def test_integration_hub_qgis_sync_preview_push_and_gis_acl(
         qn2_hidden = after_by_id["HVS-QN2"]
         hidden_touch_gpkg, _, _ = write_geopackage(
             layer_name="Sync Layer",
-            crs_code=5899,
+            crs_code=4326,
             geometry_family="Point",
             field_mappings=field_mappings,
             features=[
@@ -764,3 +830,58 @@ def test_integration_hub_qgis_sync_preview_push_and_gis_acl(
             },
         )
         assert r_hidden_push.status_code == 403, r_hidden_push.text
+
+        # 5. Read-only reference_fixture layer rejects sync-push with 403 SOURCE_READ_ONLY.
+        ref_export_url = (
+            f"{root}/integration-hub/adapters/qgis/layers/{ref_layer_id}/export?format=geopackage"
+        )
+        ref_preview_url = (
+            f"{root}/integration-hub/adapters/qgis/layers/{ref_layer_id}/sync-preview"
+        )
+        ref_push_url = (
+            f"{root}/integration-hub/adapters/qgis/layers/{ref_layer_id}/sync-push"
+        )
+        r_ref_exp = admin.get(ref_export_url)
+        assert r_ref_exp.status_code == 200, r_ref_exp.text
+        ref_members = inspect_geopackage(r_ref_exp.content)
+        ref_parsed = parse_geopackage_member(r_ref_exp.content, member_name=ref_members[0].name)
+        ref_fields = [
+            ExportFieldMapping(
+                field_id=fld.field_id,
+                source_name=fld.source_name,
+                output_name=fld.field_id,
+                type=fld.type,
+            )
+            for fld in ref_parsed.fields
+        ]
+        ref_f0 = ref_parsed.features[0]
+        ref_attrs = dict(ref_f0.attributes)
+        ref_attrs["fld_note"] = "Should be blocked on fixture"
+        ref_gpkg, _, _ = write_geopackage(
+            layer_name="ReadOnly Fixture Layer",
+            crs_code=5899,
+            geometry_family="Point",
+            field_mappings=ref_fields,
+            features=[(ref_f0.feature_id, ref_attrs, ref_f0.geometry)],
+        )
+        r_ref_prev = admin.post(
+            ref_preview_url,
+            data={
+                "base_content_revision": r_ref_exp.headers["X-OpenVietGIS-Content-Revision"],
+                "base_schema_revision": r_ref_exp.headers["X-OpenVietGIS-Schema-Revision"],
+            },
+            files={"file": ("ref.gpkg", ref_gpkg, "application/geopackage+sqlite3")},
+        )
+        assert r_ref_prev.status_code == 200, r_ref_prev.text
+        r_ref_push = admin.post(
+            ref_push_url,
+            data={
+                "base_content_revision": r_ref_exp.headers["X-OpenVietGIS-Content-Revision"],
+                "base_schema_revision": r_ref_exp.headers["X-OpenVietGIS-Schema-Revision"],
+                "operation_id": f"ref-ro-{uuid4().hex[:8]}",
+                "expected_diff_sha256": str(r_ref_prev.json()["diff_sha256"]),
+            },
+            files={"file": ("ref.gpkg", ref_gpkg, "application/geopackage+sqlite3")},
+        )
+        assert r_ref_push.status_code == 403, r_ref_push.text
+        assert r_ref_push.json()["code"] == "SOURCE_READ_ONLY"
