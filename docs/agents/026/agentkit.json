@@ -1,0 +1,14 @@
+{
+  "feature": "026-integration-hub-policy",
+  "branch": "feature/026-integration-hub-policy",
+  "base": "main@5baade9",
+  "execution": "isolated; no agents auto-started",
+  "tracks": [
+    {"role": "architect", "task": "catalog schema, protocol boundaries, preserve R010 and R025"},
+    {"role": "backend", "task": "RLS, identity, adapter registry, deny-by-default policy"},
+    {"role": "frontend", "task": "connector registry UI with honest statuses, no editable controls until backend gates"},
+    {"role": "qa", "task": "tenant/service principal tests, CRS preservation, no false capability claims"},
+    {"role": "release", "task": "CI evidence, reconcile branches, review, rollback, deployment acceptance"}
+  ],
+  "merge_gates": ["test", "lint", "typing", "tenant-rls", "security-review", "release-rollback"]
+}

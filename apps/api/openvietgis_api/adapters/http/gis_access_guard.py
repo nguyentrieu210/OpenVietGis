@@ -11,7 +11,7 @@ from openvietgis_api.adapters.persistence.gis_access import scoped
 
 SAFE_GET={"","/layers","/layers/{layer_id}","/layers/{layer_id}/features","/layers/{layer_id}/features/{feature_id}",
           "/layers/{layer_id}/viewport","/layers/{layer_id}/display-extent","/pro/tiles/{layer_id}/{z}/{x}/{y}.mvt",
-          "/map","/extensions/activations","/access/mine","/access/export/{layer_id}","/access/reviews"}
+          "/map","/extensions/activations","/access/mine","/access/export/{layer_id}","/access/reviews","/integration-hub/catalog"}
 SAFE_POST={"/sources/{source_id}/changesets","/layers/{layer_id}/geometry-preview","/pro/geometry","/editing/snap","/access/reviews/{changeset_id}"}
 def project_access_guard(request:Request,auth:Annotated[AuthenticatedRequest,Depends(authenticate_request)],
     session:Annotated[Session,Depends(get_db_session,scope="function")]):

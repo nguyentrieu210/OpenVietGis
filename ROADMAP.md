@@ -172,6 +172,8 @@ Cartography & Output.
 
 External Sources.
 
+Child [R026 — Integration Hub & Policy Gate](specs/026-integration-hub-policy/spec.md): project-scoped, read-only adapter catalog and deny-by-default action policy. Slice 1 only; desktop sync, credential binding and production deployment remain gated.
+
 ### R011
 
 Team Collaboration.
