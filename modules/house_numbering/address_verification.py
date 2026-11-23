@@ -93,13 +93,13 @@ def _report(repo:Any,stage:dict)->dict:
     for x in rows:
         kind=review_kind(road_name(x["road"]),alley_name(x["alley"]),root,full)
         if kind=="exact":continue
-        distance=round(float(x["distance"]),3) if x["distance"] is not None else None
+        distance=float(x["distance"]) if x["distance"] is not None else None
         eligible=x["route_id"] is None and not x["locked"] and distance is not None and x["eligibility"]!="ineligible"
         token=digest([identity(s),str(x["id"]),x["revision"],str(x["source_id"]),x["feature_id"],x["content_revision"],x["road"],x["alley"],x["code"],distance,eligible])
         decided=eligible and x["evidence_token"]==token and x["decision"] in {"belongs","other_address"}
         verified+=int(decided);blocked+=int(not eligible)
         item={"building_id":str(x["id"]),"source_id":str(x["source_id"]),"feature_id":x["feature_id"],
-             "road":x["road"] or "","alley":x["alley"] or "","code":x["code"] or "","kind":kind,"distance_m":distance,
+             "road":x["road"] or "","alley":x["alley"] or "","code":x["code"] or "","kind":kind,"distance_m":round(distance,3) if distance is not None else None,
              "eligible":eligible,"can_belong":eligible and distance<=35,"evidence_token":token,
              "revision":x["decision_revision"] or 0,"status":"verified" if decided else "blocked" if not eligible else "pending"}
         if decided:item.update(decision=x["decision"],verified_road=x["verified_road"],verified_prefix=x["verified_prefix"],evidence=x["evidence"])
@@ -116,6 +116,8 @@ def save_address_review(repo:Any,review_id:UUID,building_id:UUID,*,evidence_toke
     repo.prepare("edit");session=repo.session
     session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),{"key":f"house-numbering-route-import:{repo.project_id}"})
     stage=_stage(repo,review_id,True)
+    if session.execute(text("SELECT EXISTS(SELECT 1 FROM house_numbering.routes WHERE organization_id=:org AND project_id=:project AND source_label=:label)"),{"org":repo.org_id,"project":repo.project_id,"label":"route-tree-import:"+stage["route_code"]}).scalar_one():
+        raise PlatformConflictError("Tuyến đã vào danh mục; hồ sơ xác minh chỉ đọc",code="PROMOTED_ADDRESS_REVIEW")
     report=_report(repo,stage)
     row=next((r for r in report["items"] if r["building_id"]==str(building_id)),None)
     if not row or not report["geometry_current"] or row["evidence_token"]!=evidence_token or row["revision"]!=expected_revision:
@@ -148,7 +150,7 @@ def save_address_review(repo:Any,review_id:UUID,building_id:UUID,*,evidence_toke
     return {"id":str(saved["id"]),"revision":saved["revision"],"decision":decision,"building_updated":False}
 
 def apply_staged_reviews(repo:Any,rows:list[dict])->None:
-    candidates={r["code"]:r for r in rows if not r.get("existing_id") and r.get("review_reason")}
+    candidates={r["code"]:r for r in rows if not r.get("existing_id")}
     if not candidates:return
     stages=repo.session.execute(text("SELECT id,route_code,snapshot,revision FROM house_numbering.geometry_reviews WHERE organization_id=:org AND project_id=:project AND route_code=ANY(:codes)"),
         {"org":repo.org_id,"project":repo.project_id,"codes":list(candidates)}).mappings().all()

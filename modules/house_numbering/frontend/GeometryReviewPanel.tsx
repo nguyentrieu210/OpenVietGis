@@ -1,4 +1,5 @@
 import {useEffect,useState} from "react";
+import {AddressVerificationPanel} from "./AddressVerificationPanel";
 import {hnClient,uiError,withCsrf} from "./client";
 import {SurveyConflictPanel,type SurveyReview} from "./SurveyConflictPanel";
 type Candidate={key:string;name:string;geometry_stage_eligible?:boolean;survey_evidence?:{referenced:number;unassigned:number;address_conflicts:number}};
@@ -39,6 +40,7 @@ export function GeometryReviewPanel({endpoint,previewToken,candidates,request,di
     <p>Lý do: {r.reason}</p><small>Bằng chứng lúc lưu; cần xem trước lại để kiểm tra dữ liệu hiện tại.</small>
     {onGoto&&(r.snapshot.segments?.length?r.snapshot.segments:[r.snapshot]).map((s,i)=><button key={s.source_id+":"+s.feature_id} type="button" className="hn-btn secondary" onClick={()=>onGoto(s.source_id,s.feature_id)}>Xem đoạn {i+1}</button>)}
     {r.snapshot.survey_review&&<SurveyConflictPanel review={r.snapshot.survey_review} onGoto={onGoto}/>}
+    <AddressVerificationPanel endpoint={endpoint} id={r.id} promoted={r.status==="promoted"} onGoto={onGoto}/>
    </details>)}
    <div className="hn-actions"><button type="button" className="hn-btn secondary" disabled={busy||disabled||offset===0} onClick={()=>void list(Math.max(0,offset-100))}>Lô trước</button><button type="button" className="hn-btn secondary" disabled={busy||disabled||listing.next_offset===null} onClick={()=>void list(listing.next_offset??0)}>Lô sau</button></div>
   </div>}

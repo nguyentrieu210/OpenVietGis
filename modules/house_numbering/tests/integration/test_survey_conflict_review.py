@@ -60,7 +60,8 @@ def test_survey_conflict_breakdown_and_guard(migrated_database):
         staged=c.post(endpoint,json=payload);assert staged.status_code==201,staged.text
         result=staged.json()
         assert result["staged"]==1 and result["routes_created"]==0 and result["buildings_assigned"]==0
-        repeat=c.post(endpoint,json=payload);assert repeat.status_code==201,repeat.text
+        refreshed=c.post(module+"/route-import/preview",json=stage_body).json()
+        repeat=c.post(endpoint,json={**payload,"preview_token":refreshed["preview_token"]});assert repeat.status_code==201,repeat.text
         assert repeat.json()==result
         assert c.post(endpoint,json={**payload,"preview_token":"0"*64}).status_code==409
         assert c.post(endpoint,json={**payload,"reason":"Lý do đã bị thay đổi sau khi xác nhận"}).status_code==409
@@ -71,11 +72,29 @@ def test_survey_conflict_breakdown_and_guard(migrated_database):
             assert conn.execute(text("SELECT count(*) FROM house_numbering.routes WHERE organization_id=:org"),{"org":world.organization_id}).scalar_one()==1
             assert conn.execute(text("SELECT count(*) FROM house_numbering.buildings WHERE organization_id=:org AND route_id IS NOT NULL"),{"org":world.organization_id}).scalar_one()==0
             assert conn.execute(text("SELECT count(*) FROM audit.audit_events WHERE organization_id=:org AND action='house_numbering.route.stage_geometry'"),{"org":world.organization_id}).scalar_one()==1
-        # Only a fresh standard import can promote a saved review.
-        with get_admin_engine().begin() as conn:
-            for sid in refs.values():
-                conn.execute(text("UPDATE spatial.reference_features SET attributes=CAST(:a AS jsonb) WHERE source_id=:sid"),
-                    {"a":json.dumps({"ten_duong":"Đường A","hem":"91","tuyen_id":"legacy"}),"sid":sid})
+        # Verify exceptions individually without rewriting source material.
+        addresses=module+"/geometry-reviews/"+listing["items"][0]["id"]+"/addresses"
+        report=c.get(addresses);assert report.status_code==200,report.text
+        report=report.json();assert report["geometry_current"]
+        assert report["counts"]=={"total":5,"verified":0,"pending":5,"blocked":0}
+        for i,item in enumerate(report["items"]):
+            belongs=item["kind"] in {"missing_prefix","missing_road","different_road"}
+            decision={"evidence_token":item["evidence_token"],"expected_revision":item["revision"],
+                "decision":"belongs" if belongs else "other_address","verified_road":"Đường A",
+                "verified_prefix":"91" if belongs else item["alley"],"evidence":"Đối chiếu hồ sơ nghiệm thu thực địa thử nghiệm"}
+            url=addresses+"/"+item["building_id"]
+            if i==0:
+                assert c.put(url,json={**decision,"evidence_token":"0"*64}).status_code==409
+                assert c.put(url,json={**decision,"decision":"belongs","verified_prefix":"99"}).status_code==422
+            saved=c.put(url,json=decision);assert saved.status_code==200,saved.text
+            assert saved.json()["building_updated"] is False
+            if i==0:
+                assert c.put(url,json=decision).status_code==409
+                partial=c.post(module+"/route-import/preview",json=body).json()
+                assert "review_address_pending" in partial["items"][0]["errors"]
+        assert c.get(addresses).json()["counts"]["verified"]==5
+        unchecked=c.post(module+"/route-import/preview",json=stage_body).json()
+        assert "review_required" in unchecked["items"][0]["errors"]
         fixed=c.post(module+"/route-import/preview",json=body).json()
         assert fixed["items"][0]["state"]=="ready" and not fixed["items"][0]["geometry_stage_eligible"]
         applied=c.post(module+"/route-import/apply",json={**body,"preview_token":fixed["preview_token"],"selected_keys":[key]})
@@ -83,3 +102,8 @@ def test_survey_conflict_breakdown_and_guard(migrated_database):
         listing=c.get(module+"/geometry-reviews").json()
         assert listing["items"][0]["status"]=="promoted" and listing["items"][0]["promoted_route_id"]
         assert c.post(endpoint,json=payload).status_code==409
+        assert c.put(url,json=decision).status_code==409
+        with get_admin_engine().connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM house_numbering.buildings WHERE organization_id=:org AND route_id IS NOT NULL"),{"org":world.organization_id}).scalar_one()==0
+            assert conn.execute(text("SELECT attributes->>'hem' FROM spatial.reference_features WHERE source_id=:sid"),{"sid":refs["desc"]}).scalar_one()=="91/14"
+            assert conn.execute(text("SELECT count(*) FROM audit.audit_events WHERE organization_id=:org AND action='house_numbering.building.verify_address'"),{"org":world.organization_id}).scalar_one()==5
