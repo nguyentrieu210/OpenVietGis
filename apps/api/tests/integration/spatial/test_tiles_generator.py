@@ -194,8 +194,33 @@ def test_generate_tileset(migrated_database, tmp_path):
                 ).scalar_one()
                 == 1
             )
+        assert record["provenance"]["feature_picking"] is True
+        picks = []
+        uri = doc["root"]["children"][0]["content"]["uri"]
+        pick_path = resource + "/feature"
+        for triangle, fid, first, count, height in (
+            (0, "court", 0, 32, 18.5),
+            (31, "court", 0, 32, 18.5),
+            (32, "other", 32, 12, 10),
+            (43, "other", 32, 12, 10),
+        ):
+            picked = owner.get(pick_path, params={"uri": uri, "triangle": triangle})
+            assert picked.status_code == 200, picked.text
+            v = picked.json()
+            assert v["state"] == "current" and v["feature_id"] == fid
+            assert v["first_triangle"] == first and v["triangle_count"] == count
+            assert float(v["attributes"]["fld_height"]) == height
+            assert v["field_names"]["fld_height"] == "Height" and v["cad_links"] == []
+            assert v["source_id"] == sid and v["layer_id"] == lid
+            picks.append(v)
+        (tmp_path / "picks.json").write_text(json.dumps(picks))
+        assert owner.get(pick_path, params={"uri": uri, "triangle": 44}).status_code == 404
+        assert owner.get(pick_path, params={"uri": "../bad.glb", "triangle": 0}).status_code == 404
         # Invalid height after editing is all-or-nothing; old generated asset remains immutable.
         commit([{"op_type": "update", "feature_id": "other", "properties": {"fld_height": None}}])
+        stale = owner.get(pick_path, params={"uri": uri, "triangle": 0}).json()
+        assert stale["state"] == "stale" and stale["feature_id"] == "court"
+        assert "attributes" not in stale and "cad_links" not in stale
         assert owner.post(path + "/generate", json=request).status_code == 409
         bad = owner.post(path + "/generate", json=body())
         assert bad.status_code == 422, bad.text
@@ -214,9 +239,11 @@ def test_generate_tileset(migrated_database, tmp_path):
         assert grant.status_code == 201, grant.text
     with _client(world.member_user_id) as member:
         assert member.get(resource + "/tileset.json").status_code == 200
+        assert member.get(pick_path, params={"uri": uri, "triangle": 0}).status_code == 200
         assert member.post(path + "/generate", json=request).status_code == 403
     with _client(world.wrong_user_id) as other:
         assert other.get(resource + "/tileset.json").status_code in (403, 404)
+        assert other.get(pick_path, params={"uri": uri, "triangle": 0}).status_code in (403, 404)
         assert other.post(path + "/generate", json=request).status_code in (403, 404)
 
 

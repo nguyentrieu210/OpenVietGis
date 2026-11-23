@@ -11,12 +11,13 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.http.cad_documents import _linked_features
 from openvietgis_api.adapters.http.model_vault import HEADERS, LIMIT, _scope, _validate
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
@@ -214,9 +215,25 @@ def create_tileset(
     )
 
 
-def persist(session, ctx, organization_id, project_id, name, doc, resources, provenance, action):
+def persist(
+    session,
+    ctx,
+    organization_id,
+    project_id,
+    name,
+    doc,
+    resources,
+    provenance,
+    action,
+    indices=None,
+):
+    indices = indices or {}
     manifest = json.dumps(doc, allow_nan=False, separators=(",", ":"))
-    size = len(manifest.encode()) + sum(len(v) for v in resources.values())
+    size = (
+        len(manifest.encode())
+        + sum(len(v) for v in resources.values())
+        + sum(len(json.dumps(v, separators=(",", ":")).encode()) for v in indices.values())
+    )
     args = {"org": organization_id, "proj": project_id, "id": uuid4()}
     session.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
@@ -247,9 +264,15 @@ def persist(session, ctx, organization_id, project_id, name, doc, resources, pro
     for uri, data in resources.items():
         session.execute(
             text("""INSERT INTO spatial.tileset_contents
-          (organization_id,project_id,tileset_id,uri,sha256,payload)
-          VALUES(:org,:proj,:id,:uri,:sha,:payload)"""),
-            args | {"uri": uri, "sha": hashlib.sha256(data).hexdigest(), "payload": data},
+          (organization_id,project_id,tileset_id,uri,sha256,payload,feature_index)
+          VALUES(:org,:proj,:id,:uri,:sha,:payload,CAST(:index AS jsonb))"""),
+            args
+            | {
+                "uri": uri,
+                "sha": hashlib.sha256(data).hexdigest(),
+                "payload": data,
+                "index": json.dumps(indices.get(uri, []), separators=(",", ":")),
+            },
         )
     append_project_audit(
         session,
@@ -274,7 +297,8 @@ class GenerateTileset(BaseModel):
     expected_layer_revision: int = Field(ge=1, le=9007199254740991)
     expected_content_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
     expected_schema_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
-    height_field: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    height_field: str | None = Field(default=None, pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    uniform_height_m: float | None = Field(default=None, ge=0.01, le=3000, strict=True)
     base_ellipsoid_m: float = Field(ge=-1000, le=10000, strict=True)
     acknowledge_ellipsoid: bool = Field(strict=True)
 
@@ -293,11 +317,16 @@ def generate_tileset(
         name and name.isprintable() and body.acknowledge_ellipsoid,
         "Explicit ellipsoidal base and name required",
     )
+    check(
+        (body.height_field is None) != (body.uniform_height_m is None),
+        "Choose exactly one height method",
+    )
     args = {
         "org": organization_id,
         "proj": project_id,
         "layer": body.layer_id,
         "field": body.height_field,
+        "uniform": body.uniform_height_m,
     }
     try:
         session.execute(text("SET LOCAL statement_timeout = '20s'"))
@@ -347,7 +376,8 @@ def generate_tileset(
         """),
             args,
         ).scalar_one_or_none()
-        check(field in ("integer", "decimal"), "Height field must be numeric")
+        if body.height_field is not None:
+            check(field in ("integer", "decimal"), "Height field must be numeric")
         args["field_type"] = "number" if field == "integer" else "string"
         stats = (
             session.execute(
@@ -356,7 +386,8 @@ def generate_tileset(
             bool_and(coalesce(geometry_state='present' AND ST_SRID(geometry)=:crs
               AND ST_GeometryType(geometry)='ST_Polygon' AND ST_NDims(geometry)=2
               AND ST_IsValid(geometry) AND NOT ST_IsEmpty(geometry)
-              AND jsonb_typeof(attributes -> CAST(:field AS text))=:field_type,false)) AS valid
+              AND (CAST(:uniform AS double precision) IS NOT NULL
+                OR jsonb_typeof(attributes -> CAST(:field AS text))=:field_type),false)) AS valid
           FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj
             AND source_id=:src AND content_revision=:content AND schema_revision=:schema
         """),
@@ -374,7 +405,8 @@ def generate_tileset(
             session.execute(
                 text("""
           WITH polygons AS MATERIALIZED (
-            SELECT feature_id,attributes -> CAST(:field AS text) AS height,
+            SELECT feature_id,COALESCE(to_jsonb(CAST(:uniform AS double precision)),
+                attributes -> CAST(:field AS text)) AS height,
               CASE WHEN :crs=4326 THEN geometry ELSE ST_Transform(geometry,4326) END AS geom
             FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj
               AND source_id=:src AND content_revision=:content AND schema_revision=:schema
@@ -389,7 +421,7 @@ def generate_tileset(
             .all()
         )
         try:
-            doc, resources, total = build_tiles(rows, body.base_ellipsoid_m)
+            doc, resources, total, indices = build_tiles(rows, body.base_ellipsoid_m)
         except TileGenerationError as exc:
             raise HTTPException(422, str(exc)) from None
         manifest_check(doc)
@@ -397,6 +429,7 @@ def generate_tileset(
             _validate(uri.rsplit("/", 1)[-1], payload)
         provenance = {
             "kind": "gis_extrusion",
+            "feature_picking": True,
             "source_id": str(source["id"]),
             "layer_id": str(body.layer_id),
             "layer_revision": source["layer_revision"],
@@ -404,6 +437,7 @@ def generate_tileset(
             "schema_revision": source["schema_revision"],
             "source_crs": source["stored_crs"],
             "height_field": body.height_field,
+            "uniform_height_m": body.uniform_height_m,
             "base_ellipsoid_m": body.base_ellipsoid_m,
             "feature_count": len(rows),
             "triangle_count": total,
@@ -418,11 +452,141 @@ def generate_tileset(
             resources,
             provenance,
             "3d.tileset.generate",
+            indices,
         )
     except DBAPIError as exc:
         if getattr(exc.orig, "sqlstate", None) in ("57014", "42883"):
             raise HTTPException(503, "Tile generation unavailable or timed out") from None
         raise
+
+
+@router.get(BASE + "/{tileset_id}/feature")
+def get_tile_feature(
+    organization_id: UUID,
+    project_id: UUID,
+    tileset_id: UUID,
+    uri: Annotated[str, Query(min_length=1, max_length=180)],
+    triangle: Annotated[int, Query(ge=0, lt=100000)],
+    response: Response,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+):
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_READ)
+    response.headers.update(HEADERS)
+    if not URI.fullmatch(uri):
+        raise HTTPException(404, "Tile not found")
+    args = {"org": organization_id, "proj": project_id, "id": tileset_id, "uri": uri}
+    tile = (
+        session.execute(
+            text("""
+        SELECT t.provenance,c.feature_index FROM spatial.tilesets t
+        JOIN spatial.tileset_contents c ON c.organization_id=t.organization_id
+          AND c.project_id=t.project_id AND c.tileset_id=t.id
+        WHERE t.organization_id=:org AND t.project_id=:proj AND t.id=:id AND c.uri=:uri
+    """),
+            args,
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if tile is None or tile["provenance"].get("feature_picking") is not True:
+        raise HTTPException(404, "Feature picking unavailable")
+    provenance = tile["provenance"]
+    cursor = 0
+    match = None
+    entries = tile["feature_index"]
+    if not 0 < len(entries) <= MAX_FEATURES:
+        raise HTTPException(409, "Feature index integrity failure")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise HTTPException(409, "Feature index integrity failure")
+        first, count, fid = (
+            entry.get("first_triangle"),
+            entry.get("triangle_count"),
+            entry.get("feature_id"),
+        )
+        if (
+            type(first) is not int
+            or type(count) is not int
+            or first != cursor
+            or count <= 0
+            or cursor + count > 100000
+            or not isinstance(fid, str)
+            or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", fid)
+        ):
+            raise HTTPException(409, "Feature index integrity failure")
+        if first <= triangle < first + count:
+            match = entry
+        cursor += count
+    if match is None:
+        raise HTTPException(404, "Triangle not indexed")
+    identity = {
+        "tileset_id": str(tileset_id),
+        "uri": uri,
+        **match,
+        "source_id": provenance["source_id"],
+        "layer_id": provenance["layer_id"],
+        "layer_revision": provenance["layer_revision"],
+        "content_revision": provenance["content_revision"],
+        "schema_revision": provenance["schema_revision"],
+    }
+    args |= {
+        "src": identity["source_id"],
+        "layer": identity["layer_id"],
+        "fid": identity["feature_id"],
+        "content": identity["content_revision"],
+        "schema": identity["schema_revision"],
+    }
+    # Hold the source/layer version stable across feature and CAD provenance reads.
+    current = (
+        session.execute(
+            text("""
+       SELECT l.name AS layer_name,l.layer_revision,s.content_revision,s.schema_revision
+       FROM spatial.layers l JOIN spatial.data_sources s ON
+         s.organization_id=l.organization_id AND s.project_id=l.project_id AND s.id=l.source_id
+       WHERE l.organization_id=:org AND l.project_id=:proj AND l.id=:layer
+         AND s.id=:src AND l.lifecycle='active' AND s.lifecycle='active'
+         AND s.validation_state='ready'
+       FOR SHARE OF l,s
+    """),
+            args,
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if current is None or any(
+        current[k] != identity[k] for k in ("layer_revision", "content_revision", "schema_revision")
+    ):
+        return identity | {"state": "stale"}
+    attrs = session.execute(
+        text("""
+       SELECT attributes FROM spatial.reference_features
+       WHERE organization_id=:org AND project_id=:proj AND source_id=:src
+          AND feature_id=:fid AND content_revision=:content AND schema_revision=:schema
+          AND geometry_state='present'
+    """),
+        args,
+    ).scalar_one_or_none()
+    if attrs is None:
+        return identity | {"state": "stale"}
+    names = session.execute(
+        text("""
+       SELECT field_id,name FROM spatial.source_fields
+       WHERE organization_id=:org AND project_id=:proj AND source_id=:src
+          AND schema_revision=:schema ORDER BY ordinal
+    """),
+        args,
+    ).all()
+    links = _linked_features(
+        session, ctx, source_id=UUID(identity["source_id"]), feature_id=identity["feature_id"]
+    )
+    return identity | {
+        "state": "current",
+        "layer_name": current["layer_name"],
+        "attributes": attrs,
+        "field_names": dict(names),
+        "cad_links": links,
+    }
 
 
 @router.get(BASE + "/{tileset_id}/tileset.json")

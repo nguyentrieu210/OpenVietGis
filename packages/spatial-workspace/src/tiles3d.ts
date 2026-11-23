@@ -11,13 +11,18 @@ export function tileMesh(tile:Tile,model:StaticModel):SceneMesh{
  for(let i=0;i<v.length;i+=3){const [lon,lat,h]=tileVertex(tile,v[i]!,v[i+1]!,v[i+2]!),p=MercatorCoordinate.fromLngLat([lon,lat],h);out[i]=p.x-o.x;out[i+1]=p.y-o.y;out[i+2]=p.z-o.z}
  return {origin:[o.x,o.y,o.z],vertices:out,colors:model.colors};
 }
-export async function prepareTiles3d(host:HTMLElement,root:Tile,signal:AbortSignal,load:(uri:string,signal:AbortSignal)=>Promise<ArrayBuffer>,status:(v:string)=>void):Promise<SelectableFootprintEngine>{
+export type TileHit={uri:string;triangle:number};
+export type SelectableTileEngine=SelectableFootprintEngine&{highlightFeature(hit:TileHit,first:number,count:number):boolean;clearFeature():void};
+export async function prepareTiles3d(host:HTMLElement,root:Tile,signal:AbortSignal,load:(uri:string,signal:AbortSignal)=>Promise<ArrayBuffer>,status:(v:string)=>void,onPick?:(hit:TileHit|null)=>void):Promise<SelectableTileEngine>{
  const {Map,NavigationControl}=await import("maplibre-gl");if(signal.aborted)throw new DOMException("Aborted","AbortError");
  const surface=document.createElement("div");surface.className="ovg-footprint-3d";surface.style.cssText="position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:5";host.append(surface);
  let map:MLMap|null=null,disposed=false,active=false,visible=true,request:AbortController|null=null,serial=0;
  const layers=new globalThis.Map<string,{layer:InteractiveMeshLayer;triangles:number}>();
+ let picked:TileHit|null=null;
+ const resetHighlight=()=>{for(const item of layers.values())item.layer.setSelectedRange(0,0);map?.triggerRepaint()};
+ const clearFeature=()=>{picked=null;resetHighlight();onPick?.(null)};
  const dispose=()=>{if(disposed)return;disposed=true;active=false;request?.abort();map?.remove();surface.remove();layers.clear()};
- const clear=(uri:string)=>{const item=layers.get(uri);if(item){if(map?.getLayer(item.layer.id))map.removeLayer(item.layer.id);layers.delete(uri)}};
+ const clear=(uri:string)=>{if(picked?.uri===uri)clearFeature();const item=layers.get(uri);if(item){if(map?.getLayer(item.layer.id))map.removeLayer(item.layer.id);layers.delete(uri)}};
  const update=async()=>{
   if(!map||!active||disposed)return;const m=map;request?.abort();const run=new AbortController();request=run;
   const bounds=m.getBounds(),c=m.getCenter().wrap();
@@ -46,6 +51,7 @@ export async function prepareTiles3d(host:HTMLElement,root:Tile,signal:AbortSign
    signal.addEventListener("abort",abort,{once:true});m.on("load",loaded);m.on("error",failed);if(signal.aborted)abort();
   });
   map.on("movestart",()=>request?.abort());map.on("moveend",()=>void update());map.on("resize",()=>void update());
-  return {select(){},selectModel(){},setLayerVisible(_id,value){visible=value;for(const item of layers.values())item.layer.setVisible(value);map?.triggerRepaint()},getCamera(){if(!map||disposed)throw Error("Disposed");const c=map.getCenter().wrap();return {longitude:c.lng,latitude:c.lat,zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()}},activate(){if(disposed)throw Error("Disposed");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize();void update()},dispose};
+  map.on("click",e=>{if(!onPick||!active||!visible||!map)return;const canvas=map.getCanvas(),x=e.point.x/canvas.clientWidth*2-1,y=1-e.point.y/canvas.clientHeight*2;let best=Infinity;let hit:TileHit|null=null;for(const [uri,item] of layers){const p=item.layer.pickTriangle(x,y);if(p&&p.depth<best){best=p.depth;hit={uri,triangle:p.triangle}}}picked=hit;resetHighlight();onPick(hit)});
+  return {select(){},selectModel(){},highlightFeature(hit,first,count){if(!active||disposed||!visible||picked?.uri!==hit.uri||picked.triangle!==hit.triangle||hit.triangle<first||hit.triangle>=first+count)return false;const layer=layers.get(hit.uri)?.layer;if(!layer||!layer.setSelectedRange(first,count))return false;map?.triggerRepaint();return true},clearFeature,setLayerVisible(_id,value){visible=value;if(!value)clearFeature();for(const item of layers.values())item.layer.setVisible(value);map?.triggerRepaint()},getCamera(){if(!map||disposed)throw Error("Disposed");const c=map.getCenter().wrap();return {longitude:c.lng,latitude:c.lat,zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()}},activate(){if(disposed)throw Error("Disposed");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize();void update()},dispose};
  }catch(e){dispose();throw e}
 }

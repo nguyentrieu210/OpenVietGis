@@ -97,6 +97,48 @@ def test_version_pinned_georeference(migrated_database):
         reverse = owner.get(path + "/links", params={"handle": feature["handle"]})
         assert reverse.json()["items"] == [link]
         assert owner.get(path + "/links", params={"handle": "FFFF"}).json()["items"] == []
+        # CAD conversion has no height attribute: explicit uniform height leaves GIS unchanged.
+        prefix = base.rsplit("/cad/", 1)[0]
+        layer = owner.get(prefix + "/layers/" + published["layer_id"]).json()
+        request = {
+            "name": "CAD buildings",
+            "layer_id": layer["id"],
+            "expected_layer_revision": layer["layer_revision"],
+            "expected_content_revision": layer["source"]["content_revision"],
+            "expected_schema_revision": layer["source"]["schema_revision"],
+            "uniform_height_m": 12,
+            "base_ellipsoid_m": 0,
+            "acknowledge_ellipsoid": True,
+        }
+        tiles = prefix + "/3d/tilesets"
+        assert (
+            owner.post(
+                tiles + "/generate", json=request | {"height_field": "cad_layer"}
+            ).status_code
+            == 422
+        )
+        assert (
+            owner.post(tiles + "/generate", json=request | {"uniform_height_m": None}).status_code
+            == 422
+        )
+        generated = owner.post(tiles + "/generate", json=request)
+        assert generated.status_code == 201, generated.text
+        record = generated.json()
+        assert record["provenance"]["uniform_height_m"] == 12
+        tile_path = tiles + "/" + record["id"]
+        uri = owner.get(tile_path + "/tileset.json").json()["root"]["children"][0]["content"]["uri"]
+        picked = owner.get(tile_path + "/feature", params={"uri": uri, "triangle": 0})
+        assert picked.status_code == 200, picked.text
+        assert picked.json()["state"] == "current"
+        assert picked.json()["feature_id"] == feature["feature_id"]
+        assert picked.json()["cad_links"] == [link]
+        assert set(picked.json()["attributes"]) == {"cad_layer", "cad_entity"}
+        assert (
+            owner.get(prefix + "/layers/" + published["layer_id"]).json()["source"][
+                "content_revision"
+            ]
+            == request["expected_content_revision"]
+        )
         # Explicit dual local placement, not a generic datum transformation.
         vn = control | {
             "crs_code": 5899,

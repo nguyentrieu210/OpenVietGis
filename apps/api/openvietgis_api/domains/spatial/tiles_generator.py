@@ -196,7 +196,14 @@ def build_tiles(rows, base):
     buckets = defaultdict(list)
     total = 0
     vertex_count = 0
+    seen = set()
     for row in rows:
+        fid = row.get("feature_id")
+        require(
+            isinstance(fid, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", fid) and fid not in seen,
+            "Invalid or duplicate feature ID",
+        )
+        seen.add(fid)
         geometry, triangles, height = row["geometry"], row["triangles"], row["height"]
         vertex_count += sum(len(r) for r in geometry["coordinates"])
         require(vertex_count <= MAX_VERTICES, "Vertex budget exceeded")
@@ -207,16 +214,18 @@ def build_tiles(rows, base):
             math.floor((bounds[0] + bounds[2]) / 0.02),
             math.floor((bounds[1] + bounds[3]) / 0.02),
         )
-        buckets[bucket].append((mesh, bounds))
+        buckets[bucket].append((mesh, bounds, fid))
     resources = {}
     children = []
+    indices = {}
 
-    def emit(mesh, bounds):
+    def emit(mesh, bounds, ranges):
         require(len(children) < MAX_TILES, "Tile count exceeds 128")
         b = union_bounds(bounds)
         matrix, local = frame((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, base)
         uri = f"tiles/tile-{len(children):04d}.glb"
         resources[uri] = glb(mesh, local)
+        indices[uri] = ranges
         children.append(
             {
                 "boundingVolume": {"region": region(b)},
@@ -227,14 +236,21 @@ def build_tiles(rows, base):
         )
 
     for _, features in sorted(buckets.items()):
-        mesh, bounds = [], []
-        for vertices, b in features:
+        mesh, bounds, ranges = [], [], []
+        for vertices, b, fid in features:
             if len(mesh) + len(vertices) > 3 * MAX_TILE_TRIANGLES:
-                emit(mesh, bounds)
-                mesh, bounds = [], []
+                emit(mesh, bounds, ranges)
+                mesh, bounds, ranges = [], [], []
+            ranges.append(
+                {
+                    "feature_id": fid,
+                    "first_triangle": len(mesh) // 3,
+                    "triangle_count": len(vertices) // 3,
+                }
+            )
             mesh.extend(vertices)
             bounds.append(b)
-        emit(mesh, bounds)
+        emit(mesh, bounds, ranges)
     root = union_bounds([c["boundingVolume"]["region"] for c in children])
     require(root[2] - root[0] <= math.pi, "Tileset spans more than 180 degrees")
     manifest = {
@@ -247,4 +263,4 @@ def build_tiles(rows, base):
             "children": children,
         },
     }
-    return manifest, resources, total
+    return manifest, resources, total, indices

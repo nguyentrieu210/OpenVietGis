@@ -79,6 +79,10 @@ def test_tilesets(migrated_database):
         path = base + "/" + record["id"]
         assert owner.get(base).json()["items"] == [record]
         assert owner.get(path + "/tileset.json").json() == manifest()
+        assert (
+            owner.get(path + "/feature", params={"uri": "mesh/tile.glb", "triangle": 0}).status_code
+            == 404
+        )
         resource = owner.get(path + "/mesh/tile.glb")
         assert resource.content == glb() and "no-store" in resource.headers["cache-control"]
         assert owner.get(path + "/unknown.glb").status_code == 404
