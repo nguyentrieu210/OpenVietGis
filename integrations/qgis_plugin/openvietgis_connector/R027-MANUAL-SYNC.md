@@ -4,7 +4,7 @@
 
 ## Operator prerequisites
 
-- QGIS Desktop 3.28+ (native PyQGIS); local installation and desktop acceptance remain **unverified** in CI.
+- QGIS Desktop 3.34+ with Python 3.10+ (native PyQGIS); local installation and desktop acceptance remain **unverified** in CI.
 - Service Principal Bearer with correct **project.read**, and **project.edit** for posting changes; server GIS ACL must independently authorize the target layer/features/fields.
 - The selected layer must be a **single-part 2D** Point/LineString/Polygon with a verified explicit CRS and **one** GeoPackage feature table.
 - Maximum upload size **16 MiB**, at most **25,000 features**, at most **1,000 proposed reconciliation operations**. Existing R026 server-side limits remain authoritative.
@@ -50,3 +50,16 @@ uv run --project apps/api python -m pytest -q \
 uv run --project apps/api ruff check \
   integrations/qgis_plugin/openvietgis_connector/{client.py,workspace.py,plugin.py}
 ```
+
+## ZIP build / GitHub Actions verification
+
+Run from the repository root with Python 3.13:
+
+```bash
+python tools/package_qgis_plugin.py --output dist/openvietgis_connector-r027.zip
+cd dist && sha256sum -c openvietgis_connector-r027.zip.sha256
+```
+
+Install the resulting `openvietgis_connector-r027.zip` through QGIS > Plugins > Manage and Install Plugins > Install from ZIP. The ZIP contains a single `openvietgis_connector/` directory with metadata, source code and operator docs. Do not unzip secret service keys into this directory.
+
+GitHub Actions workflow `R027 QGIS Connector - package and desktop smoke` runs ZIP validation and native offscreen PyQGIS controls on the feature branch; downloadable build artifacts are published only if the packaging job succeeds. This does not replace direct Windows QGIS acceptance.

@@ -610,3 +610,24 @@ export async function changeQgisBindingDraftLifecycle(
     }
   );
 }
+
+/** Eligible verified 2D layers/fields for a QGIS binding draft (manager-only). */
+export interface QgisBindingCandidate {
+  layer_id: string;
+  layer_name: string;
+  stored_crs_code: number;
+  geometry_family: "Point" | "LineString" | "Polygon";
+  allowed_field_ids: string[];
+  binding_status: "draft_only";
+}
+
+export function listQgisBindingCandidates(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string
+): Promise<{ items: QgisBindingCandidate[] }> {
+  return client.request<{ items: QgisBindingCandidate[] }>(
+    integrationHubRoot(organizationId, projectId) + "/bindings/candidates",
+    { method: "GET", cache: "no-store" }
+  );
+}

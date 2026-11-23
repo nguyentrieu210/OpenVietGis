@@ -1,4 +1,4 @@
-# OpenVietGIS Connector for QGIS Desktop (3.28+)
+# OpenVietGIS Connector for QGIS Desktop (3.34+, Python 3.10+)
 
 > **R027 experimental — đồng bộ hai chiều có kiểm soát:** Phiên bản 0.3.0 bổ sung
 > workspace QGIS **thủ công** với bản gốc, bộ đối chiếu ba phiên bản, xác nhận ghi và
@@ -50,7 +50,7 @@
 
 ---
 
-## 3. Cài đặt Plugin vào QGIS 3.28+ / Install into QGIS 3.28+
+## 3. Cài đặt Plugin vào QGIS 3.34+ / Python 3.10+ / Install into QGIS 3.34+ / Python 3.10+
 
 ### Cách 1: Cài từ tệp ZIP (Khuyến nghị) / Option A: Install from ZIP (Recommended)
 
@@ -63,7 +63,7 @@
      ```bash
      (cd integrations/qgis_plugin && zip -r ../../openvietgis_connector.zip openvietgis_connector)
      ```
-2. Mở **QGIS Desktop (3.28+)** -> chọn **`Plugins`** -> **`Manage and Install Plugins...`** -> tab **`Install from ZIP`**.
+2. Mở **QGIS Desktop (3.34+, Python 3.10+)** -> chọn **`Plugins`** -> **`Manage and Install Plugins...`** -> tab **`Install from ZIP`**.
 3. Chọn tệp `openvietgis_connector.zip` và bấm **`Install Plugin`**.
 4. Chuyển sang tab **`Installed`** và bật **`OpenVietGIS Connector`**.
 

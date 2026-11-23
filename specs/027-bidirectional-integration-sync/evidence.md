@@ -43,3 +43,21 @@ Implement agent trust + durable baseline mapping and conditional source/target A
 - Full R026 + R027 Integration Hub HTTP/PostGIS integration suite: **7/7 passed** (including the new R027 end-to-end case) in an isolated database that migrated to `0039`.
 - Workspace unit suite: **13/13 passed**, including conflict and pending-ack recovery cases; full Integration Hub unit suite: PASS. Ruff, compileall and architecture boundary check: PASS.
 - No external connector activation, headless QGIS installation, desktop UI acceptance or production deployment occurred. **R027 desktop acceptance, ADR/security review and recovery drill remain release blockers.**
+
+## 2026-11-23 — Slice C: management UI, eligible fields, ZIP/CI (staging only)
+
+- Added project-manager-only `GET /bindings/candidates`: returns only active, verified, single-part 2D layers with explicit supported CRS and validated source field IDs. Existing CSRF-protected create/pause/revoke remain draft-only; no activate endpoint.
+- Added `QgisBindingManager` to Integration Hub: layer/field choices, opaque external dataset label validation, creation of disabled QGIS drafts, revision-pinned pause/revoke, permission-denied handling and explicit not-connected status.
+- SDK candidate endpoint and smoke contract check, TypeScript typecheck, ESLint and full Vite frontend build: PASS in isolated worktree after restoring workspace dependency symlinks.
+- Real disposable PostGIS 18/3.7 HTTP Integration Hub suite after new candidate endpoint: **7/7 PASSED**. This includes cross-tenant/anonymous denials and R006 round-trip.
+- Deterministic `tools/package_qgis_plugin.py` ZIP and SHA-256, with `tools/tests/test_package_qgis_plugin.py` package guard tests: PASS. ZIP intentionally excludes hidden files, data, credentials and Python caches.
+- CI workflow `.github/workflows/qgis-connector.yml` builds uploadable experimental QGIS plugin artifact and defines native headless PyQGIS UI smoke. **Creation of workflow is not a successful native PyQGIS test; the actual run result must be inspected.**
+- No production migrations, main merge, live deployment or automatic sync activation.
+
+### Final Slice C verification
+
+- Full client SDK suite: **79/79 PASS**, TypeScript and ESLint PASS.
+- Python Integration Hub unit suite plus ZIP artifact tests: PASS; architecture boundaries PASS.
+- Web Integration Hub TS typecheck, static smoke and Vite frontend build: PASS in isolated worktree (not deployed).
+- R027 OpenAPI 3.1 draft contract validated with `openapi-spec-validator` (8 paths). Implemented draft endpoints explicitly distinguished from proposed execution endpoints.
+- Experimental QGIS plugin ZIP generated locally for packaging validation; SHA-256 recorded in its sibling `.sha256` file. GitHub Actions workflow publishes only artifacts that pass tests. Native Windows desktop certification remains pending.

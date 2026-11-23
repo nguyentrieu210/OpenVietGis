@@ -84,6 +84,19 @@ _LAYER_SQL = text("""
       AND l.id=:lid AND l.lifecycle='active' AND s.lifecycle='active'
     FOR SHARE OF l, s
 """)
+_CANDIDATES_SQL = text("""
+    SELECT l.id AS layer_id, l.name AS layer_name, l.source_id,
+           s.stored_crs, s.geometry_family, s.dimensions,
+           s.validation_state
+    FROM spatial.layers l
+    JOIN spatial.data_sources s
+      ON s.organization_id=l.organization_id
+     AND s.project_id=l.project_id AND s.id=l.source_id
+    WHERE l.organization_id=:org AND l.project_id=:proj
+      AND l.lifecycle='active' AND s.lifecycle='active'
+    ORDER BY l.name, l.id
+    LIMIT 200
+""")
 _FIELDS_SQL = text("""
     SELECT field_id FROM spatial.source_fields
     WHERE organization_id=:org AND project_id=:proj AND source_id=:sid
@@ -142,6 +155,44 @@ def _public(row: object) -> dict[str, object]:
     out["connected"] = False
     out["reason"] = "DRAFT_ONLY_AGENT_NOT_PAIRED"
     return out
+
+
+@router.get(BASE + "/candidates")
+def list_binding_candidates(
+    organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB
+) -> dict[str, object]:
+    """Expose project-manager-only layer/field choices, not executable connections."""
+    _scope(session, auth, organization_id, project_id)
+    scope = {"org": organization_id, "proj": project_id}
+    rows = session.execute(_CANDIDATES_SQL, scope).mappings().all()
+    items: list[dict[str, object]] = []
+    for row in rows:
+        if (
+            str(row["validation_state"]) != "ready"
+            or str(row["geometry_family"]) not in ("Point", "LineString", "Polygon")
+            or str(row["dimensions"]) != "XY"
+            or not is_explicit_readable_crs(row["stored_crs"], str(row["validation_state"]))
+        ):
+            continue
+        fields = session.execute(
+            _FIELDS_SQL, {**scope, "sid": row["source_id"]}
+        ).mappings().all()
+        allowed_fields = sorted(
+            str(field["field_id"])
+            for field in fields
+            if _FIELDS_PATTERN.fullmatch(str(field["field_id"]))
+        )[:100]
+        if not allowed_fields:
+            continue
+        items.append({
+            "layer_id": str(row["layer_id"]),
+            "layer_name": str(row["layer_name"]),
+            "stored_crs_code": int(row["stored_crs"]),
+            "geometry_family": str(row["geometry_family"]),
+            "allowed_field_ids": allowed_fields,
+            "binding_status": "draft_only",
+        })
+    return {"items": items}
 
 
 @router.get(BASE)

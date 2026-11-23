@@ -4,6 +4,7 @@ import {
   changeQgisBindingDraftLifecycle,
   createQgisBindingDraft,
   listIntegrationBindingDrafts,
+  listQgisBindingCandidates,
   type CreateQgisBindingDraft,
   type IntegrationBindingDraft
 } from "../src/integration-hub";
@@ -51,6 +52,15 @@ describe("R027 draft-only QGIS binding client", () => {
     expect(calls[0]!.url).toContain("/organizations/org%2Fpath/projects/proj%3Fx/integration-hub/bindings");
     expect(calls[0]!.init.method).toBe("GET");
     expect(new Headers(calls[0]!.init.headers).has("authorization")).toBe(false);
+  });
+
+  it("fetches project-scoped eligible QGIS fields only", async () => {
+    const { client, calls } = mock();
+    await listQgisBindingCandidates(client, "org", "proj");
+    expect(calls[0]!.url).toContain(
+      "/organizations/org/projects/proj/integration-hub/bindings/candidates"
+    );
+    expect(calls[0]!.init.method).toBe("GET");
   });
 
   it("creates only disabled draft metadata with CSRF, never credentials", async () => {

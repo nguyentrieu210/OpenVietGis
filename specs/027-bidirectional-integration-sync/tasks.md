@@ -60,6 +60,13 @@
 - [ ] **T031** Stage exact commit+image+DB migration, run rollback/restore drill and monitor credentials, queue, audit and data equality.
 - [ ] **T032** Merge only after review and CI gates; production deploy and verify actual round-trip/rollback with explicitly authorized synthetic project data.
 
+## Verified implementation snapshots (not a blanket completion claim)
+
+- **Slice A:** R027 binding drafts + per-project ACL/RLS, safe three-way diff and typed SDK. API activation remains denied by database constraint.
+- **Slice B:** Manual QGIS GeoPackage workspace and R006 two-step push, conflict quarantine, server read-back and uncertain-ack recovery. Real FastAPI HTTP+PostGIS E2E and workspace unit tests passed; no automatic adapter.
+- **Slice C:** Integration Hub QGIS binding manager (eligible layer/field discovery, draft/pause/revoke), deterministic installable QGIS 0.3.0 ZIP packager, CI with offscreen native PyQGIS smoke on the R027 branch. Native PyQGIS CI outcome is pending until actual workflow execution.
+- **Blocking still open:** verified QGIS on Windows, distinct identity-mapping journal and trusted agent pairing, transactional inbox/outbox/cursors, conditional remote acks, automatic scheduling, conflict UI resolution, threat model, rollback drill, other providers and live production acceptance.
+
 ## Dependency order / parallel agent ownership
 
 - **Architect**: T002–T005, ADR, contract semantics and CRS/revision assumptions.

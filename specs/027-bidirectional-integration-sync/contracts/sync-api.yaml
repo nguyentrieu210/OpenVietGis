@@ -3,8 +3,11 @@ info:
   title: OpenVietGIS R027 Bidirectional Integration Sync — DRAFT CONTRACT
   version: 0.27.0-draft
   description: >
-    PROPOSED endpoints only. No R027 route is implemented or deployed by the
-    creation of this document. R026 remains the discovery/policy foundation.
+    Mixed-stage R027 design: branch-only experimental GET/POST binding drafts,
+    GET binding candidates and pause/revoke exist. All sync preview/commit/ack,
+    agent pairing and automated execution endpoints below are PROPOSED ONLY.
+    None of these R027 endpoints is deployed by publishing the document.
+    R026 remains the discovery/policy foundation.
     Server-side R002 tenant authorization, GIS ACL, R003 explicit CRS and R006
     changesets are mandatory. Default deny all writes and deletes.
 servers:
@@ -17,8 +20,10 @@ paths:
     get:
       tags: [Bindings]
       operationId: r027ListBindings
-      security: [{sessionCookie: []}, {serviceBearer: []}]
-      description: List project-scoped authorized bindings and nonsecret status.
+      x-release-status: branch_only_experimental
+      x-required-permission: project.manage
+      security: [{sessionCookie: []}]
+      description: List human-manager-only disabled bindings and nonsecret status.
       parameters: [{ $ref: '#/components/parameters/OrgId' }, { $ref: '#/components/parameters/ProjectId' }]
       responses:
         '200':
@@ -37,6 +42,7 @@ paths:
     post:
       tags: [Bindings]
       operationId: r027CreateBindingDraft
+      x-release-status: branch_only_experimental
       security: [{sessionCookie: []}]
       x-required-permission: project.manage
       description: Creates DISABLED draft only; CSRF and current project/tenant authorization required.
@@ -56,16 +62,40 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/candidates:
+    get:
+      tags: [Bindings]
+      operationId: r027ListQgisBindingCandidates
+      x-release-status: branch_only_experimental
+      x-required-permission: project.manage
+      security: [{sessionCookie: []}]
+      description: Human-manager-only listing of verified, active 2D layers and allowed field IDs.
+      parameters: [{ $ref: '#/components/parameters/OrgId' }, { $ref: '#/components/parameters/ProjectId' }]
+      responses:
+        '200':
+          description: Eligible layers scoped to project and GIS ACL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/QgisBindingCandidate' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/lifecycle:
     post:
       tags: [Bindings]
       operationId: r027SetBindingLifecycle
+      x-release-status: branch_only_experimental
       security: [{sessionCookie: []}]
       x-required-permission: project.manage
       description: >
-        Explicit manager activation/pause/revoke; activation requires verified
-        adapter capability, scoped grants and audited authorization. Revocation
-        invalidates queued approvals and prevents further worker execution.
+        Branch-only manual manager pause/revoke; no activation, resume or
+        worker execution exists in this release. Requires CSRF and revision pin.
       parameters:
         - { $ref: '#/components/parameters/OrgId' }
         - { $ref: '#/components/parameters/ProjectId' }
@@ -79,8 +109,8 @@ paths:
               additionalProperties: false
               required: [action, expected_revision]
               properties:
-                action: {type: string, enum: [activate, pause, resume, revoke]}
-                expected_revision: {type: integer, minimum: 0}
+                action: {type: string, enum: [pause, revoke]}
+                expected_revision: {type: integer, minimum: 1}
       responses:
         '200':
           description: Updated binding metadata only.
@@ -95,6 +125,7 @@ paths:
     post:
       tags: [Sync]
       operationId: r027PreviewBidirectionalSync
+      x-release-status: proposed_not_implemented
       security: [{sessionCookie: []}]
       x-required-permission: project.edit
       description: >
@@ -132,6 +163,7 @@ paths:
     post:
       tags: [Sync]
       operationId: r027CommitApprovedSync
+      x-release-status: proposed_not_implemented
       security: [{sessionCookie: []}]
       x-required-permission: project.edit
       description: >
@@ -163,6 +195,7 @@ paths:
     get:
       tags: [Sync]
       operationId: r027ListSyncRuns
+      x-release-status: proposed_not_implemented
       security: [{sessionCookie: []}, {serviceBearer: []}]
       parameters:
         - { $ref: '#/components/parameters/OrgId' }
@@ -187,6 +220,7 @@ paths:
     post:
       tags: [Sync]
       operationId: r027AcknowledgeConditionalDelivery
+      x-release-status: proposed_not_implemented
       security: [{serviceBearer: []}]
       description: >
         Agent-bound conditional delivery receipt. Requires a separately scoped
@@ -216,6 +250,7 @@ paths:
     post:
       tags: [Sync]
       operationId: r027ResolveConflict
+      x-release-status: proposed_not_implemented
       security: [{sessionCookie: []}]
       x-required-permission: project.edit
       description: >
@@ -293,10 +328,22 @@ components:
       required: true
       schema: {type: string, format: uuid}
   schemas:
+    QgisBindingCandidate:
+      type: object
+      required: [layer_id, layer_name, stored_crs_code, geometry_family, allowed_field_ids, binding_status]
+      properties:
+        layer_id: {type: string, format: uuid}
+        layer_name: {type: string}
+        stored_crs_code: {type: integer, minimum: 1}
+        geometry_family: {type: string, enum: [Point, LineString, Polygon]}
+        allowed_field_ids:
+          type: array
+          items: {type: string}
+        binding_status: {type: string, const: draft_only}
     CreateBinding:
       type: object
       additionalProperties: false
-      required: [adapter_key, layer_id, external_dataset_ref, direction, source_crs, target_crs, external_primary_key]
+      required: [adapter_key, layer_id, external_dataset_ref, direction, source_crs_code, target_crs_code, external_primary_key, allowed_field_ids]
       properties:
         adapter_key: {type: string, minLength: 1, maxLength: 80}
         layer_id: {type: string, format: uuid}
@@ -305,10 +352,10 @@ components:
           type: string
           enum: [pull_only, push_only, bidirectional_manual, bidirectional_auto]
           default: bidirectional_manual
-        source_crs: {type: string, pattern: '^EPSG:[0-9]+$'}
-        target_crs: {type: string, pattern: '^EPSG:[0-9]+$'}
+        source_crs_code: {type: integer, minimum: 1}
+        target_crs_code: {type: integer, minimum: 1}
         external_primary_key: {type: string, minLength: 1, maxLength: 128}
-        allowed_fields:
+        allowed_field_ids:
           type: array
           items: {type: string, minLength: 1}
         field_mapping:

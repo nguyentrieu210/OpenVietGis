@@ -717,6 +717,7 @@ describe("Integration Hub client SDK", () => {
       "getIntegrationHubAdapterProfile",
       "getIntegrationHubCatalog",
       "listIntegrationBindingDrafts",
+      "listQgisBindingCandidates",
       "previewQgisGpkgSync",
       "pushQgisGpkgSync"
     ]);

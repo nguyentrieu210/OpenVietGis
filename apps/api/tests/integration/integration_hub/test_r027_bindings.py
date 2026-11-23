@@ -38,6 +38,13 @@ def test_r027_draft_binding_is_scoped_and_non_executable(migrated_database: None
                 {"org": own.organization_id, "proj": own.project_id, "src": source_id},
             ).scalars().all()
         assert fields
+        options = owner.get(f"{root}/candidates")
+        assert options.status_code == 200, options.text
+        matching = [item for item in options.json()["items"] if item["layer_id"] == layer_id]
+        assert len(matching) == 1
+        assert matching[0]["stored_crs_code"] == 5899
+        assert set(fields) <= set(matching[0]["allowed_field_ids"])
+        assert matching[0]["binding_status"] == "draft_only"
         payload = {
             "layer_id": layer_id,
             "adapter_key": "qgis",
@@ -104,6 +111,7 @@ def test_r027_draft_binding_is_scoped_and_non_executable(migrated_database: None
         assert revoked.json()["writes_allowed"] is False
 
     with _client(foreign.owner_user_id) as outsider:
+        assert outsider.get(f"{root}/candidates").status_code in (403, 404)
         result = outsider.get(root)
         assert result.status_code in (403, 404)
         result = outsider.post(root, json=payload)
@@ -111,4 +119,5 @@ def test_r027_draft_binding_is_scoped_and_non_executable(migrated_database: None
 
     with TestClient(create_app()) as anonymous:
         assert anonymous.get(root).status_code == 401
+        assert anonymous.get(f"{root}/candidates").status_code == 401
         assert anonymous.post(root, json=payload).status_code == 401
