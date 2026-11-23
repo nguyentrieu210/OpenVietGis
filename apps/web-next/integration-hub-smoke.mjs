@@ -210,16 +210,22 @@ async function verifyTypedSdkRuntime() {
 
   const exportedNames = Object.keys(integrationHub).sort();
   assert.deepEqual(exportedNames, [
+    "activateQgisBinding",
     "buildIntegrationLayerExportPath",
     "changeQgisBindingDraftLifecycle",
     "createQgisBindingDraft",
     "downloadIntegrationLayerExport",
     "getIntegrationHubAdapterProfile",
     "getIntegrationHubCatalog",
+    "issueBindingPairingToken",
+    "listBindingConflicts",
+    "listBindingPairingTokens",
     "listIntegrationBindingDrafts",
     "listQgisBindingCandidates",
     "previewQgisGpkgSync",
-    "pushQgisGpkgSync"
+    "pushQgisGpkgSync",
+    "resolveBindingConflict",
+    "revokeBindingPairingToken"
   ]);
 
   const indexSource = await readFile(sdkIndexPath, "utf8");

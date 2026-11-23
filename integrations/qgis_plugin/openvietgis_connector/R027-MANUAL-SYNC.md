@@ -1,4 +1,4 @@
-# Hướng dẫn cài đặt & đồng bộ 2 chiều QGIS ↔ OpenVietGIS (Plugin 0.3.0)
+# Hướng dẫn cài đặt & đồng bộ 2 chiều QGIS ↔ OpenVietGIS (Plugin 0.4.0)
 
 > **Lưu ý nhanh:** Đây là luồng đồng bộ **2 chiều thủ công qua GeoPackage** (bấm xem trước rồi bấm xác nhận), **không phải** đồng bộ tự động chạy ngầm. Mọi thay đổi đẩy lên OpenVietGIS đều đi qua HTTPS, kiểm tra phân quyền dự án và ghi bằng R006 Changeset (không mở cổng database trực tiếp).
 
@@ -20,24 +20,20 @@
 ## 2. Cách cài Plugin vào QGIS Desktop (3 bước)
 
 1. **Tải file plugin ZIP** trực tiếp tại:
-   - 👉 [openvietgis_connector-0.3.0.zip](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.3.0.zip)
-   - (Tùy chọn kiểm tra toàn vẹn tệp: [openvietgis_connector-0.3.0.zip.sha256](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.3.0.zip.sha256))
+   - 👉 [openvietgis_connector-0.4.0.zip](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.4.0.zip)
+   - (Tùy chọn kiểm tra toàn vẹn tệp: [openvietgis_connector-0.4.0.zip.sha256](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.4.0.zip.sha256))
 2. Mở **QGIS Desktop** → vào menu **Plugins → Manage and Install Plugins… → Install from ZIP**.
-3. Chọn file `openvietgis_connector-0.3.0.zip` vừa tải → bấm **Install Plugin**.
+3. Chọn file `openvietgis_connector-0.4.0.zip` vừa tải → bấm **Install Plugin**.
 4. Sau khi cài xong, mở plugin từ menu **Web → OpenVietGIS**.
 
 ---
 
 ## 3. Quy trình đồng bộ 2 chiều thủ công (từng bước)
 
-### Bước 1 — Kết nối và tạo bản làm việc
-1. Mở **Web → OpenVietGIS**, điền 4 thông tin:
-   - **URL máy chủ**: `https://openvietgis.cloud`
-   - **Organization UUID** (mã tổ chức)
-   - **Project UUID** (mã dự án)
-   - **API Key (Bearer Token)** — khóa chỉ nằm trong RAM khi hộp thoại đang mở, **không bao giờ lưu xuống ổ cứng**.
-2. Bấm tải danh sách lớp và chọn lớp cần làm việc.
-3. Trong khung **R027**, bấm **1. Tạo bản làm việc**. Plugin sẽ tải GeoPackage (có kiểm tra SHA-256) và tạo thư mục `ovg_qgis_<layer_uuid>/` gồm:
+### Bước 1 — Ghép nối nhanh (không cần vào Developer Portal)
+1. Trên web `https://openvietgis.cloud`, mở **⇄ Trung tâm Tích hợp** → thẻ **QGIS** → tạo cấu hình lớp và bấm **🔑 Mã ghép nối QGIS** → **Tạo mã ghép nối mới** → sao chép chuỗi `ovg-pair-v1:...`.
+2. Mở **QGIS → Web → OpenVietGIS**, dán chuỗi `ovg-pair-v1:...` vào ô **Mã ghép nối nhanh (R027)** rồi bấm **Áp dụng mã ghép nối** — plugin tự động điền URL, Organization UUID, Project UUID, khóa Bearer và tải danh sách lớp luôn (khóa chỉ nằm trong RAM, **không lưu xuống ổ cứng**).
+3. Chọn lớp cần làm việc và trong khung **R027**, bấm **1. Tạo bản làm việc**. Plugin sẽ tải GeoPackage (có kiểm tra SHA-256) và tạo thư mục `ovg_qgis_<layer_uuid>/` gồm:
    - `baseline.gpkg`: bản gốc mốc so sánh gần nhất.
    - `working.gpkg`: bản làm việc tự động nạp sẵn lên bản đồ QGIS để bạn biên tập.
    - `workspace.json`: lưu mã phiên bản (revision) và mã băm SHA-256 (**không chứa API key**).

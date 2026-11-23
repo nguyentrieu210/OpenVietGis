@@ -13,6 +13,7 @@ in any standard Python environment. It enforces:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -50,6 +51,35 @@ _LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 class OpenVietGisError(Exception):
     """Base exception for OpenVietGIS read-only connector errors."""
+
+
+def decode_pairing_code(raw: str) -> dict[str, str]:
+    """Decode an ovg-pair-v1:<base64url> pairing bundle issued by OpenVietGIS R027."""
+    token = raw.strip()
+    if not token.startswith("ovg-pair-v1:"):
+        raise OpenVietGisError("Mã ghép nối phải bắt đầu bằng 'ovg-pair-v1:'.")
+    encoded = token.split(":", 1)[1].strip()
+    if not encoded:
+        raise OpenVietGisError("Mã ghép nối rỗng.")
+    padding = "=" * (-len(encoded) % 4)
+    try:
+        data = json.loads(base64.urlsafe_b64decode(encoded + padding).decode("utf-8"))
+    except Exception as exc:
+        raise OpenVietGisError("Không thể giải mã chuỗi ghép nối R027.") from exc
+    if not isinstance(data, dict) or data.get("v") != 1:
+        raise OpenVietGisError("Phiên bản mã ghép nối không được hỗ trợ.")
+    required = ("server_url", "organization_id", "project_id", "bearer_token")
+    out: dict[str, str] = {}
+    for key in required:
+        val = str(data.get(key) or "").strip()
+        if not val:
+            raise OpenVietGisError(f"Mã ghép nối thiếu trường bắt buộc: {key}")
+        out[key] = val
+    for optional in ("binding_id", "layer_id", "external_dataset_ref"):
+        val = str(data.get(optional) or "").strip()
+        if val:
+            out[optional] = val
+    return out
 
 
 class ConfigurationError(OpenVietGisError):

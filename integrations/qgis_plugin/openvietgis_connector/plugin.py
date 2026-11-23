@@ -52,6 +52,7 @@ from .client import (
     OpenVietGisError,
     QgisLayerInfo,
     SyncPreviewResult,
+    decode_pairing_code,
     download_layer_geopackage,
     fetch_qgis_profile,
     preview_layer_geopackage_sync,
@@ -112,6 +113,18 @@ class OpenVietGisConnectorDialog(QDialog):
         root_layout.addWidget(notice_label)
 
         form = QFormLayout()
+
+        pairing_row = QHBoxLayout()
+        self.pairing_code_input = QLineEdit()
+        self.pairing_code_input.setEchoMode(QLineEdit.Password)
+        self.pairing_code_input.setPlaceholderText(
+            "Dán mã ghép nối nhanh ovg-pair-v1:... từ Trung tâm Tích hợp (không cần Developer Portal)"
+        )
+        self.apply_pairing_button = QPushButton("Áp dụng mã ghép nối")
+        self.apply_pairing_button.clicked.connect(self._on_apply_pairing_code)
+        pairing_row.addWidget(self.pairing_code_input)
+        pairing_row.addWidget(self.apply_pairing_button)
+        form.addRow("Mã ghép nối nhanh (R027):", pairing_row)
 
         self.server_url_input = QLineEdit()
         self.server_url_input.setPlaceholderText("https://gis.example.vn")
@@ -295,6 +308,25 @@ class OpenVietGisConnectorDialog(QDialog):
             bearer_token=self.bearer_key_input.text(),
             allow_insecure_localhost=self.allow_localhost_checkbox.isChecked(),
         )
+
+    def _on_apply_pairing_code(self) -> None:
+        raw = self.pairing_code_input.text().strip()
+        if not raw:
+            QMessageBox.warning(
+                self, "OpenVietGIS Connector", "Hãy dán mã ghép nối ovg-pair-v1:... trước."
+            )
+            return
+        try:
+            parsed = decode_pairing_code(raw)
+        except OpenVietGisError as exc:
+            QMessageBox.warning(self, "Mã ghép nối không hợp lệ", str(exc))
+            return
+        self.server_url_input.setText(parsed["server_url"])
+        self.org_id_input.setText(parsed["organization_id"])
+        self.project_id_input.setText(parsed["project_id"])
+        self.bearer_key_input.setText(parsed["bearer_token"])
+        self.pairing_code_input.clear()
+        self._on_load_layers()
 
     def _on_browse_dir(self) -> None:
         selected = QFileDialog.getExistingDirectory(

@@ -537,14 +537,17 @@ export interface IntegrationBindingDraft {
   allowed_field_ids: string[];
   base_content_revision: string;
   base_schema_revision: string;
-  state: "draft" | "paused" | "revoked";
+  state: "draft" | "active" | "paused" | "revoked";
   revision: number;
   created_at: string;
   updated_at: string;
-  writes_allowed: false;
+  activated_at?: string | null;
+  last_paired_at?: string | null;
+  open_conflicts_count?: number;
+  writes_allowed: boolean;
   deletes_allowed: false;
-  connected: false;
-  reason: "DRAFT_ONLY_AGENT_NOT_PAIRED";
+  connected: boolean;
+  reason: string;
 }
 
 export interface CreateQgisBindingDraft {
@@ -629,5 +632,167 @@ export function listQgisBindingCandidates(
   return client.request<{ items: QgisBindingCandidate[] }>(
     integrationHubRoot(organizationId, projectId) + "/bindings/candidates",
     { method: "GET", cache: "no-store" }
+  );
+}
+
+/** R027 Pha A: Explicitly activate a draft or paused QGIS binding. */
+export function activateQgisBinding(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string,
+  expectedRevision: number,
+  csrfToken?: string
+): Promise<IntegrationBindingDraft> {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    throw new Error("Expected a positive integer binding revision.");
+  }
+  return client.request<IntegrationBindingDraft>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/activate",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {},
+      body: JSON.stringify({ expected_revision: expectedRevision })
+    }
+  );
+}
+
+export interface BindingPairingToken {
+  id: string;
+  binding_id: string;
+  label: string;
+  token_prefix: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface IssuedPairingTokenResponse {
+  token: BindingPairingToken;
+  binding: IntegrationBindingDraft;
+  pairing_code: string;
+  bearer_token: string;
+}
+
+export function listBindingPairingTokens(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string
+): Promise<{ items: BindingPairingToken[] }> {
+  return client.request<{ items: BindingPairingToken[] }>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/pairing-tokens",
+    { method: "GET", cache: "no-store" }
+  );
+}
+
+export function issueBindingPairingToken(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string,
+  input: { label?: string; expires_in_days?: number },
+  csrfToken?: string
+): Promise<IssuedPairingTokenResponse> {
+  return client.request<IssuedPairingTokenResponse>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/pairing-tokens",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {},
+      body: JSON.stringify(input)
+    }
+  );
+}
+
+export function revokeBindingPairingToken(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string,
+  tokenId: string,
+  csrfToken?: string
+): Promise<BindingPairingToken> {
+  return client.request<BindingPairingToken>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/pairing-tokens/" +
+      encodeURIComponent(tokenId) +
+      "/revoke",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {}
+    }
+  );
+}
+
+/** R027 Pha B: Per-feature conflict ledger and resolution. */
+export interface SyncConflictRecord {
+  id: string;
+  binding_id: string;
+  layer_id: string;
+  feature_id: string;
+  conflict_kind: "attribute" | "geometry" | "delete_candidate";
+  field_name: string | null;
+  baseline_value: unknown;
+  web_value: unknown;
+  qgis_value: unknown;
+  status: "open" | "resolved_web" | "resolved_qgis" | "resolved_merged" | "dismissed";
+  resolved_value: unknown;
+  resolution_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export function listBindingConflicts(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string
+): Promise<{ items: SyncConflictRecord[] }> {
+  return client.request<{ items: SyncConflictRecord[] }>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/conflicts",
+    { method: "GET", cache: "no-store" }
+  );
+}
+
+export function resolveBindingConflict(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string,
+  conflictId: string,
+  input: {
+    decision: "keep_web" | "keep_qgis" | "merge" | "dismiss";
+    merged_value?: unknown;
+    note?: string;
+  },
+  csrfToken?: string
+): Promise<SyncConflictRecord> {
+  return client.request<SyncConflictRecord>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" +
+      encodeURIComponent(bindingId) +
+      "/conflicts/" +
+      encodeURIComponent(conflictId) +
+      "/resolve",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {},
+      body: JSON.stringify(input)
+    }
   );
 }
