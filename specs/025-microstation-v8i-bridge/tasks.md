@@ -31,5 +31,5 @@ Base commit: `5baade9`; feature branch: `feature/025-microstation-v8i-bridge`.
 - Implemented in isolated tracks and merged to R025 feature: Windows COM scan preview, authenticated project-scoped capability discovery, browser-only local JSON snapshot inspector, QA fake-COM suite.
 - 23 portable Windows/contract tests PASS; API unit capability test PASS; Ruff PASS; web and web-next TypeScript checks PASS in an agent worktree with shared dev dependencies.
 - NOT YET VERIFIED: any MicroStation V8i Windows COM behavior, unit conversion to VN-2000, FAMIS/gCadas attributes, online sync, real database authorization integration.
-- PostgreSQL integration gate blocked: shared test DB currently holds unresolvable legacy Alembic revision 0019_extension_lifecycle; an ephemeral container attempt failed with loopback connection refused. No shared DB reset or live migration.
+- PostgreSQL authorization: 2/2 API tests PASS on fresh disposable PostGIS, after full Core + House Numbering migration, including owner/outsider authorization. Shared stale test DB was not reset. Additional user-role and credential boundary tests remain for the future pairing milestone.
 - No production network credentials, branch merges into main, or live rollout.
