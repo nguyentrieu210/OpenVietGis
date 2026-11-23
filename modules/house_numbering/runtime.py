@@ -441,6 +441,39 @@ def get_geometry_reviews(
     return list_geometry_reviews(_service(organization_id,project_id,auth,session).repo,offset,limit)
 
 
+class AddressVerificationApply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    evidence_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_revision: int = Field(ge=0)
+    decision: Literal["belongs","other_address"]
+    verified_road: str = Field(min_length=1,max_length=200)
+    verified_prefix: str = Field(default="",max_length=100)
+    evidence: str = Field(min_length=10,max_length=500)
+
+
+@router.get(f"{_PROJ}/geometry-reviews/{{review_id}}/addresses")
+def get_geometry_addresses(
+    organization_id: UUID, project_id: UUID, review_id: UUID,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    offset: int=0, limit: int=100,
+) -> dict[str,Any]:
+    from modules.house_numbering.address_verification import address_review_list
+    if offset<0 or not 1<=limit<=100:
+        raise PlatformValidationError("Lô địa chỉ không hợp lệ",code="INVALID_ADDRESS_REVIEW")
+    return address_review_list(_service(organization_id,project_id,auth,session).repo,review_id,offset,limit)
+
+
+@router.put(f"{_PROJ}/geometry-reviews/{{review_id}}/addresses/{{building_id}}")
+def verify_geometry_address(
+    organization_id: UUID, project_id: UUID, review_id: UUID, building_id: UUID, body: AddressVerificationApply,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.address_verification import save_address_review
+    return save_address_review(_service(organization_id,project_id,auth,session).repo,review_id,building_id,**body.model_dump())
+
+
 @router.post(f"{_PROJ}/route-import/stage-geometry",status_code=201)
 def stage_route_geometry(
     organization_id: UUID,project_id: UUID,body: GeometryReviewApply,
