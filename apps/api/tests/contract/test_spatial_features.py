@@ -207,6 +207,10 @@ def feature_http(monkeypatch: pytest.MonkeyPatch) -> Iterator[FeatureHTTP]:
         with Session() as session:
             yield session
 
+    monkeypatch.setattr(
+        "openvietgis_api.adapters.http.spatial.filtered_layer_wire",
+        lambda _session, _context, wire: wire,
+    )
     app = create_app()
     app.dependency_overrides[authenticate_request] = authenticate
     app.dependency_overrides[get_db_session] = no_database

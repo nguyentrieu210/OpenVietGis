@@ -5,12 +5,12 @@ import {customMeshLayer,terrainMesh,modelMesh,type PlacedModel,type InteractiveM
 import {checkSceneBudget} from "./mesh-picking";
 import type {TerrainGrid} from "./terrain";
 import "maplibre-gl/dist/maplibre-gl.css";
-export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number}>;
+export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number;pitch?:number}>;
 export type NamedModel=Readonly<{id:string;placement:PlacedModel}>;
-export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void;selectModel(id:string):void;setLayerVisible(id:string,visible:boolean):void};
+export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void;selectModel(id:string):void;setLayerVisible(id:string,visible:boolean):void;getCamera():GeographicCamera};
 export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void,extras?:{terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void}):Promise<SelectableFootprintEngine>{
  if(signal.aborted)throw new DOMException("Aborted","AbortError");
- if(![camera.longitude,camera.latitude,camera.zoom,camera.bearing].every(Number.isFinite)||Math.abs(camera.longitude)>180||Math.abs(camera.latitude)>85||camera.zoom<0||camera.zoom>22)throw Error("Invalid camera");
+ if(![camera.longitude,camera.latitude,camera.zoom,camera.bearing].every(Number.isFinite)||Math.abs(camera.longitude)>180||Math.abs(camera.latitude)>85||camera.zoom<0||camera.zoom>22||(camera.pitch!==undefined&&(!Number.isFinite(camera.pitch)||camera.pitch<0||camera.pitch>75)))throw Error("Invalid camera");
  const models=extras?.models??(extras?.model?[{id:"local",placement:extras.model}]:[]);checkSceneBudget(models.map(v=>v.placement.model));
  if(new Set(models.map(v=>v.id)).size!==models.length||models.some(v=>!v.id||v.id==="terrain"||v.id==="footprints"))throw Error("Invalid model identities");
  const {Map,NavigationControl}=await import("maplibre-gl");
@@ -25,7 +25,7 @@ export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,cam
  const select=(featureId:string)=>{if(disposed||!map)return;const selected=ids.has(featureId)?featureId:"";map.setPaintProperty("building-extrusion","fill-extrusion-color",["case",["==",["get","featureId"],selected],"#f59e0b","#326dba"]);};
  const dispose=()=>{if(disposed)return;disposed=true;active=false;map?.remove();surface.remove()};
  try{
-  map=new Map({container:surface,center:[camera.longitude,camera.latitude],zoom:camera.zoom,bearing:camera.bearing,pitch:58,maxPitch:75,attributionControl:false,style:{version:8,sources:{footprints:{type:"geojson",data:view}},layers:[
+  map=new Map({container:surface,center:[camera.longitude,camera.latitude],zoom:camera.zoom,bearing:camera.bearing,pitch:camera.pitch??58,maxPitch:75,attributionControl:false,style:{version:8,sources:{footprints:{type:"geojson",data:view}},layers:[
    {id:"background",type:"background",paint:{"background-color":"#dce6e8"}},
    {id:"footprint-ground",type:"fill",source:"footprints",paint:{"fill-color":"#607d8b","fill-opacity":.35}},
    {id:"building-extrusion",type:"fill-extrusion",source:"footprints",paint:{"fill-extrusion-color":"#326dba","fill-extrusion-base":["get","base"],"fill-extrusion-height":["get","top"],"fill-extrusion-opacity":.9}}
@@ -48,6 +48,6 @@ export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,cam
    if(hit&&(ground==null||best<=ground+1e-7)){selectModel(hit);extras?.onModelPick?.(hit);return}
    if(footprintVisible){const id=map.queryRenderedFeatures(e.point,{layers:["building-extrusion"]})[0]?.properties.featureId;if(typeof id==="string"&&ids.has(id)){selectModel("");select(id);onPick(id)}}
   });
-  return {select,selectModel,setLayerVisible,activate(){if(disposed)throw Error("Disposed 3D surface");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize()},dispose};
+  return {select,selectModel,setLayerVisible,getCamera(){if(!map||disposed)throw Error("Disposed 3D surface");const p=map.getCenter().wrap();return {longitude:p.lng,latitude:p.lat,zoom:map.getZoom(),bearing:map.getBearing(),pitch:map.getPitch()}},activate(){if(disposed)throw Error("Disposed 3D surface");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";map?.resize()},dispose};
  }catch(error){dispose();throw error}
 }

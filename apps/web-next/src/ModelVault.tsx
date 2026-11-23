@@ -6,24 +6,26 @@ import {modelNumbers,modelId,checkModels,matchesReference,type LocalModel,type S
 type Profile={source_id:string;feature_id:string;source_revision:string;longitude:number;latitude:number;crs_code:4326;scale:number;rotation_deg:number;offset_m:number;dem_id:string|null;vertical_reference:SceneOptions["reference"];reference_label:string;altitude_mode:"relative-dem"|"relative-flat"};
 export type ModelRecord={id:string;filename:string;format:"glb"|"gltf";sha256:string;byte_size:number;version:number;profile:Profile;created_at:string};
 const uuid=(v:unknown):v is string=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-function valid(v:ModelRecord):boolean{
+export function validModelRecord(v:ModelRecord):boolean{
  const p=v?.profile;return !!p&&uuid(v.id)&&typeof v.filename==="string"&&["glb","gltf"].includes(v.format)&&/^[0-9a-f]{64}$/.test(v.sha256)&&Number.isInteger(v.byte_size)&&v.byte_size>0&&v.byte_size<=MODEL_MAX_BYTES&&Number.isInteger(v.version)&&v.version>=1&&v.version<=50&&uuid(p.source_id)&&typeof p.feature_id==="string"&&/^[0-9a-f]{64}$/.test(p.source_revision)&&p.crs_code===4326&&[p.longitude,p.latitude,p.scale,p.rotation_deg,p.offset_m].every(Number.isFinite)&&Math.abs(p.longitude)<=180&&Math.abs(p.latitude)<=85&&p.scale>=.01&&p.scale<=100&&Math.abs(p.rotation_deg)<=360&&Math.abs(p.offset_m)<=1000&&["local","orthometric","ellipsoidal"].includes(p.vertical_reference)&&typeof p.reference_label==="string"&&(p.dem_id===null?p.altitude_mode==="relative-flat"&&p.reference_label===""&&p.vertical_reference==="local":uuid(p.dem_id)&&p.altitude_mode==="relative-dem"&&!!p.reference_label);
 }
-export function ModelVault({client,path,options,onChange,rows,enabled,canEdit,expire,onBusy}:{client:ApiClient;path:string;options:SceneOptions;onChange:(s:SceneOptions)=>void;rows:StudioRow[];enabled:boolean;canEdit:boolean;expire:()=>void;onBusy:(b:boolean)=>void}){
- const [items,setItems]=useState<ModelRecord[]>([]),[history,setHistory]=useState<ModelRecord[]>([]),[selected,setSelected]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
- const active=useRef(false),abort=useRef(new AbortController()),pending=useRef(false),latest=useRef({options,rows,canEdit});latest.current={options,rows,canEdit};
- const list=async(signal:AbortSignal)=>{const r=await client.request<{items:ModelRecord[]}>(path,{cache:"no-store",signal});if(!signal.aborted)setItems(r.items.filter(valid))};
- const error=(e:unknown)=>{if(e instanceof ApiError&&e.status===401)expire();else setMessage(e instanceof ApiError?e.status===409?"Phiên bản đã thay đổi, tải lại kho.":e.status===403?"Không có quyền.":e.status===422?"Không hợp lệ: kiểm tra mô hình, đối tượng GIS và mốc DEM.":"Không tải/lưu được kho mô hình.":e instanceof Error?e.message:"Không tải/lưu được kho mô hình.")};
- useEffect(()=>{active.current=true;const a=new AbortController();abort.current=a;pending.current=false;setItems([]);setHistory([]);setSelected("");setMessage("");void list(a.signal).catch(e=>{if(!a.signal.aborted)error(e)});return()=>{active.current=false;a.abort();onBusy(false)}},[client,path]);
- const task=async(fn:(signal:AbortSignal)=>Promise<void>)=>{if(!enabled||pending.current)return;const signal=abort.current.signal;pending.current=true;setBusy(true);onBusy(true);setMessage("");try{await fn(signal)}catch(e){if(!signal.aborted)error(e)}finally{if(!signal.aborted){pending.current=false;setBusy(false);onBusy(false)}}};
- const loadHistory=async(id:string,signal:AbortSignal)=>{const r=await client.request<{items:ModelRecord[]}>(path+"/"+id+"/placements",{cache:"no-store",signal});if(!signal.aborted){setSelected(id);setHistory(r.items.filter(v=>valid(v)&&v.id===id))}};
- const readModel=async(v:ModelRecord,signal:AbortSignal):Promise<LocalModel>=>{
+export async function fetchModelRecord(client:ApiClient,path:string,v:ModelRecord,signal:AbortSignal):Promise<LocalModel>{
+  if(!validModelRecord(v))throw Error("Thông tin mô hình không hợp lệ.");
   const response=await client.requestRaw(path+"/"+v.id+"/download",{cache:"no-store",signal});
   const bytes=await response.arrayBuffer();if(bytes.byteLength!==v.byte_size)throw Error("Kích thước mô hình không khớp.");
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),n=>n.toString(16).padStart(2,"0")).join("");
   if(digest!==v.sha256)throw Error("SHA-256 mô hình không khớp.");const mesh=parseStaticModel(bytes,v.format);if(signal.aborted)throw new DOMException("Aborted","AbortError");
   const p=v.profile;return {name:v.filename,mesh,rowKey:featureKey(p.source_id,p.feature_id),scale:String(p.scale),rotation:String(p.rotation_deg),offset:String(p.offset_m),saved:v};
- };
+}
+export function ModelVault({client,path,options,onChange,rows,enabled,canEdit,expire,onBusy}:{client:ApiClient;path:string;options:SceneOptions;onChange:(s:SceneOptions)=>void;rows:StudioRow[];enabled:boolean;canEdit:boolean;expire:()=>void;onBusy:(b:boolean)=>void}){
+ const [items,setItems]=useState<ModelRecord[]>([]),[history,setHistory]=useState<ModelRecord[]>([]),[selected,setSelected]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
+ const active=useRef(false),abort=useRef(new AbortController()),pending=useRef(false),latest=useRef({options,rows,canEdit});latest.current={options,rows,canEdit};
+ const list=async(signal:AbortSignal)=>{const r=await client.request<{items:ModelRecord[]}>(path,{cache:"no-store",signal});if(!signal.aborted)setItems(r.items.filter(validModelRecord))};
+ const error=(e:unknown)=>{if(e instanceof ApiError&&e.status===401)expire();else setMessage(e instanceof ApiError?e.status===409?"Phiên bản đã thay đổi, tải lại kho.":e.status===403?"Không có quyền.":e.status===422?"Không hợp lệ: kiểm tra mô hình, đối tượng GIS và mốc DEM.":"Không tải/lưu được kho mô hình.":e instanceof Error?e.message:"Không tải/lưu được kho mô hình.")};
+ useEffect(()=>{active.current=true;const a=new AbortController();abort.current=a;pending.current=false;setItems([]);setHistory([]);setSelected("");setMessage("");void list(a.signal).catch(e=>{if(!a.signal.aborted)error(e)});return()=>{active.current=false;a.abort();onBusy(false)}},[client,path]);
+ const task=async(fn:(signal:AbortSignal)=>Promise<void>)=>{if(!enabled||pending.current)return;const signal=abort.current.signal;pending.current=true;setBusy(true);onBusy(true);setMessage("");try{await fn(signal)}catch(e){if(!signal.aborted)error(e)}finally{if(!signal.aborted){pending.current=false;setBusy(false);onBusy(false)}}};
+ const loadHistory=async(id:string,signal:AbortSignal)=>{const r=await client.request<{items:ModelRecord[]}>(path+"/"+id+"/placements",{cache:"no-store",signal});if(!signal.aborted){setSelected(id);setHistory(r.items.filter(v=>validModelRecord(v)&&v.id===id))}};
+ const readModel=(v:ModelRecord,signal:AbortSignal)=>fetchModelRecord(client,path,v,signal);
  const configured=(o:SceneOptions,v:ModelRecord)=>({...o,demId:v.profile.dem_id??"",reference:v.profile.vertical_reference,label:v.profile.reference_label,ack:matchesReference(o,v)&&o.ack});
  const open=(v:ModelRecord)=>void task(async signal=>{
   const model=await readModel(v,signal);if(signal.aborted)return;
@@ -49,7 +51,7 @@ export function ModelVault({client,path,options,onChange,rows,enabled,canEdit,ex
   const profile={source_id:source,feature_id:feature,scale:n.scale,rotation_deg:n.rotationDeg,offset_m:n.offset,dem_id:o.demId||null,vertical_reference:o.demId?o.reference:"local",reference_label:o.demId?o.label.trim():""};
   await loadCsrfToken(client);if(signal.aborted||!latest.current.canEdit)return;
   let result:ModelRecord;if(m.saved){result=await client.request<ModelRecord>(path+"/"+m.saved.id+"/placements",{method:"POST",body:JSON.stringify({...profile,expected_version:m.saved.version}),signal})}else{if(!m.file)throw Error("Chưa có tệp gốc.");const form=new FormData();form.set("file",m.file);form.set("placement",JSON.stringify(profile));result=await client.request<ModelRecord>(path,{method:"POST",body:form,signal})}
-  if(signal.aborted)return;if(!valid(result))throw Error("Phản hồi kho mô hình không hợp lệ.");
+  if(signal.aborted)return;if(!validModelRecord(result))throw Error("Phản hồi kho mô hình không hợp lệ.");
   const saved={...m,file:undefined,saved:result};onChange({...o,model:saved,models:o.models.map(x=>modelId(x)===result.id?saved:x)});await list(signal);await loadHistory(result.id,signal);if(!signal.aborted)setMessage("Đã lưu định vị v"+result.version+".");
  });
  const download=(v:ModelRecord)=>void task(async signal=>{const response=await client.requestRaw(path+"/"+v.id+"/download",{cache:"no-store",signal});const blob=await response.blob();if(signal.aborted)return;const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=v.filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
