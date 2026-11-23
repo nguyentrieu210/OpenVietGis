@@ -10,7 +10,7 @@ on:
       - "tools/tests/test_package_qgis_plugin.py"
       - ".github/workflows/qgis-connector.yml"
   push:
-    branches: ["feature/027-bidirectional-integration-sync"]
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       native_qgis:

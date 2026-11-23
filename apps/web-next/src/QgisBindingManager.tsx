@@ -154,7 +154,11 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
         Đồng bộ hiện thực hiện <strong>thủ công trên QGIS Desktop</strong> qua
         GeoPackage và Changeset; một cấu hình ở đây không tự đồng bộ.
         {" "}<a
-          href="https://github.com/nguyentrieu210/OpenVietGis/blob/feature/027-bidirectional-integration-sync/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
+          href="/rewrite/downloads/openvietgis_connector-0.3.0.zip"
+          download="openvietgis_connector-0.3.0.zip"
+        >⬇ Tải Plugin QGIS 0.3.0 (.zip)</a>
+        {" · "}<a
+          href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
           target="_blank"
           rel="noopener noreferrer"
         >Hướng dẫn cài plugin QGIS thử nghiệm</a>.
