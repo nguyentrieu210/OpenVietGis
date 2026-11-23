@@ -25,6 +25,7 @@ def prepare_project_scope(
     context: AuthorizationContext,
     *,
     permission: Permission,
+    mutation: bool | None = None,
 ) -> None:
     """Re-bind authenticated actor if a new DB transaction started, then enforce RLS + authz."""
     if context.actor.actor_type == "human":
@@ -40,7 +41,7 @@ def prepare_project_scope(
     SqlSpatialRepository(session).prepare_scope(
         context=context,
         permission=permission,
-        mutation=permission != Permission.PROJECT_READ,
+        mutation=(permission != Permission.PROJECT_READ) if mutation is None else mutation,
     )
 
 

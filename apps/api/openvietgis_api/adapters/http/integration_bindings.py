@@ -135,11 +135,20 @@ _STATE = text(f"""
     RETURNING {_VIEW_COLS}
 """)
 
-def _scope(session: Session, auth: AuthenticatedRequest, org: UUID, proj: UUID):
+def _scope(
+    session: Session,
+    auth: AuthenticatedRequest,
+    org: UUID,
+    proj: UUID,
+    *,
+    mutation: bool,
+):
     if auth.actor.actor_type != "human":
         raise HTTPException(status_code=403, detail="Project manager session required.")
     context = context_for(auth, organization_id=org, project_id=proj)
-    prepare_project_scope(session, context, permission=Permission.PROJECT_MANAGE)
+    prepare_project_scope(
+        session, context, permission=Permission.PROJECT_MANAGE, mutation=mutation
+    )
     if gis_access.scoped(session, context):
         raise HTTPException(status_code=403, detail="Full project access required.")
     return context
@@ -164,7 +173,7 @@ def list_binding_candidates(
     organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB
 ) -> dict[str, object]:
     """Expose project-manager-only layer/field choices, not executable connections."""
-    _scope(session, auth, organization_id, project_id)
+    _scope(session, auth, organization_id, project_id, mutation=False)
     scope = {"org": organization_id, "proj": project_id}
     rows = session.execute(_CANDIDATES_SQL, scope).mappings().all()
     items: list[dict[str, object]] = []
@@ -201,7 +210,7 @@ def list_binding_candidates(
 def list_bindings(
     organization_id: UUID, project_id: UUID, auth: ReadAuth, session: DB
 ) -> dict[str, object]:
-    _scope(session, auth, organization_id, project_id)
+    _scope(session, auth, organization_id, project_id, mutation=False)
     rows = session.execute(_SELECT, {"org": organization_id, "proj": project_id}).mappings()
     return {"items": [_public(row) for row in rows]}
 
@@ -211,7 +220,7 @@ def create_binding(
     organization_id: UUID, project_id: UUID, body: CreateBinding,
     auth: WriteAuth, session: DB,
 ) -> dict[str, object]:
-    context = _scope(session, auth, organization_id, project_id)
+    context = _scope(session, auth, organization_id, project_id, mutation=True)
     args = {"org": organization_id, "proj": project_id, "lid": body.layer_id}
     layer = session.execute(_LAYER_SQL, args).mappings().first()
     if not layer:
@@ -264,7 +273,7 @@ def change_binding_lifecycle(
     organization_id: UUID, project_id: UUID, binding_id: UUID,
     body: ChangeLifecycle, auth: WriteAuth, session: DB,
 ) -> dict[str, object]:
-    context = _scope(session, auth, organization_id, project_id)
+    context = _scope(session, auth, organization_id, project_id, mutation=True)
     result = session.execute(
         _STATE, {
             "org": organization_id, "proj": project_id, "id": binding_id,
