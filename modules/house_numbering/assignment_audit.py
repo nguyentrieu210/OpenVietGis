@@ -1,14 +1,18 @@
 """Project-wide, read-only triage of unlinked buildings; no nearest-route guessing."""
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import json
-from modules.house_numbering.cluster_correction import cluster_key
+from collections import Counter, defaultdict
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
-from modules.house_numbering.building_assignment import RouteIndex, road_name, alley_name
+
+from modules.house_numbering.building_assignment import (
+    RouteIndex,
+    road_name,
+)
+from modules.house_numbering.cluster_correction import cluster_key
 
 GROUPS = {
     "ready": "Đủ điều kiện xem trước gán tự động",

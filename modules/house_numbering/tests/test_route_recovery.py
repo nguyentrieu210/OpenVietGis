@@ -1,8 +1,15 @@
 import pytest
 from openvietgis_api.domains.platform_errors import PlatformValidationError
-from modules.house_numbering.route_recovery import address_label, expected_parent, selection_rows, survey_evidence
+
 from modules.house_numbering.route_import import plan_routes
+from modules.house_numbering.route_recovery import (
+    address_label,
+    expected_parent,
+    selection_rows,
+    survey_evidence,
+)
 from modules.house_numbering.tests.test_route_import import row
+
 
 def test_labels_keep_full_alphanumeric_prefix_and_immediate_parent():
     assert address_label("Đường Phạm Hùng hẻm C19/30a") == ("pham hung","C19/30A")

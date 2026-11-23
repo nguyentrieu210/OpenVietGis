@@ -1,13 +1,21 @@
 """Review detail is read-only and never waives import guards."""
 import json
 from uuid import uuid4
+
 from sqlalchemy import text
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
+
 from modules.house_numbering.migrate import upgrade
-from modules.house_numbering.tests.integration.test_house_numbering_runtime import _seed_source
-from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import _activate_house,_create_route
+from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import (
+    _activate_house,
+    _create_route,
+)
+from modules.house_numbering.tests.integration.test_house_numbering_runtime import (
+    _seed_source,
+)
+
 
 def test_survey_conflict_breakdown_and_guard(migrated_database):
     upgrade()

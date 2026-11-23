@@ -1,14 +1,25 @@
 """Review missing address paths using existing source geometry, never invent lines."""
 from __future__ import annotations
+
 import hashlib
 import json
-from collections import Counter,defaultdict
+from collections import Counter, defaultdict
 from typing import Any
 from uuid import UUID
+
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError,PlatformValidationError
-from modules.house_numbering.building_assignment import RouteIndex,road_name,alley_name
+
+from modules.house_numbering.building_assignment import (
+    RouteIndex,
+    alley_name,
+    road_name,
+)
 from modules.house_numbering.route_recovery import address_label
+
 
 def digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True,separators=(",",":"),default=str).encode()).hexdigest()

@@ -1,5 +1,6 @@
 """Code-scoped reviewed address names; canonical route names stay unchanged."""
 from alembic import op
+
 revision="hn_0008_reviewed_route_aliases"
 down_revision="hn_0007_route_lines_fast_path"
 branch_labels=None

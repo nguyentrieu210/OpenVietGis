@@ -1,6 +1,7 @@
 from modules.house_numbering.batch_numbering import build_route_plan
 from modules.house_numbering.domain import Rule
 
+
 def point(bid,x,y,number=None,kind=None):
     return {"id":bid,"x":x,"y":y,"number_id":"n"+bid if number else None,"number_text":number,"kind":kind}
 def target():

@@ -11,9 +11,17 @@ import math
 from typing import Any
 from uuid import UUID
 
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
-from modules.house_numbering.building_assignment import RouteIndex, road_name, alley_name
+
+from modules.house_numbering.building_assignment import (
+    RouteIndex,
+    alley_name,
+    road_name,
+)
 
 
 def cluster_key(road: Any, alley: Any, code: Any) -> str:

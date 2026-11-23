@@ -11,8 +11,14 @@ from collections import defaultdict
 from typing import Any
 
 from sqlalchemy import text
+
 from modules.house_numbering.address_prefix import canonical_prefix
-from modules.house_numbering.building_assignment import RouteIndex, alley_name, normalize, road_name
+from modules.house_numbering.building_assignment import (
+    RouteIndex,
+    alley_name,
+    normalize,
+    road_name,
+)
 
 MAX_JUNCTION_M = 8.0
 

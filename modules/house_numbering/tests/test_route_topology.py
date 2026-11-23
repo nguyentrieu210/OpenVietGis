@@ -1,6 +1,8 @@
 import pytest
 from openvietgis_api.domains.platform_errors import PlatformValidationError
+
 from modules.house_numbering.route_topology import apply_merges, parent_tasks, stable_id
+
 
 def route(code,name,prefix,kind="alley",parent=""):
     return {"key":"s:"+code,"source_id":"s","feature_id":code,"code":code,

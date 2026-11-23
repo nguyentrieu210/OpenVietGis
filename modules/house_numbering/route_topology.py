@@ -7,8 +7,9 @@ import re
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import text
 from openvietgis_api.domains.platform_errors import PlatformValidationError
+from sqlalchemy import text
+
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.building_assignment import RouteIndex
 from modules.house_numbering.route_recovery import address_label, normalized_road
@@ -176,7 +177,6 @@ def append_parent_features(session: Any, params: dict[str,Any], rows: list[dict[
     by_saved = {r.get("source_label"):r for r in existing}
     used = {(r["source_id"],r["feature_id"]) for r in rows}
     linked = linked_features(existing)
-    by_id = {str(r["id"]):r for r in existing}
     paths = existing_paths(existing)
     # Stable order gives deterministic anchors and preview tokens.
     for item in sorted(selected,key=lambda x:x["task_id"]):
@@ -234,4 +234,3 @@ def append_parent_features(session: Any, params: dict[str,Any], rows: list[dict[
             refs=set(candidates[(label[0],label[1].rpartition("/")[0])])
             if len(refs)==1:
                 row["parent_code"]=next(iter(refs))
-

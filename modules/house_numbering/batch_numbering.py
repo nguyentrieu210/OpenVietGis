@@ -3,7 +3,15 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from typing import Any
-from modules.house_numbering.domain import Address, Rule, locate_on_route, suggest_number, _parse, _prefix
+
+from modules.house_numbering.domain import (
+    Address,
+    Rule,
+    _parse,
+    _prefix,
+    locate_on_route,
+    suggest_number,
+)
 
 PROTECTED = {"submitted","approved","reserved"}
 STATES = {"old","certificate","cad","survey","proposed","submitted","approved","reserved"}

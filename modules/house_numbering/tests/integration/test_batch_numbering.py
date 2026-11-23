@@ -1,10 +1,17 @@
 """Numbering a route tree in one coherent, stale-safe batch."""
 from uuid import uuid4
+
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
+
 from modules.house_numbering.migrate import upgrade
-from modules.house_numbering.tests.integration.test_house_numbering_runtime import _seed_source
-from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import _activate_house
+from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import (
+    _activate_house,
+)
+from modules.house_numbering.tests.integration.test_house_numbering_runtime import (
+    _seed_source,
+)
+
 
 def test_batch_route_tree(migrated_database):
     upgrade()

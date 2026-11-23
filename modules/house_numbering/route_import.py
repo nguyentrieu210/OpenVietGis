@@ -7,11 +7,26 @@ from collections import Counter
 from typing import Any
 from uuid import UUID
 
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
+
 from modules.house_numbering.address_prefix import canonical_prefix
-from modules.house_numbering.route_recovery import address_label, recover_parent_evidence, selection_rows, survey_evidence
-from modules.house_numbering.route_topology import merge_options, apply_merges, parent_tasks, append_parent_features
+from modules.house_numbering.route_recovery import (
+    address_label,
+    recover_parent_evidence,
+    selection_rows,
+    survey_evidence,
+)
+from modules.house_numbering.route_topology import (
+    append_parent_features,
+    apply_merges,
+    merge_options,
+    parent_tasks,
+)
+
 _LIMIT = 5000
 
 
@@ -49,7 +64,7 @@ def group_routes(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if members[0].get("recovery_group"):
             members = sorted(members,key=lambda r:r["key"])
         first = dict(members[0])
-        first["errors"] = sorted(set(e for row in members for e in row["errors"]))
+        first["errors"] = sorted({e for row in members for e in row["errors"]})
         first["review_reason"] = "; ".join(sorted({r["review_reason"] for r in members if r.get("review_reason")}))
         group = first.get("logical_code")
         if group:
@@ -240,7 +255,7 @@ class RouteTreeImporter:
                 attrs = f["attributes"]
                 feature = str(f["feature_id"])
                 key = f"{source}:{feature}"
-                def read(field: str, default: str = "") -> str:
+                def read(field: str, default: str = "", mapping=mapping, attrs=attrs) -> str:
                     name = mapping.get(field)
                     return _value(attrs.get(name)) if name else default
                 code = read("code", feature)

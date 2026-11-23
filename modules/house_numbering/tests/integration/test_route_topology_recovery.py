@@ -1,13 +1,20 @@
 """Real PostGIS topology recovery: explicit grouping and actual parent geometry."""
 import json
 from uuid import uuid4
+
 from sqlalchemy import text
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
+
 from modules.house_numbering.migrate import upgrade as migrate_house_numbering
-from modules.house_numbering.tests.integration.test_house_numbering_runtime import _seed_source
-from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import _activate_house
+from modules.house_numbering.tests.integration.test_house_numbering_edge_acceptance import (
+    _activate_house,
+)
+from modules.house_numbering.tests.integration.test_house_numbering_runtime import (
+    _seed_source,
+)
+
 
 def test_recovery_groups_and_missing_parent_using_existing_gis_geometry(migrated_database):
     migrate_house_numbering()

@@ -9,8 +9,11 @@ from collections import defaultdict
 from typing import Any
 from uuid import UUID
 
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 
 
 def normalize(value: Any) -> str:

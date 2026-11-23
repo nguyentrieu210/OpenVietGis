@@ -1,5 +1,6 @@
 """Per-building address decisions scoped to a staged geometry candidate."""
 from alembic import op
+
 revision="hn_0010_address_verification"
 down_revision="hn_0009_geometry_review"
 branch_labels=None

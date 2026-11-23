@@ -1,12 +1,16 @@
 """Read-only recovery queue for address-prefix conflicts. Never invent geometry."""
 from __future__ import annotations
-from collections import Counter, defaultdict
+
 import json
+from collections import Counter, defaultdict
 from typing import Any
+
 from sqlalchemy import text
+
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.building_assignment import alley_name, road_name
 from modules.house_numbering.route_recovery import MAX_JUNCTION_M
+
 
 def address_chain(prefix: str) -> list[str]:
     if not prefix:

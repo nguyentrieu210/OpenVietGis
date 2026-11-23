@@ -1,5 +1,6 @@
 """Separate review-stage geometry from active numbering routes."""
 from alembic import op
+
 revision="hn_0009_geometry_review"
 down_revision="hn_0008_reviewed_route_aliases"
 branch_labels=None

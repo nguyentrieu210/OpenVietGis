@@ -4,12 +4,18 @@ This never creates or edits an address route, building or survey attribute.
 Normal route-import remains the only promotion path, with all existing guards.
 """
 from __future__ import annotations
+
 import hashlib
 import json
 from typing import Any
-from uuid import UUID,uuid4
+from uuid import uuid4
+
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
+
 
 def stage_eligible(row: dict[str,Any]) -> bool:
     errors=set(row.get("errors") or [])

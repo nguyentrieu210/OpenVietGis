@@ -8,13 +8,14 @@ from uuid import UUID
 
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.platform_errors import (
-    PlatformValidationError,
-    PlatformNotFoundError,
     PlatformConflictError,
+    PlatformNotFoundError,
+    PlatformValidationError,
 )
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
+from modules.house_numbering.batch_numbering import build_route_plan
 from modules.house_numbering.domain import (
     Address,
     DomainError,
@@ -23,7 +24,6 @@ from modules.house_numbering.domain import (
     suggest_number,
 )
 from modules.house_numbering.persistence import HouseNumberingRepository
-from modules.house_numbering.batch_numbering import build_route_plan
 
 
 def _wire(row: RowMapping | dict[str, Any]) -> dict[str, Any]:

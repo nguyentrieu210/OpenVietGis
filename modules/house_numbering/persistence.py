@@ -22,6 +22,7 @@ from openvietgis_api.module_sdk import (
 from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
+
 from modules.house_numbering.address_prefix import canonical_prefix
 
 
