@@ -5,6 +5,9 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
+from openvietgis_api.adapters.formats.geopackage import write_geopackage
+from openvietgis_api.domains.spatial.domain import FieldType, NativeGeometry
+from openvietgis_api.domains.transfers.domain import ExportFieldMapping
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
@@ -191,8 +194,46 @@ def test_generate_tileset(migrated_database, tmp_path):
                 ).scalar_one()
                 == 1
             )
+        assert record["provenance"]["feature_picking"] is True
+        picks = []
+        uri = doc["root"]["children"][0]["content"]["uri"]
+        pick_path = resource + "/feature"
+        for triangle, fid, first, count, height in (
+            (0, "court", 0, 32, 18.5),
+            (31, "court", 0, 32, 18.5),
+            (32, "other", 32, 12, 10),
+            (43, "other", 32, 12, 10),
+        ):
+            picked = owner.get(pick_path, params={"uri": uri, "triangle": triangle})
+            assert picked.status_code == 200, picked.text
+            v = picked.json()
+            assert v["state"] == "current" and v["feature_id"] == fid
+            assert v["first_triangle"] == first and v["triangle_count"] == count
+            assert float(v["attributes"]["fld_height"]) == height
+            assert v["field_names"]["fld_height"] == "Height" and v["cad_links"] == []
+            assert v["source_id"] == sid and v["layer_id"] == lid
+            picks.append(v)
+        (tmp_path / "picks.json").write_text(json.dumps(picks))
+        reverse_path = resource + "/feature-by-id"
+        base_query = {"source_id": sid, "layer_id": lid, "feature_id": "court"}
+        for i, fid in ((0, "court"), (2, "other")):
+            reply = owner.get(reverse_path, params=base_query | {"feature_id": fid})
+            assert reply.status_code == 200, reply.text
+            assert reply.json() == picks[i]
+        for wrong in (
+            {"feature_id": "missing"},
+            {"source_id": str(uuid4())},
+            {"layer_id": str(uuid4())},
+        ):
+            assert owner.get(reverse_path, params=base_query | wrong).status_code == 404
+        assert owner.get(pick_path, params={"uri": uri, "triangle": 44}).status_code == 404
+        assert owner.get(pick_path, params={"uri": "../bad.glb", "triangle": 0}).status_code == 404
         # Invalid height after editing is all-or-nothing; old generated asset remains immutable.
         commit([{"op_type": "update", "feature_id": "other", "properties": {"fld_height": None}}])
+        stale = owner.get(pick_path, params={"uri": uri, "triangle": 0}).json()
+        assert stale["state"] == "stale" and stale["feature_id"] == "court"
+        assert "attributes" not in stale and "cad_links" not in stale
+        assert owner.get(reverse_path, params=base_query).json() == stale
         assert owner.post(path + "/generate", json=request).status_code == 409
         bad = owner.post(path + "/generate", json=body())
         assert bad.status_code == 422, bad.text
@@ -211,7 +252,88 @@ def test_generate_tileset(migrated_database, tmp_path):
         assert grant.status_code == 201, grant.text
     with _client(world.member_user_id) as member:
         assert member.get(resource + "/tileset.json").status_code == 200
+        assert member.get(pick_path, params={"uri": uri, "triangle": 0}).status_code == 200
+        assert member.get(reverse_path, params=base_query).status_code == 200
         assert member.post(path + "/generate", json=request).status_code == 403
     with _client(world.wrong_user_id) as other:
         assert other.get(resource + "/tileset.json").status_code in (403, 404)
+        assert other.get(reverse_path, params=base_query).status_code in (403, 404)
+        assert other.get(pick_path, params={"uri": uri, "triangle": 0}).status_code in (403, 404)
         assert other.post(path + "/generate", json=request).status_code in (403, 404)
+
+
+def test_generate_projected_tileset(migrated_database):
+    world = seed_access_world()
+    prefix = f"/api/v1/organizations/{world.organization_id}/projects/{world.project_id}"
+    lon, lat = 106.61, 10.71
+    radius = 6378137
+    x = radius * math.radians(lon)
+    y = radius * math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+    ring = tuple(tuple(p) for p in polygon(x, y, 40))
+    payload, _, _ = write_geopackage(
+        layer_name="buildings",
+        crs_code=3857,
+        geometry_family="Polygon",
+        field_mappings=[ExportFieldMapping("height", "Height", "height", FieldType.INTEGER)],
+        features=[("building", {"height": 12}, NativeGeometry("Polygon", (ring,), 3857))],
+    )
+    with _client(world.owner_user_id) as owner:
+        uploaded = owner.post(
+            prefix + "/imports/upload",
+            files={"file": ("buildings.gpkg", payload, "application/geopackage+sqlite3")},
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        up = uploaded.json()
+        inspected = up["inspection"]
+        imported = owner.post(
+            prefix + "/imports/confirm",
+            json={
+                "operation_id": str(uuid4()),
+                "source_asset_id": up["asset"]["id"],
+                "selected_member": inspected["selected_member"],
+                "source_name": "Projected",
+                "layer_name": "Projected buildings",
+                "declared_source_crs": 3857,
+                "target_crs": 3857,
+                "declared_encoding": "utf-8",
+                "approved_conversions": [],
+                "inspection_fingerprint": inspected["inspection_fingerprint"],
+            },
+        )
+        assert imported.status_code == 200, imported.text
+        lid = imported.json()["target_layer_id"]
+        layer = owner.get(prefix + "/layers/" + lid).json()
+        source = layer["source"]
+        assert source["stored_crs"]["code"] == 3857
+        field = next(f["field_id"] for f in source["schema"]["fields"] if f["type"] == "integer")
+        generated = owner.post(
+            prefix + "/3d/tilesets/generate",
+            json={
+                "name": "Projected tiles",
+                "layer_id": lid,
+                "height_field": field,
+                "expected_layer_revision": layer["layer_revision"],
+                "expected_content_revision": source["content_revision"],
+                "expected_schema_revision": source["schema_revision"],
+                "base_ellipsoid_m": 0,
+                "acknowledge_ellipsoid": True,
+            },
+        )
+        assert generated.status_code == 201, generated.text
+        record = generated.json()
+        assert record["provenance"]["source_crs"] == 3857
+        assert record["provenance"]["triangle_count"] == 12
+        path = prefix + "/3d/tilesets/" + record["id"]
+        child = owner.get(path + "/tileset.json").json()["root"]["children"][0]
+        data = owner.get(path + "/" + child["content"]["uri"]).content
+        points = decoded(data, child["transform"])
+        with get_admin_engine().connect() as conn:
+            expected = conn.execute(
+                text("""
+              SELECT ST_X(q),ST_Y(q),ST_Z(q) FROM (
+                SELECT ST_Transform(ST_SetSRID(ST_MakePoint(:lon,:lat,12),4979),4978) AS q
+              ) AS s
+            """),
+                {"lon": lon, "lat": lat},
+            ).one()
+            assert min(math.dist(p, expected) for p in points) < 0.001

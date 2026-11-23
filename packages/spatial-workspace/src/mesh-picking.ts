@@ -1,8 +1,9 @@
 /** Bounded triangle hit-test in the same clip-space projection as the GPU.
  * Depth is NDC z: smaller is closer, independent of model origin. */
-export function meshDepth(vertices:Float32Array,m:ArrayLike<number>,x:number,y:number):number|null{
+export type MeshHit={depth:number;triangle:number};
+export function meshHit(vertices:Float32Array,m:ArrayLike<number>,x:number,y:number):MeshHit|null{
  if(!Number.isFinite(x)||!Number.isFinite(y)||Math.abs(x)>1||Math.abs(y)>1||m.length!==16)return null;
- let best=Infinity;
+ let best=Infinity,bestTriangle=-1;
  const a=new Float64Array(9);
  for(let i=0;i+8<vertices.length;i+=9){
   let valid=true;
@@ -22,10 +23,11 @@ export function meshDepth(vertices:Float32Array,m:ArrayLike<number>,x:number,y:n
   const s=((by-cy)*(x-cx)+(cx-bx)*(y-cy))/den,t=((cy-ay)*(x-cx)+(ax-cx)*(y-cy))/den,r=1-s-t;
   if(s< -1e-7||t< -1e-7||r< -1e-7)continue;
   const z=s*a[2]!+t*a[5]!+r*a[8]!;
-  if(z>=-1&&z<=1&&z<best)best=z;
+  if(z>=-1&&z<=1&&z<best){best=z;bestTriangle=i/9;}
  }
- return Number.isFinite(best)?best:null;
+ return Number.isFinite(best)?{depth:best,triangle:bestTriangle}:null;
 }
+export function meshDepth(vertices:Float32Array,m:ArrayLike<number>,x:number,y:number):number|null{return meshHit(vertices,m,x,y)?.depth??null;}
 export const MAX_SCENE_MODELS=8;
 export const MAX_SCENE_TRIANGLES=250000;
 export function checkSceneBudget(models:readonly {triangles:number}[]):void{
