@@ -106,3 +106,23 @@ Recorded 2026-11-23 on isolated branch `feature/026-integration-hub-policy` (bas
   - `check_architecture.py` / `check_docs.py` / `check_contracts.py`: **PASS**; `check_scope.py`: **0 new violations**
 
 **Release decision remains `HOLD — NOT PROMOTED`** pending live PostGIS T006 run, full `pnpm validate:ts` + Playwright E2E, and T009 staging rollback drill.
+
+---
+
+## Live VPS Verification Record — Milion (`cdfa3dc` / `5caec1f`, 2026-11-23)
+
+Executed in isolated worktree `/opt/openvietgis-integration-hub` against disposable loopback PostGIS container `ovg-r026-verify-pg` (`postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262`, PostgreSQL 18.7 / PostGIS 3.7.0, destroyed on exit; zero production services or live data touched):
+
+- **T006 Live PostGIS Integration (`apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py`)**: **5 passed in 25.80s** (all 38 Core + 10 official module migrations applied cleanly under owner role; API runtime exercised strictly under `openvietgis_runtime` role):
+  1. `test_integration_hub_rejects_anonymous_and_cross_tenant_rls` — **PASS**
+  2. `test_integration_hub_service_principal_ceiling_and_revocation` — **PASS**
+  3. `test_integration_hub_gis_scoped_layer_acl_and_crs_preservation` — **PASS**
+  4. `test_integration_hub_autocad_dxf_export_and_crs_guard` — **PASS**
+  5. `test_integration_hub_qgis_sync_preview_push_and_gis_acl` — **PASS** (editable manual layer R006 changeset commit `201`, omitted features preserved, stale revision `409`, `gis_access.verify_edit` `403`, and `reference_fixture` `403 SOURCE_READ_ONLY`)
+- **Python Unit (`integration_hub` + `authorization`)**: **154 passed**
+- **Node `v26.13.1` / `pnpm 12.21.0` Workspace Validation (`5caec1f`)**:
+  - `@openvietgis/client-sdk`: `eslint --max-warnings=0` **PASS**, `tsc --noEmit` **PASS**, `vitest run` **16 files / 75 tests PASS** (incl. 11/11 in `tests/integration-hub.test.ts`)
+  - `@openvietgis/web-next`: `tsc --noEmit` **PASS**, `vite build` (Vite 8.3.8) **PASS**
+  - `node apps/web-next/integration-hub-smoke.mjs`: **PASS**
+
+**Remaining before production promotion:** live Playwright browser E2E (`OVG_TEST_URL`), full main-branch CI convergence (pre-existing `main` ruff/scope backlog), and T009 staging rollback drill.
