@@ -574,11 +574,10 @@ class OpenVietGisConnectorDialog(QDialog):
         try:
             config = self._build_config()
             layer = self._workspace_layer()
-            if layer is not None and layer.isEditable():
-                if not layer.commitChanges():
-                    raise WorkspaceConflict(
-                        "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
-                    )
+            if layer is not None and layer.isEditable() and not layer.commitChanges():
+                raise WorkspaceConflict(
+                    "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
+                )
             preview = preview_workspace(config, self._workspace_file().parent)
             self._workspace_preview = preview
             self.ws_commit_button.setEnabled(not bool(preview.conflicts))
