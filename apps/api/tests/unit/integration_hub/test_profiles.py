@@ -39,6 +39,7 @@ _FORBIDDEN_VALUE_SUBSTRINGS = (
 _WRITE_OR_SYNC_ACTIONS = {
     "connection.configure",
     "data.import",
+    "sync.pull",
     "sync.push",
     "sync.approve",
 }
@@ -153,6 +154,79 @@ def test_missing_crs_or_unready_validation_never_infers_4326_and_blocks_export(
         assert layer["stored_crs_code"] != 4326
     assert layer["crs_explicit"] is False
     assert layer["export_permitted"] is False
+
+
+@pytest.mark.parametrize("definition_only_crs", [3405, 3406])
+@pytest.mark.parametrize("adapter_key", ["qgis", "postgis"])
+def test_definition_only_crs_blocks_explicit_crs_and_export(
+    adapter_key: str,
+    definition_only_crs: int,
+) -> None:
+    adapter = get_adapter(adapter_key)
+    assert adapter is not None
+    profile = build_adapter_profile(
+        adapter,
+        frozenset({Permission.PROJECT_READ}),
+        organization_id="org-1",
+        project_id="proj-1",
+        scoped_access=False,
+        layers=[
+            _layer(
+                name=f"def-only-{definition_only_crs}",
+                source_crs_code=definition_only_crs,
+                stored_crs_code=definition_only_crs,
+                validation_state="ready",
+                export_permitted=True,
+            )
+        ],
+    )
+    layers = profile["layers"]
+    assert isinstance(layers, list)
+    assert len(layers) == 1
+    layer = layers[0]
+    assert layer["stored_crs_code"] == definition_only_crs
+    assert layer["crs_explicit"] is False
+    assert layer["export_permitted"] is False
+
+
+@pytest.mark.parametrize(
+    ("adapter_key", "expected_formats"),
+    [
+        ("qgis", ["geopackage", "geojson", "postgis_sql"]),
+        ("postgis", ["postgis_sql", "geopackage"]),
+    ],
+)
+def test_qgis_and_postgis_connection_profiles_advertise_read_only_hub_export(
+    adapter_key: str,
+    expected_formats: list[str],
+) -> None:
+    adapter = get_adapter(adapter_key)
+    assert adapter is not None
+    profile = build_adapter_profile(
+        adapter,
+        frozenset({Permission.PROJECT_READ}),
+        organization_id="org-1",
+        project_id="proj-1",
+        scoped_access=False,
+        layers=[],
+    )
+    conn = profile["connection_profile"]
+    assert isinstance(conn, dict)
+    assert conn["supports_direct_db_credentials"] is False
+    assert conn["default_write_policy"] == "deny"
+    assert conn["export_formats"] == expected_formats
+
+    endpoints = conn["existing_endpoints"]
+    assert isinstance(endpoints, list)
+    by_name = {ep["name"]: ep for ep in endpoints}
+    assert "hub_layer_export" in by_name
+    hub_export = by_name["hub_layer_export"]
+    assert hub_export["method"] == "GET"
+    assert hub_export["path_template"] == (
+        f"/api/v1/organizations/org-1/projects/proj-1"
+        f"/integration-hub/adapters/{adapter_key}/layers/{{layer_id}}/export"
+    )
+    assert hub_export["required_permission"] == Permission.PROJECT_READ.value
 
 
 def test_connection_profiles_never_expose_db_credentials_or_hosts() -> None:

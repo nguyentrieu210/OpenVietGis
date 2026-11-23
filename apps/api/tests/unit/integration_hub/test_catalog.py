@@ -1,5 +1,9 @@
 """Invariant tests for the public adapter inventory and its deny policy."""
 
+from __future__ import annotations
+
+import pytest
+
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.integration_hub.catalog import (
     ADAPTERS,
@@ -10,42 +14,101 @@ from openvietgis_api.domains.integration_hub.catalog import (
     list_adapters,
 )
 
+_EXPORT_ENABLED_KEYS = frozenset({"qgis", "postgis"})
+_DENIED_WRITE_OR_SYNC_ACTIONS = (
+    ConnectorAction.CONFIGURE,
+    ConnectorAction.IMPORT,
+    ConnectorAction.SYNC_PULL,
+    ConnectorAction.SYNC_PUSH,
+    ConnectorAction.APPROVE,
+)
+
 
 def test_all_keys_unique_and_every_adapter_has_status() -> None:
-    assert len(ADAPTERS) >= 10
+    assert len(ADAPTERS) == 12
     assert len({a.key for a in ADAPTERS}) == len(ADAPTERS)
     assert all(a.lifecycle in AdapterLifecycle for a in ADAPTERS)
 
 
 def test_guest_cannot_browse_catalog() -> None:
-    first = ADAPTERS[0]
-    assert not evaluate_action(first, ConnectorAction.DISCOVER, frozenset())["allowed"]
+    for adapter in ADAPTERS:
+        assert not evaluate_action(adapter, ConnectorAction.DISCOVER, frozenset())["allowed"]
+        assert not evaluate_action(adapter, ConnectorAction.EXPORT, frozenset())["allowed"]
 
 
-def test_project_reader_sees_catalog_only_and_never_syncs() -> None:
-    permissions = frozenset({Permission.PROJECT_READ})
-    catalog = list_adapters(permissions)
-    assert all(row["actions"][0]["allowed"] for row in catalog)
-    assert all(
-        not operation["allowed"]
-        for row in catalog
-        for operation in row["actions"]
-        if operation["action"] != ConnectorAction.DISCOVER.value
+@pytest.mark.parametrize("adapter_key", ["qgis", "postgis"])
+def test_qgis_and_postgis_allow_read_only_export_when_project_read_granted(
+    adapter_key: str,
+) -> None:
+    adapter = get_adapter(adapter_key)
+    assert adapter is not None
+    assert adapter.lifecycle is AdapterLifecycle.EXISTING_READ_ONLY
+    assert adapter.hub_executable_actions == (
+        ConnectorAction.DISCOVER,
+        ConnectorAction.EXPORT,
     )
 
+    permissions = frozenset({Permission.PROJECT_READ})
+    discover = evaluate_action(adapter, ConnectorAction.DISCOVER, permissions)
+    assert discover["allowed"] is True
+    assert discover["executable_in_hub"] is True
+    assert discover["reason"] == "catalog_only"
 
-def test_manager_cannot_invoke_unimplemented_write_or_sync() -> None:
-    permissions = frozenset(Permission)
-    for adapter in ADAPTERS:
-        for action in (
-            ConnectorAction.CONFIGURE,
-            ConnectorAction.IMPORT,
-            ConnectorAction.SYNC_PUSH,
-            ConnectorAction.APPROVE,
-        ):
+    export = evaluate_action(adapter, ConnectorAction.EXPORT, permissions)
+    assert export["allowed"] is True
+    assert export["executable_in_hub"] is True
+    assert export["eligible_by_role"] is True
+    assert export["required_permission"] == Permission.PROJECT_READ.value
+    assert export["reason"] == "read_only_export"
+
+
+def test_all_other_ten_adapters_only_allow_discover() -> None:
+    permissions = frozenset({Permission.PROJECT_READ})
+    other_adapters = [a for a in ADAPTERS if a.key not in _EXPORT_ENABLED_KEYS]
+    assert len(other_adapters) == 10
+
+    for adapter in other_adapters:
+        assert adapter.hub_executable_actions == (ConnectorAction.DISCOVER,)
+        discover = evaluate_action(adapter, ConnectorAction.DISCOVER, permissions)
+        assert discover["allowed"] is True
+        assert discover["reason"] == "catalog_only"
+        for action in ConnectorAction:
+            if action is ConnectorAction.DISCOVER:
+                continue
             result = evaluate_action(adapter, action, permissions)
-            assert result["allowed"] is False
-            assert result["executable_in_hub"] is False
+            assert result["allowed"] is False, (adapter.key, action)
+            assert result["executable_in_hub"] is False, (adapter.key, action)
+
+
+def test_project_reader_catalog_matches_read_only_export_and_discover_policy() -> None:
+    permissions = frozenset({Permission.PROJECT_READ})
+    catalog = list_adapters(permissions)
+    assert len(catalog) == 12
+    for row in catalog:
+        key = row["key"]
+        raw_actions = row["actions"]
+        assert isinstance(raw_actions, list)
+        actions = {op["action"]: op for op in raw_actions}
+        assert actions[ConnectorAction.DISCOVER.value]["allowed"] is True
+        if key in _EXPORT_ENABLED_KEYS:
+            assert actions[ConnectorAction.EXPORT.value]["allowed"] is True
+            assert actions[ConnectorAction.EXPORT.value]["reason"] == "read_only_export"
+            expected_allowed = {ConnectorAction.DISCOVER.value, ConnectorAction.EXPORT.value}
+        else:
+            assert actions[ConnectorAction.EXPORT.value]["allowed"] is False
+            expected_allowed = {ConnectorAction.DISCOVER.value}
+        actual_allowed = {name for name, op in actions.items() if op["allowed"]}
+        assert actual_allowed == expected_allowed
+
+
+def test_all_write_sync_import_configure_approve_denied_even_with_full_permissions() -> None:
+    permissions = frozenset(Permission)
+    assert len(ADAPTERS) == 12
+    for adapter in ADAPTERS:
+        for action in _DENIED_WRITE_OR_SYNC_ACTIONS:
+            result = evaluate_action(adapter, action, permissions)
+            assert result["allowed"] is False, (adapter.key, action)
+            assert result["executable_in_hub"] is False, (adapter.key, action)
 
 
 def test_get_adapter_returns_manifest_or_none() -> None:
@@ -67,4 +130,5 @@ def test_existing_ogc_api_is_not_misrepresented_as_hub_sync() -> None:
     ogc = next(a for a in ADAPTERS if a.key == "ogc_services")
     assert ogc.lifecycle is AdapterLifecycle.EXISTING_READ_ONLY
     assert ogc.existing_api == "external-sources"
+    assert ogc.hub_executable_actions == (ConnectorAction.DISCOVER,)
     assert ConnectorAction.SYNC_PUSH not in ogc.hub_executable_actions

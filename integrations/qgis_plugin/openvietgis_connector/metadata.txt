@@ -1,0 +1,16 @@
+[general]
+name=OpenVietGIS Read-Only Connector
+qgisMinimumVersion=3.28
+version=0.1.0
+description=Read-only connector to inspect OpenVietGIS project layers and open SHA-256 verified GeoPackage snapshots in QGIS Desktop.
+about=OpenVietGIS Read-Only Connector (R026) connects QGIS 3.28+ to the OpenVietGIS Integration Hub over HTTPS using a project-scoped Service Principal Bearer key (project.read). It never accesses internal PostgreSQL/PostGIS credentials directly, never infers CRS (preserving explicit VN-2000 and WGS 84 EPSG metadata), verifies X-Content-SHA256 before loading layers as read-only, and exposes zero write, push, or sync operations.
+author=OpenVietGIS
+email=security@openvietgis.org
+category=Web
+tags=gis,openvietgis,geopackage,vn2000,readonly
+homepage=https://openvietgis.org
+repository=https://github.com/openvietgis/openvietgis
+tracker=https://github.com/openvietgis/openvietgis/issues
+hasProcessingProvider=no
+experimental=False
+deprecated=False

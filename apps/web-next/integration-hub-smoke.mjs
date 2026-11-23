@@ -61,7 +61,7 @@ const CATALOG_FIXTURE = {
       mode: "open_protocols",
       lifecycle: "planned",
       protocols: ["GeoPackage", "PostGIS", "WMS", "WFS"],
-      note: "Read-only profile inspection only; no direct desktop sync.",
+      note: "Read-only profile and layer export only; no direct desktop sync.",
       existing_api: null,
       actions: [
         {
@@ -73,12 +73,12 @@ const CATALOG_FIXTURE = {
           reason: "catalog_only"
         },
         {
-          action: "connection.inspect",
+          action: "data.export",
           required_permission: "project.read",
           eligible_by_role: true,
-          executable_in_hub: false,
-          allowed: false,
-          reason: "not_implemented"
+          executable_in_hub: true,
+          allowed: true,
+          reason: "read_only_export"
         },
         {
           action: "sync.push",
@@ -108,6 +108,7 @@ const QGIS_PROFILE_FIXTURE = {
     requires_per_layer_acl: true,
     default_write_policy: "deny",
     supported_protocols: ["GeoPackage", "GeoJSON", "WMS", "WFS"],
+    export_formats: ["geopackage", "geojson"],
     existing_endpoints: [
       {
         name: "list_project_layers",
@@ -162,6 +163,8 @@ async function verifyTypedSdkRuntime() {
 
   const exportedNames = Object.keys(integrationHub).sort();
   assert.deepEqual(exportedNames, [
+    "buildIntegrationLayerExportPath",
+    "downloadIntegrationLayerExport",
     "getIntegrationHubAdapterProfile",
     "getIntegrationHubCatalog"
   ]);
@@ -174,12 +177,50 @@ async function verifyTypedSdkRuntime() {
   );
 
   const requests = [];
+  const rawRequests = [];
+  const sampleSha = "e".repeat(64);
+  const sampleContentRev = "f".repeat(64);
+  const sampleSchemaRev = "1".repeat(64);
+  const gpkgBytes = new Uint8Array([0x53, 0x51, 0x4c, 0x69, 0x74, 0x65]);
+
   const mockClient = {
     async request(requestPath, init) {
       requests.push({ path: requestPath, init: init ?? {} });
       return requestPath.includes("/adapters/")
         ? QGIS_PROFILE_FIXTURE
         : CATALOG_FIXTURE;
+    },
+    async requestRaw(requestPath, init) {
+      rawRequests.push({ path: requestPath, init: init ?? {} });
+      if (requestPath.includes("forbidden-layer")) {
+        const err = new Error("OpenVietGIS API request failed: 403");
+        err.name = "ApiError";
+        err.status = 403;
+        throw err;
+      }
+      if (requestPath.includes("format=postgis_sql")) {
+        return new Response("BEGIN;\nSELECT 1;\nCOMMIT;\n", {
+          status: 200,
+          headers: {
+            "content-type": "application/sql; charset=utf-8",
+            "x-content-sha256": sampleSha,
+            "x-openvietgis-crs": "EPSG:5899",
+            "x-openvietgis-feature-count": "7"
+          }
+        });
+      }
+      return new Response(gpkgBytes, {
+        status: 200,
+        headers: {
+          "content-type": "application/geopackage+sqlite3",
+          "content-disposition": 'attachment; filename="ranh-gioi-vn2000.gpkg"',
+          "x-content-sha256": sampleSha,
+          "x-openvietgis-crs": "EPSG:5899",
+          "x-openvietgis-content-revision": sampleContentRev,
+          "x-openvietgis-schema-revision": sampleSchemaRev,
+          "x-openvietgis-feature-count": "15"
+        }
+      });
     }
   };
 
@@ -217,7 +258,95 @@ async function verifyTypedSdkRuntime() {
   assert.equal(profile.layers[1].crs_explicit, false);
   assert.equal(profile.layers[1].stored_crs_code, null);
 
-  console.log("PASS typed SDK exports, URL encoding, and read-only GET contract");
+  assert.equal(
+    integrationHub.buildIntegrationLayerExportPath(
+      "org/a b",
+      "proj/c?x=1",
+      "qgis",
+      "layer/id#1"
+    ),
+    "/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/adapters/qgis/layers/layer%2Fid%231/export?format=geopackage"
+  );
+  assert.equal(
+    integrationHub.buildIntegrationLayerExportPath(
+      "org-1",
+      "proj-1",
+      "qgis",
+      "layer-4326",
+      "geojson"
+    ),
+    "/organizations/org-1/projects/proj-1/integration-hub/adapters/qgis/layers/layer-4326/export?format=geojson"
+  );
+  assert.equal(
+    integrationHub.buildIntegrationLayerExportPath(
+      "org-1",
+      "proj-1",
+      "postgis",
+      "layer-5899",
+      "postgis_sql"
+    ),
+    "/organizations/org-1/projects/proj-1/integration-hub/adapters/postgis/layers/layer-5899/export?format=postgis_sql"
+  );
+
+  const qgisExport = await integrationHub.downloadIntegrationLayerExport(
+    mockClient,
+    "org-1",
+    "proj-1",
+    "qgis",
+    "00000000-0000-4000-8000-000000000101",
+    "geopackage"
+  );
+  assert.equal(
+    rawRequests[0].path,
+    "/organizations/org-1/projects/proj-1/integration-hub/adapters/qgis/layers/00000000-0000-4000-8000-000000000101/export?format=geopackage"
+  );
+  assert.equal(rawRequests[0].init.method, "GET");
+  assert.equal(rawRequests[0].init.cache, "no-store");
+  assert.equal(rawRequests[0].init.body, undefined);
+  assert.equal(qgisExport.filename, "ranh-gioi-vn2000.gpkg");
+  assert.equal(qgisExport.contentType, "application/geopackage+sqlite3");
+  assert.equal(qgisExport.sha256, sampleSha);
+  assert.equal(qgisExport.crs, "EPSG:5899");
+  assert.equal(qgisExport.contentRevision, sampleContentRev);
+  assert.equal(qgisExport.schemaRevision, sampleSchemaRev);
+  assert.equal(qgisExport.featureCount, 15);
+  assert.deepEqual(
+    new Uint8Array(await qgisExport.blob.arrayBuffer()),
+    gpkgBytes
+  );
+
+  const postgisExport = await integrationHub.downloadIntegrationLayerExport(
+    mockClient,
+    "org-1",
+    "proj-1",
+    "postgis",
+    "layer-202",
+    "postgis_sql"
+  );
+  assert.equal(
+    rawRequests[1].path,
+    "/organizations/org-1/projects/proj-1/integration-hub/adapters/postgis/layers/layer-202/export?format=postgis_sql"
+  );
+  assert.equal(rawRequests[1].init.method, "GET");
+  assert.equal(postgisExport.filename, "postgis-layer-202.sql");
+  assert.equal(postgisExport.featureCount, 7);
+  assert.equal(await postgisExport.blob.text(), "BEGIN;\nSELECT 1;\nCOMMIT;\n");
+
+  await assert.rejects(
+    integrationHub.downloadIntegrationLayerExport(
+      mockClient,
+      "org-1",
+      "proj-1",
+      "postgis",
+      "forbidden-layer",
+      "geopackage"
+    ),
+    (err) => err?.status === 403
+  );
+
+  console.log(
+    "PASS typed SDK exports, URL encoding, and read-only GET export contract"
+  );
 }
 
 async function verifyUiAndScopeInvariants() {
@@ -228,10 +357,16 @@ async function verifyUiAndScopeInvariants() {
 
   assert.match(componentSource, /getIntegrationHubCatalog/);
   assert.match(componentSource, /getIntegrationHubAdapterProfile/);
+  assert.match(componentSource, /downloadIntegrationLayerExport/);
   assert.doesNotMatch(
     componentSource,
     /\/integration-hub\/catalog/,
     "IntegrationCatalog.tsx must use typed SDK helpers instead of raw paths"
+  );
+  assert.doesNotMatch(
+    componentSource,
+    /\/integration-hub\/adapters\//,
+    "IntegrationCatalog.tsx must use typed SDK export helper instead of raw paths"
   );
 
   for (const requiredText of [
@@ -241,6 +376,14 @@ async function verifyUiAndScopeInvariants() {
     "Xem hồ sơ kết nối",
     "Ẩn hồ sơ kết nối",
     "Chưa xác định CRS",
+    "Xuất chỉ đọc",
+    "Tải .gpkg",
+    "Tải .geojson",
+    "Tải .sql",
+    "Bị hạn chế / chưa đủ CRS",
+    "read_only_export",
+    "URL.createObjectURL",
+    "URL.revokeObjectURL",
     "default_write_policy",
     "scoped_access",
     "execution_status",
@@ -258,12 +401,20 @@ async function verifyUiAndScopeInvariants() {
     );
   }
 
-  const buttonMatches = componentSource.match(/<button\b/g) ?? [];
+  const buttonMatches = componentSource.match(/<button\b[^>]*>/g) ?? [];
   assert.equal(
     buttonMatches.length,
-    1,
-    "IntegrationCatalog.tsx must only contain the single read-only inspect toggle button"
+    5,
+    "IntegrationCatalog.tsx must only contain the inspect toggle and read-only layer download buttons"
   );
+  const typeButtonMatches =
+    componentSource.match(/<button\b[\s\S]*?type="button"/g) ?? [];
+  assert.equal(
+    typeButtonMatches.length,
+    buttonMatches.length,
+    "Every button in IntegrationCatalog.tsx must be type='button'"
+  );
+
   assert.doesNotMatch(componentSource, /<form\b/i);
   assert.doesNotMatch(componentSource, /type=["']password["']/i);
   assert.doesNotMatch(componentSource, /type=["']submit["']/i);
@@ -271,6 +422,26 @@ async function verifyUiAndScopeInvariants() {
     componentSource,
     /method\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/i
   );
+  assert.doesNotMatch(
+    sdkSource,
+    /method\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/i
+  );
+
+  for (const forbiddenUiAction of [
+    "Kết nối ngay",
+    "Đồng bộ ngay",
+    "Đẩy dữ liệu",
+    "Cấu hình kết nối",
+    "Mật khẩu CSDL",
+    "connection_string",
+    "db_password"
+  ]) {
+    assert.equal(
+      componentSource.includes(forbiddenUiAction),
+      false,
+      `IntegrationCatalog.tsx must not expose write/sync/credential control: ${forbiddenUiAction}`
+    );
+  }
 
   const componentLines = componentSource.split(/\r?\n/);
   const cssLines = stylesheetSource.split(/\r?\n/);
@@ -404,6 +575,19 @@ async function runOptionalBrowserSmoke() {
       if (pathname.endsWith("/integration-hub/adapters/qgis")) {
         return route.fulfill({ json: QGIS_PROFILE_FIXTURE });
       }
+      if (pathname.includes("/integration-hub/adapters/qgis/layers/") && pathname.endsWith("/export")) {
+        return route.fulfill({
+          status: 200,
+          headers: {
+            "content-type": "application/geopackage+sqlite3",
+            "content-disposition": 'attachment; filename="ranh-gioi-vn2000.gpkg"',
+            "x-content-sha256": "e".repeat(64),
+            "x-openvietgis-crs": "EPSG:5899",
+            "x-openvietgis-feature-count": "15"
+          },
+          body: Buffer.from("SQLite")
+        });
+      }
       return route.fulfill({ status: 404, json: {} });
     });
 
@@ -425,13 +609,17 @@ async function runOptionalBrowserSmoke() {
     await qgisCard.getByText("EPSG:5899").waitFor({ timeout: 10000 });
     await qgisCard.getByText("Chưa xác định CRS").waitFor({ timeout: 10000 });
     await qgisCard.getByText("Không hỗ trợ (false)").waitFor({ timeout: 10000 });
+    await qgisCard.getByText("Bị hạn chế / chưa đủ CRS").waitFor({ timeout: 10000 });
+
+    await qgisCard.getByRole("button", { name: "Tải .gpkg" }).click();
+    await qgisCard.getByText(/ranh-gioi-vn2000\.gpkg/).waitFor({ timeout: 10000 });
 
     assert.ok(
-      seenMethods.length >= 2 && seenMethods.every((m) => m.method === "GET"),
+      seenMethods.length >= 3 && seenMethods.every((m) => m.method === "GET"),
       "Browser Integration Hub traffic must be strictly GET"
     );
     assert.deepEqual(errors, []);
-    console.log("PASS live browser Integration Hub read-only inspection");
+    console.log("PASS live browser Integration Hub read-only inspection and export");
   } finally {
     await browser.close();
   }

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ApiError,
+  downloadIntegrationLayerExport,
   getIntegrationHubAdapterProfile,
   getIntegrationHubCatalog,
   type ActionDenialReason,
@@ -9,7 +11,9 @@ import {
   type ConnectorLifecycle,
   type IntegrationAdapterProfileResponse,
   type IntegrationAdapterSummary,
-  type IntegrationCatalogResponse
+  type IntegrationCatalogResponse,
+  type IntegrationExportAdapterKey,
+  type IntegrationExportFormat
 } from "@openvietgis/client-sdk";
 import "./integration-catalog.css";
 
@@ -17,6 +21,15 @@ interface IntegrationCatalogProps {
   client: ApiClient;
   org: string;
   projectId: string;
+}
+
+interface LayerExportStatus {
+  kind: "success" | "error";
+  filename?: string;
+  crs?: string;
+  featureCount?: number | null;
+  shortSha256?: string | null;
+  message: string;
 }
 
 const LIFECYCLE_LABELS: Record<ConnectorLifecycle, string> = {
@@ -34,9 +47,16 @@ const EXECUTION_STATUS_LABELS: Record<AdapterExecutionStatus, string> = {
 
 const DENIAL_REASON_LABELS: Record<ActionDenialReason, string> = {
   catalog_only: "Chỉ cho phép tra cứu danh mục / hồ sơ",
+  read_only_export: "Cho phép tải xuất lớp chỉ đọc theo quyền và CRS",
   permission_denied: "Không đủ quyền dự án",
   unsupported_by_adapter: "Adapter không khai báo thao tác",
   not_implemented: "Chưa triển khai trong Integration Hub"
+};
+
+const EXPORT_FORMAT_LABELS: Record<IntegrationExportFormat, string> = {
+  geopackage: "GeoPackage (.gpkg)",
+  geojson: "GeoJSON (.geojson)",
+  postgis_sql: "PostGIS SQL (.sql)"
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -47,6 +67,10 @@ const CATEGORY_LABELS: Record<string, string> = {
   tabular: "Bảng tính",
   survey_3d: "Trắc địa / 3D"
 };
+
+function isExportAdapterKey(key: string): key is IntegrationExportAdapterKey {
+  return key === "qgis" || key === "postgis";
+}
 
 function formatLayerCrs(layer: AdapterLayerDescriptor): string {
   if (!layer.crs_explicit) {
@@ -77,6 +101,39 @@ function lifecycleBadgeClass(lifecycle: ConnectorLifecycle): string {
   return "integration-badge is-planned";
 }
 
+function formatExportErrorMessage(layerName: string, error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 403) {
+      return `Không có quyền xuất lớp "${layerName}" (HTTP 403). Kiểm tra quyền dự án hoặc phạm vi GIS (ACL).`;
+    }
+    if (error.status === 409) {
+      return `Không thể xuất lớp "${layerName}" (HTTP 409): lớp chưa sẵn sàng, thiếu CRS tường minh hoặc vượt giới hạn xuất chỉ đọc.`;
+    }
+    if (error.status === 422) {
+      return `Không thể xuất lớp "${layerName}" theo định dạng đã chọn (HTTP 422): tham số không hợp lệ hoặc GeoJSON yêu cầu EPSG:4326.`;
+    }
+    if (error.status === 404) {
+      return `Không tìm thấy lớp "${layerName}" hoặc đầu cuối xuất chỉ đọc (HTTP 404).`;
+    }
+  }
+  return `Không thể tải tệp xuất chỉ đọc cho lớp "${layerName}". Vui lòng thử lại.`;
+}
+
+function triggerBrowserBlobDownload(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 export function IntegrationCatalog({
   client,
   org,
@@ -93,6 +150,10 @@ export function IntegrationCatalog({
   >({});
   const [profileLoadingKey, setProfileLoadingKey] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<Record<string, string>>({});
+  const [exportingKey, setExportingKey] = useState<string | null>(null);
+  const [exportStatusByAdapter, setExportStatusByAdapter] = useState<
+    Record<string, LayerExportStatus>
+  >({});
   const scopeGeneration = useRef(0);
 
   useEffect(() => {
@@ -106,6 +167,8 @@ export function IntegrationCatalog({
     setProfiles({});
     setProfileLoadingKey(null);
     setProfileError({});
+    setExportingKey(null);
+    setExportStatusByAdapter({});
 
     void getIntegrationHubCatalog(client, org, projectId)
       .then((value) => {
@@ -196,6 +259,80 @@ export function IntegrationCatalog({
       });
   };
 
+  const handleReadOnlyExport = (
+    adapterKey: IntegrationExportAdapterKey,
+    layer: AdapterLayerDescriptor,
+    format: IntegrationExportFormat
+  ) => {
+    const busyToken = `${adapterKey}:${layer.layer_id}:${format}`;
+    const requestGeneration = scopeGeneration.current;
+    setExportingKey(busyToken);
+    setExportStatusByAdapter((prev) => {
+      const next = { ...prev };
+      delete next[adapterKey];
+      return next;
+    });
+
+    void downloadIntegrationLayerExport(
+      client,
+      org,
+      projectId,
+      adapterKey,
+      layer.layer_id,
+      format
+    )
+      .then((result) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        triggerBrowserBlobDownload(result.blob, result.filename);
+
+        const resolvedCrs = result.crs ?? formatLayerCrs(layer);
+        const shortSha256 = result.sha256 ? result.sha256.slice(0, 12) : null;
+        const summaryParts = [
+          `Tệp: ${result.filename}`,
+          `CRS: ${resolvedCrs}`
+        ];
+        if (result.featureCount !== null) {
+          summaryParts.push(`Đối tượng: ${result.featureCount}`);
+        }
+        if (shortSha256) {
+          summaryParts.push(`SHA-256: ${shortSha256}`);
+        }
+
+        setExportStatusByAdapter((prev) => ({
+          ...prev,
+          [adapterKey]: {
+            kind: "success",
+            filename: result.filename,
+            crs: resolvedCrs,
+            featureCount: result.featureCount,
+            shortSha256,
+            message: `Đã xuất bản sao chỉ đọc · ${summaryParts.join(" · ")}`
+          }
+        }));
+      })
+      .catch((downloadError: unknown) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        setExportStatusByAdapter((prev) => ({
+          ...prev,
+          [adapterKey]: {
+            kind: "error",
+            message: formatExportErrorMessage(layer.name, downloadError)
+          }
+        }));
+      })
+      .finally(() => {
+        if (scopeGeneration.current === requestGeneration) {
+          setExportingKey((current) =>
+            current === busyToken ? null : current
+          );
+        }
+      });
+  };
+
   return (
     <section className="integration-catalog" aria-label="Tích hợp phần mềm">
       <details>
@@ -263,6 +400,11 @@ export function IntegrationCatalog({
                 const isProfileLoading = profileLoadingKey === adapter.key;
                 const adapterError = profileError[adapter.key] ?? "";
                 const detailPanelId = `integration-profile-${adapter.key}`;
+                const exportAdapterKey = isExportAdapterKey(adapter.key)
+                  ? adapter.key
+                  : null;
+                const adapterExportStatus =
+                  exportStatusByAdapter[adapter.key] ?? null;
 
                 return (
                   <article
@@ -401,6 +543,21 @@ export function IntegrationCatalog({
                                       )}
                                     </dd>
                                   </div>
+                                  {profile.connection_profile.export_formats &&
+                                    profile.connection_profile.export_formats
+                                      .length > 0 && (
+                                      <div>
+                                        <dt>Định dạng xuất chỉ đọc</dt>
+                                        <dd>
+                                          {profile.connection_profile.export_formats
+                                            .map(
+                                              (fmt) =>
+                                                EXPORT_FORMAT_LABELS[fmt] ?? fmt
+                                            )
+                                            .join(", ")}
+                                        </dd>
+                                      </div>
+                                    )}
                                 </dl>
 
                                 {profile.connection_profile.restrictions.length >
@@ -470,53 +627,188 @@ export function IntegrationCatalog({
                                         <th scope="col">Hệ tọa độ (CRS)</th>
                                         <th scope="col">Kiểm định</th>
                                         <th scope="col">Quyền xuất</th>
+                                        {exportAdapterKey && (
+                                          <th scope="col">Xuất chỉ đọc</th>
+                                        )}
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {profile.layers.map((layer) => (
-                                        <tr key={layer.layer_id}>
-                                          <td>
-                                            <strong>{layer.name}</strong>
-                                            <small className="integration-cell-sub">
-                                              rev {layer.layer_revision}
-                                            </small>
-                                          </td>
-                                          <td>
-                                            {layer.geometry_family} (
-                                            {layer.dimensions})
-                                          </td>
-                                          <td>
-                                            <span
-                                              className={
-                                                layer.crs_explicit
-                                                  ? "integration-crs-explicit"
-                                                  : "integration-crs-missing"
-                                              }
-                                            >
-                                              {formatLayerCrs(layer)}
-                                            </span>
-                                          </td>
-                                          <td>
-                                            <code>{layer.validation_state}</code>
-                                          </td>
-                                          <td>
-                                            <span
-                                              className={
-                                                layer.export_permitted
-                                                  ? "integration-flag is-allowed"
-                                                  : "integration-flag is-denied"
-                                              }
-                                            >
-                                              {layer.export_permitted
-                                                ? "Được phép xuất"
-                                                : "Không được xuất"}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ))}
+                                      {profile.layers.map((layer) => {
+                                        const gpkgBusy =
+                                          exportingKey ===
+                                          `${adapter.key}:${layer.layer_id}:geopackage`;
+                                        const geojsonBusy =
+                                          exportingKey ===
+                                          `${adapter.key}:${layer.layer_id}:geojson`;
+                                        const sqlBusy =
+                                          exportingKey ===
+                                          `${adapter.key}:${layer.layer_id}:postgis_sql`;
+
+                                        return (
+                                          <tr key={layer.layer_id}>
+                                            <td>
+                                              <strong>{layer.name}</strong>
+                                              <small className="integration-cell-sub">
+                                                rev {layer.layer_revision}
+                                              </small>
+                                            </td>
+                                            <td>
+                                              {layer.geometry_family} (
+                                              {layer.dimensions})
+                                            </td>
+                                            <td>
+                                              <span
+                                                className={
+                                                  layer.crs_explicit
+                                                    ? "integration-crs-explicit"
+                                                    : "integration-crs-missing"
+                                                }
+                                              >
+                                                {formatLayerCrs(layer)}
+                                              </span>
+                                            </td>
+                                            <td>
+                                              <code>
+                                                {layer.validation_state}
+                                              </code>
+                                            </td>
+                                            <td>
+                                              <span
+                                                className={
+                                                  layer.export_permitted
+                                                    ? "integration-flag is-allowed"
+                                                    : "integration-flag is-denied"
+                                                }
+                                              >
+                                                {layer.export_permitted
+                                                  ? "Được phép xuất"
+                                                  : "Không được xuất"}
+                                              </span>
+                                            </td>
+                                            {exportAdapterKey && (
+                                              <td>
+                                                {layer.export_permitted ? (
+                                                  <div className="integration-export-actions">
+                                                    {exportAdapterKey ===
+                                                      "qgis" && (
+                                                      <>
+                                                        <button
+                                                          type="button"
+                                                          className="integration-export-btn"
+                                                          disabled={
+                                                            exportingKey !==
+                                                            null
+                                                          }
+                                                          onClick={() =>
+                                                            handleReadOnlyExport(
+                                                              "qgis",
+                                                              layer,
+                                                              "geopackage"
+                                                            )
+                                                          }
+                                                        >
+                                                          {gpkgBusy
+                                                            ? "Đang tải .gpkg…"
+                                                            : "Tải .gpkg"}
+                                                        </button>
+                                                        {layer.stored_crs_code ===
+                                                          4326 && (
+                                                          <button
+                                                            type="button"
+                                                            className="integration-export-btn"
+                                                            disabled={
+                                                              exportingKey !==
+                                                              null
+                                                            }
+                                                            onClick={() =>
+                                                              handleReadOnlyExport(
+                                                                "qgis",
+                                                                layer,
+                                                                "geojson"
+                                                              )
+                                                            }
+                                                          >
+                                                            {geojsonBusy
+                                                              ? "Đang tải .geojson…"
+                                                              : "Tải .geojson"}
+                                                          </button>
+                                                        )}
+                                                      </>
+                                                    )}
+                                                    {exportAdapterKey ===
+                                                      "postgis" && (
+                                                      <>
+                                                        <button
+                                                          type="button"
+                                                          className="integration-export-btn"
+                                                          disabled={
+                                                            exportingKey !==
+                                                            null
+                                                          }
+                                                          onClick={() =>
+                                                            handleReadOnlyExport(
+                                                              "postgis",
+                                                              layer,
+                                                              "postgis_sql"
+                                                            )
+                                                          }
+                                                        >
+                                                          {sqlBusy
+                                                            ? "Đang tải .sql…"
+                                                            : "Tải .sql"}
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          className="integration-export-btn"
+                                                          disabled={
+                                                            exportingKey !==
+                                                            null
+                                                          }
+                                                          onClick={() =>
+                                                            handleReadOnlyExport(
+                                                              "postgis",
+                                                              layer,
+                                                              "geopackage"
+                                                            )
+                                                          }
+                                                        >
+                                                          {gpkgBusy
+                                                            ? "Đang tải .gpkg…"
+                                                            : "Tải .gpkg"}
+                                                        </button>
+                                                      </>
+                                                    )}
+                                                  </div>
+                                                ) : (
+                                                  <span className="integration-export-restricted">
+                                                    Bị hạn chế / chưa đủ CRS
+                                                  </span>
+                                                )}
+                                              </td>
+                                            )}
+                                          </tr>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
+                              )}
+
+                              {adapterExportStatus && (
+                                <p
+                                  className={
+                                    adapterExportStatus.kind === "error"
+                                      ? "integration-export-status is-error"
+                                      : "integration-export-status"
+                                  }
+                                  role={
+                                    adapterExportStatus.kind === "error"
+                                      ? "alert"
+                                      : "status"
+                                  }
+                                >
+                                  {adapterExportStatus.message}
+                                </p>
                               )}
                             </div>
 

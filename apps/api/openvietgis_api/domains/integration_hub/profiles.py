@@ -71,6 +71,7 @@ def _build_connection_profile(
                 "WFS",
                 "PostGIS_read_only_export",
             ],
+            "export_formats": ["geopackage", "geojson", "postgis_sql"],
             "existing_endpoints": [
                 {
                     "name": "project_layers",
@@ -82,6 +83,14 @@ def _build_connection_profile(
                     "name": "scoped_geojson_export",
                     "method": "GET",
                     "path_template": f"{base}/access/export/{{layer_id}}",
+                    "required_permission": "project.read",
+                },
+                {
+                    "name": "hub_layer_export",
+                    "method": "GET",
+                    "path_template": (
+                        f"{base}/integration-hub/adapters/{adapter_key}/layers/{{layer_id}}/export"
+                    ),
                     "required_permission": "project.read",
                 },
             ],
@@ -101,6 +110,7 @@ def _build_connection_profile(
             "requires_per_layer_acl": True,
             "default_write_policy": "deny",
             "supported_protocols": ["PostGIS_read_only_export", "GeoPackage"],
+            "export_formats": ["postgis_sql", "geopackage"],
             "existing_endpoints": [
                 {
                     "name": "project_layers",
@@ -112,6 +122,14 @@ def _build_connection_profile(
                     "name": "scoped_geojson_export",
                     "method": "GET",
                     "path_template": f"{base}/access/export/{{layer_id}}",
+                    "required_permission": "project.read",
+                },
+                {
+                    "name": "hub_layer_export",
+                    "method": "GET",
+                    "path_template": (
+                        f"{base}/integration-hub/adapters/{adapter_key}/layers/{{layer_id}}/export"
+                    ),
                     "required_permission": "project.read",
                 },
             ],

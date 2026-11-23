@@ -57,3 +57,28 @@ Recorded 2026-11-23 on isolated branch `feature/026-integration-hub-policy` (bas
 - Connector runtime write/sync execution (`sync.push`, `data.import`, `connection.configure`, `sync.approve`), connector credential vault, device pairing, desktop plugins, or proprietary vendor CAD/GIS SDK binaries.
 
 **Release decision: NOT PROMOTED (HOLD).** Ready for PR submission and CI execution; keep isolated from production until GATE-01 through GATE-04 are verified with live evidence.
+
+---
+
+## Slice 2 — Read-Only QGIS & PostGIS Export + QGIS Desktop Connector (2026-11-23)
+
+- **Backend read-only export endpoint**:
+  - Added `GET /api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export?format=geopackage|geojson|postgis_sql` (`Cache-Control: no-store`, `X-Content-SHA256`, `X-OpenVietGIS-CRS`, `X-OpenVietGIS-Content-Revision`, `X-OpenVietGIS-Schema-Revision`, `X-OpenVietGIS-Feature-Count`, audit event `integration_hub.layer_export`).
+  - Added `apps/api/openvietgis_api/adapters/formats/postgis_sql.py` (transactional PostGIS SQL writer with explicit readable SRID, identifier quoting, SQL literal escaping, NUL stripping, finite WKT coordinates, zero internal DB credentials).
+  - Reused existing OGC GeoPackage 1.3 writer (`write_geopackage`) and GeoJSON writer (`write_geojson`, enforcing EPSG:4326 without unverified reprojection).
+  - Enforced `prepare_project_scope(Permission.PROJECT_READ)`, `gis_access` layer + feature-level `export` ACL, explicit readable CRS (`get_readable_crs_profile`), and 25,000-feature bound; zero mutations (`default_write_policy: "deny"`), zero DB migrations.
+- **QGIS Desktop 3.28+ read-only plugin**:
+  - Added `integrations/qgis_plugin/openvietgis_connector/` (`metadata.txt`, `__init__.py`, pure-Python `client.py`, PyQt5 `plugin.py`, bilingual `README.md`) with Bearer Service Principal auth, mandatory `X-Content-SHA256` verification, path-traversal filename sanitization, and `QgsVectorLayer.setReadOnly(True)`.
+- **OpenAPI 3.1, Typed SDK & UI**:
+  - Updated `specs/026-integration-hub-policy/contracts/integration-hub-api.yaml` (`OPENAPI_OK`).
+  - Added `buildIntegrationLayerExportPath` and `downloadIntegrationLayerExport` in `packages/client-sdk/src/integration-hub.ts`.
+  - Upgraded `apps/web-next/src/IntegrationCatalog.tsx` with read-only download actions (`.gpkg` / `.geojson` for QGIS; `.sql` / `.gpkg` for PostGIS) gated by `export_permitted`, still zero write/sync/credential controls.
+- **Local Verification Results**:
+  - `ruff check` (backend + plugin + tests): **PASS**
+  - `mypy --strict` (backend + tests): **PASS**
+  - `pytest` unit (`integration_hub` + `authorization`): **117 passed** (90 `integration_hub`, 27 `authorization`)
+  - `pytest --collect-only` T006 PostGIS integration (`test_integration_hub_rls_acl.py` extended for `.gpkg`/`.sql` RLS & per-feature ACL): **3 tests collected** (live execution pending Docker/PostGIS)
+  - `node apps/web-next/integration-hub-smoke.mjs`: **PASS**
+  - `check_architecture.py` / `check_docs.py` / `check_contracts.py`: **PASS**; `check_scope.py`: **0 new violations**
+
+**Release decision remains `HOLD — NOT PROMOTED`** pending live PostGIS T006 run, full `pnpm validate:ts` + Playwright E2E, and T009 staging rollback drill.

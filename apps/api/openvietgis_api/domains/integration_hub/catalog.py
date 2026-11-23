@@ -65,10 +65,19 @@ ADAPTERS: Final[tuple[AdapterManifest, ...]] = (
                     AdapterLifecycle.EXISTING_READ_ONLY, ("WMS", "WFS", "COG", "XYZ"),
                     "R010 provides allowlisted read-only external sources; no hub sync.",
                     (ConnectorAction.INSPECT,), "external-sources"),
-    AdapterManifest("qgis", "QGIS", "gis", "open_protocols",
-                    AdapterLifecycle.PLANNED, ("GeoPackage", "PostGIS", "WMS", "WFS"),
-                    "QGIS plugin and push/pull synchronization not integrated.",
-                    (ConnectorAction.INSPECT, ConnectorAction.EXPORT, ConnectorAction.SYNC_PULL)),
+    AdapterManifest(
+        "qgis",
+        "QGIS",
+        "gis",
+        "open_protocols",
+        AdapterLifecycle.EXISTING_READ_ONLY,
+        ("GeoPackage", "PostGIS", "WMS", "WFS"),
+        "Read-only GeoPackage / GeoJSON / PostGIS SQL export verified in Hub; "
+        "QGIS writeback and sync remain denied.",
+        (ConnectorAction.INSPECT, ConnectorAction.EXPORT, ConnectorAction.SYNC_PULL),
+        existing_api="integration-hub",
+        hub_executable_actions=(ConnectorAction.DISCOVER, ConnectorAction.EXPORT),
+    ),
     AdapterManifest("arcgis", "ArcGIS Pro / Online", "gis", "remote_service",
                     AdapterLifecycle.PLANNED, ("ArcGIS Feature Service", "FileGDB", "SHP"),
                     "Vendor API authentication, feature ACL and versioning require tests.",
@@ -89,10 +98,19 @@ ADAPTERS: Final[tuple[AdapterManifest, ...]] = (
                     AdapterLifecycle.PLANNED, ("DGN", "cadastral_attributes"),
                     "Requires lawful schema access and tested parcel/attribute binding.",
                     (ConnectorAction.IMPORT, ConnectorAction.EXPORT)),
-    AdapterManifest("postgis", "PostgreSQL / PostGIS", "database", "database_bridge",
-                    AdapterLifecycle.PLANNED, ("PostGIS",),
-                    "Existing OpenVietGIS internal PostGIS is not an external DB connector.",
-                    (ConnectorAction.INSPECT, ConnectorAction.SYNC_PULL)),
+    AdapterManifest(
+        "postgis",
+        "PostgreSQL / PostGIS",
+        "database",
+        "database_bridge",
+        AdapterLifecycle.EXISTING_READ_ONLY,
+        ("PostGIS",),
+        "Read-only PostGIS SQL and GeoPackage export for external PostGIS import; "
+        "internal DB credentials are never exposed and writeback remains denied.",
+        (ConnectorAction.INSPECT, ConnectorAction.EXPORT, ConnectorAction.SYNC_PULL),
+        existing_api="integration-hub",
+        hub_executable_actions=(ConnectorAction.DISCOVER, ConnectorAction.EXPORT),
+    ),
     AdapterManifest("ogc_publisher", "OGC publishing servers", "gis", "remote_service",
                     AdapterLifecycle.PLANNED, ("WMS", "WFS", "OGC API"),
                     "Generic WMS/WFS may be registered in R010; no dedicated adapter.",
@@ -138,6 +156,8 @@ def evaluate_action(
         reason = "unsupported_by_adapter"
     elif not executable:
         reason = "not_implemented"
+    elif action is ConnectorAction.EXPORT:
+        reason = "read_only_export"
     else:
         reason = "catalog_only"
     return {

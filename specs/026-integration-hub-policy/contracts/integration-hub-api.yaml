@@ -56,6 +56,79 @@ paths:
         "422":
           description: "Invalid path or request parameters; validation never echoes raw input."
           content: {"application/json":{"schema":{"$ref":"#/components/schemas/RequestValidationError"}}}
+  "/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export":
+    get:
+      operationId: "exportIntegrationHubLayer"
+      x-required-permission: "project.read"
+      description: "Read-only export of a single authorized, ready project layer in GeoPackage (.gpkg), GeoJSON (.geojson), or external PostGIS SQL (.sql) format. Enforces PostgreSQL RLS, R002 effective permissions and service principal ceilings, project GIS ACL (per-layer and per-feature), and R003 explicit readable CRS rules. Never exposes internal database credentials or write capabilities."
+      security: [{"sessionCookie":[]},{"serviceBearer":[]}]
+      parameters:
+        - {"$ref":"#/components/parameters/OrganizationId"}
+        - {"$ref":"#/components/parameters/ProjectId"}
+        - {"$ref":"#/components/parameters/AdapterKey"}
+        - {"$ref":"#/components/parameters/LayerId"}
+        - name: "format"
+          in: "query"
+          required: false
+          description: "Read-only snapshot exchange format."
+          schema:
+            type: "string"
+            enum: ["geopackage","geojson","postgis_sql"]
+            default: "geopackage"
+      responses:
+        "200":
+          description: "Successful authorized read-only layer export payload with integrity and revision metadata headers."
+          headers:
+            Cache-Control:
+              required: true
+              description: "Always no-store to prevent caching of authorized GIS payloads."
+              schema: {"type":"string","const":"no-store"}
+            Content-Disposition:
+              required: true
+              description: "Attachment header carrying a sanitized export filename."
+              schema: {"type":"string","minLength":1,"maxLength":255}
+            X-Content-SHA256:
+              required: true
+              description: "Lowercase hex SHA-256 digest of the exact response body bytes."
+              schema: {"type":"string","pattern":"^[a-f0-9]{64}$"}
+            X-OpenVietGIS-CRS:
+              required: true
+              description: "Explicit verified EPSG identifier of the exported geometries (e.g. EPSG:4326, EPSG:4756, EPSG:5899)."
+              schema: {"type":"string","pattern":"^EPSG:[0-9]+$"}
+            X-OpenVietGIS-Content-Revision:
+              required: true
+              description: "SHA-256 content_revision pinned at export time."
+              schema: {"type":"string","pattern":"^[a-f0-9]{64}$"}
+            X-OpenVietGIS-Schema-Revision:
+              required: true
+              description: "SHA-256 schema_revision pinned at export time."
+              schema: {"type":"string","pattern":"^[a-f0-9]{64}$"}
+            X-OpenVietGIS-Feature-Count:
+              required: true
+              description: "Exact number of features included in the exported snapshot after ACL filtering."
+              schema: {"type":"integer","minimum":0}
+          content:
+            application/geopackage+sqlite3:
+              schema: {"type":"string","format":"binary"}
+            application/geo+json:
+              schema: {"type":"object"}
+            application/sql:
+              schema: {"type":"string"}
+        "401":
+          description: "Authentication/credential missing or invalid."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "403":
+          description: "R002 current authorization, lifecycle, service principal ceiling, or scoped GIS export ACL denial; generic to inaccessible target."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "404":
+          description: "Scoped organization, project, adapter key, or layer missing, retired, hidden, or wrong owner; no private details."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "409":
+          description: "Layer is not ready for export, lacks an explicit R003 readable CRS, exceeds export bounds, or the adapter does not support direct read-only export."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "422":
+          description: "Invalid path or query parameters; validation never echoes raw input."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/RequestValidationError"}}}
 components:
   securitySchemes:
     sessionCookie: {"type":"apiKey","in":"cookie","name":"ovg_session"}
@@ -69,6 +142,12 @@ components:
       required: true
       schema: {"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_]+$"}
       description: "Canonical integration hub adapter identifier (e.g. ogc_services, qgis, postgis, microstation_v8i)."
+    LayerId:
+      name: "layer_id"
+      in: "path"
+      required: true
+      schema: {"type":"string","format":"uuid"}
+      description: "Project-scoped active spatial layer identifier."
   schemas:
     ActionEvaluation:
       type: "object"
@@ -101,7 +180,7 @@ components:
         allowed: {"type":"boolean"}
         reason:
           type: "string"
-          enum: ["permission_denied","unsupported_by_adapter","not_implemented","catalog_only"]
+          enum: ["permission_denied","unsupported_by_adapter","not_implemented","catalog_only","read_only_export"]
     AdapterSummary:
       type: "object"
       additionalProperties: false
@@ -206,6 +285,14 @@ components:
           minItems: 1
           maxItems: 32
           items: {"type":"string","minLength":1,"maxLength":64}
+        export_formats:
+          type: "array"
+          minItems: 0
+          maxItems: 8
+          items:
+            type: "string"
+            enum: ["geopackage","geojson","postgis_sql"]
+          description: "Optional list of direct read-only layer export formats supported by this adapter."
         existing_endpoints:
           type: "array"
           minItems: 0
