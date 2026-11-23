@@ -43,10 +43,10 @@ from openvietgis_api.adapters.persistence.scope_helper import (
     prepare_project_scope,
 )
 from openvietgis_api.adapters.persistence.tenancy_repository import SqlTenancyRepository
-from openvietgis_api.domains.authorization.domain import ResourceRole, ScopeKind
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.authorization.service import ServicePrincipalService
 from openvietgis_api.domains.integration_hub.profiles import is_explicit_readable_crs
+from openvietgis_api.domains.tenancy.domain import ResourceRole, ResourceScopeKind
 
 router = APIRouter(tags=["integration-bindings"])
 BASE = "/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings"
@@ -658,7 +658,7 @@ def issue_pairing_token(
             actor=auth.actor,
             organization_id=organization_id,
             service_principal_id=sp_id,
-            scope_kind=ScopeKind.PROJECT,
+            scope_kind=ResourceScopeKind.PROJECT,
             workspace_id=None,
             project_id=project_id,
             role=ResourceRole.EDITOR,
