@@ -61,3 +61,8 @@ Implement agent trust + durable baseline mapping and conditional source/target A
 - Web Integration Hub TS typecheck, static smoke and Vite frontend build: PASS in isolated worktree (not deployed).
 - R027 OpenAPI 3.1 draft contract validated with `openapi-spec-validator` (8 paths). Implemented draft endpoints explicitly distinguished from proposed execution endpoints.
 - Experimental QGIS plugin ZIP generated locally for packaging validation; SHA-256 recorded in its sibling `.sha256` file. GitHub Actions workflow publishes only artifacts that pass tests. Native Windows desktop certification remains pending.
+
+### CI supply-chain repair
+
+- GitHub Actions `validate` failed at `pnpm install --frozen-lockfile` because `apps/web-next/node_modules` was accidentally committed as a symlink pointing to `../web/node_modules`. Removed **only the tracked symlink** from version control; pnpm will recreate dependencies from `pnpm-lock.yaml` in CI. No dependency lockfile or application data was removed.
+- Repository-wide backend Ruff currently reports **775 errors** in unrelated pre-existing files. Formatting all legacy modules is intentionally out of scope for R027; the focused R027 lint/architecture/unit/integration checks pass. The overall CI result must remain reported as failing until the separate cleanup is completed.
