@@ -36,10 +36,10 @@ def ecef(lon, lat, height):
 
 
 def frame(lon, lat, height):
-    l, p = lon * DEG, lat * DEG
-    east = (-math.sin(l), math.cos(l), 0)
-    north = (-math.sin(p) * math.cos(l), -math.sin(p) * math.sin(l), math.cos(p))
-    up = (math.cos(p) * math.cos(l), math.cos(p) * math.sin(l), math.sin(p))
+    lam, p = lon * DEG, lat * DEG
+    east = (-math.sin(lam), math.cos(lam), 0)
+    north = (-math.sin(p) * math.cos(lam), -math.sin(p) * math.sin(lam), math.cos(p))
+    up = (math.cos(p) * math.cos(lam), math.cos(p) * math.sin(lam), math.sin(p))
     origin = ecef(lon, lat, height)
     matrix = [*east, 0, *north, 0, *up, 0, *origin, 1]
 
