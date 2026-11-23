@@ -9,17 +9,21 @@ from uuid import UUID
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.platform_errors import (
     PlatformValidationError,
+    PlatformNotFoundError,
+    PlatformConflictError,
 )
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from modules.house_numbering.domain import (
     Address,
+    DomainError,
     Rule,
     locate_on_route,
     suggest_number,
 )
 from modules.house_numbering.persistence import HouseNumberingRepository
+from modules.house_numbering.batch_numbering import build_route_plan
 
 
 def _wire(row: RowMapping | dict[str, Any]) -> dict[str, Any]:
@@ -351,78 +355,57 @@ class HouseNumberingService:
         }
 
     def preview_assignment(
-        self,
-        *,
-        building_ids: list[UUID],
-        rule_id: UUID,
-        operation_id: UUID,
+        self, *, building_ids: list[UUID], rule_id: UUID, operation_id: UUID,
     ) -> dict[str, Any]:
-        if not building_ids:
-            raise PlatformValidationError("numbering preview requires buildings")
+        if not building_ids or len(set(building_ids)) != len(building_ids):
+            raise PlatformValidationError("numbering requires unique building IDs")
         rule = self.repo.get_rule(rule_id)
+        domain_rule = _domain_rule(rule)
         changes: list[dict[str, Any]] = []
         warnings: list[str] = []
         base: dict[str, Any] = {}
-        route_revisions: dict[UUID, int] = {}
-
-        for building_id in building_ids:
-            building = self.repo.get_building(building_id)
-            if building["route_id"] is None:
-                warnings.append(f"building {building_id} has no route")
+        groups: dict[UUID, dict[str, Any]] = {}
+        targets = self.repo.numbering_buildings(building_ids)
+        if len(targets) != len(building_ids):
+            raise PlatformNotFoundError("building not found")
+        for b in targets:
+            if b["route_id"] is None:
+                warnings.append(f"building {b['id']}: no_route")
                 continue
-            if building["eligibility"] == "ineligible":
-                warnings.append(f"building {building_id} is ineligible")
+            groups.setdefault(b["route_id"], {})[str(b["id"])] = b
+        for route_id, group in sorted(groups.items(), key=lambda item: str(item[0])):
+            snapshot = self.repo.numbering_route_snapshot(route_id)
+            try:
+                route = self.repo.route_geometry(route_id)
+                vertices = _route_vertices(route)
+            except (PlatformNotFoundError, PlatformValidationError):
+                warnings.extend(f"building {bid}: invalid_route_geometry" for bid in group)
                 continue
-            route_id = UUID(str(building["route_id"]))
-            route = self.repo.route_geometry(route_id)
-            target_crs = int(route["srid"])
-            rows = self.repo.building_points_for_route(route_id, target_crs)
-            target = next((row for row in rows if row["id"] == building_id), None)
-            if target is None:
-                warnings.append(f"building {building_id} has no usable geometry")
+            points = self.repo.building_points_for_route(route_id, int(route["srid"]))
+            numbers = [dict(row) for row in self.repo.list_route_numbers(route_id)]
+            try:
+                proposed, issues = build_route_plan(route=route, vertices=vertices, rule=domain_rule,
+                                                   points=points, numbers=numbers, targets=group)
+            except DomainError:
+                warnings.extend(f"building {bid}: invalid_route_or_number_data" for bid in group)
                 continue
-            inspection = self.inspect(
-                x=float(target["x"]),
-                y=float(target["y"]),
-                crs_code=target_crs,
-                route_id=route_id,
-                rule_id=rule_id,
-                existing_building_id=building_id,
-            )
-            number = inspection["suggestion"]["number"]
-            reason = str(inspection["suggestion"]["reason"])
-            if number is None:
-                warnings.append(f"building {building_id}: {reason}")
-                continue
-            existing = self.repo.proposed_number_for_building(building_id)
-            if existing is not None and existing["kind"] in {"submitted", "approved"}:
-                warnings.append(
-                    f"building {building_id} has protected {existing['kind']} number"
-                )
-                continue
-            route_row = self.repo.get_route(route_id)
-            route_revisions[route_id] = int(route_row["revision"])
-            base[f"route_geometry:{route_id}"] = route["content_revision"]
-            base[f"building:{building_id}"] = int(building["revision"])
-            changes.append(
-                {
-                    "building_id": str(building_id),
-                    "route_id": str(route_id),
-                    "old_number": existing["number_text"] if existing else None,
-                    "number": str(number),
-                    "side": inspection["location"]["side"],
-                    "measure": inspection["location"]["measure_m"],
-                    "reason": reason,
-                }
-            )
-        for route_id, revision in route_revisions.items():
-            base[f"route:{route_id}"] = revision
+            if snapshot != self.repo.numbering_route_snapshot(route_id):
+                raise PlatformConflictError("route numbering changed during preview", code="STALE_PREVIEW")
+            current = self.repo.route_geometry(route_id)
+            if current["content_revision"] != route["content_revision"] or current["revision"] != route["revision"]:
+                raise PlatformConflictError("route changed during preview", code="STALE_PREVIEW")
+            warnings.extend(issues)
+            if proposed:
+                base[f"route:{route_id}"] = int(route["revision"])
+                base[f"route_geometry:{route_id}"] = route["content_revision"]
+                base[f"route_snapshot:{route_id}"] = snapshot
+                for change in proposed:
+                    bid = change["building_id"]
+                    base[f"building:{bid}"] = int(group[bid]["revision"])
+                changes.extend(proposed)
         preview = self.repo.create_preview(
-            operation_id=operation_id,
-            rule_id=UUID(str(rule["id"])),
-            base_revisions=base,
-            changes=changes,
-            warnings=warnings,
+            operation_id=operation_id, rule_id=UUID(str(rule["id"])),
+            base_revisions=base, changes=changes, warnings=warnings,
             expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         self.commit()

@@ -1,4 +1,5 @@
-import {useEffect,useRef,type RefObject} from "react";
+import {useEffect,useRef,useState,type RefObject} from "react";
+import {createPortal} from "react-dom";
 import {mountAiCopilot} from "./ai-copilot/first-party.js";
 import "./ai-copilot/first-party.css";
 import type {PartnerMapBridge} from "./partner-map-bridge";
@@ -10,6 +11,8 @@ import type {PartnerMapBridge} from "./partner-map-bridge";
  */
 export function AiCopilotPanel({org,pid,bridge}:{org:string;pid:string;bridge:RefObject<PartnerMapBridge|null>}) {
  const host=useRef<HTMLSpanElement>(null);
+ const [mobile,setMobile]=useState(()=>window.matchMedia("(max-width:900px)").matches);
+ useEffect(()=>{const query=window.matchMedia("(max-width:900px)");const onChange=()=>setMobile(query.matches);query.addEventListener("change",onChange);return()=>query.removeEventListener("change",onChange);},[]);
  useEffect(()=>{
    const controller=new AbortController();
    let unmount:(()=>void)|undefined;
@@ -29,6 +32,7 @@ export function AiCopilotPanel({org,pid,bridge}:{org:string;pid:string;bridge:Re
      }catch{/* Copilot remains unavailable until the approved service is ready. */}
    })();
    return()=>{controller.abort();unmount?.()};
- },[org,pid,bridge]);
- return <span ref={host} className="ai-copilot-host"/>;
+ },[org,pid,bridge,mobile]);
+ const element=<span ref={host} className="ai-copilot-host"/>;
+ return mobile?createPortal(element,document.body):element;
 }

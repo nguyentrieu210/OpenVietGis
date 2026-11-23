@@ -114,16 +114,35 @@ class RouteImportOverride(BaseModel):
     model_config = ConfigDict(extra="forbid")
     parent_code: str = Field(max_length=200)
     prefix: str = Field(max_length=100)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    route_type: Literal["street", "alley"] | None = None
+    reviewed: bool = False
+
+
+class RouteParentFeature(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    source_id: UUID
+    feature_id: str = Field(min_length=1, max_length=300)
 
 
 class RouteImportBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     layers: list[RouteImportLayer] = Field(min_length=1, max_length=20)
     overrides: dict[str, RouteImportOverride] = Field(default_factory=dict, max_length=5000)
+    merge_groups: list[str] = Field(default_factory=list, max_length=5000)
+    parent_features: list[RouteParentFeature] = Field(default_factory=list, max_length=500)
 
 
 class RouteImportApply(RouteImportBody):
     preview_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+    selected_keys: list[str] | None = Field(default=None, min_length=1, max_length=5000)
+
+
+class GeometryReviewApply(RouteImportBody):
+    preview_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+    selected_keys: list[str] = Field(min_length=1,max_length=100)
+    reason: str = Field(min_length=10,max_length=500)
 
 
 class RouteUpdate(BaseModel):
@@ -143,6 +162,54 @@ class BuildingAssignmentPreview(BaseModel):
         default_factory=lambda: {"road": "ten_duong", "alley": "hem", "code": "tuyen_id"}
     )
     max_distance_m: float = Field(default=80, ge=5, le=500)
+    strict: bool = False
+    building_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=500)
+
+
+class BuildingAssignmentAudit(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_id: UUID | None = None
+    mapping: dict[Literal["road", "alley", "code"], str] = Field(
+        default_factory=lambda: {"road": "ten_duong", "alley": "hem", "code": "tuyen_id"}
+    )
+    group: Literal["ready","parent_missing","prefix_invalid","route_duplicate","route_pending","code_unknown",
+        "address_conflict","address_ambiguous","address_missing","route_missing","distance","non_address_route","invalid_geometry","locked"] | None = None
+    after_id: UUID | None = None
+    limit: int = Field(default=200, ge=1, le=500)
+    max_distance_m: float = Field(default=80, ge=5, le=500)
+    cluster: str | None = Field(default=None, pattern=r"^[a-f0-9]{24}$")
+
+
+class CatalogRecoveryPreview(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    source_id: UUID|None=None
+    mapping: dict[Literal["road","alley","code"],str]=Field(default_factory=lambda:{"road":"ten_duong","alley":"hem","code":"tuyen_id"})
+    search: str=Field(default="",max_length=200)
+    offset: int=Field(default=0,ge=0)
+    limit: int=Field(default=100,ge=1,le=100)
+
+
+class CatalogRecoveryApply(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    source_id: UUID|None=None
+    mapping: dict[Literal["road","alley","code"],str]=Field(default_factory=lambda:{"road":"ten_duong","alley":"hem","code":"tuyen_id"})
+    selections: dict[str,str]=Field(min_length=1,max_length=100)
+    reason: str=Field(min_length=10,max_length=500)
+
+
+class ClusterCorrectionPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cluster: str = Field(pattern=r"^[a-f0-9]{24}$")
+    building_ids: list[UUID] = Field(min_length=1,max_length=500)
+    mapping: dict[Literal["road","alley","code"],str] = Field(default_factory=lambda: {"road":"ten_duong","alley":"hem","code":"tuyen_id"})
+    max_distance_m: float = Field(default=35,ge=5,le=35)
+
+
+class ClusterCorrectionApply(ClusterCorrectionPreview):
+    preview_token: str = Field(pattern=r"^[a-f0-9]{64}$")
+    route_id: UUID
+    selected_ids: list[UUID] = Field(min_length=1,max_length=500)
+    reason: str = Field(min_length=10,max_length=500)
 
 
 class BuildingAssignmentApply(BuildingAssignmentPreview):
@@ -336,6 +403,8 @@ def preview_route_import(
     return RouteTreeImporter(service.repo).preview(
         [layer.model_dump() for layer in body.layers],
         {key: value.model_dump() for key, value in body.overrides.items()},
+        body.merge_groups,
+        [item.model_dump() for item in body.parent_features],
     )
 
 
@@ -353,7 +422,37 @@ def apply_route_import(
         [layer.model_dump() for layer in body.layers],
         {key: value.model_dump() for key, value in body.overrides.items()},
         body.preview_token,
+        body.selected_keys,
+        body.merge_groups,
+        [item.model_dump() for item in body.parent_features],
     )
+
+
+@router.get(f"{_PROJ}/geometry-reviews")
+def get_geometry_reviews(
+    organization_id: UUID,project_id: UUID,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    offset: int=0,limit: int=100,
+) -> dict[str,Any]:
+    from modules.house_numbering.geometry_review import list_geometry_reviews
+    if offset<0 or not 1<=limit<=100:
+        raise PlatformValidationError("Lô hình học không hợp lệ",code="INVALID_GEOMETRY_REVIEW")
+    return list_geometry_reviews(_service(organization_id,project_id,auth,session).repo,offset,limit)
+
+
+@router.post(f"{_PROJ}/route-import/stage-geometry",status_code=201)
+def stage_route_geometry(
+    organization_id: UUID,project_id: UUID,body: GeometryReviewApply,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.geometry_review import stage_geometry
+    return stage_geometry(_service(organization_id,project_id,auth,session).repo,
+        layers=[layer.model_dump() for layer in body.layers],
+        overrides={key:value.model_dump() for key,value in body.overrides.items()},
+        merge_groups=body.merge_groups,parent_features=[item.model_dump() for item in body.parent_features],
+        preview_token=body.preview_token,selected_keys=body.selected_keys,reason=body.reason)
 
 
 @router.put(f"{_PROJ}/routes/{{route_id}}")
@@ -395,6 +494,81 @@ def list_buildings(
             route_id=route_id
         )
     }
+
+
+@router.get(f"{_PROJ}/numbering-targets")
+def numbering_targets(
+    organization_id: UUID,
+    project_id: UUID,
+    route_id: UUID,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+    include_descendants: bool = True,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 5000,
+) -> dict[str, Any]:
+    return _service(organization_id, project_id, auth, session).repo.numbering_targets(route_id, include_descendants, limit)
+
+
+@router.post(f"{_PROJ}/building-assignment/audit")
+def audit_building_assignment(
+    organization_id: UUID,
+    project_id: UUID,
+    body: BuildingAssignmentAudit,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    from modules.house_numbering.assignment_audit import audit_unlinked
+    return audit_unlinked(_service(organization_id,project_id,auth,session).repo,**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/catalog-recovery/preview")
+def preview_catalog_recovery(
+    organization_id: UUID,project_id: UUID,body: CatalogRecoveryPreview,
+    auth: Annotated[AuthenticatedRequest,Depends(require_csrf)],
+    session: Annotated[Session,Depends(get_db_session,scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.catalog_recovery import catalog_preview
+    return catalog_preview(_service(organization_id,project_id,auth,session).repo,**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/prefix-recovery/preview")
+def preview_prefix_recovery(
+    organization_id: UUID,project_id: UUID,body: CatalogRecoveryPreview,
+    auth: Annotated[AuthenticatedRequest,Depends(require_csrf)],
+    session: Annotated[Session,Depends(get_db_session,scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.catalog_recovery import catalog_preview
+    return catalog_preview(_service(organization_id,project_id,auth,session).repo,tree=True,**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/catalog-recovery/apply")
+def apply_catalog_recovery(
+    organization_id: UUID,project_id: UUID,body: CatalogRecoveryApply,
+    auth: Annotated[AuthenticatedRequest,Depends(require_csrf)],
+    session: Annotated[Session,Depends(get_db_session,scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.catalog_recovery import catalog_apply
+    return catalog_apply(_service(organization_id,project_id,auth,session).repo,**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/correction/preview")
+def preview_cluster_correction(
+    organization_id: UUID,project_id: UUID,body: ClusterCorrectionPreview,
+    auth: Annotated[AuthenticatedRequest,Depends(require_csrf)],
+    session: Annotated[Session,Depends(get_db_session,scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.cluster_correction import correction_preview
+    return correction_preview(_service(organization_id,project_id,auth,session).repo,**body.model_dump())
+
+
+@router.post(f"{_PROJ}/building-assignment/correction/apply")
+def apply_cluster_correction(
+    organization_id: UUID,project_id: UUID,body: ClusterCorrectionApply,
+    auth: Annotated[AuthenticatedRequest,Depends(require_csrf)],
+    session: Annotated[Session,Depends(get_db_session,scope="function")],
+) -> dict[str,Any]:
+    from modules.house_numbering.cluster_correction import correction_apply
+    return correction_apply(_service(organization_id,project_id,auth,session).repo,**body.model_dump())
 
 
 @router.post(f"{_PROJ}/building-assignment/preview")
