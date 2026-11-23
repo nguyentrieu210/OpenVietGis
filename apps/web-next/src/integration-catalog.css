@@ -316,6 +316,11 @@
   color: #1d4ed8;
 }
 
+.integration-method-badge.is-post {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .integration-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -453,6 +458,154 @@
   border-color: #fecaca;
   background: #fef2f2;
   color: #991b1b;
+}
+
+.integration-sync-toggle-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.integration-sync-toggle-btn:hover,
+.integration-sync-toggle-btn.is-active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.integration-sync-toggle-btn:focus-visible {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+}
+
+.integration-sync-panel {
+  margin-top: 6px;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  display: grid;
+  gap: 8px;
+}
+
+.integration-sync-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.integration-sync-header h5 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #78350f;
+}
+
+.integration-sync-note,
+.integration-sync-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #451a03;
+}
+
+.integration-sync-note code,
+.integration-sync-preview code,
+.integration-export-status code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #0f172a;
+}
+
+.integration-sync-file {
+  display: grid;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.integration-sync-file input[type="file"] {
+  font-size: 11.5px;
+}
+
+.integration-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.integration-sync-commit-btn {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid #047857;
+  background: #065f46;
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.integration-sync-commit-btn:hover:not(:disabled) {
+  background: #047857;
+}
+
+.integration-sync-commit-btn:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
+}
+
+.integration-sync-commit-btn:disabled {
+  background: #cbd5e1;
+  border-color: #94a3b8;
+  color: #475569;
+  cursor: not-allowed;
+}
+
+.integration-sync-preview {
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  display: grid;
+  gap: 6px;
+}
+
+.integration-sync-metrics {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 10px;
+}
+
+.integration-sync-metrics > div {
+  display: grid;
+  gap: 2px;
+}
+
+.integration-sync-metrics dt {
+  font-size: 10.5px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.integration-sync-metrics dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 @media (max-width: 640px) {

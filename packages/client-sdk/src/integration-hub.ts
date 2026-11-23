@@ -17,7 +17,8 @@ export type ActionDenialReason =
   | "unsupported_by_adapter"
   | "not_implemented"
   | "catalog_only"
-  | "read_only_export";
+  | "read_only_export"
+  | "controlled_changeset_sync";
 
 export type ActionReason = ActionDenialReason;
 
@@ -27,9 +28,13 @@ export type AdapterExecutionStatus =
   | "candidate_external_branch"
   | "planned_not_implemented";
 
-export type IntegrationExportFormat = "geopackage" | "geojson" | "postgis_sql";
+export type IntegrationExportFormat =
+  | "geopackage"
+  | "geojson"
+  | "postgis_sql"
+  | "dxf";
 
-export type IntegrationExportAdapterKey = "qgis" | "postgis";
+export type IntegrationExportAdapterKey = "qgis" | "postgis" | "autocad";
 
 export interface IntegrationActionEvaluation {
   action: ConnectorActionName;
@@ -64,7 +69,7 @@ export interface IntegrationCatalogResponse {
 
 export interface IntegrationEndpointDescriptor {
   name: string;
-  method: "GET";
+  method: "GET" | "POST";
   path_template: string;
   required_permission: string;
 }
@@ -80,6 +85,8 @@ export interface ReadOnlyConnectionProfile {
   existing_endpoints: IntegrationEndpointDescriptor[];
   crs_policy: "explicit_only_never_inferred";
   restrictions: string[];
+  sync_push_enabled?: boolean;
+  deletions_blocked_by_default?: boolean;
 }
 
 export interface AdapterLayerDescriptor {
@@ -119,6 +126,72 @@ export interface IntegrationLayerExportResult {
   contentRevision: string | null;
   schemaRevision: string | null;
   featureCount: number | null;
+  attributeLoss: boolean;
+}
+
+export interface IntegrationSyncOperationPreview {
+  op_type: "create" | "update";
+  feature_id: string;
+  changed_fields: string[];
+  geometry_changed: boolean;
+}
+
+export interface IntegrationSyncPreviewResponse {
+  schema_version: number;
+  adapter_key: string;
+  layer_id: string;
+  source_id: string;
+  stored_crs_code: number;
+  geometry_family: "Point" | "LineString" | "Polygon";
+  base_content_revision: string;
+  current_content_revision: string;
+  base_schema_revision: string;
+  current_schema_revision: string;
+  stale_revision: boolean;
+  deletions_blocked: boolean;
+  create_count: number;
+  update_count: number;
+  unchanged_count: number;
+  omitted_server_feature_count: number;
+  omitted_server_feature_ids: string[];
+  diff_sha256: string;
+  can_commit: boolean;
+  operations: IntegrationSyncOperationPreview[];
+}
+
+export interface IntegrationSyncPushResponse {
+  changeset_id: string;
+  source_id: string;
+  layer_id: string;
+  operation_id: string;
+  resulting_content_revision: string;
+  resulting_catalog_revision: number;
+  operation_count: number;
+  create_count: number;
+  update_count: number;
+  omitted_server_feature_count: number;
+  deletions_blocked: boolean;
+  diff_sha256: string;
+  audit_event_id: string;
+}
+
+export interface QgisGpkgSyncPreviewInput {
+  file: Blob;
+  filename?: string;
+  baseContentRevision: string;
+  baseSchemaRevision: string;
+  csrfToken?: string;
+}
+
+export interface QgisGpkgSyncPushInput {
+  file: Blob;
+  filename?: string;
+  baseContentRevision: string;
+  baseSchemaRevision: string;
+  operationId: string;
+  expectedDiffSha256: string;
+  summary?: string;
+  csrfToken?: string;
 }
 
 function integrationHubRoot(organizationId: string, projectId: string): string {
@@ -137,6 +210,9 @@ function extensionForExportFormat(format: IntegrationExportFormat): string {
   }
   if (format === "postgis_sql") {
     return "sql";
+  }
+  if (format === "dxf") {
+    return "dxf";
   }
   return "gpkg";
 }
@@ -160,6 +236,14 @@ function sanitizeFilename(raw: string): string | null {
     return null;
   }
   return basename;
+}
+
+function resolveUploadFilename(file: Blob, explicitFilename?: string): string {
+  const candidate =
+    explicitFilename ??
+    (typeof File !== "undefined" && file instanceof File ? file.name : "");
+  const cleaned = sanitizeFilename(candidate);
+  return cleaned ?? "layer.gpkg";
 }
 
 function parseContentDispositionFilename(
@@ -222,6 +306,23 @@ function parseFeatureCountHeader(headers: Headers): number | null {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+function parseBooleanHeader(headers: Headers, name: string): boolean {
+  return headers.get(name)?.trim().toLowerCase() === "true";
+}
+
+function buildSyncRequestInit(form: FormData, csrfToken?: string): RequestInit {
+  const init: RequestInit = {
+    method: "POST",
+    body: form,
+    cache: "no-store"
+  };
+  const explicitCsrf = csrfToken?.trim();
+  if (explicitCsrf) {
+    init.headers = { "x-openvietgis-csrf": explicitCsrf };
+  }
+  return init;
+}
+
 /**
  * Read the project-scoped, read-only Integration Hub adapter catalog.
  * Never mutates state or binds external credentials.
@@ -256,7 +357,8 @@ export function getIntegrationHubAdapterProfile(
 }
 
 /**
- * Build the encoded read-only export path for a QGIS or PostGIS layer snapshot.
+ * Build the encoded read-only export path for a QGIS, PostGIS, or AutoCAD DXF
+ * layer snapshot.
  */
 export function buildIntegrationLayerExportPath(
   organizationId: string,
@@ -277,9 +379,9 @@ export function buildIntegrationLayerExportPath(
 }
 
 /**
- * Download a read-only QGIS (.gpkg/.geojson) or PostGIS (.sql/.gpkg) layer
- * snapshot via HTTP GET with explicit CRS and integrity response metadata.
- * Strictly read-only; never issues write or credential requests.
+ * Download a read-only QGIS (.gpkg/.geojson), PostGIS (.sql/.gpkg), or
+ * AutoCAD (.dxf) layer snapshot via HTTP GET with explicit CRS, attribute-loss,
+ * and integrity response metadata. Strictly read-only.
  */
 export async function downloadIntegrationLayerExport(
   client: ApiClient,
@@ -325,6 +427,96 @@ export async function downloadIntegrationLayerExport(
       response.headers,
       "x-openvietgis-schema-revision"
     ),
-    featureCount: parseFeatureCountHeader(response.headers)
+    featureCount: parseFeatureCountHeader(response.headers),
+    attributeLoss: parseBooleanHeader(
+      response.headers,
+      "x-openvietgis-attribute-loss"
+    )
   };
+}
+
+/**
+ * Step 1 of controlled QGIS GeoPackage synchronization: upload an edited .gpkg
+ * file against pinned layer revisions to compute a non-mutating diff preview
+ * and diff_sha256 commitment hash. Deletions remain blocked by default.
+ */
+export function previewQgisGpkgSync(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  layerId: string,
+  input: QgisGpkgSyncPreviewInput
+): Promise<IntegrationSyncPreviewResponse> {
+  const form = new FormData();
+  form.append(
+    "file",
+    input.file,
+    resolveUploadFilename(input.file, input.filename)
+  );
+  form.append("base_content_revision", input.baseContentRevision);
+  form.append("base_schema_revision", input.baseSchemaRevision);
+
+  const path =
+    integrationHubRoot(organizationId, projectId) +
+    "/adapters/qgis/layers/" +
+    encodeURIComponent(layerId) +
+    "/sync-preview";
+
+  return client.request<IntegrationSyncPreviewResponse>(
+    path,
+    buildSyncRequestInit(form, input.csrfToken)
+  );
+}
+
+/**
+ * Step 2 of controlled QGIS GeoPackage synchronization: commit a previously
+ * previewed diff through the audited Changeset pipeline using an explicit
+ * non-field-sync operationId and expectedDiffSha256 hash.
+ */
+export async function pushQgisGpkgSync(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  layerId: string,
+  input: QgisGpkgSyncPushInput
+): Promise<IntegrationSyncPushResponse> {
+  const operationId = input.operationId.trim();
+  if (!operationId) {
+    throw new Error("QGIS sync push requires a non-empty operationId.");
+  }
+  if (operationId.toLowerCase().startsWith("field-sync-")) {
+    throw new Error(
+      "QGIS sync push operationId must not use the reserved 'field-sync-' prefix."
+    );
+  }
+  const expectedDiffSha256 = input.expectedDiffSha256.trim();
+  if (!expectedDiffSha256) {
+    throw new Error(
+      "QGIS sync push requires expectedDiffSha256 from a preceding sync preview."
+    );
+  }
+
+  const form = new FormData();
+  form.append(
+    "file",
+    input.file,
+    resolveUploadFilename(input.file, input.filename)
+  );
+  form.append("base_content_revision", input.baseContentRevision);
+  form.append("base_schema_revision", input.baseSchemaRevision);
+  form.append("operation_id", operationId);
+  form.append("expected_diff_sha256", expectedDiffSha256);
+  const summary = input.summary?.trim() || "QGIS GeoPackage sync push";
+  form.append("summary", summary);
+
+  const path =
+    integrationHubRoot(organizationId, projectId) +
+    "/adapters/qgis/layers/" +
+    encodeURIComponent(layerId) +
+    "/sync-push";
+
+  return client.request<IntegrationSyncPushResponse>(
+    path,
+    buildSyncRequestInit(form, input.csrfToken)
+  );
 }

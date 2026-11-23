@@ -82,3 +82,27 @@ Recorded 2026-11-23 on isolated branch `feature/026-integration-hub-policy` (bas
   - `check_architecture.py` / `check_docs.py` / `check_contracts.py`: **PASS**; `check_scope.py`: **0 new violations**
 
 **Release decision remains `HOLD — NOT PROMOTED`** pending live PostGIS T006 run, full `pnpm validate:ts` + Playwright E2E, and T009 staging rollback drill.
+
+---
+
+## Slice 3 — AutoCAD 2D DXF Export + Controlled Two-Step QGIS GeoPackage Sync (2026-11-23)
+
+- **AutoCAD 2D DXF Read-Only Export (`autocad`)**:
+  - Extended `GET .../integration-hub/adapters/{adapter_key}/layers/{layer_id}/export` with `format=dxf` (`application/dxf`, reusing `adapters/cad/dxf_codec.py::write_dxf_2d` R2010).
+  - Enforces projected metre CRS (`EPSG:5899`, `EPSG:3857`) via `get_readable_crs_profile`, refuses geographic degrees (`4326`/`4756`) with `422`, enforces 1–10,000 feature bound and `gis_access` layer/feature ACL, discloses tabular attribute loss via `X-OpenVietGIS-Attribute-Loss: true`, and keeps DWG binaries & CAD writeback denied.
+- **Controlled Two-Step QGIS GeoPackage Sync (`qgis` `sync.push`)**:
+  - Added pure domain diff planner `apps/api/openvietgis_api/domains/integration_hub/sync_diff.py` (canonical `diff_sha256`, max 1,000 changed ops, zero auto-deletions — omitted server features are reported in `omitted_server_feature_ids`).
+  - Added `POST .../adapters/qgis/layers/{layer_id}/sync-preview` (`200`, dry-run diff) and `POST .../adapters/qgis/layers/{layer_id}/sync-push` (`201`, committing exclusively via `SqlEditingRepository.commit_changeset` with `Permission.PROJECT_EDIT`, CSRF, exact `base_content_revision`/`base_schema_revision` pin, `expected_diff_sha256` match, `operation_id` idempotency rejecting `field-sync-*`, and `gis_access.verify_edit` per-feature ACL). Zero DB migrations.
+- **OpenAPI 3.1, QGIS Desktop Plugin, SDK & UI**:
+  - Updated `specs/026-integration-hub-policy/contracts/integration-hub-api.yaml` (`OPENAPI_OK`).
+  - Added `preview_layer_geopackage_sync` & `push_layer_geopackage_sync` in `integrations/qgis_plugin/openvietgis_connector/` (`client.py`, `plugin.py`, `README.md`).
+  - Added `previewQgisGpkgSync` & `pushQgisGpkgSync` in `packages/client-sdk/src/integration-hub.ts` and two-step UI + AutoCAD `.dxf` download in `apps/web-next/src/IntegrationCatalog.tsx`.
+- **Local Verification Results**:
+  - `ruff check` (all R026 backend + plugin + tests): **PASS**
+  - `mypy --strict` (all R026 backend + tests): **PASS**
+  - `pytest` unit (`integration_hub` + `authorization`): **154 passed** (127 `integration_hub`, 27 `authorization`)
+  - `pytest --collect-only` T006 PostGIS integration (`test_integration_hub_rls_acl.py` with AutoCAD DXF + QGIS sync push & `gis_access.verify_edit`): **5 tests collected** (live execution pending Docker/PostGIS)
+  - `node apps/web-next/integration-hub-smoke.mjs`: **PASS**
+  - `check_architecture.py` / `check_docs.py` / `check_contracts.py`: **PASS**; `check_scope.py`: **0 new violations**
+
+**Release decision remains `HOLD — NOT PROMOTED`** pending live PostGIS T006 run, full `pnpm validate:ts` + Playwright E2E, and T009 staging rollback drill.

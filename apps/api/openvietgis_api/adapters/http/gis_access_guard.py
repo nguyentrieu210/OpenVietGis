@@ -40,6 +40,8 @@ SAFE_POST = {
     "/pro/geometry",
     "/editing/snap",
     "/access/reviews/{changeset_id}",
+    "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-preview",
+    "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-push",
 }
 
 

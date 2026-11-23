@@ -126,6 +126,8 @@ def test_fetch_qgis_profile_parses_layers_and_sends_bearer_get() -> None:
         "execution_status": "read_only_profile_ready",
         "connection_profile": {
             "supports_direct_db_credentials": False,
+            "sync_push_enabled": True,
+            "deletions_blocked_by_default": True,
             "export_formats": ["geopackage", "geojson", "postgis_sql"],
         },
         "layers": [
@@ -169,6 +171,8 @@ def test_fetch_qgis_profile_parses_layers_and_sends_bearer_get() -> None:
     assert profile.execution_status == "read_only_profile_ready"
     assert profile.export_formats == ("geopackage", "geojson", "postgis_sql")
     assert profile.supports_direct_db_credentials is False
+    assert profile.sync_push_enabled is True
+    assert profile.deletions_blocked_by_default is True
     assert len(profile.layers) == 1
     layer = profile.layers[0]
     assert layer.layer_id == layer_id
@@ -315,3 +319,337 @@ def test_download_layer_geopackage_sanitizes_path_traversal_content_disposition(
     assert result.path.name == expected_filename
     assert result.path.read_bytes() == payload
     assert not (tmp_path / expected_filename).exists()
+
+
+def _write_temp_gpkg(
+    tmp_path: Path,
+    name: str = "edited-layer.gpkg",
+    size: int | None = None,
+) -> Path:
+    path = tmp_path / name
+    if size is not None:
+        path.write_bytes(b"\x00" * size)
+    else:
+        path.write_bytes(b"SQLite format 3\x00mock-gpkg-sync-payload")
+    return path
+
+
+def test_preview_layer_geopackage_sync_formats_multipart_and_parses_response(
+    tmp_path: Path,
+) -> None:
+    cfg = _valid_config()
+    layer_id = str(uuid4())
+    source_id = str(uuid4())
+    gpkg_path = _write_temp_gpkg(tmp_path, "vn2000-edited.gpkg")
+    content_rev = "A" * 64
+    schema_rev = "B" * 64
+    diff_sha = "c" * 64
+    captured: list[tuple[urllib.request.Request, float]] = []
+
+    preview_payload = {
+        "schema_version": 1,
+        "adapter_key": "qgis",
+        "layer_id": layer_id,
+        "source_id": source_id,
+        "stored_crs_code": 5899,
+        "stale_revision": False,
+        "deletions_blocked": True,
+        "create_count": 1,
+        "update_count": 2,
+        "unchanged_count": 3,
+        "omitted_server_feature_count": 1,
+        "diff_sha256": diff_sha,
+        "can_commit": True,
+        "operations": [
+            {
+                "op_type": "update",
+                "feature_id": "HVS-QN1",
+                "changed_fields": ["fld_name"],
+                "geometry_changed": False,
+            }
+        ],
+    }
+
+    def fake_opener(request: urllib.request.Request, *, timeout: float) -> _FakeHttpResponse:
+        captured.append((request, timeout))
+        return _FakeHttpResponse(json.dumps(preview_payload).encode("utf-8"))
+
+    result = qgis_client.preview_layer_geopackage_sync(
+        cfg,
+        layer_id=layer_id,
+        gpkg_path=gpkg_path,
+        base_content_revision=content_rev,
+        base_schema_revision=schema_rev,
+        opener=fake_opener,
+        timeout=25.0,
+    )
+
+    assert len(captured) == 1
+    req, timeout = captured[0]
+    assert timeout == 25.0
+    assert req.get_method() == "POST"
+    assert req.full_url == (
+        f"https://gis.example.vn/api/v1/organizations/{cfg.organization_id}"
+        f"/projects/{cfg.project_id}/integration-hub/adapters/qgis"
+        f"/layers/{layer_id}/sync-preview"
+    )
+    assert req.get_header("Authorization") == f"Bearer {cfg.bearer_token}"
+    content_type = req.get_header("Content-type") or req.get_header("Content-Type")
+    assert content_type is not None
+    assert content_type.startswith("multipart/form-data; boundary=----OpenVietGISBoundary")
+    boundary = content_type.split("boundary=", 1)[1].encode("ascii")
+
+    body = req.data
+    assert isinstance(body, bytes)
+    assert body.startswith(b"--" + boundary + b"\r\n")
+    assert body.endswith(b"\r\n--" + boundary + b"--\r\n")
+    assert (
+        b'Content-Disposition: form-data; name="base_content_revision"\r\n\r\n'
+        + content_rev.lower().encode("ascii")
+        in body
+    )
+    assert (
+        b'Content-Disposition: form-data; name="base_schema_revision"\r\n\r\n'
+        + schema_rev.lower().encode("ascii")
+        in body
+    )
+    assert (
+        b'Content-Disposition: form-data; name="file"; filename="vn2000-edited.gpkg"\r\n'
+        b"Content-Type: application/geopackage+sqlite3\r\n\r\n"
+        + gpkg_path.read_bytes()
+        in body
+    )
+
+    assert result.layer_id == layer_id
+    assert result.source_id == source_id
+    assert result.stored_crs_code == 5899
+    assert result.stale_revision is False
+    assert result.deletions_blocked is True
+    assert result.create_count == 1
+    assert result.update_count == 2
+    assert result.unchanged_count == 3
+    assert result.omitted_server_feature_count == 1
+    assert result.diff_sha256 == diff_sha
+    assert result.can_commit is True
+    assert len(result.operations) == 1
+    assert result.operations[0]["feature_id"] == "HVS-QN1"
+
+
+def test_push_layer_geopackage_sync_formats_multipart_and_parses_response(
+    tmp_path: Path,
+) -> None:
+    cfg = _valid_config()
+    layer_id = str(uuid4())
+    changeset_id = str(uuid4())
+    audit_event_id = str(uuid4())
+    gpkg_path = _write_temp_gpkg(tmp_path, "push-edits.gpkg")
+    content_rev = "a" * 64
+    schema_rev = "b" * 64
+    diff_sha = "c" * 64
+    resulting_rev = "d" * 64
+    captured: list[urllib.request.Request] = []
+
+    push_payload = {
+        "changeset_id": changeset_id,
+        "resulting_content_revision": resulting_rev,
+        "operation_count": 2,
+        "create_count": 1,
+        "update_count": 1,
+        "omitted_server_feature_count": 2,
+        "deletions_blocked": True,
+        "diff_sha256": diff_sha,
+        "audit_event_id": audit_event_id,
+    }
+
+    def fake_opener(request: urllib.request.Request, *, timeout: float) -> _FakeHttpResponse:
+        del timeout
+        captured.append(request)
+        return _FakeHttpResponse(json.dumps(push_payload).encode("utf-8"))
+
+    result = qgis_client.push_layer_geopackage_sync(
+        cfg,
+        layer_id=layer_id,
+        gpkg_path=gpkg_path,
+        base_content_revision=content_rev,
+        base_schema_revision=schema_rev,
+        expected_diff_sha256=diff_sha,
+        operation_id="qgis-sync-2026-01",
+        summary="Update survey points",
+        opener=fake_opener,
+    )
+
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.get_method() == "POST"
+    assert req.full_url == (
+        f"https://gis.example.vn/api/v1/organizations/{cfg.organization_id}"
+        f"/projects/{cfg.project_id}/integration-hub/adapters/qgis"
+        f"/layers/{layer_id}/sync-push"
+    )
+    body = req.data
+    assert isinstance(body, bytes)
+    assert b'name="operation_id"\r\n\r\nqgis-sync-2026-01\r\n' in body
+    assert b'name="expected_diff_sha256"\r\n\r\n' + diff_sha.encode("ascii") in body
+    assert b'name="summary"\r\n\r\nUpdate survey points\r\n' in body
+    assert gpkg_path.read_bytes() in body
+
+    assert result.changeset_id == changeset_id
+    assert result.resulting_content_revision == resulting_rev
+    assert result.operation_count == 2
+    assert result.create_count == 1
+    assert result.update_count == 1
+    assert result.omitted_server_feature_count == 2
+    assert result.deletions_blocked is True
+    assert result.diff_sha256 == diff_sha
+    assert result.audit_event_id == audit_event_id
+
+
+def test_sync_rejects_oversized_geopackage_before_network(tmp_path: Path) -> None:
+    cfg = _valid_config()
+    layer_id = str(uuid4())
+    oversized = _write_temp_gpkg(
+        tmp_path,
+        "too-large.gpkg",
+        size=qgis_client.MAX_SYNC_UPLOAD_BYTES + 1,
+    )
+
+    def fail_opener(*_args: Any, **_kwargs: Any) -> Any:
+        pytest.fail("must not send HTTP request for >16 MiB GeoPackage")
+
+    with pytest.raises(qgis_client.ConfigurationError, match="16 MiB"):
+        qgis_client.preview_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=oversized,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            opener=fail_opener,
+        )
+
+    with pytest.raises(qgis_client.ConfigurationError, match="16 MiB"):
+        qgis_client.push_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=oversized,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            expected_diff_sha256="c" * 64,
+            operation_id="qgis-op-1",
+            opener=fail_opener,
+        )
+
+
+@pytest.mark.parametrize("bad_hex", ["", "short", "z" * 64, "a" * 63, "a" * 65])
+def test_sync_rejects_invalid_64_hex_revisions_and_diff_sha256(
+    tmp_path: Path,
+    bad_hex: str,
+) -> None:
+    cfg = _valid_config()
+    layer_id = str(uuid4())
+    gpkg_path = _write_temp_gpkg(tmp_path)
+
+    def fail_opener(*_args: Any, **_kwargs: Any) -> Any:
+        pytest.fail("must validate 64-hex hashes before network call")
+
+    with pytest.raises(qgis_client.ConfigurationError, match="base_content_revision"):
+        qgis_client.preview_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision=bad_hex,
+            base_schema_revision="b" * 64,
+            opener=fail_opener,
+        )
+
+    with pytest.raises(qgis_client.ConfigurationError, match="base_schema_revision"):
+        qgis_client.preview_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision="a" * 64,
+            base_schema_revision=bad_hex,
+            opener=fail_opener,
+        )
+
+    with pytest.raises(qgis_client.ConfigurationError, match="expected_diff_sha256"):
+        qgis_client.push_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            expected_diff_sha256=bad_hex,
+            operation_id="qgis-op-1",
+            opener=fail_opener,
+        )
+
+
+@pytest.mark.parametrize("reserved_op_id", ["field-sync-123", "FIELD-SYNC-abc", "  field-sync-x  "])
+def test_push_sync_rejects_reserved_field_sync_operation_id(
+    tmp_path: Path,
+    reserved_op_id: str,
+) -> None:
+    cfg = _valid_config()
+    layer_id = str(uuid4())
+    gpkg_path = _write_temp_gpkg(tmp_path)
+
+    def fail_opener(*_args: Any, **_kwargs: Any) -> Any:
+        pytest.fail("must reject reserved field-sync-* operation_id before network call")
+
+    with pytest.raises(qgis_client.ConfigurationError, match="field-sync-"):
+        qgis_client.push_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            expected_diff_sha256="c" * 64,
+            operation_id=reserved_op_id,
+            opener=fail_opener,
+        )
+
+
+def test_sync_preview_and_push_redact_bearer_token_on_http_error(tmp_path: Path) -> None:
+    secret = "ovg_sync_secret_token_leaked_in_409"
+    cfg = _valid_config(bearer_token=secret)
+    layer_id = str(uuid4())
+    gpkg_path = _write_temp_gpkg(tmp_path)
+
+    def error_opener(request: urllib.request.Request, *, timeout: float) -> Any:
+        del timeout
+        err_body = json.dumps({"detail": f"sync conflict for bearer {secret}"}).encode("utf-8")
+        raise urllib.error.HTTPError(
+            request.full_url,
+            409,
+            "Conflict",
+            Message(),
+            io.BytesIO(err_body),
+        )
+
+    with pytest.raises(qgis_client.ApiError) as preview_exc:
+        qgis_client.preview_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            opener=error_opener,
+        )
+    assert preview_exc.value.status_code == 409
+    assert secret not in str(preview_exc.value)
+    assert "[REDACTED]" in str(preview_exc.value)
+
+    with pytest.raises(qgis_client.ApiError) as push_exc:
+        qgis_client.push_layer_geopackage_sync(
+            cfg,
+            layer_id=layer_id,
+            gpkg_path=gpkg_path,
+            base_content_revision="a" * 64,
+            base_schema_revision="b" * 64,
+            expected_diff_sha256="c" * 64,
+            operation_id="qgis-op-409",
+            opener=error_opener,
+        )
+    assert push_exc.value.status_code == 409
+    assert secret not in str(push_exc.value)
+    assert "[REDACTED]" in str(push_exc.value)

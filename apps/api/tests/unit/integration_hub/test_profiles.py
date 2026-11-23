@@ -36,11 +36,10 @@ _FORBIDDEN_VALUE_SUBSTRINGS = (
     "pgpassword",
 )
 
-_WRITE_OR_SYNC_ACTIONS = {
+_ALWAYS_DENIED_WRITE_OR_SYNC_ACTIONS = {
     "connection.configure",
     "data.import",
     "sync.pull",
-    "sync.push",
     "sync.approve",
 }
 
@@ -157,7 +156,7 @@ def test_missing_crs_or_unready_validation_never_infers_4326_and_blocks_export(
 
 
 @pytest.mark.parametrize("definition_only_crs", [3405, 3406])
-@pytest.mark.parametrize("adapter_key", ["qgis", "postgis"])
+@pytest.mark.parametrize("adapter_key", ["qgis", "postgis", "autocad"])
 def test_definition_only_crs_blocks_explicit_crs_and_export(
     adapter_key: str,
     definition_only_crs: int,
@@ -189,18 +188,96 @@ def test_definition_only_crs_blocks_explicit_crs_and_export(
     assert layer["export_permitted"] is False
 
 
-@pytest.mark.parametrize(
-    ("adapter_key", "expected_formats"),
-    [
-        ("qgis", ["geopackage", "geojson", "postgis_sql"]),
-        ("postgis", ["postgis_sql", "geopackage"]),
-    ],
-)
-def test_qgis_and_postgis_connection_profiles_advertise_read_only_hub_export(
-    adapter_key: str,
-    expected_formats: list[str],
-) -> None:
-    adapter = get_adapter(adapter_key)
+def test_autocad_profile_is_read_only_dxf_ready() -> None:
+    adapter = get_adapter("autocad")
+    assert adapter is not None
+    profile = build_adapter_profile(
+        adapter,
+        frozenset({Permission.PROJECT_READ}),
+        organization_id="org-1",
+        project_id="proj-1",
+        scoped_access=False,
+        layers=[],
+    )
+    assert profile["execution_status"] == "read_only_profile_ready"
+    assert profile["default_write_policy"] == "deny"
+
+    conn = profile["connection_profile"]
+    assert isinstance(conn, dict)
+    assert conn["adapter_key"] == "autocad"
+    assert conn["export_formats"] == ["dxf"]
+    assert conn["supports_direct_db_credentials"] is False
+    assert conn["default_write_policy"] == "deny"
+    assert conn["crs_policy"] == "explicit_only_never_inferred"
+
+    endpoints = conn["existing_endpoints"]
+    assert isinstance(endpoints, list)
+    by_name = {ep["name"]: ep for ep in endpoints}
+    assert "hub_layer_export" in by_name
+    assert by_name["hub_layer_export"]["method"] == "GET"
+    assert by_name["hub_layer_export"]["path_template"] == (
+        "/api/v1/organizations/org-1/projects/proj-1"
+        "/integration-hub/adapters/autocad/layers/{layer_id}/export?format=dxf"
+    )
+    assert by_name["hub_layer_export"]["required_permission"] == Permission.PROJECT_READ.value
+
+
+def test_qgis_profile_advertises_export_and_controlled_sync_push_endpoints() -> None:
+    adapter = get_adapter("qgis")
+    assert adapter is not None
+    profile = build_adapter_profile(
+        adapter,
+        frozenset({Permission.PROJECT_READ, Permission.PROJECT_EDIT}),
+        organization_id="org-1",
+        project_id="proj-1",
+        scoped_access=False,
+        layers=[],
+    )
+    assert profile["execution_status"] == "read_only_profile_ready"
+    assert profile["default_write_policy"] == "deny"
+
+    conn = profile["connection_profile"]
+    assert isinstance(conn, dict)
+    assert conn["supports_direct_db_credentials"] is False
+    assert conn["default_write_policy"] == "deny"
+    assert conn["sync_push_enabled"] is True
+    assert conn["deletions_blocked_by_default"] is True
+    assert conn["export_formats"] == ["geopackage", "geojson", "postgis_sql"]
+
+    endpoints = conn["existing_endpoints"]
+    assert isinstance(endpoints, list)
+    by_name = {ep["name"]: ep for ep in endpoints}
+    assert by_name["hub_layer_export"] == {
+        "name": "hub_layer_export",
+        "method": "GET",
+        "path_template": (
+            "/api/v1/organizations/org-1/projects/proj-1"
+            "/integration-hub/adapters/qgis/layers/{layer_id}/export"
+        ),
+        "required_permission": Permission.PROJECT_READ.value,
+    }
+    assert by_name["sync_preview"] == {
+        "name": "sync_preview",
+        "method": "POST",
+        "path_template": (
+            "/api/v1/organizations/org-1/projects/proj-1"
+            "/integration-hub/adapters/qgis/layers/{layer_id}/sync-preview"
+        ),
+        "required_permission": Permission.PROJECT_EDIT.value,
+    }
+    assert by_name["sync_push"] == {
+        "name": "sync_push",
+        "method": "POST",
+        "path_template": (
+            "/api/v1/organizations/org-1/projects/proj-1"
+            "/integration-hub/adapters/qgis/layers/{layer_id}/sync-push"
+        ),
+        "required_permission": Permission.PROJECT_EDIT.value,
+    }
+
+
+def test_postgis_connection_profile_advertises_read_only_hub_export_only() -> None:
+    adapter = get_adapter("postgis")
     assert adapter is not None
     profile = build_adapter_profile(
         adapter,
@@ -214,17 +291,20 @@ def test_qgis_and_postgis_connection_profiles_advertise_read_only_hub_export(
     assert isinstance(conn, dict)
     assert conn["supports_direct_db_credentials"] is False
     assert conn["default_write_policy"] == "deny"
-    assert conn["export_formats"] == expected_formats
+    assert conn["export_formats"] == ["postgis_sql", "geopackage"]
+    assert "sync_push_enabled" not in conn
 
     endpoints = conn["existing_endpoints"]
     assert isinstance(endpoints, list)
     by_name = {ep["name"]: ep for ep in endpoints}
     assert "hub_layer_export" in by_name
+    assert "sync_preview" not in by_name
+    assert "sync_push" not in by_name
     hub_export = by_name["hub_layer_export"]
     assert hub_export["method"] == "GET"
     assert hub_export["path_template"] == (
-        f"/api/v1/organizations/org-1/projects/proj-1"
-        f"/integration-hub/adapters/{adapter_key}/layers/{{layer_id}}/export"
+        "/api/v1/organizations/org-1/projects/proj-1"
+        "/integration-hub/adapters/postgis/layers/{layer_id}/export"
     )
     assert hub_export["required_permission"] == Permission.PROJECT_READ.value
 
@@ -258,7 +338,7 @@ def test_connection_profiles_never_expose_db_credentials_or_hosts() -> None:
                     assert forbidden not in lowered_val, (adapter.key, key, value)
 
 
-def test_all_write_and_sync_actions_remain_denied_even_for_full_permission_managers() -> None:
+def test_write_and_sync_action_policy_even_for_full_permission_managers() -> None:
     full_permissions = frozenset(Permission)
     for adapter in ADAPTERS:
         profile = build_adapter_profile(
@@ -274,13 +354,20 @@ def test_all_write_and_sync_actions_remain_denied_even_for_full_permission_manag
         assert isinstance(serialized_adapter, dict)
         actions = serialized_adapter["actions"]
         assert isinstance(actions, list)
-        seen_write_actions = set()
-        for action in actions:
-            if action["action"] in _WRITE_OR_SYNC_ACTIONS:
-                seen_write_actions.add(action["action"])
-                assert action["allowed"] is False, (adapter.key, action)
-                assert action["executable_in_hub"] is False, (adapter.key, action)
-        assert seen_write_actions == _WRITE_OR_SYNC_ACTIONS
+        by_action = {action["action"]: action for action in actions}
+        for denied_action in _ALWAYS_DENIED_WRITE_OR_SYNC_ACTIONS:
+            assert by_action[denied_action]["allowed"] is False, (adapter.key, denied_action)
+            assert by_action[denied_action]["executable_in_hub"] is False, (
+                adapter.key,
+                denied_action,
+            )
+        if adapter.key == "qgis":
+            assert by_action["sync.push"]["allowed"] is True
+            assert by_action["sync.push"]["executable_in_hub"] is True
+            assert by_action["sync.push"]["reason"] == "controlled_changeset_sync"
+        else:
+            assert by_action["sync.push"]["allowed"] is False, adapter.key
+            assert by_action["sync.push"]["executable_in_hub"] is False, adapter.key
 
 
 def test_execution_status_and_planned_profile_suppress_layers() -> None:
@@ -305,7 +392,7 @@ def test_execution_status_and_planned_profile_suppress_layers() -> None:
         if adapter.key == "ogc_services":
             assert status == "existing_read_only_api"
             assert profile["connection_profile"] is not None
-        elif adapter.key in ("qgis", "postgis"):
+        elif adapter.key in ("qgis", "postgis", "autocad"):
             assert status == "read_only_profile_ready"
             assert profile["connection_profile"] is not None
         elif adapter.key == "microstation_v8i":

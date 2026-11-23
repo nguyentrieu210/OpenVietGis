@@ -59,10 +59,46 @@ const CATALOG_FIXTURE = {
       name: "QGIS",
       category: "gis",
       mode: "open_protocols",
-      lifecycle: "planned",
+      lifecycle: "existing_read_only",
       protocols: ["GeoPackage", "PostGIS", "WMS", "WFS"],
-      note: "Read-only profile and layer export only; no direct desktop sync.",
-      existing_api: null,
+      note: "Read-only export and controlled two-step Changeset sync.",
+      existing_api: "integration-hub",
+      actions: [
+        {
+          action: "catalog.discover",
+          required_permission: "project.read",
+          eligible_by_role: true,
+          executable_in_hub: true,
+          allowed: true,
+          reason: "catalog_only"
+        },
+        {
+          action: "data.export",
+          required_permission: "project.read",
+          eligible_by_role: true,
+          executable_in_hub: true,
+          allowed: true,
+          reason: "read_only_export"
+        },
+        {
+          action: "sync.push",
+          required_permission: "project.edit",
+          eligible_by_role: false,
+          executable_in_hub: true,
+          allowed: false,
+          reason: "permission_denied"
+        }
+      ]
+    },
+    {
+      key: "autocad",
+      name: "AutoCAD / Map 3D",
+      category: "cad",
+      mode: "file_or_desktop_bridge",
+      lifecycle: "existing_read_only",
+      protocols: ["DXF"],
+      note: "Read-only projected metric DXF export; geometry only.",
+      existing_api: "integration-hub",
       actions: [
         {
           action: "catalog.discover",
@@ -86,7 +122,7 @@ const CATALOG_FIXTURE = {
           eligible_by_role: false,
           executable_in_hub: false,
           allowed: false,
-          reason: "permission_denied"
+          reason: "unsupported_by_adapter"
         }
       ]
     }
@@ -109,6 +145,8 @@ const QGIS_PROFILE_FIXTURE = {
     default_write_policy: "deny",
     supported_protocols: ["GeoPackage", "GeoJSON", "WMS", "WFS"],
     export_formats: ["geopackage", "geojson"],
+    sync_push_enabled: true,
+    deletions_blocked_by_default: true,
     existing_endpoints: [
       {
         name: "list_project_layers",
@@ -116,12 +154,20 @@ const QGIS_PROFILE_FIXTURE = {
         path_template:
           "/api/v1/organizations/{organization_id}/projects/{project_id}/layers",
         required_permission: "project.read"
+      },
+      {
+        name: "qgis_sync_preview",
+        method: "POST",
+        path_template:
+          "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/qgis/layers/{layer_id}/sync-preview",
+        required_permission: "project.edit"
       }
     ],
     crs_policy: "explicit_only_never_inferred",
     restrictions: [
       "Direct database credentials are never issued.",
-      "Per-layer GIS ACL is enforced on every read and export."
+      "Per-layer GIS ACL is enforced on every read and export.",
+      "Deletions are blocked by default during two-step GeoPackage sync."
     ]
   },
   layers: [
@@ -166,7 +212,9 @@ async function verifyTypedSdkRuntime() {
     "buildIntegrationLayerExportPath",
     "downloadIntegrationLayerExport",
     "getIntegrationHubAdapterProfile",
-    "getIntegrationHubCatalog"
+    "getIntegrationHubCatalog",
+    "previewQgisGpkgSync",
+    "pushQgisGpkgSync"
   ]);
 
   const indexSource = await readFile(sdkIndexPath, "utf8");
@@ -176,27 +224,118 @@ async function verifyTypedSdkRuntime() {
     "client-sdk index must re-export ./integration-hub"
   );
 
-  const requests = [];
-  const rawRequests = [];
   const sampleSha = "e".repeat(64);
   const sampleContentRev = "f".repeat(64);
   const sampleSchemaRev = "1".repeat(64);
+  const sampleDiffSha = "2".repeat(64);
+  const nextContentRev = "3".repeat(64);
   const gpkgBytes = new Uint8Array([0x53, 0x51, 0x4c, 0x69, 0x74, 0x65]);
+  const dxfText = "0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n";
 
-  const mockClient = {
+  const previewResponseFixture = {
+    schema_version: 1,
+    adapter_key: "qgis",
+    layer_id: "00000000-0000-4000-8000-000000000101",
+    source_id: "00000000-0000-4000-8000-000000000201",
+    stored_crs_code: 5899,
+    geometry_family: "Polygon",
+    base_content_revision: sampleContentRev,
+    current_content_revision: sampleContentRev,
+    base_schema_revision: sampleSchemaRev,
+    current_schema_revision: sampleSchemaRev,
+    stale_revision: false,
+    deletions_blocked: true,
+    create_count: 1,
+    update_count: 2,
+    unchanged_count: 12,
+    omitted_server_feature_count: 3,
+    omitted_server_feature_ids: ["feat-omitted-1", "feat-omitted-2", "feat-omitted-3"],
+    diff_sha256: sampleDiffSha,
+    can_commit: true,
+    operations: [
+      {
+        op_type: "create",
+        feature_id: "feat-1",
+        changed_fields: [],
+        geometry_changed: true
+      }
+    ]
+  };
+
+  const pushResponseFixture = {
+    changeset_id: "00000000-0000-4000-8000-000000000888",
+    source_id: "00000000-0000-4000-8000-000000000201",
+    layer_id: "00000000-0000-4000-8000-000000000101",
+    operation_id: "11111111-1111-4111-8111-111111111111",
+    resulting_content_revision: nextContentRev,
+    resulting_catalog_revision: 3,
+    operation_count: 3,
+    create_count: 1,
+    update_count: 2,
+    omitted_server_feature_count: 3,
+    deletions_blocked: true,
+    diff_sha256: sampleDiffSha,
+    audit_event_id: "00000000-0000-4000-8000-000000000777"
+  };
+
+  const capturedCalls = [];
+  const defaultCsrfToken = "smoke-client-csrf";
+  const makeStatusError = (status) => {
+    const err = new Error(`OpenVietGIS API request failed: ${status}`);
+    err.name = "ApiError";
+    err.status = status;
+    return err;
+  };
+  const normalizeHeaders = (init) => {
+    const method = (init?.method ?? "GET").toUpperCase();
+    const headers = new Headers(init?.headers);
+    if (
+      init?.body !== undefined &&
+      !(init.body instanceof FormData) &&
+      !headers.has("content-type")
+    ) {
+      headers.set("content-type", "application/json");
+    }
+    if (method === "POST" && !headers.has("x-openvietgis-csrf")) {
+      headers.set("x-openvietgis-csrf", defaultCsrfToken);
+    }
+    return headers;
+  };
+
+  const client = {
     async request(requestPath, init) {
-      requests.push({ path: requestPath, init: init ?? {} });
-      return requestPath.includes("/adapters/")
-        ? QGIS_PROFILE_FIXTURE
-        : CATALOG_FIXTURE;
+      const headers = normalizeHeaders(init);
+      const url = `http://127.0.0.1:8000/api/v1${requestPath}`;
+      capturedCalls.push({ url, init: { ...(init ?? {}), headers } });
+      if (requestPath.endsWith("/integration-hub/catalog")) {
+        return CATALOG_FIXTURE;
+      }
+      if (
+        requestPath.includes("/integration-hub/adapters/") &&
+        !requestPath.includes("/layers/")
+      ) {
+        return QGIS_PROFILE_FIXTURE;
+      }
+      if (
+        requestPath.includes("conflict-layer") &&
+        requestPath.endsWith("/sync-push")
+      ) {
+        throw makeStatusError(409);
+      }
+      if (requestPath.endsWith("/sync-preview")) {
+        return previewResponseFixture;
+      }
+      if (requestPath.endsWith("/sync-push")) {
+        return pushResponseFixture;
+      }
+      throw makeStatusError(404);
     },
     async requestRaw(requestPath, init) {
-      rawRequests.push({ path: requestPath, init: init ?? {} });
+      const headers = normalizeHeaders(init);
+      const url = `http://127.0.0.1:8000/api/v1${requestPath}`;
+      capturedCalls.push({ url, init: { ...(init ?? {}), headers } });
       if (requestPath.includes("forbidden-layer")) {
-        const err = new Error("OpenVietGIS API request failed: 403");
-        err.name = "ApiError";
-        err.status = 403;
-        throw err;
+        throw makeStatusError(403);
       }
       if (requestPath.includes("format=postgis_sql")) {
         return new Response("BEGIN;\nSELECT 1;\nCOMMIT;\n", {
@@ -206,6 +345,20 @@ async function verifyTypedSdkRuntime() {
             "x-content-sha256": sampleSha,
             "x-openvietgis-crs": "EPSG:5899",
             "x-openvietgis-feature-count": "7"
+          }
+        });
+      }
+      if (requestPath.includes("format=dxf")) {
+        return new Response(dxfText, {
+          status: 200,
+          headers: {
+            "content-type": "application/dxf",
+            "x-content-sha256": sampleSha,
+            "x-openvietgis-crs": "EPSG:5899",
+            "x-openvietgis-content-revision": sampleContentRev,
+            "x-openvietgis-schema-revision": sampleSchemaRev,
+            "x-openvietgis-feature-count": "9",
+            "x-openvietgis-attribute-loss": "true"
           }
         });
       }
@@ -225,127 +378,208 @@ async function verifyTypedSdkRuntime() {
   };
 
   const catalog = await integrationHub.getIntegrationHubCatalog(
-    mockClient,
+    client,
     "org/a b",
     "proj/c?x=1"
   );
   assert.equal(
-    requests[0].path,
-    "/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/catalog"
+    capturedCalls[0].url,
+    "http://127.0.0.1:8000/api/v1/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/catalog"
   );
-  assert.equal(requests[0].init.method, "GET");
-  assert.equal(requests[0].init.body, undefined);
+  assert.equal(capturedCalls[0].init.method, "GET");
+  assert.equal(
+    new Headers(capturedCalls[0].init.headers).has("x-openvietgis-csrf"),
+    false
+  );
   assert.equal(catalog.mode, "catalog_read_only");
   assert.equal(catalog.default_write_policy, "deny");
   assert.equal(catalog.scoped_access, true);
 
   const profile = await integrationHub.getIntegrationHubAdapterProfile(
-    mockClient,
+    client,
     "org/a b",
     "proj/c?x=1",
     "qgis/profile#1"
   );
   assert.equal(
-    requests[1].path,
-    "/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/adapters/qgis%2Fprofile%231"
+    capturedCalls[1].url,
+    "http://127.0.0.1:8000/api/v1/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/adapters/qgis%2Fprofile%231"
   );
-  assert.equal(requests[1].init.method, "GET");
-  assert.equal(requests[1].init.body, undefined);
+  assert.equal(capturedCalls[1].init.method, "GET");
   assert.equal(profile.execution_status, "read_only_profile_ready");
   assert.equal(profile.connection_profile.supports_direct_db_credentials, false);
+  assert.equal(profile.connection_profile.sync_push_enabled, true);
+  assert.equal(profile.connection_profile.deletions_blocked_by_default, true);
   assert.equal(profile.connection_profile.crs_policy, "explicit_only_never_inferred");
-  assert.equal(profile.layers[0].stored_crs_code, 5899);
-  assert.equal(profile.layers[1].crs_explicit, false);
-  assert.equal(profile.layers[1].stored_crs_code, null);
 
   assert.equal(
     integrationHub.buildIntegrationLayerExportPath(
-      "org/a b",
-      "proj/c?x=1",
-      "qgis",
-      "layer/id#1"
-    ),
-    "/organizations/org%2Fa%20b/projects/proj%2Fc%3Fx%3D1/integration-hub/adapters/qgis/layers/layer%2Fid%231/export?format=geopackage"
-  );
-  assert.equal(
-    integrationHub.buildIntegrationLayerExportPath(
       "org-1",
       "proj-1",
-      "qgis",
-      "layer-4326",
-      "geojson"
-    ),
-    "/organizations/org-1/projects/proj-1/integration-hub/adapters/qgis/layers/layer-4326/export?format=geojson"
-  );
-  assert.equal(
-    integrationHub.buildIntegrationLayerExportPath(
-      "org-1",
-      "proj-1",
-      "postgis",
+      "autocad",
       "layer-5899",
-      "postgis_sql"
+      "dxf"
     ),
-    "/organizations/org-1/projects/proj-1/integration-hub/adapters/postgis/layers/layer-5899/export?format=postgis_sql"
+    "/organizations/org-1/projects/proj-1/integration-hub/adapters/autocad/layers/layer-5899/export?format=dxf"
   );
 
   const qgisExport = await integrationHub.downloadIntegrationLayerExport(
-    mockClient,
+    client,
     "org-1",
     "proj-1",
     "qgis",
     "00000000-0000-4000-8000-000000000101",
     "geopackage"
   );
-  assert.equal(
-    rawRequests[0].path,
-    "/organizations/org-1/projects/proj-1/integration-hub/adapters/qgis/layers/00000000-0000-4000-8000-000000000101/export?format=geopackage"
-  );
-  assert.equal(rawRequests[0].init.method, "GET");
-  assert.equal(rawRequests[0].init.cache, "no-store");
-  assert.equal(rawRequests[0].init.body, undefined);
   assert.equal(qgisExport.filename, "ranh-gioi-vn2000.gpkg");
-  assert.equal(qgisExport.contentType, "application/geopackage+sqlite3");
-  assert.equal(qgisExport.sha256, sampleSha);
-  assert.equal(qgisExport.crs, "EPSG:5899");
-  assert.equal(qgisExport.contentRevision, sampleContentRev);
-  assert.equal(qgisExport.schemaRevision, sampleSchemaRev);
+  assert.equal(qgisExport.attributeLoss, false);
   assert.equal(qgisExport.featureCount, 15);
   assert.deepEqual(
     new Uint8Array(await qgisExport.blob.arrayBuffer()),
     gpkgBytes
   );
 
+  const dxfExport = await integrationHub.downloadIntegrationLayerExport(
+    client,
+    "org-1",
+    "proj-1",
+    "autocad",
+    "layer-5899",
+    "dxf"
+  );
+  assert.equal(dxfExport.filename, "autocad-layer-5899.dxf");
+  assert.equal(dxfExport.crs, "EPSG:5899");
+  assert.equal(dxfExport.featureCount, 9);
+  assert.equal(dxfExport.attributeLoss, true);
+  assert.equal(await dxfExport.blob.text(), dxfText);
+
   const postgisExport = await integrationHub.downloadIntegrationLayerExport(
-    mockClient,
+    client,
     "org-1",
     "proj-1",
     "postgis",
     "layer-202",
     "postgis_sql"
   );
-  assert.equal(
-    rawRequests[1].path,
-    "/organizations/org-1/projects/proj-1/integration-hub/adapters/postgis/layers/layer-202/export?format=postgis_sql"
-  );
-  assert.equal(rawRequests[1].init.method, "GET");
   assert.equal(postgisExport.filename, "postgis-layer-202.sql");
-  assert.equal(postgisExport.featureCount, 7);
-  assert.equal(await postgisExport.blob.text(), "BEGIN;\nSELECT 1;\nCOMMIT;\n");
+  assert.equal(postgisExport.attributeLoss, false);
 
   await assert.rejects(
     integrationHub.downloadIntegrationLayerExport(
-      mockClient,
+      client,
       "org-1",
       "proj-1",
       "postgis",
       "forbidden-layer",
       "geopackage"
     ),
-    (err) => err?.status === 403
+    (err) => err?.name === "ApiError" && err?.status === 403
+  );
+
+  const uploadBlob = new Blob([gpkgBytes], {
+    type: "application/geopackage+sqlite3"
+  });
+  const preview = await integrationHub.previewQgisGpkgSync(
+    client,
+    "org-1",
+    "proj-1",
+    "00000000-0000-4000-8000-000000000101",
+    {
+      file: uploadBlob,
+      filename: "ranh-gioi-edited.gpkg",
+      baseContentRevision: sampleContentRev,
+      baseSchemaRevision: sampleSchemaRev,
+      csrfToken: "preview-csrf-token"
+    }
+  );
+  const previewCall = capturedCalls.at(-1);
+  assert.equal(previewCall.init.method, "POST");
+  assert.ok(previewCall.url.endsWith("/adapters/qgis/layers/00000000-0000-4000-8000-000000000101/sync-preview"));
+  const previewHeaders = new Headers(previewCall.init.headers);
+  assert.equal(previewHeaders.get("x-openvietgis-csrf"), "preview-csrf-token");
+  assert.equal(previewHeaders.has("content-type"), false);
+  assert.ok(previewCall.init.body instanceof FormData);
+  assert.equal(previewCall.init.body.get("base_content_revision"), sampleContentRev);
+  assert.equal(previewCall.init.body.get("base_schema_revision"), sampleSchemaRev);
+  assert.equal(preview.can_commit, true);
+  assert.equal(preview.omitted_server_feature_count, 3);
+  assert.equal(preview.diff_sha256, sampleDiffSha);
+
+  const callsBeforeGuard = capturedCalls.length;
+  await assert.rejects(
+    integrationHub.pushQgisGpkgSync(
+      client,
+      "org-1",
+      "proj-1",
+      "00000000-0000-4000-8000-000000000101",
+      {
+        file: uploadBlob,
+        filename: "ranh-gioi-edited.gpkg",
+        baseContentRevision: sampleContentRev,
+        baseSchemaRevision: sampleSchemaRev,
+        operationId: "field-sync-disallowed-1",
+        expectedDiffSha256: sampleDiffSha
+      }
+    ),
+    /field-sync-/
+  );
+  assert.equal(
+    capturedCalls.length,
+    callsBeforeGuard,
+    "field-sync-* operationId must be rejected client-side before sending HTTP request"
+  );
+
+  const pushResult = await integrationHub.pushQgisGpkgSync(
+    client,
+    "org-1",
+    "proj-1",
+    "00000000-0000-4000-8000-000000000101",
+    {
+      file: uploadBlob,
+      filename: "ranh-gioi-edited.gpkg",
+      baseContentRevision: sampleContentRev,
+      baseSchemaRevision: sampleSchemaRev,
+      operationId: "11111111-1111-4111-8111-111111111111",
+      expectedDiffSha256: sampleDiffSha,
+      summary: "Smoke sync push"
+    }
+  );
+  const pushCall = capturedCalls.at(-1);
+  assert.equal(pushCall.init.method, "POST");
+  assert.ok(pushCall.url.endsWith("/adapters/qgis/layers/00000000-0000-4000-8000-000000000101/sync-push"));
+  const pushHeaders = new Headers(pushCall.init.headers);
+  assert.equal(pushHeaders.get("x-openvietgis-csrf"), "smoke-client-csrf");
+  assert.equal(pushHeaders.has("content-type"), false);
+  assert.ok(pushCall.init.body instanceof FormData);
+  assert.equal(
+    pushCall.init.body.get("operation_id"),
+    "11111111-1111-4111-8111-111111111111"
+  );
+  assert.equal(pushCall.init.body.get("expected_diff_sha256"), sampleDiffSha);
+  assert.equal(pushCall.init.body.get("summary"), "Smoke sync push");
+  assert.equal(pushResult.changeset_id, pushResponseFixture.changeset_id);
+  assert.equal(pushResult.resulting_content_revision, nextContentRev);
+  assert.equal(pushResult.operation_count, 3);
+
+  await assert.rejects(
+    integrationHub.pushQgisGpkgSync(
+      client,
+      "org-1",
+      "proj-1",
+      "conflict-layer",
+      {
+        file: uploadBlob,
+        baseContentRevision: sampleContentRev,
+        baseSchemaRevision: sampleSchemaRev,
+        operationId: "22222222-2222-4222-8222-222222222222",
+        expectedDiffSha256: sampleDiffSha
+      }
+    ),
+    (err) => err?.name === "ApiError" && err?.status === 409
   );
 
   console.log(
-    "PASS typed SDK exports, URL encoding, and read-only GET export contract"
+    "PASS typed SDK exports, DXF attributeLoss, and two-step QGIS sync contract"
   );
 }
 
@@ -358,6 +592,9 @@ async function verifyUiAndScopeInvariants() {
   assert.match(componentSource, /getIntegrationHubCatalog/);
   assert.match(componentSource, /getIntegrationHubAdapterProfile/);
   assert.match(componentSource, /downloadIntegrationLayerExport/);
+  assert.match(componentSource, /loadCsrfToken/);
+  assert.match(componentSource, /previewQgisGpkgSync/);
+  assert.match(componentSource, /pushQgisGpkgSync/);
   assert.doesNotMatch(
     componentSource,
     /\/integration-hub\/catalog/,
@@ -366,7 +603,7 @@ async function verifyUiAndScopeInvariants() {
   assert.doesNotMatch(
     componentSource,
     /\/integration-hub\/adapters\//,
-    "IntegrationCatalog.tsx must use typed SDK export helper instead of raw paths"
+    "IntegrationCatalog.tsx must use typed SDK helpers instead of raw paths"
   );
 
   for (const requiredText of [
@@ -380,8 +617,26 @@ async function verifyUiAndScopeInvariants() {
     "Tải .gpkg",
     "Tải .geojson",
     "Tải .sql",
+    "Tải .dxf",
+    "Cần hệ tọa độ phẳng mét",
+    "EPSG:5899/3857",
     "Bị hạn chế / chưa đủ CRS",
     "read_only_export",
+    "controlled_changeset_sync",
+    "Đồng bộ qua Changeset có kiểm soát",
+    "Đồng bộ .gpkg (2 bước)",
+    'accept=".gpkg"',
+    "1. Xem trước thay đổi (Diff)",
+    "2. Xác nhận đẩy Changeset",
+    "Xóa bị chặn mặc định",
+    "can_commit",
+    "omitted_server_feature_count",
+    "stale_revision",
+    "diff_sha256",
+    "changeset_id",
+    "resulting_content_revision",
+    "operation_count",
+    "crypto.randomUUID",
     "URL.createObjectURL",
     "URL.revokeObjectURL",
     "default_write_policy",
@@ -404,8 +659,8 @@ async function verifyUiAndScopeInvariants() {
   const buttonMatches = componentSource.match(/<button\b[^>]*>/g) ?? [];
   assert.equal(
     buttonMatches.length,
-    5,
-    "IntegrationCatalog.tsx must only contain the inspect toggle and read-only layer download buttons"
+    9,
+    "IntegrationCatalog.tsx must only contain the inspect toggle, read-only export buttons, and QGIS 2-step sync buttons"
   );
   const typeButtonMatches =
     componentSource.match(/<button\b[\s\S]*?type="button"/g) ?? [];
@@ -424,7 +679,8 @@ async function verifyUiAndScopeInvariants() {
   );
   assert.doesNotMatch(
     sdkSource,
-    /method\s*:\s*["'](POST|PUT|PATCH|DELETE)["']/i
+    /method\s*:\s*["'](PUT|PATCH|DELETE)["']/i,
+    "integration-hub.ts must never issue PUT, PATCH, or DELETE requests"
   );
 
   for (const forbiddenUiAction of [
@@ -439,7 +695,7 @@ async function verifyUiAndScopeInvariants() {
     assert.equal(
       componentSource.includes(forbiddenUiAction),
       false,
-      `IntegrationCatalog.tsx must not expose write/sync/credential control: ${forbiddenUiAction}`
+      `IntegrationCatalog.tsx must not expose fake/credential control: ${forbiddenUiAction}`
     );
   }
 
@@ -477,7 +733,9 @@ async function verifyUiAndScopeInvariants() {
     }
   }
 
-  console.log("PASS UI read-only invariants, honest labels, and scope hygiene");
+  console.log(
+    "PASS UI Slice 3 two-step sync, AutoCAD DXF hints, honest policy invariants, and scope hygiene"
+  );
 }
 
 async function runOptionalBrowserSmoke() {
@@ -575,7 +833,10 @@ async function runOptionalBrowserSmoke() {
       if (pathname.endsWith("/integration-hub/adapters/qgis")) {
         return route.fulfill({ json: QGIS_PROFILE_FIXTURE });
       }
-      if (pathname.includes("/integration-hub/adapters/qgis/layers/") && pathname.endsWith("/export")) {
+      if (
+        pathname.includes("/integration-hub/adapters/qgis/layers/") &&
+        pathname.endsWith("/export")
+      ) {
         return route.fulfill({
           status: 200,
           headers: {
@@ -616,7 +877,7 @@ async function runOptionalBrowserSmoke() {
 
     assert.ok(
       seenMethods.length >= 3 && seenMethods.every((m) => m.method === "GET"),
-      "Browser Integration Hub traffic must be strictly GET"
+      "Viewer browser Integration Hub traffic must be strictly GET"
     );
     assert.deepEqual(errors, []);
     console.log("PASS live browser Integration Hub read-only inspection and export");

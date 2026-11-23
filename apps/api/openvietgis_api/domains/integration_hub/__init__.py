@@ -17,6 +17,14 @@ from openvietgis_api.domains.integration_hub.profiles import (
     build_adapter_profile,
     execution_status_for,
 )
+from openvietgis_api.domains.integration_hub.sync_diff import (
+    MAX_SYNC_OPERATIONS,
+    ServerFeatureSnapshot,
+    SyncDiffPlan,
+    SyncOperationPreview,
+    UploadedFeatureSnapshot,
+    compute_sync_diff,
+)
 
 __all__ = [
     "ACTION_PERMISSIONS",
@@ -25,8 +33,14 @@ __all__ = [
     "AdapterManifest",
     "ConnectorAction",
     "LayerAccessSnapshot",
+    "MAX_SYNC_OPERATIONS",
     "PROFILE_ENABLED_ADAPTER_KEYS",
+    "ServerFeatureSnapshot",
+    "SyncDiffPlan",
+    "SyncOperationPreview",
+    "UploadedFeatureSnapshot",
     "build_adapter_profile",
+    "compute_sync_diff",
     "evaluate_action",
     "execution_status_for",
     "get_adapter",

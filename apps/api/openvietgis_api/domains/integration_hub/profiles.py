@@ -20,7 +20,7 @@ from openvietgis_api.domains.integration_hub.catalog import (
 from openvietgis_api.domains.spatial.crs import get_readable_crs_profile
 
 PROFILE_ENABLED_ADAPTER_KEYS: Final[frozenset[str]] = frozenset(
-    {"qgis", "postgis", "ogc_services"}
+    {"qgis", "postgis", "ogc_services", "autocad"}
 )
 
 
@@ -43,7 +43,7 @@ class LayerAccessSnapshot:
 def execution_status_for(adapter: AdapterManifest) -> str:
     if adapter.key == "ogc_services":
         return "existing_read_only_api"
-    if adapter.key in ("qgis", "postgis"):
+    if adapter.key in ("qgis", "postgis", "autocad"):
         return "read_only_profile_ready"
     if adapter.key == "microstation_v8i" or adapter.lifecycle is AdapterLifecycle.CANDIDATE:
         return "candidate_external_branch"
@@ -64,6 +64,8 @@ def _build_connection_profile(
             "supports_direct_db_credentials": False,
             "requires_per_layer_acl": True,
             "default_write_policy": "deny",
+            "sync_push_enabled": True,
+            "deletions_blocked_by_default": True,
             "supported_protocols": [
                 "GeoPackage",
                 "GeoJSON",
@@ -93,13 +95,68 @@ def _build_connection_profile(
                     ),
                     "required_permission": "project.read",
                 },
+                {
+                    "name": "sync_preview",
+                    "method": "POST",
+                    "path_template": (
+                        f"{base}/integration-hub/adapters/{adapter_key}"
+                        "/layers/{layer_id}/sync-preview"
+                    ),
+                    "required_permission": "project.edit",
+                },
+                {
+                    "name": "sync_push",
+                    "method": "POST",
+                    "path_template": (
+                        f"{base}/integration-hub/adapters/{adapter_key}"
+                        "/layers/{layer_id}/sync-push"
+                    ),
+                    "required_permission": "project.edit",
+                },
             ],
             "crs_policy": "explicit_only_never_inferred",
             "restrictions": [
                 "No direct internal PostgreSQL/PostGIS credentials are exposed.",
                 "Only active layers visible under RLS and per-layer/feature GIS ACL are listed.",
                 "CRS is reported explicitly from stored_crs; missing CRS is never inferred.",
-                "All QGIS writeback and sync.push operations remain denied by default.",
+                "Two-step revision-pinned GeoPackage sync push commits through R006 changesets "
+                "(deletions blocked by default); all other writebacks remain denied.",
+            ],
+        }
+    if adapter_key == "autocad":
+        return {
+            "adapter_key": "autocad",
+            "access_mode": "read_only_exchange",
+            "supports_direct_db_credentials": False,
+            "requires_per_layer_acl": True,
+            "default_write_policy": "deny",
+            "supported_protocols": ["DXF"],
+            "export_formats": ["dxf"],
+            "existing_endpoints": [
+                {
+                    "name": "project_layers",
+                    "method": "GET",
+                    "path_template": f"{base}/layers",
+                    "required_permission": "project.read",
+                },
+                {
+                    "name": "hub_layer_export",
+                    "method": "GET",
+                    "path_template": (
+                        f"{base}/integration-hub/adapters/{adapter_key}"
+                        "/layers/{layer_id}/export?format=dxf"
+                    ),
+                    "required_permission": "project.read",
+                },
+            ],
+            "crs_policy": "explicit_only_never_inferred",
+            "restrictions": [
+                "Projected metre CRS only (EPSG:5899, EPSG:3857); "
+                "geographic degree CRS is rejected.",
+                "2D single-part geometries only (Point, LineString, Polygon without holes).",
+                "Tabular attributes are not stored in DXF modelspace entities.",
+                "Native DWG binaries are not supported and all CAD writebacks remain denied.",
+                "No direct internal PostgreSQL/PostGIS credentials are exposed.",
             ],
         }
     if adapter_key == "postgis":

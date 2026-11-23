@@ -72,20 +72,38 @@ ADAPTERS: Final[tuple[AdapterManifest, ...]] = (
         "open_protocols",
         AdapterLifecycle.EXISTING_READ_ONLY,
         ("GeoPackage", "PostGIS", "WMS", "WFS"),
-        "Read-only GeoPackage / GeoJSON / PostGIS SQL export verified in Hub; "
-        "QGIS writeback and sync remain denied.",
-        (ConnectorAction.INSPECT, ConnectorAction.EXPORT, ConnectorAction.SYNC_PULL),
+        "Read-only GeoPackage/GeoJSON/PostGIS SQL export and two-step revision-pinned "
+        "GeoPackage sync push via R006 changesets (deletions blocked by default).",
+        (
+            ConnectorAction.INSPECT,
+            ConnectorAction.EXPORT,
+            ConnectorAction.SYNC_PULL,
+            ConnectorAction.SYNC_PUSH,
+        ),
         existing_api="integration-hub",
-        hub_executable_actions=(ConnectorAction.DISCOVER, ConnectorAction.EXPORT),
+        hub_executable_actions=(
+            ConnectorAction.DISCOVER,
+            ConnectorAction.EXPORT,
+            ConnectorAction.SYNC_PUSH,
+        ),
     ),
     AdapterManifest("arcgis", "ArcGIS Pro / Online", "gis", "remote_service",
                     AdapterLifecycle.PLANNED, ("ArcGIS Feature Service", "FileGDB", "SHP"),
                     "Vendor API authentication, feature ACL and versioning require tests.",
                     (ConnectorAction.INSPECT, ConnectorAction.SYNC_PULL)),
-    AdapterManifest("autocad", "AutoCAD / Map 3D", "cad", "file_or_desktop_bridge",
-                    AdapterLifecycle.PLANNED, ("DXF", "DWG"),
-                    "Native DWG fidelity and licensing require verified adapter.",
-                    (ConnectorAction.IMPORT, ConnectorAction.EXPORT)),
+    AdapterManifest(
+        "autocad",
+        "AutoCAD / Map 3D",
+        "cad",
+        "file_or_desktop_bridge",
+        AdapterLifecycle.EXISTING_READ_ONLY,
+        ("DXF", "DWG"),
+        "Read-only 2D DXF export (R2010, projected metre CRS) verified in Hub; "
+        "DWG native licensing and CAD writeback remain denied.",
+        (ConnectorAction.IMPORT, ConnectorAction.EXPORT),
+        existing_api="integration-hub",
+        hub_executable_actions=(ConnectorAction.DISCOVER, ConnectorAction.EXPORT),
+    ),
     AdapterManifest("microstation_v8i", "MicroStation V8i", "cad", "windows_bridge",
                     AdapterLifecycle.CANDIDATE, ("DGN V8", "COM"),
                     "R025 separate branch: licensed Windows instance, read-only preview first.",
@@ -158,6 +176,8 @@ def evaluate_action(
         reason = "not_implemented"
     elif action is ConnectorAction.EXPORT:
         reason = "read_only_export"
+    elif action is ConnectorAction.SYNC_PUSH:
+        reason = "controlled_changeset_sync"
     else:
         reason = "catalog_only"
     return {

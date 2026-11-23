@@ -4,6 +4,9 @@ import {
   downloadIntegrationLayerExport,
   getIntegrationHubAdapterProfile,
   getIntegrationHubCatalog,
+  loadCsrfToken,
+  previewQgisGpkgSync,
+  pushQgisGpkgSync,
   type ActionDenialReason,
   type AdapterExecutionStatus,
   type AdapterLayerDescriptor,
@@ -13,7 +16,9 @@ import {
   type IntegrationAdapterSummary,
   type IntegrationCatalogResponse,
   type IntegrationExportAdapterKey,
-  type IntegrationExportFormat
+  type IntegrationExportFormat,
+  type IntegrationSyncPreviewResponse,
+  type IntegrationSyncPushResponse
 } from "@openvietgis/client-sdk";
 import "./integration-catalog.css";
 
@@ -29,6 +34,7 @@ interface LayerExportStatus {
   crs?: string;
   featureCount?: number | null;
   shortSha256?: string | null;
+  attributeLoss?: boolean;
   message: string;
 }
 
@@ -48,6 +54,7 @@ const EXECUTION_STATUS_LABELS: Record<AdapterExecutionStatus, string> = {
 const DENIAL_REASON_LABELS: Record<ActionDenialReason, string> = {
   catalog_only: "Chỉ cho phép tra cứu danh mục / hồ sơ",
   read_only_export: "Cho phép tải xuất lớp chỉ đọc theo quyền và CRS",
+  controlled_changeset_sync: "Đồng bộ qua Changeset có kiểm soát",
   permission_denied: "Không đủ quyền dự án",
   unsupported_by_adapter: "Adapter không khai báo thao tác",
   not_implemented: "Chưa triển khai trong Integration Hub"
@@ -56,7 +63,8 @@ const DENIAL_REASON_LABELS: Record<ActionDenialReason, string> = {
 const EXPORT_FORMAT_LABELS: Record<IntegrationExportFormat, string> = {
   geopackage: "GeoPackage (.gpkg)",
   geojson: "GeoJSON (.geojson)",
-  postgis_sql: "PostGIS SQL (.sql)"
+  postgis_sql: "PostGIS SQL (.sql)",
+  dxf: "AutoCAD DXF (.dxf)"
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -69,7 +77,11 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function isExportAdapterKey(key: string): key is IntegrationExportAdapterKey {
-  return key === "qgis" || key === "postgis";
+  return key === "qgis" || key === "postgis" || key === "autocad";
+}
+
+function isAutocadMetricCrs(storedCrsCode: number | null): boolean {
+  return storedCrsCode === 5899 || storedCrsCode === 3857;
 }
 
 function formatLayerCrs(layer: AdapterLayerDescriptor): string {
@@ -110,13 +122,52 @@ function formatExportErrorMessage(layerName: string, error: unknown): string {
       return `Không thể xuất lớp "${layerName}" (HTTP 409): lớp chưa sẵn sàng, thiếu CRS tường minh hoặc vượt giới hạn xuất chỉ đọc.`;
     }
     if (error.status === 422) {
-      return `Không thể xuất lớp "${layerName}" theo định dạng đã chọn (HTTP 422): tham số không hợp lệ hoặc GeoJSON yêu cầu EPSG:4326.`;
+      return `Không thể xuất lớp "${layerName}" theo định dạng đã chọn (HTTP 422): tham số không hợp lệ, GeoJSON yêu cầu EPSG:4326 hoặc DXF yêu cầu hệ tọa độ phẳng mét (EPSG:5899/3857).`;
     }
     if (error.status === 404) {
       return `Không tìm thấy lớp "${layerName}" hoặc đầu cuối xuất chỉ đọc (HTTP 404).`;
     }
   }
   return `Không thể tải tệp xuất chỉ đọc cho lớp "${layerName}". Vui lòng thử lại.`;
+}
+
+function formatSyncErrorMessage(
+  step: "preview" | "push",
+  layerName: string,
+  error: unknown
+): string {
+  const stepLabel =
+    step === "preview"
+      ? "xem trước thay đổi (Diff)"
+      : "xác nhận đẩy Changeset";
+  if (error instanceof ApiError) {
+    if (error.status === 403) {
+      return `Không có quyền ${stepLabel} cho lớp "${layerName}" (HTTP 403). Kiểm tra quyền project.edit hoặc phạm vi GIS (ACL).`;
+    }
+    if (error.status === 409) {
+      return `Xung đột phiên bản hoặc mã kiểm tra diff khi ${stepLabel} cho lớp "${layerName}" (HTTP 409). Hãy tải lại hồ sơ và xem trước lại.`;
+    }
+    if (error.status === 413) {
+      return `Tệp GeoPackage vượt giới hạn kích thước tối đa 16 MiB khi ${stepLabel} cho lớp "${layerName}" (HTTP 413).`;
+    }
+    if (error.status === 422) {
+      return `Tệp GeoPackage không hợp lệ hoặc sai hệ tọa độ CRS khi ${stepLabel} cho lớp "${layerName}" (HTTP 422).`;
+    }
+    if (error.status === 404) {
+      return `Không tìm thấy lớp "${layerName}" hoặc đầu cuối đồng bộ (HTTP 404).`;
+    }
+  }
+  return `Không thể ${stepLabel} cho lớp "${layerName}". Vui lòng kiểm tra tệp .gpkg và thử lại.`;
+}
+
+function generateSyncOperationId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `qgis-sync-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function triggerBrowserBlobDownload(blob: Blob, filename: string): void {
@@ -154,7 +205,28 @@ export function IntegrationCatalog({
   const [exportStatusByAdapter, setExportStatusByAdapter] = useState<
     Record<string, LayerExportStatus>
   >({});
+
+  const [syncLayerId, setSyncLayerId] = useState<string | null>(null);
+  const [syncFile, setSyncFile] = useState<File | null>(null);
+  const [syncPreviewLoading, setSyncPreviewLoading] = useState(false);
+  const [syncPushLoading, setSyncPushLoading] = useState(false);
+  const [syncPreview, setSyncPreview] =
+    useState<IntegrationSyncPreviewResponse | null>(null);
+  const [syncPushResult, setSyncPushResult] =
+    useState<IntegrationSyncPushResponse | null>(null);
+  const [syncError, setSyncError] = useState("");
+
   const scopeGeneration = useRef(0);
+
+  const resetSyncPanelState = () => {
+    setSyncLayerId(null);
+    setSyncFile(null);
+    setSyncPreviewLoading(false);
+    setSyncPushLoading(false);
+    setSyncPreview(null);
+    setSyncPushResult(null);
+    setSyncError("");
+  };
 
   useEffect(() => {
     let alive = true;
@@ -169,6 +241,7 @@ export function IntegrationCatalog({
     setProfileError({});
     setExportingKey(null);
     setExportStatusByAdapter({});
+    resetSyncPanelState();
 
     void getIntegrationHubCatalog(client, org, projectId)
       .then((value) => {
@@ -217,7 +290,14 @@ export function IntegrationCatalog({
   const inspectAdapterProfile = (adapter: IntegrationAdapterSummary) => {
     if (expandedKey === adapter.key) {
       setExpandedKey(null);
+      if (adapter.key === "qgis") {
+        resetSyncPanelState();
+      }
       return;
+    }
+
+    if (expandedKey === "qgis" && adapter.key !== "qgis") {
+      resetSyncPanelState();
     }
 
     setExpandedKey(adapter.key);
@@ -299,6 +379,11 @@ export function IntegrationCatalog({
         if (shortSha256) {
           summaryParts.push(`SHA-256: ${shortSha256}`);
         }
+        if (result.attributeLoss) {
+          summaryParts.push(
+            "Lưu ý: chỉ xuất hình học (không bảo toàn thuộc tính)"
+          );
+        }
 
         setExportStatusByAdapter((prev) => ({
           ...prev,
@@ -308,6 +393,7 @@ export function IntegrationCatalog({
             crs: resolvedCrs,
             featureCount: result.featureCount,
             shortSha256,
+            attributeLoss: result.attributeLoss,
             message: `Đã xuất bản sao chỉ đọc · ${summaryParts.join(" · ")}`
           }
         }));
@@ -329,6 +415,122 @@ export function IntegrationCatalog({
           setExportingKey((current) =>
             current === busyToken ? null : current
           );
+        }
+      });
+  };
+
+  const toggleSyncLayerPanel = (layerId: string) => {
+    if (syncLayerId === layerId) {
+      resetSyncPanelState();
+      return;
+    }
+    setSyncLayerId(layerId);
+    setSyncFile(null);
+    setSyncPreview(null);
+    setSyncPushResult(null);
+    setSyncError("");
+  };
+
+  const handleSyncPreview = (layer: AdapterLayerDescriptor) => {
+    if (!syncFile) {
+      return;
+    }
+    const requestGeneration = scopeGeneration.current;
+    setSyncPreviewLoading(true);
+    setSyncPreview(null);
+    setSyncPushResult(null);
+    setSyncError("");
+
+    void (async () => {
+      const csrfToken = await loadCsrfToken(client);
+      return previewQgisGpkgSync(client, org, projectId, layer.layer_id, {
+        file: syncFile,
+        filename: syncFile.name,
+        baseContentRevision: layer.content_revision,
+        baseSchemaRevision: layer.schema_revision,
+        csrfToken
+      });
+    })()
+      .then((preview) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        setSyncPreview(preview);
+      })
+      .catch((previewError: unknown) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        setSyncError(formatSyncErrorMessage("preview", layer.name, previewError));
+      })
+      .finally(() => {
+        if (scopeGeneration.current === requestGeneration) {
+          setSyncPreviewLoading(false);
+        }
+      });
+  };
+
+  const handleSyncPush = (layer: AdapterLayerDescriptor) => {
+    if (!syncFile || !syncPreview || !syncPreview.can_commit) {
+      return;
+    }
+    const requestGeneration = scopeGeneration.current;
+    const expectedDiffSha256 = syncPreview.diff_sha256;
+    const operationId = generateSyncOperationId();
+
+    setSyncPushLoading(true);
+    setSyncError("");
+
+    void (async () => {
+      const csrfToken = await loadCsrfToken(client);
+      const pushResult = await pushQgisGpkgSync(
+        client,
+        org,
+        projectId,
+        layer.layer_id,
+        {
+          file: syncFile,
+          filename: syncFile.name,
+          baseContentRevision: layer.content_revision,
+          baseSchemaRevision: layer.schema_revision,
+          operationId,
+          expectedDiffSha256,
+          summary: `QGIS GeoPackage sync (${syncFile.name})`,
+          csrfToken
+        }
+      );
+      let refreshedProfile: IntegrationAdapterProfileResponse | null = null;
+      try {
+        refreshedProfile = await getIntegrationHubAdapterProfile(
+          client,
+          org,
+          projectId,
+          "qgis"
+        );
+      } catch {
+        refreshedProfile = null;
+      }
+      return { pushResult, refreshedProfile };
+    })()
+      .then(({ pushResult, refreshedProfile }) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        setSyncPushResult(pushResult);
+        setSyncPreview(null);
+        if (refreshedProfile) {
+          setProfiles((prev) => ({ ...prev, qgis: refreshedProfile }));
+        }
+      })
+      .catch((pushError: unknown) => {
+        if (scopeGeneration.current !== requestGeneration) {
+          return;
+        }
+        setSyncError(formatSyncErrorMessage("push", layer.name, pushError));
+      })
+      .finally(() => {
+        if (scopeGeneration.current === requestGeneration) {
+          setSyncPushLoading(false);
         }
       });
   };
@@ -406,6 +608,20 @@ export function IntegrationCatalog({
                 const adapterExportStatus =
                   exportStatusByAdapter[adapter.key] ?? null;
 
+                const profilePushAction =
+                  profile?.adapter.actions.find(
+                    (item) => item.action === "sync.push"
+                  ) ?? pushAction;
+                const qgisSyncPushAllowed =
+                  adapter.key === "qgis" && profilePushAction?.allowed === true;
+                const selectedSyncLayer =
+                  qgisSyncPushAllowed && profile && syncLayerId
+                    ? profile.layers.find(
+                        (item) =>
+                          item.layer_id === syncLayerId && item.crs_explicit
+                      ) ?? null
+                    : null;
+
                 return (
                   <article
                     key={adapter.key}
@@ -432,9 +648,11 @@ export function IntegrationCatalog({
                       Quyền xem danh mục:{" "}
                       {discoverAction?.allowed ? "Được phép" : "Không được cấp"}.
                       {" "}Đồng bộ ghi:{" "}
-                      {pushAction?.executable_in_hub
-                        ? "Có API"
-                        : "Từ chối mặc định / chưa hỗ trợ"}
+                      {pushAction?.allowed
+                        ? "Changeset 2 bước có kiểm soát"
+                        : pushAction?.executable_in_hub
+                          ? "Yêu cầu quyền project.edit (từ chối mặc định)"
+                          : "Từ chối mặc định / chưa hỗ trợ"}
                       .
                     </small>
 
@@ -558,6 +776,19 @@ export function IntegrationCatalog({
                                         </dd>
                                       </div>
                                     )}
+                                  {profile.connection_profile
+                                    .sync_push_enabled && (
+                                    <div>
+                                      <dt>Đồng bộ Changeset có kiểm soát</dt>
+                                      <dd>
+                                        Hỗ trợ quy trình 2 bước (Diff → Xác nhận)
+                                        {profile.connection_profile
+                                          .deletions_blocked_by_default !== false
+                                          ? " · Xóa bị chặn mặc định"
+                                          : ""}
+                                      </dd>
+                                    </div>
+                                  )}
                                 </dl>
 
                                 {profile.connection_profile.restrictions.length >
@@ -577,14 +808,20 @@ export function IntegrationCatalog({
                                 {profile.connection_profile.existing_endpoints
                                   .length > 0 && (
                                   <div className="integration-subblock">
-                                    <h5>API chỉ đọc hiện hữu</h5>
+                                    <h5>API trao đổi hiện hữu</h5>
                                     <ul className="integration-endpoints">
                                       {profile.connection_profile.existing_endpoints.map(
                                         (endpoint) => (
                                           <li
                                             key={`${endpoint.method}-${endpoint.name}`}
                                           >
-                                            <span className="integration-method-badge">
+                                            <span
+                                              className={
+                                                endpoint.method === "POST"
+                                                  ? "integration-method-badge is-post"
+                                                  : "integration-method-badge"
+                                              }
+                                            >
                                               {endpoint.method}
                                             </span>
                                             <code>{endpoint.path_template}</code>
@@ -643,6 +880,14 @@ export function IntegrationCatalog({
                                         const sqlBusy =
                                           exportingKey ===
                                           `${adapter.key}:${layer.layer_id}:postgis_sql`;
+                                        const dxfBusy =
+                                          exportingKey ===
+                                          `${adapter.key}:${layer.layer_id}:dxf`;
+                                        const canOpenLayerSync =
+                                          qgisSyncPushAllowed &&
+                                          layer.crs_explicit;
+                                        const isSyncSelected =
+                                          syncLayerId === layer.layer_id;
 
                                         return (
                                           <tr key={layer.layer_id}>
@@ -687,32 +932,81 @@ export function IntegrationCatalog({
                                             </td>
                                             {exportAdapterKey && (
                                               <td>
-                                                {layer.export_permitted ? (
+                                                {layer.export_permitted ||
+                                                canOpenLayerSync ? (
                                                   <div className="integration-export-actions">
                                                     {exportAdapterKey ===
                                                       "qgis" && (
                                                       <>
-                                                        <button
-                                                          type="button"
-                                                          className="integration-export-btn"
-                                                          disabled={
-                                                            exportingKey !==
-                                                            null
-                                                          }
-                                                          onClick={() =>
-                                                            handleReadOnlyExport(
-                                                              "qgis",
-                                                              layer,
-                                                              "geopackage"
-                                                            )
-                                                          }
-                                                        >
-                                                          {gpkgBusy
-                                                            ? "Đang tải .gpkg…"
-                                                            : "Tải .gpkg"}
-                                                        </button>
-                                                        {layer.stored_crs_code ===
-                                                          4326 && (
+                                                        {layer.export_permitted && (
+                                                          <>
+                                                            <button
+                                                              type="button"
+                                                              className="integration-export-btn"
+                                                              disabled={
+                                                                exportingKey !==
+                                                                null
+                                                              }
+                                                              onClick={() =>
+                                                                handleReadOnlyExport(
+                                                                  "qgis",
+                                                                  layer,
+                                                                  "geopackage"
+                                                                )
+                                                              }
+                                                            >
+                                                              {gpkgBusy
+                                                                ? "Đang tải .gpkg…"
+                                                                : "Tải .gpkg"}
+                                                            </button>
+                                                            {layer.stored_crs_code ===
+                                                              4326 && (
+                                                              <button
+                                                                type="button"
+                                                                className="integration-export-btn"
+                                                                disabled={
+                                                                  exportingKey !==
+                                                                  null
+                                                                }
+                                                                onClick={() =>
+                                                                  handleReadOnlyExport(
+                                                                    "qgis",
+                                                                    layer,
+                                                                    "geojson"
+                                                                  )
+                                                                }
+                                                              >
+                                                                {geojsonBusy
+                                                                  ? "Đang tải .geojson…"
+                                                                  : "Tải .geojson"}
+                                                              </button>
+                                                            )}
+                                                          </>
+                                                        )}
+                                                        {canOpenLayerSync && (
+                                                          <button
+                                                            type="button"
+                                                            className={`integration-sync-toggle-btn${isSyncSelected ? " is-active" : ""}`}
+                                                            aria-expanded={
+                                                              isSyncSelected
+                                                            }
+                                                            onClick={() =>
+                                                              toggleSyncLayerPanel(
+                                                                layer.layer_id
+                                                              )
+                                                            }
+                                                          >
+                                                            {isSyncSelected
+                                                              ? "Đóng đồng bộ .gpkg"
+                                                              : "Đồng bộ .gpkg (2 bước)"}
+                                                          </button>
+                                                        )}
+                                                      </>
+                                                    )}
+                                                    {exportAdapterKey ===
+                                                      "postgis" &&
+                                                      layer.export_permitted && (
+                                                        <>
                                                           <button
                                                             type="button"
                                                             className="integration-export-btn"
@@ -722,62 +1016,67 @@ export function IntegrationCatalog({
                                                             }
                                                             onClick={() =>
                                                               handleReadOnlyExport(
-                                                                "qgis",
+                                                                "postgis",
                                                                 layer,
-                                                                "geojson"
+                                                                "postgis_sql"
                                                               )
                                                             }
                                                           >
-                                                            {geojsonBusy
-                                                              ? "Đang tải .geojson…"
-                                                              : "Tải .geojson"}
+                                                            {sqlBusy
+                                                              ? "Đang tải .sql…"
+                                                              : "Tải .sql"}
                                                           </button>
-                                                        )}
-                                                      </>
-                                                    )}
+                                                          <button
+                                                            type="button"
+                                                            className="integration-export-btn"
+                                                            disabled={
+                                                              exportingKey !==
+                                                              null
+                                                            }
+                                                            onClick={() =>
+                                                              handleReadOnlyExport(
+                                                                "postgis",
+                                                                layer,
+                                                                "geopackage"
+                                                              )
+                                                            }
+                                                          >
+                                                            {gpkgBusy
+                                                              ? "Đang tải .gpkg…"
+                                                              : "Tải .gpkg"}
+                                                          </button>
+                                                        </>
+                                                      )}
                                                     {exportAdapterKey ===
-                                                      "postgis" && (
-                                                      <>
+                                                      "autocad" &&
+                                                      layer.export_permitted &&
+                                                      (isAutocadMetricCrs(
+                                                        layer.stored_crs_code
+                                                      ) ? (
                                                         <button
                                                           type="button"
                                                           className="integration-export-btn"
                                                           disabled={
-                                                            exportingKey !==
-                                                            null
+                                                            exportingKey !== null
                                                           }
                                                           onClick={() =>
                                                             handleReadOnlyExport(
-                                                              "postgis",
+                                                              "autocad",
                                                               layer,
-                                                              "postgis_sql"
+                                                              "dxf"
                                                             )
                                                           }
                                                         >
-                                                          {sqlBusy
-                                                            ? "Đang tải .sql…"
-                                                            : "Tải .sql"}
+                                                          {dxfBusy
+                                                            ? "Đang tải .dxf…"
+                                                            : "Tải .dxf"}
                                                         </button>
-                                                        <button
-                                                          type="button"
-                                                          className="integration-export-btn"
-                                                          disabled={
-                                                            exportingKey !==
-                                                            null
-                                                          }
-                                                          onClick={() =>
-                                                            handleReadOnlyExport(
-                                                              "postgis",
-                                                              layer,
-                                                              "geopackage"
-                                                            )
-                                                          }
-                                                        >
-                                                          {gpkgBusy
-                                                            ? "Đang tải .gpkg…"
-                                                            : "Tải .gpkg"}
-                                                        </button>
-                                                      </>
-                                                    )}
+                                                      ) : (
+                                                        <span className="integration-export-restricted">
+                                                          Cần hệ tọa độ phẳng mét
+                                                          (EPSG:5899/3857)
+                                                        </span>
+                                                      ))}
                                                   </div>
                                                 ) : (
                                                   <span className="integration-export-restricted">
@@ -792,6 +1091,204 @@ export function IntegrationCatalog({
                                     </tbody>
                                   </table>
                                 </div>
+                              )}
+
+                              {selectedSyncLayer && (
+                                <section
+                                  className="integration-sync-panel"
+                                  aria-label={`Đồng bộ .gpkg (2 bước) cho lớp ${selectedSyncLayer.name}`}
+                                >
+                                  <div className="integration-sync-header">
+                                    <h5>
+                                      Đồng bộ .gpkg (2 bước) ·{" "}
+                                      {selectedSyncLayer.name}
+                                    </h5>
+                                    <span className="integration-policy-pill is-scoped">
+                                      Xóa bị chặn mặc định
+                                    </span>
+                                  </div>
+
+                                  <p className="integration-sync-note">
+                                    Phiên bản gốc đang ghim:{" "}
+                                    <code
+                                      title={selectedSyncLayer.content_revision}
+                                    >
+                                      {selectedSyncLayer.content_revision.slice(
+                                        0,
+                                        12
+                                      )}
+                                    </code>{" "}
+                                    · lược đồ:{" "}
+                                    <code
+                                      title={selectedSyncLayer.schema_revision}
+                                    >
+                                      {selectedSyncLayer.schema_revision.slice(
+                                        0,
+                                        12
+                                      )}
+                                    </code>{" "}
+                                    · CRS: {formatLayerCrs(selectedSyncLayer)}.
+                                    Bước 2 chỉ mở sau khi bước 1 xác nhận diff
+                                    hợp lệ.
+                                  </p>
+
+                                  <label className="integration-sync-file">
+                                    Tệp GeoPackage (.gpkg) đã chỉnh sửa trong
+                                    QGIS
+                                    <input
+                                      type="file"
+                                      accept=".gpkg"
+                                      disabled={
+                                        syncPreviewLoading || syncPushLoading
+                                      }
+                                      onChange={(event) => {
+                                        const picked =
+                                          event.target.files?.[0] ?? null;
+                                        setSyncFile(picked);
+                                        setSyncPreview(null);
+                                        setSyncPushResult(null);
+                                        setSyncError("");
+                                      }}
+                                    />
+                                  </label>
+
+                                  <div className="integration-sync-actions">
+                                    <button
+                                      type="button"
+                                      className="integration-export-btn"
+                                      disabled={
+                                        !syncFile ||
+                                        syncPreviewLoading ||
+                                        syncPushLoading
+                                      }
+                                      onClick={() =>
+                                        handleSyncPreview(selectedSyncLayer)
+                                      }
+                                    >
+                                      {syncPreviewLoading
+                                        ? "Đang phân tích Diff…"
+                                        : "1. Xem trước thay đổi (Diff)"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="integration-sync-commit-btn"
+                                      disabled={
+                                        !syncFile ||
+                                        !syncPreview ||
+                                        !syncPreview.can_commit ||
+                                        syncPreviewLoading ||
+                                        syncPushLoading
+                                      }
+                                      onClick={() =>
+                                        handleSyncPush(selectedSyncLayer)
+                                      }
+                                    >
+                                      {syncPushLoading
+                                        ? "Đang đẩy Changeset…"
+                                        : "2. Xác nhận đẩy Changeset"}
+                                    </button>
+                                  </div>
+
+                                  {syncError && (
+                                    <p
+                                      className="integration-export-status is-error"
+                                      role="alert"
+                                    >
+                                      {syncError}
+                                    </p>
+                                  )}
+
+                                  {syncPreview && (
+                                    <div
+                                      className="integration-sync-preview"
+                                      role="status"
+                                    >
+                                      <dl className="integration-sync-metrics">
+                                        <div>
+                                          <dt>Tạo mới</dt>
+                                          <dd>{syncPreview.create_count}</dd>
+                                        </div>
+                                        <div>
+                                          <dt>Cập nhật</dt>
+                                          <dd>{syncPreview.update_count}</dd>
+                                        </div>
+                                        <div>
+                                          <dt>Không đổi</dt>
+                                          <dd>{syncPreview.unchanged_count}</dd>
+                                        </div>
+                                        <div>
+                                          <dt>
+                                            Đối tượng máy chủ giữ nguyên (chặn
+                                            xóa mặc định)
+                                          </dt>
+                                          <dd>
+                                            {
+                                              syncPreview.omitted_server_feature_count
+                                            }
+                                          </dd>
+                                        </div>
+                                        <div>
+                                          <dt>Trạng thái phiên bản</dt>
+                                          <dd>
+                                            {syncPreview.stale_revision ? (
+                                              <span className="integration-flag is-denied">
+                                                Cũ (stale_revision)
+                                              </span>
+                                            ) : (
+                                              <span className="integration-flag is-allowed">
+                                                Hợp lệ
+                                              </span>
+                                            )}
+                                          </dd>
+                                        </div>
+                                        <div>
+                                          <dt>Mã diff (SHA-256)</dt>
+                                          <dd>
+                                            <code
+                                              title={syncPreview.diff_sha256}
+                                            >
+                                              {syncPreview.diff_sha256.slice(
+                                                0,
+                                                12
+                                              )}
+                                            </code>
+                                          </dd>
+                                        </div>
+                                      </dl>
+                                      <p className="integration-sync-hint">
+                                        {syncPreview.can_commit
+                                          ? "Diff hợp lệ. Xóa đối tượng bị chặn mặc định; chỉ các đối tượng tạo mới và cập nhật sẽ được áp dụng khi bạn nhấn Bước 2."
+                                          : "Không thể đẩy Changeset (can_commit: false): phiên bản lớp đã cũ hoặc không có thay đổi hợp lệ để áp dụng."}
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {syncPushResult && (
+                                    <div
+                                      className="integration-export-status"
+                                      role="status"
+                                    >
+                                      Đã đẩy Changeset có kiểm soát · Changeset:{" "}
+                                      <code>{syncPushResult.changeset_id}</code>{" "}
+                                      · Phiên bản nội dung mới:{" "}
+                                      <code
+                                        title={
+                                          syncPushResult.resulting_content_revision
+                                        }
+                                      >
+                                        {syncPushResult.resulting_content_revision.slice(
+                                          0,
+                                          12
+                                        )}
+                                      </code>{" "}
+                                      · Số thao tác:{" "}
+                                      <strong>
+                                        {syncPushResult.operation_count}
+                                      </strong>
+                                      .
+                                    </div>
+                                  )}
+                                </section>
                               )}
 
                               {adapterExportStatus && (
