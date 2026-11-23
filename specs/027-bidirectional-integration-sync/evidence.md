@@ -32,3 +32,14 @@
 ## Next development slice
 
 Implement agent trust + durable baseline mapping and conditional source/target API contract; then wire planner to non-mutating preview and human-approved R006 changeset/local-QGIS apply with idempotent acknowledgments. Run end-to-end QGIS, real PostGIS/RLS and network-failure acceptance before any production release.
+
+## 2026-11-23 — Foundation Slice B: QGIS manual bilateral workspace (experimental)
+
+- Added pure-stdlib `integrations/qgis_plugin/openvietgis_connector/workspace.py`: SHA-verified common baseline, editable local GeoPackage, remote snapshot read, per-field/geometry three-way reconciliation, deletion/conflict quarantine, staged local apply, R026 server diff and R006 confirmed write, server read-back, recovery of ambiguous network acknowledgments.
+- Integrated optional manual workflow into QGIS plugin UI: create/open workspace, preview, confirm sync and recover; metadata version 0.3.0 marked experimental, scrollable dialog.
+- Added `apps/api/tests/unit/integration_hub/test_qgis_workspace.py` with actual GeoPackage read/write and simulated server calls, including independent two-way field/geometry edits, conflicts, deleted features, file drift, remote-only pull and uncertain write recovery.
+- **No autonomous sync, server-side pairing, durable inbox/outbox, remote conditional agent API or cross-provider bridge.** QGIS native runtime acceptance and actual authenticated PostGIS HTTP round-trip remain separate release blockers.
+- Real **HTTP + disposable PostGIS 18 / PostGIS 3.7 E2E passed** on a loopback-only test container: `apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py`. The test creates a manual spatial layer, commits its baseline through real R006, edits one field locally in a GeoPackage, independently edits another via authenticated R006 HTTP, then uses the R027 workspace with R026 HTTP preview/push and server read-back to verify both edits are preserved. This uses a FastAPI TestClient session transport adapter (not a native running QGIS GUI and not a real bearer-authenticated network client).
+- Full R026 + R027 Integration Hub HTTP/PostGIS integration suite: **7/7 passed** (including the new R027 end-to-end case) in an isolated database that migrated to `0039`.
+- Workspace unit suite: **13/13 passed**, including conflict and pending-ack recovery cases; full Integration Hub unit suite: PASS. Ruff, compileall and architecture boundary check: PASS.
+- No external connector activation, headless QGIS installation, desktop UI acceptance or production deployment occurred. **R027 desktop acceptance, ADR/security review and recovery drill remain release blockers.**

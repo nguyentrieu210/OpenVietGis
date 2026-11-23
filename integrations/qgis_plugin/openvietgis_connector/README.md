@@ -1,7 +1,14 @@
 # OpenVietGIS Connector for QGIS Desktop (3.28+)
 
-**Phiên bản / Version:** `0.2.0`  
-**Đặc tả / Specification:** `R026 — Integration Hub & Policy Gate (Slice 3)`  
+> **R027 experimental — đồng bộ hai chiều có kiểm soát:** Phiên bản 0.3.0 bổ sung
+> workspace QGIS **thủ công** với bản gốc, bộ đối chiếu ba phiên bản, xác nhận ghi và
+> khôi phục sau mất mạng. Xem [R027-MANUAL-SYNC.md](R027-MANUAL-SYNC.md) để sử dụng.
+> **Chưa có đồng bộ tự động**, chưa nghiệm thu trên QGIS Desktop thật, và không kích hoạt
+> R027 server binding draft. Chức năng R026 cũ vẫn giữ nguyên.
+
+
+**Phiên bản / Version:** `0.3.0`
+**Đặc tả / Specification:** `R026 + R027 (manual workspace preview)`
 **Chính sách ghi mặc định / Default Write Policy:** `deny` (chỉ đọc mặc định; đồng bộ ngược hai bước có kiểm soát qua R006 Changeset khi có quyền `project.edit`)
 
 ---

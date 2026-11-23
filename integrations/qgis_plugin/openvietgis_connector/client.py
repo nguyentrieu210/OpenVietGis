@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-USER_AGENT = "OpenVietGIS-QGIS-Connector/0.2.0"
+USER_AGENT = "OpenVietGIS-QGIS-Connector/0.3.0"
 DEFAULT_PROFILE_TIMEOUT_SECONDS = 30.0
 DEFAULT_EXPORT_TIMEOUT_SECONDS = 60.0
 DEFAULT_SYNC_TIMEOUT_SECONDS = 60.0

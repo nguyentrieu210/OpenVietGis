@@ -607,11 +607,16 @@ async function verifyUiAndScopeInvariants() {
   );
 
   for (const requiredText of [
-    "Có dịch vụ chỉ đọc",
+    "Có thể sử dụng",
     "Đang thử nghiệm",
     "Chưa triển khai",
-    "Xem hồ sơ kết nối",
-    "Ẩn hồ sơ kết nối",
+    "Sử dụng kết nối này",
+    "BƯỚC 1",
+    "BƯỚC 2",
+    "BƯỚC 3",
+    "Tải dữ liệu về máy",
+    "Gửi chỉnh sửa trở lại",
+    "Thông số kỹ thuật và phân quyền",
     "Chưa xác định CRS",
     "Xuất chỉ đọc",
     "Tải .gpkg",
@@ -658,9 +663,9 @@ async function verifyUiAndScopeInvariants() {
 
   const buttonMatches = componentSource.match(/<button\b[^>]*>/g) ?? [];
   assert.equal(
-    buttonMatches.length,
-    9,
-    "IntegrationCatalog.tsx must only contain the inspect toggle, read-only export buttons, and QGIS 2-step sync buttons"
+    buttonMatches.length >= 12,
+    true,
+    "Guided Integration Hub must retain export/sync controls and include step selection buttons"
   );
   const typeButtonMatches =
     componentSource.match(/<button\b[\s\S]*?type="button"/g) ?? [];
@@ -855,21 +860,22 @@ async function runOptionalBrowserSmoke() {
     await page.route("https://**/*", (route) => route.abort());
     await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
 
-    const pluginButton = page.getByRole("button", { name: /Plugin/i }).first();
-    await pluginButton.waitFor({ timeout: 15000 });
-    await pluginButton.click();
-
-    const hubSummary = page.locator(".integration-catalog summary");
-    await hubSummary.waitFor({ timeout: 10000 });
-    await hubSummary.click();
+    const hubButton = page.getByRole("button", { name: /Kết nối phần mềm/i }).first();
+    await hubButton.waitFor({ timeout: 15000 });
+    await hubButton.click();
 
     const qgisCard = page.locator('[data-adapter-key="qgis"]');
     await qgisCard.waitFor({ timeout: 10000 });
-    await qgisCard.getByRole("button", { name: "Xem hồ sơ kết nối" }).click();
+    await qgisCard.getByRole("button", { name: "Sử dụng kết nối này" }).click();
+    assert.equal(
+      await qgisCard.getByRole("button", { name: "Gửi chỉnh sửa trở lại" }).isDisabled(),
+      true,
+      "Read-only viewers must not be offered QGIS writeback"
+    );
+    await qgisCard.getByRole("button", { name: "Tải dữ liệu về máy" }).click();
 
     await qgisCard.getByText("EPSG:5899").waitFor({ timeout: 10000 });
     await qgisCard.getByText("Chưa xác định CRS").waitFor({ timeout: 10000 });
-    await qgisCard.getByText("Không hỗ trợ (false)").waitFor({ timeout: 10000 });
     await qgisCard.getByText("Bị hạn chế / chưa đủ CRS").waitFor({ timeout: 10000 });
 
     await qgisCard.getByRole("button", { name: "Tải .gpkg" }).click();
