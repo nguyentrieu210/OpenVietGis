@@ -24,15 +24,13 @@ Chúng tôi học hỏi **tinh thần phát triển của Linux**: mã nguồn c
 
 **Mục tiêu dài hạn:** Dù OpenVietGIS có nhà tài trợ, khách hàng doanh nghiệp hay sản phẩm thương mại đi kèm, các phiên bản Core đã phát hành dưới giấy phép mở vẫn là nền tảng để cộng đồng sử dụng và phát triển độc lập.
 
-### Tình trạng giấy phép — đọc trước khi sử dụng lại mã nguồn
+### Giấy phép mã nguồn mở (`AGPL-3.0-or-later`)
 
-**Tính đến 23/11/2026, repository chưa có tệp `LICENSE` ở thư mục gốc.** Vì vậy, trạng thái hiện tại là **mã nguồn công khai (source-available), chưa xác lập giấy phép mã nguồn mở cho toàn bộ repository**. Công khai trên GitHub **không đồng nghĩa** với việc mọi người đã được cấp quyền tự do sử dụng, sửa đổi và phân phối mã nguồn ở ngoài các quyền mà điều khoản GitHub cho phép (như xem và fork trên nền tảng).
+OpenVietGIS được phát hành dưới giấy phép **[GNU Affero General Public License v3.0 (AGPL-3.0-or-later)](LICENSE)**.
 
-- **Cam kết ở phần trên là định hướng công khai, không thay thế giấy phép pháp lý.** Chỉ khi có tệp `LICENSE` hợp lệ mới có thể xác định chắc chắn quyền và nghĩa vụ của từng bản phát hành.
-- Dự án sẽ đánh giá giấy phép copyleft phù hợp với WebGIS (ví dụ GPL hoặc AGPL), kiểm tra tính tương thích của các thư viện/thành phần và quyền của người đóng góp trước khi công bố giấy phép chính thức. **Chưa có quyết định chọn GPLv2, GPLv3 hay AGPLv3.** Linux kernel sử dụng GPL-2.0-only; OpenVietGIS không tự động mang giấy phép đó chỉ vì lấy cảm hứng từ Linux.
-- Trong thời gian chưa có `LICENSE`, hãy ưu tiên **Issue, phản hồi, kiểm thử và đề xuất thiết kế**; vui lòng trao đổi trước khi tái sử dụng/phân phối mã hoặc gửi phần đóng góp mã nguồn cần cấp phép.
-
-Tham khảo: [GitHub — Licensing a repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository) · [Linux kernel licensing rules](https://www.kernel.org/doc/html/latest/process/license-rules.html).
+- **Tự do sử dụng, tự triển khai, nghiên cứu, sửa đổi và phân phối** theo điều kiện của AGPL-3.0-or-later.
+- **Bảo vệ Core cộng đồng cho WebGIS/SaaS:** Nếu bất kỳ cá nhân hay tổ chức nào sửa đổi mã nguồn và cung cấp dịch vụ qua mạng cho người dùng khác, họ phải công khai mã nguồn tương ứng theo đúng điều khoản AGPL-3.0 — phù hợp với cam kết giữ Core mở lâu dài và chống khóa hệ thống.
+- Các plugin/module độc lập hoặc dịch vụ thương mại đi kèm (hosting, SLA, tích hợp, đào tạo) phải được phân định minh bạch theo điều khoản giấy phép.
 
 ## OpenVietGIS là gì?
 
