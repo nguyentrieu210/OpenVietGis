@@ -153,8 +153,7 @@ class ServiceCredentialMetadataResponse(BaseModel):
 
 
 @router.get(
-    "/organizations/{organization_id}/service-principals/"
-    "{service_principal_id}/credentials",
+    "/organizations/{organization_id}/service-principals/{service_principal_id}/credentials",
     response_model=list[ServiceCredentialMetadataResponse],
 )
 def list_service_credentials(
@@ -169,21 +168,25 @@ def list_service_credentials(
     )
     context = context_for(authentication, organization_id=organization_id)
     repo = SqlServicePrincipalRepository(session)
-    if repo.get_principal(
-        context=context, organization_id=organization_id,
-        service_principal_id=service_principal_id,
-    ) is None:
+    if (
+        repo.get_principal(
+            context=context,
+            organization_id=organization_id,
+            service_principal_id=service_principal_id,
+        )
+        is None
+    ):
         raise HTTPException(status_code=404, detail="service principal not found")
     response.headers["Cache-Control"] = "no-store"
     return repo.list_credential_metadata(
-        context=context, organization_id=organization_id,
+        context=context,
+        organization_id=organization_id,
         service_principal_id=service_principal_id,
     )
 
 
 @router.post(
-    "/organizations/{organization_id}/service-principals/"
-    "{service_principal_id}/credentials",
+    "/organizations/{organization_id}/service-principals/{service_principal_id}/credentials",
     status_code=201,
 )
 def issue_service_credential(

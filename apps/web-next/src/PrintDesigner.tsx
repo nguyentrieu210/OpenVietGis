@@ -1,5 +1,5 @@
 import React,{useRef,useState,useEffect} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import {ApiClient,createPrintLayout,loadCsrfToken,previewPrintExport,exportPrintLayout,printExportDownloadUrl,type SpatialLayer} from "@openvietgis/client-sdk";
 import {Modal} from "./studio-ui";
 type Paper="A0"|"A1"|"A2"|"A3"|"A4";

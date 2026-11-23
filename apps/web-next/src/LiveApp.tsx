@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState,useMemo,useCallback,type FormEvent,type ReactNode} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import type {FeatureCollection,Geometry,Position} from "geojson";
 import {ApiClient,ApiError,getCurrentUser,listIdentityProviders,loadCsrfToken,logout,listMyOrganizations,listProjects,createOrganization,createProject,listOrganizationMembers,listSpatialLayers,readSpatialFeatures,listSpatialSources,createSpatialLayer,retireSpatialLayer,listProjectActivations,registerOfficialExtension,listExtensionManifests,activateProjectExtension,commitChangeset,getEffectivePermissions,uploadImportAsset,inspectImportAsset,confirmImport,type ImportInspectionResponse,type CurrentUser,type MyOrganization,type Project,type SpatialLayer,type SpatialFeature,type SpatialFeatureDetail,type SpatialSource,type IdentityProviderSummary} from "@openvietgis/client-sdk";
 import "./live.css";

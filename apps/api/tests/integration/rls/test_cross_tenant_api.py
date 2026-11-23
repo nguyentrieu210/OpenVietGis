@@ -16,14 +16,17 @@ def client_for_user(user_id: UUID) -> TestClient:
     session_id = uuid4()
     raw_token, digest = issue_session_token(session_id)
     with get_admin_engine().begin() as connection:
-        link_id = connection.execute(text(
-            "SELECT id FROM identity.identity_links WHERE user_id=:user"
-        ), {"user": user_id}).scalar_one()
-        connection.execute(text("""
+        link_id = connection.execute(
+            text("SELECT id FROM identity.identity_links WHERE user_id=:user"), {"user": user_id}
+        ).scalar_one()
+        connection.execute(
+            text("""
             INSERT INTO identity.web_sessions
                 (id, user_id, identity_link_id, secret_hash, issued_at, expires_at)
             VALUES (:id,:user,:link,:digest,now(),now()+interval '1 hour')
-        """), {"id": session_id, "user": user_id, "link": link_id, "digest": digest})
+        """),
+            {"id": session_id, "user": user_id, "link": link_id, "digest": digest},
+        )
     client = TestClient(create_app())
     client.cookies.set("ovg_session", raw_token)
     csrf = client.get("/api/v1/auth/csrf")
@@ -37,24 +40,37 @@ def test_cross_tenant_routes_and_identifier_substitution(migrated_database: None
     with client_for_user(a.owner_user_id) as owner_a, client_for_user(b.owner_user_id) as owner_b:
         root_a = f"/api/v1/organizations/{a.organization_id}"
         root_b = f"/api/v1/organizations/{b.organization_id}"
-        grant = owner_b.post(f"{root_b}/grants", json={
-            "subject_kind": "membership", "subject_id": str(b.member_membership_id),
-            "scope_kind": "project", "project_id": str(b.project_id), "role": "viewer",
-        })
+        grant = owner_b.post(
+            f"{root_b}/grants",
+            json={
+                "subject_kind": "membership",
+                "subject_id": str(b.member_membership_id),
+                "scope_kind": "project",
+                "project_id": str(b.project_id),
+                "role": "viewer",
+            },
+        )
         assert grant.status_code == 201, grant.text
         grant_id = grant.json()["id"]
-        invitation = owner_b.post(f"{root_b}/invitations", json={
-            "target": {"kind": "user", "user_id": str(b.wrong_user_id)},
-            "organization_role": "guest",
-            "expires_at": (datetime.now(UTC)+timedelta(hours=1)).isoformat(),
-        })
+        invitation = owner_b.post(
+            f"{root_b}/invitations",
+            json={
+                "target": {"kind": "user", "user_id": str(b.wrong_user_id)},
+                "organization_role": "guest",
+                "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            },
+        )
         assert invitation.status_code == 201
         invitation_id = invitation.json()["id"]
         assert owner_a.get(root_a).status_code == 200
         assert owner_a.get(f"{root_a}/projects/{a.project_id}").status_code == 200
         for path in (
-            root_b, f"{root_b}/members", f"{root_b}/workspaces", f"{root_b}/projects",
-            f"{root_b}/projects/{b.project_id}", f"{root_b}/grants",
+            root_b,
+            f"{root_b}/members",
+            f"{root_b}/workspaces",
+            f"{root_b}/projects",
+            f"{root_b}/projects/{b.project_id}",
+            f"{root_b}/grants",
             f"{root_b}/effective-permissions",
         ):
             denied = owner_a.get(path)
@@ -78,11 +94,14 @@ def test_cross_tenant_routes_and_identifier_substitution(migrated_database: None
         ):
             denied = owner_a.post(path)
             assert denied.status_code == 404, (path, denied.status_code, denied.text)
-        invalid = owner_a.post("/api/v1/invitations/accept", json={
-            "organization_id": str(b.organization_id),
-            "invitation_id": invitation_id,
-            "secret": "invalid-invitation-fixture-value-000000",
-        })
+        invalid = owner_a.post(
+            "/api/v1/invitations/accept",
+            json={
+                "organization_id": str(b.organization_id),
+                "invitation_id": invitation_id,
+                "secret": "invalid-invitation-fixture-value-000000",
+            },
+        )
         assert invalid.status_code == 400
         assert invalid.json()["detail"] == "invalid invitation"
         assert owner_b.get(f"{root_b}/projects/{b.project_id}").status_code == 200
@@ -91,18 +110,26 @@ def test_cross_tenant_routes_and_identifier_substitution(migrated_database: None
         assert denied.status_code == 403
 
         root_a = f"/api/v1/organizations/{a.organization_id}"
-        assert member_a.patch(
-            f"{root_a}/projects/{a.project_id}", json={"name": "Denied"}
-        ).status_code == 403
-        assert member_a.patch(
-            f"{root_a}/projects/{b.project_id}", json={"name": "Denied"}
-        ).status_code == 404
-        assert member_a.patch(
-            f"{root_a}/workspaces/{a.workspace_a_id}", json={"name": "Denied"}
-        ).status_code == 403
-        assert member_a.patch(
-            f"{root_a}/workspaces/{b.workspace_a_id}", json={"name": "Denied"}
-        ).status_code == 404
+        assert (
+            member_a.patch(f"{root_a}/projects/{a.project_id}", json={"name": "Denied"}).status_code
+            == 403
+        )
+        assert (
+            member_a.patch(f"{root_a}/projects/{b.project_id}", json={"name": "Denied"}).status_code
+            == 404
+        )
+        assert (
+            member_a.patch(
+                f"{root_a}/workspaces/{a.workspace_a_id}", json={"name": "Denied"}
+            ).status_code
+            == 403
+        )
+        assert (
+            member_a.patch(
+                f"{root_a}/workspaces/{b.workspace_a_id}", json={"name": "Denied"}
+            ).status_code
+            == 404
+        )
 
 
 def test_invitation_accept_and_immediate_revocation_via_runtime_api(
@@ -115,15 +142,19 @@ def test_invitation_accept_and_immediate_revocation_via_runtime_api(
         client_for_user(world.wrong_user_id) as target,
         client_for_user(world.member_user_id) as wrong,
     ):
-        issued = owner.post(f"{root}/invitations", json={
-            "target": {"kind": "email", "email": "wrong@example.test"},
-            "organization_role": "guest",
-            "resource_grant": {
-                "scope_kind": "project", "project_id": str(world.project_id),
-                "role": "viewer",
+        issued = owner.post(
+            f"{root}/invitations",
+            json={
+                "target": {"kind": "email", "email": "wrong@example.test"},
+                "organization_role": "guest",
+                "resource_grant": {
+                    "scope_kind": "project",
+                    "project_id": str(world.project_id),
+                    "role": "viewer",
+                },
+                "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             },
-            "expires_at": (datetime.now(UTC)+timedelta(hours=1)).isoformat(),
-        })
+        )
         assert issued.status_code == 201
         payload = {
             "organization_id": str(world.organization_id),
@@ -137,7 +168,8 @@ def test_invitation_accept_and_immediate_revocation_via_runtime_api(
         membership_id = accepted.json()["membership"]["id"]
         assert target.get(f"{root}/projects/{world.project_id}").status_code == 200
         assert target.post("/api/v1/invitations/accept", json=payload).status_code == 400
-        assert owner.patch(
-            f"{root}/members/{membership_id}", json={"status": "revoked"}
-        ).status_code == 200
+        assert (
+            owner.patch(f"{root}/members/{membership_id}", json={"status": "revoked"}).status_code
+            == 200
+        )
         assert target.get(f"{root}/projects/{world.project_id}").status_code == 404

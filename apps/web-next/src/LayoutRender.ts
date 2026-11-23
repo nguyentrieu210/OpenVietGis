@@ -1,4 +1,4 @@
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 export type Camera={lng:number;lat:number;zoom:number;bearing:number;reference_width:number};
 export type GridLine={path:string;label:string;x:number;y:number};
 export type Shot={url:string;meters:number;bearing:number;ratio:number;grid:GridLine[];attribution:string};

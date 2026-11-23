@@ -2,11 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 REGISTRY = (
-    ROOT
-    / "specs"
-    / "002-identity-organization-tenancy"
-    / "contracts"
-    / "permission-registry.md"
+    ROOT / "specs" / "002-identity-organization-tenancy" / "contracts" / "permission-registry.md"
 )
 
 

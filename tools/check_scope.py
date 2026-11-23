@@ -5,7 +5,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_ROOTS = (ROOT / "apps", ROOT / "packages")
-SKIP_DIRS = {"node_modules", ".venv", "dist", "build", "coverage", "__pycache__", "generated"}
+SKIP_DIRS = {
+    "node_modules",
+    ".venv",
+    "dist",
+    "build",
+    "coverage",
+    "__pycache__",
+    "generated",
+}
 TEXT_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".toml"}
 FORBIDDEN_MARKERS = {
     "maplibre": "map rendering engine",
@@ -27,8 +35,10 @@ RENDERER_OWNERS = {
     MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
     "packages/spatial-workspace/src/maplibre3d.ts",
+    "packages/spatial-workspace/src/renderer3d.ts",
     # Isolated browser fixture bootstraps a renderer worker; never production.
     "packages/spatial-workspace/tests/browser/3d.ts",
+    "packages/spatial-workspace/tests/browser/worker.ts",
 }
 RENDERER_MANIFESTS = {
     "apps/web/package.json",

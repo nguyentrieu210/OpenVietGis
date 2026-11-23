@@ -1,4 +1,4 @@
-import {MercatorCoordinate,type CustomLayerInterface} from "maplibre-gl";
+import {MercatorCoordinate,type CustomLayerInterface} from "./renderer3d";
 import {geographic3857,terrainTriangles,type TerrainGrid} from "./terrain";
 import type {StaticModel} from "./gltf";
 import {meshHit,type MeshHit} from "./mesh-picking";

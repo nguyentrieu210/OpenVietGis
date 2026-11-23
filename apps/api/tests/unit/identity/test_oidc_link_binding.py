@@ -192,11 +192,14 @@ def test_other_identity_conflicts_still_rollback(oidc_client) -> None:
     assert oidc_client.transactions == ["committed", "rolled_back"]
 
 
-@pytest.mark.parametrize("headers", [
-    {},
-    {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-User": "?1"},
-    {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate"},
-])
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-User": "?1"},
+        {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate"},
+    ],
+)
 def test_link_requires_explicit_same_origin_browser_intent(oidc_client, headers) -> None:
     response = oidc_client.client.get(
         "/api/v1/auth/login/keycloak",

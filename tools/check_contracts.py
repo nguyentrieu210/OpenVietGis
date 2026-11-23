@@ -38,7 +38,9 @@ def validate_contracts() -> list[str]:
         spec, base_uri = read_from_filename(str(path))
         try:
             validate(spec, base_uri=base_uri)
-        except OpenAPIValidationError as exc:  # pragma: no cover - library supplies details
+        except (
+            OpenAPIValidationError
+        ) as exc:  # pragma: no cover - library supplies details
             errors.append(f"{path.relative_to(ROOT)}: {exc}")
     permission_registry = CONTRACT_DIR / "permission-registry.md"
     if not permission_registry.exists():

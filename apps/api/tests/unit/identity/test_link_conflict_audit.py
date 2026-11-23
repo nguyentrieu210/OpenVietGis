@@ -61,7 +61,8 @@ def conflict_case():
 
 @pytest.mark.parametrize("race_winner", ["known", "concurrent_foreign", "concurrent_missing"])
 def test_conflict_denial_is_audited_without_foreign_identity_data(
-    conflict_case, race_winner: str,
+    conflict_case,
+    race_winner: str,
 ) -> None:
     actor, foreign, foreign_link, claims, repository, audit = conflict_case
     if race_winner == "known":

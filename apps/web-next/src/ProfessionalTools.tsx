@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState,useMemo} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import type {Feature,Geometry,Position} from "geojson";
 import {ApiClient,ApiError,commitChangeset,loadCsrfToken,type SpatialLayer} from "@openvietgis/client-sdk";
 import type {CoreCommand} from "./CoreCommandBar";

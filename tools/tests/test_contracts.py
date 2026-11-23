@@ -19,8 +19,7 @@ def test_contract_validation_covers_all_integrated_contracts() -> None:
         for name, spec in CONTRACTS.items()
     }
     expected_outputs = {
-        ROOT / "packages/client-sdk/src/generated" / f"{name}.ts"
-        for name in CONTRACTS
+        ROOT / "packages/client-sdk/src/generated" / f"{name}.ts" for name in CONTRACTS
     }
     assert expected_specs <= set(check_contracts.OPENAPI_FILES)
     assert expected_outputs <= set(check_contracts.GENERATED_FILES)

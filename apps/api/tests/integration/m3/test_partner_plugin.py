@@ -1,4 +1,5 @@
 """Partner extension approval, activation and isolation through real API/DB."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -18,16 +19,25 @@ def partner_manifest() -> dict:
         "permissions": [],
         "commands": [],
         "capabilities": [
-            "host_context", "map_view", "map_navigate", "map_selection",
-            "map_overlay", "tool_register",
+            "host_context",
+            "map_view",
+            "map_navigate",
+            "map_selection",
+            "map_overlay",
+            "tool_register",
         ],
         "entity_schemas": {},
-        "ui_contributions": [{
-            "id": "partner_panel", "slot": "project_panel",
-            "label": "Example partner", "route_suffix": "/partner",
-            "runtime": "sandboxed_iframe", "sdk_version": "1.0",
-            "url": "https://plugins.example.com/v1/index.html",
-        }],
+        "ui_contributions": [
+            {
+                "id": "partner_panel",
+                "slot": "project_panel",
+                "label": "Example partner",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "url": "https://plugins.example.com/v1/index.html",
+            }
+        ],
     }
 
 
@@ -39,9 +49,13 @@ def test_partner_manifest_security_and_activation(migrated_database: None) -> No
     with _client(world.owner_user_id) as owner, _client(world.member_user_id) as member:
         assert member.post(manifests, json=partner_manifest()).status_code == 403
         for url in (
-            "javascript:alert(1)", "http://plugins.example.com/a", "https://localhost/a",
-            "https://127.0.0.1/a", "https://openvietgis.cloud/rewrite/",
-            "https://plugins.example.com/a?secret=x", "https://user@plugins.example.com/a",
+            "javascript:alert(1)",
+            "http://plugins.example.com/a",
+            "https://localhost/a",
+            "https://127.0.0.1/a",
+            "https://openvietgis.cloud/rewrite/",
+            "https://plugins.example.com/a?secret=x",
+            "https://user@plugins.example.com/a",
             "https://plugins.example.com:8443/a",
         ):
             data = partner_manifest()

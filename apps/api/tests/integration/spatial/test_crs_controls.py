@@ -214,21 +214,32 @@ def _record_control_measurements(capsys):
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(report, indent=2), encoding="utf-8")
     with capsys.disabled():
-        print("R003_CRS_CONTROLS " + json.dumps({
-            "max_residual_by_operation": maxima,
-            "control_observations": len(_MEASURED_CONTROLS),
-            "runtime": list(runtime),
-            "observed_image_digest": report["observed_image_digest"],
-        }))
+        print(
+            "R003_CRS_CONTROLS "
+            + json.dumps(
+                {
+                    "max_residual_by_operation": maxima,
+                    "control_observations": len(_MEASURED_CONTROLS),
+                    "runtime": list(runtime),
+                    "observed_image_digest": report["observed_image_digest"],
+                }
+            )
+        )
 
 
 def _assert_target(actual, expected, edge: DirectedControlSet, point_id: str) -> None:
     residual = _residual(actual, expected, edge)
-    _MEASURED_CONTROLS.append({
-        "operation_id": edge.operation_id, "point_id": point_id,
-        "actual": list(actual), "expected": list(expected),
-        "residual": residual, "tolerance": edge.tolerance, "unit": edge.tolerance_unit,
-    })
+    _MEASURED_CONTROLS.append(
+        {
+            "operation_id": edge.operation_id,
+            "point_id": point_id,
+            "actual": list(actual),
+            "expected": list(expected),
+            "residual": residual,
+            "tolerance": edge.tolerance,
+            "unit": edge.tolerance_unit,
+        }
+    )
     assert residual <= edge.tolerance, (
         f"{edge.operation_id}/{point_id}: {residual:.12g} {edge.tolerance_unit} "
         f"> {edge.tolerance:.12g}"

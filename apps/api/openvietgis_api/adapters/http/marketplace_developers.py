@@ -205,9 +205,9 @@ def register_publisher(
         .mappings()
         .one()
     )
-    result = dict(result)
+    result_data = dict(result)
     session.commit()
-    return result
+    return result_data
 
 
 @router.post("/submissions", status_code=201)

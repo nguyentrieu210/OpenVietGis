@@ -122,19 +122,14 @@ def test_runtime_concurrent_owner_role_and_status_changes(
         client_for_user(world.owner_user_id) as owner_a,
         client_for_user(world.member_user_id) as owner_b,
     ):
+
         def change(client, membership_id, payload: dict[str, str]) -> int:
             start.wait(timeout=10)
-            return client.patch(
-                f"{root}/members/{membership_id}", json=payload
-            ).status_code
+            return client.patch(f"{root}/members/{membership_id}", json=payload).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            first = pool.submit(
-                change, owner_a, world.owner_membership_id, first_change
-            )
-            second = pool.submit(
-                change, owner_b, world.member_membership_id, second_change
-            )
+            first = pool.submit(change, owner_a, world.owner_membership_id, first_change)
+            second = pool.submit(change, owner_b, world.member_membership_id, second_change)
             assert sorted([first.result(timeout=20), second.result(timeout=20)]) == [200, 400]
 
     # Validate the committed invariant, not merely status codes from racing requests.
@@ -164,6 +159,7 @@ def test_runtime_cannot_remove_the_last_active_owner(
         members = owner.get(f"{root}/members")
         assert members.status_code == 200
         assert [
-            member["id"] for member in members.json()
+            member["id"]
+            for member in members.json()
             if member["role"] == "owner" and member["status"] == "active"
         ] == [str(world.owner_membership_id)]

@@ -243,11 +243,18 @@ def test_r006_editing_changesets_conflicts_validation_and_revert(migrated_databa
         journal = client.get(f"{base}/integrations/events", params={"limit": 2})
         assert journal.status_code == 200, journal.text
         page = journal.json()
-        assert [e["event_kind"] for e in page["items"]] == ["changeset.committed", "changeset.reverted"]
-        tail = client.get(f"{base}/integrations/events", params={"after": page["next_after_sequence"]})
+        assert [e["event_kind"] for e in page["items"]] == [
+            "changeset.committed",
+            "changeset.reverted",
+        ]
+        tail = client.get(
+            f"{base}/integrations/events", params={"after": page["next_after_sequence"]}
+        )
         assert tail.status_code == 200, tail.text
         assert [e["id"] for e in tail.json()["items"]] == [redo.json()["id"]]
-        q_redo = client.post(f"{base}/layers/{imp['target_layer_id']}/query", json={"limit": 50, "offset": 0})
+        q_redo = client.post(
+            f"{base}/layers/{imp['target_layer_id']}/query", json={"limit": 50, "offset": 0}
+        )
         assert q_redo.status_code == 200, q_redo.text
         redo_features = {f["feature_id"]: f for f in q_redo.json()["items"]}
         assert set(redo_features) == {"p1", "p3"}

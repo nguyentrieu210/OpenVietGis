@@ -25,6 +25,7 @@ def safe_prefix(secret: str, *, visible_chars: int = 12) -> str:
         raise ValueError("visible_chars must be at least 4")
     return secret[:visible_chars]
 
+
 SERVICE_CREDENTIAL_TOKEN_PREFIX = "ovgsvc"
 
 

@@ -1,0 +1,56 @@
+{
+  "schema_version": "ovg.v8i.snapshot.v1",
+  "drawing_id": "synthetic-drawing-001",
+  "model_id": "default",
+  "source_crs": "EPSG:3405",
+  "unsupported_count": 0,
+  "elements": [
+    {
+      "element_id": "parcel-A",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              550000,
+              1200000
+            ],
+            [
+              550010,
+              1200000
+            ],
+            [
+              550010,
+              1200010
+            ],
+            [
+              550000,
+              1200010
+            ],
+            [
+              550000,
+              1200000
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "parcel_no": "1",
+        "map_sheet": "10"
+      }
+    },
+    {
+      "element_id": "parcel-B",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          550020,
+          1200020
+        ]
+      },
+      "properties": {
+        "label": "synthetic"
+      }
+    }
+  ]
+}

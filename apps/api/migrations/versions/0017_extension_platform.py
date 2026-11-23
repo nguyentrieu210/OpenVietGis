@@ -124,9 +124,7 @@ def upgrade() -> None:
     op.execute(
         "GRANT SELECT, INSERT, UPDATE ON extensions.project_activations TO openvietgis_runtime"
     )
-    op.execute(
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON extensions.records TO openvietgis_runtime"
-    )
+    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON extensions.records TO openvietgis_runtime")
 
 
 def downgrade() -> None:

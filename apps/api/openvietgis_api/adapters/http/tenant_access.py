@@ -76,6 +76,7 @@ def require_human_permission(
     )
     return membership
 
+
 def require_tenant_access(
     session: Session,
     authentication: AuthenticatedRequest,
@@ -94,10 +95,7 @@ def require_tenant_access(
         return organization
     if authentication.actor.actor_type != "service_principal":
         raise HTTPException(status_code=401, detail="authentication required")
-    if (
-        authentication.organization_id != organization_id
-        or authentication.credential_id is None
-    ):
+    if authentication.organization_id != organization_id or authentication.credential_id is None:
         raise TenantResourceNotFoundError("organization not found")
     context = context_for(authentication, organization_id=organization_id)
     service_organization = SqlTenancyRepository(session).get_organization(

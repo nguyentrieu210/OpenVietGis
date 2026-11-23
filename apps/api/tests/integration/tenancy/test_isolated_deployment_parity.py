@@ -32,20 +32,28 @@ def _exercise(mode: Literal["shared", "isolated"]) -> dict[str, object]:
             assert owner.get(f"/api/v1/organizations/{other.organization_id}").status_code == 404
         project_path = f"{root}/projects/{world.project_id}"
         assert recipient.get(project_path).status_code == 404
-        invitation = owner.post(f"{root}/invitations", json={
-            "target": {"kind": "user", "user_id": str(world.wrong_user_id)},
-            "organization_role": "guest",
-            "resource_grant": {
-                "scope_kind": "project", "project_id": str(world.project_id), "role": "viewer",
+        invitation = owner.post(
+            f"{root}/invitations",
+            json={
+                "target": {"kind": "user", "user_id": str(world.wrong_user_id)},
+                "organization_role": "guest",
+                "resource_grant": {
+                    "scope_kind": "project",
+                    "project_id": str(world.project_id),
+                    "role": "viewer",
+                },
+                "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
             },
-            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
-        })
+        )
         assert invitation.status_code == 201
-        accepted = recipient.post("/api/v1/invitations/accept", json={
-            "organization_id": str(world.organization_id),
-            "invitation_id": invitation.json()["id"],
-            "secret": invitation.json()["secret"],
-        })
+        accepted = recipient.post(
+            "/api/v1/invitations/accept",
+            json={
+                "organization_id": str(world.organization_id),
+                "invitation_id": invitation.json()["id"],
+                "secret": invitation.json()["secret"],
+            },
+        )
         assert accepted.status_code == 200
         member = accepted.json()["membership"]
         grant = accepted.json()["grant"]
@@ -58,42 +66,58 @@ def _exercise(mode: Literal["shared", "isolated"]) -> dict[str, object]:
         created = owner.post(f"{root}/service-principals", json={"name": f"parity-{uuid4().hex}"})
         assert created.status_code == 201
         principal_id = created.json()["id"]
-        service_grant = owner.post(f"{root}/grants", json={
-            "subject_kind": "service_principal", "subject_id": principal_id,
-            "scope_kind": "project", "project_id": str(world.project_id), "role": "viewer",
-        })
+        service_grant = owner.post(
+            f"{root}/grants",
+            json={
+                "subject_kind": "service_principal",
+                "subject_id": principal_id,
+                "scope_kind": "project",
+                "project_id": str(world.project_id),
+                "role": "viewer",
+            },
+        )
         assert service_grant.status_code == 201
-        issued = owner.post(f"{root}/service-principals/{principal_id}/credentials", json={
-            "name": "parity", "permission_ceiling": ["project.read"],
-        })
+        issued = owner.post(
+            f"{root}/service-principals/{principal_id}/credentials",
+            json={
+                "name": "parity",
+                "permission_ceiling": ["project.read"],
+            },
+        )
         assert issued.status_code == 201
         service_credential = issued.json()["id"]
         with _service_client(issued.json()["secret"]) as service:
             service_read = service.get(project_path).status_code
             service_write = service.patch(project_path, json={"name": "Denied"}).status_code
             assert (service_read, service_write) == (200, 403)
-            assert owner.post(
-                f"{root}/service-principals/{principal_id}/credentials/{service_credential}/revoke"
-            ).status_code == 204
+            assert (
+                owner.post(
+                    f"{root}/service-principals/{principal_id}/credentials/{service_credential}/revoke"
+                ).status_code
+                == 204
+            )
             service_after_revoke = service.get(project_path).status_code
             assert service_after_revoke == 401
 
-        assert owner.patch(
-            f"{root}/members/{member['id']}", json={"status": "revoked"}
-        ).status_code == 200
+        assert (
+            owner.patch(f"{root}/members/{member['id']}", json={"status": "revoked"}).status_code
+            == 200
+        )
         member_after_revoke = recipient.get(project_path).status_code
         assert member_after_revoke == 404
         audit = owner.get(f"{root}/audit-events", params={"limit": 200})
         assert audit.status_code == 200
         actions = {event["action"] for event in audit.json()}
         assert {
-            "invitation.create", "invitation.accept", "authorization.grant.create",
-            "organization.membership.update", "service_principal.create",
-            "service_credential.issue", "service_credential.revoke",
+            "invitation.create",
+            "invitation.accept",
+            "authorization.grant.create",
+            "organization.membership.update",
+            "service_principal.create",
+            "service_credential.issue",
+            "service_credential.revoke",
         } <= actions
-        assert all(
-            event["organization_id"] == str(world.organization_id) for event in audit.json()
-        )
+        assert all(event["organization_id"] == str(world.organization_id) for event in audit.json())
         return {
             "identity": account.json()["status"],
             "owner_role": organizations.json()[0]["role"],

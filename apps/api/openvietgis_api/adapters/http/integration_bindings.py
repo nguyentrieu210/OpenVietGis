@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from sqlalchemy import text
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.authorization import context_for
@@ -144,12 +145,13 @@ def _scope(session: Session, auth: AuthenticatedRequest, org: UUID, proj: UUID):
     return context
 
 
-def _public(row: object) -> dict[str, object]:
-    out = dict(row)  # Only explicitly selected safe columns; no credentials.
+def _public(row: RowMapping) -> dict[str, object]:
+    out: dict[str, object] = dict(row)  # Only explicitly selected safe columns; no credentials.
     out["id"] = str(out["id"])
     out["layer_id"] = str(out["layer_id"])
-    if isinstance(out.get("allowed_field_ids"), str):
-        out["allowed_field_ids"] = json.loads(out["allowed_field_ids"])
+    raw_fields = out.get("allowed_field_ids")
+    if isinstance(raw_fields, str):
+        out["allowed_field_ids"] = json.loads(raw_fields)
     out["writes_allowed"] = False
     out["deletes_allowed"] = False
     out["connected"] = False

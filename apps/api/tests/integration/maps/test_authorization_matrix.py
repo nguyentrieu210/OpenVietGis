@@ -3,6 +3,7 @@
 Product actions use real cookie/bearer authentication and fresh tenant proof.
 Existing fixture helpers only establish synthetic users/catalog/grants.
 """
+
 from __future__ import annotations
 
 from uuid import uuid4
@@ -134,10 +135,13 @@ def test_dual_authorized_sibling_layer_substitution_and_foreign_save_are_conceal
                 assert denied.status_code == absent.status_code == 404, denied.text
                 assert denied.json() == absent.json()
             payload = _intent()
-            payload["layers"] = [{
-                "layer_id": layer, "visible": True,
-                "style": {"color": "#3B82F6", "opacity": 1.0, "width": 2.0, "radius": 5.0},
-            }]
+            payload["layers"] = [
+                {
+                    "layer_id": layer,
+                    "visible": True,
+                    "style": {"color": "#3B82F6", "opacity": 1.0, "width": 2.0, "radius": 5.0},
+                }
+            ]
             before = owner.get(root + "/map").json()
             denied = owner.put(root + "/map", json=payload)
             assert denied.status_code == 404, denied.text

@@ -45,7 +45,9 @@ def collect(report: dict[str, Any], limits: dict[str, int]) -> dict[str, int]:
             try:
                 if attachment.get("contentType") != "application/json":
                     raise ValueError
-                payload = json.loads(base64.b64decode(attachment["body"], validate=True))
+                payload = json.loads(
+                    base64.b64decode(attachment["body"], validate=True)
+                )
                 if not isinstance(payload, dict):
                     raise TypeError
                 expected_keys = {"elapsedMs"}
@@ -76,7 +78,8 @@ def main() -> int:
     try:
         p1 = collect(json.loads(args.p1_report.read_text(encoding="utf-8")), P1_LIMITS)
         bootstrap = collect(
-            json.loads(args.bootstrap_report.read_text(encoding="utf-8")), BOOTSTRAP_LIMITS
+            json.loads(args.bootstrap_report.read_text(encoding="utf-8")),
+            BOOTSTRAP_LIMITS,
         )
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         # Do not print arbitrary report contents or parsing exception payloads.

@@ -44,8 +44,10 @@ def _seed_grants(world: AccessWorld) -> tuple[UUID, UUID, UUID]:
             """),
             [
                 {
-                    "id": workspace_id, "org": world.organization_id,
-                    "slug": f"benchmark-{workspace_id.hex}", "owner": world.owner_user_id,
+                    "id": workspace_id,
+                    "org": world.organization_id,
+                    "slug": f"benchmark-{workspace_id.hex}",
+                    "owner": world.owner_user_id,
                 }
                 for workspace_id in workspace_ids
             ],
@@ -62,9 +64,11 @@ def _seed_grants(world: AccessWorld) -> tuple[UUID, UUID, UUID]:
             """),
             [
                 {
-                    "id": project_id, "org": world.organization_id,
+                    "id": project_id,
+                    "org": world.organization_id,
                     "workspace": workspace_ids[index % len(workspace_ids)],
-                    "slug": f"benchmark-{project_id.hex}", "owner": world.owner_user_id,
+                    "slug": f"benchmark-{project_id.hex}",
+                    "owner": world.owner_user_id,
                 }
                 for index, project_id in enumerate(project_ids)
             ],
@@ -76,12 +80,10 @@ def _seed_grants(world: AccessWorld) -> tuple[UUID, UUID, UUID]:
             (project_grant, "project", None, world.project_id, "editor"),
         ]
         grants.extend(
-            (uuid4(), "workspace", workspace_id, None, "manager")
-            for workspace_id in workspace_ids
+            (uuid4(), "workspace", workspace_id, None, "manager") for workspace_id in workspace_ids
         )
         grants.extend(
-            (uuid4(), "project", None, project_id, "manager")
-            for project_id in project_ids
+            (uuid4(), "project", None, project_id, "manager") for project_id in project_ids
         )
         connection.execute(
             text("""
@@ -96,22 +98,29 @@ def _seed_grants(world: AccessWorld) -> tuple[UUID, UUID, UUID]:
             """),
             [
                 {
-                    "id": grant_id, "org": world.organization_id,
+                    "id": grant_id,
+                    "org": world.organization_id,
                     "member": world.member_membership_id,
-                    "scope": scope, "workspace": workspace_id, "project": project_id,
-                    "role": role, "owner": world.owner_user_id,
+                    "scope": scope,
+                    "workspace": workspace_id,
+                    "project": project_id,
+                    "role": role,
+                    "owner": world.owner_user_id,
                 }
                 for grant_id, scope, workspace_id, project_id, role in grants
             ],
         )
-        assert connection.execute(
-            text("""
+        assert (
+            connection.execute(
+                text("""
                 SELECT count(*) FROM org.resource_grants
                 WHERE organization_id = :org AND membership_id = :member
                   AND revoked_at IS NULL
             """),
-            {"org": world.organization_id, "member": world.member_membership_id},
-        ).scalar_one() == 63
+                {"org": world.organization_id, "member": world.member_membership_id},
+            ).scalar_one()
+            == 63
+        )
     return organization_grant, workspace_grant, project_grant
 
 
@@ -143,7 +152,9 @@ def test_authorization_p95_dynamic_scope_and_next_request_revocation(
     org_grant, workspace_grant, project_grant = _seed_grants(world)
     context = AuthorizationContext(
         actor=Actor(
-            actor_type="human", actor_id=world.member_user_id, display_name="Benchmark Member",
+            actor_type="human",
+            actor_id=world.member_user_id,
+            display_name="Benchmark Member",
         ),
         organization_id=world.organization_id,
         project_id=world.project_id,
@@ -165,10 +176,7 @@ def test_authorization_p95_dynamic_scope_and_next_request_revocation(
     def measure_phase(name: str, expected: frozenset[Permission]) -> None:
         # The very first sample after each committed mutation is asserted and
         # timed: a stale result must fail on the next transaction, not after TTL.
-        samples = [
-            _measure_fresh_resolution(context, expected)
-            for _ in range(SAMPLES_PER_PHASE)
-        ]
+        samples = [_measure_fresh_resolution(context, expected) for _ in range(SAMPLES_PER_PHASE)]
         results[name] = samples
 
     root = f"/api/v1/organizations/{world.organization_id}"
@@ -188,9 +196,7 @@ def test_authorization_p95_dynamic_scope_and_next_request_revocation(
         assert owner.post(f"{root}/grants/{project_grant}/revoke").status_code == 204
         measure_phase("direct_project_grant_revoked", viewer)
 
-        moved_back = owner.patch(
-            project_url, json={"workspace_id": str(world.workspace_a_id)}
-        )
+        moved_back = owner.patch(project_url, json={"workspace_id": str(world.workspace_a_id)})
         assert moved_back.status_code == 200, moved_back.text
         measure_phase("workspace_a_inheritance_returns", manager)
 

@@ -9,10 +9,7 @@ def test_audit_redaction_removes_all_secret_classes_recursively() -> None:
             "issuer": "https://id.test",
         },
         "invitation": "inv_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
-        "service": (
-            "ovgsvc0123456789abcdef0123456789abcdef_"
-            "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
-        ),
+        "service": ("ovgsvc0123456789abcdef0123456789abcdef_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"),
         "bootstrap_secret": "local-bootstrap-canary",
         "safe": {"organization_id": "org-1", "count": 3},
     }

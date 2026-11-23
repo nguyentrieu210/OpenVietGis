@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
-import type {Map as MapLibreMap} from "maplibre-gl";
+import type {Map as SurfaceMap} from "./map-surface";
 import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
 import {rasterPath,type StoredRaster} from "./ProjectRaster";
 import {cleanSentinelScene,type SentinelScene} from "./Basemaps";
@@ -9,7 +9,7 @@ const algorithms={ndvi:["B08","B04","NDVI · Thảm thực vật"],ndwi:["B03","
 type Method=keyof typeof algorithms;
 const base="https://planetarycomputer.microsoft.com/api";
 function dateAgo(days:number){const d=new Date();d.setUTCDate(d.getUTCDate()-days);return d.toISOString().slice(0,10)}
-export function SentinelWorkbench({client,org,pid,map,close,onStored,onPreview,onBusy}:{client:ApiClient;org:string;pid:string;map:React.RefObject<MapLibreMap|null>;close:()=>void;onStored:(r:StoredRaster)=>void;onPreview:(r:SentinelScene)=>void;onBusy:(v:boolean)=>void}){
+export function SentinelWorkbench({client,org,pid,map,close,onStored,onPreview,onBusy}:{client:ApiClient;org:string;pid:string;map:React.RefObject<SurfaceMap|null>;close:()=>void;onStored:(r:StoredRaster)=>void;onPreview:(r:SentinelScene)=>void;onBusy:(v:boolean)=>void}){
  const [start,setStart]=useState(dateAgo(30)),[end,setEnd]=useState(dateAgo(0)),[cloud,setCloud]=useState(35),[scenes,setScenes]=useState<Scene[]>([]),[selected,setSelected]=useState(""),[box,setBox]=useState<Box|null>(null),[method,setMethod]=useState<Method>("ndvi"),[busy,setBusy]=useState(""),[error,setError]=useState("");
  const abort=useRef<AbortController|null>(null);
  useEffect(()=>()=>{abort.current?.abort();onBusy(false)},[]);useEffect(()=>{onBusy(!!busy)},[busy,onBusy]);

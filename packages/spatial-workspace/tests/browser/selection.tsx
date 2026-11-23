@@ -4,9 +4,8 @@ import {ApiClient,type SpatialLayer,type SpatialFeatureDetail} from "../../../cl
 import {SpatialWorkspace} from "../../../../apps/web-next/src/SpatialWorkspace";
 import {featureKey,type StudioRow} from "../../../../apps/web-next/src/studio-contract";
 import type {SourceFeatureRef} from "../../../../apps/web-next/src/TileFeaturePanel";
-import {setWorkerUrl,type Map as MLMap} from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-setWorkerUrl(workerUrl);
+import {configureBrowserTestWorker,type BrowserTestMap as MLMap} from "./worker";
+configureBrowserTestWorker();
 const client=new ApiClient({baseUrl:"/fixture"}),camera={resize(){}} as MLMap;
 function Fixture(){
  const [layer,setLayer]=useState<SpatialLayer|null>(null),[rows,setRows]=useState<StudioRow[]>([]),[selected,setSelected]=useState(""),[canRead,setCanRead]=useState(true);

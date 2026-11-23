@@ -54,7 +54,8 @@ READY = {
     "reference_lines_4326": (3000, (106.6, 10.7, 106.6996, 10.7292)),
     "reference_polygons_4326": (3000, (106.6, 10.7, 106.6996, 10.7294)),
     "reference_points_3857": (
-        3, (11866657.718562961, 1198103.040560261, 11928662.674934816, 2357927.646019978)
+        3,
+        (11866657.718562961, 1198103.040560261, 11928662.674934816, 2357927.646019978),
     ),
     "reference_points_4756": (5, None),
     "reference_points_4326_quang_ninh": (5, None),
@@ -81,8 +82,12 @@ def _prepare(session: Session, world: AccessWorld) -> AuthorizationContext:
 
 def _candidate(world: AccessWorld, key: str) -> PinnedSource:
     return materialize_reference_fixture(
-        key, organization_id=world.organization_id, project_id=world.project_id,
-        source_id=uuid4(), name="Reference", now=NOW,
+        key,
+        organization_id=world.organization_id,
+        project_id=world.project_id,
+        source_id=uuid4(),
+        name="Reference",
+        now=NOW,
     )
 
 
@@ -91,12 +96,12 @@ def _insert(session: Session, pinned: PinnedSource) -> None:
     metadata = asdict(pinned.source)
     metadata["validation_reason"] = (
         json.dumps(pinned.source.validation_reason.to_wire())
-        if pinned.source.validation_reason is not None else None
+        if pinned.source.validation_reason is not None
+        else None
     )
-    metadata["extent"] = (
-        json.dumps(asdict(pinned.source.extent)) if pinned.source.extent else None
-    )
-    session.execute(text("""
+    metadata["extent"] = json.dumps(asdict(pinned.source.extent)) if pinned.source.extent else None
+    session.execute(
+        text("""
         INSERT INTO spatial.data_sources (
             id,organization_id,project_id,name,kind,reference_key,fixture_version,
             manifest_digest,source_asset_id,lifecycle,validation_state,validation_reason,
@@ -111,8 +116,11 @@ def _insert(session: Session, pinned: PinnedSource) -> None:
             CAST(:extent AS jsonb),:catalog_revision,:content_revision,:schema_revision,
             :created_at,:updated_at,:retired_at
         )
-    """), metadata)
-    session.execute(text("""
+    """),
+        metadata,
+    )
+    session.execute(
+        text("""
         INSERT INTO spatial.source_fields (
             organization_id,project_id,source_id,field_id,name,ordinal,type,nullable,
             schema_revision
@@ -120,16 +128,21 @@ def _insert(session: Session, pinned: PinnedSource) -> None:
             :organization_id,:project_id,:source_id,:field_id,:name,:ordinal,:type,:nullable,
             :schema_revision
         )
-    """), [asdict(field) for field in pinned.fields])
+    """),
+        [asdict(field) for field in pinned.fields],
+    )
     if pinned.features:
         scope = {
-            "org": pinned.source.organization_id, "project": pinned.source.project_id,
-            "source": pinned.source.id, "content": pinned.source.content_revision,
+            "org": pinned.source.organization_id,
+            "project": pinned.source.project_id,
+            "source": pinned.source.id,
+            "content": pinned.source.content_revision,
             "schema": pinned.source.schema_revision,
         }
         rows = [
             {
-                "feature_id": feature.feature_id, "attributes": dict(feature.attributes),
+                "feature_id": feature.feature_id,
+                "attributes": dict(feature.attributes),
                 "state": feature.geometry_state.value,
                 "wkt": wkt,
                 "srid": srid,
@@ -137,7 +150,8 @@ def _insert(session: Session, pinned: PinnedSource) -> None:
             for feature in pinned.features
             for wkt, srid in (native_geometry_parameters(feature.geometry),)
         ]
-        session.execute(text("""
+        session.execute(
+            text("""
             INSERT INTO spatial.reference_features (
                 organization_id,project_id,source_id,feature_id,attributes,geometry,
                 geometry_state,content_revision,schema_revision
@@ -148,7 +162,9 @@ def _insert(session: Session, pinned: PinnedSource) -> None:
                 r.state,:content,:schema
             FROM jsonb_to_recordset(CAST(:rows AS jsonb))
                 AS r(feature_id text, attributes jsonb, wkt text, srid integer, state text)
-        """), scope | {"rows": json.dumps(rows)})
+        """),
+            scope | {"rows": json.dumps(rows)},
+        )
 
 
 def test_all_native_fixtures_verified_twice_in_one_restricted_transaction(
@@ -158,10 +174,14 @@ def test_all_native_fixtures_verified_twice_in_one_restricted_transaction(
     assert set(REFERENCE_FIXTURES) == set(READY) | set(NEGATIVE)
     with get_session_factory()() as session:
         context = _prepare(session, world)
-        assert tuple(session.execute(text("""
+        assert tuple(
+            session.execute(
+                text("""
             SELECT current_user,rolsuper,rolbypassrls
             FROM pg_roles WHERE rolname=current_user
-        """)).one()) == ("openvietgis_runtime", False, False)
+        """)
+            ).one()
+        ) == ("openvietgis_runtime", False, False)
         for key, fixture in REFERENCE_FIXTURES.items():
             candidate = _candidate(world, key)
             result = validate_reference_candidate(session, fixture, candidate)
@@ -186,7 +206,8 @@ def test_all_native_fixtures_verified_twice_in_one_restricted_transaction(
                         assert (extent.min_x, extent.min_y, extent.max_x, extent.max_y) == bounds
             else:
                 assert result.source.validation_state == (
-                    ValidationState.NOT_READY if key == "reference_unknown_crs"
+                    ValidationState.NOT_READY
+                    if key == "reference_unknown_crs"
                     else ValidationState.INVALID
                 )
                 assert result.source.validation_reason is not None
@@ -194,15 +215,17 @@ def test_all_native_fixtures_verified_twice_in_one_restricted_transaction(
                 assert result.source.extent_state == ExtentState.UNAVAILABLE
                 assert result.source.extent is None
             _insert(session, result)
-            assert validate_persisted_reference_source(
-                session, fixture, result, context=context
-            ) == result
+            assert (
+                validate_persisted_reference_source(session, fixture, result, context=context)
+                == result
+            )
         session.rollback()
 
 
 @pytest.mark.parametrize("rename_first", [False, True])
 def test_native_correction_verifies_existing_manifest_and_leaves_rows_unchanged(
-    migrated_database: None, rename_first: bool,
+    migrated_database: None,
+    rename_first: bool,
 ) -> None:
     world = seed_access_world()
     with get_session_factory()() as session:
@@ -214,17 +237,24 @@ def test_native_correction_verifies_existing_manifest_and_leaves_rows_unchanged(
         _insert(session, original)
         if rename_first:
             renamed = replace(
-                original.source, name="Renamed", catalog_revision=2,
+                original.source,
+                name="Renamed",
+                catalog_revision=2,
                 updated_at=NOW + timedelta(seconds=1),
             )
-            session.execute(text("""
+            session.execute(
+                text("""
                 UPDATE spatial.data_sources
                 SET name=:name,catalog_revision=:revision,updated_at=:now
                 WHERE id=:source
-            """), {
-                "name": renamed.name, "revision": renamed.catalog_revision,
-                "now": renamed.updated_at, "source": renamed.id,
-            })
+            """),
+                {
+                    "name": renamed.name,
+                    "revision": renamed.catalog_revision,
+                    "now": renamed.updated_at,
+                    "source": renamed.id,
+                },
+            )
             original = replace(original, source=renamed)
         snapshot = text("""
             SELECT ST_AsEWKB(geometry),attributes,content_revision,schema_revision
@@ -237,8 +267,11 @@ def test_native_correction_verifies_existing_manifest_and_leaves_rows_unchanged(
                 session, original.source, context=context, declared_crs=4756, now=NOW
             )
         corrected = validate_reference_correction(
-            session, original.source, context=context, declared_crs=4326,
-            now=NOW + timedelta(seconds=2)
+            session,
+            original.source,
+            context=context,
+            declared_crs=4326,
+            now=NOW + timedelta(seconds=2),
         )
         assert corrected.validation_state == ValidationState.READY
         assert corrected.source_crs == corrected.stored_crs == 4326
@@ -332,7 +365,8 @@ def test_candidate_manifest_and_persisted_scope_guard_fail_closed(migrated_datab
 
 
 def test_unknown_native_query_failure_is_not_an_accepted_correction_rejection(
-    migrated_database: None, monkeypatch: pytest.MonkeyPatch,
+    migrated_database: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     world = seed_access_world()
     with get_session_factory()() as session:

@@ -1,11 +1,9 @@
-import {setWorkerUrl} from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
-import {prepareFootprint3d} from "../../src/maplibre3d";
+import {configureBrowserTestWorker,prepareFootprint3d} from "./worker";
 import {footprint3d} from "../../src/footprint3d";
 import {parseStaticModel} from "../../src/gltf";
 import {validateTerrain,geographic3857,sampleTerrain} from "../../src/terrain";
 import {glbFixture,terrainFixture} from "../terrain-model-fixture.mjs";
-setWorkerUrl(workerUrl);
+configureBrowserTestWorker();
 const grid=validateTerrain(terrainFixture(),"dem"),[l,b,r,t]=grid.extent,center=geographic3857((l+r)/2,(b+t)/2);
 const anchor=geographic3857(l+30,t-35),ground=sampleTerrain(grid,...anchor)!;
 const status=document.querySelector("#status")!,surface=document.querySelector<HTMLElement>("#surface")!,abort=new AbortController();

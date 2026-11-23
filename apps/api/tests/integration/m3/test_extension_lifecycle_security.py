@@ -122,17 +122,21 @@ def test_extension_lifecycle_requires_admin_and_project_manage(
         assert [row["id"] for row in retained.json()["items"]] == [record_id]
 
     with get_admin_engine().connect() as connection:
-        actions = connection.execute(
-            text(
-                """
+        actions = (
+            connection.execute(
+                text(
+                    """
                 SELECT action
                 FROM audit.audit_events
                 WHERE organization_id=:org
                   AND resource_type='extension_activation'
                 ORDER BY created_at,id
                 """
-            ),
-            {"org": world.organization_id},
-        ).scalars().all()
+                ),
+                {"org": world.organization_id},
+            )
+            .scalars()
+            .all()
+        )
     assert actions.count("extension.activate") == 2
     assert actions.count("extension.disable") == 1

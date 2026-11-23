@@ -1,4 +1,4 @@
-import type {Map as MlMap} from "maplibre-gl";
+import type {Map as MlMap} from "../map-surface";
 import {captureFrame,svgCanvas,pdfFromCanvas,pngFromCanvas,saveBlob,type Camera,type Shot} from "../LayoutRender";
 type Item={id:string;kind:"map"|"text"|"legend"|"north"|"scale"|"rect";x:number;y:number;w:number;h:number;text:string;font_size:number;color:string;border:boolean;grid:boolean;camera?:Camera;map_id?:string};
 type Doc={version:1;paper:"A0"|"A1"|"A2"|"A3"|"A4";landscape:boolean;dpi:150|300;items:Item[]};

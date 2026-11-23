@@ -119,10 +119,7 @@ class OidcProviderRegistry:
             raise OidcInvalidResponseError("invalid provider issuer")
         email = userinfo.get("email")
         display_name = (
-            userinfo.get("name")
-            or userinfo.get("preferred_username")
-            or email
-            or subject
+            userinfo.get("name") or userinfo.get("preferred_username") or email or subject
         )
         return ExternalIdentityClaims(
             issuer=provider.issuer,
