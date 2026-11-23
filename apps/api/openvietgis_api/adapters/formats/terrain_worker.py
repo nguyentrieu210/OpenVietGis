@@ -4,7 +4,7 @@ import json
 import math
 import sys
 
-import raster_worker
+import raster_worker  # type: ignore[import-not-found]  # Copied sibling worker.
 from raster_worker import gdal, np, opened
 
 raster_worker.PIXELS = 20_000_000

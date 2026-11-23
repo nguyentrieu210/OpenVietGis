@@ -14,7 +14,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from openvietgis_api.adapters.http.raster import MAX_UPLOAD, WHERE, WORKER, gate, raster_scope
+from openvietgis_api.adapters.http.raster import (
+    MAX_UPLOAD,
+    WHERE,
+    WORKER,
+    RasterWorkerOptions,
+    gate,
+    raster_scope,
+)
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
     get_db_session,
@@ -81,7 +88,7 @@ def terrain_preview(
             for script in (WORKER, TERRAIN):
                 shutil.copyfile(script, root / script.name)
                 (root / script.name).chmod(0o644)
-            opts = {}
+            opts: RasterWorkerOptions = {}
             if os.geteuid() == 0:
                 import pwd
 

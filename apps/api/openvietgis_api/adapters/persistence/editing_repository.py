@@ -426,14 +426,26 @@ class SqlEditingRepository:
             )
 
         # The source row is already locked: lease acquisition cannot race this commit.
-        lease_args = {"o": org_id, "p": project_id, "s": source_id,
-                      "ids": list(seen_ids), "a": context.actor.actor_id,
-                      "human": context.actor.actor_type == "human"}
-        if self._session.execute(text("""SELECT 1 FROM collaboration.feature_edit_leases
+        lease_args = {
+            "o": org_id,
+            "p": project_id,
+            "s": source_id,
+            "ids": list(seen_ids),
+            "a": context.actor.actor_id,
+            "human": context.actor.actor_type == "human",
+        }
+        if self._session.execute(
+            text("""SELECT 1 FROM collaboration.feature_edit_leases
             WHERE organization_id=:o AND project_id=:p AND source_id=:s
               AND feature_id=ANY(CAST(:ids AS varchar[])) AND expires_at>clock_timestamp()
-              AND (NOT :human OR actor_id<>:a) LIMIT 1"""), lease_args).first():
-            raise PlatformConflictError("feature currently being edited by another account", code="FEATURE_LOCKED", details={"draft_preserved": True})
+              AND (NOT :human OR actor_id<>:a) LIMIT 1"""),
+            lease_args,
+        ).first():
+            raise PlatformConflictError(
+                "feature currently being edited by another account",
+                code="FEATURE_LOCKED",
+                details={"draft_preserved": True},
+            )
 
         new_content_rev = compute_content_revision(source_id, source.content_revision, fingerprint)
         new_catalog_rev = source.catalog_revision + 1
@@ -719,9 +731,12 @@ class SqlEditingRepository:
 
         ops_records = self._load_operations(org_id, project_id, changeset_id)
         if context.actor.actor_type == "human":
-            self._session.execute(text("""DELETE FROM collaboration.feature_edit_leases
+            self._session.execute(
+                text("""DELETE FROM collaboration.feature_edit_leases
               WHERE organization_id=:o AND project_id=:p AND source_id=:s
-                AND feature_id=ANY(CAST(:ids AS varchar[])) AND actor_id=:a"""), lease_args)
+                AND feature_id=ANY(CAST(:ids AS varchar[])) AND actor_id=:a"""),
+                lease_args,
+            )
         self._session.commit()
         return _changeset_from_row(cs_row, ops_records)
 

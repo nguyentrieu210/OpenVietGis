@@ -187,17 +187,33 @@ def test_sse_pushes_committed_changes(migrated_database):
                     )
                     assert result.status_code == 201, result.text
                     assert next(events) == "event: spatial_change"
-                    result=owner.post(base+"/comments",json={"source_id":layer["source_id"],"feature_id":"A","body":"SSE comment"})
-                    assert result.status_code==201,result.text
+                    result = owner.post(
+                        base + "/comments",
+                        json={
+                            "source_id": layer["source_id"],
+                            "feature_id": "A",
+                            "body": "SSE comment",
+                        },
+                    )
+                    assert result.status_code == 201, result.text
                     assert next(events) == "event: change"
-                    lease={"source_id":layer["source_id"],"feature_id":"A","token":str(uuid4())}
-                    result=owner.post(base+"/edit-locks",json=lease)
-                    assert result.status_code == 200,result.text
+                    lease = {
+                        "source_id": layer["source_id"],
+                        "feature_id": "A",
+                        "token": str(uuid4()),
+                    }
+                    result = owner.post(base + "/edit-locks", json=lease)
+                    assert result.status_code == 200, result.text
                     assert next(events) == "event: lock_change"
-                    result=owner.post(base+"/edit-locks/release",json=lease)
-                    assert result.status_code == 200,result.text
+                    result = owner.post(base + "/edit-locks/release", json=lease)
+                    assert result.status_code == 200, result.text
                     assert next(events) == "event: lock_change"
-        assert not matches('{"o":"x","p":"y","a":null,"b":null}', world.organization_id,world.project_id,world.owner_user_id)
+        assert not matches(
+            '{"o":"x","p":"y","a":null,"b":null}',
+            world.organization_id,
+            world.project_id,
+            world.owner_user_id,
+        )
     finally:
         server.should_exit = True
         thread.join(timeout=5)
