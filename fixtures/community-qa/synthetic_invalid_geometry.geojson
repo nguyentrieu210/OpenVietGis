@@ -1,0 +1,61 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "qa-bad-bowtie",
+      "properties": {
+        "code": "SYN-BAD-001",
+        "expected_failure": "self_intersection_bowtie_polygon"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              105.85,
+              21.028
+            ],
+            [
+              105.851,
+              21.029
+            ],
+            [
+              105.851,
+              21.028
+            ],
+            [
+              105.85,
+              21.029
+            ],
+            [
+              105.85,
+              21.028
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "qa-bad-line",
+      "properties": {
+        "code": "SYN-BAD-002",
+        "expected_failure": "zero_length_degenerate_linestring"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            105.85,
+            21.028
+          ],
+          [
+            105.85,
+            21.028
+          ]
+        ]
+      }
+    }
+  ]
+}

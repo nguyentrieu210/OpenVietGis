@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "name": "synthetic_gis_3857",
+  "crs_note": "EPSG:3857 Web Mercator meters (for CRS reprojection QA)",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "qa-pt-001",
+      "properties": {
+        "code": "SYN-PT-001",
+        "name": "Synthetic Survey Benchmark A",
+        "category": "control_point",
+        "elevation_m": 12.5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          11783179.232,
+          2395277.233
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "qa-ln-001",
+      "properties": {
+        "code": "SYN-LN-001",
+        "name": "Synthetic Corridor Axis 1",
+        "category": "road_centerline",
+        "elevation_m": 11.2
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            11783056.781,
+            2395217.602
+          ],
+          [
+            11783223.76,
+            2395313.012
+          ],
+          [
+            11783390.739,
+            2395384.569
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "qa-pg-001",
+      "properties": {
+        "code": "SYN-PG-001",
+        "name": "Synthetic Parcel With Courtyard Hole",
+        "category": "parcel_with_hole",
+        "elevation_m": 10.8
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              11783112.441,
+              2395157.971
+            ],
+            [
+              11783335.08,
+              2395157.971
+            ],
+            [
+              11783335.08,
+              2395396.496
+            ],
+            [
+              11783112.441,
+              2395396.496
+            ],
+            [
+              11783112.441,
+              2395157.971
+            ]
+          ],
+          [
+            [
+              11783179.232,
+              2395229.528
+            ],
+            [
+              11783179.232,
+              2395324.938
+            ],
+            [
+              11783268.288,
+              2395324.938
+            ],
+            [
+              11783268.288,
+              2395229.528
+            ],
+            [
+              11783179.232,
+              2395229.528
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

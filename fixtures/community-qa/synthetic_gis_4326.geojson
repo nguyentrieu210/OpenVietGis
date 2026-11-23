@@ -1,0 +1,108 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "qa-pt-001",
+      "properties": {
+        "code": "SYN-PT-001",
+        "name": "Synthetic Survey Benchmark A",
+        "category": "control_point",
+        "elevation_m": 12.5
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          105.8501,
+          21.0285
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "qa-ln-001",
+      "properties": {
+        "code": "SYN-LN-001",
+        "name": "Synthetic Corridor Axis 1",
+        "category": "road_centerline",
+        "elevation_m": 11.2
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            105.849,
+            21.028
+          ],
+          [
+            105.8505,
+            21.0288
+          ],
+          [
+            105.852,
+            21.0294
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "qa-pg-001",
+      "properties": {
+        "code": "SYN-PG-001",
+        "name": "Synthetic Parcel With Courtyard Hole",
+        "category": "parcel_with_hole",
+        "elevation_m": 10.8
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              105.8495,
+              21.0275
+            ],
+            [
+              105.8515,
+              21.0275
+            ],
+            [
+              105.8515,
+              21.0295
+            ],
+            [
+              105.8495,
+              21.0295
+            ],
+            [
+              105.8495,
+              21.0275
+            ]
+          ],
+          [
+            [
+              105.8501,
+              21.0281
+            ],
+            [
+              105.8501,
+              21.0289
+            ],
+            [
+              105.8509,
+              21.0289
+            ],
+            [
+              105.8509,
+              21.0281
+            ],
+            [
+              105.8501,
+              21.0281
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
