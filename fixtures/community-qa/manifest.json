@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "purpose": "Community QA isolated synthetic fixtures (Issue #7)",
+  "contains_private_data": false,
+  "artifacts": [
+    {
+      "file": "synthetic_gis_4326.geojson",
+      "format": "GeoJSON",
+      "crs": "EPSG:4326",
+      "feature_count": 3,
+      "geometries": [
+        "Point",
+        "LineString",
+        "Polygon (with interior hole)"
+      ],
+      "negative_test": false,
+      "sha256": "ef500d515668469a6188b7896c40673f2c3c7dcde61d7c0f989f155b158a25e6"
+    },
+    {
+      "file": "synthetic_gis_3857.geojson",
+      "format": "GeoJSON",
+      "crs": "EPSG:3857",
+      "feature_count": 3,
+      "geometries": [
+        "Point",
+        "LineString",
+        "Polygon (with interior hole)"
+      ],
+      "negative_test": false,
+      "sha256": "f07e0f62bde98d1056d9bdf8fd9509b25e6d2bdd253c8f67acb44911bc920988"
+    },
+    {
+      "file": "synthetic_invalid_geometry.geojson",
+      "format": "GeoJSON",
+      "crs": "EPSG:4326",
+      "feature_count": 2,
+      "geometries": [
+        "Polygon (self-intersecting bowtie)",
+        "LineString (degenerate zero-length)"
+      ],
+      "negative_test": true,
+      "sha256": "386085cc8857b3bc30f0b3d974d9a6ddcf23d277fd65ffef940148a2f2946c03"
+    },
+    {
+      "file": "synthetic_gis_4326.gpkg",
+      "format": "GeoPackage",
+      "crs": "EPSG:4326",
+      "feature_count": 1,
+      "layers": [
+        "synthetic_parcels_4326"
+      ],
+      "geometries": [
+        "Polygon (with interior hole)"
+      ],
+      "negative_test": false,
+      "sha256": "e9011b1be900287bb38419c8574566666d4b0188f135b8d77c96b9a04407dd3e"
+    },
+    {
+      "file": "synthetic_gis_4326_shp.zip",
+      "format": "ESRI Shapefile ZIP",
+      "crs": "EPSG:4326",
+      "feature_count": 1,
+      "geometries": [
+        "Polygon (with interior hole)"
+      ],
+      "negative_test": false,
+      "sha256": "3322e3ae4e7622de8c375b404d75e85036a2dec52aa98221ad1b4b2b6dd4eac5"
+    },
+    {
+      "file": "synthetic_cad_2d.dxf",
+      "format": "DXF 2D (AC1015)",
+      "crs": "Projected 2D synthetic meters (declare EPSG:32648 on import)",
+      "feature_count": 3,
+      "geometries": [
+        "POINT",
+        "LINE",
+        "LWPOLYLINE (closed)"
+      ],
+      "negative_test": false,
+      "sha256": "f684e5784c69df23749559eea886195c115fa12f03c0e09b93fbb5d71d4aa05e"
+    }
+  ]
+}

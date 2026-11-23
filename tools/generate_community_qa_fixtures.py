@@ -192,10 +192,10 @@ def _write_gpkg_and_shp(features_4326: list[dict[str, object]], out_dir: Path) -
     from openvietgis_api.domains.transfers.domain import ExportFieldMapping
 
     field_mappings = [
-        ExportFieldMapping("code", "code", FieldType.TEXT, False),
-        ExportFieldMapping("name", "name", FieldType.TEXT, False),
-        ExportFieldMapping("category", "category", FieldType.TEXT, False),
-        ExportFieldMapping("elevation_m", "elev_m", FieldType.DECIMAL, False),
+        ExportFieldMapping("code", "code", "code", FieldType.TEXT),
+        ExportFieldMapping("name", "name", "name", FieldType.TEXT),
+        ExportFieldMapping("category", "category", "category", FieldType.TEXT),
+        ExportFieldMapping("elevation_m", "elevation_m", "elev_m", FieldType.DECIMAL),
     ]
     poly_feature = next(
         f for f in features_4326 if f["geometry"]["type"] == "Polygon"  # type: ignore[index]
@@ -204,13 +204,14 @@ def _write_gpkg_and_shp(features_4326: list[dict[str, object]], out_dir: Path) -
         type="Polygon",
         coordinates=poly_feature["geometry"]["coordinates"],  # type: ignore[index,arg-type]
         dimensions=GeometryDimensions.XY,
+        srid=4326,
     )
     poly_rows = [(str(poly_feature["id"]), dict(poly_feature["properties"]), poly_geom)]  # type: ignore[arg-type]
 
     gpkg_bytes, _, _ = write_geopackage(
         layer_name="synthetic_parcels_4326",
         crs_code=4326,
-        geometry_family="polygon",
+        geometry_family="Polygon",
         field_mappings=field_mappings,
         features=poly_rows,
     )
@@ -219,7 +220,7 @@ def _write_gpkg_and_shp(features_4326: list[dict[str, object]], out_dir: Path) -
     shp_bytes, _, _ = write_shapefile_zip(
         layer_name="synthetic_parcels_4326",
         crs_code=4326,
-        geometry_family="polygon",
+        geometry_family="Polygon",
         field_mappings=field_mappings,
         features=poly_rows,
     )
