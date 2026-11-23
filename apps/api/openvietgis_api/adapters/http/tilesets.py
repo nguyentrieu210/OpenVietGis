@@ -12,7 +12,9 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.model_vault import HEADERS, LIMIT, _scope, _validate
@@ -24,6 +26,12 @@ from openvietgis_api.adapters.http.security import (
 )
 from openvietgis_api.adapters.persistence.scope_helper import append_project_audit
 from openvietgis_api.domains.authorization.permissions import Permission
+from openvietgis_api.domains.spatial.tiles_generator import (
+    MAX_FEATURES,
+    MAX_VERTICES,
+    TileGenerationError,
+    build_tiles,
+)
 
 router = APIRouter(tags=["3d-tiles"])
 BASE = "/organizations/{organization_id}/projects/{project_id}/3d/tilesets"
@@ -167,7 +175,7 @@ def read_archive(payload):
 
 def items(session, args):
     rows = session.execute(
-        text("""SELECT id,name,byte_size,tile_count,created_at
+        text("""SELECT id,name,byte_size,tile_count,created_at,provenance
       FROM spatial.tilesets WHERE organization_id=:org AND project_id=:proj
       ORDER BY created_at DESC,id"""),
         args,
@@ -201,6 +209,12 @@ def create_tileset(
     name = name.strip()
     check(name and name.isprintable() and (file.filename or "").lower().endswith(".zip"))
     doc, resources = read_archive(file.file.read(64 * MIB + 1))
+    return persist(
+        session, ctx, organization_id, project_id, name, doc, resources, {}, "3d.tileset.import"
+    )
+
+
+def persist(session, ctx, organization_id, project_id, name, doc, resources, provenance, action):
     manifest = json.dumps(doc, allow_nan=False, separators=(",", ":"))
     size = len(manifest.encode()) + sum(len(v) for v in resources.values())
     args = {"org": organization_id, "proj": project_id, "id": uuid4()}
@@ -217,8 +231,9 @@ def create_tileset(
         raise HTTPException(413, "Project tileset quota exceeded")
     session.execute(
         text("""INSERT INTO spatial.tilesets
-       (organization_id,project_id,id,name,manifest,byte_size,tile_count,actor_id)
-       VALUES(:org,:proj,:id,:name,CAST(:manifest AS jsonb),:size,:count,:actor)"""),
+       (organization_id,project_id,id,name,manifest,byte_size,tile_count,actor_id,provenance)
+       VALUES(:org,:proj,:id,:name,CAST(:manifest AS jsonb),:size,:count,:actor,
+        CAST(:provenance AS jsonb))"""),
         args
         | {
             "name": name,
@@ -226,6 +241,7 @@ def create_tileset(
             "size": size,
             "count": len(resources),
             "actor": ctx.actor.actor_id,
+            "provenance": json.dumps(provenance, allow_nan=False),
         },
     )
     for uri, data in resources.items():
@@ -239,15 +255,174 @@ def create_tileset(
         session,
         ctx,
         audit_id=uuid4(),
-        action="3d.tileset.import",
+        action=action,
         resource_type="tileset",
         resource_id=args["id"],
-        metadata={"tile_count": len(resources), "byte_size": size, "crs": "EPSG:4979/EPSG:4978"},
+        metadata={"tile_count": len(resources), "byte_size": size, "crs": "EPSG:4979/EPSG:4978"}
+        | provenance,
         created_at=datetime.now(UTC),
     )
     result = next(r for r in items(session, args) if r["id"] == str(args["id"]))
     session.commit()
     return result
+
+
+class GenerateTileset(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    name: str = Field(min_length=1, max_length=160)
+    layer_id: UUID
+    expected_layer_revision: int = Field(ge=1, le=9007199254740991)
+    expected_content_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_schema_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    height_field: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+    base_ellipsoid_m: float = Field(ge=-1000, le=10000, strict=True)
+    acknowledge_ellipsoid: bool = Field(strict=True)
+
+
+@router.post(BASE + "/generate", status_code=201)
+def generate_tileset(
+    organization_id: UUID,
+    project_id: UUID,
+    body: GenerateTileset,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+):
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_EDIT)
+    name = body.name.strip()
+    check(
+        name and name.isprintable() and body.acknowledge_ellipsoid,
+        "Explicit ellipsoidal base and name required",
+    )
+    args = {
+        "org": organization_id,
+        "proj": project_id,
+        "layer": body.layer_id,
+        "field": body.height_field,
+    }
+    try:
+        session.execute(text("SET LOCAL statement_timeout = '20s'"))
+        source = (
+            session.execute(
+                text("""
+          SELECT s.id,s.content_revision,s.schema_revision,s.stored_crs,s.feature_count,
+                 s.geometry_family,s.dimensions,s.validation_state,l.layer_revision
+          FROM spatial.layers l JOIN spatial.data_sources s ON
+            s.organization_id=l.organization_id AND s.project_id=l.project_id AND s.id=l.source_id
+          WHERE l.organization_id=:org AND l.project_id=:proj AND l.id=:layer
+            AND l.lifecycle='active' AND s.lifecycle='active'
+          FOR SHARE OF s,l
+        """),
+                args,
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if source is None:
+            raise HTTPException(404, "Layer not found")
+        if (
+            source["layer_revision"] != body.expected_layer_revision
+            or source["content_revision"] != body.expected_content_revision
+            or source["schema_revision"] != body.expected_schema_revision
+        ):
+            raise HTTPException(409, "Source revision changed; reload the layer")
+        check(
+            source["validation_state"] == "ready"
+            and source["geometry_family"] == "Polygon"
+            and source["dimensions"] == "XY"
+            and source["stored_crs"] in (4326, 3857),
+            "Only ready XY Polygon EPSG:4326 / EPSG:3857 supported",
+        )
+        if not source["feature_count"] or source["feature_count"] > MAX_FEATURES:
+            raise HTTPException(413, "Layer must have 1–3000 features")
+        args |= {
+            "src": source["id"],
+            "content": source["content_revision"],
+            "schema": source["schema_revision"],
+            "crs": source["stored_crs"],
+        }
+        field = session.execute(
+            text("""
+          SELECT type FROM spatial.source_fields WHERE organization_id=:org AND project_id=:proj
+            AND source_id=:src AND field_id=:field AND schema_revision=:schema
+        """),
+            args,
+        ).scalar_one_or_none()
+        check(field in ("integer", "decimal"), "Height field must be numeric")
+        args["field_type"] = "number" if field == "integer" else "string"
+        stats = (
+            session.execute(
+                text("""
+          SELECT count(*) AS n, coalesce(sum(ST_NPoints(geometry)),0) AS vertices,
+            bool_and(coalesce(geometry_state='present' AND ST_SRID(geometry)=:crs
+              AND ST_GeometryType(geometry)='ST_Polygon' AND ST_NDims(geometry)=2
+              AND ST_IsValid(geometry) AND NOT ST_IsEmpty(geometry)
+              AND jsonb_typeof(attributes -> CAST(:field AS text))=:field_type,false)) AS valid
+          FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj
+            AND source_id=:src AND content_revision=:content AND schema_revision=:schema
+        """),
+                args,
+            )
+            .mappings()
+            .one()
+        )
+        if stats["n"] != source["feature_count"]:
+            raise HTTPException(409, "Feature count changed")
+        if stats["vertices"] > MAX_VERTICES:
+            raise HTTPException(413, "60,000 vertex budget exceeded")
+        check(stats["valid"], "All features require valid XY polygons and numeric heights")
+        rows = (
+            session.execute(
+                text("""
+          WITH polygons AS MATERIALIZED (
+            SELECT feature_id,attributes -> CAST(:field AS text) AS height,
+              CASE WHEN :crs=4326 THEN geometry ELSE ST_Transform(geometry,4326) END AS geom
+            FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj
+              AND source_id=:src AND content_revision=:content AND schema_revision=:schema
+          )
+          SELECT feature_id,height,ST_AsGeoJSON(geom,15)::jsonb AS geometry,
+            ST_AsGeoJSON(ST_TriangulatePolygon(geom),15)::jsonb AS triangles
+          FROM polygons ORDER BY feature_id
+        """),
+                args,
+            )
+            .mappings()
+            .all()
+        )
+        try:
+            doc, resources, total = build_tiles(rows, body.base_ellipsoid_m)
+        except TileGenerationError as exc:
+            raise HTTPException(422, str(exc)) from None
+        manifest_check(doc)
+        for uri, payload in resources.items():
+            _validate(uri.rsplit("/", 1)[-1], payload)
+        provenance = {
+            "kind": "gis_extrusion",
+            "source_id": str(source["id"]),
+            "layer_id": str(body.layer_id),
+            "layer_revision": source["layer_revision"],
+            "content_revision": source["content_revision"],
+            "schema_revision": source["schema_revision"],
+            "source_crs": source["stored_crs"],
+            "height_field": body.height_field,
+            "base_ellipsoid_m": body.base_ellipsoid_m,
+            "feature_count": len(rows),
+            "triangle_count": total,
+        }
+        return persist(
+            session,
+            ctx,
+            organization_id,
+            project_id,
+            name,
+            doc,
+            resources,
+            provenance,
+            "3d.tileset.generate",
+        )
+    except DBAPIError as exc:
+        if getattr(exc.orig, "sqlstate", None) in ("57014", "42883"):
+            raise HTTPException(503, "Tile generation unavailable or timed out") from None
+        raise
 
 
 @router.get(BASE + "/{tileset_id}/tileset.json")
