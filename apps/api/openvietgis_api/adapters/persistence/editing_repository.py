@@ -247,8 +247,8 @@ class SqlEditingRepository:
                     ),
                     {"org": org_id, "proj": project_id, "cid": existing["id"]},
                 ).mappings()
-                for item in replay:
-                    verify_edit(self._session, context, source_id, item)
+                for replay_item in replay:
+                    verify_edit(self._session, context, source_id, replay_item)
             return _changeset_from_row(
                 existing, self._load_operations(org_id, project_id, existing["id"])
             )

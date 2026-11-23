@@ -16,7 +16,7 @@ os.environ.update(PROJ_NETWORK="OFF", OPENBLAS_NUM_THREADS="1", GDAL_NUM_THREADS
 
 def _load_guarded_deps():
     import numpy as np
-    from osgeo import gdal, osr
+    from osgeo import gdal, osr  # type: ignore[import-not-found]
 
     return np, gdal, osr
 

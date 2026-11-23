@@ -45,6 +45,7 @@ from openvietgis_api.domains.spatial.crs import (
 from openvietgis_api.domains.spatial.domain import (
     MAX_REVISION,
     CatalogChange,
+    CoordinateTree,
     Extent,
     SourceField,
 )
@@ -666,8 +667,10 @@ def preview_geometry(
     if payload.action == "split":
         if len(payload.feature_ids) != 1 or len(payload.blade) < 2:
             raise HTTPException(422, "Choose one feature and draw a cutting line")
+        # NativeGeometry stores an immutable coordinate tree; request lists are mutable.
+        blade_coordinates: CoordinateTree = tuple(tuple(point) for point in payload.blade)
         validate_ready_geometry(
-            NativeGeometry(type="LineString", coordinates=payload.blade, srid=4326)
+            NativeGeometry(type="LineString", coordinates=blade_coordinates, srid=4326)
         )
         expression = "ST_Split(ST_Collect(geometry), ST_SetSRID(ST_GeomFromGeoJSON(:blade),4326))"
         # ST_Collect of a single geometry is multi; use the original geometry instead.

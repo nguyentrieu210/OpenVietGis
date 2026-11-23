@@ -5,10 +5,24 @@ import json
 import math
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import raster_worker
-from osgeo import ogr
-from raster_worker import NODATA, epsg_ref, gdal, np, opened, osr
+from osgeo import ogr  # type: ignore[import-not-found]
+
+if TYPE_CHECKING:
+    from openvietgis_api.adapters.formats import raster_worker
+    from openvietgis_api.adapters.formats.raster_worker import (
+        NODATA,
+        epsg_ref,
+        gdal,
+        np,
+        opened,
+        osr,
+    )
+else:
+    # Worker is launched as a stand-alone script; resource guards precede GDAL import.
+    import raster_worker
+    from raster_worker import NODATA, epsg_ref, gdal, np, opened, osr
 
 raster_worker.PIXELS = 20_000_000
 WORLD = 20037508.342789244

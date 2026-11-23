@@ -285,9 +285,10 @@ class SqlMapViewportRepository(SqlSpatialRepository):
             first = next(iterator, None)
             if first is None:
                 raise MapReadUnavailableError("missing render snapshot summary")
-            self._validate_summary(
-                params["expected_count"], first["snapshot_count"], first["snapshot_valid"]
-            )
+            expected_count = params["expected_count"]
+            if not isinstance(expected_count, int):
+                raise MapReadUnavailableError("missing render snapshot expected count")
+            self._validate_summary(expected_count, first["snapshot_count"], first["snapshot_valid"])
 
             def features() -> Iterator[RenderFeature]:
                 for row in chain((first,), iterator):
@@ -343,9 +344,10 @@ class SqlMapViewportRepository(SqlSpatialRepository):
                 .mappings()
                 .one()
             )
-            self._validate_summary(
-                params["expected_count"], row["snapshot_count"], row["snapshot_valid"]
-            )
+            expected_count = params["expected_count"]
+            if not isinstance(expected_count, int):
+                raise MapReadUnavailableError("missing render snapshot expected count")
+            self._validate_summary(expected_count, row["snapshot_count"], row["snapshot_valid"])
             if row["west"] is None:
                 return {"context": wire, "state": "empty", "bounds": None}
             return {

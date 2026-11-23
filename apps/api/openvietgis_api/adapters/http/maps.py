@@ -158,10 +158,17 @@ def get_map(
             ).scalars()
         }
         config = wire.get("configuration")
-        if config:
-            config["layers"] = [
-                layer for layer in config.get("layers", []) if str(layer.get("layer_id")) in allowed
-            ]
+        if isinstance(config, dict):
+            layers = config.get("layers")
+            config["layers"] = (
+                [
+                    layer
+                    for layer in layers
+                    if isinstance(layer, dict) and str(layer.get("layer_id")) in allowed
+                ]
+                if isinstance(layers, list)
+                else []
+            )
             config["default_viewpoint"] = None
     return wire
 
