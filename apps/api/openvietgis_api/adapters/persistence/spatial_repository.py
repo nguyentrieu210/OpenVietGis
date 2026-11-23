@@ -288,7 +288,7 @@ class SqlSpatialRepository:
         allowed = (
             {Permission.PROJECT_EDIT, Permission.PROJECT_MANAGE}
             if mutation
-            else {Permission.PROJECT_READ}
+            else {Permission.PROJECT_READ, Permission.PROJECT_MANAGE}
         )
         if permission not in allowed:
             raise SpatialScopeError("spatial action does not match requested scope")
