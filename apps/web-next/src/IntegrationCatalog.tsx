@@ -28,6 +28,23 @@ interface IntegrationCatalogProps {
   projectId: string;
 }
 
+type IntegrationTask = "export" | "sync" | "service" | "details";
+
+const CONNECTOR_HELP: Record<string, string> = {
+  qgis: "Tải lớp bản đồ về QGIS hoặc gửi các chỉnh sửa GeoPackage trở lại dự án.",
+  postgis: "Xuất dữ liệu sang SQL hoặc GeoPackage để sử dụng trong cơ sở dữ liệu riêng.",
+  autocad: "Tải bản vẽ DXF 2D để mở trong AutoCAD; chưa hỗ trợ DWG và đồng bộ ngược.",
+  ogc_services: "Khai thác dịch vụ bản đồ WMS, WFS, COG và XYZ qua nguồn dữ liệu ngoài.",
+  microstation_v8i: "Cầu nối DGN V8i cần máy Windows và bản quyền phần mềm; chưa sử dụng trực tiếp tại đây.",
+  arcgis: "Kết nối ArcGIS chuyên dụng chưa được đưa vào vận hành.",
+  mapinfo: "Trao đổi dữ liệu MapInfo TAB/MIF/MID đang được phát triển.",
+  cadastral_vn: "Liên thông gCadas, FAMIS, TMV.Map và dữ liệu địa chính đang được phát triển.",
+  ogc_publisher: "Xuất bản dữ liệu đến máy chủ OGC chưa được tích hợp trong màn hình này.",
+  google_earth: "Bộ kết nối Google Earth KML/KMZ đang được phát triển.",
+  excel: "Bộ kết nối bảng tính Excel/CSV đang được phát triển.",
+  survey_3d: "Kết nối RTK, UAV, BIM và dữ liệu 3D đang được phát triển."
+};
+
 interface LayerExportStatus {
   kind: "success" | "error";
   filename?: string;
@@ -39,7 +56,7 @@ interface LayerExportStatus {
 }
 
 const LIFECYCLE_LABELS: Record<ConnectorLifecycle, string> = {
-  existing_read_only: "Có dịch vụ chỉ đọc",
+  existing_read_only: "Có thể sử dụng",
   candidate: "Đang thử nghiệm",
   planned: "Chưa triển khai"
 };
@@ -194,7 +211,8 @@ export function IntegrationCatalog({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ready");
+  const [activeTask, setActiveTask] = useState<IntegrationTask | null>(null);
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<
@@ -237,6 +255,9 @@ export function IntegrationCatalog({
     setError("");
     setLoading(true);
     setExpandedKey(null);
+    setActiveTask(null);
+    setQuery("");
+    setCategoryFilter("ready");
     setProfiles({});
     setProfileLoadingKey(null);
     setProfileError({});
@@ -315,7 +336,12 @@ export function IntegrationCatalog({
     });
   }, [catalog, categoryFilter, query]);
 
+  const visibleAdapters = expandedKey
+    ? catalog?.adapters.filter((adapter) => adapter.key === expandedKey) ?? []
+    : filteredAdapters;
+
   const inspectAdapterProfile = (adapter: IntegrationAdapterSummary) => {
+    setActiveTask(null);
     if (expandedKey === adapter.key) {
       setExpandedKey(null);
       if (adapter.key === "qgis") {
@@ -527,7 +553,7 @@ export function IntegrationCatalog({
           csrfToken
         }
       );
-      let refreshedProfile: IntegrationAdapterProfileResponse | null = null;
+      let refreshedProfile: IntegrationAdapterProfileResponse | null;
       try {
         refreshedProfile = await getIntegrationHubAdapterProfile(
           client,
@@ -565,32 +591,31 @@ export function IntegrationCatalog({
 
   return (
     <section className="integration-catalog" aria-label="Tích hợp phần mềm">
-      <details open>
-        <summary>
-          <div className="integration-summary-title">
-            <span className="integration-summary-icon" aria-hidden="true">
-              ⇄
-            </span>
-            <strong>Tích hợp phần mềm</strong>
-            <span className="integration-ready-chip">
-              QGIS · PostGIS · AutoCAD · OGC đã sẵn sàng
-            </span>
+      <div className="integration-guided-shell">
+        <header className="integration-hero">
+          <div className="integration-hero-copy">
+            <span className="integration-eyebrow">OPENVIETGIS / INTEGRATION CENTER</span>
+            <h2>Kết nối phần mềm, không cần biết API</h2>
+            <p>Chọn công cụ đang dùng, chọn việc muốn làm. Hệ thống sẽ hiển thị đúng dữ liệu và thao tác được hỗ trợ.</p>
           </div>
-          <span>
-            {catalog
-              ? `${catalog.adapters.length} nhóm kết nối · chính sách ghi mặc định: ${catalog.default_write_policy}`
-              : "GIS · CAD · Địa chính · 3D"}
-          </span>
-        </summary>
+          <div className="integration-hero-meta">
+            <span className="integration-hero-meta-value">{catalog?.adapters.filter((item) => item.lifecycle === "existing_read_only").length ?? "—"}</span>
+            <span>nhóm có khả năng hoạt động</span>
+          </div>
+        </header>
+        <nav className="integration-steps" aria-label="Các bước kết nối">
+          <span className={expandedKey ? "is-done" : "is-current"}><b>1</b> Chọn phần mềm</span>
+          <span className={expandedKey && !activeTask ? "is-current" : activeTask ? "is-done" : ""}><b>2</b> Chọn việc cần làm</span>
+          <span className={activeTask && activeTask !== "details" && activeTask !== "service" ? "is-current" : ""}><b>3</b> Chọn dữ liệu và thực hiện</span>
+        </nav>
+        <p className="integration-user-note">Mỗi dự án có quyền truy cập riêng. Không có kết nối nào tự ý ghi hoặc xóa dữ liệu của bạn.</p>
 
-        <p className="live-note">
-          Danh mục năng lực kỹ thuật chỉ đọc của OpenVietGIS. Quyền dự án không tự
-          động cấp quyền truy cập tệp, cơ sở dữ liệu hoặc thực thi đồng bộ ở phần
-          mềm bên ngoài.
-        </p>
+
 
         {catalog && (
-          <div className="integration-policy-bar">
+          <details className="integration-policy-disclosure">
+            <summary>Chi tiết chính sách truy cập (quản trị viên)</summary>
+            <div className="integration-policy-bar">
             <span className="integration-policy-pill is-deny">
               Chính sách ghi mặc định: Từ chối ({catalog.default_write_policy})
             </span>
@@ -603,7 +628,8 @@ export function IntegrationCatalog({
                 trong phạm vi được cấp
               </span>
             )}
-          </div>
+            </div>
+          </details>
         )}
 
         {loading && <p role="status">Đang kiểm tra danh mục…</p>}
@@ -615,7 +641,19 @@ export function IntegrationCatalog({
 
         {catalog && (
           <>
-            <div className="integration-filter-toolbar">
+            {expandedKey && (
+              <div className="integration-selection-bar">
+                <button type="button" onClick={() => { setExpandedKey(null); setActiveTask(null); resetSyncPanelState(); }}>
+                  ← Đổi phần mềm
+                </button>
+                <span>Đang chọn: <b>{catalog.adapters.find((item) => item.key === expandedKey)?.name}</b></span>
+              </div>
+            )}
+            {!expandedKey && <div className="integration-choose-heading">
+              <div><span className="integration-step-label">BƯỚC 1</span><h3>Bạn đang dùng phần mềm nào?</h3></div>
+              <p>Ưu tiên những phần mềm đã có chức năng sử dụng. Các mục đang phát triển vẫn được hiển thị riêng.</p>
+            </div>}
+            {!expandedKey && <div className="integration-filter-toolbar">
               <label className="integration-search">
                 Nhóm phần mềm
                 <select
@@ -653,10 +691,10 @@ export function IntegrationCatalog({
                   placeholder="QGIS, PostGIS, AutoCAD, DGN, WFS…"
                 />
               </label>
-            </div>
+            </div>}
 
-            <div className="integration-list">
-              {filteredAdapters.map((adapter) => {
+            <div className={"integration-list" + (expandedKey ? " is-focused" : "")}>
+              {visibleAdapters.map((adapter) => {
                 const discoverAction = adapter.actions.find(
                   (item) => item.action === "catalog.discover"
                 );
@@ -712,9 +750,9 @@ export function IntegrationCatalog({
                       <span>{adapter.protocols.join(" · ")}</span>
                     </div>
 
-                    <p>{adapter.note}</p>
+                    <p>{CONNECTOR_HELP[adapter.key] ?? adapter.note}</p>
 
-                    <small>
+                    {activeTask === "details" && <small>
                       Quyền xem danh mục:{" "}
                       {discoverAction?.allowed ? "Được phép" : "Không được cấp"}.
                       {" "}Đồng bộ ghi:{" "}
@@ -724,9 +762,9 @@ export function IntegrationCatalog({
                           ? "Yêu cầu quyền project.edit (từ chối mặc định)"
                           : "Từ chối mặc định / chưa hỗ trợ"}
                       .
-                    </small>
+                    </small>}
 
-                    {adapter.existing_api && (
+                    {activeTask === "details" && adapter.existing_api && (
                       <small>
                         Dịch vụ hiện hữu: {adapter.existing_api} (vẫn áp dụng phân
                         quyền riêng).
@@ -742,8 +780,10 @@ export function IntegrationCatalog({
                         onClick={() => inspectAdapterProfile(adapter)}
                       >
                         {isExpanded
-                          ? "Ẩn hồ sơ kết nối"
-                          : "Xem hồ sơ kết nối"}
+                          ? "Đổi phần mềm"
+                          : adapter.lifecycle === "existing_read_only"
+                            ? "Sử dụng kết nối này"
+                            : "Xem tình trạng phát triển"}
                       </button>
                     </div>
 
@@ -767,7 +807,44 @@ export function IntegrationCatalog({
 
                         {profile && (
                           <div className="integration-profile-body">
-                            <div className="integration-profile-summary">
+                            <section className="integration-task-intro" aria-label="Chọn thao tác">
+                              <span className="integration-step-label">BƯỚC 2</span>
+                              <h3>Bạn muốn làm gì với {adapter.name}?</h3>
+                              {adapter.lifecycle !== "existing_read_only" ? (
+                                <p className="integration-unavailable" role="status">Kết nối này chưa trao đổi dữ liệu trực tiếp trên live. Tên phần mềm trong danh mục không có nghĩa là đã liên thông.</p>
+                              ) : (
+                                <div className="integration-task-grid">
+                                  {isExportAdapterKey(adapter.key) && (
+                                    <button type="button" className={"integration-task-option" + (activeTask === "export" ? " is-active" : "")} aria-pressed={activeTask === "export"} onClick={() => { setActiveTask("export"); resetSyncPanelState(); }}>
+                                      <span className="integration-task-icon">↓</span>
+                                      <strong>{adapter.key === "autocad" ? "Tải bản vẽ DXF" : "Tải dữ liệu về máy"}</strong>
+                                      <small>{adapter.key === "autocad" ? "Xuất DXF 2D để mở bằng AutoCAD" : adapter.key === "postgis" ? "Tải SQL hoặc GeoPackage để nhập vào PostGIS riêng" : "Tải GeoPackage hoặc GeoJSON để mở bằng QGIS"}</small>
+                                    </button>
+                                  )}
+                                  {adapter.key === "qgis" && (
+                                    <button type="button" className={"integration-task-option" + (activeTask === "sync" ? " is-active" : "")} aria-pressed={activeTask === "sync"} disabled={!profile.adapter.actions.some((action) => action.action === "sync.push" && action.allowed)} onClick={() => { setActiveTask("sync"); resetSyncPanelState(); }}>
+                                      <span className="integration-task-icon">⇄</span>
+                                      <strong>Gửi chỉnh sửa trở lại</strong>
+                                      <small>{profile.adapter.actions.some((action) => action.action === "sync.push" && action.allowed) ? "Xem trước thay đổi rồi xác nhận ghi dữ liệu" : "Cần quyền chỉnh sửa dự án (project.edit)"}</small>
+                                    </button>
+                                  )}
+                                  {adapter.key === "ogc_services" && (
+                                    <button type="button" className={"integration-task-option" + (activeTask === "service" ? " is-active" : "")} aria-pressed={activeTask === "service"} onClick={() => setActiveTask("service")}>
+                                      <span className="integration-task-icon">◎</span>
+                                      <strong>Xem kết nối dịch vụ</strong>
+                                      <small>WMS/WFS/COG/XYZ dùng chức năng nguồn ngoài</small>
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              <button type="button" className="integration-advanced-trigger" aria-pressed={activeTask === "details"} onClick={() => { setActiveTask(activeTask === "details" ? null : "details"); resetSyncPanelState(); }}>
+                                {activeTask === "details" ? "Ẩn thông tin kỹ thuật" : "Thông số kỹ thuật và phân quyền"}
+                              </button>
+                              {activeTask === "service" && <p className="integration-user-note">Để dùng WMS/WFS/COG/XYZ, mở <b>Nguồn dữ liệu ngoài (R010)</b> của dự án. Trình kết nối không tự đăng nhập hoặc đồng bộ với máy chủ ngoài.</p>}
+                              {activeTask === "sync" && <p className="integration-user-note">Tải .gpkg bản gốc, chỉnh sửa một bản sao trong QGIS, sau đó chọn lớp đích và xem trước thay đổi. Chỉ đẩy dữ liệu nếu có quyền sửa lớp và dự án.</p>}
+                              {activeTask === "export" && <p className="integration-user-note">Chọn lớp dữ liệu và bấm Tải xuống. Tệp sẽ lưu về máy; dữ liệu gốc trên OpenVietGIS không thay đổi.</p>}
+                            </section>
+                            {activeTask === "details" && <div className="integration-profile-summary">
                               <span className="integration-badge is-status">
                                 {EXECUTION_STATUS_LABELS[profile.execution_status]}
                               </span>
@@ -779,9 +856,9 @@ export function IntegrationCatalog({
                                   Tài khoản giới hạn phạm vi GIS
                                 </span>
                               )}
-                            </div>
+                            </div>}
 
-                            {profile.connection_profile ? (
+                            {activeTask === "details" && (profile.connection_profile ? (
                               <div className="integration-profile-block">
                                 <h4>Hồ sơ trao đổi chỉ đọc</h4>
                                 <dl className="integration-kv">
@@ -912,11 +989,13 @@ export function IntegrationCatalog({
                                 Integration Hub; mọi thao tác ghi hoặc đồng bộ đều
                                 bị từ chối mặc định.
                               </p>
-                            )}
+                            ))}
 
-                            <div className="integration-profile-block">
+                            {(activeTask === "export" || activeTask === "sync") && (
+                            <div className="integration-profile-block integration-data-step">
+                              <span className="integration-step-label">BƯỚC 3</span>
                               <h4>
-                                Lớp dữ liệu khả dụng trong dự án (
+                                Chọn lớp dữ liệu trong dự án (
                                 {profile.layers.length})
                               </h4>
                               {profile.layers.length === 0 ? (
@@ -926,7 +1005,7 @@ export function IntegrationCatalog({
                                 </p>
                               ) : (
                                 <div className="integration-table-wrap">
-                                  <table className="integration-table">
+                                  <table className="integration-table integration-layer-table">
                                     <thead>
                                       <tr>
                                         <th scope="col">Tên lớp</th>
@@ -1008,7 +1087,7 @@ export function IntegrationCatalog({
                                                     {exportAdapterKey ===
                                                       "qgis" && (
                                                       <>
-                                                        {layer.export_permitted && (
+                                                        {(activeTask === "export" || activeTask === "sync") && layer.export_permitted && (
                                                           <>
                                                             <button
                                                               type="button"
@@ -1027,9 +1106,9 @@ export function IntegrationCatalog({
                                                             >
                                                               {gpkgBusy
                                                                 ? "Đang tải .gpkg…"
-                                                                : "Tải .gpkg"}
+                                                                : activeTask === "sync" ? "Tải .gpkg bản gốc" : "Tải .gpkg"}
                                                             </button>
-                                                            {layer.stored_crs_code ===
+                                                            {activeTask === "export" && layer.stored_crs_code ===
                                                               4326 && (
                                                               <button
                                                                 type="button"
@@ -1053,7 +1132,7 @@ export function IntegrationCatalog({
                                                             )}
                                                           </>
                                                         )}
-                                                        {canOpenLayerSync && (
+                                                        {activeTask === "sync" && canOpenLayerSync && (
                                                           <button
                                                             type="button"
                                                             className={`integration-sync-toggle-btn${isSyncSelected ? " is-active" : ""}`}
@@ -1378,8 +1457,9 @@ export function IntegrationCatalog({
                                 </p>
                               )}
                             </div>
+                            )}
 
-                            <div className="integration-profile-block">
+                            {activeTask === "details" && <div className="integration-profile-block">
                               <h4>Ma trận chính sách thao tác</h4>
                               <div className="integration-table-wrap">
                                 <table className="integration-table">
@@ -1444,7 +1524,7 @@ export function IntegrationCatalog({
                                   </tbody>
                                 </table>
                               </div>
-                            </div>
+                            </div>}
                           </div>
                         )}
                       </section>
@@ -1454,12 +1534,12 @@ export function IntegrationCatalog({
               })}
             </div>
 
-            {!filteredAdapters.length && (
+            {!visibleAdapters.length && (
               <p className="live-note">Không có kết nối khớp từ khóa.</p>
             )}
           </>
         )}
-      </details>
+      </div>
     </section>
   );
 }
