@@ -142,7 +142,13 @@ function extensionForExportFormat(format: IntegrationExportFormat): string {
 }
 
 function sanitizeFilename(raw: string): string | null {
-  const withoutControls = raw.replace(/[\x00-\x1f\x7f]/g, "").trim();
+  const withoutControls = Array.from(raw)
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("")
+    .trim();
   if (!withoutControls) {
     return null;
   }
