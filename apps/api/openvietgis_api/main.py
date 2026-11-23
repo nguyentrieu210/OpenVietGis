@@ -1,5 +1,4 @@
-from fastapi import APIRouter, FastAPI, Depends
-from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -15,8 +14,8 @@ from openvietgis_api.adapters.http import (
     extensions,
     external_sources,
     field,
-    grants,
     gis_access,
+    grants,
     health,
     invitations,
     layout_designer,
@@ -45,9 +44,11 @@ from openvietgis_api.adapters.http import (
     terrain,
     tilesets,
     transfers,
+    v8i_bridge,
     workspaces,
 )
 from openvietgis_api.adapters.http.errors import install_error_handlers
+from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
 from openvietgis_api.config import get_settings
 from openvietgis_api.domains.extensions.runtime import discover_official_module_runtimes
 
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(cartography.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(layout_designer.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(external_sources.router,dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(v8i_bridge.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(collaboration.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router,dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad_documents.router, dependencies=[Depends(project_access_guard)])

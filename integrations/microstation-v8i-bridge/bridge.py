@@ -13,7 +13,7 @@ from bridge_contract import (
     stable_digest,
     validate_snapshot,
 )
-from windows_com import V8iProbeError, probe_running_v8i
+from windows_com import V8iProbeError, probe_running_v8i, scan_running_v8i
 
 MAX_BYTES = 4 * 1024 * 1024
 
@@ -30,6 +30,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="OpenVietGIS V8i bridge: read-only diagnostic and fixture validation")
     cmd = parser.add_subparsers(dest="cmd", required=True)
     cmd.add_parser("probe", help="attach to an already-running V8i COM session (Windows only)")
+    scan = cmd.add_parser("scan", help="experimental, local-only active-model geometry preview (Windows)")
+    scan.add_argument("--drawing-id", required=True)
+    scan.add_argument("--model-id", required=True)
+    scan.add_argument("--source-crs", required=True, help="explicit CRS code, never auto-detected")
+    scan.add_argument("--output", required=True, help="new local JSON file; will not overwrite existing files")
     validate = cmd.add_parser("validate", help="validate source-CRS snapshot without network transfer")
     validate.add_argument("snapshot")
     compare = cmd.add_parser("diff", help="preview non-destructive revision changes")
@@ -39,6 +44,21 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.cmd == "probe":
             result = probe_running_v8i()
+        elif args.cmd == "scan":
+            scanned = scan_running_v8i(
+                drawing_id=args.drawing_id, model_id=args.model_id, source_crs=args.source_crs
+            )
+            # Use exclusive mode to avoid accidental overwrite of CAD exports.
+            with Path(args.output).open("x", encoding="utf-8") as stream:
+                json.dump(scanned["snapshot"], stream, ensure_ascii=False, indent=2)
+                stream.write("\n")
+            result = {
+                "status": "experimental_scan_saved_locally",
+                "geometry_extraction_verified_on_v8i": False,
+                "coordinate_units_verified": False,
+                "file_uploaded": False,
+                "scan_stats": scanned["scan_stats"],
+            }
         elif args.cmd == "validate":
             snapshot = validate_snapshot(read_snapshot(args.snapshot))
             result = {

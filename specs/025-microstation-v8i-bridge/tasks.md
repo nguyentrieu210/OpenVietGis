@@ -8,7 +8,7 @@ Base commit: `5baade9`; feature branch: `feature/025-microstation-v8i-bridge`.
 - [x] T003 [US2] Add synthetic fixtures and repeatable unit tests for CRS, duplicate IDs, unsupported geometries and deletion candidates.
 
 ## Phase B — Windows adapter (Agent: windows)
-- [ ] T004 [US1] Safe attach-only COM probe for **running** V8i on Windows, with clear offline diagnostics.
+- [x] T004 [US1] Safe attach-only COM probe for **running** V8i on Windows, with clear offline diagnostics.
 - [ ] T005 [US1/US2] Verify COM element traversal on an authorized V8i Windows machine; create capability matrix. Do not enable auto-sync based only on probe.
 - [ ] T006 [US2] Map line/string/shape with verified V8i COM semantics; track unsupported entity types rather than silently dropping.
 
@@ -19,9 +19,17 @@ Base commit: `5baade9`; feature branch: `feature/025-microstation-v8i-bridge`.
 - [ ] T010 [US4] Add review-driven changeset sync as separately approved milestone, no automatic deletes.
 
 ## Phase D — Frontend and release (Agent: frontend/release)
-- [ ] T011 [US3] Add project-scoped connector UI under current integrations settings; disabled capabilities clearly labelled.
+- [x] T011 [US3] Add project-scoped connector UI under current integrations settings; disabled capabilities clearly labelled.
 - [ ] T012 [US3] Browser smoke for pairing, revoke, offline status, never exposing secret.
 - [ ] T013 [US4] Real V8i Windows smoke: 100-parcel read, metadata coverage, bitness, ID stability, CRS control points, backup/restore.
 - [ ] T014 Run merge-review, full quality gates, release with rollback; production deploy **only** after T008–T013 and required Windows evidence.
 
 **Policy:** Existing R010 is read-only; main/live remain untouched. Use PR for review and do not merge automatically.
+
+## Review checkpoint — 2026-11-23
+
+- Implemented in isolated tracks and merged to R025 feature: Windows COM scan preview, authenticated project-scoped capability discovery, browser-only local JSON snapshot inspector, QA fake-COM suite.
+- 23 portable Windows/contract tests PASS; API unit capability test PASS; Ruff PASS; web and web-next TypeScript checks PASS in an agent worktree with shared dev dependencies.
+- NOT YET VERIFIED: any MicroStation V8i Windows COM behavior, unit conversion to VN-2000, FAMIS/gCadas attributes, online sync, real database authorization integration.
+- PostgreSQL integration gate blocked: shared test DB currently holds unresolvable legacy Alembic revision 0019_extension_lifecycle; an ephemeral container attempt failed with loopback connection refused. No shared DB reset or live migration.
+- No production network credentials, branch merges into main, or live rollout.

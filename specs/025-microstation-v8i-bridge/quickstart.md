@@ -14,8 +14,11 @@ To inspect a licensed V8i instance on Windows:
 ```powershell
 py -m pip install pywin32
 py bridge.py probe
+py bridge.py scan --drawing-id drawing1 --model-id model1 --source-crs EPSG:XXXX --output snapshot.json
 ```
 
 `probe` only attaches to an **already running** COM application and prints metadata. `probe` cannot prove that a drawing's parcels can be extracted, that CRS matches, or that two-way sync works. No credentials are needed; no network call is made.
+
+**Scan is unverified without a real V8i test machine:** verify working units, reference attachments, element IDs, geometry/topology and local origin before trusting coordinates. The scan writes locally and never uploads.
 
 **Do not upload private cadastral data until an authorized P2 sync API, device pairing, masking and consent controls exist.**

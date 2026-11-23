@@ -27,6 +27,7 @@ import {
   releaseStatusLabel
 } from "./platform-release-state";
 import { ExternalSourcePreview } from "./ExternalSourcePreview";
+import { MicroStationBridgePanel } from "./MicroStationBridgePanel";
 import { CollaborationWorkbenchPanel } from "./CollaborationWorkbenchPanel";
 import { CadImportPanel } from "./CadImportPanel";
 import { ExtensionWorkbenchPanel } from "./ExtensionWorkbenchPanel";
@@ -241,6 +242,8 @@ export function PlatformHubPage({ embeddedTab }: { embeddedTab?: HubTab } = {}) 
             </table>
           </section>
         )}
+
+        {tab === "external" && <MicroStationBridgePanel />}
 
         {tab === "external" && (
           <section className="ovg-card">
