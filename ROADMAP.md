@@ -174,7 +174,7 @@ External Sources.
 
 Child [R026 — Integration Hub & Policy Gate](specs/026-integration-hub-policy/spec.md): project-scoped, read-only adapter catalog and deny-by-default action policy. Slice 1 only; desktop sync, credential binding and production deployment remain gated.
 
-Child [R027 — Bidirectional Integration Sync](specs/027-bidirectional-integration-sync/spec.md): Spec Kit initialized (spec/research/plan/data model/API draft/tasks) for QGIS-first approved two-way synchronization, durable identity/cursor/inbox-outbox, ACL/CRS, conflicts and rollback. **Planning only**; no live write connector or automatic two-way sync implied. Depends on R026, R006, R002, R003, R010/R013. [Plan](specs/027-bidirectional-integration-sync/plan.md) | [Tasks](specs/027-bidirectional-integration-sync/tasks.md).
+Child [R027 — Bidirectional Integration Sync](specs/027-bidirectional-integration-sync/spec.md): Spec Kit initialized (spec/research/plan/data model/API draft/tasks) for QGIS-first approved two-way synchronization, durable identity/cursor/inbox-outbox, ACL/CRS, conflicts and rollback. **Foundation Slice A implementation candidate exists on the feature branch** (disabled QGIS binding registry + pure three-way diff; see [evidence](specs/027-bidirectional-integration-sync/evidence.md)); no live write connector or automatic two-way sync implied. Depends on R026, R006, R002, R003, R010/R013. [Plan](specs/027-bidirectional-integration-sync/plan.md) | [Tasks](specs/027-bidirectional-integration-sync/tasks.md).
 
 ### R011
 

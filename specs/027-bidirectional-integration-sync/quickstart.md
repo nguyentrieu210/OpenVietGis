@@ -1,6 +1,6 @@
 # Quickstart — R027 Bidirectional Integration Sync
 
-**Current state: SPEC ONLY.** These are proposed endpoints and acceptance scenarios, **not existing production routes**. R026's catalog/GeoPackage preview-push must be independently verified before building R027.
+**Current state:** Foundation Slice A has branch-only implementation of disabled QGIS binding drafts and a pure three-way diff planner, with isolated PostGIS tests. **No R027 production routes or live two-way synchronization are deployed.** The broader sync endpoints below remain proposals. See [implementation evidence](evidence.md).
 
 ## Intended user flow (QGIS first)
 
