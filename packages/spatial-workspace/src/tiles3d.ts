@@ -1,10 +1,7 @@
-import type {Map as MLMap} from "maplibre-gl";
-import type {SelectableFootprintEngine} from "./maplibre3d";
+import {MercatorCoordinate,load3dMapRuntime,type Renderer3dMap as MLMap,type SelectableFootprintEngine} from "./renderer3d";
 import {customMeshLayer,type InteractiveMeshLayer,type SceneMesh} from "./mesh-layer";
 import {parseStaticModel,MODEL_MAX_BYTES,type StaticModel} from "./gltf";
 import {selectTiles,tileVertex,TRIANGLE_LIMIT,type Tile} from "./tileset";
-import {MercatorCoordinate} from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
 const deg=180/Math.PI;
 export function tileMesh(tile:Tile,model:StaticModel):SceneMesh{
  const r=tile.region,o=MercatorCoordinate.fromLngLat([(r[0]+r[2])/2*deg,(r[1]+r[3])/2*deg],r[4]),v=model.positions,out=new Float32Array(v.length);
@@ -14,7 +11,7 @@ export function tileMesh(tile:Tile,model:StaticModel):SceneMesh{
 export type TileHit={uri:string;triangle:number};
 export type SelectableTileEngine=SelectableFootprintEngine&{highlightFeature(hit:TileHit,first:number,count:number):boolean;clearFeature():void;focusFeature(hit:TileHit,first:number,count:number,signal:AbortSignal):Promise<boolean>};
 export async function prepareTiles3d(host:HTMLElement,root:Tile,signal:AbortSignal,load:(uri:string,signal:AbortSignal)=>Promise<ArrayBuffer>,status:(v:string)=>void,onPick?:(hit:TileHit|null)=>void):Promise<SelectableTileEngine>{
- const {Map,NavigationControl}=await import("maplibre-gl");if(signal.aborted)throw new DOMException("Aborted","AbortError");
+ const {Map,NavigationControl}=await load3dMapRuntime();if(signal.aborted)throw new DOMException("Aborted","AbortError");
  const surface=document.createElement("div");surface.className="ovg-footprint-3d";surface.style.cssText="position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:5";host.append(surface);
  let map:MLMap|null=null,disposed=false,active=false,visible=true,request:AbortController|null=null,serial=0;
  const layers=new globalThis.Map<string,{layer:InteractiveMeshLayer;triangles:number;mesh:SceneMesh}>();

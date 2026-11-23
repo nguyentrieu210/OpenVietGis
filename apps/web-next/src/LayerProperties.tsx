@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import type {SpatialLayer,MapStyle} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
-import type {Map as MLMap} from "maplibre-gl";
+import type {Map as MLMap} from "./map-surface";
 import type {Geometry,Position} from "geojson";
 import {Modal} from "./studio-ui";
 

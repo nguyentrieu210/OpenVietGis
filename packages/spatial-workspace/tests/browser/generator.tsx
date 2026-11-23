@@ -2,13 +2,12 @@ import {useState,useEffect,useRef} from "react";
 import {createRoot} from "react-dom/client";
 import {ApiClient,type SpatialLayer} from "../../../client-sdk/src/index";
 import {TilesetPanel,type TilesetRecord} from "../../../../apps/web-next/src/TilesetPanel";
-import {setWorkerUrl} from "maplibre-gl";
-import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+import {configureBrowserTestWorker} from "./worker";
 import {parseTileset} from "../../src/tileset";
 import {prepareTiles3d} from "../../src/tiles3d";
 import type {SelectableTileEngine} from "../../src/tiles3d";
 import {TileFeaturePanel,parseTileFeature,type TileFeature} from "../../../../apps/web-next/src/TileFeaturePanel";
-setWorkerUrl(workerUrl);
+configureBrowserTestWorker();
 const client=new ApiClient({baseUrl:"/fixture"});
 function Fixture(){
  const [layers,setLayers]=useState<SpatialLayer[]>([]),[selected,setSelected]=useState<TilesetRecord|null>(null),[busy,setBusy]=useState(false),[status,setStatus]=useState("");

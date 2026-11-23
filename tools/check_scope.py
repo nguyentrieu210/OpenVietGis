@@ -35,8 +35,10 @@ RENDERER_OWNERS = {
     MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
     "packages/spatial-workspace/src/maplibre3d.ts",
+    "packages/spatial-workspace/src/renderer3d.ts",
     # Isolated browser fixture bootstraps a renderer worker; never production.
     "packages/spatial-workspace/tests/browser/3d.ts",
+    "packages/spatial-workspace/tests/browser/worker.ts",
 }
 RENDERER_MANIFESTS = {
     "apps/web/package.json",
