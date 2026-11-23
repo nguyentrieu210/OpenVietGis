@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent,type DragEvent,type RefObject} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import {createPortal} from "react-dom";
 import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
 import "./team-collaboration.css";

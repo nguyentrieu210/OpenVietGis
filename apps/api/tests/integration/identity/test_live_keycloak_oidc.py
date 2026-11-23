@@ -3,6 +3,7 @@
 This is not browser/Playwright E2E. The provider login form and authorization code
 exchange are real; only the application HTTP transport is in-process TestClient.
 """
+
 from __future__ import annotations
 
 import io
@@ -38,6 +39,7 @@ live_oidc = pytest.mark.skipif(
     os.environ.get("OPENVIETGIS_LIVE_OIDC") != "1",
     reason="opt-in loopback Keycloak acceptance; set OPENVIETGIS_LIVE_OIDC=1",
 )
+
 
 def _loopback_origin(name: str, default: int) -> str:
     raw = os.environ.get(name, str(default))
@@ -130,7 +132,8 @@ def _private_runtime_logs() -> Iterator[io.StringIO]:
 
 
 def _observe_real_exchange(
-    monkeypatch: pytest.MonkeyPatch, evidence: _SecretEvidence,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: _SecretEvidence,
 ) -> None:
     # This is a transparent observer, not a token endpoint mock. Authlib's real
     # HTTP token fetch runs unmodified, and its caller still performs ID-token
@@ -191,13 +194,11 @@ def _check_loopback_cookie_policy() -> None:
     # Test the precise exception without constructing or sending real cookies.
     _require(
         policy.return_ok_secure(secure_cookie, Request(ISSUER + "/login-actions/authenticate"))
+        and not policy.return_ok_secure(secure_cookie, Request(APP_ORIGIN + "/realms/openvietgis/"))
+        and not policy.return_ok_secure(secure_cookie, Request(PROVIDER_ORIGIN + "/realms/other/"))
         and not policy.return_ok_secure(
-            secure_cookie, Request(APP_ORIGIN + "/realms/openvietgis/")
+            secure_cookie, Request("http://example.test/realms/openvietgis/")
         )
-        and not policy.return_ok_secure(
-            secure_cookie, Request(PROVIDER_ORIGIN + "/realms/other/")
-        )
-        and not policy.return_ok_secure(secure_cookie, Request("http://example.test/realms/openvietgis/"))
         and not policy.return_ok_secure(secure_cookie, Request(APP_ORIGIN + CALLBACK_PATH)),
         "loopback provider Secure cookie policy was not narrowly confined",
     )
@@ -221,10 +222,7 @@ def _redirect(response: httpx.Response) -> str:
 
 
 def _fixture_password() -> str:
-    fixture = (
-        Path(__file__).resolve().parents[5]
-        / "infra/dev/keycloak/realm-openvietgis.json"
-    )
+    fixture = Path(__file__).resolve().parents[5] / "infra/dev/keycloak/realm-openvietgis.json"
     data = json.loads(fixture.read_text(encoding="utf-8"))
     user = next(item for item in data["users"] if item["username"] == FIXTURE_USERNAME)
     password = next(item for item in user["credentials"] if item["type"] == "password")
@@ -241,8 +239,12 @@ def _fixture_password() -> str:
 
 
 def _provider_request(
-    client: httpx.Client, method: str, url: str, *,
-    data: dict[str, str] | None = None, headers: dict[str, str] | None = None,
+    client: httpx.Client,
+    method: str,
+    url: str,
+    *,
+    data: dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> httpx.Response:
     _require(_provider_url(url), "refusing unexpected provider request")
     # Client.build_request copies cookies into a new default CookieJar, losing
@@ -331,7 +333,9 @@ def _provider_callback(client: httpx.Client, authorization_url: str) -> str:
     # The password is sent only to Keycloak's standard browser login action.
     # No direct password grant and no token endpoint mocking.
     response = _provider_request(
-        client, "POST", action,
+        client,
+        "POST",
+        action,
         data={
             **form.hidden,
             "username": FIXTURE_USERNAME,
@@ -353,7 +357,9 @@ def _provider_callback(client: httpx.Client, authorization_url: str) -> str:
 
 
 def _login_once(
-    app: TestClient, provider: httpx.Client, evidence: _SecretEvidence,
+    app: TestClient,
+    provider: httpx.Client,
+    evidence: _SecretEvidence,
 ) -> tuple[str, str]:
     begin = app.get(
         "/api/v1/auth/login/keycloak",
@@ -366,8 +372,7 @@ def _login_once(
     _require(_provider_url(authorization_url), "unexpected authorization URL")
     authorization = parse_qs(urlsplit(authorization_url).query)
     _require(
-        urlsplit(authorization_url).path
-        == "/realms/openvietgis/protocol/openid-connect/auth"
+        urlsplit(authorization_url).path == "/realms/openvietgis/protocol/openid-connect/auth"
         and authorization.get("response_type") == ["code"]
         and authorization.get("client_id") == [CLIENT_ID]
         and authorization.get("redirect_uri") == [CALLBACK_URL]
@@ -375,9 +380,7 @@ def _login_once(
         and len(authorization.get("state", [])) == 1
         and len(authorization.get("nonce", [])) == 1
         and len(authorization.get("code_challenge", [])) == 1
-        and bool(re.fullmatch(
-            r"[A-Za-z0-9_-]{43}", authorization.get("code_challenge", [""])[0]
-        )),
+        and bool(re.fullmatch(r"[A-Za-z0-9_-]{43}", authorization.get("code_challenge", [""])[0])),
         "authorization code, state, nonce or PKCE contract is invalid",
     )
     evidence.record("state", authorization["state"][0])
@@ -401,8 +404,7 @@ def _login_once(
     evidence.response(result, stage="callback")
     _require(result.status_code == 302, "real authorization code exchange failed")
     _require(
-        result.headers.get("location") == WEB_ORIGIN + "/organizations"
-        and not result.content,
+        result.headers.get("location") == WEB_ORIGIN + "/organizations" and not result.content,
         "callback leaked data or did not redirect to the expected app path",
     )
     cookies = SimpleCookie()
@@ -442,9 +444,10 @@ def _login_once(
     # refresh token. Prove its stored representation is only a digest.
     parsed = parse_session_token(token)
     with get_admin_session_factory()() as admin:
-        row = admin.execute(
-            text(
-                """
+        row = (
+            admin.execute(
+                text(
+                    """
                 SELECT s.secret_hash, s.user_id, s.revoked_at, l.issuer,
                        l.email_snapshot, l.email_verified
                 FROM identity.web_sessions s
@@ -452,9 +455,12 @@ def _login_once(
                   ON l.id = s.identity_link_id AND l.user_id = s.user_id
                 WHERE s.id = :id
                 """
-            ),
-            {"id": parsed.session_id},
-        ).mappings().one_or_none()
+                ),
+                {"id": parsed.session_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
         _require(
             row is not None,
             "application session was not persisted",
@@ -560,7 +566,9 @@ def _exercise_live_oidc(
         evidence.record("fixture-password", _fixture_password())
         _observe_real_exchange(monkeypatch, evidence)
         with TestClient(
-            create_app(), base_url=APP_ORIGIN, raise_server_exceptions=False,
+            create_app(),
+            base_url=APP_ORIGIN,
+            raise_server_exceptions=False,
         ) as app:
             stage = "first real Keycloak login"
             with httpx.Client(follow_redirects=False, trust_env=False, timeout=20) as provider_http:

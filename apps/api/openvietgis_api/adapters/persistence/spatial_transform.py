@@ -109,7 +109,8 @@ def transform_response_geometries(
         return ()
 
     def apply(
-        geometries: Sequence[NativeGeometry], step: PipelineStep,
+        geometries: Sequence[NativeGeometry],
+        step: PipelineStep,
     ) -> tuple[NativeGeometry, ...]:
         import json
 
@@ -121,10 +122,13 @@ def transform_response_geometries(
         ]
         # Function identifier comes only from this boolean, never from data.
         function = "ST_InverseTransformPipeline" if step.inverse else "ST_TransformPipeline"
-        query = """
+        query = (
+            """
             WITH transformed AS MATERIALIZED (
                 SELECT n.feature_id,
-        """ + function + """(
+        """
+            + function
+            + """(
                     ST_GeomFromText(r.wkt,:input_srid), :pipeline, :output_srid
                 ) AS geometry
                 FROM jsonb_to_recordset(CAST(:records AS jsonb)) AS r(id text,wkt text,native text)
@@ -142,17 +146,26 @@ def transform_response_geometries(
                 ST_AsBinary(geometry,'NDR') AS wkb
             FROM transformed
         """
+        )
         try:
-            rows = session.execute(
-                text(query),
-                dict(scope) | {
-                    "source": source.id, "content": source.content_revision,
-                    "schema": source.schema_revision,
-                    "records": json.dumps(records, allow_nan=False),
-                    "native_srid": source.stored_crs, "input_srid": step.source_code,
-                    "output_srid": step.target_code, "pipeline": step.pipeline,
-                },
-            ).mappings().all()
+            rows = (
+                session.execute(
+                    text(query),
+                    dict(scope)
+                    | {
+                        "source": source.id,
+                        "content": source.content_revision,
+                        "schema": source.schema_revision,
+                        "records": json.dumps(records, allow_nan=False),
+                        "native_srid": source.stored_crs,
+                        "input_srid": step.source_code,
+                        "output_srid": step.target_code,
+                        "pipeline": step.pipeline,
+                    },
+                )
+                .mappings()
+                .all()
+            )
         except SQLAlchemyError:
             raise SpatialTransformationUnavailableError("explicit operation failed") from None
         if len(rows) != len(features) or {row["feature_id"] for row in rows} != seen:

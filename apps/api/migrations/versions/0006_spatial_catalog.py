@@ -165,8 +165,10 @@ def upgrade() -> None:
     op.execute("GRANT USAGE ON SCHEMA spatial TO openvietgis_runtime")
     _create_validation_functions()
     op.create_unique_constraint(
-        "uq_audit_events_organization_id_id", "audit_events",
-        ["organization_id", "id"], schema="audit",
+        "uq_audit_events_organization_id_id",
+        "audit_events",
+        ["organization_id", "id"],
+        schema="audit",
     )
     op.execute("""
         CREATE TABLE spatial.data_sources (

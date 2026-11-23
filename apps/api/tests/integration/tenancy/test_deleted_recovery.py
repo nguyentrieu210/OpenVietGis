@@ -51,13 +51,16 @@ def test_deleted_workspace_and_project_restore_is_status_only_tenant_scoped_and_
         assert owner.patch(project, json={"name": "denied"}).status_code == 400
         assert owner.patch(project, json={"status": "archived"}).status_code == 400
         assert owner.patch(project, json={"status": "active", "name": None}).status_code == 400
-        assert owner.patch(
-            project, json={"status": "active", "workspace_id": None}
-        ).status_code == 400
+        assert (
+            owner.patch(project, json={"status": "active", "workspace_id": None}).status_code == 400
+        )
         assert member.patch(project, json={"status": "active"}).status_code == 403
-        assert unrelated_owner.patch(
-            f"{foreign_root}/projects/{world.project_id}", json={"status": "active"}
-        ).status_code == 404
+        assert (
+            unrelated_owner.patch(
+                f"{foreign_root}/projects/{world.project_id}", json={"status": "active"}
+            ).status_code
+            == 404
+        )
 
         # Recovery preserves grouping: first restore the original Workspace.
         assert owner.patch(project, json={"status": "active"}).status_code == 400
@@ -66,22 +69,24 @@ def test_deleted_workspace_and_project_restore_is_status_only_tenant_scoped_and_
         assert str(world.workspace_a_id) not in {
             item["id"] for item in owner.get(f"{root}/workspaces").json()
         }
-        assert owner.get(
-            f"{root}/projects", params={"workspace_id": str(world.workspace_a_id)}
-        ).status_code == 404
         assert (
-            owner.patch(workspace, json={"status": "active", "name": "denied"}).status_code
-            == 400
+            owner.get(
+                f"{root}/projects", params={"workspace_id": str(world.workspace_a_id)}
+            ).status_code
+            == 404
         )
         assert (
-            owner.patch(workspace, json={"status": "active", "name": None}).status_code
-            == 400
+            owner.patch(workspace, json={"status": "active", "name": "denied"}).status_code == 400
         )
+        assert owner.patch(workspace, json={"status": "active", "name": None}).status_code == 400
         assert owner.patch(workspace, json={"name": "denied"}).status_code == 400
         assert member.patch(workspace, json={"status": "active"}).status_code == 403
-        assert unrelated_owner.patch(
-            f"{foreign_root}/workspaces/{world.workspace_a_id}", json={"status": "active"}
-        ).status_code == 404
+        assert (
+            unrelated_owner.patch(
+                f"{foreign_root}/workspaces/{world.workspace_a_id}", json={"status": "active"}
+            ).status_code
+            == 404
+        )
 
         restored_workspace = owner.patch(workspace, json={"status": "active"})
         assert restored_workspace.status_code == 200, restored_workspace.text
@@ -114,8 +119,7 @@ def test_deleted_workspace_and_project_restore_is_status_only_tenant_scoped_and_
             {"org": world.organization_id},
         ).all()
         actual = [
-            (row.action, row.actor_type, row.actor_id, row.resource_id)
-            for row in restored_events
+            (row.action, row.actor_type, row.actor_id, row.resource_id) for row in restored_events
         ]
         assert actual == [
             ("project.update", "human", world.owner_user_id, world.project_id),

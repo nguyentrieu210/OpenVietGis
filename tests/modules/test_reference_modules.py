@@ -77,8 +77,12 @@ def test_two_independent_reference_modules_validate_core_extension_model() -> No
         assert r2.status_code == 201, r2.text
 
         # Verify both modules operate independently in the same project
-        h_recs = client.get(f"{proj_base}/extensions/house_numbering/records").json()["items"]
-        l_recs = client.get(f"{proj_base}/extensions/land_asset/records").json()["items"]
+        h_recs = client.get(f"{proj_base}/extensions/house_numbering/records").json()[
+            "items"
+        ]
+        l_recs = client.get(f"{proj_base}/extensions/land_asset/records").json()[
+            "items"
+        ]
         assert len(h_recs) == 3
         assert len(l_recs) == 1
         assert l_recs[0]["payload"]["asset_code"] == "LND-QN-0042"

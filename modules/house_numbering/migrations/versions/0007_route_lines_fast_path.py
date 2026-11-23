@@ -1,4 +1,5 @@
 """Keep existing single-feature routes on the indexed Core join."""
+
 from alembic import op
 
 revision = "hn_0007_route_lines_fast_path"
@@ -29,19 +30,35 @@ _SINGLE = """
           AND s.lifecycle='active' AND s.validation_state='ready' 
 """
 
+
 def upgrade() -> None:
-    op.execute("""
+    op.execute(
+        """
       CREATE OR REPLACE VIEW house_numbering.route_lines WITH (security_invoker=true) AS
       SELECT r.organization_id,r.project_id,r.id AS route_id,f.geometry AS geometry,f.content_revision::text AS content_revision
-    """ + _SINGLE + """
+    """
+        + _SINGLE
+        + """
       AND ST_GeometryType(f.geometry)='ST_LineString' AND ST_Length(f.geometry)>0
       UNION ALL
       SELECT r.organization_id,r.project_id,r.id AS route_id,house_numbering.resolve_route_line(ARRAY[f.geometry]) AS geometry,f.content_revision::text AS content_revision
-    """ + _SINGLE + """
+    """
+        + _SINGLE
+        + """
       AND ST_GeometryType(f.geometry)='ST_MultiLineString' AND house_numbering.resolve_route_line(ARRAY[f.geometry]) IS NOT NULL
       UNION ALL 
-    """ + _GROUPED.format(links="r.segments",where="AND jsonb_array_length(r.segments)>0"))
+    """
+        + _GROUPED.format(
+            links="r.segments", where="AND jsonb_array_length(r.segments)>0"
+        )
+    )
+
 
 def downgrade() -> None:
-    op.execute("CREATE OR REPLACE VIEW house_numbering.route_lines WITH (security_invoker=true) AS " +
-        _GROUPED.format(links="CASE WHEN jsonb_array_length(r.segments)>0 THEN r.segments ELSE jsonb_build_array(jsonb_build_object('source_id',r.linked_source_id,'feature_id',r.linked_feature_id)) END",where=""))
+    op.execute(
+        "CREATE OR REPLACE VIEW house_numbering.route_lines WITH (security_invoker=true) AS "
+        + _GROUPED.format(
+            links="CASE WHEN jsonb_array_length(r.segments)>0 THEN r.segments ELSE jsonb_build_array(jsonb_build_object('source_id',r.linked_source_id,'feature_id',r.linked_feature_id)) END",
+            where="",
+        )
+    )

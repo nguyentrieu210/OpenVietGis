@@ -21,18 +21,14 @@ PROTECTED_TABLES = (
 
 
 def _tenant_expr(column: str = "organization_id") -> str:
-    return (
-        f"{column} = NULLIF(current_setting('openvietgis.organization_id', true), '')::uuid"
-    )
+    return f"{column} = NULLIF(current_setting('openvietgis.organization_id', true), '')::uuid"
 
 
 def upgrade() -> None:
     bind = op.get_bind()
     role_exists = bool(
         bind.execute(
-            sa.text(
-                "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime')"
-            )
+            sa.text("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime')")
         ).scalar_one()
     )
     if not role_exists:
@@ -150,12 +146,8 @@ def downgrade() -> None:
     ):
         op.execute(f"DROP POLICY IF EXISTS {table}_tenant ON {schema}.{table}")
 
-    op.execute(
-        "DROP POLICY IF EXISTS memberships_tenant_write ON org.organization_memberships"
-    )
-    op.execute(
-        "DROP POLICY IF EXISTS memberships_tenant_or_self ON org.organization_memberships"
-    )
+    op.execute("DROP POLICY IF EXISTS memberships_tenant_write ON org.organization_memberships")
+    op.execute("DROP POLICY IF EXISTS memberships_tenant_or_self ON org.organization_memberships")
 
     for schema, table in PROTECTED_TABLES:
         op.execute(f'ALTER TABLE "{schema}"."{table}" NO FORCE ROW LEVEL SECURITY')

@@ -1,5 +1,5 @@
 import React,{useRef,useState,useEffect} from "react";
-import * as ml from "maplibre-gl";
+import * as ml from "./map-surface";
 import {ApiClient,ApiError,loadCsrfToken,type SpatialLayer} from "@openvietgis/client-sdk";
 import {captureFrame,currentCamera,svgCanvas,pngFromCanvas,pdfFromCanvas,saveBlob,type Camera,type Shot} from "./LayoutRender";
 import "./layout-designer.css";

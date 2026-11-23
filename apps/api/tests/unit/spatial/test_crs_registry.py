@@ -6,9 +6,7 @@ from openvietgis_api.domains.spatial import crs
 
 
 def test_registry_is_finite_and_definition_only_is_not_readable() -> None:
-    assert {profile.code for profile in crs.CRS_PROFILES} == {
-        4326, 3857, 4756, 5899, 3405, 3406
-    }
+    assert {profile.code for profile in crs.CRS_PROFILES} == {4326, 3857, 4756, 5899, 3405, 3406}
     assert len(crs.CRS_PROFILES) == 6
     for code in (4326, 3857, 4756, 5899):
         profile = crs.get_crs_profile(code)
@@ -107,9 +105,18 @@ def test_profile_wire_uses_exact_contract_keys_and_does_not_mutate_registry() ->
     assert profile is not None
     wire = profile.to_wire()
     assert set(wire) == {
-        "authority", "code", "name", "datum", "native_axes", "unit",
-        "coordinate_order", "x_axis", "y_axis", "projection_parameters",
-        "area_of_use", "disposition",
+        "authority",
+        "code",
+        "name",
+        "datum",
+        "native_axes",
+        "unit",
+        "coordinate_order",
+        "x_axis",
+        "y_axis",
+        "projection_parameters",
+        "area_of_use",
+        "disposition",
     }
     assert wire["authority"] == "EPSG"
     assert wire["coordinate_order"] == "xy"
@@ -137,7 +144,9 @@ def test_only_eight_directed_edges_have_frozen_operation_ids_and_tolerances() ->
     assert len(crs.TRANSFORMATION_PROFILES) == 8
     assert {
         (edge.source_code, edge.target_code): (
-            edge.operation_id, edge.tolerance, edge.tolerance_unit
+            edge.operation_id,
+            edge.tolerance,
+            edge.tolerance_unit,
         )
         for edge in crs.TRANSFORMATION_PROFILES
     } == expected
@@ -176,12 +185,22 @@ def test_operation_steps_are_fixed_and_not_automatic_graph_chaining() -> None:
         (4326, 5899): ((4326, 4756, datum_pipe, True), (4756, 5899, tm_pipe, False)),
     }
     for edge in crs.TRANSFORMATION_PROFILES:
-        assert tuple(
-            (step.source_code, step.target_code, step.pipeline, step.inverse) for step in edge.steps
-        ) == steps[(edge.source_code, edge.target_code)]
+        assert (
+            tuple(
+                (step.source_code, step.target_code, step.pipeline, step.inverse)
+                for step in edge.steps
+            )
+            == steps[(edge.source_code, edge.target_code)]
+        )
         assert set(edge.to_wire()) == {
-            "source_code", "target_code", "operation_id", "method", "validated_area",
-            "tolerance", "tolerance_unit", "evidence_id",
+            "source_code",
+            "target_code",
+            "operation_id",
+            "method",
+            "validated_area",
+            "tolerance",
+            "tolerance_unit",
+            "evidence_id",
         }
 
 

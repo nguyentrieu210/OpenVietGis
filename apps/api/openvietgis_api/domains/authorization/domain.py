@@ -24,6 +24,7 @@ class ResourceGrant:
     created_by_actor_id: UUID | None
     revoked_at: datetime | None
 
+
 class ServicePrincipalStatus(StrEnum):
     ACTIVE = "active"
     REVOKED = "revoked"
@@ -61,7 +62,6 @@ def service_credential_is_usable(
     credential: ServiceCredential,
     now: datetime,
 ) -> bool:
-    return (
-        credential.revoked_at is None
-        and (credential.expires_at is None or credential.expires_at > now)
+    return credential.revoked_at is None and (
+        credential.expires_at is None or credential.expires_at > now
     )

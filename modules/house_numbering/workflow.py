@@ -28,11 +28,13 @@ def assign_even_odd_sequence(
         num += 1
     plates: list[dict[str, Any]] = []
     for i in range(count):
-        plates.append({
-            "street_name": street_name,
-            "house_number": str(num + i * step),
-            "side": side,
-            "ward_code": ward_code,
-            "verified": True,
-        })
+        plates.append(
+            {
+                "street_name": street_name,
+                "house_number": str(num + i * step),
+                "side": side,
+                "ward_code": ward_code,
+                "verified": True,
+            }
+        )
     return plates

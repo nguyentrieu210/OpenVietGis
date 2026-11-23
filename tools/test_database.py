@@ -14,11 +14,15 @@ DEFAULT_TEST_DATABASE_URL = (
 def assert_safe_test_target(database_url: str) -> None:
     assert_safe_target("test", database_url)
     if make_url(database_url).database != "openvietgis_test":
-        raise RuntimeError("Refusing tests outside the dedicated openvietgis_test database")
+        raise RuntimeError(
+            "Refusing tests outside the dedicated openvietgis_test database"
+        )
 
 
 def build_test_environment(environ: Mapping[str, str]) -> dict[str, str]:
-    database_url = environ.get("OPENVIETGIS_TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL)
+    database_url = environ.get(
+        "OPENVIETGIS_TEST_DATABASE_URL", DEFAULT_TEST_DATABASE_URL
+    )
     assert_safe_test_target(database_url)
     owner_url = make_url(database_url)
     runtime_url = owner_url.set(

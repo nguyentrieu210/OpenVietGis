@@ -8,12 +8,12 @@ from uuid import UUID
 
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.platform_errors import (
-    PlatformValidationError,
-    PlatformNotFoundError,
     PlatformConflictError,
+    PlatformNotFoundError,
+    PlatformValidationError,
 )
-from sqlalchemy.engine import RowMapping
 from sqlalchemy import text
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from modules.house_numbering.batch_numbering import build_route_plan
@@ -24,8 +24,12 @@ from modules.house_numbering.domain import (
     locate_on_route,
     suggest_number,
 )
+from modules.house_numbering.numbering_audit import (
+    audit_route_numbering,
+    find_tree_collisions,
+    summarize_audit,
+)
 from modules.house_numbering.persistence import HouseNumberingRepository
-from modules.house_numbering.numbering_audit import audit_route_numbering, summarize_audit, find_tree_collisions
 
 
 def _wire(row: RowMapping | dict[str, Any]) -> dict[str, Any]:
@@ -357,7 +361,11 @@ class HouseNumberingService:
         }
 
     def preview_assignment(
-        self, *, building_ids: list[UUID], rule_id: UUID, operation_id: UUID,
+        self,
+        *,
+        building_ids: list[UUID],
+        rule_id: UUID,
+        operation_id: UUID,
     ) -> dict[str, Any]:
         if not building_ids or len(set(building_ids)) != len(building_ids):
             raise PlatformValidationError("numbering requires unique building IDs")
@@ -383,23 +391,46 @@ class HouseNumberingService:
                 route = self.repo.route_geometry(route_id)
                 vertices = _route_vertices(route)
             except (PlatformNotFoundError, PlatformValidationError):
-                warnings.extend(f"building {bid}: invalid_route_geometry" for bid in group)
+                warnings.extend(
+                    f"building {bid}: invalid_route_geometry" for bid in group
+                )
                 continue
             points = self.repo.building_points_for_route(route_id, int(route["srid"]))
             numbers = [dict(row) for row in self.repo.list_route_numbers(route_id)]
             try:
-                proposed, issues = build_route_plan(route=route, vertices=vertices, rule=domain_rule,
-                                                   points=points, numbers=numbers, targets=group)
+                proposed, issues = build_route_plan(
+                    route=route,
+                    vertices=vertices,
+                    rule=domain_rule,
+                    points=points,
+                    numbers=numbers,
+                    targets=group,
+                )
             except DomainError:
-                warnings.extend(f"building {bid}: invalid_route_or_number_data" for bid in group)
+                warnings.extend(
+                    f"building {bid}: invalid_route_or_number_data" for bid in group
+                )
                 continue
             if snapshot != self.repo.numbering_route_snapshot(route_id):
-                raise PlatformConflictError("route numbering changed during preview", code="STALE_PREVIEW")
+                raise PlatformConflictError(
+                    "route numbering changed during preview", code="STALE_PREVIEW"
+                )
             current = self.repo.route_geometry(route_id)
-            if current["content_revision"] != route["content_revision"] or current["revision"] != route["revision"]:
-                raise PlatformConflictError("route changed during preview", code="STALE_PREVIEW")
-            audit = audit_route_numbering(route=route, vertices=vertices, rule=domain_rule,
-                                          points=points, numbers=numbers, changes=proposed)
+            if (
+                current["content_revision"] != route["content_revision"]
+                or current["revision"] != route["revision"]
+            ):
+                raise PlatformConflictError(
+                    "route changed during preview", code="STALE_PREVIEW"
+                )
+            audit = audit_route_numbering(
+                route=route,
+                vertices=vertices,
+                rule=domain_rule,
+                points=points,
+                numbers=numbers,
+                changes=proposed,
+            )
             audit["route_name"] = self.repo.get_route(route_id)["name"]
             audit["cross_route_duplicates"] = []
             audits.append(audit)
@@ -407,7 +438,9 @@ class HouseNumberingService:
             inspected_numbers.update(str(c["number"]) for c in proposed)
             warnings.extend(issues)
             if audit["blocking_issues"]:
-                warnings.append(f"route {route_id}: numbering_audit_blocked ({audit['blocking_issues']} issues)")
+                warnings.append(
+                    f"route {route_id}: numbering_audit_blocked ({audit['blocking_issues']} issues)"
+                )
                 # A corrupt existing anchor or duplicate prevents safely placing
                 # new numbers on that route. Other independent child routes remain usable.
                 proposed = []
@@ -422,27 +455,65 @@ class HouseNumberingService:
         tree_collisions: list[dict[str, Any]] = []
         if inspected_numbers:
             scope = {"org": self.repo.org_id, "project": self.repo.project_id}
-            parents = {str(r["id"]): str(r["parent_route_id"]) if r["parent_route_id"] else None
-                for r in self.repo.session.execute(text("""
+            parents = {
+                str(r["id"]): str(r["parent_route_id"])
+                if r["parent_route_id"]
+                else None
+                for r in self.repo.session.execute(
+                    text("""
                     SELECT id,parent_route_id FROM house_numbering.routes
                     WHERE organization_id=:org AND project_id=:project
-                """), scope).mappings()}
-            active = self.repo.session.execute(text("""
+                """),
+                    scope,
+                ).mappings()
+            }
+            active = (
+                self.repo.session.execute(
+                    text("""
                 SELECT route_id,number_text,building_id FROM house_numbering.address_numbers
                 WHERE organization_id=:org AND project_id=:project AND retired_at IS NULL
                   AND number_text=ANY(:numbers)
-            """), {**scope, "numbers": sorted(inspected_numbers)}).mappings().all()
-            occupied = [{"route_id": r["route_id"], "number_text": r["number_text"],
-                "building_id": r["building_id"], "origin": "existing"} for r in active]
-            occupied.extend({"route_id": c["route_id"], "number_text": c["number"],
-                "building_id": c["building_id"], "origin": "proposal"} for c in changes)
+            """),
+                    {**scope, "numbers": sorted(inspected_numbers)},
+                )
+                .mappings()
+                .all()
+            )
+            occupied = [
+                {
+                    "route_id": r["route_id"],
+                    "number_text": r["number_text"],
+                    "building_id": r["building_id"],
+                    "origin": "existing",
+                }
+                for r in active
+            ]
+            occupied.extend(
+                {
+                    "route_id": c["route_id"],
+                    "number_text": c["number"],
+                    "building_id": c["building_id"],
+                    "origin": "proposal",
+                }
+                for c in changes
+            )
             tree_collisions = find_tree_collisions(parents, occupied)
             audited_ids = {str(a["route_id"]) for a in audits}
-            affected = {entry["route_id"] for issue in tree_collisions for entry in issue["occupants"]
-                        if entry["route_id"] in audited_ids}
+            affected = {
+                entry["route_id"]
+                for issue in tree_collisions
+                for entry in issue["occupants"]
+                if entry["route_id"] in audited_ids
+            }
             for detail in audits:
-                relevant = [issue for issue in tree_collisions if any(
-                    entry["route_id"] == detail["route_id"] for entry in issue["occupants"])]
+                relevant = [
+                    issue
+                    for issue in tree_collisions
+                    if any(
+                        entry["route_id"] == detail["route_id"]
+                        for entry in issue["occupants"]
+                    )
+                ]
                 if relevant:
                     detail["cross_route_duplicates"] = relevant[:40]
                     detail["blocking_issues"] += len(relevant)
@@ -454,10 +525,16 @@ class HouseNumberingService:
                 for rid in affected:
                     for label in ("route", "route_geometry", "route_snapshot"):
                         base.pop(f"{label}:{rid}", None)
-                warnings.extend(f"route {rid}: cross_route_number_duplicate" for rid in sorted(affected))
+                warnings.extend(
+                    f"route {rid}: cross_route_number_duplicate"
+                    for rid in sorted(affected)
+                )
         preview = self.repo.create_preview(
-            operation_id=operation_id, rule_id=UUID(str(rule["id"])),
-            base_revisions=base, changes=changes, warnings=warnings,
+            operation_id=operation_id,
+            rule_id=UUID(str(rule["id"])),
+            base_revisions=base,
+            changes=changes,
+            warnings=warnings,
             expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         self.commit()

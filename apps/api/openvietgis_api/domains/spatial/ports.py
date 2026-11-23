@@ -188,8 +188,12 @@ class SpatialFeatureRepository(SpatialLayerRepository, Protocol):
     """Authorized pinned feature reads and controlled fixture refresh."""
 
     def transform_features(
-        self, *, context: AuthorizationContext, source: DataSource,
-        features: Sequence[ReferenceFeature], target_code: int,
+        self,
+        *,
+        context: AuthorizationContext,
+        source: DataSource,
+        features: Sequence[ReferenceFeature],
+        target_code: int,
     ) -> tuple[NativeGeometry, ...]:
         """Transform a bounded pinned response copy using only a direct approved edge."""
         ...

@@ -65,16 +65,17 @@ def test_layer_service_lifecycle_and_capabilities(migrated_database: None) -> No
             and not cap.actor_authorized
             and cap.required_permission is None
             for name, cap in capabilities.items()
-            if name not in (
-                    "metadata_read",
-                    "feature_read",
-                    "render",
-                    "style",
-                    "export",
-                    "query",
-                    "analysis",
-                    "offline",
-                )
+            if name
+            not in (
+                "metadata_read",
+                "feature_read",
+                "render",
+                "style",
+                "export",
+                "query",
+                "analysis",
+                "offline",
+            )
         )
         no_authority = {
             item.name: item for item in layer_capabilities(first, source, actor_authorized=False)

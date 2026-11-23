@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: "Community QA guide"
+    url: "https://github.com/nguyentrieu210/OpenVietGis/blob/main/docs/community/README.md"
+    about: "Hướng dẫn kiểm thử và nghiệm thu cộng đồng (sẽ có trên main sau khi PR được merge)."
+  - name: "Security reporting"
+    url: "https://github.com/nguyentrieu210/OpenVietGis/blob/main/SECURITY.md"
+    about: "Không đăng chi tiết lỗ hổng bảo mật công khai. Xem kênh liên hệ an toàn."

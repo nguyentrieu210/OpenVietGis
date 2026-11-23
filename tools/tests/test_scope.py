@@ -35,7 +35,9 @@ def test_accepted_renderer_stays_inside_map_engine_adapter(tmp_path: Path) -> No
     assert find_scope_violations(tmp_path) == []
 
 
-def test_business_map_ui_cannot_import_renderer_types_or_dynamic_api(tmp_path: Path) -> None:
+def test_business_map_ui_cannot_import_renderer_types_or_dynamic_api(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "apps/web/src/features/map/MapWorkspace.tsx"
     source.parent.mkdir(parents=True)
     for content in (
@@ -66,7 +68,9 @@ def test_studio_renderer_adapter_is_narrowly_scoped(tmp_path: Path) -> None:
     assert len(find_scope_violations(tmp_path)) == 1
 
 
-def test_3d_adapter_does_not_grant_renderer_access_to_coordinator(tmp_path: Path) -> None:
+def test_3d_adapter_does_not_grant_renderer_access_to_coordinator(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "packages/spatial-workspace/src"
     root.mkdir(parents=True)
     adapter = root / "maplibre3d.ts"

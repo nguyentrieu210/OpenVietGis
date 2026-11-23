@@ -20,9 +20,7 @@ def _complete(monkeypatch: pytest.MonkeyPatch, token):
             return token
 
     monkeypatch.setattr(registry, "_get_client", lambda _name: Client())
-    return asyncio.run(
-        registry.complete_login(Request({"type": "http"}), provider_name="keycloak")
-    )
+    return asyncio.run(registry.complete_login(Request({"type": "http"}), provider_name="keycloak"))
 
 
 @pytest.mark.parametrize(
@@ -35,7 +33,8 @@ def _complete(monkeypatch: pytest.MonkeyPatch, token):
     ],
 )
 def test_oidc_registry_requires_transaction_validated_id_token(
-    monkeypatch: pytest.MonkeyPatch, token,
+    monkeypatch: pytest.MonkeyPatch,
+    token,
 ) -> None:
     with pytest.raises(OidcInvalidResponseError):
         _complete(monkeypatch, token)

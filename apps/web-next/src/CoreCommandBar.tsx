@@ -1,3 +1,4 @@
+import {isStudioMapCanvas} from "./map-surface";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 export type CoreCommand={alias:string;label:string;group:string;hint?:string;disabled?:boolean;run:(args:string)=>void|Promise<void>};
@@ -51,7 +52,7 @@ export function CoreCommandBar(host:Host){
   if(/^[a-zA-Z0-9?@.,+-]$/.test(e.key)){e.preventDefault();e.stopPropagation();setValue(e.key.toUpperCase());setCursor(-1);setHighlight(-1);setHelp(false);latest.current.focus()}
  };window.addEventListener("keydown",key,true);return()=>window.removeEventListener("keydown",key,true)},[]);
  useEffect(()=>{const run=(e:Event)=>{const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
- useEffect(()=>{const menu=(e:MouseEvent)=>{const target=e.target as HTMLElement;if(!target?.closest(".qgis-map-region .maplibregl-canvas")||document.querySelector('[aria-modal="true"]'))return;e.preventDefault();void latest.current.execute("");};document.addEventListener("contextmenu",menu);return()=>document.removeEventListener("contextmenu",menu)},[]);
+ useEffect(()=>{const menu=(e:MouseEvent)=>{const target=e.target as HTMLElement;if(!isStudioMapCanvas(target)||document.querySelector('[aria-modal="true"]'))return;e.preventDefault();void latest.current.execute("");};document.addEventListener("contextmenu",menu);return()=>document.removeEventListener("contextmenu",menu)},[]);
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
  const open=focused&&(help||!!prefix&&!value.includes(" ")&&!pending)&&matches.length>0;

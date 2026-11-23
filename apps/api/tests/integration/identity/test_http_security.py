@@ -104,6 +104,7 @@ def test_cookie_session_authentication_and_csrf(migrated_database: None) -> None
     finally:
         session.close()
 
+
 def test_unlink_identity_invalid_payload_is_safe_422(migrated_database: None) -> None:
     from tests.fixtures.identity_tenancy import seed_access_world
     from tests.integration.rls.test_cross_tenant_api import client_for_user

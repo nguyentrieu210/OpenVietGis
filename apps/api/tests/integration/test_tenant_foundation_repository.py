@@ -23,8 +23,10 @@ def test_real_tenant_repository_persists_stable_identity_and_timestamps(
             repository, SqlPlatformRepository(session), SqlAuditRepository(session)
         )
         created = service.create_project(
-            actor=actor, organization_id=world.organization_id,
-            name="  repository-check  ", slug=f"repo-{uuid4().hex}",
+            actor=actor,
+            organization_id=world.organization_id,
+            name="  repository-check  ",
+            slug=f"repo-{uuid4().hex}",
         )
         session.commit()
     assert created.name == "repository-check"

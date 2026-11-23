@@ -1,4 +1,5 @@
 """Dedicated test-database setup/assertion access, never application runtime."""
+
 from functools import lru_cache
 
 from sqlalchemy import create_engine

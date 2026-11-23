@@ -83,9 +83,7 @@ def upgrade() -> None:
             )
         """)
 
-    op.execute(
-        "GRANT SELECT, INSERT, UPDATE ON field.offline_packages TO openvietgis_runtime"
-    )
+    op.execute("GRANT SELECT, INSERT, UPDATE ON field.offline_packages TO openvietgis_runtime")
     op.execute("GRANT SELECT, INSERT ON field.sync_batches TO openvietgis_runtime")
 
 
