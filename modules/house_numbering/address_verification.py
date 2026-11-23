@@ -1,13 +1,22 @@
 """Explicit address evidence for staged route promotion, separate from raw GIS."""
 from __future__ import annotations
-import hashlib,json
+
+import hashlib
+import json
 from typing import Any
-from uuid import UUID,uuid4
+from uuid import UUID, uuid4
+
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformNotFoundError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError,PlatformValidationError,PlatformNotFoundError
+
 from modules.house_numbering.address_prefix import canonical_prefix
-from modules.house_numbering.building_assignment import road_name,alley_name
+from modules.house_numbering.building_assignment import alley_name, road_name
 from modules.house_numbering.route_recovery import address_label
+
 
 def digest(v:Any)->str:
     return hashlib.sha256(json.dumps(v,sort_keys=True,ensure_ascii=False,separators=(",",":"),default=str).encode()).hexdigest()
