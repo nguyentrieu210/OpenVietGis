@@ -1,65 +1,104 @@
-# R027 — QGIS ↔ OpenVietGIS manual two-way workspace (experimental)
+# Hướng dẫn cài đặt & đồng bộ 2 chiều QGIS ↔ OpenVietGIS (Plugin 0.3.0)
 
-**Implementation:** QGIS plugin 0.3.0 on the R027 feature branch. **This is a reviewed/manual GeoPackage workflow, not an always-on realtime/automatic connector.** R027's persistent server-side connector binding registry remains disabled; the manual workspace uses R026's authenticated HTTPS export and revision-pinned R006 changeset endpoints. It does not activate a server binding.
+> **Lưu ý nhanh:** Đây là luồng đồng bộ **2 chiều thủ công qua GeoPackage** (bấm xem trước rồi bấm xác nhận), **không phải** đồng bộ tự động chạy ngầm. Mọi thay đổi đẩy lên OpenVietGIS đều đi qua HTTPS, kiểm tra phân quyền dự án và ghi bằng R006 Changeset (không mở cổng database trực tiếp).
 
-## Operator prerequisites
+---
 
-- QGIS Desktop 3.34+ with Python 3.10+ (native PyQGIS); local installation and desktop acceptance remain **unverified** in CI.
-- Service Principal Bearer with correct **project.read**, and **project.edit** for posting changes; server GIS ACL must independently authorize the target layer/features/fields.
-- The selected layer must be a **single-part 2D** Point/LineString/Polygon with a verified explicit CRS and **one** GeoPackage feature table.
-- Maximum upload size **16 MiB**, at most **25,000 features**, at most **1,000 proposed reconciliation operations**. Existing R026 server-side limits remain authoritative.
-- Only identical source and destination CRS and schema can be merged. No implicit reprojection, no deletes, no field remapping.
+## 1. Yêu cầu trước khi dùng
 
-## User workflow
+- **QGIS Desktop 3.34 trở lên** (có sẵn Python 3.10+ / PyQGIS).
+- **Khóa API (Service Bearer Key)** tạo trong **Developer Portal** trên `https://openvietgis.cloud`:
+  - Cần quyền **`project.read`** để tải lớp về QGIS.
+  - Cần thêm quyền **`project.edit`** nếu muốn đẩy chỉnh sửa từ QGIS ngược lên OpenVietGIS.
+- **Lớp dữ liệu hợp lệ**:
+  - Hình học **2D đơn phần** (`Point`, `LineString` hoặc `Polygon`), đã có hệ tọa độ (CRS) rõ ràng.
+  - Giới hạn an toàn: tệp tải lên tối đa **16 MiB**, tối đa **25.000 đối tượng**, tối đa **1.000 thao tác** mỗi lần đồng bộ.
+  - Hai bên phải cùng hệ tọa độ và cấu trúc cột (không tự ý đổi CRS, không tự ý xóa đối tượng).
 
-1. In QGIS, install OpenVietGIS Connector from `integrations/qgis_plugin/openvietgis_connector/` (ZIP or QGIS plugin directory). Open from **Web → OpenVietGIS**.
-2. Enter HTTPS URL, organization UUID, project UUID and short-lived service bearer key. The key is kept in the dialog's memory only and never written to `workspace.json`.
-3. Load authorized layers and select a valid layer. Click **1. Tạo bản làm việc** (R027 panel). The plugin downloads a SHA-256-verified GeoPackage and creates:
-   - `ovg_qgis_<layer_uuid>/baseline.gpkg` — last common acknowledged snapshot.
-   - `ovg_qgis_<layer_uuid>/working.gpkg` — local editable layer loaded into QGIS.
-   - `ovg_qgis_<layer_uuid>/workspace.json` — nonsecret project, content/schema revisions, baseline hash and optional recovery journal.
-4. Edit `working.gpkg` in QGIS, retaining `ovg_feature_id` as a stable, **unique, nonblank** ID for each feature. For new features, provide a unique ID before saving. Do not change table/column names or CRS. **Save edits and turn off the QGIS edit mode**.
-5. Click **2. Xem trước 2 chiều**. The plugin downloads a fresh server snapshot into a separate temporary preview directory, computes the three-way diff, and shows how many edits go **QGIS → OpenVietGIS** and **OpenVietGIS → QGIS**. When any feature or geometry has a conflict, the commit button is disabled and no writes are sent.
-6. Review each change count and digest, then click **3. Xác nhận đồng bộ**. After confirmation, the plugin closes its own editable map layer, merges conflict-free server edits into a **staged** local copy, requests an R026 non-mutating `sync-preview`, checks the exact expected server operation count, and (if local updates exist) sends **one** confirmed R006 `sync-push` with a durable operation ID.
-7. The plugin downloads a server read-back after the R006 receipt; only after source/target data and pinned content revision match is `working.gpkg` atomically replaced, a new common `baseline.gpkg` saved, and `workspace.json` advanced. The QGIS layer is reloaded from the resulting local file.
+---
 
-## Conflicts / recovery
+## 2. Cách cài Plugin vào QGIS Desktop (3 bước)
 
-- Both sides editing a **different field** on the same feature: the merged feature incorporates both authorized changes.
-- Both sides editing the **same field differently** or changing geometry differently: **conflict**. The whole manual batch is held, without overwriting either side.
-- A feature disappearing from either side: **delete candidate conflict**, never an implicit delete/recreation.
-- Schema/CRS mismatch, missing feature IDs, duplicate IDs, large payload, stale server revision, changed local file after preview: **fail closed**.
-- On timeout after a server push, the plugin persists `.pending-merged.gpkg` and a nonsecret `pending` record with operation ID and revision. **It does not automatically replay the write.** Choose **Khôi phục giao dịch** to fetch the current server data: recovery finalizes only if it exactly matches staged changes. Otherwise the pending state is preserved for investigation. Open the existing workspace with **Mở workspace** after restarting QGIS.
-- If the working layer is in edit mode, close/commit edits first. Other QGIS layers referencing the same local file must be closed to protect SQLite/OGR file handles.
+1. **Tải file plugin ZIP** trực tiếp tại:
+   - 👉 [openvietgis_connector-0.3.0.zip](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.3.0.zip)
+   - (Tùy chọn kiểm tra toàn vẹn tệp: [openvietgis_connector-0.3.0.zip.sha256](https://openvietgis.cloud/rewrite/downloads/openvietgis_connector-0.3.0.zip.sha256))
+2. Mở **QGIS Desktop** → vào menu **Plugins → Manage and Install Plugins… → Install from ZIP**.
+3. Chọn file `openvietgis_connector-0.3.0.zip` vừa tải → bấm **Install Plugin**.
+4. Sau khi cài xong, mở plugin từ menu **Web → OpenVietGIS**.
 
-## Security and release limitations
+---
 
-- No autonomous/live polling, webhooks, durable external-identity server mapping, agent pairing, or background execution.
-- No external PostGIS, ArcGIS, AutoCAD or MicroStation two-way writes from this plugin.
-- R006 is the only OpenVietGIS write path; the standalone workspace client never opens the internal OpenVietGIS database.
-- The plugin uses a dedicated project-scoped service bearer, not an OIDC interactive login. A future server-approved agent auth/pairing protocol remains in the R027 backlog.
-- Unit coverage exercises real GeoPackage file parsing/writes with mock HTTP responses. An additional **HTTP/PostGIS integration test** performs a real two-way manual round trip using a TestClient session adapter and real R006/R026 endpoints. **PyQGIS Desktop acceptance, actual bearer-client network validation, security review and rollback drill remain required before general release.**
+## 3. Quy trình đồng bộ 2 chiều thủ công (từng bước)
 
-## Development tests
+### Bước 1 — Kết nối và tạo bản làm việc
+1. Mở **Web → OpenVietGIS**, điền 4 thông tin:
+   - **URL máy chủ**: `https://openvietgis.cloud`
+   - **Organization UUID** (mã tổ chức)
+   - **Project UUID** (mã dự án)
+   - **API Key (Bearer Token)** — khóa chỉ nằm trong RAM khi hộp thoại đang mở, **không bao giờ lưu xuống ổ cứng**.
+2. Bấm tải danh sách lớp và chọn lớp cần làm việc.
+3. Trong khung **R027**, bấm **1. Tạo bản làm việc**. Plugin sẽ tải GeoPackage (có kiểm tra SHA-256) và tạo thư mục `ovg_qgis_<layer_uuid>/` gồm:
+   - `baseline.gpkg`: bản gốc mốc so sánh gần nhất.
+   - `working.gpkg`: bản làm việc tự động nạp sẵn lên bản đồ QGIS để bạn biên tập.
+   - `workspace.json`: lưu mã phiên bản (revision) và mã băm SHA-256 (**không chứa API key**).
+
+### Bước 2 — Biên tập dữ liệu trên QGIS
+- Chỉnh sửa hình học hoặc thuộc tính trực tiếp trên lớp `working.gpkg`.
+- **Quan trọng**:
+  - Giữ nguyên cột **`ovg_feature_id`** (duy nhất, không để trống). Nếu thêm đối tượng mới, nhớ điền `ovg_feature_id` duy nhất trước khi lưu.
+  - Không đổi tên bảng, tên cột hay hệ tọa độ (CRS).
+  - Sau khi sửa xong, **bấm Lưu (Save Layer Edits) và tắt chế độ biên tập (Toggle Editing)** trên QGIS.
+
+### Bước 3 — Xem trước chênh lệch 2 chiều
+- Bấm **2. Xem trước 2 chiều**.
+- Plugin sẽ tải bản mới nhất từ OpenVietGIS vào thư mục tạm, đối chiếu **3 chiều** (`bản gốc` vs `QGIS` vs `OpenVietGIS`) và báo rõ:
+  - Số thay đổi sẽ đẩy **QGIS → OpenVietGIS**.
+  - Số thay đổi sẽ kéo **OpenVietGIS → QGIS**.
+- Nếu có bất kỳ xung đột nào, nút xác nhận sẽ **tự động khóa** và **không ghi gì lên máy chủ**.
+
+### Bước 4 — Xác nhận đồng bộ
+- Kiểm tra lại số lượng thay đổi và bấm **3. Xác nhận đồng bộ**.
+- Plugin sẽ:
+  1. Gộp các thay đổi không xung đột từ máy chủ vào bản tạm trên máy.
+  2. Gọi API `sync-preview` kiểm tra đúng số thao tác, rồi gửi **1 lệnh `sync-push` (R006)** kèm mã giao dịch chống trùng lặp.
+  3. Đọc lại dữ liệu từ máy chủ để kiểm tra khớp hoàn toàn, sau đó mới cập nhật `working.gpkg`, `baseline.gpkg` và nạp lại lớp trên QGIS.
+
+---
+
+## 4. Quy tắc xử lý xung đột & khôi phục khi rớt mạng
+
+- **Hai bên sửa 2 trường khác nhau trên cùng 1 đối tượng**: Tự động gộp sạch cả hai thay đổi.
+- **Hai bên cùng sửa 1 trường khác giá trị, hoặc cùng sửa hình học khác nhau**: Báo **Xung đột (Conflict)** và giữ nguyên dữ liệu hai bên, không ghi đè.
+- **Một bên xóa đối tượng**: Đưa vào danh sách **nghi vấn xóa (delete candidate)** — hệ thống **không bao giờ tự xóa dữ liệu**.
+- **Rớt mạng / timeout giữa chừng khi đang đẩy lên**:
+  - Plugin lưu trạng thái `.pending-merged.gpkg` và **không tự gửi lại mù quáng**.
+  - Khi có mạng lại (hoặc sau khi mở lại QGIS bằng nút **Mở workspace**), bấm **Khôi phục giao dịch**: plugin sẽ đối chiếu với máy chủ và chỉ hoàn tất nếu dữ liệu trên máy chủ đã khớp đúng bản vừa đẩy.
+- **Lỗi khóa tệp SQLite/OGR**: Hãy tắt chế độ biên tập (Edit Mode) trên QGIS và đóng các lớp khác đang mở cùng file `working.gpkg` trước khi đồng bộ.
+
+---
+
+## 5. Giới hạn hiện tại (cần biết)
+
+- Chưa có chế độ đồng bộ tự động chạy ngầm hay tự ghép nối (pairing) không cần dán API key.
+- Plugin này chỉ dùng cho **QGIS Desktop** (không ghi trực tiếp sang PostGIS ngoài, AutoCAD hay MicroStation).
+- Không chép API key hay tệp bí mật vào thư mục cài đặt plugin.
+
+---
+
+## 6. Dành cho lập trình viên (chạy kiểm thử & đóng gói ZIP)
 
 ```bash
+# Chạy kiểm thử unit workspace & integration hub
 uv run --project apps/api python -m pytest -q \
   apps/api/tests/unit/integration_hub/test_qgis_workspace.py
 uv run --project apps/api python -m pytest -q \
   apps/api/tests/unit/integration_hub
+
+# Kiểm tra lint plugin QGIS
 uv run --project apps/api ruff check \
   integrations/qgis_plugin/openvietgis_connector/{client.py,workspace.py,plugin.py}
+
+# Đóng gói tệp ZIP và kiểm tra SHA-256
+python tools/package_qgis_plugin.py --output dist/openvietgis_connector-0.3.0.zip
+cd dist && sha256sum -c openvietgis_connector-0.3.0.zip.sha256
 ```
-
-## ZIP build / GitHub Actions verification
-
-Run from the repository root with Python 3.13:
-
-```bash
-python tools/package_qgis_plugin.py --output dist/openvietgis_connector-r027.zip
-cd dist && sha256sum -c openvietgis_connector-r027.zip.sha256
-```
-
-Install the resulting `openvietgis_connector-r027.zip` through QGIS > Plugins > Manage and Install Plugins > Install from ZIP. The ZIP contains a single `openvietgis_connector/` directory with metadata, source code and operator docs. Do not unzip secret service keys into this directory.
-
-GitHub Actions workflow `R027 QGIS Connector - package and desktop smoke` runs ZIP validation and native offscreen PyQGIS controls on the feature branch; downloadable build artifacts are published only if the packaging job succeeds. This does not replace direct Windows QGIS acceptance.
