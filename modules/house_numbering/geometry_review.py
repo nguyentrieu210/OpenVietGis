@@ -43,10 +43,11 @@ def stage_geometry(repo:Any, *, layers:list[dict], overrides:dict, preview_token
     params={"org":repo.org_id,"project":repo.project_id,"actor":repo.actor_id}
     session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),{"key":f"house-numbering-route-import:{repo.project_id}"})
     plan=RouteTreeImporter(repo).preview(layers,overrides,merge_groups,parent_features)
-    if plan["preview_token"]!=preview_token:
-        raise PlatformConflictError("Dữ liệu hình học hoặc khảo sát đã đổi; xem trước lại",code="STALE_GEOMETRY_REVIEW")
+    replay=plan["preview_token"]!=preview_token
     by_key={r["key"]:r for r in plan["items"]}
     if any(k not in by_key or not stage_eligible(by_key[k]) for k in selected_keys):
+        if replay:
+            raise PlatformConflictError("Dữ liệu hình học hoặc khảo sát đã đổi; xem trước lại",code="STALE_GEOMETRY_REVIEW")
         raise PlatformValidationError("Chỉ lưu hình học đã nối đúng cha, chưa có tuyến và chỉ còn lỗi khảo sát",code="INVALID_GEOMETRY_REVIEW")
     items=[]
     for key in sorted(selected_keys):
@@ -57,6 +58,21 @@ def stage_geometry(repo:Any, *, layers:list[dict], overrides:dict, preview_token
         snapshot={k:row[k] for k in fields if k in row}
         raw=json.dumps(snapshot,sort_keys=True,ensure_ascii=False,separators=(",",":"),default=str)
         token=hashlib.sha256(raw.encode()).hexdigest()
+        # Staging changes the next preview (address-review status is now present).
+        # Permit only an exact, non-mutating replay of the original accepted request.
+        if replay:
+            saved=session.execute(text("""
+                SELECT id,revision FROM house_numbering.geometry_reviews
+                WHERE organization_id=:org AND project_id=:project AND route_code=:code
+                  AND snapshot_token=:token AND reason=:reason
+                  AND snapshot->>'stage_request_token'=:request
+            """),{**params,"code":row["code"],"token":token,"reason":reason,"request":preview_token}).mappings().first()
+            if not saved:
+                raise PlatformConflictError("Dữ liệu hình học hoặc khảo sát đã đổi; xem trước lại",code="STALE_GEOMETRY_REVIEW")
+            items.append({"id":str(saved["id"]),"revision":saved["revision"],"name":row["name"]})
+            continue
+        snapshot["stage_request_token"]=preview_token
+        raw=json.dumps(snapshot,sort_keys=True,ensure_ascii=False,separators=(",",":"),default=str)
         saved=session.execute(text("""
             INSERT INTO house_numbering.geometry_reviews(id,organization_id,project_id,route_code,snapshot,snapshot_token,
                   reason,created_by_actor_id,updated_by_actor_id)

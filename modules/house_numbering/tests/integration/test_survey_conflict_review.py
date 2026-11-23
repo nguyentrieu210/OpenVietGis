@@ -62,6 +62,8 @@ def test_survey_conflict_breakdown_and_guard(migrated_database):
         assert result["staged"]==1 and result["routes_created"]==0 and result["buildings_assigned"]==0
         repeat=c.post(endpoint,json=payload);assert repeat.status_code==201,repeat.text
         assert repeat.json()==result
+        assert c.post(endpoint,json={**payload,"preview_token":"0"*64}).status_code==409
+        assert c.post(endpoint,json={**payload,"reason":"Lý do đã bị thay đổi sau khi xác nhận"}).status_code==409
         listing=c.get(module+"/geometry-reviews").json()
         assert len(listing["items"])==1 and listing["items"][0]["status"]=="pending"
         assert listing["items"][0]["snapshot"]["survey_evidence"]["address_conflicts"]==3
