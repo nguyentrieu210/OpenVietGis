@@ -17,6 +17,7 @@
 - [x] T013 [US3] Project-scoped DEM terrain preview with declared metre vertical reference, GIS relative heights, and session-local static GLB/GLTF placement; real API and browser evidence captured.
 - [x] T014 [US3] Project-scoped GLB/GLTF catalog, immutable original bytes, versioned fixed placement, source linkage, shared read and optimistic edit conflict; real API and browser checks passed.
 - [x] T015 [US3] Bounded multi-model scene, per-layer visibility, real mesh selection/highlight and linked GIS navigation; WebGL and host browser evidence captured.
+- [x] T016 [US3] Named project scene versions with pinned model placement references, DEM, live numeric footprint, visibility, camera and access/history regression; API and browser evidence captured.
 ## Polish
 - [ ] T011 Run unit evidence, typecheck, browser regressions, and document results in specs/022-spatial-workspace/evidence.md.
 - [ ] T012 Run full convergence and review; gate promotion in specs/022-spatial-workspace/evidence.md.
