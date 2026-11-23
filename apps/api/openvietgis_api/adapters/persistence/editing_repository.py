@@ -13,12 +13,6 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
-from openvietgis_api.adapters.persistence.gis_access import (
-    deny,
-    enable_internal_edit,
-    feature_allowed,
-    verify_edit,
-)
 from openvietgis_api.adapters.persistence.scope_helper import (
     append_project_audit,
     prepare_project_scope,

@@ -14,7 +14,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from modules.house_numbering.address_prefix import canonical_prefix
 
-from modules.house_numbering.address_prefix import canonical_prefix
 
 
 class DomainError(ValueError):

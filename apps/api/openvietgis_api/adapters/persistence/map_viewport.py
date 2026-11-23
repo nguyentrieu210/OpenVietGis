@@ -12,7 +12,6 @@ from openvietgis_api.adapters.persistence.gis_access import scoped
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from openvietgis_api.adapters.persistence.gis_access import scoped
 from openvietgis_api.adapters.persistence.spatial_repository import (
     SqlSpatialRepository,
     _read_native_wkb,

@@ -6,8 +6,6 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-import base64
-from io import BytesIO
 from PIL import Image
 from sqlalchemy import text
 from pydantic import BaseModel, ConfigDict, Field

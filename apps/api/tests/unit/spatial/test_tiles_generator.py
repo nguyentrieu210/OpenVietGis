@@ -31,9 +31,11 @@ def test_wgs84_and_scale():
     assert len(matrix) == 16
     x, y, z = local((106, 10, 45))
     assert abs(x) < 1e-8 and abs(z) < 1e-8 and abs(y - 25) < 1e-8
-    rows = [rectangle(106 + (i % 100) * 0.0002, 10 + (i // 100) * 0.0002) for i in range(3000)]
+    rows = [rectangle(106 + (i % 100) * 0.0002, 10 + (i // 100) * 0.0002) | {"feature_id": f"f_{i}"} for i in range(3000)]
     start = time.monotonic()
-    manifest, resources, total = build_tiles(rows, 20)
+    manifest, resources, total, indices = build_tiles(rows, 20)
+    assert set(indices) == set(resources)
+    assert sum(len(v) for v in indices.values()) == 3000
     elapsed = time.monotonic() - start
     assert total == 36000 and 1 < len(resources) <= 128
     assert len(manifest["root"]["children"]) == len(resources)

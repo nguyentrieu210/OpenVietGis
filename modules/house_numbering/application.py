@@ -8,8 +8,6 @@ from uuid import UUID
 
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.platform_errors import (
-    PlatformConflictError,
-    PlatformNotFoundError,
     PlatformValidationError,
     PlatformNotFoundError,
     PlatformConflictError,
@@ -26,7 +24,6 @@ from modules.house_numbering.domain import (
     suggest_number,
 )
 from modules.house_numbering.persistence import HouseNumberingRepository
-from modules.house_numbering.batch_numbering import build_route_plan
 
 
 def _wire(row: RowMapping | dict[str, Any]) -> dict[str, Any]:

@@ -33,7 +33,6 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
-from openvietgis_api.adapters.persistence.gis_access import filtered_layer_wire
 from openvietgis_api.adapters.persistence.spatial_repository import SqlSpatialRepository
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.spatial.crs import (

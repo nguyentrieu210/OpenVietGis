@@ -12,7 +12,6 @@ from openvietgis_api.domains.platform_errors import (
     PlatformValidationError,
 )
 from sqlalchemy import text
-from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.route_recovery import address_label, recover_parent_evidence, selection_rows, survey_evidence
 from modules.house_numbering.route_topology import merge_options, apply_merges, parent_tasks, append_parent_features
