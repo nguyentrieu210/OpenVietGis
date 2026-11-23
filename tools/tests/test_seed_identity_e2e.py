@@ -7,7 +7,9 @@ from openvietgis_api import config
 from tools import seed_identity_e2e
 
 OWNER_URL = "postgresql+psycopg://owner:password@localhost:54330/openvietgis_test"
-RUNTIME_URL = "postgresql+psycopg://openvietgis_runtime:password@localhost:54330/openvietgis_test"
+RUNTIME_URL = (
+    "postgresql+psycopg://openvietgis_runtime:password@localhost:54330/openvietgis_test"
+)
 
 
 @pytest.mark.parametrize(
@@ -21,11 +23,17 @@ RUNTIME_URL = "postgresql+psycopg://openvietgis_runtime:password@localhost:54330
         ("test", OWNER_URL, RUNTIME_URL.replace("54330", "5432")),
         ("test", OWNER_URL, RUNTIME_URL + "?dbname=customer"),
         ("test", OWNER_URL, OWNER_URL),
-        ("test", OWNER_URL, RUNTIME_URL.replace("openvietgis_runtime", "administrator")),
+        (
+            "test",
+            OWNER_URL,
+            RUNTIME_URL.replace("openvietgis_runtime", "administrator"),
+        ),
     ],
 )
 @pytest.mark.parametrize("uninitialized", [False, True])
-def test_unsafe_seed_never_connects(monkeypatch, environment, migration_url, runtime_url, uninitialized) -> None:
+def test_unsafe_seed_never_connects(
+    monkeypatch, environment, migration_url, runtime_url, uninitialized
+) -> None:
     monkeypatch.setattr(
         config,
         "get_settings",

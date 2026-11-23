@@ -13,15 +13,19 @@ from tests.fixtures.db_admin import get_admin_engine
 
 def test_runtime_role_is_not_superuser_or_bypassrls(migrated_database: None) -> None:
     with get_engine().connect() as connection:
-        row = connection.execute(
-            text(
-                """
+        row = (
+            connection.execute(
+                text(
+                    """
                 SELECT rolsuper, rolbypassrls, rolcanlogin
                 FROM pg_roles
                 WHERE rolname = current_user AND current_user = 'openvietgis_runtime'
                 """
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
 
     assert row["rolsuper"] is False
     assert row["rolbypassrls"] is False
@@ -109,9 +113,7 @@ def test_runtime_role_rls_hides_other_organization_and_audit_rows(
                 connection.execute(text("SELECT id FROM workspace.workspaces")).scalars()
             )
             audit_orgs = set(
-                connection.execute(
-                    text("SELECT organization_id FROM audit.audit_events")
-                ).scalars()
+                connection.execute(text("SELECT organization_id FROM audit.audit_events")).scalars()
             )
             assert workspace_a in workspace_ids
             assert workspace_b not in workspace_ids
@@ -121,7 +123,8 @@ def test_runtime_role_rls_hides_other_organization_and_audit_rows(
 
 
 def test_application_rejects_privileged_runtime_connection(
-    migrated_database: None, monkeypatch: pytest.MonkeyPatch,
+    migrated_database: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = make_url(get_settings().migration_db_url)
     # A different string with the SAME privileged actor must still fail at connection.

@@ -20,22 +20,26 @@ def test_repeated_pool_checkout_isolates_a_b_and_no_context(
     # deliberately omit set_request_context for no-context requests to test cleanup.
     for _ in range(4):
         for actor, allowed, commit in (
-            (a, rows_a, True), (b, rows_b, False), (None, {}, True),
-            (b, rows_b, True), (a, rows_a, False), (None, {}, False),
+            (a, rows_a, True),
+            (b, rows_b, False),
+            (None, {}, True),
+            (b, rows_b, True),
+            (a, rows_a, False),
+            (None, {}, False),
         ):
             with factory() as session:
-                role, pid = session.execute(
-                    text("SELECT current_user, pg_backend_pid()")
-                ).one()
+                role, pid = session.execute(text("SELECT current_user, pg_backend_pid()")).one()
                 assert role == "openvietgis_runtime"
                 if backend_pid is None:
                     backend_pid = pid
                 assert pid == backend_pid, "pool did not reuse the same physical connection"
                 # Every checkout must start with no retained context before binding a new one.
-                previous = session.execute(text("""
+                previous = session.execute(
+                    text("""
                     SELECT nullif(current_setting('openvietgis.organization_id', true), ''),
                            nullif(current_setting('openvietgis.actor_user_id', true), '')
-                """)).one()
+                """)
+                ).one()
                 assert tuple(previous) == (None, None)
                 if actor is not None:
                     set_request_context(
@@ -44,10 +48,12 @@ def test_repeated_pool_checkout_isolates_a_b_and_no_context(
                         actor_user_id=actor.owner_user_id,
                     )
                 for table in TABLES:
-                    ids = set(session.execute(
-                        text(f"SELECT id FROM {table} WHERE id IN (:a, :b)"),
-                        {"a": rows_a[table], "b": rows_b[table]},
-                    ).scalars())
+                    ids = set(
+                        session.execute(
+                            text(f"SELECT id FROM {table} WHERE id IN (:a, :b)"),
+                            {"a": rows_a[table], "b": rows_b[table]},
+                        ).scalars()
+                    )
                     expected = {allowed[table]} if actor is not None else set()
                     assert ids == expected, table
                 if commit:

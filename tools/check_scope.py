@@ -5,7 +5,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME_ROOTS = (ROOT / "apps", ROOT / "packages")
-SKIP_DIRS = {"node_modules", ".venv", "dist", "build", "coverage", "__pycache__", "generated"}
+SKIP_DIRS = {
+    "node_modules",
+    ".venv",
+    "dist",
+    "build",
+    "coverage",
+    "__pycache__",
+    "generated",
+}
 TEXT_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".toml"}
 FORBIDDEN_MARKERS = {
     "maplibre": "map rendering engine",

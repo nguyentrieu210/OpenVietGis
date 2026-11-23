@@ -20,9 +20,7 @@ class StaticPermissionProvider:
 
 
 def test_authorization_service_allows_effective_permission() -> None:
-    service = AuthorizationService(
-        StaticPermissionProvider(frozenset({Permission.PROJECT_READ}))
-    )
+    service = AuthorizationService(StaticPermissionProvider(frozenset({Permission.PROJECT_READ})))
     context = AuthorizationContext(
         actor=Actor(actor_type="human", actor_id=uuid4(), display_name="Tester"),
         organization_id=uuid4(),

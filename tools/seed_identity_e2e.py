@@ -9,7 +9,9 @@ from sqlalchemy.engine import make_url
 from tools.test_database import assert_safe_test_target
 
 
-def assert_safe_seed_target(environment: str, migration_url: str, runtime_url: str) -> None:
+def assert_safe_seed_target(
+    environment: str, migration_url: str, runtime_url: str
+) -> None:
     """Refuse to seed a normal installation, even on the local development host."""
     if environment != "test":
         raise RuntimeError("Refusing identity E2E seed outside test environment")
@@ -22,9 +24,12 @@ def assert_safe_seed_target(environment: str, migration_url: str, runtime_url: s
         runtime.port,
         runtime.database,
     ):
-        raise RuntimeError("Refusing identity E2E seed for mismatched test database targets")
+        raise RuntimeError(
+            "Refusing identity E2E seed for mismatched test database targets"
+        )
     if not migration.username or (
-        migration.username == runtime.username or runtime.username != "openvietgis_runtime"
+        migration.username == runtime.username
+        or runtime.username != "openvietgis_runtime"
     ):
         raise RuntimeError("Refusing identity E2E seed without distinct runtime role")
 

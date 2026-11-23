@@ -117,11 +117,7 @@ def _capabilities(layer) -> None:
             "analysis",
             "offline",
         }
-        req_perm = (
-            "project.edit"
-            if name == "analysis"
-            else ("project.read" if supported else None)
-        )
+        req_perm = "project.edit" if name == "analysis" else ("project.read" if supported else None)
         assert item == {
             "name": name,
             "technical_supported": supported,

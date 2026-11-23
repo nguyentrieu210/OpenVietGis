@@ -27,7 +27,9 @@ def configure(base_url: str, redirect_uri: str, web_origin: str) -> None:
     base = _local_url(base_url, label="base_url")
     redirect = _local_url(redirect_uri, label="redirect_uri")
     origin = _local_url(web_origin, label="web_origin")
-    username = os.environ.get("OPENVIETGIS_E2E_KEYCLOAK_ADMIN_USER", "openvietgis-admin")
+    username = os.environ.get(
+        "OPENVIETGIS_E2E_KEYCLOAK_ADMIN_USER", "openvietgis-admin"
+    )
     password = os.environ.get(
         "OPENVIETGIS_E2E_KEYCLOAK_ADMIN_PASSWORD", "openvietgis-development-only"
     )

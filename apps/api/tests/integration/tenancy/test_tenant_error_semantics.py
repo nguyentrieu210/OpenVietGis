@@ -54,31 +54,33 @@ def test_foreign_resource_is_indistinguishable_from_absent_and_not_same_tenant_4
         assert other_org.json() == absent_org.json()
 
         for method, path, own_id, foreign_id, payload in (
-            ("PATCH", "members/{id}", a.member_membership_id,
-             b.member_membership_id, {"status": "revoked"}),
-            ("PATCH", "workspaces/{id}", a.workspace_a_id,
-             b.workspace_a_id, {"name": "Denied"}),
-            ("PATCH", "projects/{id}", a.project_id,
-             b.project_id, {"name": "Denied"}),
+            (
+                "PATCH",
+                "members/{id}",
+                a.member_membership_id,
+                b.member_membership_id,
+                {"status": "revoked"},
+            ),
+            ("PATCH", "workspaces/{id}", a.workspace_a_id, b.workspace_a_id, {"name": "Denied"}),
+            ("PATCH", "projects/{id}", a.project_id, b.project_id, {"name": "Denied"}),
             ("POST", "grants/{id}/revoke", grant_a, grant_b, None),
             ("POST", "invitations/{id}/revoke", invite_a, invite_b, None),
         ):
             own, foreign, absent = [
-                member.request(
-                    method, f"{root_a}/{path.format(id=resource_id)}", json=payload
-                )
+                member.request(method, f"{root_a}/{path.format(id=resource_id)}", json=payload)
                 for resource_id in (own_id, foreign_id, uuid4())
             ]
             # Same tenant is distinguishable only as an authorization denial.
             assert own.status_code == 403, (method, path, own.status_code)
             assert foreign.status_code == absent.status_code == 404, (
-                method, path, foreign.status_code, absent.status_code
+                method,
+                path,
+                foreign.status_code,
+                absent.status_code,
             )
             assert foreign.json() == absent.json(), (method, path)
             assert str(foreign_id) not in foreign.text
 
         # Failed actions cannot change foreign resources or their permissions.
         assert owner_b.get(f"{root_b}/projects/{b.project_id}").status_code == 200
-        assert any(
-            item["id"] == grant_b for item in owner_b.get(f"{root_b}/grants").json()
-        )
+        assert any(item["id"] == grant_b for item in owner_b.get(f"{root_b}/grants").json())

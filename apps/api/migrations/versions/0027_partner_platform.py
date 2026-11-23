@@ -1,4 +1,5 @@
 """Persistent partner contributions and transactional integration event journal."""
+
 from alembic import op
 
 revision = "0027_partner_platform"

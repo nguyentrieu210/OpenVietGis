@@ -17,10 +17,14 @@ def test_runtime_cannot_insert_or_reference_foreign_tenant(
 ) -> None:
     a, b = seed_access_world(), seed_access_world()
     values = {
-        "a": a.organization_id, "b": b.organization_id,
-        "actor": a.owner_user_id, "workspace": b.workspace_a_id,
-        "project": b.project_id, "member": a.member_membership_id,
-        "foreign_member": b.member_membership_id, "a_project": a.project_id,
+        "a": a.organization_id,
+        "b": b.organization_id,
+        "actor": a.owner_user_id,
+        "workspace": b.workspace_a_id,
+        "project": b.project_id,
+        "member": a.member_membership_id,
+        "foreign_member": b.member_membership_id,
+        "a_project": a.project_id,
     }
     statements = (
         """INSERT INTO workspace.workspaces
@@ -68,12 +72,17 @@ def test_runtime_cannot_insert_or_reference_foreign_tenant(
     )
     with Session(bind=get_engine()) as runtime:
         set_request_context(
-            runtime, organization_id=a.organization_id, actor_user_id=a.owner_user_id,
+            runtime,
+            organization_id=a.organization_id,
+            actor_user_id=a.owner_user_id,
         )
         for statement in statements:
             with pytest.raises(DBAPIError), runtime.begin_nested():
                 runtime.execute(text(statement), {**values, "id": uuid4()})
-        assert runtime.execute(text(
-            "SELECT workspace_id FROM workspace.projects WHERE id=:a_project"
-        ), values).scalar_one() == a.workspace_a_id
+        assert (
+            runtime.execute(
+                text("SELECT workspace_id FROM workspace.projects WHERE id=:a_project"), values
+            ).scalar_one()
+            == a.workspace_a_id
+        )
         runtime.rollback()

@@ -29,7 +29,9 @@ def registration(client, org, project, body):
     created = client.post(f"{org}/extensions/manifests", json=body)
     assert created.status_code == 201, created.text
     mid = created.json()["id"]
-    activation = client.post(f"{project}/extensions/activations", json={"manifest_id": mid})
+    activation = client.post(
+        f"{project}/extensions/activations", json={"manifest_id": mid}
+    )
     assert activation.status_code == 201, activation.text
     return mid, activation.json()["id"]
 
@@ -47,7 +49,9 @@ def test_linked_house_record_history_disabled_portability_and_scope():
         _client(other.owner_user_id) as outsider,
     ):
         mid, aid = registration(owner, org, project, manifest("house_numbering"))
-        grant = _grant(owner, world, "membership", str(world.member_membership_id), "editor")
+        grant = _grant(
+            owner, world, "membership", str(world.member_membership_id), "editor"
+        )
         imported = _import_geojson(
             owner,
             world,
@@ -129,13 +133,17 @@ def test_linked_house_record_history_disabled_portability_and_scope():
         )
         assert cs.status_code == 201, cs.text
         assert (
-            editor.put(f"{records}/{rid}", json={**update, "expected_revision": 2}).status_code
+            editor.put(
+                f"{records}/{rid}", json={**update, "expected_revision": 2}
+            ).status_code
             == 409
         )
         disabled = owner.post(f"{project}/extensions/activations/{aid}/deactivate")
         assert disabled.status_code == 200
         assert (
-            owner.put(f"{records}/{rid}", json={**update, "expected_revision": 2}).status_code
+            owner.put(
+                f"{records}/{rid}", json={**update, "expected_revision": 2}
+            ).status_code
             == 404
         )
         assert owner.get(records).json()["items"][0]["payload"] == changed
@@ -150,9 +158,18 @@ def test_linked_house_record_history_disabled_portability_and_scope():
             "organization_id": str(world.organization_id),
             "project_id": str(world.project_id),
         }
-        assert b["records"][0]["record_id"] == rid and b["records"][0]["history"] == history
-        assert b["manifests"][0]["entity_schemas"] == manifest("house_numbering")["entity_schemas"]
-        assert [e["event"] for e in b["activation_history"]] == ["activate", "deactivate"]
+        assert (
+            b["records"][0]["record_id"] == rid
+            and b["records"][0]["history"] == history
+        )
+        assert (
+            b["manifests"][0]["entity_schemas"]
+            == manifest("house_numbering")["entity_schemas"]
+        )
+        assert [e["event"] for e in b["activation_history"]] == [
+            "activate",
+            "deactivate",
+        ]
         assert outsider.get(export).status_code in (403, 404)
         assert owner.post(f"{org}/grants/{grant}/revoke").status_code == 204
         assert editor.get(export).status_code in (403, 404)
@@ -168,7 +185,12 @@ def test_linked_house_record_history_disabled_portability_and_scope():
             json={**portable, "expected_manifest_id": omid},
         )
         assert bad.status_code == 409, bad.text
-        assert outsider.get(f"{oproject}/extensions/house_numbering/records").json()["items"] == []
+        assert (
+            outsider.get(f"{oproject}/extensions/house_numbering/records").json()[
+                "items"
+            ]
+            == []
+        )
 
 
 def test_land_asset_atomic_copy_explicit_transition_and_replay():
@@ -206,14 +228,21 @@ def test_land_asset_atomic_copy_explicit_transition_and_replay():
             },
         )
         assert two.status_code == 201, two.text
-        assert source.post(f"{op}/extensions/activations/{said}/deactivate").status_code == 200
+        assert (
+            source.post(f"{op}/extensions/activations/{said}/deactivate").status_code
+            == 200
+        )
         portable = source.get(f"{op}/extensions/land_asset/portable-export").json()
         target = f"{dp}/extensions/land_asset/portable-import"
         request = {**portable, "expected_manifest_id": mid}
         _grant(owner, dest, "membership", str(dest.member_membership_id), "viewer")
         assert viewer.post(target, json=request).status_code == 403
-        assert viewer.get(f"{dp}/extensions/land_asset/portable-export").status_code == 200
-        assert owner.post(target, json={**request, "sha256": "0" * 64}).status_code == 422
+        assert (
+            viewer.get(f"{dp}/extensions/land_asset/portable-export").status_code == 200
+        )
+        assert (
+            owner.post(target, json={**request, "sha256": "0" * 64}).status_code == 422
+        )
         malformed = json.loads(json.dumps(portable["bundle"]))
         malformed["records"][1]["payload"]["condition_score"] = True
         invalid = owner.post(
@@ -233,7 +262,10 @@ def test_land_asset_atomic_copy_explicit_transition_and_replay():
         again = owner.post(target, json=request).json()
         assert again == {**receipt, "replayed": True}
         copied = owner.get(rec).json()["items"]
-        assert sorted(r["payload"]["asset_code"] for r in copied) == ["LND-01", "LND-02"]
+        assert sorted(r["payload"]["asset_code"] for r in copied) == [
+            "LND-01",
+            "LND-02",
+        ]
         assert all(
             r["payload"]["inspector_note"] is None and r["payload"]["area_m2"] == 185.5
             for r in copied
@@ -241,19 +273,25 @@ def test_land_asset_atomic_copy_explicit_transition_and_replay():
         assert all(r["id"] not in (one.json()["id"], two.json()["id"]) for r in copied)
         rid = copied[0]["id"]
         history = owner.get(f"{rec}/{rid}/history").json()["items"]
-        assert history[0]["event"] == "import" and history[0]["actor_id"] == str(dest.owner_user_id)
+        assert history[0]["event"] == "import" and history[0]["actor_id"] == str(
+            dest.owner_user_id
+        )
         assert history[0]["import_origin"]["verified_origin"] is False
         assert history[0]["import_origin"]["bundle_sha256"] == portable["sha256"]
 
         # Only an explicitly compatible forward same-major metadata transition is accepted.
-        new = owner.post(f"{dorg}/extensions/manifests", json={**body, "version": "1.1.0"})
+        new = owner.post(
+            f"{dorg}/extensions/manifests", json={**body, "version": "1.1.0"}
+        )
         assert new.status_code == 201, new.text
         nextid = new.json()["id"]
         route = f"{dp}/extensions/activations/{aid}/transition"
         transition = {"expected_manifest_id": mid, "target_manifest_id": nextid}
         assert viewer.post(route, json=transition).status_code == 403
         assert (
-            owner.post(f"{dp}/extensions/activations", json={"manifest_id": nextid}).status_code
+            owner.post(
+                f"{dp}/extensions/activations", json={"manifest_id": nextid}
+            ).status_code
             == 409
         )
         assert owner.post(route, json=transition).status_code == 200
@@ -306,8 +344,13 @@ def test_land_asset_atomic_copy_explicit_transition_and_replay():
         assert [v["manifest_id"] for v in versions] == [mid, nextid]
         events = owner.get(f"{dp}/extensions/activations/{aid}/history").json()["items"]
         assert [e["event"] for e in events] == ["activate", "transition"]
-        assert events[1]["previous_manifest_id"] == mid and events[1]["manifest_id"] == nextid
-        assert owner.get(f"{dp}/extensions/house_numbering/records").json()["items"] == []
+        assert (
+            events[1]["previous_manifest_id"] == mid
+            and events[1]["manifest_id"] == nextid
+        )
+        assert (
+            owner.get(f"{dp}/extensions/house_numbering/records").json()["items"] == []
+        )
 
     # Database enforceability, not merely absence of an HTTP DELETE endpoint.
     with get_admin_engine().begin() as conn:

@@ -26,15 +26,19 @@ def test_identity_tenant_schemas_and_tables_exist(migrated_database: None) -> No
 def test_installation_state_is_singleton(migrated_database: None) -> None:
     engine = get_admin_engine()
     with engine.begin() as connection:
-        row = connection.execute(
-            text(
-                """
+        row = (
+            connection.execute(
+                text(
+                    """
                 SELECT singleton_key, initialized_at
                 FROM platform.installation_state
                 WHERE singleton_key = 'installation'
                 """
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         assert row["singleton_key"] == "installation"
 
     with pytest.raises(IntegrityError):

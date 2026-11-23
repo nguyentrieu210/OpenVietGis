@@ -33,8 +33,12 @@ def test_service_requested_context_preserves_exact_credential_identity() -> None
     payload = context.to_payload()
     assert RequestedActorContext.from_payload(json.loads(json.dumps(payload))) == context
     assert set(payload) == {
-        "actor_type", "actor_id", "organization_id", "workspace_id",
-        "project_id", "credential_id",
+        "actor_type",
+        "actor_id",
+        "organization_id",
+        "workspace_id",
+        "project_id",
+        "credential_id",
     }
     with pytest.raises(ValueError, match="credential_id"):
         RequestedActorContext.from_payload({**payload, "credential_id": None})

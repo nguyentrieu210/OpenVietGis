@@ -76,12 +76,8 @@ def upgrade() -> None:
             organization_id, project_id, successor_building_id, created_at
         )
     """)
-    op.execute(
-        "ALTER TABLE house_numbering.building_lineage ENABLE ROW LEVEL SECURITY"
-    )
-    op.execute(
-        "ALTER TABLE house_numbering.building_lineage FORCE ROW LEVEL SECURITY"
-    )
+    op.execute("ALTER TABLE house_numbering.building_lineage ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE house_numbering.building_lineage FORCE ROW LEVEL SECURITY")
     op.execute("""
         CREATE POLICY hn_building_lineage_project_scope
         ON house_numbering.building_lineage

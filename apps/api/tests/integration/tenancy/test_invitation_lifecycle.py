@@ -68,7 +68,9 @@ def test_invitation_recipient_binding_accept_once_and_optional_grant(
             service.accept(
                 actor=wrong,
                 user_id=world.wrong_user_id,
-                identity_link_id=SqlIdentityRepository(session).list_identity_links(world.wrong_user_id)[0].id,
+                identity_link_id=SqlIdentityRepository(session)
+                .list_identity_links(world.wrong_user_id)[0]
+                .id,
                 organization_id=world.organization_id,
                 invitation_id=issued.invitation.id,
                 secret=issued.secret,
@@ -78,7 +80,9 @@ def test_invitation_recipient_binding_accept_once_and_optional_grant(
         membership, grant = service.accept(
             actor=member,
             user_id=world.member_user_id,
-            identity_link_id=SqlIdentityRepository(session).list_identity_links(world.member_user_id)[0].id,
+            identity_link_id=SqlIdentityRepository(session)
+            .list_identity_links(world.member_user_id)[0]
+            .id,
             organization_id=world.organization_id,
             invitation_id=issued.invitation.id,
             secret=issued.secret,
@@ -93,7 +97,9 @@ def test_invitation_recipient_binding_accept_once_and_optional_grant(
             service.accept(
                 actor=member,
                 user_id=world.member_user_id,
-                identity_link_id=SqlIdentityRepository(session).list_identity_links(world.member_user_id)[0].id,
+                identity_link_id=SqlIdentityRepository(session)
+                .list_identity_links(world.member_user_id)[0]
+                .id,
                 organization_id=world.organization_id,
                 invitation_id=issued.invitation.id,
                 secret=issued.secret,
@@ -264,21 +270,27 @@ def test_runtime_accepts_only_matching_invitation_recipient(
             assert intended.get(root).status_code == 404
 
         with get_admin_engine().connect() as connection:
-            assert connection.execute(
-                text("""
+            assert (
+                connection.execute(
+                    text("""
                     SELECT count(*) FROM org.organization_memberships
                     WHERE organization_id = :org AND user_id IN (:intended, :wrong)
                 """),
-                {
-                    "org": world.organization_id,
-                    "intended": world.wrong_user_id,
-                    "wrong": outsider.owner_user_id,
-                },
-            ).scalar_one() == 0
-            assert connection.execute(
-                text("SELECT status FROM org.invitations WHERE id = :id"),
-                {"id": payload["invitation_id"]},
-            ).scalar_one() == "pending"
+                    {
+                        "org": world.organization_id,
+                        "intended": world.wrong_user_id,
+                        "wrong": outsider.owner_user_id,
+                    },
+                ).scalar_one()
+                == 0
+            )
+            assert (
+                connection.execute(
+                    text("SELECT status FROM org.invitations WHERE id = :id"),
+                    {"id": payload["invitation_id"]},
+                ).scalar_one()
+                == "pending"
+            )
 
         # User-target accepts any authenticated identity linked to that exact User.
         recipient = alternate if kind == "user" else intended
@@ -314,9 +326,7 @@ def test_runtime_invitation_expired_or_revoked_is_unusable(
         assert issued.status_code == 201
         invitation_id = issued.json()["id"]
         if state == "revoked":
-            assert owner.post(
-                f"{root}/invitations/{invitation_id}/revoke"
-            ).status_code == 204
+            assert owner.post(f"{root}/invitations/{invitation_id}/revoke").status_code == 204
         else:
             # Age only the test fixture deterministically; no sleeps or production clock changes.
             with get_admin_engine().begin() as connection:
@@ -341,17 +351,23 @@ def test_runtime_invitation_expired_or_revoked_is_unusable(
         assert denied.json() == {"detail": "invalid invitation"}
         assert recipient.get(root).status_code == 404
         with get_admin_engine().connect() as connection:
-            assert connection.execute(
-                text("SELECT status FROM org.invitations WHERE id = :id"),
-                {"id": invitation_id},
-            ).scalar_one() == state
-            assert connection.execute(
-                text("""
+            assert (
+                connection.execute(
+                    text("SELECT status FROM org.invitations WHERE id = :id"),
+                    {"id": invitation_id},
+                ).scalar_one()
+                == state
+            )
+            assert (
+                connection.execute(
+                    text("""
                     SELECT count(*) FROM org.organization_memberships
                     WHERE organization_id = :org AND user_id = :uid
                 """),
-                {"org": world.organization_id, "uid": world.wrong_user_id},
-            ).scalar_one() == 0
+                    {"org": world.organization_id, "uid": world.wrong_user_id},
+                ).scalar_one()
+                == 0
+            )
 
 
 def test_acceptance_reuses_existing_identical_active_grant(
@@ -363,47 +379,60 @@ def test_acceptance_reuses_existing_identical_active_grant(
         client_for_user(world.owner_user_id) as owner,
         client_for_user(world.member_user_id) as recipient,
     ):
-        existing = owner.post(f"{root}/grants", json={
-            "subject_kind": "membership",
-            "subject_id": str(world.member_membership_id),
-            "scope_kind": "project",
-            "project_id": str(world.project_id),
-            "role": "viewer",
-        })
-        assert existing.status_code == 201, existing.text
-        grant_id = existing.json()["id"]
-        issued = owner.post(f"{root}/invitations", json={
-            "target": {"kind": "user", "user_id": str(world.member_user_id)},
-            "organization_role": "member",
-            "resource_grant": {
+        existing = owner.post(
+            f"{root}/grants",
+            json={
+                "subject_kind": "membership",
+                "subject_id": str(world.member_membership_id),
                 "scope_kind": "project",
                 "project_id": str(world.project_id),
                 "role": "viewer",
             },
-            "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
-        })
+        )
+        assert existing.status_code == 201, existing.text
+        grant_id = existing.json()["id"]
+        issued = owner.post(
+            f"{root}/invitations",
+            json={
+                "target": {"kind": "user", "user_id": str(world.member_user_id)},
+                "organization_role": "member",
+                "resource_grant": {
+                    "scope_kind": "project",
+                    "project_id": str(world.project_id),
+                    "role": "viewer",
+                },
+                "expires_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+            },
+        )
         assert issued.status_code == 201
-        accepted = recipient.post("/api/v1/invitations/accept", json={
-            "organization_id": str(world.organization_id),
-            "invitation_id": issued.json()["id"],
-            "secret": issued.json()["secret"],
-        })
+        accepted = recipient.post(
+            "/api/v1/invitations/accept",
+            json={
+                "organization_id": str(world.organization_id),
+                "invitation_id": issued.json()["id"],
+                "secret": issued.json()["secret"],
+            },
+        )
         assert accepted.status_code == 200
         assert accepted.json()["grant"]["id"] == grant_id
         assert accepted.json()["membership"]["id"] == str(world.member_membership_id)
     with get_admin_engine().connect() as connection:
-        active_grants = connection.execute(
-            text("""
+        active_grants = (
+            connection.execute(
+                text("""
                 SELECT id FROM org.resource_grants
                 WHERE organization_id = :org AND membership_id = :member
                   AND project_id = :project AND role = 'viewer' AND revoked_at IS NULL
             """),
-            {
-                "org": world.organization_id,
-                "member": world.member_membership_id,
-                "project": world.project_id,
-            },
-        ).scalars().all()
+                {
+                    "org": world.organization_id,
+                    "member": world.member_membership_id,
+                    "project": world.project_id,
+                },
+            )
+            .scalars()
+            .all()
+        )
         assert active_grants == [UUID(grant_id)]
         event = connection.execute(
             text("""
@@ -414,11 +443,14 @@ def test_acceptance_reuses_existing_identical_active_grant(
             {"org": world.organization_id, "invite": issued.json()["id"]},
         ).scalar_one()
         assert event["grant_id"] == grant_id
-        assert connection.execute(
-            text("""
+        assert (
+            connection.execute(
+                text("""
                 SELECT count(*) FROM audit.audit_events
                 WHERE organization_id = :org AND action = 'authorization.grant.create'
                   AND resource_id = :grant
             """),
-            {"org": world.organization_id, "grant": grant_id},
-        ).scalar_one() == 1
+                {"org": world.organization_id, "grant": grant_id},
+            ).scalar_one()
+            == 1
+        )

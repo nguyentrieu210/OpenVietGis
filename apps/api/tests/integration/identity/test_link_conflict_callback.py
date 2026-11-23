@@ -40,7 +40,8 @@ def _service(session: Session) -> IdentityService:
 
 
 def test_oidc_callback_preserves_denied_audit_and_does_not_change_links(
-    migrated_database: None, monkeypatch: pytest.MonkeyPatch,
+    migrated_database: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = get_settings()
     migration_url = settings.migration_db_url
@@ -99,27 +100,34 @@ def test_oidc_callback_preserves_denied_audit_and_does_not_change_links(
             repository = SqlIdentityRepository(verify)
             assert repository.list_identity_links(actor.user.id) == [actor.identity_link]
             assert repository.list_identity_links(foreign.user.id) == [foreign.identity_link]
-            audit = verify.execute(
-                text(
-                    """
+            audit = (
+                verify.execute(
+                    text(
+                        """
                     SELECT organization_id, actor_id, actor_display_snapshot, outcome,
                            resource_id, metadata
                     FROM audit.audit_events
                     WHERE actor_id = :actor_id AND action = 'identity.link'
                     """
-                ),
-                {"actor_id": actor.user.id},
-            ).mappings().one()
+                    ),
+                    {"actor_id": actor.user.id},
+                )
+                .mappings()
+                .one()
+            )
             assert audit["organization_id"] is None
             assert audit["actor_id"] == actor.user.id
             assert audit["actor_display_snapshot"] == actor.user.display_name
             assert audit["outcome"] == "denied"
             assert audit["resource_id"] is None
             assert audit["metadata"] == {"reason": "identity_conflict"}
-            assert verify.execute(
-                text("SELECT count(*) FROM identity.web_sessions WHERE user_id = :user_id"),
-                {"user_id": actor.user.id},
-            ).scalar_one() == 1
+            assert (
+                verify.execute(
+                    text("SELECT count(*) FROM identity.web_sessions WHERE user_id = :user_id"),
+                    {"user_id": actor.user.id},
+                ).scalar_one()
+                == 1
+            )
     finally:
         engine.dispose()
 
@@ -162,20 +170,25 @@ def test_concurrent_distinct_users_linking_one_identity_audits_loser(
         loser = next(user_id for user_id, outcome in results if outcome == "denied")
         with Session(engine) as verify:
             current = SqlIdentityRepository(verify).find_by_external_identity(
-                issuer=claimed.issuer, subject=claimed.subject,
+                issuer=claimed.issuer,
+                subject=claimed.subject,
             )
             assert current is not None
             assert current[0].id == winner
-            audit = verify.execute(
-                text(
-                    """
+            audit = (
+                verify.execute(
+                    text(
+                        """
                     SELECT outcome, resource_id, metadata
                     FROM audit.audit_events
                     WHERE actor_id = :actor_id AND action = 'identity.link'
                     """
-                ),
-                {"actor_id": loser},
-            ).mappings().one()
+                    ),
+                    {"actor_id": loser},
+                )
+                .mappings()
+                .one()
+            )
             assert audit["outcome"] == "denied"
             assert audit["resource_id"] is None
             assert audit["metadata"] == {"reason": "identity_conflict"}

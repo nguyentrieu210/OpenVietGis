@@ -10,9 +10,7 @@ from openvietgis_api.domains.spatial.domain import FieldType, SourceField
 
 
 def field(kind: FieldType, *, nullable: bool = False) -> SourceField:
-    return SourceField(
-        uuid4(), uuid4(), uuid4(), "value", "Value", 0, kind, nullable, "a" * 64
-    )
+    return SourceField(uuid4(), uuid4(), uuid4(), "value", "Value", 0, kind, nullable, "a" * 64)
 
 
 @pytest.mark.parametrize(

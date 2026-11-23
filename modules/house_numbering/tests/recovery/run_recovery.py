@@ -27,7 +27,9 @@ CONTAINER = "dev-postgres-test-1"
 DB_NAME = "openvietgis_test"
 DB_USER = "openvietgis"
 RESTORE_DB = "openvietgis_test_hn019_restore"
-ARTIFACT_ROOT = Path(os.environ.get("OPENVIETGIS_ARTIFACT_STORE_DIR", "/tmp/hn019-recovery-artifacts"))
+ARTIFACT_ROOT = Path(
+    os.environ.get("OPENVIETGIS_ARTIFACT_STORE_DIR", "/tmp/hn019-recovery-artifacts")
+)
 BACKUP_ROOT = Path("/tmp/hn019-recovery-backup")
 RESTORE_ARTIFACT_ROOT = Path("/tmp/hn019-recovery-restored-artifacts")
 OUTPUT = Path("/tmp/hn019-recovery.json")
@@ -58,13 +60,17 @@ def _sha(path: Path) -> str:
 def _module_artifact_files(root: Path, artifact_id: UUID) -> tuple[Path, Path]:
     matches = list(root.glob(f"extensions/*/*/*/{artifact_id}/*.json"))
     if len(matches) != 1:
-        raise RuntimeError(f"expected one metadata file for artifact {artifact_id}, got {len(matches)}")
+        raise RuntimeError(
+            f"expected one metadata file for artifact {artifact_id}, got {len(matches)}"
+        )
     meta_path = matches[0]
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     data_path = meta_path.parent / str(meta["filename"])
     if not data_path.is_file():
         raise RuntimeError(f"artifact bytes missing for {artifact_id}")
-    if _sha(data_path) != meta["sha256"] or data_path.stat().st_size != int(meta["byte_size"]):
+    if _sha(data_path) != meta["sha256"] or data_path.stat().st_size != int(
+        meta["byte_size"]
+    ):
         raise RuntimeError(f"artifact integrity mismatch for {artifact_id}")
     return meta_path, data_path
 
@@ -124,7 +130,9 @@ def _source_module_state(engine, org: UUID, project: UUID) -> dict[str, object]:
         photo_ids = [UUID(str(v)) for row in photo_rows for v in (row or [])]
     return {
         "counts": counts,
-        "referenced_artifact_ids": [str(v) for v in (*import_ids, *document_ids, *photo_ids)],
+        "referenced_artifact_ids": [
+            str(v) for v in (*import_ids, *document_ids, *photo_ids)
+        ],
     }
 
 
@@ -157,7 +165,9 @@ def _seed() -> tuple[UUID, UUID, list[UUID]]:
     created_artifacts: list[UUID] = []
 
     with _client(world.owner_user_id) as client:
-        manifest = client.post(f"{org_base}/extensions/official/house_numbering/register")
+        manifest = client.post(
+            f"{org_base}/extensions/official/house_numbering/register"
+        )
         assert manifest.status_code == 201, manifest.text
         activation = client.post(
             f"{proj_base}/extensions/activations",
@@ -223,14 +233,20 @@ def _seed() -> tuple[UUID, UUID, list[UUID]]:
             },
         )
         proposal_id = proposal.json()["proposal"]["id"]
-        assert client.post(
-            f"{module_base}/proposals/{proposal_id}/transition",
-            json={"expected_revision": 1, "action": "submit"},
-        ).status_code == 200
-        assert client.post(
-            f"{module_base}/proposals/{proposal_id}/transition",
-            json={"expected_revision": 2, "action": "approve"},
-        ).status_code == 200
+        assert (
+            client.post(
+                f"{module_base}/proposals/{proposal_id}/transition",
+                json={"expected_revision": 1, "action": "submit"},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                f"{module_base}/proposals/{proposal_id}/transition",
+                json={"expected_revision": 2, "action": "approve"},
+            ).status_code
+            == 200
+        )
 
         document = client.post(
             f"{module_base}/documents",
@@ -338,7 +354,11 @@ def run() -> dict[str, object]:
         isolated_target_confirmed=True,
     )
 
-    restored_url = make_url(source_url).set(database=RESTORE_DB).render_as_string(hide_password=False)
+    restored_url = (
+        make_url(source_url)
+        .set(database=RESTORE_DB)
+        .render_as_string(hide_password=False)
+    )
     restore_engine = create_engine(restored_url)
     restored_state = _source_module_state(restore_engine, org, project)
     if restored_state != source_state:
@@ -364,7 +384,9 @@ def run() -> dict[str, object]:
         "restore": restore_meta,
         "module_db_state_identical": True,
         "module_artifact_tree_identical": True,
-        "module_artifact_references_verified": len(source_state["referenced_artifact_ids"]),
+        "module_artifact_references_verified": len(
+            source_state["referenced_artifact_ids"]
+        ),
         "synthetic_only": True,
     }
 

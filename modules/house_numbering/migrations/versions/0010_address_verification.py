@@ -1,9 +1,12 @@
 """Per-building address decisions scoped to a staged geometry candidate."""
+
 from alembic import op
-revision="hn_0010_address_verification"
-down_revision="hn_0009_geometry_review"
-branch_labels=None
-depends_on=None
+
+revision = "hn_0010_address_verification"
+down_revision = "hn_0009_geometry_review"
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
     op.execute("""
@@ -32,5 +35,8 @@ def upgrade():
       GRANT SELECT,INSERT,UPDATE ON house_numbering.geometry_address_reviews TO openvietgis_runtime;
     """)
 
+
 def downgrade():
-    op.execute("DROP TABLE house_numbering.geometry_address_reviews; ALTER TABLE house_numbering.geometry_reviews DROP CONSTRAINT uq_hn_geometry_review_scope")
+    op.execute(
+        "DROP TABLE house_numbering.geometry_address_reviews; ALTER TABLE house_numbering.geometry_reviews DROP CONSTRAINT uq_hn_geometry_review_scope"
+    )

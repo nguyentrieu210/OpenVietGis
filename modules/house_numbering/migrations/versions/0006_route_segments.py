@@ -1,10 +1,12 @@
 """Allow a route to reference several Core features without duplicating geometry."""
+
 from alembic import op
 
 revision = "hn_0006_route_segments"
 down_revision = "hn_0005_building_lineage_plaque"
 branch_labels = None
 depends_on = None
+
 
 def upgrade() -> None:
     op.execute("""
@@ -54,6 +56,7 @@ def upgrade() -> None:
         ) g WHERE g.geometry IS NOT NULL
     """)
     op.execute("GRANT SELECT ON house_numbering.route_lines TO openvietgis_runtime")
+
 
 def downgrade() -> None:
     # Refuse lossy downgrade while grouped routes exist.

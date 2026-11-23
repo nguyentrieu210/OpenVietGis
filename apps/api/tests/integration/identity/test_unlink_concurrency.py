@@ -66,15 +66,17 @@ def test_runtime_unlink_is_actor_bound_and_atomic(migrated_database: None) -> No
             )
             assert not session.execute(
                 text(
-                    "SELECT has_table_privilege(current_user, "
-                    "'identity.identity_links', 'DELETE')"
+                    "SELECT has_table_privilege(current_user, 'identity.identity_links', 'DELETE')"
                 )
             ).scalar_one()
             set_request_context(session, organization_id=None, actor_user_id=uuid4())
-            assert SqlIdentityRepository(session).unlink_identity(
-                user_id=user_id,
-                identity_link_id=second.id,
-            ) == UnlinkIdentityResult.NOT_FOUND
+            assert (
+                SqlIdentityRepository(session).unlink_identity(
+                    user_id=user_id,
+                    identity_link_id=second.id,
+                )
+                == UnlinkIdentityResult.NOT_FOUND
+            )
             session.rollback()
 
         barrier = Barrier(2)
@@ -113,12 +115,15 @@ def test_runtime_unlink_is_actor_bound_and_atomic(migrated_database: None) -> No
             assert len(remaining_sessions) == 1
             assert remaining_sessions[0].identity_link_id == remaining_id
             assert remaining_sessions[0].id in {login.web_session.id, second_login.web_session.id}
-            assert check.execute(
-                text(
-                    "SELECT count(*) FROM audit.audit_events "
-                    "WHERE actor_id=:id AND action='identity.unlink'"
-                ),
-                {"id": user_id},
-            ).scalar_one() == 1
+            assert (
+                check.execute(
+                    text(
+                        "SELECT count(*) FROM audit.audit_events "
+                        "WHERE actor_id=:id AND action='identity.unlink'"
+                    ),
+                    {"id": user_id},
+                ).scalar_one()
+                == 1
+            )
     finally:
         engine.dispose()

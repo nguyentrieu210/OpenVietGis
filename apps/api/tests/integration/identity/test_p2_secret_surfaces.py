@@ -33,35 +33,56 @@ def test_p2_actual_bootstrap_and_service_secrets_stay_out_of_log_and_audit(
                 ):
                     assert value is not None
                     canaries.append(value)
-                bootstrap = owner.post("/api/v1/bootstrap/initialize", json={
-                    "organization_name": "Secret scan",
-                    "organization_slug": f"scan-{uuid4().hex}",
-                }, headers={"Authorization": "Bearer " + authority})
+                bootstrap = owner.post(
+                    "/api/v1/bootstrap/initialize",
+                    json={
+                        "organization_name": "Secret scan",
+                        "organization_slug": f"scan-{uuid4().hex}",
+                    },
+                    headers={"Authorization": "Bearer " + authority},
+                )
                 responses.append(bootstrap.text)
                 assert bootstrap.status_code == 201
                 org = bootstrap.json()["organization_id"]
                 root = f"/api/v1/organizations/{org}"
-                project = owner.post(f"{root}/projects", json={
-                    "name": "Security test project", "slug": f"scan-project-{uuid4().hex}",
-                })
+                project = owner.post(
+                    f"{root}/projects",
+                    json={
+                        "name": "Security test project",
+                        "slug": f"scan-project-{uuid4().hex}",
+                    },
+                )
                 responses.append(project.text)
                 assert project.status_code == 201
                 project_id = project.json()["id"]
-                principal = owner.post(f"{root}/service-principals", json={
-                    "name": f"scan-principal-{uuid4().hex}",
-                })
+                principal = owner.post(
+                    f"{root}/service-principals",
+                    json={
+                        "name": f"scan-principal-{uuid4().hex}",
+                    },
+                )
                 responses.append(principal.text)
                 assert principal.status_code == 201
                 principal_id = principal.json()["id"]
-                grant = owner.post(f"{root}/grants", json={
-                    "subject_kind": "service_principal", "subject_id": principal_id,
-                    "scope_kind": "project", "project_id": project_id, "role": "viewer",
-                })
+                grant = owner.post(
+                    f"{root}/grants",
+                    json={
+                        "subject_kind": "service_principal",
+                        "subject_id": principal_id,
+                        "scope_kind": "project",
+                        "project_id": project_id,
+                        "role": "viewer",
+                    },
+                )
                 responses.append(grant.text)
                 assert grant.status_code == 201
-                issued = owner.post(f"{root}/service-principals/{principal_id}/credentials", json={
-                    "name": "scan-credential", "permission_ceiling": ["project.read"],
-                })
+                issued = owner.post(
+                    f"{root}/service-principals/{principal_id}/credentials",
+                    json={
+                        "name": "scan-credential",
+                        "permission_ceiling": ["project.read"],
+                    },
+                )
                 assert issued.status_code == 201
                 # The issuance response alone intentionally contains this one-time credential.
                 secret = issued.json()["secret"]
@@ -79,19 +100,28 @@ def test_p2_actual_bootstrap_and_service_secrets_stay_out_of_log_and_audit(
                     refused = service.get(f"{root}/projects/{project_id}")
                     responses.append(refused.text)
                     assert refused.status_code == 401
-                reuse = owner.post("/api/v1/bootstrap/initialize", json={
-                    "organization_name": "Reuse", "organization_slug": "reuse",
-                }, headers={"Authorization": "Bearer " + authority})
+                reuse = owner.post(
+                    "/api/v1/bootstrap/initialize",
+                    json={
+                        "organization_name": "Reuse",
+                        "organization_slug": "reuse",
+                    },
+                    headers={"Authorization": "Bearer " + authority},
+                )
                 assert reuse.status_code == 409
                 responses.append(reuse.text)
                 audit = owner.get(f"{root}/audit-events", params={"limit": 200})
                 assert audit.status_code == 200
                 responses.append(audit.text)
             with get_admin_engine().connect() as connection:
-                persisted = connection.execute(
-                    text("SELECT * FROM audit.audit_events WHERE organization_id = :org"),
-                    {"org": org},
-                ).mappings().all()
+                persisted = (
+                    connection.execute(
+                        text("SELECT * FROM audit.audit_events WHERE organization_id = :org"),
+                        {"org": org},
+                    )
+                    .mappings()
+                    .all()
+                )
             assert len(persisted) >= 5
             responses.append(json.dumps([dict(row) for row in persisted], default=str))
             console = capsys.readouterr()

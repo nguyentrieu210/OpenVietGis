@@ -109,12 +109,10 @@ def test_machine_identity_tables_are_force_rls_and_runtime_tenant_scoped(
 
         set_request_context(session, organization_id=None, actor_user_id=None)
         assert (
-            session.execute(text("SELECT count(*) FROM org.service_principals")).scalar_one()
-            == 0
+            session.execute(text("SELECT count(*) FROM org.service_principals")).scalar_one() == 0
         )
         assert (
-            session.execute(text("SELECT count(*) FROM org.service_credentials")).scalar_one()
-            == 0
+            session.execute(text("SELECT count(*) FROM org.service_credentials")).scalar_one() == 0
         )
 
 

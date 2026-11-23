@@ -25,11 +25,16 @@ def test_tenant_create_restart_read_path_ten_consecutive_runs(migrated_database:
         csrf = authenticated.headers["X-OpenVietGIS-CSRF"]
     assert cookie is not None
     for index in range(10):
-        with TestClient(create_app(), cookies={"ovg_session": cookie},
-                        headers={"X-OpenVietGIS-CSRF": csrf}) as client:
-            created = client.post(root, json={
-                "name": f"restart-check-{index}", "slug": f"restart-{uuid4().hex}",
-            })
+        with TestClient(
+            create_app(), cookies={"ovg_session": cookie}, headers={"X-OpenVietGIS-CSRF": csrf}
+        ) as client:
+            created = client.post(
+                root,
+                json={
+                    "name": f"restart-check-{index}",
+                    "slug": f"restart-{uuid4().hex}",
+                },
+            )
             assert created.status_code == 201
             record = created.json()
 

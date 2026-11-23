@@ -47,8 +47,12 @@ def downgrade() -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Migrate the House Numbering module schema.")
-    parser.add_argument("action", choices=("upgrade", "downgrade"), nargs="?", default="upgrade")
+    parser = argparse.ArgumentParser(
+        description="Migrate the House Numbering module schema."
+    )
+    parser.add_argument(
+        "action", choices=("upgrade", "downgrade"), nargs="?", default="upgrade"
+    )
     args = parser.parse_args()
     if args.action == "downgrade":
         downgrade()

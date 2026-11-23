@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from openvietgis_api.adapters.persistence.gis_access import scoped
 
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
@@ -18,6 +17,7 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
+from openvietgis_api.adapters.persistence.gis_access import scoped
 from openvietgis_api.adapters.persistence.map_repository import SqlMapRepository
 from openvietgis_api.domains.maps.domain import (
     MAX_REVISION,
@@ -146,13 +146,30 @@ def get_map(
 ) -> dict[str, object]:
     response.headers["Cache-Control"] = "no-store"
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
-    wire=MapService(SqlMapRepository(session)).get_map(context=context).to_wire()
-    if scoped(session,context):
-        allowed={str(x) for x in session.execute(text("SELECT id FROM spatial.layers WHERE organization_id=:org AND project_id=:proj"),{"org":organization_id,"proj":project_id}).scalars()}
-        config=wire.get("configuration")
-        if config:
-            config["layers"]=[l for l in config.get("layers",[]) if str(l.get("layer_id")) in allowed]
-            config["default_viewpoint"]=None
+    wire = MapService(SqlMapRepository(session)).get_map(context=context).to_wire()
+    if scoped(session, context):
+        allowed = {
+            str(x)
+            for x in session.execute(
+                text(
+                    "SELECT id FROM spatial.layers WHERE organization_id=:org AND project_id=:proj"
+                ),
+                {"org": organization_id, "proj": project_id},
+            ).scalars()
+        }
+        config = wire.get("configuration")
+        if isinstance(config, dict):
+            layers = config.get("layers")
+            config["layers"] = (
+                [
+                    layer
+                    for layer in layers
+                    if isinstance(layer, dict) and str(layer.get("layer_id")) in allowed
+                ]
+                if isinstance(layers, list)
+                else []
+            )
+            config["default_viewpoint"] = None
     return wire
 
 

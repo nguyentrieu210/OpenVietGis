@@ -1,4 +1,5 @@
 """Metadata-only, isolated partner UI contract. No server-side URL fetching."""
+
 from __future__ import annotations
 
 import re
@@ -8,10 +9,17 @@ from urllib.parse import urlsplit
 from openvietgis_api.domains.platform_errors import PlatformValidationError
 
 EXTERNAL_PREFIX = "partner_"
-EXTERNAL_CAPABILITIES = frozenset({
-    "host_context", "host_notice", "map_view", "map_navigate", "map_selection",
-    "map_overlay", "tool_register",
-})
+EXTERNAL_CAPABILITIES = frozenset(
+    {
+        "host_context",
+        "host_notice",
+        "map_view",
+        "map_navigate",
+        "map_selection",
+        "map_overlay",
+        "tool_register",
+    }
+)
 _HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\Z")
 
 
@@ -40,7 +48,13 @@ def validate_external_manifest(
         raise invalid
     ui = ui_contributions[0]
     if not isinstance(ui, dict) or set(ui) != {
-        "id", "slot", "label", "route_suffix", "runtime", "url", "sdk_version"
+        "id",
+        "slot",
+        "label",
+        "route_suffix",
+        "runtime",
+        "url",
+        "sdk_version",
     }:
         raise invalid
     if (
