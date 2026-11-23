@@ -1,6 +1,5 @@
 """Cross-platform fake-HTTP acceptance. Real Windows/MicroStation acceptance still required."""
 import hashlib
-import importlib.util
 import json
 from contextlib import closing
 import sqlite3

@@ -8,7 +8,7 @@ if not exist "%TARGET%" (
   pause
   exit /b 1
 )
-for %%F in (receiver.py v8i_probe.py gui.py start.cmd OpenVietGISConnector.bas README.md) do (
+for %%F in (receiver.py v8i_probe.py gui.py start.cmd OpenVietGISConnector.bas README.md outbound.py sync_transport.py windows_com.py bridge_contract.py) do (
   copy /Y "%SOURCE%%%F" "%TARGET%\%%F" >nul
   if errorlevel 1 (
     echo Installation failed while copying %%F
