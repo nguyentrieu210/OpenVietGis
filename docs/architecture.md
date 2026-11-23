@@ -6,7 +6,8 @@ lives in source code.
 
 ## Ownership boundaries
 
-- `apps/web`: desktop-class web product shell.
+- `apps/web-next`: canonical public/live frontend (`/` and `/app`) in the current release; production Docker builds this app.
+- `apps/web`: legacy/compatibility shell and development/preview entrypoints. Keep until feature parity and migration tests authorize retirement.
 - `apps/api`: application backend and HTTP adapter.
 - `packages/*`: reusable public or cross-application contracts with explicit ownership.
 - `modules/*`: vertical domain modules downstream of platform contracts.
