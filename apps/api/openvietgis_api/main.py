@@ -42,6 +42,7 @@ from openvietgis_api.adapters.http import (
     team_presence,
     team_realtime,
     terrain,
+    tilesets,
     transfers,
     workspaces,
 )
@@ -109,6 +110,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(terrain.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(model_vault.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(saved_scenes.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(tilesets.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cartography.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(layout_designer.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(external_sources.router, dependencies=[Depends(project_access_guard)])
