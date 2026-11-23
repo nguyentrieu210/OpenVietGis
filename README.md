@@ -1,5 +1,39 @@
 # OpenVietGIS
 
+**Nền tảng WebGIS mã nguồn công khai, hướng tới kết nối GIS, CAD, dữ liệu không gian, cộng tác và AI trên một không gian làm việc thống nhất.**
+
+[**Trải nghiệm bản demo trực tuyến**](https://openvietgis.cloud) · [**Mã nguồn GitHub**](https://github.com/nguyentrieu210/OpenVietGis) · [**Roadmap**](ROADMAP.md) · [**Định hướng sản phẩm**](docs/product.md)
+
+> **Trạng thái:** Đang phát triển và mở cho cộng đồng trải nghiệm, góp ý, kiểm thử. Demo là môi trường dùng thử, không phải chứng nhận mọi tính năng đã sẵn sàng cho sản xuất. Không tải dữ liệu nhạy cảm lên bản demo.
+
+## OpenVietGIS là gì?
+
+OpenVietGIS là dự án xây dựng **không gian làm việc GIS trên trình duyệt**, lấy cảm hứng từ các luồng công việc hữu ích của QGIS, ArcGIS, MapInfo và AutoCAD nhưng không đặt mục tiêu sao chép toàn bộ các phần mềm này. Dự án được xây dựng với sự hỗ trợ của AI (AI-assisted development / Vibe Coding), đồng thời chú trọng kiến trúc, kiểm thử và sự đóng góp của cộng đồng.
+
+Các nhóm năng lực đang phát triển và kiểm chứng:
+
+- **WebGIS:** dự án, nguồn dữ liệu, lớp bản đồ, thuộc tính, truy vấn và biên tập.
+- **Bản đồ chuyên đề:** ký hiệu, nhãn, bố cục in và xuất kết quả.
+- **Xử lý dữ liệu không gian:** CRS, nhập/xuất, phân tích và các luồng xử lý.
+- **CAD và các nguồn bên ngoài:** trao đổi dữ liệu, kết nối hệ thống và khả năng mở rộng.
+- **Cộng tác:** tổ chức, workspace, phân quyền, phân tách dữ liệu và lịch sử thao tác.
+- **Plugin, API và AI:** các hướng tích hợp/mở rộng đang được phát triển, thử nghiệm và đánh giá.
+
+**Lưu ý:** Danh sách trên mô tả *phạm vi phát triển*, không có nghĩa mọi nhóm tính năng đều đã hoàn tất hoặc được nghiệm thu. Xem [roadmap](ROADMAP.md), [đặc tả](specs/) và [bằng chứng kiểm thử](specs/018-full-product-audit/remediation/final-next-integration-evidence.md) để xác minh từng năng lực.
+
+## Thử demo và cùng đóng góp
+
+1. Mở **https://openvietgis.cloud** để trải nghiệm phiên bản đang triển khai.
+2. Nếu gặp lỗi, có đề xuất cải tiến hoặc muốn phát triển thêm plugin, hãy [tạo Issue](https://github.com/nguyentrieu210/OpenVietGis/issues).
+3. Muốn đóng góp mã nguồn, hãy Fork repo, tạo nhánh riêng và gửi Pull Request kèm mô tả thay đổi, kiểm thử và ảnh minh họa nếu liên quan giao diện.
+4. Trước khi sửa Core, vui lòng đọc [kiến trúc](docs/architecture.md), [quy tắc dự án](.specify/memory/constitution.md) và [roadmap](ROADMAP.md).
+
+Rất hoan nghênh cộng đồng **Vibe Coding, GIS, trắc địa, địa chính, CAD, frontend/backend và AI Agent** tham gia góp ý và phát triển cùng nhau. Mã nguồn đang được công khai; điều khoản cấp phép sử dụng và phân phối cần được xác định rõ trong tệp LICENSE trước khi sử dụng lại theo một giấy phép mã nguồn mở cụ thể.
+
+---
+
+## Technical documentation (English)
+
 OpenVietGIS is a platform-first spatial workspace for the web. The original Spec 001 built the
 architecture runway and a disposable non-GIS vertical slice; later feature slices extend that
 foundation.
