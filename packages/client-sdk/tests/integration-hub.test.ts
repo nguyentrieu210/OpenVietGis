@@ -710,16 +710,22 @@ describe("Integration Hub client SDK", () => {
   it("exports reviewed read-only, controlled sync and disabled draft binding helpers", () => {
     const exportedKeys = Object.keys(integrationHub).sort();
     expect(exportedKeys).toEqual([
+      "activateQgisBinding",
       "buildIntegrationLayerExportPath",
       "changeQgisBindingDraftLifecycle",
       "createQgisBindingDraft",
       "downloadIntegrationLayerExport",
       "getIntegrationHubAdapterProfile",
       "getIntegrationHubCatalog",
+      "issueBindingPairingToken",
+      "listBindingConflicts",
+      "listBindingPairingTokens",
       "listIntegrationBindingDrafts",
       "listQgisBindingCandidates",
       "previewQgisGpkgSync",
-      "pushQgisGpkgSync"
+      "pushQgisGpkgSync",
+      "resolveBindingConflict",
+      "revokeBindingPairingToken"
     ]);
   });
 
