@@ -23,6 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from modules.house_numbering.address_prefix import canonical_prefix
+from modules.house_numbering.numbering_audit import find_tree_collisions
 
 
 class HouseNumberingRepository:
@@ -1593,6 +1594,11 @@ class HouseNumberingRepository:
         )
 
     def apply_preview(self, preview_id: UUID) -> list[RowMapping]:
+        self.prepare("edit")
+        # Number assignments in different branches must serialize so two previews
+        # cannot allocate the same full address concurrently under one street.
+        self.session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+                             {"key": f"house-numbering-number-apply:{self.project_id}"})
         preview = self.get_preview(preview_id, for_update=True)
         if preview["applied_at"] is not None:
             changes = list(preview["candidate_changes"])
@@ -1638,6 +1644,26 @@ class HouseNumberingRepository:
             snapshot_key=f"route_snapshot:{route_id}"
             if snapshot_key in base and self.numbering_route_snapshot(route_id) != base[snapshot_key]:
                 raise PlatformConflictError("route addresses or building geometry changed since preview",code="STALE_PREVIEW")
+        if changes:
+            scope = {"org": self.org_id, "project": self.project_id}
+            parents = {str(r["id"]): str(r["parent_route_id"]) if r["parent_route_id"] else None
+                for r in self.session.execute(text("""
+                    SELECT id,parent_route_id FROM house_numbering.routes
+                    WHERE organization_id=:org AND project_id=:project
+                """), scope).mappings()}
+            existing = self.session.execute(text("""
+                SELECT route_id,number_text,building_id FROM house_numbering.address_numbers
+                WHERE organization_id=:org AND project_id=:project AND retired_at IS NULL
+                  AND number_text=ANY(:numbers)
+            """), {**scope, "numbers": sorted({str(c["number"]) for c in changes})}).mappings().all()
+            occupants = [{"route_id": r["route_id"], "number_text": r["number_text"],
+                "building_id": r["building_id"], "origin": "existing"} for r in existing]
+            occupants.extend({"route_id": c["route_id"], "number_text": c["number"],
+                "building_id": c["building_id"], "origin": "proposal"} for c in changes)
+            cross = find_tree_collisions(parents, occupants)
+            if any(any(o["origin"] == "proposal" for o in issue["occupants"]) for issue in cross):
+                raise PlatformConflictError("full number already exists on another route in the same street tree",
+                                            code="CROSS_ROUTE_NUMBER_OCCUPIED")
         for change in changes:
             building_id = UUID(str(change["building_id"]))
             route_id = UUID(str(change["route_id"]))

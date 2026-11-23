@@ -13,6 +13,7 @@ from openvietgis_api.domains.platform_errors import (
     PlatformConflictError,
 )
 from sqlalchemy.engine import RowMapping
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from modules.house_numbering.domain import (
@@ -24,6 +25,7 @@ from modules.house_numbering.domain import (
 )
 from modules.house_numbering.persistence import HouseNumberingRepository
 from modules.house_numbering.batch_numbering import build_route_plan
+from modules.house_numbering.numbering_audit import audit_route_numbering, summarize_audit, find_tree_collisions
 
 
 def _wire(row: RowMapping | dict[str, Any]) -> dict[str, Any]:
@@ -363,6 +365,8 @@ class HouseNumberingService:
         domain_rule = _domain_rule(rule)
         changes: list[dict[str, Any]] = []
         warnings: list[str] = []
+        audits: list[dict[str, Any]] = []
+        inspected_numbers: set[str] = set()
         base: dict[str, Any] = {}
         groups: dict[UUID, dict[str, Any]] = {}
         targets = self.repo.numbering_buildings(building_ids)
@@ -394,7 +398,19 @@ class HouseNumberingService:
             current = self.repo.route_geometry(route_id)
             if current["content_revision"] != route["content_revision"] or current["revision"] != route["revision"]:
                 raise PlatformConflictError("route changed during preview", code="STALE_PREVIEW")
+            audit = audit_route_numbering(route=route, vertices=vertices, rule=domain_rule,
+                                          points=points, numbers=numbers, changes=proposed)
+            audit["route_name"] = self.repo.get_route(route_id)["name"]
+            audit["cross_route_duplicates"] = []
+            audits.append(audit)
+            inspected_numbers.update(str(n["number_text"]) for n in numbers)
+            inspected_numbers.update(str(c["number"]) for c in proposed)
             warnings.extend(issues)
+            if audit["blocking_issues"]:
+                warnings.append(f"route {route_id}: numbering_audit_blocked ({audit['blocking_issues']} issues)")
+                # A corrupt existing anchor or duplicate prevents safely placing
+                # new numbers on that route. Other independent child routes remain usable.
+                proposed = []
             if proposed:
                 base[f"route:{route_id}"] = int(route["revision"])
                 base[f"route_geometry:{route_id}"] = route["content_revision"]
@@ -403,13 +419,53 @@ class HouseNumberingService:
                     bid = change["building_id"]
                     base[f"building:{bid}"] = int(group[bid]["revision"])
                 changes.extend(proposed)
+        tree_collisions: list[dict[str, Any]] = []
+        if inspected_numbers:
+            scope = {"org": self.repo.org_id, "project": self.repo.project_id}
+            parents = {str(r["id"]): str(r["parent_route_id"]) if r["parent_route_id"] else None
+                for r in self.repo.session.execute(text("""
+                    SELECT id,parent_route_id FROM house_numbering.routes
+                    WHERE organization_id=:org AND project_id=:project
+                """), scope).mappings()}
+            active = self.repo.session.execute(text("""
+                SELECT route_id,number_text,building_id FROM house_numbering.address_numbers
+                WHERE organization_id=:org AND project_id=:project AND retired_at IS NULL
+                  AND number_text=ANY(:numbers)
+            """), {**scope, "numbers": sorted(inspected_numbers)}).mappings().all()
+            occupied = [{"route_id": r["route_id"], "number_text": r["number_text"],
+                "building_id": r["building_id"], "origin": "existing"} for r in active]
+            occupied.extend({"route_id": c["route_id"], "number_text": c["number"],
+                "building_id": c["building_id"], "origin": "proposal"} for c in changes)
+            tree_collisions = find_tree_collisions(parents, occupied)
+            audited_ids = {str(a["route_id"]) for a in audits}
+            affected = {entry["route_id"] for issue in tree_collisions for entry in issue["occupants"]
+                        if entry["route_id"] in audited_ids}
+            for detail in audits:
+                relevant = [issue for issue in tree_collisions if any(
+                    entry["route_id"] == detail["route_id"] for entry in issue["occupants"])]
+                if relevant:
+                    detail["cross_route_duplicates"] = relevant[:40]
+                    detail["blocking_issues"] += len(relevant)
+            if affected:
+                filtered = [c for c in changes if str(c["route_id"]) in affected]
+                changes = [c for c in changes if str(c["route_id"]) not in affected]
+                for bid in (str(c["building_id"]) for c in filtered):
+                    base.pop(f"building:{bid}", None)
+                for rid in affected:
+                    for label in ("route", "route_geometry", "route_snapshot"):
+                        base.pop(f"{label}:{rid}", None)
+                warnings.extend(f"route {rid}: cross_route_number_duplicate" for rid in sorted(affected))
         preview = self.repo.create_preview(
             operation_id=operation_id, rule_id=UUID(str(rule["id"])),
             base_revisions=base, changes=changes, warnings=warnings,
             expires_at=datetime.now(UTC) + timedelta(minutes=15),
         )
         self.commit()
-        return _wire(preview)
+        result = _wire(preview)
+        result["audit"] = summarize_audit(audits)
+        result["audit"]["cross_route_duplicate_count"] = len(tree_collisions)
+        result["audit"]["cross_route_duplicates"] = tree_collisions[:40]
+        return result
 
     def apply_preview(self, preview_id: UUID) -> list[dict[str, Any]]:
         rows = self.repo.apply_preview(preview_id)

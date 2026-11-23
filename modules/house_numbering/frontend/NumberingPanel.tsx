@@ -140,7 +140,32 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
         }}>Xác nhận lưu số đề xuất</button>
       </div>
       {busy && <p>Đang xử lý…</p>}
-      {preview && <><p>{preview.candidate_changes.length} số đề xuất · hiển thị tối đa 200 dòng.</p><div style={{maxHeight:"460px",overflow:"auto"}}><table className="hn-table"><thead><tr><th>Nhà</th><th>Tuyến</th><th>Số cũ</th><th>Số đề xuất</th><th>Bên / lý trình</th><th>Lý do</th></tr></thead><tbody>{preview.candidate_changes.slice(0,200).map(c=><tr key={c.building_id}><td>{c.building_id.slice(0,8)}</td><td>{routeNames.get(c.route_id) ?? c.route_id.slice(0,8)}</td><td>{c.old_number ?? "—"}</td><td><strong>{c.number}</strong></td><td>{c.side ?? "?"} / {c.measure.toFixed(1)}m</td><td>{c.reason}</td></tr>)}</tbody></table></div></>}
+      {preview?.audit && <section className="hn-card" aria-label="Kiểm toán phương án đánh số">
+        <h3>Kiểm toán số nhà theo toàn bộ cây tuyến</h3>
+        <p className="hn-muted">Kiểm tra riêng từng tuyến nghiệp vụ, theo chiều vẽ và lý trình thực tế. Số trùng, sai chẵn/lẻ, sai tiền tố và đảo thứ tự sẽ khóa đề xuất của tuyến lỗi. Khoảng số chưa dùng chỉ là thông tin tham khảo, không tự động cấp bù.</p>
+        <div className="hn-actions" style={{flexWrap:"wrap"}}>
+          <span className="hn-badge">{preview.audit.routes} tuyến kiểm tra</span>
+          <span className="hn-badge">{preview.audit.existing} số đang có</span>
+          <span className="hn-badge">{preview.audit.duplicate_count} số trùng trong tuyến</span>
+          <span className="hn-badge">{preview.audit.cross_route_duplicate_count ?? 0} số trùng giữa tuyến cùng đường</span>
+          <span className="hn-badge">{preview.audit.parity_error_count} sai chẵn/lẻ</span>
+          <span className="hn-badge">{preview.audit.ordering_error_count} sai thứ tự</span>
+          <span className="hn-badge">{preview.audit.invalid_format_count} sai định dạng</span>
+          <span className="hn-badge">{preview.audit.gap_count} vị trí số còn trống</span>
+        </div>
+        {preview.audit.blocking_issues > 0 ? <p className="hn-warning">Có {preview.audit.blocking_issues} điểm cần sửa trong dữ liệu hiện có. Những tuyến lỗi đã bị loại khỏi danh sách số được phép lưu. Chỉ các tuyến còn hợp lệ mới có số đề xuất.</p> : <p className="hn-ok">Không phát hiện số trùng, sai chẵn/lẻ hoặc sai thứ tự trong các tuyến đã kiểm tra.</p>}
+        <div style={{maxHeight:360,overflow:"auto"}}>{preview.audit.details.map(a=><details key={a.route_id} style={{borderBottom:"1px solid var(--ovg-border,#dbe3ec)",padding:6}}>
+          <summary><b>{a.route_name}</b> · {a.proposed} đề xuất thử · {a.blocking_issues} lỗi chặn · {a.gap_count} khoảng số trống</summary>
+          {a.duplicates.map(d=><p key={"dup"+d.number}>Số trùng <b>{d.number}</b> · {d.occupants.length} hồ sơ</p>)}
+          {a.cross_route_duplicates?.map(d=><p key={"cross"+d.root_route_id+d.number}>Trùng giữa các tuyến cùng đường: <b>{d.number}</b> · {new Set(d.occupants.map(x=>x.route_id)).size} tuyến</p>)}
+          {a.parity_errors.map((x,i)=><p key={"par"+i}>Sai chẵn/lẻ: {x.number} · bên {x.side==="left"?"trái":"phải"}</p>)}
+          {a.invalid_formats.map((x,i)=><p key={"format"+i}>Sai tiền tố/định dạng: {x.number}</p>)}
+          {a.ordering_errors.map((x,i)=><p key={"order"+i}>Sai thứ tự dọc tuyến: {x.before} → {x.after} · bên {x.side==="left"?"trái":"phải"}</p>)}
+          {a.gaps.map((x,i)=><p key={"gap"+i}>Khoảng số chưa dùng: {x.from_number} → {x.to_number} · {x.unused_slots} số {x.side==="left"?"bên trái":"bên phải"}</p>)}
+          {a.blocking_issues===0&&a.gap_count===0&&<p>Không phát hiện bất thường trên tuyến này.</p>}
+        </details>)}</div>
+      </section>}
+      {preview && <><p>{preview.candidate_changes.length} số đề xuất hợp lệ · hiển thị tối đa 200 dòng.</p><div style={{maxHeight:"460px",overflow:"auto"}}><table className="hn-table"><thead><tr><th>Nhà</th><th>Tuyến</th><th>Số cũ</th><th>Số đề xuất</th><th>Bên / lý trình</th><th>Lý do</th></tr></thead><tbody>{preview.candidate_changes.slice(0,200).map(c=><tr key={c.building_id}><td>{c.building_id.slice(0,8)}</td><td>{routeNames.get(c.route_id) ?? c.route_id.slice(0,8)}</td><td>{c.old_number ?? "—"}</td><td><strong>{c.number}</strong></td><td>{c.side ?? "?"} / {c.measure.toFixed(1)}m</td><td>{c.reason}</td></tr>)}</tbody></table></div></>}
       {preview?.warnings?.length ? <details className="hn-warning"><summary>{preview.warnings.length} nhà cần rà soát (tối đa 200 hiển thị)</summary><ul>{preview.warnings.slice(0,200).map((w,i)=><li key={i}>{w}</li>)}</ul></details> : null}
       {notice && <div className="hn-ok">{notice}</div>}{error && <div className="hn-error">{error}</div>}
     </section>

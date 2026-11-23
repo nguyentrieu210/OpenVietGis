@@ -34,6 +34,9 @@ def test_batch_route_tree(migrated_database):
         dup=c.post(module+"/previews",json={"building_ids":[a,a],"rule_id":rule["id"],"operation_id":str(uuid4())})
         assert dup.status_code==422,dup.text
         p=preview([f,b,e,d,a])
+        assert p["audit"]["routes"]==2 and p["audit"]["can_save"]
+        assert p["audit"]["proposed"]==5 and p["audit"]["duplicate_count"]==0
+        assert p["audit"]["parity_error_count"]==0 and p["audit"]["ordering_error_count"]==0
         assert {v["building_id"]:v["number"] for v in p["candidate_changes"]}=={a:"2",b:"4",d:"1",e:"C19/2",f:"C19/4"},p
         stale=preview([a,b])
         applied=c.post(module+"/previews/"+p["id"]+"/apply")

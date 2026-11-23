@@ -86,7 +86,45 @@ export type HouseNumberingInspection = {
   };
 };
 
+export type HouseNumberingAuditDetail = {
+  route_id: string;
+  route_name: string;
+  existing: number;
+  proposed: number;
+  duplicate_count: number;
+  parity_error_count: number;
+  invalid_format_count: number;
+  ordering_error_count: number;
+  gap_count: number;
+  gap_ranges: number;
+  blocking_issues: number;
+  duplicates: Array<{number:string;occupants:Array<{origin:string;building_id:string|null}>}>;
+  parity_errors: Array<{number:string;building_id:string|null;side:string;origin:string}>;
+  invalid_formats: Array<{number:string;building_id:string|null;origin:string}>;
+  ordering_errors: Array<{side:string;before:string;after:string;before_building_id:string;after_building_id:string}>;
+  gaps: Array<{side:string;from_number:string;to_number:string;unused_slots:number}>;
+  cross_route_duplicates?: Array<{root_route_id:string;number:string;occupants:Array<{route_id:string;building_id:string|null;origin:string}>}>;
+};
+
+export type HouseNumberingAudit = {
+  routes: number;
+  existing: number;
+  proposed: number;
+  duplicate_count: number;
+  parity_error_count: number;
+  invalid_format_count: number;
+  ordering_error_count: number;
+  gap_count: number;
+  gap_ranges: number;
+  blocking_issues: number;
+  can_save: boolean;
+  cross_route_duplicate_count?: number;
+  cross_route_duplicates?: Array<{root_route_id:string;number:string;occupants:Array<{route_id:string;building_id:string|null;origin:string}>}>;
+  details: HouseNumberingAuditDetail[];
+};
+
 export type HouseNumberingPreview = {
+  audit?: HouseNumberingAudit;
   id: string;
   operation_id: string;
   candidate_changes: Array<{

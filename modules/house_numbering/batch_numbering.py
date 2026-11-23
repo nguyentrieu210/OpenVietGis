@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from typing import Any
-from modules.house_numbering.domain import Address, Rule, locate_on_route, suggest_number, _parse, _prefix
+from modules.house_numbering.domain import Address, Rule, locate_on_route, suggest_number
 
 PROTECTED = {"submitted","approved","reserved"}
 STATES = {"old","certificate","cad","survey","proposed","submitted","approved","reserved"}
@@ -64,34 +64,21 @@ def build_route_plan(*, route: dict[str,Any], vertices: list[tuple[float,float]]
         # Historical evidence is preserved. A proposed number already present
         # needs no replacement. A duplicate/malformed evidence number needs review.
         existing=str(row["number_text"]) if row.get("number_text") else None
-        if existing and row["kind"]=="proposed":
-            warnings.append(f"building {bid}: already_proposed")
-            continue
         if existing:
-            parsed=_parse(existing,_prefix(prefix),rule.suffix_style)
-            if not parsed or parsed[0]%2!=rule.parity(loc.side) or occupancy[existing]-{bid}:
-                warnings.append(f"building {bid}: conflicting_existing_number")
-                continue
-            physical = sorted((a for a in addresses if a.side==loc.side and a.state!="reserved"),key=lambda a:(a.measure,a.id))
-            parsed_anchors=[_parse(a.number,_prefix(prefix),rule.suffix_style) for a in physical]
-            if any(v is None or v[0]%2!=rule.parity(loc.side) for v in parsed_anchors) or any(
-                a.measure>=b.measure or av>=bv
-                for a,b,av,bv in zip(physical,physical[1:],parsed_anchors,parsed_anchors[1:])
-            ):
-                warnings.append(f"building {bid}: nonmonotonic_or_duplicate_anchor")
-                continue
-            number,reason=existing,"existing_number"
-        else:
-            proposal=suggest_number(addresses,measure=loc.measure,side=loc.side,rule=rule,prefix=prefix,distance=loc.distance,batch_before_first=True)
-            if proposal.number is None:
-                warnings.append(f"building {bid}: {proposal.reason}")
-                continue
-            number,reason=proposal.number,proposal.reason
-            if occupancy[number]:
-                warnings.append(f"building {bid}: number_occupied")
-                continue
-            addresses.append(Address("batch:"+bid,number,loc.measure,loc.side,"proposed"))
-            occupancy[number].add(bid)
+            # An existing survey/certificate/old number is evidence, not a vacant
+            # numbering target. Do not insert a second number or renumber it.
+            warnings.append(f"building {bid}: already_proposed" if row["kind"]=="proposed" else f"building {bid}: existing_number_requires_review")
+            continue
+        proposal=suggest_number(addresses,measure=loc.measure,side=loc.side,rule=rule,prefix=prefix,distance=loc.distance,batch_before_first=True)
+        if proposal.number is None:
+            warnings.append(f"building {bid}: {proposal.reason}")
+            continue
+        number,reason=proposal.number,proposal.reason
+        if occupancy[number]:
+            warnings.append(f"building {bid}: number_occupied")
+            continue
+        addresses.append(Address("batch:"+bid,number,loc.measure,loc.side,"proposed"))
+        occupancy[number].add(bid)
         changes.append({"building_id":bid,"route_id":str(route["id"]),"old_number":existing,"number":number,
                         "side":loc.side,"measure":loc.measure,"reason":reason})
     return changes,warnings
