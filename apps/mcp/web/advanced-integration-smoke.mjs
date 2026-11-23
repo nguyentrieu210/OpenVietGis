@@ -44,10 +44,23 @@ try{
    return r.fulfill({json:body});
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
+ if(process.env.OVG_HOTFIX_HTML)await page.route(url,r=>r.fulfill({contentType:"text/html",path:process.env.OVG_HOTFIX_HTML}));
  await page.goto(url,{waitUntil:"domcontentloaded"});
  const button=page.getByRole("button",{name:"AI Copilot",exact:true});await button.waitFor({timeout:30000});await button.click();await page.getByRole("button",{name:"Kết nối AI",exact:true}).click();await page.getByText(/Đã kết nối phiên này/).waitFor();
  const review=page.getByRole("region",{name:"Xác nhận lệnh AI"});
- async function send(method,params,allow=true){let index=acks.length;cmd={id:"cmd"+index,method,params,expires_in:180};await review.waitFor({timeout:15000});await page.getByRole("button",{name:allow?"Đồng ý một lần":"Từ chối",exact:true}).click();await review.waitFor({state:"hidden",timeout:90000});assert.equal(acks.length,index+1);assert.equal(acks[index].ok,allow,JSON.stringify(acks[index]));return acks[index].result}
+ async function send(method,params,allow=true){let index=acks.length;cmd={id:"cmd"+index,method,params,expires_in:180};await review.waitFor({timeout:15000});await page.getByRole("button",{name:allow?"Cho phép lần này":"Từ chối",exact:true}).click();await review.waitFor({state:"hidden",timeout:90000});assert.equal(acks.length,index+1);assert.equal(acks[index].ok,allow,JSON.stringify(acks[index]));return acks[index].result}
+ if(process.env.OVG_CONSENT_ONLY){
+   cmd={id:"consent1",method:"gis_layers",params:{limit:20},expires_in:40};
+   await page.getByRole("button",{name:"Luôn cho phép trong phiên",exact:true}).click();
+   await page.waitForFunction(()=>document.querySelector('[data-ai="review"]').hidden);
+   assert.equal(acks[0].ok,true);
+   cmd={id:"consent2",method:"gis_layers",params:{limit:10},expires_in:40};
+   await page.getByText(/Đã tự động thực hiện lệnh AI/).waitFor();
+   assert.equal(acks[1].ok,true);assert.equal(await review.isVisible(),false);
+   await send("gis_raster_process",{method:"ndvi",name:"NDVI test",source_id:rid},false);
+   assert.deepEqual(calls,[]);assert.deepEqual(errors,[]);
+   console.log("PASS live release: automatically approved safe commands; raster write still requires explicit consent");
+ }else{
  await send("gis_raster_process",{method:"ndvi",name:"NDVI test",source_id:rid},false);assert.equal(calls.length,0);
  assert.equal((await send("gis_raster_process",{method:"ndvi",name:"NDVI test",source_id:rid})).id,out);
  await page.waitForTimeout(1200);
@@ -58,4 +71,5 @@ try{
  const file=await download,pdf=await readFile(await file.path());assert.match(pdf.toString("latin1"),/\/MediaBox \[0 0 841\.8898 595\.2756\]/);
  assert.deepEqual(calls,["raster","model","plugin"]);assert.deepEqual(errors,[]);
  console.log("PASS real MapLibre frontend: reject raster write, approved multipart raster, DAG model, plugin activation and A4 PDF download (mocked Core API)");
+ }
 }finally{await browser.close()}

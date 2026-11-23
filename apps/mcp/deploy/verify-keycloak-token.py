@@ -6,7 +6,10 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from remote_oauth import OidcConfig,KeycloakVerifier
 
 async def main():
-    config=OidcConfig("https://openvietgis.cloud/realms/openvietgis","https://openvietgis.cloud/mcp",frozenset({"openvietgis-mcp-claude"}))
+    import os
+    client = os.environ.get("OVG_TEST_MCP_CLIENT", "openvietgis-mcp-claude")
+    assert client in {"openvietgis-mcp-claude", "openvietgis-mcp-chatgpt"}
+    config=OidcConfig("https://openvietgis.cloud/realms/openvietgis","https://openvietgis.cloud/mcp",frozenset({client}))
     verifier=KeycloakVerifier(config,jwks_url="http://127.0.0.1:18080/realms/openvietgis/protocol/openid-connect/certs")
     raw=sys.stdin.read().strip()
     token=await verifier.verify_token(raw)
