@@ -192,10 +192,10 @@ def _write_gpkg_and_shp(features_4326: list[dict[str, object]], out_dir: Path) -
     from openvietgis_api.domains.transfers.domain import ExportFieldMapping
 
     field_mappings = [
-        ExportFieldMapping("code", "code", FieldType.STRING, False),
-        ExportFieldMapping("name", "name", FieldType.STRING, False),
-        ExportFieldMapping("category", "category", FieldType.STRING, False),
-        ExportFieldMapping("elevation_m", "elev_m", FieldType.FLOAT, False),
+        ExportFieldMapping("code", "code", FieldType.TEXT, False),
+        ExportFieldMapping("name", "name", FieldType.TEXT, False),
+        ExportFieldMapping("category", "category", FieldType.TEXT, False),
+        ExportFieldMapping("elevation_m", "elev_m", FieldType.DECIMAL, False),
     ]
     poly_feature = next(
         f for f in features_4326 if f["geometry"]["type"] == "Polygon"  # type: ignore[index]
