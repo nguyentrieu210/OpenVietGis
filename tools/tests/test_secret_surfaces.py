@@ -68,7 +68,11 @@ def test_exact_canaries_are_found_without_key_names() -> None:
 
 def test_does_not_flag_hashes_safe_prefixes_or_redacted_values() -> None:
     sample = (
-        '{"token_hash":"' + ("a" * 64) + '", "token_prefix":"' + ('inv_' + '12345678') + '", '
+        '{"token_hash":"'
+        + ("a" * 64)
+        + '", "token_prefix":"'
+        + ("inv_" + "12345678")
+        + '", '
         '"provider_subject":"synthetic-subject", "secret":"[REDACTED]", '
         '"id_token":"redacted", "password_redacted": true}\n'
         "location: /auth?code_challenge=synthetic-public-challenge\n"

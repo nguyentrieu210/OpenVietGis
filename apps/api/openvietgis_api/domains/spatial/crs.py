@@ -282,8 +282,7 @@ def get_coordinate_reference(code: int) -> CoordinateReference | None:
 
 
 WEB_MERCATOR_PIPELINE = (
-    "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad "
-    "+step +proj=webmerc +ellps=WGS84"
+    "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=webmerc +ellps=WGS84"
 )
 EPSG_6960_PIPELINE = "urn:ogc:def:coordinateOperation:EPSG::6960"
 TM3_PIPELINE = (
@@ -369,46 +368,108 @@ _TM3_INVERSE = PipelineStep(5899, 4756, TM3_PIPELINE, True)
 # approved concatenations. Identity reads are deliberately not transform edges.
 TRANSFORMATION_PROFILES: tuple[TransformationProfile, ...] = (
     TransformationProfile(
-        4326, 3857, "epsg-1024-forward", "analytic Pseudo-Mercator",
-        _WEB_AREA, 0.001, "metre", _WEB_EVIDENCE,
-        WEB_MERCATOR_GEOGRAPHIC_BOUNDS, False, (_WEB_FORWARD,),
+        4326,
+        3857,
+        "epsg-1024-forward",
+        "analytic Pseudo-Mercator",
+        _WEB_AREA,
+        0.001,
+        "metre",
+        _WEB_EVIDENCE,
+        WEB_MERCATOR_GEOGRAPHIC_BOUNDS,
+        False,
+        (_WEB_FORWARD,),
     ),
     TransformationProfile(
-        3857, 4326, "epsg-1024-inverse", "analytic Pseudo-Mercator inverse",
-        _WEB_AREA, 1e-8, "degree", _WEB_EVIDENCE,
-        WEB_MERCATOR_GEOGRAPHIC_BOUNDS, False, (_WEB_INVERSE,),
+        3857,
+        4326,
+        "epsg-1024-inverse",
+        "analytic Pseudo-Mercator inverse",
+        _WEB_AREA,
+        1e-8,
+        "degree",
+        _WEB_EVIDENCE,
+        WEB_MERCATOR_GEOGRAPHIC_BOUNDS,
+        False,
+        (_WEB_INVERSE,),
     ),
     TransformationProfile(
-        4756, 4326, "epsg-6960-forward", "VN-2000 to WGS 84 (2)",
-        _QN_AREA, 3.0, "metre", _QN_EVIDENCE,
-        QUANG_NINH_GEOGRAPHIC_BOUNDS, True, (_DATUM_FORWARD,),
+        4756,
+        4326,
+        "epsg-6960-forward",
+        "VN-2000 to WGS 84 (2)",
+        _QN_AREA,
+        3.0,
+        "metre",
+        _QN_EVIDENCE,
+        QUANG_NINH_GEOGRAPHIC_BOUNDS,
+        True,
+        (_DATUM_FORWARD,),
     ),
     TransformationProfile(
-        4326, 4756, "epsg-6960-inverse", "inverse EPSG:6960",
-        _QN_AREA, 3.0, "metre", _QN_EVIDENCE,
-        QUANG_NINH_GEOGRAPHIC_BOUNDS, True, (_DATUM_INVERSE,),
+        4326,
+        4756,
+        "epsg-6960-inverse",
+        "inverse EPSG:6960",
+        _QN_AREA,
+        3.0,
+        "metre",
+        _QN_EVIDENCE,
+        QUANG_NINH_GEOGRAPHIC_BOUNDS,
+        True,
+        (_DATUM_INVERSE,),
     ),
     TransformationProfile(
-        5899, 4756, "epsg-5899-inverse-tm3", "inverse native EPSG TM-3 107-45 projection",
-        _TM3_AREA, 1.0, "metre", _TM3_EVIDENCE,
-        QUANG_NINH_TM3_BOUNDS, True, (_TM3_INVERSE,),
+        5899,
+        4756,
+        "epsg-5899-inverse-tm3",
+        "inverse native EPSG TM-3 107-45 projection",
+        _TM3_AREA,
+        1.0,
+        "metre",
+        _TM3_EVIDENCE,
+        QUANG_NINH_TM3_BOUNDS,
+        True,
+        (_TM3_INVERSE,),
     ),
     TransformationProfile(
-        4756, 5899, "epsg-5899-forward-tm3", "native EPSG TM-3 107-45 projection",
-        _TM3_AREA, 1.0, "metre", _TM3_EVIDENCE,
-        QUANG_NINH_TM3_BOUNDS, True, (_TM3_FORWARD,),
+        4756,
+        5899,
+        "epsg-5899-forward-tm3",
+        "native EPSG TM-3 107-45 projection",
+        _TM3_AREA,
+        1.0,
+        "metre",
+        _TM3_EVIDENCE,
+        QUANG_NINH_TM3_BOUNDS,
+        True,
+        (_TM3_FORWARD,),
     ),
     TransformationProfile(
-        5899, 4326, "epsg-5899-to-4326-via-6960",
+        5899,
+        4326,
+        "epsg-5899-to-4326-via-6960",
         "explicit inverse TM-3 then EPSG:6960 approved as one registry edge",
-        _TM3_AREA, 1.0, "metre", _TM3_EVIDENCE,
-        QUANG_NINH_TM3_BOUNDS, True, (_TM3_INVERSE, _DATUM_FORWARD),
+        _TM3_AREA,
+        1.0,
+        "metre",
+        _TM3_EVIDENCE,
+        QUANG_NINH_TM3_BOUNDS,
+        True,
+        (_TM3_INVERSE, _DATUM_FORWARD),
     ),
     TransformationProfile(
-        4326, 5899, "epsg-4326-to-5899-via-6960",
+        4326,
+        5899,
+        "epsg-4326-to-5899-via-6960",
         "explicit inverse EPSG:6960 then TM-3 approved as one registry edge",
-        _TM3_AREA, 1.0, "metre", _TM3_EVIDENCE,
-        QUANG_NINH_TM3_BOUNDS, True, (_DATUM_INVERSE, _TM3_FORWARD),
+        _TM3_AREA,
+        1.0,
+        "metre",
+        _TM3_EVIDENCE,
+        QUANG_NINH_TM3_BOUNDS,
+        True,
+        (_DATUM_INVERSE, _TM3_FORWARD),
     ),
 )
 _TRANSFORM_BY_EDGE = MappingProxyType(
@@ -416,9 +477,7 @@ _TRANSFORM_BY_EDGE = MappingProxyType(
 )
 
 
-def get_transformation_profile(
-    source_code: int, target_code: int
-) -> TransformationProfile | None:
+def get_transformation_profile(source_code: int, target_code: int) -> TransformationProfile | None:
     """Return only a direct approved edge; never infer identities or transit."""
     if type(source_code) is not int or type(target_code) is not int:
         return None

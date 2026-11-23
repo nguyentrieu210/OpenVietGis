@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 import httpx
 
 _ENTRY = re.compile(r'src="(/assets/index-[A-Za-z0-9_-]+\.js)"')
-_WORKER = re.compile(r'(/assets/maplibre-gl-worker-[A-Za-z0-9_-]+\.mjs)')
+_WORKER = re.compile(r"(/assets/maplibre-gl-worker-[A-Za-z0-9_-]+\.mjs)")
 
 
 def check_origin(origin: str) -> str:
@@ -38,7 +38,9 @@ def check(client: httpx.Client, origin: str) -> None:
     def get(path: str, expected_status: int = 200) -> httpx.Response:
         response = client.get(path)
         if response.status_code != expected_status:
-            raise RuntimeError(f"{path}: expected {expected_status}, got {response.status_code}")
+            raise RuntimeError(
+                f"{path}: expected {expected_status}, got {response.status_code}"
+            )
         return response
 
     for page in ("/", "/app", "/rewrite/?live=1"):
@@ -56,7 +58,11 @@ def check(client: httpx.Client, origin: str) -> None:
         raise RuntimeError("MapLibre module worker missing from the Studio bundle")
     if "javascript" not in get(worker.group(1)).headers.get("content-type", ""):
         raise RuntimeError("MapLibre module worker must be served as JavaScript")
-    if not get("/brand/ovg-mark.png").headers.get("content-type", "").startswith("image/"):
+    if (
+        not get("/brand/ovg-mark.png")
+        .headers.get("content-type", "")
+        .startswith("image/")
+    ):
         raise RuntimeError("Studio branding asset missing or invalid")
     get("/assets/nonexistent-release-fixture.js", 404)
     get("/brand/nonexistent-release-fixture.png", 404)
@@ -75,14 +81,20 @@ def check(client: httpx.Client, origin: str) -> None:
         or releases.get("production_ready") is not False
     ):
         raise RuntimeError("Unaccepted fixture must not advertise certified releases")
-    for test_origin, expected_status in ((origin, 200), ("https://foreign.invalid", 400)):
+    for test_origin, expected_status in (
+        (origin, 200),
+        ("https://foreign.invalid", 400),
+    ):
         response = client.options(
             "/api/v1/me",
             headers={"Origin": test_origin, "Access-Control-Request-Method": "POST"},
         )
         if response.status_code != expected_status:
             raise RuntimeError("Unexpected CORS status")
-        if expected_status == 200 and response.headers.get("access-control-allow-origin") != origin:
+        if (
+            expected_status == 200
+            and response.headers.get("access-control-allow-origin") != origin
+        ):
             raise RuntimeError("Configured origin not permitted")
         if expected_status == 400 and "access-control-allow-origin" in response.headers:
             raise RuntimeError("Foreign origin unexpectedly permitted")
@@ -99,7 +111,9 @@ def main() -> int:
         base_url=origin, verify=tls, follow_redirects=False, trust_env=False, timeout=20
     ) as client:
         check(client, origin)
-    print("Self-host fixture HTTPS, Studio assets/worker, CORS, readiness and release truth: PASS")
+    print(
+        "Self-host fixture HTTPS, Studio assets/worker, CORS, readiness and release truth: PASS"
+    )
     return 0
 
 

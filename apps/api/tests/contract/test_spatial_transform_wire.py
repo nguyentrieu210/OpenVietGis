@@ -21,7 +21,8 @@ def harness(request: pytest.FixtureRequest) -> FeatureHTTP:
 
 
 def test_transform_contract_preserves_native_attributes_pins_and_selected_identity(
-    harness: FeatureHTTP, monkeypatch: pytest.MonkeyPatch,
+    harness: FeatureHTTP,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     layer, source, pins = harness.seed("reference_points_4326")
     original = harness.feature(layer, "point-000001", **pins)
@@ -34,11 +35,16 @@ def test_transform_contract_preserves_native_attributes_pins_and_selected_identi
     monkeypatch.setattr(SqlSpatialRepository, "transform_features", transform, raising=False)
     query = {**pins, "response_crs": 3857}
     page = response_payload(
-        harness.client.get(url(layer_id=layer), params={**query, "limit": 1}), "GET", BASE, 200,
+        harness.client.get(url(layer_id=layer), params={**query, "limit": 1}),
+        "GET",
+        BASE,
+        200,
     )
     detail = response_payload(
         harness.client.get(url(DETAIL, layer_id=layer, feature_id="point-000001"), params=query),
-        "GET", DETAIL, 200,
+        "GET",
+        DETAIL,
+        200,
     )
     assert page["items"] == [detail["feature"]]
     assert page["context"] == detail["context"]

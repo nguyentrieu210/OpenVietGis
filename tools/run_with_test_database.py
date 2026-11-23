@@ -21,7 +21,9 @@ def main() -> int:
     os.environ.update(environment)
     command.upgrade(Config(str(ROOT / "apps" / "api" / "alembic.ini")), "head")
     migrate_official_modules()
-    return subprocess.run(sys.argv[1:], cwd=ROOT, env=environment, check=False).returncode
+    return subprocess.run(
+        sys.argv[1:], cwd=ROOT, env=environment, check=False
+    ).returncode
 
 
 if __name__ == "__main__":

@@ -58,7 +58,9 @@ def test_runner_applies_core_then_official_module_migrations(monkeypatch) -> Non
         "postgresql+psycopg://u:p@localhost/openvietgis_customer_live",
     ],
 )
-def test_unsafe_test_target_stops_before_migration_or_child_process(monkeypatch, target) -> None:
+def test_unsafe_test_target_stops_before_migration_or_child_process(
+    monkeypatch, target
+) -> None:
     monkeypatch.setenv("OPENVIETGIS_TEST_DATABASE_URL", target)
     monkeypatch.setattr(run_with_test_database.sys, "argv", ["test-runner", "pytest"])
     migrate = Mock()

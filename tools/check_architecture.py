@@ -24,9 +24,7 @@ MODULE_GATEWAYS = {
     "apps/web/src/features/extensions/registry.ts",
 }
 
-PYTHON_MODULE_IMPORT = re.compile(
-    r"(?m)^\s*(?:from|import)\s+modules(?:\.|\s|$)"
-)
+PYTHON_MODULE_IMPORT = re.compile(r"(?m)^\s*(?:from|import)\s+modules(?:\.|\s|$)")
 JS_MODULE_IMPORT = re.compile(
     r"""(?m)\b(?:from\s+|import\s*(?:\(\s*)?)["'][^"']*modules/[^"']*["']"""
 )
@@ -63,12 +61,9 @@ def find_violations(root: Path = ROOT) -> list[str]:
                 relative_to_root not in MODULE_GATEWAYS
                 and references_vertical_module_code(content)
             ):
-                violations.append(
-                    f"{relative_to_root} references vertical module code"
-                )
-            if (
-                relative_to_root.startswith("apps/api/openvietgis_api/domains/")
-                and any(marker in content for marker in ADAPTER_MARKERS)
+                violations.append(f"{relative_to_root} references vertical module code")
+            if relative_to_root.startswith("apps/api/openvietgis_api/domains/") and any(
+                marker in content for marker in ADAPTER_MARKERS
             ):
                 violations.append(
                     f"{relative_to_root} imports infrastructure adapter code from a domain"

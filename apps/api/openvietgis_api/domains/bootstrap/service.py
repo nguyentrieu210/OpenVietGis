@@ -64,9 +64,13 @@ class BootstrapService:
     ) -> BootstrapResult:
         if actor.actor_type != "human" or actor.actor_id is None:
             raise BootstrapAuthorizationError("authenticated human required")
-        if not presented_authority or not configured_authority or not hmac.compare_digest(
-            presented_authority.encode(),
-            configured_authority.encode(),
+        if (
+            not presented_authority
+            or not configured_authority
+            or not hmac.compare_digest(
+                presented_authority.encode(),
+                configured_authority.encode(),
+            )
         ):
             raise BootstrapAuthorizationError("invalid bootstrap authority")
 

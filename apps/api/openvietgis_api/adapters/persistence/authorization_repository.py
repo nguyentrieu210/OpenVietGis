@@ -595,8 +595,9 @@ class SqlServicePrincipalRepository:
     ) -> list[dict[str, object]]:
         require_member_context(self._session, context, organization_id)
         # Never select the credential hash or a recoverable secret for the portal.
-        rows = self._session.execute(
-            text("""
+        rows = (
+            self._session.execute(
+                text("""
                 SELECT id, name, prefix, permission_ceiling, created_at,
                        expires_at, last_used_at, revoked_at
                 FROM org.service_credentials
@@ -604,8 +605,11 @@ class SqlServicePrincipalRepository:
                   AND service_principal_id=:service_principal_id
                 ORDER BY created_at DESC, id
             """),
-            {"organization_id": organization_id, "service_principal_id": service_principal_id},
-        ).mappings().all()
+                {"organization_id": organization_id, "service_principal_id": service_principal_id},
+            )
+            .mappings()
+            .all()
+        )
         return [dict(row) for row in rows]
 
     def get_credential(
@@ -705,9 +709,10 @@ class SqlServicePrincipalRepository:
         # Revalidate the live principal and credential after acquiring the
         # organization lock, which serializes administrative revoke/suspend.
         # Never write revoked_at from the (potentially stale) lookup snapshot.
-        return self._session.execute(
-            text(
-                """
+        return (
+            self._session.execute(
+                text(
+                    """
                 UPDATE org.service_credentials AS c
                 SET last_used_at = GREATEST(c.last_used_at, :now)
                 FROM org.service_principals AS sp
@@ -722,14 +727,16 @@ class SqlServicePrincipalRepository:
                   AND sp.revoked_at IS NULL
                 RETURNING c.id
                 """
-            ),
-            {
-                "now": datetime.now(UTC),
-                "organization_id": credential.organization_id,
-                "service_principal_id": credential.service_principal_id,
-                "credential_id": credential.id,
-            },
-        ).scalar_one_or_none() is not None
+                ),
+                {
+                    "now": datetime.now(UTC),
+                    "organization_id": credential.organization_id,
+                    "service_principal_id": credential.service_principal_id,
+                    "credential_id": credential.id,
+                },
+            ).scalar_one_or_none()
+            is not None
+        )
 
     def get_credential_for_authentication(
         self,

@@ -27,11 +27,17 @@ def test_transaction_local_context_does_not_leak_across_reused_connection(
 
         second = connection.begin()
         try:
-            assert connection.execute(
-                text("SELECT current_setting('openvietgis.organization_id', true)")
-            ).scalar_one() == ""
-            assert connection.execute(
-                text("SELECT current_setting('openvietgis.actor_user_id', true)")
-            ).scalar_one() == ""
+            assert (
+                connection.execute(
+                    text("SELECT current_setting('openvietgis.organization_id', true)")
+                ).scalar_one()
+                == ""
+            )
+            assert (
+                connection.execute(
+                    text("SELECT current_setting('openvietgis.actor_user_id', true)")
+                ).scalar_one()
+                == ""
+            )
         finally:
             second.rollback()

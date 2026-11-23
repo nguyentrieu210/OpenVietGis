@@ -40,8 +40,7 @@ PERMISSION_VALUES = (
 
 def _tenant_expr() -> str:
     return (
-        "organization_id = "
-        "NULLIF(current_setting('openvietgis.organization_id', true), '')::uuid"
+        "organization_id = NULLIF(current_setting('openvietgis.organization_id', true), '')::uuid"
     )
 
 

@@ -1,9 +1,12 @@
 """Separate review-stage geometry from active numbering routes."""
+
 from alembic import op
-revision="hn_0009_geometry_review"
-down_revision="hn_0008_reviewed_route_aliases"
-branch_labels=None
-depends_on=None
+
+revision = "hn_0009_geometry_review"
+down_revision = "hn_0008_reviewed_route_aliases"
+branch_labels = None
+depends_on = None
+
 
 def upgrade():
     op.execute("""
@@ -33,6 +36,7 @@ def upgrade():
              AND project_id=NULLIF(current_setting('openvietgis.project_id',true),'')::uuid);
         GRANT SELECT, INSERT, UPDATE ON house_numbering.geometry_reviews TO openvietgis_runtime;
     """)
+
 
 def downgrade():
     op.execute("DROP TABLE house_numbering.geometry_reviews")

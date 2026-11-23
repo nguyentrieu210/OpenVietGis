@@ -23,9 +23,7 @@ def test_archived_project_cannot_restore_inside_deleted_workspace(
         assert before["status"] == "archived"
         assert before["workspace_id"] == str(world.workspace_a_id)
 
-        restored = owner.patch(
-            project_url, json={"status": "active", "workspace_id": None}
-        )
+        restored = owner.patch(project_url, json={"status": "active", "workspace_id": None})
         assert restored.status_code == 200, restored.text
         assert restored.json()["status"] == "active"
         assert restored.json()["workspace_id"] is None

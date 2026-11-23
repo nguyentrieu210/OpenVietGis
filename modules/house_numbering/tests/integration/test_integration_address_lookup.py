@@ -1,4 +1,5 @@
 """Authenticated third-party address lookup: real PostGIS and service credentials."""
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
@@ -24,7 +25,9 @@ def test_approved_addresses_only_and_credential_scope(migrated_database: None) -
     # A known synthetic draft must not appear in the integration projection.
     with get_admin_engine().begin() as conn:
         conn.execute(
-            text("UPDATE house_numbering.address_numbers SET kind='proposed' WHERE building_id=:id"),
+            text(
+                "UPDATE house_numbering.address_numbers SET kind='proposed' WHERE building_id=:id"
+            ),
             {"id": buildings["f"]},
         )
     endpoint = f"{module}/integrations/v1/addresses"
@@ -36,8 +39,13 @@ def test_approved_addresses_only_and_credential_scope(migrated_database: None) -
         app_id = app.json()["id"]
         grant = owner.post(
             f"{org}/grants",
-            json={"subject_kind": "service_principal", "subject_id": app_id,
-                  "scope_kind": "project", "project_id": str(world.project_id), "role": "viewer"},
+            json={
+                "subject_kind": "service_principal",
+                "subject_id": app_id,
+                "scope_kind": "project",
+                "project_id": str(world.project_id),
+                "role": "viewer",
+            },
         )
         assert grant.status_code == 201, grant.text
         issued = owner.post(
@@ -53,9 +61,22 @@ def test_approved_addresses_only_and_credential_scope(migrated_database: None) -
             assert result.headers["cache-control"] == "no-store"
             data = result.json()
             assert data["crs"] == "EPSG:4326"
-            assert {row["house_number"] for row in data["items"]} == {"100", "102", "104", "106", "108"}
+            assert {row["house_number"] for row in data["items"]} == {
+                "100",
+                "102",
+                "104",
+                "106",
+                "108",
+            }
             for row in data["items"]:
-                assert set(row) == {"address_id", "house_number", "street", "area", "longitude", "latitude"}
+                assert set(row) == {
+                    "address_id",
+                    "house_number",
+                    "street",
+                    "area",
+                    "longitude",
+                    "latitude",
+                }
                 assert -180 <= row["longitude"] <= 180
                 assert -90 <= row["latitude"] <= 90
             assert service.get(endpoint, params={"query": "%_"}).json()["items"] == []
@@ -66,11 +87,17 @@ def test_approved_addresses_only_and_credential_scope(migrated_database: None) -
                 params={"query": "10"},
             )
             assert denied.status_code == 401
-            assert service.get(
-                f"{module}/buildings/{buildings['a']}/private-households", params={"purpose": "test"}
-            ).status_code == 403
+            assert (
+                service.get(
+                    f"{module}/buildings/{buildings['a']}/private-households",
+                    params={"purpose": "test"},
+                ).status_code
+                == 403
+            )
             assert service.get(f"{project}/layers").status_code == 200
-        revoked = owner.post(f"{org}/service-principals/{app_id}/credentials/{credential_id}/revoke")
+        revoked = owner.post(
+            f"{org}/service-principals/{app_id}/credentials/{credential_id}/revoke"
+        )
         assert revoked.status_code == 204
     with _service_client(secret) as service:
         assert service.get(endpoint, params={"query": "10"}).status_code == 401

@@ -133,9 +133,10 @@ def test_runtime_owner_controls_suspend_restore_and_soft_delete(
         assert suspended.status_code == 200, suspended.text
         assert suspended.json()["status"] == "suspended"
         assert admin.patch(root, json={"status": "active"}).status_code == 403
-        assert owner.patch(
-            f"{root}/projects/{world.project_id}", json={"name": "blocked"}
-        ).status_code == 403
+        assert (
+            owner.patch(f"{root}/projects/{world.project_id}", json={"name": "blocked"}).status_code
+            == 403
+        )
         assert admin.get(f"{root}/projects").status_code == 403
 
         restored = owner.patch(root, json={"status": "active"})
@@ -147,9 +148,10 @@ def test_runtime_owner_controls_suspend_restore_and_soft_delete(
         assert deleted.status_code == 200
         assert deleted.json()["status"] == "deleted"
         assert admin.patch(root, json={"status": "active"}).status_code == 403
-        assert owner.post(
-            f"{root}/projects", json={"name": "blocked", "slug": "blocked"}
-        ).status_code == 403
+        assert (
+            owner.post(f"{root}/projects", json={"name": "blocked", "slug": "blocked"}).status_code
+            == 403
+        )
 
         # Persisted ownership and references survive deletion; this is not hard purge.
         with get_admin_engine().connect() as connection:
@@ -165,15 +167,17 @@ def test_runtime_owner_controls_suspend_restore_and_soft_delete(
             assert stored.deleted_at is not None
             assert stored.organization_id == world.organization_id
             assert stored.workspace_id == world.workspace_a_id
-            audit_statuses = set(connection.execute(
-                text("""
+            audit_statuses = set(
+                connection.execute(
+                    text("""
                     SELECT metadata ->> 'status'
                     FROM audit.audit_events
                     WHERE organization_id = :org AND action = 'organization.update'
                       AND actor_id = :actor AND outcome = 'success'
                 """),
-                {"org": world.organization_id, "actor": world.owner_user_id},
-            ).scalars())
+                    {"org": world.organization_id, "actor": world.owner_user_id},
+                ).scalars()
+            )
             assert {"suspended", "active", "deleted"} <= audit_statuses
         assert owner.patch(root, json={"status": "active"}).status_code == 200
         assert admin.get(f"{root}/projects/{world.project_id}").status_code == 200

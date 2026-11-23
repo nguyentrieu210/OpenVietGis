@@ -181,9 +181,7 @@ class SqlIdentityRepository:
             ).scalar_one()
         )
 
-    def unlink_identity(
-        self, *, user_id: UUID, identity_link_id: UUID
-    ) -> UnlinkIdentityResult:
+    def unlink_identity(self, *, user_id: UUID, identity_link_id: UUID) -> UnlinkIdentityResult:
         # One guarded database operation owns the count/delete invariant.
         result = self._session.execute(
             text("SELECT identity.unlink_identity(:user_id, :identity_link_id)"),

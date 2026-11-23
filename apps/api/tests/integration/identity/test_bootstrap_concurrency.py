@@ -34,7 +34,10 @@ def test_bootstrap_two_authenticated_requests_have_one_winner(uninitialized: Non
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(attempt, range(2))) == [201, 409]
     with get_admin_engine().connect() as connection:
-        count = connection.execute(text("""
+        count = connection.execute(
+            text("""
             SELECT count(*) FROM org.organizations WHERE slug IN (:a, :b)
-        """), {"a": payloads[0]["organization_slug"], "b": payloads[1]["organization_slug"]})
+        """),
+            {"a": payloads[0]["organization_slug"], "b": payloads[1]["organization_slug"]},
+        )
         assert count.scalar_one() == 1

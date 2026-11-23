@@ -34,14 +34,18 @@ def _seed_protected_rows(world: AccessWorld) -> dict[str, UUID]:
             "invite": invite,
             "audit": audit,
         }
-        connection.execute(text("""
+        connection.execute(
+            text("""
             INSERT INTO org.resource_grants
               (id, organization_id, subject_kind, membership_id, scope_kind,
                role, created_at, created_by_actor_type, created_by_actor_id)
             VALUES (:grant,:org,'membership',:member,'organization',
                     'viewer',now(),'human',:actor)
-        """), args)
-        connection.execute(text("""
+        """),
+            args,
+        )
+        connection.execute(
+            text("""
             INSERT INTO org.invitations
               (id, organization_id, status, target_kind, target_email_normalized,
                organization_role, token_hash, token_prefix, expires_at,
@@ -49,18 +53,33 @@ def _seed_protected_rows(world: AccessWorld) -> dict[str, UUID]:
             VALUES (:invite,:org,'pending','email','rls@example.test',
                     'member',decode('0102','hex'),'test',now()+interval '1 hour',
                     now(),'human',:actor)
-        """), args)
-        connection.execute(text("""
+        """),
+            args,
+        )
+        connection.execute(
+            text("""
             INSERT INTO audit.audit_events
               (id, organization_id, actor_type, actor_id, actor_display_snapshot,
                action, outcome, metadata, created_at)
             VALUES (:audit,:org,'human',:actor,'RLS fixture','test.rls',
                     'success','{}'::jsonb,now())
-        """), args)
-    return dict(zip(TABLES, (
-        world.owner_membership_id, world.workspace_a_id, world.project_id,
-        grant, invite, audit,
-    ), strict=True))
+        """),
+            args,
+        )
+    return dict(
+        zip(
+            TABLES,
+            (
+                world.owner_membership_id,
+                world.workspace_a_id,
+                world.project_id,
+                grant,
+                invite,
+                audit,
+            ),
+            strict=True,
+        )
+    )
 
 
 def test_all_p1_protected_tables_and_pool_reuse(migrated_database: None) -> None:
@@ -81,17 +100,27 @@ def test_all_p1_protected_tables_and_pool_reuse(migrated_database: None) -> None
                     actor_user_id=selected.owner_user_id if selected else None,
                 )
                 for table in TABLES:
-                    found = set(session.execute(text(
-                        f"SELECT id FROM {table} WHERE id IN (:a, :b)"
-                    ), {"a": rows_a[table], "b": rows_b[table]}).scalars())
+                    found = set(
+                        session.execute(
+                            text(f"SELECT id FROM {table} WHERE id IN (:a, :b)"),
+                            {"a": rows_a[table], "b": rows_b[table]},
+                        ).scalars()
+                    )
                     assert found == ({visible[table]} if selected else set()), table
                     if selected is not None and table != "audit.audit_events":
                         hidden = rows_b[table] if selected is a else rows_a[table]
                         with session.begin_nested():
-                            changed = session.execute(text(
-                                f"UPDATE {table} SET organization_id=organization_id "
-                                "WHERE id=:hidden RETURNING id"
-                            ), {"hidden": hidden}).scalars().all()
+                            changed = (
+                                session.execute(
+                                    text(
+                                        f"UPDATE {table} SET organization_id=organization_id "
+                                        "WHERE id=:hidden RETURNING id"
+                                    ),
+                                    {"hidden": hidden},
+                                )
+                                .scalars()
+                                .all()
+                            )
                             assert changed == [], table
                 session.rollback()
 
@@ -103,11 +132,13 @@ def test_runtime_cannot_change_audit_even_with_tenant_context(
     rows = _seed_protected_rows(world)
     with Session(bind=get_engine()) as session:
         set_request_context(
-            session, organization_id=world.organization_id,
+            session,
+            organization_id=world.organization_id,
             actor_user_id=world.owner_user_id,
         )
         with pytest.raises(DBAPIError):
-            session.execute(text(
-                "UPDATE audit.audit_events SET action='tampered' WHERE id=:id"
-            ), {"id": rows["audit.audit_events"]})
+            session.execute(
+                text("UPDATE audit.audit_events SET action='tampered' WHERE id=:id"),
+                {"id": rows["audit.audit_events"]},
+            )
         session.rollback()

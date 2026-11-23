@@ -87,9 +87,13 @@ def test_tenant_record_survives_ten_real_api_process_restarts(migrated_database:
             cookies={"ovg_session": cookie}, headers={"X-OpenVietGIS-CSRF": csrf}, timeout=2
         ) as client:
             for index in range(10):
-                create = client.post(path, json={
-                    "name": f"process-restart-{index}", "slug": f"restart-{uuid4().hex}",
-                })
+                create = client.post(
+                    path,
+                    json={
+                        "name": f"process-restart-{index}",
+                        "slug": f"restart-{uuid4().hex}",
+                    },
+                )
                 assert create.status_code == 201
                 created = create.json()
 

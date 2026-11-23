@@ -12,8 +12,8 @@ import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from modules.house_numbering.address_prefix import canonical_prefix
 
+from modules.house_numbering.address_prefix import canonical_prefix
 
 
 class DomainError(ValueError):
@@ -227,7 +227,9 @@ def suggest_number(
         assert following is not None
         if batch_before_first:
             number = free_base(1 if parity else 2, following[0])
-            return result(number, "before_first" if number else "no_number_before_first")
+            return result(
+                number, "before_first" if number else "no_number_before_first"
+            )
         candidate = following[0] - 2
         while candidate > 0:
             number = _format(candidate, 0, prefix_text, rule.suffix_style)

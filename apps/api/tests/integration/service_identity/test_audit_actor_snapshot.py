@@ -87,9 +87,7 @@ def test_actor_snapshots_survive_human_and_service_revocation(
             json={"status": "revoked"},
         )
         assert revoked_member.status_code == 200, revoked_member.text
-        revoked_service = owner.post(
-            f"{root}/service-principals/{principal_id}/revoke"
-        )
+        revoked_service = owner.post(f"{root}/service-principals/{principal_id}/revoke")
         assert revoked_service.status_code == 204, revoked_service.text
 
         response = owner.get(f"{root}/audit-events", params={"limit": 200})
@@ -116,49 +114,68 @@ def test_runtime_service_mutations_are_audited_and_survive_revocation(
         created = owner.post(f"{root}/service-principals", json={"name": principal_name})
         assert created.status_code == 201, created.text
         principal_id = created.json()["id"]
-        grant = owner.post(f"{root}/grants", json={
-            "subject_kind": "service_principal",
-            "subject_id": principal_id,
-            "scope_kind": "organization",
-            "role": "manager",
-        })
+        grant = owner.post(
+            f"{root}/grants",
+            json={
+                "subject_kind": "service_principal",
+                "subject_id": principal_id,
+                "scope_kind": "organization",
+                "role": "manager",
+            },
+        )
         assert grant.status_code == 201, grant.text
-        issued = owner.post(f"{root}/service-principals/{principal_id}/credentials", json={
-            "name": "runtime-audit",
-            "permission_ceiling": ["workspace.manage", "project.manage", "project.read"],
-        })
+        issued = owner.post(
+            f"{root}/service-principals/{principal_id}/credentials",
+            json={
+                "name": "runtime-audit",
+                "permission_ceiling": ["workspace.manage", "project.manage", "project.read"],
+            },
+        )
         assert issued.status_code == 201
         credential_id = issued.json()["id"]
         secret = issued.json()["secret"]
         with _service_client(secret) as service:
-            workspace = service.post(f"{root}/workspaces", json={
-                "name": "Service workspace", "slug": f"svc-ws-{uuid4().hex}",
-            })
+            workspace = service.post(
+                f"{root}/workspaces",
+                json={
+                    "name": "Service workspace",
+                    "slug": f"svc-ws-{uuid4().hex}",
+                },
+            )
             assert workspace.status_code == 201, workspace.text
             workspace_id = workspace.json()["id"]
             modified_workspace = service.patch(
                 f"{root}/workspaces/{workspace_id}", json={"name": "Updated workspace"}
             )
             assert modified_workspace.status_code == 200, modified_workspace.text
-            project = service.post(f"{root}/projects", json={
-                "name": "Service project",
-                "slug": f"svc-project-{uuid4().hex}",
-                "workspace_id": workspace_id,
-            })
+            project = service.post(
+                f"{root}/projects",
+                json={
+                    "name": "Service project",
+                    "slug": f"svc-project-{uuid4().hex}",
+                    "workspace_id": workspace_id,
+                },
+            )
             assert project.status_code == 201, project.text
             project_id = project.json()["id"]
             updated = service.patch(
                 f"{root}/projects/{project_id}", json={"name": "Service update"}
             )
             assert updated.status_code == 200, updated.text
-        assert owner.post(
-            f"{root}/service-principals/{principal_id}/credentials/{credential_id}/revoke"
-        ).status_code == 204
+        assert (
+            owner.post(
+                f"{root}/service-principals/{principal_id}/credentials/{credential_id}/revoke"
+            ).status_code
+            == 204
+        )
         assert owner.post(f"{root}/service-principals/{principal_id}/revoke").status_code == 204
         with _service_client(secret) as service:
-            assert service.patch(
-                f"{root}/projects/{project_id}", json={"name": "Denied update"}
-            ).status_code == 401
+            assert (
+                service.patch(
+                    f"{root}/projects/{project_id}", json={"name": "Denied update"}
+                ).status_code
+                == 401
+            )
         response = owner.get(f"{root}/audit-events", params={"limit": 200})
         assert response.status_code == 200
         secret_exposed = secret in response.text
@@ -168,7 +185,10 @@ def test_runtime_service_mutations_are_audited_and_survive_revocation(
     service_rows = [row for row in rows if row["actor_id"] == principal_id]
     assert len(service_rows) == 4
     assert {row["action"] for row in service_rows} == {
-        "workspace.create", "workspace.update", "project.create", "project.update"
+        "workspace.create",
+        "workspace.update",
+        "project.create",
+        "project.update",
     }
     assert {row["resource_id"] for row in service_rows} == {workspace_id, project_id}
     assert all(
@@ -179,7 +199,9 @@ def test_runtime_service_mutations_are_audited_and_survive_revocation(
         for row in service_rows
     )
     owner_rows = [row for row in rows if row["actor_id"] == str(world.owner_user_id)]
-    assert {"service_principal.create", "service_credential.issue",
-            "service_credential.revoke", "service_principal.revoke"} <= {
-                row["action"] for row in owner_rows
-            }
+    assert {
+        "service_principal.create",
+        "service_credential.issue",
+        "service_credential.revoke",
+        "service_principal.revoke",
+    } <= {row["action"] for row in owner_rows}

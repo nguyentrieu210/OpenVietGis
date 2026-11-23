@@ -109,14 +109,19 @@ class HouseNumberingExportService:
             result.append(item)
         return result
 
-    def lookup_approved_addresses(self, *, query: str, limit: int = 50) -> list[dict[str, Any]]:
+    def lookup_approved_addresses(
+        self, *, query: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """Version-one integration projection: approved addresses only, no household data."""
         self.repo.prepare("read")
         q = query.strip()
         if not 2 <= len(q) <= 120 or not 1 <= limit <= 100:
-            raise PlatformValidationError("query length must be 2..120 and limit 1..100")
-        rows = self.session.execute(
-            text("""
+            raise PlatformValidationError(
+                "query length must be 2..120 and limit 1..100"
+            )
+        rows = (
+            self.session.execute(
+                text("""
                 SELECT b.id AS address_id,n.number_text AS house_number,
                        r.name AS street,a.name AS area,
                        ST_X(ST_Transform(ST_PointOnSurface(f.geometry),4326)) AS longitude,
@@ -142,8 +147,11 @@ class HouseNumberingExportService:
                          r.name,n.number_text,b.id
                 LIMIT :limit
             """),
-            {"org": self.org, "project": self.project, "q": q, "limit": limit},
-        ).mappings().all()
+                {"org": self.org, "project": self.project, "q": q, "limit": limit},
+            )
+            .mappings()
+            .all()
+        )
         return [dict(row) for row in rows]
 
     def search(

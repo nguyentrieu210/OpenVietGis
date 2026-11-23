@@ -214,6 +214,7 @@ class GrantService:
         )
         return revoked
 
+
 class ServicePrincipalNotFoundError(LookupError):
     pass
 

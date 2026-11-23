@@ -22,7 +22,8 @@ from openvietgis_api.main import create_app
 
 
 def test_concurrent_first_login_same_identity_one_user_two_sessions(
-    migrated_database: None, monkeypatch: pytest.MonkeyPatch,
+    migrated_database: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     claims = ExternalIdentityClaims(
         issuer="https://issuer.example",
@@ -67,6 +68,7 @@ def test_concurrent_first_login_same_identity_one_user_two_sessions(
             httpx.AsyncClient(transport=transport, base_url="https://testserver") as first,
             httpx.AsyncClient(transport=transport, base_url="https://testserver") as second,
         ):
+
             async def login(client: httpx.AsyncClient) -> str:
                 response = await client.get("/api/v1/auth/login/keycloak")
                 assert response.status_code == 302
@@ -93,14 +95,26 @@ def test_concurrent_first_login_same_identity_one_user_two_sessions(
     engine = create_engine(migration_url)
     try:
         with engine.connect() as conn:
-            assert conn.execute(text(
-                "SELECT count(*) FROM identity.identity_links "
-                "WHERE issuer = :issuer AND subject = :subject AND user_id = :user_id"
-            ), {
-                "issuer": claims.issuer, "subject": claims.subject, "user_id": user_id,
-            }).scalar_one() == 1
-            assert conn.execute(text(
-                "SELECT count(*) FROM identity.web_sessions WHERE user_id = :user_id"
-            ), {"user_id": user_id}).scalar_one() == 2
+            assert (
+                conn.execute(
+                    text(
+                        "SELECT count(*) FROM identity.identity_links "
+                        "WHERE issuer = :issuer AND subject = :subject AND user_id = :user_id"
+                    ),
+                    {
+                        "issuer": claims.issuer,
+                        "subject": claims.subject,
+                        "user_id": user_id,
+                    },
+                ).scalar_one()
+                == 1
+            )
+            assert (
+                conn.execute(
+                    text("SELECT count(*) FROM identity.web_sessions WHERE user_id = :user_id"),
+                    {"user_id": user_id},
+                ).scalar_one()
+                == 2
+            )
     finally:
         engine.dispose()

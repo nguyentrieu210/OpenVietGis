@@ -916,8 +916,14 @@ class InvitationService:
         return link.issuer == invitation.target_issuer and link.subject == invitation.target_subject
 
     def check_recipient(
-        self, *, actor: Actor, user_id: UUID, organization_id: UUID,
-        invitation_id: UUID, secret: str, identity_link_id: UUID | None,
+        self,
+        *,
+        actor: Actor,
+        user_id: UUID,
+        organization_id: UUID,
+        invitation_id: UUID,
+        secret: str,
+        identity_link_id: UUID | None,
     ) -> str:
         """A verified link holder sees only whether the current session can accept."""
         if actor.actor_type != "human" or actor.actor_id != user_id:
@@ -926,13 +932,18 @@ class InvitationService:
         invitation = self._tenancy_repository.get_invitation(
             context=context, organization_id=organization_id, invitation_id=invitation_id
         )
-        if (invitation is None or invitation.status != InvitationStatus.PENDING
+        if (
+            invitation is None
+            or invitation.status != InvitationStatus.PENDING
             or invitation.expires_at <= datetime.now(UTC)
-            or not verify_secret(secret, invitation.token_hash)):
+            or not verify_secret(secret, invitation.token_hash)
+        ):
             return "invalid"
-        return "eligible" if self._target_matches(
-            invitation, user_id=user_id, identity_link_id=identity_link_id
-        ) else "mismatch"
+        return (
+            "eligible"
+            if self._target_matches(invitation, user_id=user_id, identity_link_id=identity_link_id)
+            else "mismatch"
+        )
 
     def accept(
         self,

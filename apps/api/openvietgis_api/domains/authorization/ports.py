@@ -34,6 +34,7 @@ class ResourceGrantRepository(Protocol):
 
     def update(self, grant: ResourceGrant, *, context: AuthorizationContext) -> None: ...
 
+
 class ServicePrincipalRepository(Protocol):
     def list_principals(
         self,

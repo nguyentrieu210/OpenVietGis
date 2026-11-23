@@ -123,9 +123,10 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
         with _client_for_user(a.member_user_id) as member:
             assert member.get(metadata_url).status_code == 403
         with _client_for_user(b.owner_user_id) as other:
-            assert other.get(
-                f"{root_b}/service-principals/{principal_id}/credentials"
-            ).status_code == 404
+            assert (
+                other.get(f"{root_b}/service-principals/{principal_id}/credentials").status_code
+                == 404
+            )
         secret = issued.json()["secret"]
         assert secret.startswith("ovgsvc")
         assert "secret_hash" not in issued.text
@@ -150,7 +151,9 @@ def test_service_credential_allowed_scope_ceiling_cross_tenant_and_revocation(
             assert isinstance(activity.json()["items"], list)
             journal = service.get(f"{root_a}/projects/{a.project_id}/integrations/events")
             assert journal.status_code == 200, journal.text
-            denied_journal = service.get(f"{root_a}/projects/{unscoped_project_id}/integrations/events")
+            denied_journal = service.get(
+                f"{root_a}/projects/{unscoped_project_id}/integrations/events"
+            )
             assert denied_journal.status_code == 403, denied_journal.text
             denied_activity = service.get(
                 f"{root_a}/projects/{unscoped_project_id}/collaboration/activities"

@@ -153,10 +153,9 @@ def update_workspace(
         workspace_id=workspace_id,
     )
     require_permission(session, context, Permission.WORKSPACE_MANAGE)
-    if (
-        existing_workspace.status == WorkspaceStatus.DELETED
-        and payload.model_fields_set != {"status"}
-    ):
+    if existing_workspace.status == WorkspaceStatus.DELETED and payload.model_fields_set != {
+        "status"
+    }:
         raise InvalidLifecycleTransitionError("deleted workspace requires a status-only restore")
     workspace = _service(session).update_workspace(
         actor=authentication.actor,

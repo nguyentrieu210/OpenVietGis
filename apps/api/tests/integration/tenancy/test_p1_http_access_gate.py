@@ -151,7 +151,8 @@ def test_http_workspace_inheritance_tracks_project_moves_without_grant_copying(
         grants_after_second_move = owner.get(f"{root}/grants")
         assert grants_after_second_move.status_code == 200
         assert {item["id"] for item in grants_after_second_move.json()} == {
-            workspace_grant, project_grant,
+            workspace_grant,
+            project_grant,
         }
 
 
@@ -205,9 +206,7 @@ def test_foreign_workspace_create_and_move_payloads_are_non_disclosing(
             },
         )
         assert same_tenant.status_code == 403
-        assert member.patch(
-            url, json={"workspace_id": str(a.workspace_b_id)}
-        ).status_code == 403
+        assert member.patch(url, json={"workspace_id": str(a.workspace_b_id)}).status_code == 403
         assert owner.get(url).json() == before.json()
         assert _visible_projects(owner, root) == initial_projects
         foreign_project = other_owner.get(
