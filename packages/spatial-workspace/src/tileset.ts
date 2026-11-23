@@ -25,7 +25,7 @@ export function parseTileset(v:unknown):Tile{
  const result=walk(doc.root,I,doc.geometricError,null,0);requireValue(seen.size>0&&seen.size<=128);return result;
 }
 export type View={west:number;south:number;east:number;north:number;longitude:number;latitude:number;zoom:number};
-export function selectTiles(root:Tile,view:View):{tiles:Tile[];omitted:number}{
+export function selectTiles(root:Tile,view:View,priorityUri?:string):{tiles:Tile[];omitted:number}{
  const w=view.west*D,e=view.east*D,s=view.south*D,n=view.north*D;
  const visible=(r:Region)=>r[1]<=n&&r[3]>=s&&[-2*Math.PI,0,2*Math.PI].some(k=>r[0]+k<=e&&r[2]+k>=w);
  const selected:Tile[]=[];const ppm=512*2**view.zoom/(40075016.6856*Math.max(.08,Math.cos(view.latitude*D)));
@@ -35,7 +35,7 @@ export function selectTiles(root:Tile,view:View):{tiles:Tile[];omitted:number}{
  };
  walk(root);
  const distance=(t:Tile)=>Math.hypot(((t.region[0]+t.region[2])/2-view.longitude*D)*Math.cos(view.latitude*D),(t.region[1]+t.region[3])/2-view.latitude*D);
- selected.sort((a,b)=>distance(a)-distance(b)||a.uri!.localeCompare(b.uri!));
+ selected.sort((a,b)=>Number(b.uri===priorityUri)-Number(a.uri===priorityUri)||distance(a)-distance(b)||a.uri!.localeCompare(b.uri!));
  return {tiles:selected.slice(0,TILE_LIMIT),omitted:Math.max(0,selected.length-TILE_LIMIT)};
 }
 /** ECEF metres -> longitude/latitude degrees + ellipsoidal height metres. */

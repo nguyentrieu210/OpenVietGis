@@ -1,4 +1,5 @@
 import io
+import json
 from uuid import uuid4
 
 import ezdxf
@@ -20,7 +21,7 @@ def _drawing() -> bytes:
     return target.getvalue().encode()
 
 
-def test_version_pinned_georeference(migrated_database):
+def test_version_pinned_georeference(migrated_database, tmp_path):
     world = seed_access_world()
     base = (
         f"/api/v1/organizations/{world.organization_id}/projects/{world.project_id}/cad/documents"
@@ -132,6 +133,42 @@ def test_version_pinned_georeference(migrated_database):
         assert picked.json()["state"] == "current"
         assert picked.json()["feature_id"] == feature["feature_id"]
         assert picked.json()["cad_links"] == [link]
+        reverse3d = owner.get(
+            tile_path + "/feature-by-id",
+            params={
+                "source_id": published["source_id"],
+                "layer_id": published["layer_id"],
+                "feature_id": feature["feature_id"],
+            },
+        )
+        assert reverse3d.status_code == 200, reverse3d.text
+        assert reverse3d.json() == picked.json()
+        manifest = owner.get(tile_path + "/tileset.json").json()
+        for name, value in (
+            ("record.json", record),
+            ("layer.json", layer),
+            ("tileset.json", manifest),
+            ("pick.json", picked.json()),
+            ("cad.json", file),
+            (
+                "feature.json",
+                owner.get(
+                    prefix + "/layers/" + layer["id"] + "/features/" + feature["feature_id"],
+                    params={
+                        "content_revision": layer["source"]["content_revision"],
+                        "schema_revision": layer["source"]["schema_revision"],
+                        "include_geometry": "true",
+                        "response_crs": 4326,
+                    },
+                ).json(),
+            ),
+        ):
+            (tmp_path / name).write_text(json.dumps(value))
+        for child in manifest["root"]["children"]:
+            uri = child["content"]["uri"]
+            target = tmp_path / uri
+            target.parent.mkdir(exist_ok=True)
+            target.write_bytes(owner.get(tile_path + "/" + uri).content)
         assert set(picked.json()["attributes"]) == {"cad_layer", "cad_entity"}
         assert (
             owner.get(prefix + "/layers/" + published["layer_id"]).json()["source"][

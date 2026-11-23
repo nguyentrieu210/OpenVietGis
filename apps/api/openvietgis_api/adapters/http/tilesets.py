@@ -589,6 +589,62 @@ def get_tile_feature(
     }
 
 
+@router.get(BASE + "/{tileset_id}/feature-by-id")
+def locate_tile_feature(
+    organization_id: UUID,
+    project_id: UUID,
+    tileset_id: UUID,
+    source_id: UUID,
+    layer_id: UUID,
+    feature_id: Annotated[str, Query(pattern=r"^[A-Za-z0-9_-]{1,128}$")],
+    response: Response,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+):
+    _scope(session, auth, organization_id, project_id, Permission.PROJECT_READ)
+    rows = (
+        session.execute(
+            text("""
+        SELECT c.uri, e.item->'first_triangle' AS triangle
+        FROM spatial.tilesets t JOIN spatial.tileset_contents c ON
+          c.organization_id=t.organization_id AND c.project_id=t.project_id AND c.tileset_id=t.id
+        CROSS JOIN LATERAL jsonb_array_elements(c.feature_index) e(item)
+        WHERE t.organization_id=:org AND t.project_id=:proj AND t.id=:id
+          AND t.provenance->>'feature_picking'='true'
+          AND t.provenance->>'source_id'=:src AND t.provenance->>'layer_id'=:layer
+          AND e.item->>'feature_id'=:fid LIMIT 2
+        """),
+            {
+                "org": organization_id,
+                "proj": project_id,
+                "id": tileset_id,
+                "src": str(source_id),
+                "layer": str(layer_id),
+                "fid": feature_id,
+            },
+        )
+        .mappings()
+        .all()
+    )
+    if not rows:
+        raise HTTPException(404, "Feature not indexed in this tileset")
+    if len(rows) != 1 or type(rows[0]["triangle"]) is not int:
+        raise HTTPException(409, "Feature index integrity failure")
+    result = get_tile_feature(
+        organization_id,
+        project_id,
+        tileset_id,
+        rows[0]["uri"],
+        rows[0]["triangle"],
+        response,
+        auth,
+        session,
+    )
+    if result["feature_id"] != feature_id:
+        raise HTTPException(409, "Feature index integrity failure")
+    return result
+
+
 @router.get(BASE + "/{tileset_id}/tileset.json")
 def get_manifest(
     organization_id: UUID,

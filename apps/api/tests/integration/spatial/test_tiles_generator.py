@@ -214,6 +214,18 @@ def test_generate_tileset(migrated_database, tmp_path):
             assert v["source_id"] == sid and v["layer_id"] == lid
             picks.append(v)
         (tmp_path / "picks.json").write_text(json.dumps(picks))
+        reverse_path = resource + "/feature-by-id"
+        base_query = {"source_id": sid, "layer_id": lid, "feature_id": "court"}
+        for i, fid in ((0, "court"), (2, "other")):
+            reply = owner.get(reverse_path, params=base_query | {"feature_id": fid})
+            assert reply.status_code == 200, reply.text
+            assert reply.json() == picks[i]
+        for wrong in (
+            {"feature_id": "missing"},
+            {"source_id": str(uuid4())},
+            {"layer_id": str(uuid4())},
+        ):
+            assert owner.get(reverse_path, params=base_query | wrong).status_code == 404
         assert owner.get(pick_path, params={"uri": uri, "triangle": 44}).status_code == 404
         assert owner.get(pick_path, params={"uri": "../bad.glb", "triangle": 0}).status_code == 404
         # Invalid height after editing is all-or-nothing; old generated asset remains immutable.
@@ -221,6 +233,7 @@ def test_generate_tileset(migrated_database, tmp_path):
         stale = owner.get(pick_path, params={"uri": uri, "triangle": 0}).json()
         assert stale["state"] == "stale" and stale["feature_id"] == "court"
         assert "attributes" not in stale and "cad_links" not in stale
+        assert owner.get(reverse_path, params=base_query).json() == stale
         assert owner.post(path + "/generate", json=request).status_code == 409
         bad = owner.post(path + "/generate", json=body())
         assert bad.status_code == 422, bad.text
@@ -240,9 +253,11 @@ def test_generate_tileset(migrated_database, tmp_path):
     with _client(world.member_user_id) as member:
         assert member.get(resource + "/tileset.json").status_code == 200
         assert member.get(pick_path, params={"uri": uri, "triangle": 0}).status_code == 200
+        assert member.get(reverse_path, params=base_query).status_code == 200
         assert member.post(path + "/generate", json=request).status_code == 403
     with _client(world.wrong_user_id) as other:
         assert other.get(resource + "/tileset.json").status_code in (403, 404)
+        assert other.get(reverse_path, params=base_query).status_code in (403, 404)
         assert other.get(pick_path, params={"uri": uri, "triangle": 0}).status_code in (403, 404)
         assert other.post(path + "/generate", json=request).status_code in (403, 404)
 

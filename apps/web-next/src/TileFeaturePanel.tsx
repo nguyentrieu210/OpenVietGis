@@ -2,6 +2,7 @@ import type {TilesetRecord} from "./TilesetPanel";
 import type {TileHit} from "@openvietgis/spatial-workspace/tiles3d";
 export type CadLink={document_id:string;version:number;filename:string;source_id:string;layer_id:string;feature_id:string;handle:string;layer_name:string;original_revision:boolean};
 export const validLink=(v:CadLink)=>!!v&&typeof v.document_id==="string"&&typeof v.source_id==="string"&&typeof v.layer_id==="string"&&typeof v.feature_id==="string"&&typeof v.filename==="string"&&typeof v.layer_name==="string"&&typeof v.original_revision==="boolean"&&Number.isInteger(v.version)&&v.version>=1&&v.version<=20&&typeof v.handle==="string"&&/^[0-9a-fA-F]{1,32}$/.test(v.handle);
+export type SourceFeatureRef={source_id:string;layer_id:string;feature_id:string;layer_revision?:number;content_revision?:string;schema_revision?:string};
 export type TileFeatureIdentity={tileset_id:string;uri:string;feature_id:string;first_triangle:number;triangle_count:number;source_id:string;layer_id:string;layer_revision:number;content_revision:string;schema_revision:string};
 type Current=TileFeatureIdentity&{state:"current";layer_name:string;attributes:Record<string,unknown>;field_names:Record<string,string>;cad_links:CadLink[]};
 export type TileFeature=Current|(TileFeatureIdentity&{state:"stale"});
@@ -16,6 +17,12 @@ export function parseTileFeature(raw:unknown,record:TilesetRecord,hit:TileHit):T
  if(raw.state==="stale")return raw as unknown as TileFeature;
  if(raw.state!=="current"||typeof raw.layer_name!=="string"||!object(raw.attributes)||!object(raw.field_names)||Object.values(raw.field_names).some(v=>typeof v!=="string")||!Array.isArray(raw.cad_links)||raw.cad_links.some(v=>!validLink(v)||v.source_id!==raw.source_id||v.feature_id!==raw.feature_id))throw Error("Thuộc tính nguồn không hợp lệ.");
  return raw as unknown as Current;
+}
+export function parseLocatedFeature(raw:unknown,record:TilesetRecord,source:SourceFeatureRef):TileFeature{
+ if(!object(raw)||typeof raw.uri!=="string"||!Number.isInteger(raw.first_triangle)||raw.feature_id!==source.feature_id||raw.source_id!==source.source_id||raw.layer_id!==source.layer_id)throw Error("Đối tượng nguồn không khớp.");
+ const v=parseTileFeature(raw,record,{uri:raw.uri,triangle:Number(raw.first_triangle)});
+ for(const k of ["layer_revision","content_revision","schema_revision"] as const)if(source[k]!==undefined&&source[k]!==v[k])throw Error("Bộ tile khác phiên bản nguồn.");
+ return v;
 }
 export function TileFeaturePanel({record,feature,message,busy,onNavigate}:{record:TilesetRecord;feature:TileFeature|null;message:string;busy:boolean;onNavigate:(target:"gis"|CadLink)=>void}){
  if(record.provenance?.feature_picking!==true)return <small>Chỉ xem. Tạo lại bộ tile từ GIS để chọn từng công trình.</small>;

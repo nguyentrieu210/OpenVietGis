@@ -13,6 +13,8 @@ test("region bounds, REPLACE refinement, capped deterministic selection",()=>{
  const crowded=parseTileset({...doc,root:{...root,children:Array.from({length:12},(_,i)=>leaf("tile"+i+".glb"))}});
  assert.equal(selectTiles(crowded,{...view,zoom:19}).tiles.length,8);
  assert.equal(selectTiles(crowded,{...view,zoom:19}).omitted,4);
+ const priority=selectTiles(crowded,{...view,zoom:19},"tile9.glb");assert.equal(priority.tiles.length,8);assert.equal(priority.tiles[0].uri,"tile9.glb");assert.equal(priority.omitted,4);
+ assert.equal(selectTiles(crowded,{...view,zoom:19,west:10,east:20},"tile9.glb").tiles.length,0);
 });
 test("explicit ECEF transform, glTF y-up and WGS84 ellipsoid control points",()=>{
  const t=parseTileset(doc).children[0];assert.deepEqual(tileVertex(t,0,0,0),[0,0,0]);
