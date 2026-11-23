@@ -99,9 +99,9 @@ class ActivateBinding(BaseModel):
 
 class IssuePairingToken(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    label: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)] = (
-        "QGIS Desktop"
-    )
+    label: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
+    ] = "QGIS Desktop"
     expires_in_days: int = Field(default=30, ge=1, le=365)
 
 

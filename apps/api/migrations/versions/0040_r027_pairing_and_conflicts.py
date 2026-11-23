@@ -34,7 +34,9 @@ def upgrade() -> None:
         ADD COLUMN IF NOT EXISTS service_principal_id uuid
     """)
     op.execute("""
-        GRANT UPDATE(state, revision, updated_at, activated_at, last_paired_at, service_principal_id)
+        GRANT UPDATE(
+            state, revision, updated_at, activated_at, last_paired_at, service_principal_id
+        )
         ON integration_hub.connector_bindings TO openvietgis_runtime
     """)
 
