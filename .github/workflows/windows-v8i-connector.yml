@@ -45,7 +45,7 @@ jobs:
       - name: Package Tkinter GUI and pywin32 COM adapter
         shell: pwsh
         run: |
-          python -m PyInstaller --clean --noconfirm --onedir --windowed --name OpenVietGISConnector --collect-submodules win32com --hidden-import pythoncom --hidden-import pywintypes gui.py
+          python -m PyInstaller --clean --noconfirm --onedir --windowed --runtime-hook frozen_streams.py --name OpenVietGISConnector --collect-submodules win32com --hidden-import pythoncom --hidden-import pywintypes gui.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
       - name: Execute built EXE without launching MicroStation
         shell: pwsh

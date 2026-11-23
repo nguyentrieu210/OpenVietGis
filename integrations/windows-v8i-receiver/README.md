@@ -64,7 +64,7 @@ After a successful writeback, re-download a new bundle at the new server revisio
 python -m unittest discover -v -s integrations/windows-v8i-receiver/tests
 ```
 
-A **Windows-only GitHub Actions workflow** builds an unsigned `.exe` with PyInstaller, runs offline tests, executes its `--self-test`, and uploads the ZIP as a temporary workflow artifact. No signing certificate, Bentley binary or native `.mvba` is embedded. Until a successful build run is verified, this is a *build configuration*, not a verified downloadable executable. Use `uninstall.cmd` to remove the app while preserving `Incoming` data. In the repo, run integration fixtures with `PYTHONPATH=apps/api:integrations/windows-v8i-receiver /opt/openvietgis/apps/api/.venv/bin/python -m unittest discover -v -s integrations/windows-v8i-receiver/tests`. Future packaging as a signed `.exe` is a separate release gate.
+A **Windows-only GitHub Actions workflow** builds an unsigned `.exe` with PyInstaller (including early windowed-runtime stream initialization), runs offline tests, executes its `--self-test`, and uploads the ZIP as a temporary workflow artifact. No signing certificate, Bentley binary or native `.mvba` is embedded. Until a successful build run is verified, this is a *build configuration*, not a verified downloadable executable. Use `uninstall.cmd` to remove the app while preserving `Incoming` data. In the repo, run integration fixtures with `PYTHONPATH=apps/api:integrations/windows-v8i-receiver /opt/openvietgis/apps/api/.venv/bin/python -m unittest discover -v -s integrations/windows-v8i-receiver/tests`. Future packaging as a signed `.exe` is a separate release gate.
 
 ## CI packaging and distribution
 
