@@ -1,0 +1,37 @@
+name: "Feature request / Đề xuất tính năng"
+description: "Đề xuất kịch bản GIS/CAD/3D hoặc cải thiện UX theo nhu cầu thực tế."
+title: "[Feature] "
+body:
+  - type: input
+    id: workflow
+    attributes:
+      label: "Luồng công việc đang bị thiếu"
+      placeholder: "VD: DXF import → chỉnh sửa → xuất DXF không đổi CRS"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Vấn đề người dùng và bối cảnh"
+      description: "Ai gặp vấn đề, khối lượng dữ liệu, kết quả mong muốn?"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Hành vi đề xuất và tiêu chí nghiệm thu"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Cách làm hiện tại / các giải pháp thay thế"
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: "Ranh giới"
+      options:
+        - label: "Đề xuất không yêu cầu truy cập trái phép hoặc sử dụng dữ liệu khách hàng thật để demo."
+          required: true

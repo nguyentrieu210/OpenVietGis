@@ -66,6 +66,20 @@ OpenVietGIS is a platform-first spatial workspace for the web. The original Spec
 architecture runway and a disposable non-GIS vertical slice; later feature slices extend that
 foundation.
 
+
+## Community testing and contributions / Nghiệm thu cộng đồng
+
+OpenVietGIS is a public development candidate. It is **not production-release certified** and should not be described as a complete replacement for QGIS, MapInfo, ArcGIS or AutoCAD. Public GitHub visibility does not grant open-source reuse rights without a published license; a repository LICENSE decision is pending.
+
+- [Start contributing / Hướng dẫn đóng góp](CONTRIBUTING.md)
+- [Community QA program / Chương trình kiểm thử](docs/community/README.md)
+- [Acceptance matrix (CQ-00–CQ-17)](docs/community/ACCEPTANCE_MATRIX.md)
+- [Reproducible QA runbook](docs/community/TEST_RUNBOOK.md)
+- [Beta / release gates](docs/community/RELEASE_POLICY.md)
+- [Security reporting](SECURITY.md)
+
+**How to help:** use the GitHub Issue forms for a reproducible bug, a single community acceptance case or a feature request. Pin the exact commit, use synthetic local/test fixtures, attach sanitized evidence, and never change production or legal house-numbering records for testing. Maintainers handle release approval; independent community tests are evidence, not certification.
+
 ## Product direction and roadmap
 
 - [Product direction and release outcomes](docs/product.md)

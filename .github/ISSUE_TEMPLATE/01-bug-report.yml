@@ -1,0 +1,81 @@
+name: "Bug report / Báo lỗi"
+description: "Lỗi có thể tái hiện trên bản OpenVietGIS được ghim SHA (không đăng secrets hoặc dữ liệu thật)."
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cảm ơn bạn đã thử OpenVietGIS! Dùng **test/local hoặc synthetic sandbox**, không thử thao tác ghi/xóa trên production. Lỗ hổng bảo mật: xem SECURITY.md, không mở Issue công khai chứa chi tiết nhạy cảm.
+  - type: input
+    id: version
+    attributes:
+      label: "Git commit SHA và phiên bản frontend/backend"
+      description: "Bắt buộc ghi SHA, đừng chỉ ghi 'bản mới nhất'."
+      placeholder: "SHA / branch / build / migration"
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: "Nhóm chức năng"
+      options:
+        - "GIS 2D / map"
+        - "CRS / import / export"
+        - "Editing / CAD"
+        - "3D / raster / processing"
+        - "Layout / cartography"
+        - "Auth / permissions / collaboration"
+        - "Plugins / House Numbering"
+        - "AI / MCP"
+        - "UX / mobile / accessibility"
+        - "Deployment / tests / docs"
+        - "Other"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: "Mức độ tác động sơ bộ"
+      options:
+        - "P0 - mất dữ liệu / lộ quyền / an toàn (không công khai chi tiết)"
+        - "P1 - workflow chính bị chặn"
+        - "P2 - có cách khắc phục tạm"
+        - "P3 - nhỏ / trình bày"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Môi trường và fixture"
+      description: "OS, trình duyệt, role, CRS, loại/khối lượng dữ liệu GIẢ, local/test URL; không ghi credentials."
+      placeholder: "Windows 11 / Chrome / viewer / EPSG:4326 / 200 synthetic points..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "Các bước tái hiện"
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Kỳ vọng"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Kết quả thực tế, ảnh/log đã che thông tin"
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: "Xác nhận an toàn"
+      options:
+        - label: "Tôi đã xóa secrets, dữ liệu cá nhân và thông tin khách hàng khỏi Issue."
+          required: true
+        - label: "Tôi không thử lệnh ghi/xóa hoặc thao tác phá hoại trên production."
+          required: true

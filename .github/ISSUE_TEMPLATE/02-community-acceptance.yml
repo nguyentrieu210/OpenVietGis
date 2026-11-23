@@ -1,0 +1,75 @@
+name: "Community Acceptance / Nghiệm thu cộng đồng"
+description: "Nộp bằng chứng kiểm thử một case CQ-xx của ma trận community."
+title: "[QA][CQ-XX] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hãy xem [ma trận nghiệm thu](../../docs/community/ACCEPTANCE_MATRIX.md) và [runbook](../../docs/community/TEST_RUNBOOK.md). Chỉ báo PASS khi có bằng chứng trên **cùng SHA/profile**. Nếu không chạy được, chọn BLOCKED; không dùng production để chạy destructive tests.
+  - type: input
+    id: case
+    attributes:
+      label: "Case ID"
+      placeholder: "CQ-03"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: "Kết quả"
+      options:
+        - "PASS - có bằng chứng và oracle"
+        - "FAIL - có sai lệch / regression"
+        - "BLOCKED - không thể thực hiện"
+        - "NOT_RUN - chưa chạy"
+        - "N/A - ngoài scope, chờ reviewer chấp thuận"
+    validations:
+      required: true
+  - type: input
+    id: sha
+    attributes:
+      label: "SHA exact của candidate"
+      placeholder: "40-character commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: profile
+    attributes:
+      label: "Profile môi trường và role"
+      description: "Browser/OS, web/API build, migration, fixture synthetic, CRS, số feature và checksum nếu có."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Thao tác thực hiện"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Kỳ vọng và ngưỡng chấp nhận"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Kết quả thực tế, đối chiếu độc lập, minh chứng"
+      description: "Chỉ chia sẻ artifact đã ẩn danh, log không chứa secrets. Ghi rõ chức năng chưa thể thử."
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: "Giới hạn, lỗi chưa xử lý và rủi ro"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: "Xác nhận"
+      options:
+        - label: "Tôi đã kiểm tra trên môi trường được phép, dùng dữ liệu synthetic hoặc được công bố rõ để kiểm thử."
+          required: true
+        - label: "Tôi không kết luận production ready chỉ dựa trên testcase này."
+          required: true
