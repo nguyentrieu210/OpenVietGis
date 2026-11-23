@@ -660,6 +660,7 @@ dependencies = [
     { name = "cryptography" },
     { name = "ezdxf" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "itsdangerous" },
     { name = "pillow" },
     { name = "psycopg", extra = ["binary"] },
@@ -672,7 +673,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "mypy" },
     { name = "openapi-spec-validator" },
     { name = "pytest" },
@@ -688,6 +688,7 @@ requires-dist = [
     { name = "cryptography", specifier = "==50.0.2" },
     { name = "ezdxf", specifier = ">=1.4.5" },
     { name = "fastapi", specifier = "==0.163.1" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "itsdangerous", specifier = "==2.2.0" },
     { name = "pillow", specifier = ">=13.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -700,7 +701,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28" },
     { name = "mypy", specifier = ">=1.18" },
     { name = "openapi-spec-validator", specifier = "==0.9.0" },
     { name = "pytest", specifier = ">=8.4" },

@@ -33,6 +33,7 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
+from openvietgis_api.adapters.persistence.gis_access import filtered_layer_wire
 from openvietgis_api.adapters.persistence.spatial_repository import SqlSpatialRepository
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.spatial.crs import (
@@ -75,13 +76,17 @@ def list_crs_profiles(
 ) -> dict[str, object]:
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
     SqlSpatialRepository(session).prepare_scope(
-        context=context, permission=Permission.PROJECT_READ, mutation=False,
+        context=context,
+        permission=Permission.PROJECT_READ,
+        mutation=False,
     )
     return {
-        "organization_id": organization_id, "project_id": project_id,
+        "organization_id": organization_id,
+        "project_id": project_id,
         "profiles": [profile.to_wire() for profile in CRS_PROFILES],
         "transformations": [profile.to_wire() for profile in TRANSFORMATION_PROFILES],
     }
+
 
 SourceName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 ReferenceKey = Annotated[

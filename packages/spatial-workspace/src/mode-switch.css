@@ -1,0 +1,8 @@
+.ovg-modebar{display:flex;align-items:center;gap:8px;min-width:0;font:inherit;color:inherit}
+.ovg-modebar-group{display:inline-flex;align-items:center;gap:2px;border:1px solid color-mix(in srgb,currentColor 20%,transparent);border-radius:6px;padding:2px}
+.ovg-modebar button{font:inherit;font-size:12px;font-weight:600;min-height:30px;padding:3px 12px;color:inherit;background:transparent;border:1px solid transparent;border-radius:4px;white-space:nowrap;cursor:pointer}
+.ovg-modebar button[aria-pressed=true]{background:#1558aa;color:#fff}
+.ovg-modebar button[aria-disabled=true]{opacity:.42;cursor:not-allowed}
+.ovg-modebar button:focus-visible{outline:2px solid #3b82f6;outline-offset:2px}
+.ovg-modebar-status{font-size:11px;max-width:36ch}
+.ovg-modebar-dot{display:inline-block;width:6px;height:6px;margin-left:5px;background:#f59e0b;border-radius:50%}

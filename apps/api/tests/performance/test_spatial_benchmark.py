@@ -84,7 +84,14 @@ def test_spatial_http_p95_10k_native_and_transformed(
     with _client(world.owner_user_id) as client:
         datasets = []
         for key, prefix, family, count in PRIMARY:
+            setup_started = perf_counter_ns()
             path, source, layer_id, pins = _setup(client, world, key)
+            with capsys.disabled():
+                print(
+                    f"R003_FIXTURE {key} count={count} "
+                    f"setup_ms={(perf_counter_ns() - setup_started) / 1_000_000:.1f}",
+                    flush=True,
+                )
             assert source["validation_state"] == "ready"
             assert source["feature_count"] == count
             datasets.append((path, source, layer_id, pins, prefix, family))
@@ -126,6 +133,12 @@ def test_spatial_http_p95_10k_native_and_transformed(
                 "max_ms": max(samples),
                 "budget_p95_ms": budget_ms,
             }
+            with capsys.disabled():
+                print(
+                    f"R003_SCENARIO {name} "
+                    f"p95_ms={results[name]['p95_ms']:.3f} budget_ms={budget_ms:.1f}",
+                    flush=True,
+                )
 
         def check_catalog(body: dict) -> None:
             assert body["organization_id"] == str(world.organization_id)

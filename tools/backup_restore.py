@@ -23,6 +23,7 @@ from typing import Any, BinaryIO
 
 from tools.recovery_authority import (
     AUTHORITY_QUERY,
+    GIS_AUTHORITY_QUERY,
     QUARANTINE_REPORT_QUERY,
     reconciliation_sql,
     safe_human_authority,
@@ -45,6 +46,13 @@ FROM (
     UNION ALL
     SELECT storage_key, sha256, byte_size, 'offline', true
     FROM field.offline_packages
+) a;
+"""
+_CAD_DOCUMENT_ARTIFACT_QUERY = """
+SELECT COALESCE(json_agg(row_to_json(a) ORDER BY storage_key, kind), '[]'::json)
+FROM (
+    SELECT storage_key, sha256, byte_size, 'cad_document' AS kind, true AS required
+    FROM cad.document_versions
 ) a;
 """
 _DB_CHECK = """
@@ -364,11 +372,26 @@ def _sql_script(container: str, user: str, database: str, script: str) -> None:
 
 
 def _authority(container: str, user: str, database: str) -> dict[str, Any]:
-    return json.loads(
+    snapshot = json.loads(
         _sql(
             container, user, database, "SET row_security=off; " + AUTHORITY_QUERY
         ).splitlines()[-1]
     )
+    # Pre-0023 backups retain their original fingerprint format. A newer
+    # authority snapshot must include the finer GIS permission envelope.
+    if (
+        _sql(
+            container,
+            user,
+            database,
+            "SELECT to_regclass('gis_access.scoped_members') IS NOT NULL",
+        )
+        == "t"
+    ):
+        snapshot["gis_access"] = _sql(
+            container, user, database, "SET row_security=off; " + GIS_AUTHORITY_QUERY
+        ).splitlines()[-1]
+    return snapshot
 
 
 def _inventory(container: str, user: str, database: str) -> tuple[list, dict]:
@@ -382,6 +405,29 @@ def _inventory(container: str, user: str, database: str) -> tuple[list, dict]:
             container, user, database, "SET row_security=off; " + _DB_CHECK
         ).splitlines()[-1]
     )
+    has_cad_documents = (
+        _sql(
+            container,
+            user,
+            database,
+            "SELECT to_regclass('cad.document_versions') IS NOT NULL",
+        )
+        == "t"
+    )
+    if has_cad_documents or checks["revision"] in {
+        "0029_cad_documents",
+        "0032_unified_collaboration",
+    }:
+        # An unexpectedly missing table on the current schema fails closed.
+        references += json.loads(
+            _sql(
+                container,
+                user,
+                database,
+                "SET row_security=off; " + _CAD_DOCUMENT_ARTIFACT_QUERY,
+            ).splitlines()[-1]
+        )
+        references.sort(key=lambda ref: (ref["storage_key"], ref["kind"]))
     if checks["inconsistent_publications"]:
         raise RuntimeError("Snapshot contains a partially published unsuccessful job")
     return references, checks

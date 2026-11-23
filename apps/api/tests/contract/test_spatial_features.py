@@ -16,6 +16,7 @@ from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
     authenticate_request,
@@ -206,9 +207,16 @@ def feature_http(monkeypatch: pytest.MonkeyPatch) -> Iterator[FeatureHTTP]:
         with Session() as session:
             yield session
 
+    monkeypatch.setattr(
+        "openvietgis_api.adapters.http.spatial.filtered_layer_wire",
+        lambda _session, _context, wire: wire,
+    )
     app = create_app()
     app.dependency_overrides[authenticate_request] = authenticate
     app.dependency_overrides[get_db_session] = no_database
+    # These tests exercise the real HTTP and domain permissions using fake
+    # repositories. Restricted ACL/RLS is covered by PostGIS integration tests.
+    app.dependency_overrides[project_access_guard] = lambda: None
     settings = get_settings()
     csrf = {
         "X-OpenVietGIS-CSRF": make_csrf_token(

@@ -1,0 +1,58 @@
+import {chromium} from "@playwright/test";
+import assert from "node:assert/strict";
+const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+try{
+ const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
+ page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
+ const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
+ const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
+ const saved=[];let restricted=false;
+ const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
+ await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
+ await page.route("**/api/v1/**",async route=>{
+  const p=new URL(route.request().url()).pathname,m=route.request().method();let body;
+  if(p.endsWith("/me"))body={id:"fixture",display_name:"Spatial Test",status:"active"};
+  else if(p.endsWith("/auth/providers"))body=[];
+  else if(p.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
+  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
+  else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
+  else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
+  else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
+  else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
+  else if(p.endsWith("/features"))body={context:{source_id:"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
+  else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
+    if(m==="POST"){const x=ver();saved.unshift(x);body=x}
+    else body={items:p.endsWith("/versions")?saved:saved.slice(0,1)};
+  }
+  else if(p.includes("/cad/documents/")&&p.endsWith("/download"))return route.fulfill({body:"0\nSECTION\n",headers:{"content-type":"application/octet-stream"}});
+  else body={items:[],next_after_id:null};
+  return route.fulfill({json:body});
+ });
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ const modes=page.getByRole("group",{name:"Chế độ không gian"});
+ await modes.waitFor({timeout:30000});
+ await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.getByText(/mốc phẳng 0 m/).waitFor();
+ assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ console.log("PASS live 3D adapter");
+ await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ await page.getByLabel("Thêm bản vẽ").setInputFiles({name:"building.dxf",mimeType:"application/octet-stream",buffer:Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")});
+ await page.getByText("Đã lưu phiên bản 1.").waitFor();
+ await page.getByLabel("Lưu phiên bản mới").setInputFiles({name:"building.dxf",mimeType:"application/octet-stream",buffer:Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n\n")});
+ await page.getByText("Đã lưu phiên bản 2.").waitFor();
+ console.log("PASS live CAD version UI");
+ assert.equal(await page.getByRole("button",{name:"Tải xuống",exact:true}).count(),2);
+ await modes.getByRole("button",{name:"GIS 2D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".qgis-map-region .maplibregl-canvas").waitFor();
+ await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
+ assert.equal(errors.length,0,errors.join("\n"));
+ console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");
+}finally{await browser.close()}

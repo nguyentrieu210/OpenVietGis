@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from itertools import chain
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import text
@@ -11,6 +12,7 @@ from openvietgis_api.adapters.persistence.gis_access import scoped
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.persistence.gis_access import scoped
 from openvietgis_api.adapters.persistence.spatial_repository import (
     SqlSpatialRepository,
     _read_native_wkb,

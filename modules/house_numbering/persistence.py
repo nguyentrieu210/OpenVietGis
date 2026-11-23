@@ -24,6 +24,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 from modules.house_numbering.address_prefix import canonical_prefix
 
+from modules.house_numbering.address_prefix import canonical_prefix
+
 
 class HouseNumberingRepository:
     def __init__(self, session: Session, context: AuthorizationContext) -> None:

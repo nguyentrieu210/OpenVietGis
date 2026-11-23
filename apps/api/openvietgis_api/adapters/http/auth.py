@@ -200,7 +200,8 @@ def _complete_verified_login(
             ):
                 raise HTTPException(status_code=400, detail="link session changed")
             if not SqlIdentityRepository(session).lock_active_web_session(
-                user_id=actor_id, session_id=authentication.session_id,
+                user_id=actor_id,
+                session_id=authentication.session_id,
             ):
                 raise HTTPException(status_code=400, detail="link session no longer valid")
             try:

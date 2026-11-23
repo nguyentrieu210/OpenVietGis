@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from openvietgis_api.adapters.persistence.gis_access import scoped
@@ -18,6 +19,7 @@ from openvietgis_api.adapters.http.security import (
     get_db_session,
     require_csrf,
 )
+from openvietgis_api.adapters.persistence.gis_access import scoped
 from openvietgis_api.adapters.persistence.map_repository import SqlMapRepository
 from openvietgis_api.domains.maps.domain import (
     MAX_REVISION,

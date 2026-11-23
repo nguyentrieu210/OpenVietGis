@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 from sqlalchemy.orm import Session

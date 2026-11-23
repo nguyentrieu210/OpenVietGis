@@ -7,6 +7,10 @@ from collections import Counter
 from typing import Any
 from uuid import UUID
 
+from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformValidationError,
+)
 from sqlalchemy import text
 from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 from modules.house_numbering.address_prefix import canonical_prefix
@@ -240,7 +244,7 @@ class RouteTreeImporter:
                 attrs = f["attributes"]
                 feature = str(f["feature_id"])
                 key = f"{source}:{feature}"
-                def read(field: str, default: str = "") -> str:
+                def read(field: str, default: str = "", mapping=mapping, attrs=attrs) -> str:
                     name = mapping.get(field)
                     return _value(attrs.get(name)) if name else default
                 code = read("code", feature)

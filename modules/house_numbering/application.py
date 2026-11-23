@@ -8,6 +8,8 @@ from uuid import UUID
 
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.platform_errors import (
+    PlatformConflictError,
+    PlatformNotFoundError,
     PlatformValidationError,
     PlatformNotFoundError,
     PlatformConflictError,
@@ -15,6 +17,7 @@ from openvietgis_api.domains.platform_errors import (
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
+from modules.house_numbering.batch_numbering import build_route_plan
 from modules.house_numbering.domain import (
     Address,
     DomainError,

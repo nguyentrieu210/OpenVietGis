@@ -917,19 +917,28 @@ class SqlSpatialRepository:
         return source
 
     def transform_features(
-        self, *, context: AuthorizationContext, source: DataSource,
-        features: Sequence[ReferenceFeature], target_code: int,
+        self,
+        *,
+        context: AuthorizationContext,
+        source: DataSource,
+        features: Sequence[ReferenceFeature],
+        target_code: int,
     ) -> tuple[NativeGeometry, ...]:
         current = self._pinned_source(
-            context=context, source_id=source.id,
-            content_revision=source.content_revision, schema_revision=source.schema_revision,
+            context=context,
+            source_id=source.id,
+            content_revision=source.content_revision,
+            schema_revision=source.schema_revision,
         )
         if current != source:
             raise SpatialValidationError("transform source snapshot disagrees")
         return transform_response_geometries(
             self._session,
             scope=self._scope(context, permission=Permission.PROJECT_READ),
-            source=current, features=features, target_code=target_code, decode=_read_native_wkb,
+            source=current,
+            features=features,
+            target_code=target_code,
+            decode=_read_native_wkb,
         )
 
     def read_features(

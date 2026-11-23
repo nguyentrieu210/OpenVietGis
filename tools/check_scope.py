@@ -21,6 +21,21 @@ FORBIDDEN_MARKERS = {
 }
 MAP_UI_ROOT = "apps/web/src/features/map/"
 MAP_ENGINE_ADAPTER = MAP_UI_ROOT + "maplibre-engine.ts"
+# Explicit renderer ownership paths. The Studio compatibility adapter and the
+# independent 3D adapter do not grant renderer access to their parent folders.
+RENDERER_OWNERS = {
+    MAP_ENGINE_ADAPTER,
+    "apps/web-next/src/map-surface.ts",
+    "packages/spatial-workspace/src/maplibre3d.ts",
+    # Isolated browser fixture bootstraps a renderer worker; never production.
+    "packages/spatial-workspace/tests/browser/3d.ts",
+}
+RENDERER_MANIFESTS = {
+    "apps/web/package.json",
+    "apps/web-next/package.json",
+    "apps/web-next/tsconfig.json",
+    "packages/spatial-workspace/package.json",
+}
 RENDERER_IMPORT = re.compile(
     r"""(?:from\s*|import\s*(?:\(\s*)?)["']maplibre-gl(?:/[^"']*)?["']"""
 )
@@ -39,16 +54,17 @@ def find_scope_violations(root: Path = ROOT) -> list[str]:
             content = path.read_text(encoding="utf-8", errors="ignore").lower()
             relative = path.relative_to(root).as_posix()
             for marker, label in FORBIDDEN_MARKERS.items():
-                if marker == "maplibre" and (
-                    relative == "apps/web/package.json" or relative.startswith(MAP_UI_ROOT)
-                ):
-                    # R004 permits references in its UI; only the replaceable
-                    # adapter can import renderer APIs, types or CSS.
-                    if relative != MAP_ENGINE_ADAPTER and RENDERER_IMPORT.search(content):
-                        violations.append(
-                            f"{relative} imports renderer APIs outside the MapEngine adapter"
-                        )
-                    continue
+                if marker == "maplibre":
+                    if relative in RENDERER_OWNERS or relative in RENDERER_MANIFESTS:
+                        continue
+                    # The legacy R004 UI may mention the engine by name, but it
+                    # may not import renderer APIs, types or CSS.
+                    if relative.startswith(MAP_UI_ROOT):
+                        if RENDERER_IMPORT.search(content):
+                            violations.append(
+                                f"{relative} imports renderer APIs outside the MapEngine adapter"
+                            )
+                        continue
                 if marker in content:
                     violations.append(
                         f"{relative} contains out-of-scope {label} marker {marker!r}"

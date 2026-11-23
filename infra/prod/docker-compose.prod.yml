@@ -12,6 +12,7 @@ x-app-environment: &app-environment
   OPENVIETGIS_API_PUBLIC_BASE_URL: ${PUBLIC_HTTPS_ORIGIN:?set PUBLIC_HTTPS_ORIGIN}
   OPENVIETGIS_OIDC_PROVIDERS: ${OIDC_PROVIDERS_JSON:?configure independent HTTPS OIDC provider}
   OPENVIETGIS_ARTIFACT_STORE_DIR: /var/lib/openvietgis/artifacts
+  OPENVIETGIS_INVITATION_WEB_PATH: /app
 
 services:
   postgres:
@@ -40,7 +41,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["/app/apps/api/.venv/bin/alembic", "-c", "/app/apps/api/alembic.ini", "upgrade", "head"]
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        /app/apps/api/.venv/bin/alembic -c /app/apps/api/alembic.ini upgrade head
+        /app/apps/api/.venv/bin/python /app/tools/migrate_official_modules.py
     environment:
       <<: *app-environment
       OPENVIETGIS_MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?set MIGRATION_DATABASE_URL}

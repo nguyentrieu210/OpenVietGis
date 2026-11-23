@@ -143,6 +143,11 @@ Spatial Catalog & CRS: implemented and converged for internal integration on ver
 
 Map Workspace.
 
+- **R004-A — Unified Spatial Workspace**: [Spec 022](specs/022-spatial-workspace/spec.md). In progress (Spec Kit; isolated candidate). Dependencies: R002, R003, R004, R006, R012; integrate after Spec 020 candidate is reviewed and committed. Shared project/session, capability-aware GIS/CAD/3D mode switching, safe draft handling and lazy engine lifecycle. No new CAD or 3D engine promised by this slice.
+- **R012-A — CAD Bridge** (planned): authorized linking and explicit georeferencing of native CAD assets; depends on R004-A, R003, R005, R012.
+- **R004-B — 3D Viewer** (planned): actual geographic 3D engine adapter, bounded first workflow using project data; depends on R004-A, R003 and R010. Terrain/model support follows measured acceptance; not part of R004-A.
+
+
 ### R005
 
 Import & Export.
@@ -171,6 +176,8 @@ External Sources.
 
 Team Collaboration.
 
+- [R011-2 — Project Chat & Tasks](specs/024-team-chat-tasks/spec.md): project messages, assigned tasks and map pins; depends on R002/R011 and integrated GIS ACL candidate. Implementation candidate; release validation pending. [V4 feature edit leases](specs/024-team-chat-tasks/v4-feature-locks.md) extends R006 changeset conflict protection with renewable per-feature locks; [V5 feature discussion](specs/024-team-chat-tasks/v5-feature-discussion.md) adds comments, mentions and feature-linked tasks.
+
 ### R012
 
 CAD Interoperability & Precision.
@@ -184,6 +191,8 @@ Field & Offline.
 Module Framework & References.
 
 Child [Spec 019 — House Numbering Plugin](specs/019-house-numbering-plugin/spec.md): isolated technical candidate implemented and automated-verified across dynamic module UI, PostGIS workflows, browser/mobile, security, 10k/100k performance and DB+artifact recovery. [Plan](specs/019-house-numbering-plugin/plan.md) | [Tasks](specs/019-house-numbering-plugin/tasks.md) | [Convergence evidence](specs/019-house-numbering-plugin/evidence/convergence.md).
+
+Child [Spec 021 — AI Copilot / MCP](specs/021-ai-copilot/spec.md): isolated MCP adapter, live bridge and remote OAuth candidate, 27 automated tests plus Partner SDK/first-party browser acceptance (R002, R003, R004, R014); real Keycloak/Claude OAuth exchange, merged frontend integration, real-project verification and production release remain open. [Plan](specs/021-ai-copilot/plan.md) | [Tasks](specs/021-ai-copilot/tasks.md).
 
 ### R015
 

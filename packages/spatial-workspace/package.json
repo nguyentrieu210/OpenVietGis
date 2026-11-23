@@ -1,0 +1,37 @@
+{
+  "name": "@openvietgis/spatial-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./coordinator": "./src/coordinator.ts",
+    "./cad-editor": "./src/cad-editor.ts",
+    "./session": "./src/session.ts",
+    "./ModeSwitch": "./src/ModeSwitch.tsx",
+    "./footprint3d": "./src/footprint3d.ts",
+    "./terrain": "./src/terrain.ts",
+    "./gltf": "./src/gltf.ts",
+    "./mesh-layer": "./src/mesh-layer.ts",
+    "./mesh-picking": "./src/mesh-picking.ts",
+    "./footprint-renderer": "./src/maplibre3d.ts",
+    "./maplibre3d": "./src/maplibre3d.ts",
+    "./tileset": "./src/tileset.ts",
+    "./tiles3d": "./src/tiles3d.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "maplibre-gl": "6.18.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/geojson": "7946.0.16",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.8",
+    "typescript": "^6.0.3"
+  }
+}
