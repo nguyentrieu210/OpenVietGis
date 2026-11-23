@@ -1,0 +1,409 @@
+openapi: 3.1.0
+info:
+  title: OpenVietGIS R027 Bidirectional Integration Sync — DRAFT CONTRACT
+  version: 0.27.0-draft
+  description: >
+    PROPOSED endpoints only. No R027 route is implemented or deployed by the
+    creation of this document. R026 remains the discovery/policy foundation.
+    Server-side R002 tenant authorization, GIS ACL, R003 explicit CRS and R006
+    changesets are mandatory. Default deny all writes and deletes.
+servers:
+  - url: /api/v1
+tags:
+  - name: Bindings
+  - name: Sync
+paths:
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings:
+    get:
+      tags: [Bindings]
+      operationId: r027ListBindings
+      security: [{sessionCookie: []}, {serviceBearer: []}]
+      description: List project-scoped authorized bindings and nonsecret status.
+      parameters: [{ $ref: '#/components/parameters/OrgId' }, { $ref: '#/components/parameters/ProjectId' }]
+      responses:
+        '200':
+          description: Scoped list, never includes raw tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Binding' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Bindings]
+      operationId: r027CreateBindingDraft
+      security: [{sessionCookie: []}]
+      x-required-permission: project.manage
+      description: Creates DISABLED draft only; CSRF and current project/tenant authorization required.
+      parameters: [{ $ref: '#/components/parameters/OrgId' }, { $ref: '#/components/parameters/ProjectId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBinding' }
+      responses:
+        '201':
+          description: Created disabled binding.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Binding' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/lifecycle:
+    post:
+      tags: [Bindings]
+      operationId: r027SetBindingLifecycle
+      security: [{sessionCookie: []}]
+      x-required-permission: project.manage
+      description: >
+        Explicit manager activation/pause/revoke; activation requires verified
+        adapter capability, scoped grants and audited authorization. Revocation
+        invalidates queued approvals and prevents further worker execution.
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action, expected_revision]
+              properties:
+                action: {type: string, enum: [activate, pause, resume, revoke]}
+                expected_revision: {type: integer, minimum: 0}
+      responses:
+        '200':
+          description: Updated binding metadata only.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Binding' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/sync/preview:
+    post:
+      tags: [Sync]
+      operationId: r027PreviewBidirectionalSync
+      security: [{sessionCookie: []}]
+      x-required-permission: project.edit
+      description: >
+        Read-only, deterministic diff of both ends; includes exact schema and
+        content revisions and permission/CRS validation. Preview is not a write
+        grant, does not store raw credentials, and MUST NOT mutate either side.
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [requested_direction]
+              properties:
+                requested_direction:
+                  type: string
+                  enum: [pull, push, bidirectional]
+                external_checkpoint: {type: [string, 'null'], maxLength: 256}
+      responses:
+        '200':
+          description: Preview result without side effects.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncPreview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/sync/commit:
+    post:
+      tags: [Sync]
+      operationId: r027CommitApprovedSync
+      security: [{sessionCookie: []}]
+      x-required-permission: project.edit
+      description: >
+        CSRF-protected human approval of the exact preview digest. Enforce
+        current permissions, CRS, source/target revisions, binding policy and
+        provider conditional writes. R006 is the only OpenVietGIS write path.
+        Approval MUST NOT silently apply deletes or conflicted operations.
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CommitRequest' }
+      responses:
+        '202':
+          description: Durable run accepted; async status must be inspected.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncRun' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Invalid' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/runs:
+    get:
+      tags: [Sync]
+      operationId: r027ListSyncRuns
+      security: [{sessionCookie: []}, {serviceBearer: []}]
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+      responses:
+        '200':
+          description: Authorized redacted ledger.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SyncRun' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/runs/{run_id}/ack:
+    post:
+      tags: [Sync]
+      operationId: r027AcknowledgeConditionalDelivery
+      security: [{serviceBearer: []}]
+      description: >
+        Agent-bound conditional delivery receipt. Requires a separately scoped
+        credential and worker-side ACL revalidation; a generic project.read
+        bearer MUST be denied. Duplicate matching receipts are idempotent.
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+        - { $ref: '#/components/parameters/RunId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AckRequest' }
+      responses:
+        '200':
+          description: Durable acknowledgment recorded; cursor may advance.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncRun' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/conflicts/{conflict_id}/resolve:
+    post:
+      tags: [Sync]
+      operationId: r027ResolveConflict
+      security: [{sessionCookie: []}]
+      x-required-permission: project.edit
+      description: >
+        Resolve a redacted conflict against exact revisions and approval policy.
+        Requires explicit actor decision and must not unconditionally overwrite
+        geometry, delete or merge unauthorized attributes.
+      parameters:
+        - { $ref: '#/components/parameters/OrgId' }
+        - { $ref: '#/components/parameters/ProjectId' }
+        - { $ref: '#/components/parameters/BindingId' }
+        - { $ref: '#/components/parameters/ConflictId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [resolution, expected_local_revision, expected_remote_revision]
+              properties:
+                resolution: {type: string, enum: [keep_local, keep_remote, manual_merge, postpone]}
+                expected_local_revision: {type: string, minLength: 1}
+                expected_remote_revision: {type: string, minLength: 1}
+                merged_properties: {type: object, additionalProperties: true}
+                merged_geometry: {type: [object, 'null']}
+      responses:
+        '200':
+          description: Audited explicit resolution recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conflict_id, state]
+                properties:
+                  conflict_id: {type: string, format: uuid}
+                  state: {type: string, enum: [resolved, postponed]}
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: ovg_session
+    serviceBearer:
+      type: http
+      scheme: bearer
+      description: Scoped agent credential, never a generic read token for writes.
+  parameters:
+    OrgId:
+      name: organization_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    BindingId:
+      name: binding_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    ConflictId:
+      name: conflict_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  schemas:
+    CreateBinding:
+      type: object
+      additionalProperties: false
+      required: [adapter_key, layer_id, external_dataset_ref, direction, source_crs, target_crs, external_primary_key]
+      properties:
+        adapter_key: {type: string, minLength: 1, maxLength: 80}
+        layer_id: {type: string, format: uuid}
+        external_dataset_ref: {type: string, minLength: 1, maxLength: 256}
+        direction:
+          type: string
+          enum: [pull_only, push_only, bidirectional_manual, bidirectional_auto]
+          default: bidirectional_manual
+        source_crs: {type: string, pattern: '^EPSG:[0-9]+$'}
+        target_crs: {type: string, pattern: '^EPSG:[0-9]+$'}
+        external_primary_key: {type: string, minLength: 1, maxLength: 128}
+        allowed_fields:
+          type: array
+          items: {type: string, minLength: 1}
+        field_mapping:
+          type: object
+          additionalProperties: {type: string}
+    Binding:
+      type: object
+      required: [id, layer_id, adapter_key, direction, state, revision, writes_allowed, deletes_allowed]
+      properties:
+        id: {type: string, format: uuid}
+        layer_id: {type: string, format: uuid}
+        adapter_key: {type: string}
+        adapter_version: {type: [string, 'null']}
+        direction: {type: string, enum: [pull_only, push_only, bidirectional_manual, bidirectional_auto]}
+        state: {type: string, enum: [draft, disabled, active, paused, revoked, error]}
+        revision: {type: integer, minimum: 0}
+        writes_allowed: {type: boolean, const: false, description: 'Draft defaults only; active may report true after independent permission gate.'}
+        deletes_allowed: {type: boolean, const: false, description: 'Default policy. Separate approved contract revision needed to enable.'}
+        last_sync_at: {type: [string, 'null'], format: date-time}
+        capability_status: {type: string, enum: [verified, read_only, candidate, offline]}
+    SyncPreview:
+      type: object
+      required: [preview_id, digest, base_local_revision, base_remote_revision, expires_at, counts, candidate_ops, conflicts]
+      properties:
+        preview_id: {type: string, format: uuid}
+        digest: {type: string, pattern: '^[a-f0-9]{64}$'}
+        base_local_revision: {type: string}
+        base_remote_revision: {type: string}
+        expires_at: {type: string, format: date-time}
+        counts: { $ref: '#/components/schemas/RunCounts' }
+        candidate_ops:
+          type: array
+          items:
+            type: object
+            required: [operation_id, direction, action, allowed]
+            properties:
+              operation_id: {type: string, format: uuid}
+              direction: {type: string, enum: [pull, push]}
+              action: {type: string, enum: [create, update, delete_candidate]}
+              allowed: {type: boolean}
+              reason: {type: [string, 'null']}
+        conflicts:
+          type: array
+          items: {type: string, format: uuid}
+    CommitRequest:
+      type: object
+      additionalProperties: false
+      required: [preview_id, preview_digest, approved_operation_ids, operation_id]
+      properties:
+        preview_id: {type: string, format: uuid}
+        preview_digest: {type: string, pattern: '^[a-f0-9]{64}$'}
+        approved_operation_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, format: uuid}
+        operation_id: {type: string, format: uuid}
+    AckRequest:
+      type: object
+      additionalProperties: false
+      required: [operation_id, delivery_id, source_revision, target_revision, payload_digest, status]
+      properties:
+        operation_id: {type: string, format: uuid}
+        delivery_id: {type: string, format: uuid}
+        source_revision: {type: string}
+        target_revision: {type: string}
+        payload_digest: {type: string, pattern: '^[a-f0-9]{64}$'}
+        status: {type: string, enum: [applied, conflict, rejected]}
+    RunCounts:
+      type: object
+      required: [created, updated, delete_candidates, applied, skipped, conflicted, rejected]
+      properties:
+        created: {type: integer, minimum: 0}
+        updated: {type: integer, minimum: 0}
+        delete_candidates: {type: integer, minimum: 0}
+        applied: {type: integer, minimum: 0}
+        skipped: {type: integer, minimum: 0}
+        conflicted: {type: integer, minimum: 0}
+        rejected: {type: integer, minimum: 0}
+    SyncRun:
+      type: object
+      required: [id, binding_id, state, counts]
+      properties:
+        id: {type: string, format: uuid}
+        binding_id: {type: string, format: uuid}
+        state: {type: string, enum: [queued, running, paused, partially_applied, completed, failed, cancelled]}
+        counts: { $ref: '#/components/schemas/RunCounts' }
+        last_acked_cursor: {type: [string, 'null']}
+        created_at: {type: string, format: date-time}
+  responses:
+    Unauthorized:
+      description: Missing, invalid, expired or revoked credential.
+    Forbidden:
+      description: Authorization, service scope, GIS ACL or security policy denied.
+    Conflict:
+      description: Binding lifecycle, stale revision, lost synchronization lease, ambiguous mapping or sync conflict.
+    Invalid:
+      description: Invalid CRS, geometry, preview digest or payload schema.
