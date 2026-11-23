@@ -20,6 +20,7 @@ import {
   type IntegrationSyncPreviewResponse,
   type IntegrationSyncPushResponse
 } from "@openvietgis/client-sdk";
+import { QgisBindingManager } from "./QgisBindingManager";
 import "./integration-catalog.css";
 
 interface IntegrationCatalogProps {
@@ -28,7 +29,7 @@ interface IntegrationCatalogProps {
   projectId: string;
 }
 
-type IntegrationTask = "export" | "sync" | "service" | "details";
+type IntegrationTask = "export" | "sync" | "service" | "details" | "bindings";
 
 const CONNECTOR_HELP: Record<string, string> = {
   qgis: "Tải lớp bản đồ về QGIS hoặc gửi các chỉnh sửa GeoPackage trở lại dự án.",
@@ -828,6 +829,18 @@ export function IntegrationCatalog({
                                       <small>{profile.adapter.actions.some((action) => action.action === "sync.push" && action.allowed) ? "Xem trước thay đổi rồi xác nhận ghi dữ liệu" : "Cần quyền chỉnh sửa dự án (project.edit)"}</small>
                                     </button>
                                   )}
+                                  {adapter.key === "qgis" && (
+                                    <button
+                                      type="button"
+                                      className={"integration-task-option" + (activeTask === "bindings" ? " is-active" : "")}
+                                      aria-pressed={activeTask === "bindings"}
+                                      onClick={() => { setActiveTask("bindings"); resetSyncPanelState(); }}
+                                    >
+                                      <span className="integration-task-icon">⌘</span>
+                                      <strong>Quản lý cấu hình QGIS</strong>
+                                      <small>Đăng ký lớp, ánh xạ trường và quản lý bản nháp. Không tự kết nối.</small>
+                                    </button>
+                                  )}
                                   {adapter.key === "ogc_services" && (
                                     <button type="button" className={"integration-task-option" + (activeTask === "service" ? " is-active" : "")} aria-pressed={activeTask === "service"} onClick={() => setActiveTask("service")}>
                                       <span className="integration-task-icon">◎</span>
@@ -844,6 +857,9 @@ export function IntegrationCatalog({
                               {activeTask === "sync" && <p className="integration-user-note">Tải .gpkg bản gốc, chỉnh sửa một bản sao trong QGIS, sau đó chọn lớp đích và xem trước thay đổi. Chỉ đẩy dữ liệu nếu có quyền sửa lớp và dự án.</p>}
                               {activeTask === "export" && <p className="integration-user-note">Chọn lớp dữ liệu và bấm Tải xuống. Tệp sẽ lưu về máy; dữ liệu gốc trên OpenVietGIS không thay đổi.</p>}
                             </section>
+                            {activeTask === "bindings" && adapter.key === "qgis" && (
+                              <QgisBindingManager client={client} org={org} projectId={projectId} />
+                            )}
                             {activeTask === "details" && <div className="integration-profile-summary">
                               <span className="integration-badge is-status">
                                 {EXECUTION_STATUS_LABELS[profile.execution_status]}

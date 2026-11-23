@@ -17,6 +17,7 @@ const sdkTestPath = path.join(
 );
 const componentPath = path.join(here, "src/IntegrationCatalog.tsx");
 const stylesheetPath = path.join(here, "src/integration-catalog.css");
+const bindingManagerPath = path.join(here, "src/QgisBindingManager.tsx");
 
 const CATALOG_FIXTURE = {
   schema_version: 1,
@@ -210,9 +211,13 @@ async function verifyTypedSdkRuntime() {
   const exportedNames = Object.keys(integrationHub).sort();
   assert.deepEqual(exportedNames, [
     "buildIntegrationLayerExportPath",
+    "changeQgisBindingDraftLifecycle",
+    "createQgisBindingDraft",
     "downloadIntegrationLayerExport",
     "getIntegrationHubAdapterProfile",
     "getIntegrationHubCatalog",
+    "listIntegrationBindingDrafts",
+    "listQgisBindingCandidates",
     "previewQgisGpkgSync",
     "pushQgisGpkgSync"
   ]);
@@ -588,6 +593,17 @@ async function verifyUiAndScopeInvariants() {
   const stylesheetSource = await readFile(stylesheetPath, "utf8");
   const sdkSource = await readFile(sdkHubPath, "utf8");
   const sdkTestSource = await readFile(sdkTestPath, "utf8");
+  const bindingManagerSource = await readFile(bindingManagerPath, "utf8");
+
+  assert.match(componentSource, /QgisBindingManager/);
+  assert.match(bindingManagerSource, /listQgisBindingCandidates/);
+  assert.match(bindingManagerSource, /listIntegrationBindingDrafts/);
+  assert.match(bindingManagerSource, /createQgisBindingDraft/);
+  assert.match(bindingManagerSource, /changeQgisBindingDraftLifecycle/);
+  assert.match(bindingManagerSource, /Chưa kết nối/);
+  assert.match(bindingManagerSource, /Không tự ghi\/xóa/);
+  assert.doesNotMatch(bindingManagerSource, /"activate"/);
+  assert.doesNotMatch(bindingManagerSource, /password|token_secret|access_key/i);
 
   assert.match(componentSource, /getIntegrationHubCatalog/);
   assert.match(componentSource, /getIntegrationHubAdapterProfile/);

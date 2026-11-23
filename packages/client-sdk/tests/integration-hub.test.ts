@@ -707,13 +707,17 @@ describe("Integration Hub client SDK", () => {
     ).rejects.toMatchObject({ name: "ApiError", status: 409 });
   });
 
-  it("exports only reviewed read-only and controlled two-step QGIS sync helpers", () => {
+  it("exports reviewed read-only, controlled sync and disabled draft binding helpers", () => {
     const exportedKeys = Object.keys(integrationHub).sort();
     expect(exportedKeys).toEqual([
       "buildIntegrationLayerExportPath",
+      "changeQgisBindingDraftLifecycle",
+      "createQgisBindingDraft",
       "downloadIntegrationLayerExport",
       "getIntegrationHubAdapterProfile",
       "getIntegrationHubCatalog",
+      "listIntegrationBindingDrafts",
+      "listQgisBindingCandidates",
       "previewQgisGpkgSync",
       "pushQgisGpkgSync"
     ]);

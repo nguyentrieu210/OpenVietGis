@@ -520,3 +520,114 @@ export async function pushQgisGpkgSync(
     buildSyncRequestInit(form, input.csrfToken)
   );
 }
+
+/**
+ * R027 QGIS binding metadata, draft only: no agent pairing or writable sync.
+ * An active connection MUST NOT be inferred from the presence of a binding.
+ */
+export interface IntegrationBindingDraft {
+  id: string;
+  layer_id: string;
+  adapter_key: "qgis";
+  external_dataset_ref: string;
+  direction: "bidirectional_manual";
+  source_crs_code: number;
+  target_crs_code: number;
+  external_primary_key: "ovg_feature_id";
+  allowed_field_ids: string[];
+  base_content_revision: string;
+  base_schema_revision: string;
+  state: "draft" | "paused" | "revoked";
+  revision: number;
+  created_at: string;
+  updated_at: string;
+  writes_allowed: false;
+  deletes_allowed: false;
+  connected: false;
+  reason: "DRAFT_ONLY_AGENT_NOT_PAIRED";
+}
+
+export interface CreateQgisBindingDraft {
+  layer_id: string;
+  adapter_key: "qgis";
+  external_dataset_ref: string;
+  direction: "bidirectional_manual";
+  source_crs_code: number;
+  target_crs_code: number;
+  external_primary_key: "ovg_feature_id";
+  allowed_field_ids: string[];
+}
+
+export function listIntegrationBindingDrafts(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string
+): Promise<{ items: IntegrationBindingDraft[] }> {
+  return client.request<{ items: IntegrationBindingDraft[] }>(
+    integrationHubRoot(organizationId, projectId) + "/bindings",
+    { method: "GET", cache: "no-store" }
+  );
+}
+
+/** Creates a disabled QGIS binding: not a connection activation or data write. */
+export function createQgisBindingDraft(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  input: CreateQgisBindingDraft,
+  csrfToken?: string
+): Promise<IntegrationBindingDraft> {
+  return client.request<IntegrationBindingDraft>(
+    integrationHubRoot(organizationId, projectId) + "/bindings",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {},
+      body: JSON.stringify(input)
+    }
+  );
+}
+
+/** Non-activating pause or permanent revoke with optimistic revision check. */
+export async function changeQgisBindingDraftLifecycle(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string,
+  bindingId: string,
+  action: "pause" | "revoke",
+  expectedRevision: number,
+  csrfToken?: string
+): Promise<IntegrationBindingDraft> {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    throw new Error("Expected a positive integer binding revision.");
+  }
+  return client.request<IntegrationBindingDraft>(
+    integrationHubRoot(organizationId, projectId) +
+      "/bindings/" + encodeURIComponent(bindingId) + "/lifecycle",
+    {
+      method: "POST",
+      headers: csrfToken?.trim() ? { "x-openvietgis-csrf": csrfToken.trim() } : {},
+      body: JSON.stringify({ action, expected_revision: expectedRevision })
+    }
+  );
+}
+
+/** Eligible verified 2D layers/fields for a QGIS binding draft (manager-only). */
+export interface QgisBindingCandidate {
+  layer_id: string;
+  layer_name: string;
+  stored_crs_code: number;
+  geometry_family: "Point" | "LineString" | "Polygon";
+  allowed_field_ids: string[];
+  binding_status: "draft_only";
+}
+
+export function listQgisBindingCandidates(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string
+): Promise<{ items: QgisBindingCandidate[] }> {
+  return client.request<{ items: QgisBindingCandidate[] }>(
+    integrationHubRoot(organizationId, projectId) + "/bindings/candidates",
+    { method: "GET", cache: "no-store" }
+  );
+}

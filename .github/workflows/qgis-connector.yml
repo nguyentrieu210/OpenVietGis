@@ -1,0 +1,77 @@
+name: R027 QGIS Connector - package and desktop smoke
+
+on:
+  pull_request:
+    paths:
+      - "integrations/qgis_plugin/**"
+      - "apps/api/tests/unit/integration_hub/test_qgis_workspace.py"
+      - "tools/package_qgis_plugin.py"
+      - "tools/smoke_qgis_native.py"
+      - "tools/tests/test_package_qgis_plugin.py"
+      - ".github/workflows/qgis-connector.yml"
+  push:
+    branches: ["feature/027-bidirectional-integration-sync"]
+  workflow_dispatch:
+    inputs:
+      native_qgis:
+        description: "Install system QGIS and run native offscreen plugin UI smoke"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  qgis-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install isolated API test dependencies
+        run: uv sync --project apps/api --frozen
+      - name: Lint reviewed QGIS files and release tool
+        run: |
+          uv run --project apps/api ruff check \
+            integrations/qgis_plugin/openvietgis_connector \
+            apps/api/tests/unit/integration_hub/test_qgis_workspace.py \
+            tools/package_qgis_plugin.py tools/tests/test_package_qgis_plugin.py
+      - name: Test manual bilateral sync and deterministic ZIP
+        run: |
+          uv run --project apps/api python -m pytest -q \
+            apps/api/tests/unit/integration_hub/test_qgis_workspace.py \
+            tools/tests/test_package_qgis_plugin.py
+      - name: Package installable experimental QGIS plugin
+        run: |
+          uv run --project apps/api python tools/package_qgis_plugin.py \
+            --output dist/openvietgis_connector-r027.zip
+          (cd dist && sha256sum -c openvietgis_connector-r027.zip.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openvietgis-qgis-r027-experimental
+          path: |
+            dist/openvietgis_connector-r027.zip
+            dist/openvietgis_connector-r027.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  native-qgis-smoke:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.native_qgis }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native QGIS with Qt offscreen support
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            --no-install-recommends python3-qgis qgis-common xvfb xauth
+      - name: Check QGIS version and plugin controls
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QGIS_PREFIX_PATH: /usr
+        run: |
+          /usr/bin/python3 -c 'from qgis.core import Qgis; print("QGIS", Qgis.QGIS_VERSION)'
+          xvfb-run -a /usr/bin/python3 tools/smoke_qgis_native.py
