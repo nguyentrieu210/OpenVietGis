@@ -4,6 +4,11 @@
 
 **Phạm vi**: định hướng toàn sản phẩm; chi tiết từng tính năng nằm trong spec tương ứng.
 
+**Bản demo trực tuyến**: https://openvietgis.cloud  
+**Mã nguồn công khai**: https://github.com/nguyentrieu210/OpenVietGis
+
+> Bản demo phục vụ trải nghiệm và lấy phản hồi cộng đồng. Các khả năng của từng nhóm tính năng cần được xác minh theo roadmap, đặc tả và bằng chứng nghiệm thu; việc có mặt trên giao diện không mặc nhiên đồng nghĩa với sẵn sàng vận hành sản xuất.
+
 ## Mục tiêu
 
 OpenVietGIS là không gian làm việc GIS trên web cho cá nhân chuyên môn và nhóm.
