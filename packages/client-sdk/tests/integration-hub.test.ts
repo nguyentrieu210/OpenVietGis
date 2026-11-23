@@ -52,7 +52,7 @@ function createBinaryMockClient(
       calls.push({ url: String(input), init: init ?? {} });
       return new Response(body, {
         status: options.status ?? 200,
-        headers: options.headers
+        headers: options.headers ?? {}
       });
     }) as typeof fetch
   });
