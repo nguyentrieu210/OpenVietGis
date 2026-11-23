@@ -30,6 +30,9 @@ SAFE_GET = {
     "/access/mine",
     "/access/export/{layer_id}",
     "/access/reviews",
+    "/integration-hub/catalog",
+    "/integration-hub/adapters/{adapter_key}",
+    "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export",
 }
 SAFE_POST = {
     "/sources/{source_id}/changesets",
@@ -37,6 +40,8 @@ SAFE_POST = {
     "/pro/geometry",
     "/editing/snap",
     "/access/reviews/{changeset_id}",
+    "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-preview",
+    "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-push",
 }
 
 
@@ -44,7 +49,7 @@ def project_access_guard(
     request: Request,
     auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
-):
+) -> None:
     if (
         "project_id" not in request.path_params
         or "organization_id" not in request.path_params
@@ -58,12 +63,14 @@ def project_access_guard(
         return
     ctx = context_for(auth, organization_id=org, project_id=proj)
     require_member_context(session, ctx, org)
-    # Serialize ACL changes with project operations.
-    # Follow the existing organization -> project lock order.
+    # Serialize ACL changes with project operations using organization -> project lock order.
     lock = " FOR SHARE" if request.method in ("GET", "HEAD") else " FOR UPDATE"
     session.execute(text("SELECT id FROM org.organizations WHERE id=:org" + lock), {"org": org})
     session.execute(
-        text("SELECT id FROM workspace.projects WHERE organization_id=:org AND id=:proj" + lock),
+        text(
+            "SELECT id FROM workspace.projects "
+            "WHERE organization_id=:org AND id=:proj" + lock
+        ),
         {"org": org, "proj": proj},
     )
     if not scoped(session, ctx):

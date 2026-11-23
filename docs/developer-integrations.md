@@ -60,3 +60,22 @@ Status: 401 invalid/expired/revoked credential; 403 out-of-scope; 404 absent res
 ## External plugin SDK
 
 The partner plugin SDK 1.0 private-catalog candidate is described in [Partner Plugin SDK](partner-plugin-sdk.md). It isolates external UI in a sandbox, requires tenant registration and project activation, and does not pass credentials to the plugin. The self-service Developer Portal, signed public Marketplace, native webhook journal/worker and downloadable signing/SDK tools are described in the same document. OAuth2 client registration, event-only credentials and billing remain separate follow-on work.
+
+## Integration Hub catalog candidate — R026 (2026-11-23)
+
+The authorized project GET endpoint
+"/api/v1/organizations/{org}/projects/{project}/integration-hub/catalog"
+reports adapter lifecycle and required permissions. Only discovery is executable
+through this new endpoint. WMS/WFS/COG remains on the existing R010 read-only
+API. QGIS, ArcGIS, AutoCAD, MicroStation V8i, MapInfo, Vietnamese cadastral
+formats, PostGIS bridges and additional software are marked candidate/planned
+until accepted by independent tests. Do not interpret the catalog as a connected
+device, a valid license, or an authorization to synchronize.
+
+**Extension contract:** introduce a reviewed adapter manifest, tenant-scoped
+binding and capability negotiation; enforce project + layer/feature/field rights,
+explicit CRS, origin allowlist, revision pins, idempotency and audit on every
+future data execution endpoint. Separate managed device credentials from user
+sessions; default deny writes and deletions. See
+[spec](../specs/026-integration-hub-policy/spec.md) and
+[quickstart](../specs/026-integration-hub-policy/quickstart.md).
