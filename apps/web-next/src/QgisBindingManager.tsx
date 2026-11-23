@@ -362,9 +362,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
       <p>
         Tạo cấu hình, cấp <strong>Mã ghép nối QGIS</strong> trực tiếp (không cần vào Developer Portal) và xử lý xung đột giữa bản Web / bản QGIS ngay tại đây. Không tự ghi/xóa ngầm — mọi đồng bộ đều qua xem trước & R006 Changeset.
         {" "}<a
-          href="/rewrite/downloads/openvietgis_connector-0.4.0.zip"
-          download="openvietgis_connector-0.4.0.zip"
-        >⬇ Tải Plugin QGIS 0.4.0 (.zip)</a>
+          href="/rewrite/downloads/openvietgis_connector-0.5.0.zip"
+          download="openvietgis_connector-0.5.0.zip"
+        >⬇ Tải Plugin QGIS 0.5.0 (Dock Panel gọn)</a>
         {" · "}<a
           href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
           target="_blank"

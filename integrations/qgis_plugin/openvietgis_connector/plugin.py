@@ -31,6 +31,7 @@ from qgis.PyQt.QtWidgets import (
     QAction,
     QCheckBox,
     QDialog,
+    QDockWidget,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -78,8 +79,8 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("OpenVietGIS Connector (R026 / R027)")
-        self.setMinimumSize(820, 680)
+        self.setWindowTitle("OpenVietGIS Connector (0.5.0)")
+        self.setMinimumWidth(420)
 
         self._layers: list[QgisLayerInfo] = []
         self._pinned_revisions: dict[str, tuple[str, str]] = {}
@@ -88,90 +89,96 @@ class OpenVietGisConnectorDialog(QDialog):
         self._workspace_root: Path | None = None
         self._workspace_preview: WorkspaceSyncPreview | None = None
         self._workspace_map_layer_id: str | None = None
+        self._preferred_layer_id: str | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(4, 4, 4, 4)
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         body = QWidget()
         root_layout = QVBoxLayout(body)
+        root_layout.setSpacing(8)
         scroll.setWidget(body)
         outer.addWidget(scroll)
 
-        notice_label = QLabel(
-            "Mặc định CHỈ ĐỌC (default_write_policy = deny). Đồng bộ ngược hai bước "
-            "(Preview Diff -> Xác nhận đẩy R006 Changeset) yêu cầu quyền project.edit và "
-            "chặn xóa mặc định (deletions blocked). API Key chỉ giữ trong bộ nhớ tạm và "
-            "KHÔNG lưu vào tệp dự án QGIS (.qgs/.qgz)."
-        )
-        notice_label.setWordWrap(True)
-        notice_label.setStyleSheet(
-            "background-color: #f0f4f8; border: 1px solid #cbd5e1; "
-            "padding: 8px; border-radius: 4px;"
-        )
-        root_layout.addWidget(notice_label)
-
-        form = QFormLayout()
-
+        # 1. Quick Pairing Bar (always visible, 1 click)
+        pair_group = QGroupBox("Bước 1 · Kết nối OpenVietGIS")
+        pair_layout = QVBoxLayout(pair_group)
         pairing_row = QHBoxLayout()
         self.pairing_code_input = QLineEdit()
         self.pairing_code_input.setEchoMode(QLineEdit.Password)
         self.pairing_code_input.setPlaceholderText(
-            "Dán mã ghép nối nhanh ovg-pair-v1:... từ Trung tâm Tích hợp (không cần Developer Portal)"
+            "Dán mã ghép nối ovg-pair-v1:... từ web"
         )
-        self.apply_pairing_button = QPushButton("Áp dụng mã ghép nối")
+        self.apply_pairing_button = QPushButton("Kết nối ngay")
+        self.apply_pairing_button.setStyleSheet(
+            "background-color: #1d4ed8; color: #ffffff; font-weight: bold; "
+            "padding: 5px 12px; border-radius: 4px;"
+        )
         self.apply_pairing_button.clicked.connect(self._on_apply_pairing_code)
         pairing_row.addWidget(self.pairing_code_input)
         pairing_row.addWidget(self.apply_pairing_button)
-        form.addRow("Mã ghép nối nhanh (R027):", pairing_row)
+        pair_layout.addLayout(pairing_row)
+
+        conn_bar = QHBoxLayout()
+        self.load_layers_button = QPushButton("↻ Tải lại lớp")
+        self.load_layers_button.clicked.connect(self._on_load_layers)
+        self.manual_conn_toggle = QPushButton("Cài đặt tay ▾")
+        self.manual_conn_toggle.setCheckable(True)
+        self.manual_conn_toggle.toggled.connect(self._on_toggle_manual_conn)
+        conn_bar.addWidget(self.load_layers_button)
+        conn_bar.addWidget(self.manual_conn_toggle)
+        conn_bar.addStretch(1)
+        pair_layout.addLayout(conn_bar)
+
+        self.manual_conn_box = QWidget()
+        form = QFormLayout(self.manual_conn_box)
+        form.setContentsMargins(0, 4, 0, 0)
 
         self.server_url_input = QLineEdit()
-        self.server_url_input.setPlaceholderText("https://gis.example.vn")
-        form.addRow("Server URL (HTTPS):", self.server_url_input)
+        self.server_url_input.setPlaceholderText("https://openvietgis.cloud")
+        form.addRow("Server URL:", self.server_url_input)
 
-        self.allow_localhost_checkbox = QCheckBox(
-            "Allow http://localhost or http://127.0.0.1 (local development only)"
-        )
+        self.allow_localhost_checkbox = QCheckBox("Cho phép http://localhost (dev)")
         self.allow_localhost_checkbox.setChecked(False)
         form.addRow("", self.allow_localhost_checkbox)
 
         self.org_id_input = QLineEdit()
-        self.org_id_input.setPlaceholderText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-        form.addRow("Organization UUID:", self.org_id_input)
+        self.org_id_input.setPlaceholderText("Organization UUID")
+        form.addRow("Org UUID:", self.org_id_input)
 
         self.project_id_input = QLineEdit()
-        self.project_id_input.setPlaceholderText("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+        self.project_id_input.setPlaceholderText("Project UUID")
         form.addRow("Project UUID:", self.project_id_input)
 
         self.bearer_key_input = QLineEdit()
         self.bearer_key_input.setEchoMode(QLineEdit.Password)
-        self.bearer_key_input.setPlaceholderText(
-            "Service Principal Bearer Key (project.read; project.edit for sync — not persisted)"
-        )
-        form.addRow("Service Principal Bearer Key:", self.bearer_key_input)
+        self.bearer_key_input.setPlaceholderText("Bearer Key (không lưu xuống đĩa)")
+        form.addRow("Bearer Key:", self.bearer_key_input)
 
         folder_row = QHBoxLayout()
         default_dir = str(Path.home() / "OpenVietGIS_Exports")
         self.download_dir_input = QLineEdit(default_dir)
-        self.browse_dir_button = QPushButton("Browse...")
+        self.browse_dir_button = QPushButton("Chọn…")
         self.browse_dir_button.clicked.connect(self._on_browse_dir)
         folder_row.addWidget(self.download_dir_input)
         folder_row.addWidget(self.browse_dir_button)
-        form.addRow("Local GeoPackage Folder:", folder_row)
+        form.addRow("Thư mục lưu:", folder_row)
 
-        root_layout.addLayout(form)
+        self.manual_conn_box.setVisible(False)
+        pair_layout.addWidget(self.manual_conn_box)
+        root_layout.addWidget(pair_group)
 
-        actions_row = QHBoxLayout()
-        self.load_layers_button = QPushButton("Tải danh sách lớp / Load Authorized Layers")
-        self.load_layers_button.clicked.connect(self._on_load_layers)
-        actions_row.addWidget(self.load_layers_button)
-        actions_row.addStretch(1)
-        root_layout.addLayout(actions_row)
-
+        # 2. Layer Picker (compact, directly visible)
+        layers_group = QGroupBox("Bước 2 · Chọn lớp bản đồ")
+        layers_layout = QVBoxLayout(layers_group)
         self.layers_table = QTableWidget(0, 4)
+        self.layers_table.setMinimumHeight(150)
+        self.layers_table.setMaximumHeight(220)
         self.layers_table.setHorizontalHeaderLabels(
-            ["Name / Tên lớp", "Geometry", "CRS (Explicit)", "Export Status"]
+            ["Tên lớp", "Loại", "CRS", "Trạng thái"]
         )
         self.layers_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.layers_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -182,123 +189,139 @@ class OpenVietGisConnectorDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        root_layout.addWidget(self.layers_table)
+        layers_layout.addWidget(self.layers_table)
+        root_layout.addWidget(layers_group)
 
-        download_row = QHBoxLayout()
-        self.download_open_button = QPushButton("Tải & mở lớp vào QGIS (Chỉ đọc)")
+        # 3. Primary Two-Way Sync Box (top-level, 3 big buttons, no scrolling!)
+        workspace_group = QGroupBox("Bước 3 · Sửa & Đồng bộ 2 chiều (QGIS ↔ Web)")
+        ws_layout = QVBoxLayout(workspace_group)
+
+        ws_buttons = QVBoxLayout()
+        self.ws_create_button = QPushButton("1. Mở lớp để sửa trên QGIS")
+        self.ws_create_button.setStyleSheet(
+            "background-color: #0284c7; color: #ffffff; font-weight: bold; "
+            "padding: 7px 12px; border-radius: 4px;"
+        )
+        self.ws_create_button.clicked.connect(self._on_create_workspace)
+
+        ws_sync_row = QHBoxLayout()
+        self.ws_preview_button = QPushButton("2. Xem thay đổi")
+        self.ws_preview_button.setStyleSheet(
+            "padding: 7px 10px; font-weight: bold; border-radius: 4px;"
+        )
+        self.ws_preview_button.clicked.connect(self._on_preview_workspace)
+
+        self.ws_commit_button = QPushButton("3. Đồng bộ lên Web")
+        self.ws_commit_button.setEnabled(False)
+        self.ws_commit_button.setStyleSheet(
+            "background-color: #16a34a; color: #ffffff; font-weight: bold; "
+            "padding: 7px 10px; border-radius: 4px;"
+        )
+        self.ws_commit_button.clicked.connect(self._on_commit_workspace)
+
+        ws_sync_row.addWidget(self.ws_preview_button)
+        ws_sync_row.addWidget(self.ws_commit_button)
+        ws_buttons.addWidget(self.ws_create_button)
+        ws_buttons.addLayout(ws_sync_row)
+        ws_layout.addLayout(ws_buttons)
+
+        self.ws_status = QLabel(
+            "Chọn lớp → bấm '1. Mở lớp để sửa' → vẽ/sửa trực tiếp trên bản đồ → "
+            "bấm '2. Xem thay đổi' → '3. Đồng bộ lên Web'."
+        )
+        self.ws_status.setWordWrap(True)
+        self.ws_status.setStyleSheet(
+            "background-color: #f0f9ff; border: 1px solid #bae6fd; "
+            "padding: 6px; border-radius: 4px;"
+        )
+        ws_layout.addWidget(self.ws_status)
+        root_layout.addWidget(workspace_group)
+
+        self.status_label = QLabel("Sẵn sàng. Dán mã ghép nối để bắt đầu.")
+        self.status_label.setWordWrap(True)
+        root_layout.addWidget(self.status_label)
+
+        # 4. Collapsible Advanced Section (hidden by default to keep UI clean)
+        self.advanced_toggle = QPushButton("Công cụ nâng cao (Chỉ đọc / R026 / Khôi phục) ▾")
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.toggled.connect(self._on_toggle_advanced)
+        root_layout.addWidget(self.advanced_toggle)
+
+        self.advanced_box = QWidget()
+        adv_layout = QVBoxLayout(self.advanced_box)
+        adv_layout.setContentsMargins(0, 4, 0, 0)
+
+        adv_quick_row = QHBoxLayout()
+        self.download_open_button = QPushButton("Tải & mở Chỉ đọc")
         self.download_open_button.setEnabled(False)
         self.download_open_button.clicked.connect(self._on_download_and_open)
-        download_row.addWidget(self.download_open_button)
-        download_row.addStretch(1)
-        root_layout.addLayout(download_row)
+        self.ws_open_button = QPushButton("Mở workspace cũ")
+        self.ws_open_button.clicked.connect(self._on_open_workspace)
+        self.ws_recover_button = QPushButton("Khôi phục giao dịch")
+        self.ws_recover_button.clicked.connect(self._on_recover_workspace)
+        adv_quick_row.addWidget(self.download_open_button)
+        adv_quick_row.addWidget(self.ws_open_button)
+        adv_quick_row.addWidget(self.ws_recover_button)
+        adv_layout.addLayout(adv_quick_row)
 
-        sync_group = QGroupBox(
-            "Đồng bộ GeoPackage hai bước (R006 Changeset Sync — yêu cầu project.edit)"
-        )
+        self.ws_path_input = QLineEdit()
+        self.ws_path_input.setReadOnly(True)
+        self.ws_path_input.setPlaceholderText("Đường dẫn thư mục workspace hiện tại")
+        adv_layout.addWidget(self.ws_path_input)
+
+        sync_group = QGroupBox("R026 thủ công (chọn tệp .gpkg rời)")
         sync_layout = QVBoxLayout(sync_group)
-
         sync_form = QFormLayout()
 
         gpkg_row = QHBoxLayout()
         self.sync_gpkg_input = QLineEdit()
-        self.sync_gpkg_input.setPlaceholderText(
-            "Chọn tệp .gpkg cục bộ đã chỉnh sửa (tối đa 16 MiB)..."
-        )
+        self.sync_gpkg_input.setPlaceholderText("Chọn tệp .gpkg (tối đa 16 MiB)...")
         self.sync_gpkg_input.textChanged.connect(self._on_sync_inputs_changed)
-        self.browse_sync_gpkg_button = QPushButton("Chọn tệp .gpkg...")
+        self.browse_sync_gpkg_button = QPushButton("Chọn…")
         self.browse_sync_gpkg_button.clicked.connect(self._on_browse_sync_gpkg)
         gpkg_row.addWidget(self.sync_gpkg_input)
         gpkg_row.addWidget(self.browse_sync_gpkg_button)
-        sync_form.addRow("Edited GeoPackage (.gpkg):", gpkg_row)
+        sync_form.addRow("Tệp .gpkg:", gpkg_row)
 
         self.sync_summary_input = QLineEdit("QGIS GeoPackage sync push")
-        self.sync_summary_input.setPlaceholderText("Mô tả Changeset R006...")
-        sync_form.addRow("Changeset Summary:", self.sync_summary_input)
+        sync_form.addRow("Mô tả:", self.sync_summary_input)
 
-        self.pinned_revision_label = QLabel("Chưa chọn lớp đích / No target layer selected.")
+        self.pinned_revision_label = QLabel("Chưa chọn lớp đích.")
         self.pinned_revision_label.setWordWrap(True)
-        sync_form.addRow("Pinned Revisions:", self.pinned_revision_label)
-
+        sync_form.addRow("Revision:", self.pinned_revision_label)
         sync_layout.addLayout(sync_form)
 
         sync_buttons_row = QHBoxLayout()
-        self.preview_sync_button = QPushButton("1. Xem trước thay đổi (Diff)")
+        self.preview_sync_button = QPushButton("Xem trước Diff (R026)")
         self.preview_sync_button.setEnabled(False)
         self.preview_sync_button.clicked.connect(self._on_preview_sync)
-
-        self.push_sync_button = QPushButton("2. Xác nhận đẩy Changeset")
+        self.push_sync_button = QPushButton("Đẩy Changeset (R026)")
         self.push_sync_button.setEnabled(False)
         self.push_sync_button.clicked.connect(self._on_push_sync)
-
         sync_buttons_row.addWidget(self.preview_sync_button)
         sync_buttons_row.addWidget(self.push_sync_button)
-        sync_buttons_row.addStretch(1)
         sync_layout.addLayout(sync_buttons_row)
 
-        self.sync_preview_label = QLabel(
-            "Chưa xem trước thay đổi. Bấm bước 1 để tính diff trên máy chủ "
-            "(xóa đối tượng trên máy chủ bị chặn mặc định / deletions blocked by default)."
-        )
+        self.sync_preview_label = QLabel("Chưa xem trước thay đổi R026.")
         self.sync_preview_label.setWordWrap(True)
-        self.sync_preview_label.setStyleSheet(
-            "background-color: #f8fafc; border: 1px solid #cbd5e1; "
-            "padding: 6px; border-radius: 4px;"
-        )
         sync_layout.addWidget(self.sync_preview_label)
+        adv_layout.addWidget(sync_group)
 
-        root_layout.addWidget(sync_group)
+        self.advanced_box.setVisible(False)
+        root_layout.addWidget(self.advanced_box)
+        root_layout.addStretch(1)
 
-        workspace_group = QGroupBox("R027 — Hai chiều thủ công (QGIS ↔ OpenVietGIS)")
-        ws_layout = QVBoxLayout(workspace_group)
-        ws_explainer = QLabel(
-            "Lưu 3 bản: mốc chung, bản QGIS đang chỉnh và bản OpenVietGIS mới nhất. "
-            "Chỉ ghi khi không xung đột. Phải lưu hoàn tất chỉnh sửa QGIS trước khi đồng bộ; "
-            "xóa dữ liệu và đồng bộ tự động vẫn bị chặn."
+    def _on_toggle_manual_conn(self, checked: bool) -> None:
+        self.manual_conn_box.setVisible(checked)
+        self.manual_conn_toggle.setText("Cài đặt tay ▴" if checked else "Cài đặt tay ▾")
+
+    def _on_toggle_advanced(self, checked: bool) -> None:
+        self.advanced_box.setVisible(checked)
+        self.advanced_toggle.setText(
+            "Công cụ nâng cao (Chỉ đọc / R026 / Khôi phục) ▴"
+            if checked
+            else "Công cụ nâng cao (Chỉ đọc / R026 / Khôi phục) ▾"
         )
-        ws_explainer.setWordWrap(True)
-        ws_layout.addWidget(ws_explainer)
-        ws_path = QHBoxLayout()
-        self.ws_path_input = QLineEdit()
-        self.ws_path_input.setReadOnly(True)
-        self.ws_path_input.setPlaceholderText("Chưa chọn workspace — mỗi lớp có một thư mục riêng")
-        ws_path.addWidget(self.ws_path_input)
-        self.ws_open_button = QPushButton("Mở workspace")
-        self.ws_open_button.clicked.connect(self._on_open_workspace)
-        ws_path.addWidget(self.ws_open_button)
-        ws_layout.addLayout(ws_path)
-        ws_buttons = QHBoxLayout()
-        self.ws_create_button = QPushButton("1. Tạo bản làm việc")
-        self.ws_create_button.clicked.connect(self._on_create_workspace)
-        self.ws_preview_button = QPushButton("2. Xem trước 2 chiều")
-        self.ws_preview_button.clicked.connect(self._on_preview_workspace)
-        self.ws_commit_button = QPushButton("3. Xác nhận đồng bộ")
-        self.ws_commit_button.setEnabled(False)
-        self.ws_commit_button.clicked.connect(self._on_commit_workspace)
-        self.ws_recover_button = QPushButton("Khôi phục giao dịch")
-        self.ws_recover_button.clicked.connect(self._on_recover_workspace)
-        for btn in (
-            self.ws_create_button, self.ws_preview_button,
-            self.ws_commit_button, self.ws_recover_button,
-        ):
-            ws_buttons.addWidget(btn)
-        ws_layout.addLayout(ws_buttons)
-        self.ws_status = QLabel("Chưa tạo workspace. Tạo bản làm việc để biên tập trực tiếp trong QGIS.")
-        self.ws_status.setWordWrap(True)
-        ws_layout.addWidget(self.ws_status)
-        root_layout.addWidget(workspace_group)
-
-        self.status_label = QLabel(
-            "Ready. Enter connection details and load authorized layers."
-        )
-        self.status_label.setWordWrap(True)
-        root_layout.addWidget(self.status_label)
-
-        footer_row = QHBoxLayout()
-        footer_row.addStretch(1)
-        self.close_button = QPushButton("Close / Đóng")
-        self.close_button.clicked.connect(self.close)
-        footer_row.addWidget(self.close_button)
-        root_layout.addLayout(footer_row)
 
     def _build_config(self) -> OpenVietGisConfig:
         return OpenVietGisConfig(
@@ -325,8 +348,14 @@ class OpenVietGisConnectorDialog(QDialog):
         self.org_id_input.setText(parsed["organization_id"])
         self.project_id_input.setText(parsed["project_id"])
         self.bearer_key_input.setText(parsed["bearer_token"])
+        self._preferred_layer_id = parsed.get("layer_id")
         self.pairing_code_input.clear()
         self._on_load_layers()
+        if self._preferred_layer_id:
+            for row_idx, lyr in enumerate(self._layers):
+                if lyr.layer_id == self._preferred_layer_id:
+                    self.layers_table.selectRow(row_idx)
+                    break
 
     def _on_browse_dir(self) -> None:
         selected = QFileDialog.getExistingDirectory(
@@ -546,9 +575,10 @@ class OpenVietGisConnectorDialog(QDialog):
             config = self._build_config()
             layer = self._workspace_layer()
             if layer is not None and layer.isEditable():
-                raise WorkspaceConflict(
-                    "Hãy lưu và kết thúc chế độ chỉnh sửa lớp QGIS rồi mới xem trước."
-                )
+                if not layer.commitChanges():
+                    raise WorkspaceConflict(
+                        "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
+                    )
             preview = preview_workspace(config, self._workspace_file().parent)
             self._workspace_preview = preview
             self.ws_commit_button.setEnabled(not bool(preview.conflicts))
@@ -891,24 +921,28 @@ class OpenVietGisConnectorDialog(QDialog):
 
 
 class OpenVietGisConnectorPlugin:
-    """QGIS 3 plugin controller registering the OpenVietGIS connector action."""
+    """QGIS 3 plugin controller docking OpenVietGIS right beside the map canvas."""
 
     def __init__(self, iface: Any) -> None:
         self.iface = iface
         self.action: QAction | None = None
         self.dialog: OpenVietGisConnectorDialog | None = None
+        self.dock: QDockWidget | None = None
 
     def initGui(self) -> None:
         self.action = QAction(ACTION_LABEL, self.iface.mainWindow())
         self.action.setStatusTip(
-            "Connect to OpenVietGIS for SHA-256 GeoPackage exchange and "
-            "reviewed manual QGIS bidirectional sync via R006 changesets"
+            "OpenVietGIS Connector — Ghép nối nhanh & Đồng bộ hai chiều QGIS ↔ Web"
         )
         self.action.triggered.connect(self.run)
         self.iface.addPluginToWebMenu(PLUGIN_MENU_NAME, self.action)
         self.iface.addToolBarIcon(self.action)
 
     def unload(self) -> None:
+        if self.dock is not None:
+            self.iface.removeDockWidget(self.dock)
+            self.dock.close()
+            self.dock = None
         if self.dialog is not None:
             self.dialog.close()
             self.dialog = None
@@ -918,8 +952,13 @@ class OpenVietGisConnectorPlugin:
             self.action = None
 
     def run(self) -> None:
-        if self.dialog is None:
+        if self.dock is None:
             self.dialog = OpenVietGisConnectorDialog(parent=self.iface.mainWindow())
-        self.dialog.show()
-        self.dialog.raise_()
-        self.dialog.activateWindow()
+            self.dialog.setWindowFlags(Qt.Widget)
+            self.dock = QDockWidget("OpenVietGIS", self.iface.mainWindow())
+            self.dock.setObjectName("OpenVietGisConnectorDock")
+            self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+            self.dock.setWidget(self.dialog)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+        self.dock.show()
+        self.dock.raise_()
