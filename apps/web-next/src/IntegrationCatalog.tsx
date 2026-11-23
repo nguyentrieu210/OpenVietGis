@@ -194,6 +194,7 @@ export function IntegrationCatalog({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [profiles, setProfiles] = useState<
@@ -269,11 +270,38 @@ export function IntegrationCatalog({
     if (!catalog) {
       return [];
     }
+    const lifecycleRank: Record<ConnectorLifecycle, number> = {
+      existing_read_only: 0,
+      candidate: 1,
+      planned: 2
+    };
+    const keyPriority: Record<string, number> = {
+      qgis: 0,
+      postgis: 1,
+      autocad: 2,
+      ogc_services: 3
+    };
+    const sorted = [...catalog.adapters].sort((a, b) => {
+      const rankDiff = lifecycleRank[a.lifecycle] - lifecycleRank[b.lifecycle];
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+      return (keyPriority[a.key] ?? 99) - (keyPriority[b.key] ?? 99);
+    });
+    const byCategory = sorted.filter((adapter) => {
+      if (categoryFilter === "all") {
+        return true;
+      }
+      if (categoryFilter === "ready") {
+        return adapter.lifecycle === "existing_read_only";
+      }
+      return adapter.category === categoryFilter;
+    });
     const normalized = query.trim().toLocaleLowerCase("vi");
     if (!normalized) {
-      return catalog.adapters;
+      return byCategory;
     }
-    return catalog.adapters.filter((adapter) => {
+    return byCategory.filter((adapter) => {
       const searchable = [
         adapter.name,
         adapter.key,
@@ -285,7 +313,7 @@ export function IntegrationCatalog({
         .toLocaleLowerCase("vi");
       return searchable.includes(normalized);
     });
-  }, [catalog, query]);
+  }, [catalog, categoryFilter, query]);
 
   const inspectAdapterProfile = (adapter: IntegrationAdapterSummary) => {
     if (expandedKey === adapter.key) {
@@ -537,9 +565,17 @@ export function IntegrationCatalog({
 
   return (
     <section className="integration-catalog" aria-label="Tích hợp phần mềm">
-      <details>
+      <details open>
         <summary>
-          <strong>Tích hợp phần mềm</strong>
+          <div className="integration-summary-title">
+            <span className="integration-summary-icon" aria-hidden="true">
+              ⇄
+            </span>
+            <strong>Tích hợp phần mềm</strong>
+            <span className="integration-ready-chip">
+              QGIS · PostGIS · AutoCAD · OGC đã sẵn sàng
+            </span>
+          </div>
           <span>
             {catalog
               ? `${catalog.adapters.length} nhóm kết nối · chính sách ghi mặc định: ${catalog.default_write_policy}`
@@ -579,15 +615,45 @@ export function IntegrationCatalog({
 
         {catalog && (
           <>
-            <label className="integration-search">
-              Tìm phần mềm hoặc định dạng
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="QGIS, PostGIS, AutoCAD, DGN, WFS…"
-              />
-            </label>
+            <div className="integration-filter-toolbar">
+              <label className="integration-search">
+                Nhóm phần mềm
+                <select
+                  aria-label="Lọc nhóm phần mềm"
+                  value={categoryFilter}
+                  onChange={(event) => setCategoryFilter(event.target.value)}
+                >
+                  <option value="all">
+                    Tất cả ({catalog.adapters.length} nhóm)
+                  </option>
+                  <option value="ready">
+                    ★ Đã sẵn sàng xuất / đồng bộ (
+                    {
+                      catalog.adapters.filter(
+                        (a) => a.lifecycle === "existing_read_only"
+                      ).length
+                    }
+                    )
+                  </option>
+                  <option value="gis">GIS (QGIS · ArcGIS · MapInfo · OGC)</option>
+                  <option value="cad">CAD (AutoCAD · MicroStation V8i)</option>
+                  <option value="database">Cơ sở dữ liệu (PostGIS)</option>
+                  <option value="cadastral">Địa chính (gCadas · FAMIS · TMV.Map)</option>
+                  <option value="survey_3d">Trắc địa / 3D (RTK · UAV · BIM)</option>
+                  <option value="tabular">Bảng tính (Excel · CSV)</option>
+                </select>
+              </label>
+
+              <label className="integration-search">
+                Tìm phần mềm hoặc định dạng
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="QGIS, PostGIS, AutoCAD, DGN, WFS…"
+                />
+              </label>
+            </div>
 
             <div className="integration-list">
               {filteredAdapters.map((adapter) => {
@@ -625,7 +691,11 @@ export function IntegrationCatalog({
                 return (
                   <article
                     key={adapter.key}
-                    className={`integration-item${isExpanded ? " is-expanded" : ""}`}
+                    className={`integration-item${isExpanded ? " is-expanded" : ""}${
+                      adapter.lifecycle === "existing_read_only"
+                        ? " is-ready-card"
+                        : ""
+                    }`}
                     data-adapter-key={adapter.key}
                   >
                     <div className="integration-item-header">
