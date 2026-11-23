@@ -1,0 +1,316 @@
+openapi: "3.1.0"
+info:
+  title: "OpenVietGIS Integration Hub and Policy Gate API"
+  version: "0.26.0"
+  description: "R026 authenticated, project-scoped, read-only integration hub catalog and adapter exchange profiles. Policy evaluations are descriptive preflights only, never execution tokens or credential grants. See qgis-postgis-architecture.md and spec.md for protocol boundaries, explicit CRS rules, and GIS ACL composition."
+servers: [{"url":"/api/v1"}]
+paths:
+  "/organizations/{organization_id}/projects/{project_id}/integration-hub/catalog":
+    get:
+      operationId: "getIntegrationHubCatalog"
+      x-required-permission: "project.read"
+      description: "Read project-scoped integration adapter catalog with fail-closed policy preflight evaluations. Enforces PostgreSQL RLS, R002 effective permissions (including service principal credential ceiling), and project GIS ACL guard."
+      security: [{"sessionCookie":[]},{"serviceBearer":[]}]
+      parameters:
+        - {"$ref":"#/components/parameters/OrganizationId"}
+        - {"$ref":"#/components/parameters/ProjectId"}
+      responses:
+        "200":
+          description: "Successful authorized read-only catalog inspection."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/IntegrationHubCatalogResponse"}}}
+        "401":
+          description: "Authentication/credential missing or invalid."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "403":
+          description: "R002 current authorization, lifecycle, service principal ceiling, or scoped GIS access denial; generic to inaccessible target."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "404":
+          description: "Scoped organization or project missing, retired, hidden, or wrong owner; no private details."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "422":
+          description: "Invalid path or request parameters; validation never echoes raw input."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/RequestValidationError"}}}
+  "/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}":
+    get:
+      operationId: "getIntegrationHubAdapterProfile"
+      x-required-permission: "project.read"
+      description: "Read-only profile for a single registered adapter, including non-secret exchange profile metadata and per-layer ACL-filtered descriptors. Never exposes internal database credentials, vendor secrets, or write capabilities."
+      security: [{"sessionCookie":[]},{"serviceBearer":[]}]
+      parameters:
+        - {"$ref":"#/components/parameters/OrganizationId"}
+        - {"$ref":"#/components/parameters/ProjectId"}
+        - {"$ref":"#/components/parameters/AdapterKey"}
+      responses:
+        "200":
+          description: "Successful authorized read-only adapter profile inspection."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/AdapterProfileResponse"}}}
+        "401":
+          description: "Authentication/credential missing or invalid."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "403":
+          description: "R002 current authorization, lifecycle, service principal ceiling, or scoped GIS access denial; generic to inaccessible target."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "404":
+          description: "Scoped organization, project, or adapter key missing, hidden, or wrong owner; no private details."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/R002Error"}}}
+        "422":
+          description: "Invalid path or request parameters; validation never echoes raw input."
+          content: {"application/json":{"schema":{"$ref":"#/components/schemas/RequestValidationError"}}}
+components:
+  securitySchemes:
+    sessionCookie: {"type":"apiKey","in":"cookie","name":"ovg_session"}
+    serviceBearer: {"type":"http","scheme":"bearer"}
+  parameters:
+    OrganizationId: {"name":"organization_id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}
+    ProjectId: {"name":"project_id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}
+    AdapterKey:
+      name: "adapter_key"
+      in: "path"
+      required: true
+      schema: {"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_]+$"}
+      description: "Canonical integration hub adapter identifier (e.g. ogc_services, qgis, postgis, microstation_v8i)."
+  schemas:
+    ActionEvaluation:
+      type: "object"
+      additionalProperties: false
+      description: "Fail-closed policy preflight for a single connector action. Never an execution token or authorization grant."
+      required:
+        - "action"
+        - "required_permission"
+        - "eligible_by_role"
+        - "executable_in_hub"
+        - "allowed"
+        - "reason"
+      properties:
+        action:
+          type: "string"
+          enum:
+            - "catalog.discover"
+            - "connection.inspect"
+            - "connection.configure"
+            - "data.import"
+            - "data.export"
+            - "sync.pull"
+            - "sync.push"
+            - "sync.approve"
+        required_permission:
+          type: "string"
+          enum: ["project.read","project.edit","project.manage"]
+        eligible_by_role: {"type":"boolean"}
+        executable_in_hub: {"type":"boolean"}
+        allowed: {"type":"boolean"}
+        reason:
+          type: "string"
+          enum: ["permission_denied","unsupported_by_adapter","not_implemented","catalog_only"]
+    AdapterSummary:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "key"
+        - "name"
+        - "category"
+        - "mode"
+        - "lifecycle"
+        - "protocols"
+        - "note"
+        - "existing_api"
+        - "actions"
+      properties:
+        key: {"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_]+$"}
+        name: {"type":"string","minLength":1,"maxLength":200}
+        category:
+          type: "string"
+          enum: ["gis","cad","cadastral","database","tabular","survey_3d"]
+        mode:
+          type: "string"
+          enum:
+            - "remote_service"
+            - "open_protocols"
+            - "file_or_desktop_bridge"
+            - "windows_bridge"
+            - "file_exchange"
+            - "format_adapter"
+            - "database_bridge"
+        lifecycle:
+          type: "string"
+          enum: ["existing_read_only","candidate","planned"]
+        protocols:
+          type: "array"
+          minItems: 1
+          maxItems: 32
+          items: {"type":"string","minLength":1,"maxLength":64}
+        note: {"type":"string","minLength":1,"maxLength":500}
+        existing_api:
+          anyOf: [{"type":"string","minLength":1,"maxLength":128},{"type":"null"}]
+        actions:
+          type: "array"
+          minItems: 1
+          maxItems: 32
+          items: {"$ref":"#/components/schemas/ActionEvaluation"}
+    IntegrationHubCatalogResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "schema_version"
+        - "organization_id"
+        - "project_id"
+        - "mode"
+        - "default_write_policy"
+        - "scoped_access"
+        - "adapters"
+      properties:
+        schema_version: {"type":"integer","const":1}
+        organization_id: {"type":"string","format":"uuid"}
+        project_id: {"type":"string","format":"uuid"}
+        mode: {"type":"string","enum":["catalog_read_only"]}
+        default_write_policy: {"type":"string","enum":["deny"]}
+        scoped_access:
+          type: "boolean"
+          description: "True when the calling human actor is subject to project-level gis_access scoped member restrictions."
+        adapters:
+          type: "array"
+          minItems: 0
+          maxItems: 100
+          items: {"$ref":"#/components/schemas/AdapterSummary"}
+    ExistingEndpointDescriptor:
+      type: "object"
+      additionalProperties: false
+      required: ["name","method","path_template","required_permission"]
+      properties:
+        name: {"type":"string","minLength":1,"maxLength":128}
+        method: {"type":"string","enum":["GET","POST"]}
+        path_template: {"type":"string","minLength":1,"maxLength":500}
+        required_permission: {"type":"string","minLength":1,"maxLength":128}
+    ReadOnlyConnectionProfile:
+      type: "object"
+      additionalProperties: false
+      description: "Non-secret read-only exchange contract for an adapter profile. Direct internal DB credentials and default writes are structurally prohibited."
+      required:
+        - "adapter_key"
+        - "access_mode"
+        - "supports_direct_db_credentials"
+        - "requires_per_layer_acl"
+        - "default_write_policy"
+        - "supported_protocols"
+        - "existing_endpoints"
+        - "crs_policy"
+        - "restrictions"
+      properties:
+        adapter_key: {"type":"string","minLength":1,"maxLength":64,"pattern":"^[a-z0-9_]+$"}
+        access_mode: {"type":"string","enum":["read_only_exchange"]}
+        supports_direct_db_credentials: {"type":"boolean","const":false}
+        requires_per_layer_acl: {"type":"boolean","const":true}
+        default_write_policy: {"type":"string","enum":["deny"]}
+        supported_protocols:
+          type: "array"
+          minItems: 1
+          maxItems: 32
+          items: {"type":"string","minLength":1,"maxLength":64}
+        existing_endpoints:
+          type: "array"
+          minItems: 0
+          maxItems: 32
+          items: {"$ref":"#/components/schemas/ExistingEndpointDescriptor"}
+        crs_policy: {"type":"string","enum":["explicit_only_never_inferred"]}
+        restrictions:
+          type: "array"
+          minItems: 1
+          maxItems: 64
+          items: {"type":"string","minLength":1,"maxLength":500}
+    AdapterLayerDescriptor:
+      type: "object"
+      additionalProperties: false
+      description: "ACL-filtered active layer summary for read-only adapter exchange inspection. Coordinates and CRS are never inferred."
+      required:
+        - "layer_id"
+        - "source_id"
+        - "name"
+        - "geometry_family"
+        - "dimensions"
+        - "validation_state"
+        - "source_crs_code"
+        - "stored_crs_code"
+        - "crs_explicit"
+        - "layer_revision"
+        - "content_revision"
+        - "schema_revision"
+        - "export_permitted"
+      properties:
+        layer_id: {"type":"string","format":"uuid"}
+        source_id: {"type":"string","format":"uuid"}
+        name: {"type":"string","minLength":1,"maxLength":200}
+        geometry_family:
+          type: "string"
+          enum: ["Point","LineString","Polygon","mixed","unsupported","unknown"]
+        dimensions:
+          type: "string"
+          enum: ["XY","XYZ","XYM","XYZM","mixed","unknown"]
+        validation_state:
+          type: "string"
+          enum: ["ready","invalid","not_ready"]
+        source_crs_code:
+          anyOf: [{"type":"integer","minimum":1,"maximum":2147483647},{"type":"null"}]
+          description: "Explicit EPSG code declared on the source (R003 registry: 4326, 3857, 4756, 5899 readable; 3405, 3406 definition-only), or null if absent."
+        stored_crs_code:
+          anyOf: [{"type":"integer","minimum":1,"maximum":2147483647},{"type":"null"}]
+          description: "Verified stored EPSG code (R003 readable codes: 4326, 3857, 4756, 5899), or null if unverified/not ready."
+        crs_explicit: {"type":"boolean"}
+        layer_revision: {"type":"integer","minimum":1,"maximum":9007199254740991}
+        content_revision: {"type":"string","pattern":"^[a-f0-9]{64}$"}
+        schema_revision: {"type":"string","pattern":"^[a-f0-9]{64}$"}
+        export_permitted:
+          type: "boolean"
+          description: "True only when layer is ready with explicit readable CRS and actor satisfies role/ceiling plus per-layer gis_access export authorization."
+    AdapterProfileResponse:
+      type: "object"
+      additionalProperties: false
+      required:
+        - "schema_version"
+        - "organization_id"
+        - "project_id"
+        - "scoped_access"
+        - "default_write_policy"
+        - "adapter"
+        - "execution_status"
+        - "connection_profile"
+        - "layers"
+      properties:
+        schema_version: {"type":"integer","const":1}
+        organization_id: {"type":"string","format":"uuid"}
+        project_id: {"type":"string","format":"uuid"}
+        scoped_access: {"type":"boolean"}
+        default_write_policy: {"type":"string","enum":["deny"]}
+        adapter: {"$ref":"#/components/schemas/AdapterSummary"}
+        execution_status:
+          type: "string"
+          enum:
+            - "existing_read_only_api"
+            - "read_only_profile_ready"
+            - "candidate_external_branch"
+            - "planned_not_implemented"
+        connection_profile:
+          anyOf: [{"$ref":"#/components/schemas/ReadOnlyConnectionProfile"},{"type":"null"}]
+        layers:
+          type: "array"
+          minItems: 0
+          maxItems: 1000
+          items: {"$ref":"#/components/schemas/AdapterLayerDescriptor"}
+    R002Error:
+      type: "object"
+      additionalProperties: false
+      required: ["detail"]
+      properties: {"detail":{"type":"string","minLength":1,"maxLength":500}}
+    RequestValidationError:
+      type: "object"
+      additionalProperties: false
+      required: ["detail"]
+      properties:
+        detail:
+          type: "array"
+          minItems: 1
+          maxItems: 1
+          items:
+            type: "object"
+            additionalProperties: false
+            required: ["loc","msg","type"]
+            properties: {"loc":{"type":"array","maxItems":0},"msg":{"const":"invalid request payload"},"type":{"const":"value_error"}}

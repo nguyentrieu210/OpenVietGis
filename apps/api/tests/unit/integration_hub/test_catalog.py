@@ -6,6 +6,7 @@ from openvietgis_api.domains.integration_hub.catalog import (
     AdapterLifecycle,
     ConnectorAction,
     evaluate_action,
+    get_adapter,
     list_adapters,
 )
 
@@ -36,10 +37,22 @@ def test_project_reader_sees_catalog_only_and_never_syncs() -> None:
 def test_manager_cannot_invoke_unimplemented_write_or_sync() -> None:
     permissions = frozenset(Permission)
     for adapter in ADAPTERS:
-        for action in (ConnectorAction.IMPORT, ConnectorAction.SYNC_PUSH, ConnectorAction.APPROVE):
+        for action in (
+            ConnectorAction.CONFIGURE,
+            ConnectorAction.IMPORT,
+            ConnectorAction.SYNC_PUSH,
+            ConnectorAction.APPROVE,
+        ):
             result = evaluate_action(adapter, action, permissions)
             assert result["allowed"] is False
             assert result["executable_in_hub"] is False
+
+
+def test_get_adapter_returns_manifest_or_none() -> None:
+    qgis = get_adapter("qgis")
+    assert qgis is not None
+    assert qgis.key == "qgis"
+    assert get_adapter("unknown_adapter") is None
 
 
 def test_service_credential_ceiling_is_reflected_by_permissions() -> None:

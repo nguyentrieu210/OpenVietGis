@@ -2,13 +2,75 @@
   "feature": "026-integration-hub-policy",
   "branch": "feature/026-integration-hub-policy",
   "base": "main@5baade9",
-  "execution": "isolated; no agents auto-started",
+  "reconciled_with": "origin/main@2373a53",
+  "execution": "all 5 tracks executed locally on isolated candidate branch; live PostGIS integration (T006), live browser E2E + pnpm validate:ts (T007b), full CI (T008), and production deployment (T009) remain pending",
+  "release_decision": "HOLD_NOT_PROMOTED",
   "tracks": [
-    {"role": "architect", "task": "catalog schema, protocol boundaries, preserve R010 and R025"},
-    {"role": "backend", "task": "RLS, identity, adapter registry, deny-by-default policy"},
-    {"role": "frontend", "task": "connector registry UI with honest statuses, no editable controls until backend gates"},
-    {"role": "qa", "task": "tenant/service principal tests, CRS preservation, no false capability claims"},
-    {"role": "release", "task": "CI evidence, reconcile branches, review, rollback, deployment acceptance"}
+    {
+      "role": "architect",
+      "task": "catalog schema, protocol boundaries, preserve R010 and R025",
+      "status": "completed_local",
+      "artifacts": [
+        "specs/026-integration-hub-policy/qgis-postgis-architecture.md",
+        "specs/026-integration-hub-policy/contracts/integration-hub-api.yaml"
+      ]
+    },
+    {
+      "role": "backend",
+      "task": "RLS, identity, adapter registry, read-only exchange profiles, deny-by-default policy",
+      "status": "completed_local",
+      "artifacts": [
+        "apps/api/openvietgis_api/domains/integration_hub/catalog.py",
+        "apps/api/openvietgis_api/domains/integration_hub/profiles.py",
+        "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+        "apps/api/openvietgis_api/adapters/http/gis_access_guard.py",
+        "apps/api/openvietgis_api/main.py"
+      ]
+    },
+    {
+      "role": "frontend",
+      "task": "typed read-only SDK and connector registry/profile UI with honest statuses, no editable controls until backend gates",
+      "status": "completed_local_pending_live_e2e",
+      "artifacts": [
+        "packages/client-sdk/src/integration-hub.ts",
+        "packages/client-sdk/tests/integration-hub.test.ts",
+        "apps/web-next/src/IntegrationCatalog.tsx",
+        "apps/web-next/src/integration-catalog.css",
+        "apps/web-next/integration-hub-smoke.mjs"
+      ]
+    },
+    {
+      "role": "qa",
+      "task": "tenant/service principal tests, gis_access scoped layer ACL, CRS preservation, no false capability claims",
+      "status": "authored_pending_live_postgis",
+      "artifacts": [
+        "apps/api/tests/unit/integration_hub/test_catalog.py",
+        "apps/api/tests/unit/integration_hub/test_http_catalog.py",
+        "apps/api/tests/unit/integration_hub/test_profiles.py",
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py"
+      ]
+    },
+    {
+      "role": "release",
+      "task": "CI evidence, reconcile branches, independent security review, rollback plan, deployment acceptance",
+      "status": "review_completed_pending_ci_and_deploy",
+      "artifacts": [
+        "specs/026-integration-hub-policy/security-review.md",
+        "specs/026-integration-hub-policy/rollback-plan.md",
+        "specs/026-integration-hub-policy/evidence.md",
+        "specs/026-integration-hub-policy/tasks.md",
+        "docs/agents/026/agentkit.json"
+      ]
+    }
   ],
-  "merge_gates": ["test", "lint", "typing", "tenant-rls", "security-review", "release-rollback"]
+  "merge_gates": [
+    {"name": "unit-tests", "status": "passed_local", "detail": "57 passed (30 integration_hub + 27 authorization)"},
+    {"name": "lint-typing-py", "status": "passed_local", "detail": "ruff and mypy green on R026 Python files"},
+    {"name": "openapi-contracts-arch-docs", "status": "passed_local", "detail": "OPENAPI_OK; check_contracts, check_architecture, check_docs OK; check_scope 0 new delta"},
+    {"name": "branch-reconciliation", "status": "passed_local", "detail": "git merge-tree --write-tree origin/main HEAD exit 0 (0 conflicts with 2373a53/db4784f)"},
+    {"name": "security-review", "status": "passed_static_hold_for_ci", "detail": "0 Critical/High/Medium findings; 3 Low + 2 Informational residual items in security-review.md"},
+    {"name": "release-rollback", "status": "plan_authored_pending_staging_drill", "detail": "Zero-schema-change rollback-plan.md authored; staging drill pending T009"},
+    {"name": "tenant-rls-live-postgis", "status": "pending_ci", "detail": "T006 test_integration_hub_rls_acl.py (3 tests) collected cleanly; live PostGIS run required"},
+    {"name": "ts-workspace-and-browser-e2e", "status": "pending_ci", "detail": "Offline smoke PASS; pnpm validate:ts and live Playwright browser E2E (OVG_TEST_URL) required"}
+  ]
 }

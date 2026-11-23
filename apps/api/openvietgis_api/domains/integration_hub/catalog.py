@@ -112,6 +112,15 @@ ADAPTERS: Final[tuple[AdapterManifest, ...]] = (
 )
 
 
+_ADAPTERS_BY_KEY: Final[dict[str, AdapterManifest]] = {
+    adapter.key: adapter for adapter in ADAPTERS
+}
+
+
+def get_adapter(key: str) -> AdapterManifest | None:
+    return _ADAPTERS_BY_KEY.get(key)
+
+
 def evaluate_action(
     adapter: AdapterManifest,
     action: ConnectorAction,
@@ -141,21 +150,25 @@ def evaluate_action(
     }
 
 
+def serialize_adapter(
+    adapter: AdapterManifest,
+    effective_permissions: frozenset[Permission],
+) -> dict[str, object]:
+    return {
+        "key": adapter.key,
+        "name": adapter.name,
+        "category": adapter.category,
+        "mode": adapter.mode,
+        "lifecycle": adapter.lifecycle.value,
+        "protocols": list(adapter.protocols),
+        "note": adapter.note,
+        "existing_api": adapter.existing_api,
+        "actions": [
+            evaluate_action(adapter, action, effective_permissions)
+            for action in ConnectorAction
+        ],
+    }
+
+
 def list_adapters(effective_permissions: frozenset[Permission]) -> list[dict[str, object]]:
-    return [
-        {
-            "key": adapter.key,
-            "name": adapter.name,
-            "category": adapter.category,
-            "mode": adapter.mode,
-            "lifecycle": adapter.lifecycle.value,
-            "protocols": list(adapter.protocols),
-            "note": adapter.note,
-            "existing_api": adapter.existing_api,
-            "actions": [
-                evaluate_action(adapter, action, effective_permissions)
-                for action in ConnectorAction
-            ],
-        }
-        for adapter in ADAPTERS
-    ]
+    return [serialize_adapter(adapter, effective_permissions) for adapter in ADAPTERS]
