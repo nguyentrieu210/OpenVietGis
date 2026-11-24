@@ -1,6 +1,6 @@
 import type {TilesetRecord} from "./TilesetPanel";
 import type {TileHit} from "@openvietgis/spatial-workspace/tiles3d";
-export type CadLink={document_id:string;version:number;filename:string;source_id:string;layer_id:string;feature_id:string;handle:string;layer_name:string;original_revision:boolean};
+export type CadLink={document_id:string;version:number;filename:string;source_id:string;layer_id:string;feature_id:string;handle:string;layer_name:string;original_revision:boolean;conversion_id?:string;content_revision?:string;schema_revision?:string};
 export const validLink=(v:CadLink)=>!!v&&typeof v.document_id==="string"&&typeof v.source_id==="string"&&typeof v.layer_id==="string"&&typeof v.feature_id==="string"&&typeof v.filename==="string"&&typeof v.layer_name==="string"&&typeof v.original_revision==="boolean"&&Number.isInteger(v.version)&&v.version>=1&&v.version<=20&&typeof v.handle==="string"&&/^[0-9a-fA-F]{1,32}$/.test(v.handle);
 export type SourceFeatureRef={source_id:string;layer_id:string;feature_id:string;layer_revision?:number;content_revision?:string;schema_revision?:string};
 export type TileFeatureIdentity={tileset_id:string;uri:string;feature_id:string;first_triangle:number;triangle_count:number;source_id:string;layer_id:string;layer_revision:number;content_revision:string;schema_revision:string};

@@ -113,6 +113,9 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
         assert by_source[first["source_id"]]["original_revision"] is False
         assert by_source[sources[1]["source_id"]]["original_revision"] is True
         current = check(owner.get(root + "/layers/" + first["layer_id"]))["source"]
+        assert by_source[first["source_id"]]["conversion_id"] == first["id"]
+        assert by_source[first["source_id"]]["content_revision"] == current["content_revision"]
+        assert by_source[first["source_id"]]["schema_revision"] == current["schema_revision"]
         draft_path = path + "/export-georef-draft"
         draft_request = {
             "conversion_id": first["id"],

@@ -316,7 +316,8 @@ def _linked_features(
                 """
             SELECT d.document_id, d.version, d.filename, c.source_id, c.layer_id,
                    f.feature_id, m.item->>'handle' AS handle, l.name AS layer_name,
-                   (c.content_revision=s.content_revision) AS original_revision
+                   (c.content_revision=s.content_revision) AS original_revision,
+                   c.id AS conversion_id, s.content_revision, s.schema_revision
             FROM cad.conversions c
             JOIN cad.document_versions d ON d.organization_id=c.organization_id
                 AND d.project_id=c.project_id
@@ -361,6 +362,7 @@ def _linked_features(
             "document_id": str(row["document_id"]),
             "source_id": str(row["source_id"]),
             "layer_id": str(row["layer_id"]),
+            "conversion_id": str(row["conversion_id"]),
         }
         for row in rows
     ]
