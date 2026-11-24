@@ -31,3 +31,8 @@ The connector hardening candidate based on main 8d6a914 passed 65 focused Python
 - Follow-up candidate: direct CAD/3D mode requests from an authorized business plugin switch to GIS Core automatically. Browser fixture tests for both modes passed; restricted access remains denied.
 
 - Core/plugin coexistence candidate: removed plugin-based mode and source-navigation gates, removed automatic plugin dismissal and Core prompt, retained project.read and scoped-access checks, blocked mode changes while a plugin modal is open. Browser fixture verifies CAD and 3D with the active plugin, preserved navigator state on return to GIS, and restricted access denial. Typecheck, build and 36 spatial workspace unit tests passed.
+
+### Native DXF 2D fallback and real PostGIS checks (2026-11-24)
+- Native ASCII DXF preview for supported planar LINE/CIRCLE/POINT and straight LWPOLYLINE, bounded to 4 MiB/5,000 rendered entities. New simple R12 drawings allow numeric-coordinate drawing and editing of LINE/CIRCLE/POINT, with verified SHA-256 and optimistic version receipts. Imported complex drawings are read-only; DWG/binary DXF and external editor remain unavailable without a verified engine.
+- Node parser tests 3/3; independent ezdxf read and audit of generated LINE/CIRCLE/POINT file; browser fixture created a drawing, saved real DXF bytes, reopened, edited and saved another version while preserving the original. Typecheck and build passed.
+- Nine existing CAD/3D integration tests passed against a fresh, isolated PostGIS 18/3.7 container (CAD versions and georeference, DEM and raster terrain, model vault, saved scenes, tileset upload and generation). The test container was removed; no production data used. These are not full authenticated production acceptance.
