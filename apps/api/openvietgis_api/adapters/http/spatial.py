@@ -808,7 +808,7 @@ def read_features(
     include_geometry: bool = True,
     response_crs: _ResponseCRS | None = None,
     after_feature_id: _AfterFeature | None = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> dict[str, object]:
     context = context_for(authentication, organization_id=organization_id, project_id=project_id)
     service = SpatialFeatureService(SqlSpatialRepository(session))

@@ -966,7 +966,7 @@ class SqlSpatialRepository:
             content_revision=content_revision,
             schema_revision=schema_revision,
         )
-        if type(limit) is not int or not 1 <= limit <= 100:
+        if type(limit) is not int or not 1 <= limit <= 1000:
             raise SpatialValidationError("feature page limit out of bounds")
         params = self._scope(context, permission=Permission.PROJECT_READ) | {"source": source.id}
         if after_feature_id is not None:
