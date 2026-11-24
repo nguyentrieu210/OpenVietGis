@@ -31,6 +31,7 @@ export async function createOrganization(
   await page.getByLabel("Mã định danh tổ chức").fill(slug);
   await page.getByRole("button", { name: "Tạo tổ chức" }).click();
   await page.getByRole("link", { name, exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/organizations\/[0-9a-f-]{36}$/);
 
   const segments = new URL(page.url()).pathname.split("/").filter(Boolean);
   const organizationId = segments.at(-1) ?? "";
