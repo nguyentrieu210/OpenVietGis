@@ -33,6 +33,7 @@ test("checks readiness and reloads a persisted real tenant project", async ({ pa
   const orgLink = page.getByRole("link", { name: orgName, exact: true });
   await expect(orgLink).toBeVisible();
   await orgLink.click();
+  await expect(page).toHaveURL(/\/app\/organizations\/[0-9a-f-]{36}$/);
 
   const organizationId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
   expect(organizationId).toMatch(/^[0-9a-f-]{36}$/);
