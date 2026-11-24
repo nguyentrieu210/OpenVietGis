@@ -35,7 +35,7 @@ def test_global_cursor_is_not_advanced_by_write_receipt():
     source = (Path(__file__).resolve().parents[2] /
               "integrations/qgis_plugin/openvietgis_connector/plugin.py").read_text()
     assert "self._managed_cursor = max(" not in source
-    assert "get_managed_commit_receipt(config, operation_id=pending" in source
+    assert "send_pending_commit(config, pending" in source
     assert 'return "b64:"' not in source
 
 
@@ -88,3 +88,37 @@ def test_platform_error_message_is_not_discarded():
     assert _extract_http_error_detail(error, "secret") == (
         "SCHEMA_MISMATCH: field fld_x does not match integer"
     )
+
+def test_pending_retry_checks_receipt_before_replaying(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    sent = []
+    pending = {"operation_id": "op", "request": {"operation_id": "op"}}
+    monkeypatch.setattr(client, "commit_managed_changes", lambda *a, **kw: sent.append(kw) or "sent")
+    monkeypatch.setattr(client, "get_managed_commit_receipt", lambda *a, **kw: "receipt")
+    assert client.send_pending_commit(None, pending, recover=True) == "receipt"
+    assert sent == []
+    def missing(*a, **kw):
+        raise ApiError("not found", status_code=404)
+    monkeypatch.setattr(client, "get_managed_commit_receipt", missing)
+    with pytest.raises(ApiError):
+        client.send_pending_commit(None, pending, recover=True, permit_replay=False)
+    assert sent == []
+    assert client.send_pending_commit(None, pending, recover=True) == "sent"
+    assert sent == [{"operation_id": "op"}]
+
+
+def test_required_fields_preflight_preserves_draft_and_allows_valid_point():
+    from integrations.qgis_plugin.openvietgis_connector.managed_client import (
+        validate_managed_operations,
+    )
+    fields = [{"name": "id", "display_name": "Mã", "nullable": False},
+              {"name": "note", "nullable": True}]
+    op = {"op_type": "create", "feature_id": "new",
+          "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+          "properties": {"id": None, "note": None}}
+    with pytest.raises(ApiError, match="1 đối tượng thiếu trường bắt buộc: Mã"):
+        validate_managed_operations([op], fields)
+    assert op["properties"]["id"] is None
+    op["properties"]["id"] = "valid"
+    validate_managed_operations([op], fields)
+    validate_managed_operations([{"op_type": "delete", "feature_id": "new"}], fields)

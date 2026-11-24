@@ -1,6 +1,13 @@
 """Managed QGIS session scopes against isolated real PostGIS and service credentials."""
 from __future__ import annotations
 
+from uuid import UUID
+
+from sqlalchemy import text
+
+from openvietgis_api.adapters.http.managed_sync import _session_still_valid
+from openvietgis_api.domains.authorization.context import Actor, AuthorizationContext
+from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.integration_hub.test_integration_hub_rls_acl import (
     _credential,
@@ -101,6 +108,18 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert response.json()["binding_id"] == bid
         assert response.json()["capabilities"]["can_edit"] is True
         sid = response.json()["id"]
+        with get_admin_engine().connect() as db:
+            credential_id = db.execute(text(
+                "SELECT service_credential_id FROM integration_hub.binding_pairing_tokens "
+                "WHERE id=:id"
+            ), {"id": UUID(issued["token"]["id"])}).scalar_one()
+        ctx = AuthorizationContext(
+            actor=Actor("service_principal", UUID(response.json()["actor_id"]), "QGIS"),
+            organization_id=world.organization_id,
+            project_id=world.project_id,
+            credential_id=credential_id,
+        )
+        assert _session_still_valid(ctx, UUID(sid))
         managed = root + "/managed"
         page_response = device.get(managed + "/bootstrap", params={
             "layer_id": layer, "session_id": sid, "limit": 1,
@@ -144,10 +163,15 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
                            json={"binding_id": bid}).status_code in (401, 403, 404)
     with _service_client(generic_token) as other:
         assert other.post(sessions, json={"binding_id": bid}).status_code == 403
+        assert other.get(managed + "/delta", params={"session_id": sid}).status_code == 403
+        assert other.get(managed + "/bootstrap", params={
+            "session_id": sid, "layer_id": layer,
+        }).status_code == 403
     with _client(world.owner_user_id) as owner:
         revoke = owner.post(
             bindings + "/" + bid + "/pairing-tokens/" + issued["token"]["id"] + "/revoke"
         )
         assert revoke.status_code == 200, revoke.text
+    assert not _session_still_valid(ctx, UUID(sid))
     with _service_client(issued["bearer_token"]) as device:
         assert device.post(sessions, json={"binding_id": bid}).status_code == 401

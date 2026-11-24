@@ -14,17 +14,25 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 def main() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from time import perf_counter
+    from threading import Event
+    from time import perf_counter, sleep
+    from types import SimpleNamespace
     from unittest.mock import patch
 
-    from qgis.core import QgsApplication, QgsFeature, QgsField, QgsVectorLayer
+    from qgis.core import (
+        QgsApplication,
+        QgsFeature,
+        QgsField,
+        QgsProject,
+        QgsVectorLayer,
+    )
     from qgis.PyQt.QtCore import QVariant
 
     from integrations.qgis_plugin.openvietgis_connector.plugin import (
         OpenVietGisConnectorDialog,
     )
 
-    app = QgsApplication([], False)
+    app = QgsApplication([], False, os.environ.get("OVG_QGIS_QA_PROFILE", ""))
     app.initQgis()
     try:
         dialog = OpenVietGisConnectorDialog()
@@ -81,6 +89,43 @@ def main() -> None:
             assert layer.commitChanges()
             assert dialog._managed_is_dirty(layer, info)
         print(f"Native 8000 points build + snapshot + native edit: {perf_counter()-started:.2f}s")
+        # Real Qt task scheduling, with isolated mock transport (no production writes).
+        QgsProject.instance().addMapLayer(layer)
+        info.update({"map_layer_id": layer.id(), "source_id": "s",
+                     "content_revision": "a" * 64, "schema_revision": "b" * 64,
+                     "cursor": 0, "permission_epoch": 1})
+        dialog._managed_layers["l"] = info
+        dialog._managed_session = SimpleNamespace(id="test", can_edit=True)
+        dialog._managed_config = object()
+        release = Event()
+        def mock_send(*args, **kwargs):
+            assert release.wait(5)
+            return SimpleNamespace(resulting_content_revision="c" * 64,
+                                   event_cursor=1, operation_count=1)
+        with patch.object(dialog, "_write_managed_draft"), patch.object(
+            dialog._managed_delta_debounce, "start"
+        ), patch(
+            "integrations.qgis_plugin.openvietgis_connector.plugin.send_pending_commit",
+            side_effect=mock_send,
+        ):
+            dialog._on_commit_r029_managed()
+            assert dialog._commit_task is not None
+            assert layer.startEditing()
+            assert layer.changeAttributeValue(fid, 1, "Edited while saving")
+            release.set()
+            until = perf_counter() + 10
+            while dialog._commit_task is not None and perf_counter() < until:
+                app.processEvents()
+                sleep(.02)
+            assert dialog._commit_task is None
+            assert info["baseline"][str(layer.getFeature(fid)["ovg_feature_id"])]["properties"]["fld_name"] == "Edited"
+            assert layer.getFeature(fid)["fld_name"] == "Edited while saving"
+            assert dialog._managed_is_dirty(layer, info)
+        dialog._managed_layers.clear()
+        dialog._managed_config = None
+        dialog._managed_session = None
+        QgsProject.instance().removeMapLayer(layer.id())
+        print("PASS native background commit preserves edit made while sending")
         dialog.close()
         print("PASS PyQGIS native plugin window: primary controls, browser login and default deny")
     finally:

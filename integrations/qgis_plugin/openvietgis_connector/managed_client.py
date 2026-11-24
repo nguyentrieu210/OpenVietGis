@@ -375,3 +375,40 @@ def load_managed_layers(config, layer_ids, binding_id, cancelled=lambda: False, 
         result.append((first, features))
         progress(100 * (index + 1) / len(layer_ids))
     return session, result
+
+
+def send_pending_commit(config, pending, *, recover=False, permit_replay=True):
+    """Only network I/O. A retry checks the durable receipt before sending again."""
+    if recover:
+        try:
+            return get_managed_commit_receipt(config, operation_id=pending["operation_id"])
+        except ApiError as exc:
+            if exc.status_code != 404:
+                raise
+            if not permit_replay:
+                raise ApiError("Giao dịch chưa xác nhận; cần đối chiếu trước khi gửi lại.") from exc
+    return commit_managed_changes(config, **pending["request"])
+
+
+def validate_managed_operations(operations, fields):
+    """Preflight mandatory fields without inventing business values."""
+    required = {f["name"]: f.get("display_name") or f["name"] for f in fields
+                if not f.get("nullable", True)}
+    missing = set()
+    affected = 0
+    for op in operations:
+        if op["op_type"] == "delete":
+            continue
+        props = op.get("properties") or {}
+        bad = {label for name, label in required.items() if props.get(name) is None}
+        if bad:
+            affected += 1
+            missing.update(bad)
+        if not op.get("geometry"):
+            raise ApiError("Đối tượng chưa có hình học hợp lệ. Hãy hoàn tất hình học trước khi lưu.")
+    if affected:
+        raise ApiError(
+            f"{affected} đối tượng thiếu trường bắt buộc: {', '.join(sorted(missing))}. "
+            "Mở bảng thuộc tính hoặc biểu mẫu đối tượng, điền các trường này rồi lưu lại. "
+            "Bản nháp vẫn được giữ."
+        )
