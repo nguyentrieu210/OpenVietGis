@@ -30,7 +30,7 @@ try{
   else body={items:[],next_after_id:null};
   return route.fulfill({json:body});
  });
- await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/app",{waitUntil:"domcontentloaded"});
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ không gian"});
  await modes.waitFor({timeout:30000});
  await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
@@ -109,7 +109,7 @@ try{
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  console.log("PASS permission revocation, explicit restriction and restored access");
- pluginActive=true;await page.reload({waitUntil:"domcontentloaded"});
+ pluginActive=true;await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
