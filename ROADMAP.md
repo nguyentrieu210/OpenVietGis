@@ -221,3 +221,6 @@ Cross-cutting [Spec 034 — Spatial data and CRS standardization](specs/034-spat
 
 
 Cross-cutting [Spec 035 — Unified API and SDK](specs/035-unified-api-sdk/spec.md): single API transport base, managed QGIS URL fix, shared scoped paths and normalized error parsing; [evidence](specs/035-unified-api-sdk/AUDIT.md). Full contract coverage and live acceptance remain open.
+
+
+Cross-cutting [Spec 036 — Identity and access control](specs/036-identity-access-control/spec.md): managed-session ownership, management authority, epoch checks and scoped delta fail-closed behavior; [evidence and limitations](specs/036-identity-access-control/AUDIT.md). Full cross-client security acceptance remains open.

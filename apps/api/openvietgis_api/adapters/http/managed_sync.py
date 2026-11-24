@@ -38,6 +38,9 @@ from openvietgis_api.adapters.http.security import (
     require_csrf,
 )
 from openvietgis_api.adapters.persistence import gis_access
+from openvietgis_api.adapters.persistence.authorization_repository import (
+    SqlEffectivePermissionProvider,
+)
 from openvietgis_api.adapters.persistence.editing_repository import SqlEditingRepository
 from openvietgis_api.adapters.persistence.rls import require_project_context
 from openvietgis_api.adapters.persistence.scope_helper import (
@@ -123,14 +126,18 @@ class RespondDesktopCommandRequest(BaseModel):
 
 
 def _ensure_counter(session: Session, org: UUID, proj: UUID) -> tuple[int, int, int]:
-    row = session.execute(
-        text(
-            "SELECT last_cursor, permission_epoch, retention_floor "
-            "FROM integration_hub.project_event_counters "
-            "WHERE organization_id=:o AND project_id=:p"
-        ),
-        {"o": org, "p": proj},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT last_cursor, permission_epoch, retention_floor "
+                "FROM integration_hub.project_event_counters "
+                "WHERE organization_id=:o AND project_id=:p"
+            ),
+            {"o": org, "p": proj},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return (0, 1, 0)
     return (int(row["last_cursor"]), int(row["permission_epoch"]), int(row["retention_floor"]))
@@ -167,22 +174,64 @@ def _load_active_session(
     org: UUID,
     proj: UUID,
     session_id: UUID,
+    auth: AuthenticatedRequest,
+    *,
+    allow_manager: bool = False,
+    require_current_epoch: bool = True,
 ) -> RowMapping:
-    row = session.execute(
-        text(
-            "SELECT * FROM integration_hub.managed_sessions "
-            "WHERE organization_id=:o AND project_id=:p AND id=:sid"
-        ),
-        {"o": org, "p": proj, "sid": session_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT * FROM integration_hub.managed_sessions "
+                "WHERE organization_id=:o AND project_id=:p AND id=:sid"
+            ),
+            {"o": org, "p": proj, "sid": session_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise HTTPException(404, "Managed session not found.")
+    _require_session_access(session, auth, org, proj, row, allow_manager=allow_manager)
     now = datetime.now(UTC)
     if str(row["state"]) != "active" or row["revoked_at"] is not None:
         raise HTTPException(403, "Managed session is revoked or inactive.")
     if row["expires_at"] <= now:
         raise HTTPException(401, "Managed session has expired.")
+    if (
+        require_current_epoch
+        and int(row["permission_epoch"]) != _ensure_counter(session, org, proj)[1]
+    ):
+        raise HTTPException(403, "Managed session permission epoch changed; reconnect.")
     return row
+
+
+def _owns_session(auth: AuthenticatedRequest, row: RowMapping) -> bool:
+    return row["actor_id"] == auth.actor.actor_id and row["actor_type"] == auth.actor.actor_type
+
+
+def _is_project_manager(
+    session: Session, auth: AuthenticatedRequest, org: UUID, proj: UUID
+) -> bool:
+    ctx = context_for(auth, organization_id=org, project_id=proj)
+    return Permission.PROJECT_MANAGE in SqlEffectivePermissionProvider(session).resolve(ctx)
+
+
+def _require_session_access(
+    session: Session,
+    auth: AuthenticatedRequest,
+    org: UUID,
+    proj: UUID,
+    row: RowMapping,
+    *,
+    allow_manager: bool = False,
+) -> None:
+    if _owns_session(auth, row):
+        return
+    if allow_manager and _is_project_manager(session, auth, org, proj):
+        return
+    # Do not disclose whether another actor's session is active or expired.
+    raise HTTPException(404, "Managed session not found.")
 
 
 def _prep_scope(
@@ -212,10 +261,6 @@ def _can_edit_project(
     rejecting that combination, so the subsequent R029 INSERT loses its RLS
     context. Permission inspection must not re-bind or clear project scope.
     """
-    from openvietgis_api.adapters.persistence.authorization_repository import (
-        SqlEffectivePermissionProvider,
-    )
-
     ctx = context_for(auth, organization_id=org, project_id=proj)
     return Permission.PROJECT_EDIT in SqlEffectivePermissionProvider(session).resolve(ctx)
 
@@ -251,22 +296,30 @@ def create_managed_session(
                 raise HTTPException(403, "Managed binding is not active or authorized.")
             # Only verified request identity; never derive these values from the body.
             session.execute(
-                text("SELECT set_config('openvietgis.qgis_pairing_principal', :actor, true), "
-                     "set_config('openvietgis.qgis_pairing_credential', :credential, true)"),
+                text(
+                    "SELECT set_config('openvietgis.qgis_pairing_principal', :actor, true), "
+                    "set_config('openvietgis.qgis_pairing_credential', :credential, true)"
+                ),
                 {"actor": str(auth.actor.actor_id), "credential": str(auth.credential_id)},
             )
-        binding = session.execute(
-            text(
-                "SELECT state FROM integration_hub.connector_bindings "
-                "WHERE organization_id=:o AND project_id=:p AND id=:bid"
-            ),
-            {"o": organization_id, "p": project_id, "bid": body.binding_id},
-        ).mappings().first()
+        binding = (
+            session.execute(
+                text(
+                    "SELECT state FROM integration_hub.connector_bindings "
+                    "WHERE organization_id=:o AND project_id=:p AND id=:bid"
+                ),
+                {"o": organization_id, "p": project_id, "bid": body.binding_id},
+            )
+            .mappings()
+            .first()
+        )
         if service:
-            session.execute(text(
-                "SELECT set_config('openvietgis.qgis_pairing_principal', '', true), "
-                "set_config('openvietgis.qgis_pairing_credential', '', true)"
-            ))
+            session.execute(
+                text(
+                    "SELECT set_config('openvietgis.qgis_pairing_principal', '', true), "
+                    "set_config('openvietgis.qgis_pairing_credential', '', true)"
+                )
+            )
         if binding is None or str(binding["state"]) != "active":
             raise HTTPException(403, "Managed binding is not active or authorized.")
 
@@ -287,35 +340,39 @@ def create_managed_session(
         or getattr(auth.actor, "email", None)
         or str(auth.actor.actor_id)
     )
-    row = session.execute(
-        text(
-            "INSERT INTO integration_hub.managed_sessions ("
-            "id, organization_id, project_id, binding_id, actor_type, actor_id, "
-            "actor_display, device_label, client_version, mode, capabilities, "
-            "permission_epoch, last_ack_cursor, state, expires_at, last_seen_at, created_at"
-            ") VALUES ("
-            ":id, :o, :p, :bid, :atype, :aid, :adisp, :dev, :ver, :mode, "
-            "CAST(:caps AS jsonb), :epoch, :cur, 'active', :exp, :now, :now"
-            ") RETURNING *"
-        ),
-        {
-            "id": sid,
-            "o": organization_id,
-            "p": project_id,
-            "bid": body.binding_id,
-            "atype": auth.actor.actor_type,
-            "aid": auth.actor.actor_id,
-            "adisp": str(actor_display)[:200],
-            "dev": body.device_label,
-            "ver": body.client_version,
-            "mode": body.mode,
-            "caps": json.dumps(capabilities),
-            "epoch": perm_epoch,
-            "cur": last_cursor,
-            "exp": expires_at,
-            "now": now,
-        },
-    ).mappings().one()
+    row = (
+        session.execute(
+            text(
+                "INSERT INTO integration_hub.managed_sessions ("
+                "id, organization_id, project_id, binding_id, actor_type, actor_id, "
+                "actor_display, device_label, client_version, mode, capabilities, "
+                "permission_epoch, last_ack_cursor, state, expires_at, last_seen_at, created_at"
+                ") VALUES ("
+                ":id, :o, :p, :bid, :atype, :aid, :adisp, :dev, :ver, :mode, "
+                "CAST(:caps AS jsonb), :epoch, :cur, 'active', :exp, :now, :now"
+                ") RETURNING *"
+            ),
+            {
+                "id": sid,
+                "o": organization_id,
+                "p": project_id,
+                "bid": body.binding_id,
+                "atype": auth.actor.actor_type,
+                "aid": auth.actor.actor_id,
+                "adisp": str(actor_display)[:200],
+                "dev": body.device_label,
+                "ver": body.client_version,
+                "mode": body.mode,
+                "caps": json.dumps(capabilities),
+                "epoch": perm_epoch,
+                "cur": last_cursor,
+                "exp": expires_at,
+                "now": now,
+            },
+        )
+        .mappings()
+        .one()
+    )
     append_project_audit(
         session,
         ctx,
@@ -343,17 +400,27 @@ def list_managed_sessions(
 ) -> dict[str, Any]:
     """List managed desktop sessions and current project cursor health."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    last_cursor, perm_epoch, retention_floor = _ensure_counter(
-        session, organization_id, project_id
+    last_cursor, perm_epoch, retention_floor = _ensure_counter(session, organization_id, project_id)
+    manager = _is_project_manager(session, auth, organization_id, project_id)
+    rows = (
+        session.execute(
+            text(
+                "SELECT * FROM integration_hub.managed_sessions "
+                "WHERE organization_id=:o AND project_id=:p "
+                "AND (:manager OR (actor_id=:aid AND actor_type=:atype)) "
+                "ORDER BY created_at DESC LIMIT 100"
+            ),
+            {
+                "o": organization_id,
+                "p": project_id,
+                "manager": manager,
+                "aid": auth.actor.actor_id,
+                "atype": auth.actor.actor_type,
+            },
+        )
+        .mappings()
+        .all()
     )
-    rows = session.execute(
-        text(
-            "SELECT * FROM integration_hub.managed_sessions "
-            "WHERE organization_id=:o AND project_id=:p "
-            "ORDER BY created_at DESC LIMIT 100"
-        ),
-        {"o": organization_id, "p": project_id},
-    ).mappings().all()
     return {
         "current_cursor": last_cursor,
         "permission_epoch": perm_epoch,
@@ -372,15 +439,20 @@ def get_managed_session(
 ) -> dict[str, Any]:
     """Inspect managed session status, capability flags, and current cursor."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    row = session.execute(
-        text(
-            "SELECT * FROM integration_hub.managed_sessions "
-            "WHERE organization_id=:o AND project_id=:p AND id=:sid"
-        ),
-        {"o": organization_id, "p": project_id, "sid": session_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT * FROM integration_hub.managed_sessions "
+                "WHERE organization_id=:o AND project_id=:p AND id=:sid"
+            ),
+            {"o": organization_id, "p": project_id, "sid": session_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise HTTPException(404, "Managed session not found.")
+    _require_session_access(session, auth, organization_id, project_id, row, allow_manager=True)
     last_cursor, _, _ = _ensure_counter(session, organization_id, project_id)
     return _session_wire(row, current_cursor=last_cursor)
 
@@ -398,27 +470,37 @@ def revoke_managed_session(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
-    row = session.execute(
-        text(
-            "SELECT * FROM integration_hub.managed_sessions "
-            "WHERE organization_id=:o AND project_id=:p AND id=:sid"
-        ),
-        {"o": organization_id, "p": project_id, "sid": session_id},
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT * FROM integration_hub.managed_sessions "
+                "WHERE organization_id=:o AND project_id=:p AND id=:sid"
+            ),
+            {"o": organization_id, "p": project_id, "sid": session_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise HTTPException(404, "Managed session not found.")
-    if row["actor_id"] != auth.actor.actor_id:
+    if not _owns_session(auth, row) or bump_epoch:
+        if not _is_project_manager(session, auth, organization_id, project_id):
+            raise HTTPException(403, "Project manage permission required.")
         prepare_project_scope(session, ctx, permission=Permission.PROJECT_MANAGE, mutation=True)
     now = datetime.now(UTC)
-    updated = session.execute(
-        text(
-            "UPDATE integration_hub.managed_sessions "
-            "SET state='revoked', revoked_at=:now, last_seen_at=:now "
-            "WHERE organization_id=:o AND project_id=:p AND id=:sid "
-            "RETURNING *"
-        ),
-        {"o": organization_id, "p": project_id, "sid": session_id, "now": now},
-    ).mappings().one()
+    updated = (
+        session.execute(
+            text(
+                "UPDATE integration_hub.managed_sessions "
+                "SET state='revoked', revoked_at=:now, last_seen_at=:now "
+                "WHERE organization_id=:o AND project_id=:p AND id=:sid "
+                "RETURNING *"
+            ),
+            {"o": organization_id, "p": project_id, "sid": session_id, "now": now},
+        )
+        .mappings()
+        .one()
+    )
     if bump_epoch:
         session.execute(
             text(
@@ -455,7 +537,7 @@ def bootstrap_managed_layer(
     auth: ReadAuth,
     session: DB,
     layer_id: Annotated[UUID, Query()],
-    session_id: Annotated[UUID | None, Query()] = None,
+    session_id: Annotated[UUID, Query()],
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict[str, Any]:
@@ -463,21 +545,24 @@ def bootstrap_managed_layer(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
-    if session_id is not None:
-        _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth)
 
-    layer = session.execute(
-        text(
-            "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
-            "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision "
-            "FROM spatial.layers l "
-            "JOIN spatial.data_sources s "
-            "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
-            "  AND s.project_id=l.project_id "
-            "WHERE l.organization_id=:o AND l.project_id=:p AND l.id=:lid"
-        ),
-        {"o": organization_id, "p": project_id, "lid": layer_id},
-    ).mappings().first()
+    layer = (
+        session.execute(
+            text(
+                "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
+                "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision "
+                "FROM spatial.layers l "
+                "JOIN spatial.data_sources s "
+                "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
+                "  AND s.project_id=l.project_id "
+                "WHERE l.organization_id=:o AND l.project_id=:p AND l.id=:lid"
+            ),
+            {"o": organization_id, "p": project_id, "lid": layer_id},
+        )
+        .mappings()
+        .first()
+    )
     if layer is None:
         raise HTTPException(404, "Layer not found.")
 
@@ -487,14 +572,18 @@ def bootstrap_managed_layer(
         raise HTTPException(403, "Layer is outside your authorized GIS scope.")
 
     last_cursor, perm_epoch, _ = _ensure_counter(session, organization_id, project_id)
-    fields = session.execute(
-        text(
-            "SELECT field_id AS name, type AS data_type, nullable FROM spatial.source_fields "
-            "WHERE organization_id=:o AND project_id=:p AND source_id=:sid "
-            "ORDER BY ordinal ASC"
-        ),
-        {"o": organization_id, "p": project_id, "sid": layer["source_id"]},
-    ).mappings().all()
+    fields = (
+        session.execute(
+            text(
+                "SELECT field_id AS name, type AS data_type, nullable FROM spatial.source_fields "
+                "WHERE organization_id=:o AND project_id=:p AND source_id=:sid "
+                "ORDER BY ordinal ASC"
+            ),
+            {"o": organization_id, "p": project_id, "sid": layer["source_id"]},
+        )
+        .mappings()
+        .all()
+    )
 
     params: dict[str, Any] = {
         "o": organization_id,
@@ -503,16 +592,20 @@ def bootstrap_managed_layer(
         "lim": limit + 1,
         "off": offset,
     }
-    rows = session.execute(
-        text(
-            "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
-            "f.attributes AS properties, f.content_revision "
-            "FROM spatial.reference_features f "
-            "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
-            "ORDER BY f.feature_id ASC LIMIT :lim OFFSET :off"
-        ),
-        params,
-    ).mappings().all()
+    rows = (
+        session.execute(
+            text(
+                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+                "f.attributes AS properties, f.content_revision "
+                "FROM spatial.reference_features f "
+                "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
+                "ORDER BY f.feature_id ASC LIMIT :lim OFFSET :off"
+            ),
+            params,
+        )
+        .mappings()
+        .all()
+    )
     has_more = len(rows) > limit
     page = rows[:limit]
     features = [
@@ -563,10 +656,10 @@ def fetch_managed_delta(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
-    sess_row = _load_active_session(session, organization_id, project_id, session_id)
-    last_cursor, perm_epoch, retention_floor = _ensure_counter(
-        session, organization_id, project_id
+    sess_row = _load_active_session(
+        session, organization_id, project_id, session_id, auth, require_current_epoch=False
     )
+    last_cursor, perm_epoch, retention_floor = _ensure_counter(session, organization_id, project_id)
     if (
         int(sess_row["permission_epoch"]) != perm_epoch
         or cursor < retention_floor
@@ -581,15 +674,19 @@ def fetch_managed_delta(
             "changes": [],
         }
 
-    events = session.execute(
-        text(
-            "SELECT cursor, kind, source_id, changeset_id, content_revision, committed_at "
-            "FROM integration_hub.project_events "
-            "WHERE organization_id=:o AND project_id=:p AND cursor > :cur "
-            "ORDER BY cursor ASC LIMIT :lim"
-        ),
-        {"o": organization_id, "p": project_id, "cur": cursor, "lim": limit + 1},
-    ).mappings().all()
+    events = (
+        session.execute(
+            text(
+                "SELECT cursor, kind, source_id, changeset_id, content_revision, committed_at "
+                "FROM integration_hub.project_events "
+                "WHERE organization_id=:o AND project_id=:p AND cursor > :cur "
+                "ORDER BY cursor ASC LIMIT :lim"
+            ),
+            {"o": organization_id, "p": project_id, "cur": cursor, "lim": limit + 1},
+        )
+        .mappings()
+        .all()
+    )
     has_more = len(events) > limit
     page = events[:limit]
     if not page:
@@ -619,46 +716,67 @@ def fetch_managed_delta(
         src_id = ev["source_id"]
         if is_scoped and not gis_access.source_allowed(session, ctx, src_id, "read"):
             continue
-        layer_row = session.execute(
-            text(
-                "SELECT l.id AS layer_id, s.stored_crs AS stored_crs_code, s.content_revision "
-                "FROM spatial.layers l "
-                "JOIN spatial.data_sources s ON s.id=l.source_id "
-                "WHERE l.organization_id=:o AND l.project_id=:p AND l.source_id=:sid "
-                "LIMIT 1"
-            ),
-            {"o": organization_id, "p": project_id, "sid": src_id},
-        ).mappings().first()
+        if is_scoped:
+            return {
+                "reset_required": True,
+                "reason": "scoped_snapshot_required",
+                "next_cursor": last_cursor,
+                "permission_epoch": perm_epoch,
+                "has_more": False,
+                "changes": [],
+            }
+        layer_row = (
+            session.execute(
+                text(
+                    "SELECT l.id AS layer_id, s.stored_crs AS stored_crs_code, s.content_revision "
+                    "FROM spatial.layers l "
+                    "JOIN spatial.data_sources s ON s.id=l.source_id "
+                    "WHERE l.organization_id=:o AND l.project_id=:p AND l.source_id=:sid "
+                    "LIMIT 1"
+                ),
+                {"o": organization_id, "p": project_id, "sid": src_id},
+            )
+            .mappings()
+            .first()
+        )
         if layer_row is None:
             continue
         lid = layer_row["layer_id"]
 
-        op_rows = session.execute(
-            text(
-                "SELECT DISTINCT feature_id, op_type FROM editing.changeset_operations "
-                "WHERE organization_id=:o AND project_id=:p AND changeset_id=:cid"
-            ),
-            {"o": organization_id, "p": project_id, "cid": ev["changeset_id"]},
-        ).mappings().all()
+        op_rows = (
+            session.execute(
+                text(
+                    "SELECT DISTINCT feature_id, op_type FROM editing.changeset_operations "
+                    "WHERE organization_id=:o AND project_id=:p AND changeset_id=:cid"
+                ),
+                {"o": organization_id, "p": project_id, "cid": ev["changeset_id"]},
+            )
+            .mappings()
+            .all()
+        )
         touched_ids = sorted({str(op["feature_id"]) for op in op_rows})
         if not touched_ids:
             continue
 
-        live_rows = session.execute(
-            text(
-                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
-                "f.attributes AS properties, f.content_revision "
-                "FROM spatial.reference_features f "
-                "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
-                "AND f.feature_id = ANY(CAST(:fids AS varchar[]))"
-            ),
-            {
-                "o": organization_id,
-                "p": project_id,
-                "sid": src_id,
-                "fids": touched_ids,
-            },
-        ).mappings().all()
+        live_rows = (
+            session.execute(
+                text(
+                    "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+                    "f.attributes AS properties, f.content_revision "
+                    "FROM spatial.reference_features f "
+                    "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
+                    "AND f.feature_id = ANY(CAST(:fids AS varchar[]))"
+                ),
+                {
+                    "o": organization_id,
+                    "p": project_id,
+                    "sid": src_id,
+                    "fids": touched_ids,
+                },
+            )
+            .mappings()
+            .all()
+        )
         live_by_id = {str(r["feature_id"]): r for r in live_rows}
         upserts = [
             {
@@ -713,7 +831,7 @@ def commit_managed_changes(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_EDIT, mutation=True
     )
-    sess_row = _load_active_session(session, organization_id, project_id, body.session_id)
+    sess_row = _load_active_session(session, organization_id, project_id, body.session_id, auth)
     caps = dict(sess_row["capabilities"] or {})
     if not caps.get("can_edit", False):
         raise HTTPException(403, "Managed session does not have edit capability.")
@@ -749,14 +867,18 @@ def commit_managed_changes(
     )
     # Rebind verified scope after the editing repository commits its transaction.
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    ev_row = session.execute(
-        text(
-            "SELECT cursor FROM integration_hub.project_events "
-            "WHERE organization_id=:o AND project_id=:p AND changeset_id=:cid "
-            "ORDER BY cursor DESC LIMIT 1"
-        ),
-        {"o": organization_id, "p": project_id, "cid": cs.id},
-    ).mappings().first()
+    ev_row = (
+        session.execute(
+            text(
+                "SELECT cursor FROM integration_hub.project_events "
+                "WHERE organization_id=:o AND project_id=:p AND changeset_id=:cid "
+                "ORDER BY cursor DESC LIMIT 1"
+            ),
+            {"o": organization_id, "p": project_id, "cid": cs.id},
+        )
+        .mappings()
+        .first()
+    )
     event_cursor = int(ev_row["cursor"]) if ev_row else 0
     if event_cursor > 0:
         session.execute(
@@ -791,25 +913,30 @@ def get_managed_commit_receipt(
 ) -> dict[str, Any]:
     """Recover durable receipt for an uncertain commit using scoped operation_id."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    row = session.execute(
-        text(
-            "SELECT c.id, c.source_id, c.operation_id, c.resulting_content_revision, "
-            "c.operation_count, c.audit_event_id, c.created_at, e.cursor "
-            "FROM editing.changesets c "
-            "LEFT JOIN integration_hub.project_events e "
-            "  ON e.organization_id=c.organization_id AND e.project_id=c.project_id "
-            "  AND e.changeset_id=c.id "
-            "WHERE c.organization_id=:o AND c.project_id=:p "
-            "  AND c.operation_id=:op_id AND c.actor_id=:aid "
-            "ORDER BY c.created_at DESC LIMIT 1"
-        ),
-        {
-            "o": organization_id,
-            "p": project_id,
-            "op_id": operation_id.strip(),
-            "aid": auth.actor.actor_id,
-        },
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "SELECT c.id, c.source_id, c.operation_id, c.resulting_content_revision, "
+                "c.operation_count, c.audit_event_id, c.created_at, e.cursor "
+                "FROM editing.changesets c "
+                "LEFT JOIN integration_hub.project_events e "
+                "  ON e.organization_id=c.organization_id AND e.project_id=c.project_id "
+                "  AND e.changeset_id=c.id "
+                "WHERE c.organization_id=:o AND c.project_id=:p "
+                "  AND c.operation_id=:op_id AND c.actor_id=:aid AND c.actor_type=:atype "
+                "ORDER BY c.created_at DESC LIMIT 1"
+            ),
+            {
+                "o": organization_id,
+                "p": project_id,
+                "op_id": operation_id.strip(),
+                "aid": auth.actor.actor_id,
+                "atype": auth.actor.actor_type,
+            },
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise HTTPException(404, "Commit receipt not found for this operation_id.")
     return {
@@ -825,9 +952,7 @@ def get_managed_commit_receipt(
     }
 
 
-def _session_still_valid(
-    dsn: str, org: UUID, proj: UUID, session_id: UUID
-) -> bool:
+def _session_still_valid(dsn: str, org: UUID, proj: UUID, session_id: UUID) -> bool:
     try:
         with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
             cur.execute(
@@ -855,9 +980,11 @@ async def stream_managed_events(
 ) -> StreamingResponse:
     """SSE wake-up stream with 15s bounded session/revocation recheck."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
-    dsn = make_url(get_settings().database_url).set(drivername="postgresql").render_as_string(
-        hide_password=False
+    _load_active_session(session, organization_id, project_id, session_id, auth)
+    dsn = (
+        make_url(get_settings().database_url)
+        .set(drivername="postgresql")
+        .render_as_string(hide_password=False)
     )
     org_s, proj_s = str(organization_id), str(project_id)
 
@@ -929,34 +1056,38 @@ def enqueue_desktop_command(
         )
     if body.tool_name in MUTATING_DESKTOP_TOOLS:
         prepare_project_scope(session, ctx, permission=Permission.PROJECT_EDIT, mutation=True)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth, allow_manager=True)
     now = datetime.now(UTC)
     cmd_id = uuid4()
     expires_at = now + timedelta(seconds=body.ttl_seconds)
     requires_consent = True
-    row = session.execute(
-        text(
-            "INSERT INTO integration_hub.desktop_commands ("
-            "id, organization_id, project_id, session_id, tool_name, arguments, "
-            "requires_consent, status, requested_by, expires_at, created_at"
-            ") VALUES ("
-            ":id, :o, :p, :sid, :tool, CAST(:args AS jsonb), "
-            ":consent, 'pending', :req_by, :exp, :now"
-            ") RETURNING *"
-        ),
-        {
-            "id": cmd_id,
-            "o": organization_id,
-            "p": project_id,
-            "sid": session_id,
-            "tool": body.tool_name,
-            "args": json.dumps(body.arguments),
-            "consent": requires_consent,
-            "req_by": auth.actor.actor_id,
-            "exp": expires_at,
-            "now": now,
-        },
-    ).mappings().one()
+    row = (
+        session.execute(
+            text(
+                "INSERT INTO integration_hub.desktop_commands ("
+                "id, organization_id, project_id, session_id, tool_name, arguments, "
+                "requires_consent, status, requested_by, expires_at, created_at"
+                ") VALUES ("
+                ":id, :o, :p, :sid, :tool, CAST(:args AS jsonb), "
+                ":consent, 'pending', :req_by, :exp, :now"
+                ") RETURNING *"
+            ),
+            {
+                "id": cmd_id,
+                "o": organization_id,
+                "p": project_id,
+                "sid": session_id,
+                "tool": body.tool_name,
+                "args": json.dumps(body.arguments),
+                "consent": requires_consent,
+                "req_by": auth.actor.actor_id,
+                "exp": expires_at,
+                "now": now,
+            },
+        )
+        .mappings()
+        .one()
+    )
     _notify_project_channel(session, organization_id, project_id, "desktop_command")
     append_project_audit(
         session,
@@ -998,7 +1129,7 @@ def list_desktop_commands(
 ) -> dict[str, Any]:
     """List pending or recent allowlisted commands for a managed QGIS session."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth)
     sql = (
         "SELECT * FROM integration_hub.desktop_commands "
         "WHERE organization_id=:o AND project_id=:p AND session_id=:sid "
@@ -1024,26 +1155,30 @@ def respond_desktop_command(
 ) -> dict[str, Any]:
     """Record user consent decision and bounded command result from QGIS."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth)
     now = datetime.now(UTC)
-    row = session.execute(
-        text(
-            "UPDATE integration_hub.desktop_commands "
-            "SET status=:st, result=CAST(:res AS jsonb), resolved_at=:now "
-            "WHERE organization_id=:o AND project_id=:p AND session_id=:sid AND id=:cid "
-            "  AND status IN ('pending', 'approved') AND expires_at > :now "
-            "RETURNING *"
-        ),
-        {
-            "o": organization_id,
-            "p": project_id,
-            "sid": session_id,
-            "cid": command_id,
-            "st": body.status,
-            "res": json.dumps(body.result) if body.result is not None else None,
-            "now": now,
-        },
-    ).mappings().first()
+    row = (
+        session.execute(
+            text(
+                "UPDATE integration_hub.desktop_commands "
+                "SET status=:st, result=CAST(:res AS jsonb), resolved_at=:now "
+                "WHERE organization_id=:o AND project_id=:p AND session_id=:sid AND id=:cid "
+                "  AND status IN ('pending', 'approved') AND expires_at > :now "
+                "RETURNING *"
+            ),
+            {
+                "o": organization_id,
+                "p": project_id,
+                "sid": session_id,
+                "cid": command_id,
+                "st": body.status,
+                "res": json.dumps(body.result) if body.result is not None else None,
+                "now": now,
+            },
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         raise HTTPException(409, "Command not found, already resolved, or expired.")
     session.commit()

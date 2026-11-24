@@ -249,9 +249,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     setError("");
     try {
       const csrf = await loadCsrfToken(client);
-      await revokeManagedSession(client, org, projectId, sessionId, csrf, true);
+      await revokeManagedSession(client, org, projectId, sessionId, csrf, false);
       await refreshAll();
-      setNotice("🔒 Đã ngắt kết nối máy QGIS — máy trạm đã chuyển về Chỉ đọc.");
+      setNotice("Đã thu hồi phiên QGIS trên máy chủ.");
     } catch {
       setError("Không thể ngắt kết nối phiên QGIS.");
     } finally {

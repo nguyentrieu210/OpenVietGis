@@ -65,7 +65,7 @@ export function revokeManagedSession(
   projectId: string,
   sessionId: string,
   csrfToken: string,
-  bumpEpoch = true,
+  bumpEpoch = false,
 ): Promise<ManagedSessionItem> {
   const qs = bumpEpoch ? "?bump_epoch=true" : "";
   return client.request<ManagedSessionItem>(
