@@ -1,0 +1,77 @@
+// Synthetic project and real official CAD engine. No production account or data.
+import {chromium} from "@playwright/test";
+import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
+import {readFileSync,existsSync,statSync} from "node:fs";
+import {resolve,extname} from "node:path";
+import {fileURLToPath} from "node:url";
+const blankDxf=readFileSync(new URL("./public/cad/blank-r2018.dxf",import.meta.url));
+const dist=fileURLToPath(new URL("./dist/",import.meta.url)), origin="https://openvietgis.cloud",cad="https://cad.gpcds.site";
+const fixture=readFileSync(process.env.OVG_DWG_FIXTURE||"/tmp/ovg-full-cad-fixture.dwg");
+const browser=await chromium.launch({headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--use-angle=swiftshader","--enable-unsafe-swiftshader","--enable-unsafe-webgpu"]});
+try{
+ const p=await browser.newPage({viewport:{width:1440,height:950}}),errors=[],outside=[],docs=new Map();
+ const org="fixture-org",pid="fixture-project",id="drawing-id";
+ docs.set(id,[{filename:"Drawing1.dwg",bytes:fixture}]);
+ const meta=(id,v)=>{const x=docs.get(id)[v-1];return {id,filename:x.filename,format:x.filename.split(".").at(-1),version:v,byte_size:x.bytes.length,sha256:createHash("sha256").update(x.bytes).digest("hex"),created_at:"2026-01-01T00:00:00Z"}};
+ p.on("pageerror",e=>{errors.push(e.message);console.log("pageerror",e.message)});
+ await p.route("**/*",async r=>{
+  const u=new URL(r.request().url());
+  if(u.origin===cad&&(u.pathname==="/relay.html"||u.pathname.startsWith("/ovg-cad-2026.46/")))return r.continue();
+  if(u.origin!==origin){if(u.origin===cad)outside.push(u.pathname);return r.abort()}
+  if(u.pathname.startsWith("/api/v1/")){
+   const path=u.pathname,m=r.request().method();let body;
+   if(path.endsWith("/me"))body={id:"fixture",display_name:"CAD Test",status:"active"};
+   else if(path.endsWith("/auth/providers"))body=[];
+   else if(path.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
+   else if(path.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
+   else if(path.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"CAD project",status:"active"}];
+   else if(path.endsWith("/access/mine"))body={restricted:false};
+   else if(path.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
+   else if(path.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
+   else if(path.includes("/cad/documents")){
+    const parts=path.split("/cad/documents")[1].split("/").filter(Boolean), doc=parts[0];
+    if(m==="POST"){
+     const request=r.request(),data=request.postDataBuffer(),ct=request.headers()["content-type"];
+     const form=await new Response(data,{headers:{"content-type":ct}}).formData(),file=form.get("file"),bytes=Buffer.from(await file.arrayBuffer());
+     const key=doc||"new-dxf";if(doc)assert.equal(form.get("expected_version"),String(docs.get(doc).length));else {assert.deepEqual(bytes,blankDxf);docs.set(key,[]);}
+     docs.get(key).push({filename:file.name,bytes});body=meta(key,docs.get(key).length);
+    }else if(parts.at(-1)==="download")return r.fulfill({contentType:"application/octet-stream",body:docs.get(doc)[Number(parts.at(-2))-1].bytes});
+    else if(parts.at(-1)==="versions")body={items:docs.get(doc).map((_,i)=>meta(doc,i+1)).reverse()};
+    else body={items:[...docs].map(([k,vs])=>meta(k,vs.length))};
+   }else body={items:[],next_after_id:null};
+   return r.fulfill({json:body});
+  }
+  const relative=(u.pathname==="/app"||u.pathname==="/"||u.pathname==="/rewrite/")?"index.html":u.pathname.replace(/^\/rewrite\//,"");
+  const file=resolve(dist,relative);if(!file.startsWith(dist)||!existsSync(file)||!statSync(file).isFile())return r.fulfill({status:404});
+  const type={".js":"text/javascript",".css":"text/css",".html":"text/html",".json":"application/json",".svg":"image/svg+xml",".png":"image/png",".ico":"image/x-icon",".webmanifest":"application/manifest+json"}[extname(file)]||"application/octet-stream";
+  return r.fulfill({path:file,contentType:type});
+ });
+ await p.goto(origin+"/app",{waitUntil:"domcontentloaded"});
+ const modes=p.getByRole("group",{name:"Chế độ không gian"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ if(process.env.OVG_CAD_TEST!=="create"){
+ await p.getByRole("button",{name:/Drawing1.dwg/}).click();
+ await p.getByRole("button",{name:"Mở & sửa",exact:true}).click();
+ const editor=p.locator(".ovg-cad-editor");
+ await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000});
+ await editor.frameLocator("iframe").frameLocator("iframe").locator("canvas").first().waitFor({timeout:20000});
+ console.log("PASS full OpenCADStudio canvas in GIS, DWG opened");
+ await p.getByRole("button",{name:"Lưu phiên bản",exact:true}).click();
+ await p.getByText("Đã lưu phiên bản 2.",{exact:true}).waitFor({timeout:45000}).catch(async e=>{console.log("SAVE DEBUG",docs.get(id).length,(await editor.innerText()).slice(0,2000));throw e});
+ assert.equal(docs.get(id).length,2);assert.ok(/^AC10\d{2}/.test(docs.get(id)[1].bytes.subarray(0,6).toString()));assert.deepEqual(docs.get(id)[0].bytes,fixture);
+ await p.getByRole("button",{name:"Về kho CAD",exact:true}).click();
+ await p.getByRole("button",{name:"Xem CAD",exact:true}).click();
+ await p.getByText("Chế độ chỉ đọc.",{exact:true}).waitFor({timeout:120000});
+ assert.equal(await p.getByRole("button",{name:"Lưu phiên bản",exact:true}).isDisabled(),true);
+ await p.getByRole("button",{name:"Về kho CAD",exact:true}).click();
+ console.log("PASS real DWG save receipt, immutable original and historical read-only");
+ }
+ if(process.env.OVG_CAD_TEST!=="dwg"){
+ p.once("dialog",d=>d.accept("Test-new"));
+ await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
+ await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000}).catch(async e=>{console.log("CREATE DEBUG",docs.get("new-dxf")?.length,(await p.locator("body").innerText()).slice(0,1800));throw e});
+ assert.equal(docs.get("new-dxf").length,1);
+ console.log("PASS create DXF and launch full CAD editor directly");
+ }
+ assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
+}finally{await browser.close()}
