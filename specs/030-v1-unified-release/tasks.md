@@ -29,3 +29,5 @@ The connector hardening candidate based on main 8d6a914 passed 65 focused Python
 - Isolated candidate checks: web-next TypeScript and production build passed; spatial-workspace unit suite 36/36 passed; Playwright spatial-mode smoke with synthetic API fixtures passed empty 3D, configured 3D, CAD upload/revisions, GIS return, permission revocation and access restoration. These are not production or real PostGIS/OIDC acceptance.
 
 - Follow-up candidate: direct CAD/3D mode requests from an authorized business plugin switch to GIS Core automatically. Browser fixture tests for both modes passed; restricted access remains denied.
+
+- Core/plugin coexistence candidate: removed plugin-based mode and source-navigation gates, removed automatic plugin dismissal and Core prompt, retained project.read and scoped-access checks, blocked mode changes while a plugin modal is open. Browser fixture verifies CAD and 3D with the active plugin, preserved navigator state on return to GIS, and restricted access denial. Typecheck, build and 36 spatial workspace unit tests passed.
