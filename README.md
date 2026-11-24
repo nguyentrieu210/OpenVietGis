@@ -52,18 +52,47 @@ Dự án có sử dụng **AI-assisted development/Vibe Coding** trong quá trì
 
 Văn bản tham khảo: [Luật Đo đạc và bản đồ 27/2018/QH14](https://vanban.chinhphu.vn/?classid=1&docid=206110&pageid=27160) (đọc cùng sửa đổi, văn bản hiện hành); [Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15](https://chinhphu.vn/?docid=214590&pageid=27160) (hiệu lực 01/01/2026). **Mục này không phải tư vấn pháp lý, chứng nhận tuân thủ hoặc giấy phép hoạt động.** Việc triển khai cho cơ quan/doanh nghiệp phải được rà soát theo nghiệp vụ, quyền dữ liệu và quy định hiện hành.
 
-## Giấy phép mã nguồn mở và cam kết cộng đồng
+## Mã nguồn mở – Phát triển cùng cộng đồng
 
-OpenVietGIS công bố dự án theo **[AGPL-3.0-or-later](LICENSE)**; cần đối chiếu văn bản `LICENSE`, thông báo bản quyền và điều kiện của từng thành phần. **Mã nguồn dự án, dữ liệu vận hành, bản đồ nền, plugin độc lập và tài sản của bên thứ ba không mặc nhiên có cùng giấy phép.**
+OpenVietGIS được xây dựng với tinh thần mã nguồn mở, tự do sáng tạo, chia sẻ tri thức và cùng nhau phát triển công nghệ GIS.
 
-- Người nhận bản phát hành có thể sử dụng, nghiên cứu, tự triển khai, sửa đổi, phân phối và fork trong phạm vi và điều kiện của giấy phép áp dụng.
-- Với các **phiên bản sửa đổi** thuộc phạm vi AGPL được cung cấp để người dùng tương tác qua mạng, có nghĩa vụ cung cấp **mã nguồn tương ứng** theo điều khoản AGPL. Nghĩa vụ này không phải lệnh công khai mọi dữ liệu cá nhân hay bí mật vận hành.
-- Quyền đã được cấp hợp lệ với phiên bản trước tiếp tục được điều chỉnh bởi giấy phép của phiên bản đó; không bị tự động thu hồi chỉ vì chiến lược kinh doanh về sau thay đổi.
-- Dịch vụ hosting, tích hợp, bảo trì, đào tạo và SLA có thể có thu phí khi tuân thủ giấy phép và hợp đồng tương ứng. Thu phí dịch vụ **không** có nghĩa thu hồi quyền với mã Core đã phát hành.
-- Người đóng góp phải có quyền đối với mã/tài sản cung cấp; Pull Request không tự động chuyển nhượng toàn bộ bản quyền cho maintainer.
-- Định hướng là giảm phụ thuộc nhà cung cấp, hỗ trợ self-host, dữ liệu mở, kiểm tra và fork. Từng khả năng chỉ được coi là sẵn sàng khi có bằng chứng và tài liệu.
+Chúng tôi chào đón mọi cá nhân, tổ chức và doanh nghiệp tham gia hệ sinh thái OpenVietGIS:
 
-Chúng tôi học hỏi **tinh thần phát triển cộng đồng của Linux**, nhưng OpenVietGIS **không trực thuộc hoặc được chứng thực bởi Linux Foundation, QGIS, ArcGIS, MapInfo hay AutoCAD**.
+- Tự do sử dụng cho mục đích cá nhân, giáo dục, nghiên cứu và thương mại.
+- Tự triển khai trên máy chủ và hạ tầng của mình.
+- Tự do nghiên cứu, sửa đổi, fork, phân phối và phát triển phiên bản riêng theo giấy phép.
+- Phát triển plugin, tiện ích mở rộng và tích hợp với các nền tảng khác.
+- Cung cấp dịch vụ triển khai, tư vấn, đào tạo, bảo trì và các dịch vụ thương mại phù hợp với giấy phép.
+- Đóng góp ý tưởng, mã nguồn và cùng xây dựng hệ sinh thái GIS ngày càng hoàn thiện.
+
+### Cam kết với cộng đồng
+
+- **Open Source:** Duy trì tính mở của mã nguồn Core.
+- **Open Ecosystem:** Khuyến khích phát triển và mở rộng hệ sinh thái.
+- **Data Ownership:** Tôn trọng quyền làm chủ dữ liệu của người dùng.
+- **No Vendor Lock-in:** Giảm sự phụ thuộc vào một nhà cung cấp duy nhất.
+- **Community Driven:** Khuyến khích cộng đồng tham gia định hướng và phát triển sản phẩm.
+- **Commercial Friendly:** Khuyến khích các mô hình kinh doanh và dịch vụ phù hợp với giấy phép mã nguồn mở.
+
+### Giấy phép
+
+OpenVietGIS Core được phát hành theo giấy phép **[AGPL-3.0-or-later](LICENSE)**, nhằm duy trì tính mở của mã nguồn và bảo vệ quyền lợi lâu dài của cộng đồng.
+
+Quyền sử dụng hợp pháp đối với các phiên bản đã phát hành không bị tự động thu hồi khi định hướng kinh doanh thay đổi. Các phiên bản sửa đổi thuộc phạm vi AGPL được cung cấp cho người dùng tương tác qua mạng phải cung cấp mã nguồn tương ứng theo giấy phép; điều này không đồng nghĩa với việc công khai dữ liệu người dùng hay bí mật vận hành.
+
+Các SDK, plugin, connector, dữ liệu, bản đồ nền và thành phần độc lập có thể áp dụng giấy phép riêng phù hợp với kiến trúc và mục đích sử dụng. Người đóng góp cần có quyền đối với nội dung cung cấp; Pull Request không mặc nhiên chuyển nhượng toàn bộ bản quyền.
+
+Chi tiết điều khoản được quy định tại [LICENSE](LICENSE) và giấy phép của từng thành phần.
+
+### Tầm nhìn
+
+Lấy cảm hứng từ tinh thần phát triển cộng đồng của Linux, OpenVietGIS hướng đến một nền tảng GIS mở, linh hoạt, có khả năng kết nối và phát triển không giới hạn bởi một cá nhân hay tổ chức duy nhất. OpenVietGIS là dự án độc lập, không trực thuộc hay được chứng thực bởi Linux Foundation hoặc các nhà cung cấp GIS/CAD khác.
+
+Chúng tôi tin rằng công nghệ càng mở, cộng đồng càng mạnh và giá trị tạo ra càng lớn.
+
+**Open Source. Open Ecosystem. Open Future.**
+
+**Không chỉ là một phần mềm GIS, mà là một hệ sinh thái GIS do cộng đồng cùng xây dựng.**
 
 ## Trạng thái sản phẩm, nghiệm thu và phát hành
 
