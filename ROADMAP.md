@@ -215,3 +215,6 @@ Cross-cutting [Spec 032 — Repository and release consolidation](specs/032-rele
 
 
 Cross-cutting [Spec 033 — Core architecture standardization](specs/033-core-standardization/spec.md): enforce domain/adapter and package/app boundaries; isolate legacy workbench bridge, generic module discovery and shared spatial math. [Evidence](specs/033-core-standardization/AUDIT.md); real parity acceptance remains open.
+
+
+Cross-cutting [Spec 034 — Spatial data and CRS standardization](specs/034-spatial-data-standardization/spec.md): unify CRS registry ownership and enforce coherent native QGIS snapshots; [evidence and limits](specs/034-spatial-data-standardization/AUDIT.md). Full geodetic and native runtime acceptance remains open.

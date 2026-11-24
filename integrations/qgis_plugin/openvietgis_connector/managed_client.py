@@ -6,6 +6,7 @@ Zero PyQt/QGIS imports so it can be unit tested in any standard Python environme
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -190,6 +191,64 @@ def bootstrap_managed_layer(
         has_more=bool(res.get("has_more", False)),
         next_offset=int(res["next_offset"]) if res.get("next_offset") is not None else None,
     )
+
+
+def load_managed_snapshot(
+    config: OpenVietGisConfig, *, layer_id: str, session_id: str,
+    permission_epoch: int, limit: int = 1000,
+) -> tuple[ManagedBootstrapPage, list[dict[str, Any]]]:
+    """Load a coherent native snapshot before materializing any QGIS layer."""
+    first = None
+    offset = 0
+    features: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    while True:
+        page = bootstrap_managed_layer(
+            config, layer_id=layer_id, session_id=session_id, limit=limit, offset=offset,
+        )
+        if page.layer_id != layer_id or page.permission_epoch != permission_epoch:
+            raise ApiError("Phạm vi hoặc quyền của lớp đã thay đổi; hãy mở lại.")
+        if page.crs_code not in (4326, 3857, 4756, 5899) or page.dimensions != "XY":
+            raise ApiError("CRS hoặc số chiều chưa được hỗ trợ cho đồng bộ trực tiếp.")
+        if page.geometry_family not in ("Point", "LineString", "Polygon"):
+            raise ApiError("Kiểu hình học chưa được hỗ trợ cho đồng bộ trực tiếp.")
+        if not page.source_id or not all(
+            re.fullmatch(r"[a-f0-9]{64}", token)
+            for token in (page.content_revision, page.schema_revision)
+        ):
+            raise ApiError("Định danh nguồn hoặc revision không hợp lệ.")
+        if first is None:
+            first = page
+            names = [f.get("name") for f in page.fields]
+            if any(not isinstance(n, str) or not n for n in names):
+                raise ApiError("Tên trường không hợp lệ.")
+            if len({n.casefold() for n in names}) != len(names) or any(
+                n.casefold() == "ovg_feature_id" for n in names
+            ):
+                raise ApiError("Tên trường bị trùng hoặc trùng mã định danh hệ thống.")
+        elif (
+            page.source_id, page.crs_code, page.geometry_family, page.dimensions,
+            page.content_revision, page.schema_revision, page.fields
+        ) != (
+            first.source_id, first.crs_code, first.geometry_family, first.dimensions,
+            first.content_revision, first.schema_revision, first.fields
+        ):
+            raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
+        if len(page.features) > limit:
+            raise ApiError("Trang dữ liệu vượt quá giới hạn.")
+        for item in page.features:
+            oid = item.get("feature_id")
+            if not isinstance(oid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", oid) or oid in ids:
+                raise ApiError("Mã đối tượng không hợp lệ hoặc trùng lặp.")
+            ids.add(oid)
+            features.append(item)
+        if not page.has_more:
+            if page.next_offset is not None:
+                raise ApiError("Con trỏ trang cuối không hợp lệ.")
+            return first, features
+        if not page.features or page.next_offset != offset + len(page.features):
+            raise ApiError("Con trỏ phân trang không hợp lệ; hãy mở lại lớp.")
+        offset = page.next_offset
 
 
 def fetch_managed_delta(

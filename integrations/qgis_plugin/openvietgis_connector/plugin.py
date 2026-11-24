@@ -95,7 +95,6 @@ from .client import (
 from .drafts import draft_path, merge_snapshots, read_draft, write_draft
 from .managed_client import (
     ManagedSessionInfo,
-    bootstrap_managed_layer,
     build_managed_events_url,
     commit_managed_changes,
     create_managed_session,
@@ -103,6 +102,7 @@ from .managed_client import (
     fetch_managed_delta,
     get_managed_commit_receipt,
     list_desktop_commands,
+    load_managed_snapshot,
     respond_desktop_command,
 )
 from .workspace import (
@@ -1919,9 +1919,9 @@ class OpenVietGisConnectorDialog(QDialog):
             return QgsGeometry()
         fc = json.dumps({"type": "Feature", "geometry": geom_obj, "properties": {}})
         feats = QgsJsonUtils.stringToFeatureList(fc, QgsVectorLayer("Point", "t", "memory").fields())
-        if feats:
+        if len(feats) == 1 and not feats[0].geometry().isEmpty():
             return QgsGeometry(feats[0].geometry())
-        return QgsGeometry()
+        raise ApiError("Không thể giải mã hình học gốc; không đồng bộ dữ liệu lỗi.")
 
     def _on_open_r029_managed(self) -> None:
         if not self._connected:
@@ -1988,29 +1988,10 @@ class OpenVietGisConnectorDialog(QDialog):
 
             opened_names: list[str] = []
             for target in targets:
-                offset = 0
-                all_feats: list[dict[str, Any]] = []
-                first_page = None
-                while True:
-                    page = bootstrap_managed_layer(
-                        config,
-                        layer_id=target.layer_id,
-                        session_id=sess.id,
-                        limit=1000,
-                        offset=offset,
-                    )
-                    if first_page is None:
-                        first_page = page
-                    elif (page.content_revision, page.schema_revision, page.permission_epoch) != (
-                        first_page.content_revision, first_page.schema_revision, first_page.permission_epoch
-                    ):
-                        raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
-                    all_feats.extend(page.features)
-                    if not page.has_more or page.next_offset is None:
-                        break
-                    offset = page.next_offset
-                if first_page is None or not first_page.crs_code:
-                    continue
+                first_page, all_feats = load_managed_snapshot(
+                    config, layer_id=target.layer_id, session_id=sess.id,
+                    permission_epoch=sess.permission_epoch,
+                )
                 geom_type = first_page.geometry_family or "Point"
                 uri = f"{geom_type}?crs=EPSG:{first_page.crs_code}"
                 vlayer = QgsVectorLayer(uri, f"OpenVietGIS · {first_page.name}", "memory")

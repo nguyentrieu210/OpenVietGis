@@ -247,3 +247,14 @@ def test_projected_native_range_does_not_claim_region_without_inverse_projection
     assert crs.get_crs_profile(4756).native_bounds == crs.CoordinateBounds(
         -180.0, -90.0, 180.0, 90.0
     )
+
+
+def test_domain_and_format_profiles_are_consistent() -> None:
+    from openvietgis_api.adapters.formats.wkt_crs import EPSG_NAMES, EPSG_WKT1
+    from openvietgis_api.domains.spatial.domain import KNOWN_CRS_CODES, READABLE_CRS_CODES
+
+    assert KNOWN_CRS_CODES == {profile.code for profile in crs.CRS_PROFILES}
+    assert READABLE_CRS_CODES == {
+        profile.code for profile in crs.CRS_PROFILES if profile.disposition == "readable"
+    }
+    assert set(EPSG_WKT1) == set(EPSG_NAMES) == READABLE_CRS_CODES
