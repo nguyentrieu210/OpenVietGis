@@ -39,6 +39,7 @@ from openvietgis_api.adapters.http.security import (
 )
 from openvietgis_api.adapters.persistence import gis_access
 from openvietgis_api.adapters.persistence.editing_repository import SqlEditingRepository
+from openvietgis_api.adapters.persistence.rls import require_project_context
 from openvietgis_api.adapters.persistence.scope_helper import (
     append_project_audit,
     prepare_project_scope,
@@ -243,6 +244,17 @@ def create_managed_session(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     if body.binding_id is not None:
+        require_project_context(session, ctx, permission=Permission.PROJECT_READ)
+        service = auth.actor.actor_type == "service_principal"
+        if service:
+            if auth.actor.actor_id is None or auth.credential_id is None:
+                raise HTTPException(403, "Managed binding is not active or authorized.")
+            # Only verified request identity; never derive these values from the body.
+            session.execute(
+                text("SELECT set_config('openvietgis.qgis_pairing_principal', :actor, true), "
+                     "set_config('openvietgis.qgis_pairing_credential', :credential, true)"),
+                {"actor": str(auth.actor.actor_id), "credential": str(auth.credential_id)},
+            )
         binding = session.execute(
             text(
                 "SELECT state FROM integration_hub.connector_bindings "
@@ -250,8 +262,13 @@ def create_managed_session(
             ),
             {"o": organization_id, "p": project_id, "bid": body.binding_id},
         ).mappings().first()
+        if service:
+            session.execute(text(
+                "SELECT set_config('openvietgis.qgis_pairing_principal', '', true), "
+                "set_config('openvietgis.qgis_pairing_credential', '', true)"
+            ))
         if binding is None or str(binding["state"]) != "active":
-            raise HTTPException(403, "Managed binding is not active.")
+            raise HTTPException(403, "Managed binding is not active or authorized.")
 
     can_edit = _can_edit_project(session, auth, organization_id, project_id)
     last_cursor, perm_epoch, _ = _ensure_counter(session, organization_id, project_id)
@@ -452,7 +469,7 @@ def bootstrap_managed_layer(
     layer = session.execute(
         text(
             "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
-            "s.stored_crs_code, s.content_revision, s.schema_revision "
+            "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision "
             "FROM spatial.layers l "
             "JOIN spatial.data_sources s "
             "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
@@ -472,7 +489,7 @@ def bootstrap_managed_layer(
     last_cursor, perm_epoch, _ = _ensure_counter(session, organization_id, project_id)
     fields = session.execute(
         text(
-            "SELECT name, data_type, nullable FROM spatial.source_fields "
+            "SELECT field_id AS name, type AS data_type, nullable FROM spatial.source_fields "
             "WHERE organization_id=:o AND project_id=:p AND source_id=:sid "
             "ORDER BY ordinal ASC"
         ),
@@ -488,9 +505,9 @@ def bootstrap_managed_layer(
     }
     rows = session.execute(
         text(
-            "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
-            "f.properties, f.content_revision "
-            "FROM spatial.features f "
+            "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+            "f.attributes AS properties, f.content_revision "
+            "FROM spatial.reference_features f "
             "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
             "ORDER BY f.feature_id ASC LIMIT :lim OFFSET :off"
         ),
@@ -604,7 +621,7 @@ def fetch_managed_delta(
             continue
         layer_row = session.execute(
             text(
-                "SELECT l.id AS layer_id, s.stored_crs_code, s.content_revision "
+                "SELECT l.id AS layer_id, s.stored_crs AS stored_crs_code, s.content_revision "
                 "FROM spatial.layers l "
                 "JOIN spatial.data_sources s ON s.id=l.source_id "
                 "WHERE l.organization_id=:o AND l.project_id=:p AND l.source_id=:sid "
@@ -629,9 +646,9 @@ def fetch_managed_delta(
 
         live_rows = session.execute(
             text(
-                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
-                "f.properties, f.content_revision "
-                "FROM spatial.features f "
+                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+                "f.attributes AS properties, f.content_revision "
+                "FROM spatial.reference_features f "
                 "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
                 "AND f.feature_id = ANY(CAST(:fids AS varchar[]))"
             ),
@@ -730,6 +747,8 @@ def commit_managed_changes(
         summary=body.summary,
         operations=edit_ops,
     )
+    # Rebind verified scope after the editing repository commits its transaction.
+    _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
     ev_row = session.execute(
         text(
             "SELECT cursor FROM integration_hub.project_events "

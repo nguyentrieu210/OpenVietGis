@@ -96,7 +96,7 @@ class FeatureRepositoryDouble(LayerRepositoryDouble):
             content_revision=content_revision,
             schema_revision=schema_revision,
         )
-        assert 1 <= limit <= 100
+        assert 1 <= limit <= 1000
         if after_feature_id is not None and not any(
             item.feature_id == after_feature_id for item in records
         ):
@@ -576,7 +576,7 @@ def test_invalid_request_errors_are_sanitized_and_do_not_read(
     if template == BASE:
         invalid_params += [
             {**pins, "limit": 0},
-            {**pins, "limit": 101},
+            {**pins, "limit": 1001},
             {**pins, "limit": "secret-marker"},
             {**pins, "after_feature_id": "secret-marker!"},
             {**pins, "after_feature_id": "x" * 129},
@@ -592,3 +592,13 @@ def test_invalid_request_errors_are_sanitized_and_do_not_read(
         assert error(response, "GET", template, 422) == VALIDATION_ERROR
         assert "secret-marker" not in response.text
     assert not repo.page_calls and not repo.detail_calls
+
+
+def test_feature_page_accepts_expanded_limit(feature_http: FeatureHTTP) -> None:
+    layer, source, pins = feature_http.seed("reference_points_5899")
+    response = feature_http.client.get(url(BASE, layer_id=layer), params={**pins, "limit": 1000})
+    assert response.status_code == 200
+    assert feature_http.repository.page_calls[-1] == (
+        source.id, pins["content_revision"], pins["schema_revision"], None, 1000
+    )
+    assert len(response.json()["items"]) == len(feature_http.repository.features[source.id])

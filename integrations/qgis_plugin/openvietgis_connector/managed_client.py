@@ -132,7 +132,7 @@ def create_managed_session(
     config: OpenVietGisConfig,
     *,
     device_label: str = "QGIS Desktop",
-    client_version: str = "0.9.0",
+    client_version: str = "1.0.0",
     binding_id: str | None = None,
 ) -> ManagedSessionInfo:
     payload: dict[str, Any] = {
@@ -296,3 +296,25 @@ def respond_desktop_command(
         f"{_managed_base(config)}/desktop-sessions/{session_id}/commands/{command_id}/respond",
         payload,
     )
+
+
+def diff_managed_snapshots(
+    baseline: dict[str, dict[str, Any]],
+    current: dict[str, dict[str, Any]],
+    *,
+    allow_deletes: bool = False,
+) -> list[dict[str, Any]]:
+    """Diff server-confirmed snapshot against QGIS, including native local saves."""
+    removed = baseline.keys() - current.keys()
+    if removed and not allow_deletes:
+        raise ApiError("Có đối tượng bị xóa; hãy khôi phục hoặc bật cho phép xóa.")
+    ops = [
+        {"op_type": "delete", "feature_id": oid}
+        for oid in sorted(removed)
+    ]
+    for oid in sorted(current):
+        if oid not in baseline:
+            ops.append({"op_type": "create", "feature_id": oid, **current[oid]})
+        elif current[oid] != baseline[oid]:
+            ops.append({"op_type": "update", "feature_id": oid, **current[oid]})
+    return ops
