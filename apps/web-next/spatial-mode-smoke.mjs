@@ -31,9 +31,9 @@ try{
   return route.fulfill({json:body});
  });
  await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
- const modes=page.getByRole("group",{name:"Chế độ không gian"});
+ const modes=page.getByRole("group",{name:"Không gian làm việc"});
  await modes.waitFor({timeout:30000});
- await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ await page.locator("#ovg-3d-height option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
  // The compact dock retains all commands in the searchable ribbon.
  const compact=page.locator(".qgis-toolstrip");
  const advanced=compact.locator('[data-tool-detail="advanced"]').first();
@@ -63,22 +63,22 @@ try{
  await page.setViewportSize({width:1280,height:850});
  console.log("PASS mobile ribbon search within viewport");
  // A project with no configured 3D source must still open the workspace.
- await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator('[data-ovg-alternate-active="3d"] canvas').waitFor();
  // Hidden GIS command listeners must not consume keyboard events in alternate modes.
  const keyHandled=await page.evaluate(()=>!document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"L",bubbles:true,cancelable:true})));
  assert.equal(keyHandled,false);
  assert.equal(await page.locator('.core-command input').inputValue(),"");
  console.log("PASS alternate mode does not intercept GIS shortcuts");
- assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
- await page.getByRole("button",{name:"Chiều cao polygon",exact:true}).click();
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"2D",exact:true}).click();await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);
  await page.getByLabel("Chiều cao 3D (m)").waitFor();
  console.log("PASS empty 3D workspace and configuration entry");
- await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/mốc phẳng 0 m/).waitFor();
- assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -88,7 +88,7 @@ try{
  for(let i=0;i<100&&!releaseSave;i++)await new Promise(resolve=>setTimeout(resolve,20));
  assert.ok(releaseSave,"CAD save should be in flight");
  try{
-  await modes.getByRole("button",{name:"GIS 2D",exact:true}).click();
+  await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click();
   await page.getByText("Hãy lưu hoặc hủy chỉnh sửa trước khi chuyển chế độ.").waitFor();
   assert.equal(await modes.getByRole("button",{name:"CAD",exact:true}).getAttribute("aria-pressed"),"true");
  }finally{holdSave=false;releaseSave()}
@@ -96,7 +96,7 @@ try{
  console.log("PASS in-flight CAD save blocks mode switch");
  console.log("PASS live CAD version UI");
  assert.equal(await page.getByRole("button",{name:"Tải xuống",exact:true}).count(),2);
- await modes.getByRole("button",{name:"GIS 2D",exact:true}).click({noWaitAfter:true});
+ await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click({noWaitAfter:true});
  await page.locator(".qgis-map-region .maplibregl-canvas").waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -113,9 +113,10 @@ try{
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
- await modes.getByRole("button",{name:"3D",exact:true}).click();
- await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
- await modes.getByRole("button",{name:"GIS 2D",exact:true}).click();
+ await modes.getByRole("button",{name:"GIS",exact:true}).click();
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click();
+ await page.locator('[data-ovg-alternate-active="3d"] canvas').waitFor();
+ await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  console.log("PASS enabled business module can enter CAD and 3D without switching to Core");
  pluginCompatible=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
@@ -125,7 +126,7 @@ try{
  await mismatch.getByText(/Phiên bản không tương thích/).waitFor();
  assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).isDisabled(),true);
  await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();
- await modes.getByRole("button",{name:"GIS 2D",exact:true}).waitFor();
+ await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').waitFor();
  console.log("PASS incompatible activation falls back to Core with explicit reason");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");

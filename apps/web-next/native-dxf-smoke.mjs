@@ -34,7 +34,7 @@ try{
  return route.fulfill({json:body});
  });
  await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
- const modes=page.getByRole("group",{name:"Chế độ không gian"});
+ const modes=page.getByRole("group",{name:"Không gian làm việc"});
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  page.once("dialog",d=>d.accept("Test"));

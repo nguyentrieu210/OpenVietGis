@@ -7,7 +7,8 @@ import type {TerrainGrid} from "./terrain";
 import "maplibre-gl/dist/maplibre-gl.css";
 export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number;pitch?:number}>;
 export type NamedModel=Readonly<{id:string;placement:PlacedModel}>;
-export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void;selectModel(id:string):void;setLayerVisible(id:string,visible:boolean):void;getCamera():GeographicCamera};
+export type SharedVector={id:string;geometry:import("geojson").Geometry;color:string};
+export type SelectableFootprintEngine=PreparedEngine&{select(featureId:string):void;selectModel(id:string):void;setLayerVisible(id:string,visible:boolean):void;getCamera():GeographicCamera;replaceVectors?(rows:readonly SharedVector[],selected:string):void};
 export async function prepareFootprint3d(host:HTMLElement,view:FootprintView,camera:GeographicCamera,signal:AbortSignal,onPick:(featureId:string)=>void,extras?:{terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void}):Promise<SelectableFootprintEngine>{
  if(signal.aborted)throw new DOMException("Aborted","AbortError");
  if(![camera.longitude,camera.latitude,camera.zoom,camera.bearing].every(Number.isFinite)||Math.abs(camera.longitude)>180||Math.abs(camera.latitude)>85||camera.zoom<0||camera.zoom>22||(camera.pitch!==undefined&&(!Number.isFinite(camera.pitch)||camera.pitch<0||camera.pitch>75)))throw Error("Invalid camera");

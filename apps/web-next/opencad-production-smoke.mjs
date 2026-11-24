@@ -48,7 +48,7 @@ try{
   return r.fulfill({path:file,contentType:type});
  });
  await p.goto(origin+"/app",{waitUntil:"domcontentloaded"});
- const modes=p.getByRole("group",{name:"Chế độ không gian"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ const modes=p.getByRole("group",{name:"Không gian làm việc"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
  if(process.env.OVG_CAD_TEST!=="create"){
 
  const editor=p.locator(".ovg-cad-editor");

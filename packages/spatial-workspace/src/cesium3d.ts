@@ -1,7 +1,7 @@
 /** Cesium geographic viewer, using validated local scene inputs and no ion/CDN. */
 import type * as Cesium from "cesium";
 import type {FootprintView} from "./footprint3d";
-import type {GeographicCamera,NamedModel,SelectableFootprintEngine} from "./maplibre3d";
+import type {GeographicCamera,NamedModel,SelectableFootprintEngine,SharedVector} from "./maplibre3d";
 import type {Tile} from "./tileset";
 import type {SelectableTileEngine} from "./tiles3d";
 import type {PlacedModel} from "./mesh-layer";
@@ -13,7 +13,7 @@ type Pick={kind:"footprint"|"model"|"terrain";id:string};
 type MeshGroup={id:Pick;positions:number[];color:Cesium.Color};
 export type ProjectImagery={name:string;url:string;bounds:[number,number,number,number];maxzoom:number};
 export type LegacyImagery={id:"google-satellite"|"google-hybrid";name:string;url:string;maxzoom:number;credit:string};
-type SceneOptions={legacyImagery?:readonly LegacyImagery[];imagery?:readonly ProjectImagery[];terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void};
+type SceneOptions={vectors?:readonly SharedVector[];initialBasemap?:string;onBasemapChange?:(id:string)=>void;legacyImagery?:readonly LegacyImagery[];imagery?:readonly ProjectImagery[];terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void};
 const abortError=()=>new DOMException("Aborted","AbortError");
 let runtime:Promise<C>|undefined;
 export function loadCesium():Promise<C>{
@@ -34,7 +34,7 @@ const cameraPins=new WeakMap<Cesium.CesiumWidget,{view:GeographicCamera;position
 function setCamera(c:C,widget:Cesium.CesiumWidget,camera:GeographicCamera){
  validCamera(camera);
  const center=c.Cartesian3.fromDegrees(camera.longitude,camera.latitude);
- widget.camera.lookAt(center,new c.HeadingPitchRange(c.Math.toRadians(camera.bearing),c.Math.toRadians((camera.pitch??58)-90),rangeFor(camera.zoom,camera.latitude)));
+ widget.camera.lookAt(center,new c.HeadingPitchRange(c.Math.toRadians(camera.bearing),c.Math.toRadians((camera.zoom<=2?0:camera.pitch??58)-90),rangeFor(camera.zoom,camera.latitude)));
  widget.camera.lookAtTransform(c.Matrix4.IDENTITY);
  cameraPins.set(widget,{view:{...camera},position:c.Cartesian3.clone(widget.camera.positionWC),direction:c.Cartesian3.clone(widget.camera.directionWC),up:c.Cartesian3.clone(widget.camera.upWC)});
 }
@@ -48,7 +48,7 @@ function getCamera(c:C,widget:Cesium.CesiumWidget):GeographicCamera{
  const pitch=range>0?Math.asin(clamp(-offset.z/range,-1,1)):camera.pitch;
  return {longitude:c.Math.toDegrees(ll.longitude),latitude,zoom:clamp(Math.log2(40075016.6856*Math.max(.08,Math.cos(ll.latitude))/Math.max(5,range)),0,22),bearing:c.Math.toDegrees(c.Math.negativePiToPi(heading)),pitch:clamp(90+c.Math.toDegrees(pitch),0,75)};
 }
-function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initial:GeographicCamera,imagery:readonly ProjectImagery[]=[],legacyImagery:readonly LegacyImagery[]=[]){
+function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initial:GeographicCamera,imagery:readonly ProjectImagery[]=[],legacyImagery:readonly LegacyImagery[]=[],initialBasemap?:string,onBasemapChange?:(id:string)=>void){
  const scene=widget.scene,controller=scene.screenSpaceCameraController,E=c.CameraEventType,M=c.KeyboardEventModifier;
  // Globe-ray camera navigation avoids synchronous GPU depth-buffer readback on drag.
  scene.useDepthPicking=false;
@@ -84,6 +84,7 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
  let overlay:Cesium.ImageryLayer|undefined;imagerySelect.value="natural";
  const info=document.createElement("div");info.className="ovg-earth-imagery-status";info.setAttribute("role","status");info.textContent="Natural Earth · ảnh tổng quan";
  imagerySelect.onchange=()=>{
+  if(["google-satellite","google-hybrid","sentinel"].includes(imagerySelect.value))onBasemapChange?.(imagerySelect.value);
   if(overlay){widget.imageryLayers.remove(overlay,true);overlay=undefined}
   const selected=legacy.find(i=>i.id===imagerySelect.value);
   if(selected){
@@ -104,9 +105,11 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
   }else info.textContent="Natural Earth · ảnh tổng quan";
   scene.requestRender();
  };
+ if(legacy.some(i=>i.id===initialBasemap)||initialBasemap==="sentinel"){imagerySelect.value=initialBasemap!;imagerySelect.dispatchEvent(new Event("change"))}
  settings.append(info);
  const help=document.createElement("small");help.textContent="Trái: kéo · Phải xuống/lên: zoom vào/ra · Cuộn: zoom tại con trỏ · Giữa/Ctrl: nghiêng · N/U/R: đặt lại";settings.append(help);
  const details=document.createElement("details");details.className="ovg-earth-settings-menu";const summary=document.createElement("summary");summary.textContent="Hiển thị 3D";details.append(summary,settings);tools.append(details);
+ const credits=document.createElement("details");credits.className="ovg-earth-credit";const creditButton=document.createElement("summary");creditButton.textContent="ⓘ";creditButton.setAttribute("aria-label","Thông tin nguồn bản đồ");const creditText=document.createElement("p");creditText.textContent="CesiumJS self-hosted · Apache-2.0. Nguồn ảnh và ghi công nhà cung cấp hiển thị trên bản đồ. Google legacy là nguồn không chính thức.";credits.append(creditButton,creditText);tools.append(credits);
  surface.append(tools);
  const hud=document.createElement("div");hud.className="ovg-earth-camera-hud";hud.setAttribute("aria-label","Thông số camera 3D");surface.append(hud);
  const updateHud=()=>{if(widget.isDestroyed())return;const v=getCamera(c,widget),alt=widget.camera.positionCartographic.height;hud.dataset.altitude=String(alt);const next=v.latitude.toFixed(5)+"°, "+v.longitude.toFixed(5)+"° · "+(alt>=1000?(alt/1000).toFixed(2)+" km":Math.round(alt)+" m")+" · N "+Math.round(v.bearing)+"° · Nghiêng "+Math.round(v.pitch??0)+"°";if(hud.textContent!==next)hud.textContent=next};
@@ -188,16 +191,44 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
  const models=extras?.models??(extras?.model?[{id:"local",placement:extras.model}]:[]);checkSceneBudget(models.map(v=>v.placement.model));
  if(new Set(models.map(v=>v.id)).size!==models.length||models.some(v=>!v.id||v.id==="terrain"||v.id==="footprints"))throw Error("Invalid model identities");
  const c=await loadCesium();if(signal.aborted)throw abortError();
+ c.CreditDisplay.cesiumCredit=new c.Credit('<a href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener" title="CesiumJS · self-hosted Apache-2.0">CesiumJS</a>',true);
  const surface=document.createElement("div");surface.className="ovg-cesium-3d";surface.dataset.ovg3dEngine="cesium";surface.style.cssText="position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:5;overflow:hidden";
  host.append(surface);
  let widget:Cesium.CesiumWidget|undefined,disposed=false,active=false,cleanupNav:(()=>void)|undefined;
  const modelLayers=new Map<string,{primitive:Cesium.Primitive;groups:MeshGroup[]}>();
  const footprintEntities=new Map<string,Cesium.Entity[]>();
  let terrain:Cesium.Primitive|undefined,footprintsVisible=true,selectedModel="";
+ const vectorEntities=new Map<string,{items:Cesium.Entity[];color:Cesium.Color}>();
+ const replaceVectors=(rows:readonly SharedVector[],selected:string)=>{
+  if(!widget||disposed)return;
+  for(const item of vectorEntities.values())for(const entity of item.items)widget.entities.remove(entity);
+  vectorEntities.clear();
+  const positions=(coords:number[][])=>c.Cartesian3.fromDegreesArray(coords.flatMap(p=>[p[0]!,p[1]!]));
+  let vertices=0;
+  for(const row of rows.slice(0,5000)){
+   if(footprintEntities.has(row.id))continue;
+   const items:Cesium.Entity[]=[],color=c.Color.fromCssColorString(row.color)??c.Color.DODGERBLUE;
+   const add=(g:import("geojson").Geometry):void=>{
+    if(!widget||vertices>=100000)return;
+    const base={properties:{sourceId:row.id}};
+    if(g.type==="Point"){vertices++;items.push(widget.entities.add({...base,position:c.Cartesian3.fromDegrees(g.coordinates[0]!,g.coordinates[1]!),point:{pixelSize:7,color,outlineColor:c.Color.WHITE,outlineWidth:1,disableDepthTestDistance:1000}}))}
+    else if(g.type==="LineString"){vertices+=g.coordinates.length;if(vertices<=100000)items.push(widget.entities.add({...base,polyline:{positions:positions(g.coordinates),width:2,material:color,clampToGround:true}}))}
+    else if(g.type==="Polygon"){vertices+=g.coordinates.reduce((n,r)=>n+r.length,0);if(vertices<=100000&&g.coordinates[0]?.length>=4)items.push(widget.entities.add({...base,polygon:{hierarchy:new c.PolygonHierarchy(positions(g.coordinates[0]),g.coordinates.slice(1).map(r=>new c.PolygonHierarchy(positions(r)))),material:color.withAlpha(.4),outline:false}}))}
+    else if(g.type==="MultiPoint")g.coordinates.forEach(coordinates=>add({type:"Point",coordinates}));
+    else if(g.type==="MultiLineString")g.coordinates.forEach(coordinates=>add({type:"LineString",coordinates}));
+    else if(g.type==="MultiPolygon")g.coordinates.forEach(coordinates=>add({type:"Polygon",coordinates}));
+    else if(g.type==="GeometryCollection")g.geometries.forEach(add);
+   };
+   try{add(row.geometry)}catch{/* invalid source geometry is not rendered */}
+   if(items.length)vectorEntities.set(row.id,{items,color});
+   if(vertices>=100000)break;
+  }
+  surface.dataset.ovgVectorCount=String(vectorEntities.size);surface.dataset.ovgVectorLimited=String(rows.length>5000||vertices>=100000);select(selected);
+ };
  const render=()=>widget?.scene.requestRender();
  const dispose=()=>{if(disposed)return;disposed=true;active=false;cleanupNav?.();if(widget&&!widget.isDestroyed())widget.destroy();surface.remove()};
  const color=c.Color.fromCssColorString("#326dba"),highlight=c.Color.fromCssColorString("#f59e0b");
- const select=(id:string)=>{for(const [key,entities] of footprintEntities)for(const entity of entities)if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(key===id?highlight:color);render()};
+ const select=(id:string)=>{for(const [key,entities] of footprintEntities)for(const entity of entities)if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(key===id?highlight:color);for(const [key,v] of vectorEntities)for(const entity of v.items){const tint=key===id?highlight:v.color;if(entity.point)entity.point.color=new c.ConstantProperty(tint);if(entity.polyline)entity.polyline.material=new c.ColorMaterialProperty(tint);if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(tint.withAlpha(.4))}render()};
  const applyModelHighlight=()=>{for(const [id,{primitive,groups}] of modelLayers){if(!primitive.ready)continue;for(const group of groups){const a=primitive.getGeometryInstanceAttributes(group.id);if(a)a.color=c.ColorGeometryInstanceAttribute.toValue(id===selectedModel?highlight:group.color,a.color)}}};
  const selectModel=(id:string)=>{selectedModel=id;applyModelHighlight();render()};
  const setLayerVisible=(id:string,visible:boolean)=>{if(id==="footprints"){footprintsVisible=visible;for(const items of footprintEntities.values())for(const item of items)item.show=visible}else if(id==="terrain"&&terrain)terrain.show=visible;else{const m=modelLayers.get(id);if(m)m.primitive.show=visible}render()};
@@ -219,21 +250,22 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
    }
    footprintEntities.set(f.properties.featureId,entities);
   }
+  replaceVectors(extras?.vectors??[],"");
   if(extras?.terrain){terrain=meshPrimitive(c,terrainGroups(c,extras.terrain));scene.primitives.add(terrain)}
   for(const m of models){const groups=modelGroups(c,m.id,m.placement),primitive=meshPrimitive(c,groups);scene.primitives.add(primitive);modelLayers.set(m.id,{primitive,groups})}
   setCamera(c,widget,camera);
-  cleanupNav=addNavigation(c,widget,surface,camera,extras?.imagery,extras?.legacyImagery);
+  cleanupNav=addNavigation(c,widget,surface,camera,extras?.imagery,extras?.legacyImagery,extras?.initialBasemap,extras?.onBasemapChange);
   let waitingForModels=true;scene.postRender.addEventListener(()=>{if(waitingForModels&&[...modelLayers.values()].every(v=>v.primitive.ready)){waitingForModels=false;applyModelHighlight();render()}});
   widget.screenSpaceEventHandler.setInputAction((e:{position:Cesium.Cartesian2})=>{
    if(!active||disposed||!widget)return;
    const hit=scene.pick(e.position),id=hit?.id;
-   if(id instanceof c.Entity){const key=id.properties?.sourceId?.getValue(widget.clock.currentTime);if(footprintsVisible&&typeof key==="string"&&footprintEntities.has(key)){selectModel("");select(key);onPick(key)}}
+   if(id instanceof c.Entity){const key=id.properties?.sourceId?.getValue(widget.clock.currentTime);if(typeof key==="string"&&(vectorEntities.has(key)||(footprintsVisible&&footprintEntities.has(key)))){selectModel("");select(key);onPick(key)}}
    else if(id?.kind==="model"&&modelLayers.has(id.id)){select("");selectModel(id.id);extras?.onModelPick?.(id.id)}
   },c.ScreenSpaceEventType.LEFT_CLICK);
   // Render once before the mode transaction can commit.
   widget.resize();widget.render();
   if(signal.aborted)throw abortError();
-  return {select,selectModel,setLayerVisible,getCamera(){if(!widget||disposed)throw Error("Disposed Cesium");return getCamera(c,widget)},activate(){if(disposed||!widget)throw Error("Disposed Cesium");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";widget.resize();render()},dispose};
+  return {select,selectModel,setLayerVisible,replaceVectors,getCamera(){if(!widget||disposed)throw Error("Disposed Cesium");return getCamera(c,widget)},activate(){if(disposed||!widget)throw Error("Disposed Cesium");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";widget.resize();render()},dispose};
  }catch(e){dispose();throw e}
 }
 
@@ -243,6 +275,7 @@ export async function prepareCesiumTiles3d(host:HTMLElement,root:Tile,manifestPa
  const url=new URL(manifestPath,location.origin);
  if(url.origin!==location.origin||!/^\/api\/v1\/organizations\/[A-Za-z0-9_-]+\/projects\/[A-Za-z0-9_-]+\/3d\/tilesets\/[A-Za-z0-9_-]+\/tileset\.json$/.test(url.pathname)||url.search||url.hash)throw Error("Invalid project tileset path");
  const c=await loadCesium();if(signal.aborted)throw abortError();
+ c.CreditDisplay.cesiumCredit=new c.Credit('<a href="https://cesium.com/platform/cesiumjs/" target="_blank" rel="noopener" title="CesiumJS · self-hosted Apache-2.0">CesiumJS</a>',true);
  const surface=document.createElement("div");surface.className="ovg-cesium-3d";surface.dataset.ovg3dEngine="cesium-tiles";surface.style.cssText="position:absolute;inset:0;visibility:hidden;pointer-events:none;z-index:5;overflow:hidden";host.append(surface);
  let widget:Cesium.CesiumWidget|undefined,tiles:Cesium.Cesium3DTileset|undefined,disposed=false,active=false,failed=0,loaded=0,cleanupNav:(()=>void)|undefined;
  const dispose=()=>{if(disposed)return;disposed=true;active=false;cleanupNav?.();if(widget&&!widget.isDestroyed())widget.destroy();if(tiles&&!tiles.isDestroyed())tiles.destroy();surface.remove()};
