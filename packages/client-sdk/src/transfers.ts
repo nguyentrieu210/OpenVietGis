@@ -1,5 +1,5 @@
 import type { components } from "./generated/import-export";
-import { ApiClient, ApiError } from "./http";
+import { ApiClient, ApiError, projectApiPath } from "./http";
 
 export type TransferFormat = components["schemas"]["TransferFormat"];
 export type TransferJobKind = components["schemas"]["JobKind"];
@@ -34,7 +34,7 @@ export class TransferApiError extends ApiError {
 }
 
 function projectBase(organizationId: string, projectId: string): string {
-  return `/organizations/${encodeURIComponent(organizationId)}/projects/${encodeURIComponent(projectId)}`;
+  return projectApiPath(organizationId, projectId);
 }
 
 async function wrapTransfer<T>(call: () => Promise<T>): Promise<T> {
@@ -42,20 +42,9 @@ async function wrapTransfer<T>(call: () => Promise<T>): Promise<T> {
     return await call();
   } catch (error) {
     if (error instanceof ApiError) {
-      let code = "TRANSFER_ERROR";
-      let detail = error.message;
-      try {
-        const parsed = (await error.response.clone().json()) as {
-          code?: string;
-          message?: string;
-          detail?: string;
-        };
-        if (typeof parsed.code === "string") code = parsed.code;
-        if (typeof parsed.message === "string") detail = parsed.message;
-        else if (typeof parsed.detail === "string") detail = parsed.detail;
-      } catch {
-        // Ignore non-JSON error body
-      }
+      const payload = await error.readPayload();
+      const code = payload.code ?? "TRANSFER_ERROR";
+      const detail = payload.message ?? payload.detail ?? error.message;
       throw new TransferApiError(error.status, error.response, code, detail);
     }
     throw error;

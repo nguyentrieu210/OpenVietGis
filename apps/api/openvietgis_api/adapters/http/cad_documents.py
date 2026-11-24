@@ -1,5 +1,7 @@
 """Native CAD file vault and explicit version-pinned 2D DXF placement."""
 
+import hashlib
+import json
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -9,10 +11,12 @@ from urllib.parse import quote
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from openvietgis_api.adapters.cad.dxf_codec import write_dxf_2d
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
@@ -30,7 +34,12 @@ from openvietgis_api.config import get_settings
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.cad.domain import CadUnit
-from openvietgis_api.domains.cad.georeference import CadPlacement, Control, fit_web_placement
+from openvietgis_api.domains.cad.georeference import (
+    CadPlacement,
+    Control,
+    fit_web_placement,
+    restore_features,
+)
 
 router = APIRouter(tags=["cad-documents"])
 BASE = "/organizations/{organization_id}/projects/{project_id}/cad/documents"
@@ -502,3 +511,212 @@ def import_georef(
         "entity_summary": record.entity_summary,
         "loss_report": record.loss_report,
     }
+
+
+class GeorefDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversion_id: UUID
+    expected_document_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_content_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_schema_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
+    expected_preview_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    acknowledge_loss: bool = False
+
+
+@router.post(BASE + "/{document_id}/versions/{version}/export-georef-draft")
+def export_georef_draft(
+    organization_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    version: int,
+    body: GeorefDraftRequest,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> Response:
+    """Review and download a derived DXF, never mutate the original document."""
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_EDIT)
+    args = {
+        "org": ctx.organization_id,
+        "proj": ctx.project_id,
+        "doc": document_id,
+        "version": version,
+        "conversion": body.conversion_id,
+    }
+    # Share the native vault's lock order so latest version and source revision
+    # cannot change between validation and materialization.
+    session.execute(
+        text("SELECT pg_advisory_xact_lock_shared(hashtextextended(:key,0))"),
+        {"key": "cad-doc:" + str(ctx.project_id)},
+    )
+    row = (
+        session.execute(
+            text("""
+        SELECT d.sha256, d.storage_key, d.format, c.entity_summary,
+               c.source_id, c.layer_id, s.content_revision, s.schema_revision,
+               s.stored_crs, s.dimensions, s.feature_count, l.name AS layer_name
+        FROM cad.conversions c
+        JOIN cad.document_versions d ON d.organization_id=c.organization_id
+          AND d.project_id=c.project_id AND d.document_id=:doc
+          AND d.version=:version AND d.sha256=c.sha256
+          AND d.document_id::text=c.entity_summary->>'cad_document_id'
+          AND d.version::text=c.entity_summary->>'cad_document_version'
+        JOIN spatial.data_sources s ON s.organization_id=c.organization_id
+          AND s.project_id=c.project_id AND s.id=c.source_id
+        JOIN spatial.layers l ON l.organization_id=c.organization_id
+          AND l.project_id=c.project_id AND l.id=c.layer_id AND l.source_id=s.id
+        WHERE c.organization_id=:org AND c.project_id=:proj AND c.id=:conversion
+          AND c.direction='import' AND c.status='succeeded'
+          AND s.lifecycle='active' AND s.validation_state='ready' AND l.lifecycle='active'
+        FOR SHARE OF s,l
+    """),
+            args,
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(404, "Version-pinned CAD conversion not found")
+    latest = session.execute(
+        text(f"SELECT max(version) FROM cad.document_versions WHERE {WHERE} AND document_id=:doc"),
+        {"org": ctx.organization_id, "proj": ctx.project_id, "doc": document_id},
+    ).scalar_one()
+    if latest != version or (row["sha256"], row["content_revision"], row["schema_revision"]) != (
+        body.expected_document_sha256,
+        body.expected_content_revision,
+        body.expected_schema_revision,
+    ):
+        raise HTTPException(409, "CAD or GIS source revision changed")
+    if row["format"] != "dxf" or row["stored_crs"] != 3857 or row["dimensions"] != "XY":
+        raise HTTPException(422, "Only calibrated local XY DXF supported")
+    if not 1 <= row["feature_count"] <= 10_000:
+        raise HTTPException(422, "Draft requires 1–10000 features")
+    # Use immutable conversion provenance, not request-supplied controls.
+    meta = row["entity_summary"].get("placement")
+    if not isinstance(meta, dict) or meta.get("algorithm") != "similarity-grid-2d-v1":
+        raise HTTPException(422, "Missing reviewed CAD placement")
+    native = meta.get("native_reference")
+    control = GeorefRequest.model_validate(
+        {
+            "crs_code": native["crs_code"] if native else meta["crs_code"],
+            "units": meta["units"],
+            "controls": native["controls"] if native else meta["controls"],
+            "web_controls": meta["controls"] if native else None,
+            "tolerance_m": meta["tolerance_grid_m"],
+            "max_scale_deviation": meta["max_scale_deviation"],
+        }
+    )
+    placement = fit_web_placement(
+        document_id=document_id,
+        version=version,
+        crs_code=control.crs_code,
+        units=control.units,
+        controls=control.controls,
+        web_controls=control.web_controls,
+        tolerance_m=control.tolerance_m,
+        max_scale_deviation=control.max_scale_deviation,
+    )
+    _store().get_bytes(row["storage_key"], expected_sha256=row["sha256"])
+    # Bound database materialization before serializing any geometry to JSON.
+    counts = (
+        session.execute(
+            text("""
+            SELECT count(*) AS n,coalesce(sum(ST_NPoints(geometry)),0) AS positions,
+                   coalesce(max(ST_NPoints(geometry)),0) AS largest
+            FROM spatial.reference_features WHERE organization_id=:org
+              AND project_id=:proj AND source_id=:src
+        """),
+            {"org": ctx.organization_id, "proj": ctx.project_id, "src": row["source_id"]},
+        )
+        .mappings()
+        .one()
+    )
+    if (
+        counts["n"] != row["feature_count"]
+        or counts["positions"] > 200_000
+        or counts["largest"] > 4096
+    ):
+        raise HTTPException(422, "Derived DXF position limit exceeded")
+    records = (
+        session.execute(
+            text("""
+        SELECT feature_id,ST_AsGeoJSON(geometry,15,0)::jsonb AS geom,
+               ST_IsValid(geometry) AND NOT ST_IsEmpty(geometry) AS valid
+        FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj
+          AND source_id=:src ORDER BY feature_id LIMIT 10001
+    """),
+            {"org": ctx.organization_id, "proj": ctx.project_id, "src": row["source_id"]},
+        )
+        .mappings()
+        .all()
+    )
+    if len(records) != row["feature_count"] or any(
+        not r["valid"] or r["geom"] is None for r in records
+    ):
+        raise HTTPException(422, "Source contains invalid, missing or excessive geometry")
+    features = [{"feature_id": r["feature_id"], "geometry": dict(r["geom"])} for r in records]
+    local = restore_features(
+        features, placement, document_id=document_id, version=version, source_crs_code=3857
+    )
+    payload = write_dxf_2d(local, layer_name=str(row["layer_name"]), units=placement.units)
+    if len(payload) > LIMIT:
+        raise HTTPException(422, "Derived DXF exceeds 25 MiB")
+    loss = {
+        "derived_document": True,
+        "original_document_unchanged": True,
+        "attributes_omitted": True,
+        "native_handles_not_preserved": True,
+        "native_styles_layers_curves_blocks_text_and_unlinked_entities_not_preserved": True,
+        "all_current_source_features_included": True,
+        "survey_grade": False,
+        "requires_acknowledgement": True,
+    }
+    preview = {
+        "document_id": str(document_id),
+        "version": version,
+        "document_sha256": row["sha256"],
+        "conversion_id": str(body.conversion_id),
+        "source_id": str(row["source_id"]),
+        "layer_id": str(row["layer_id"]),
+        "content_revision": row["content_revision"],
+        "schema_revision": row["schema_revision"],
+        "format": "dxf",
+        "units": placement.units.value,
+        "feature_count": len(features),
+        "loss_report": loss,
+        "published": False,
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "profile": "derived-local-dxf-v1",
+                "preview": preview,
+                "placement": placement.metadata(),
+                "features": features,
+                "layer_name": row["layer_name"],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+    ).hexdigest()
+    if body.expected_preview_fingerprint is None:
+        if body.acknowledge_loss:
+            raise HTTPException(422, "Review preview before acknowledging loss")
+        return JSONResponse(
+            {**preview, "preview_fingerprint": fingerprint}, headers={"Cache-Control": "no-store"}
+        )
+    if body.expected_preview_fingerprint != fingerprint:
+        raise HTTPException(409, "Draft preview changed")
+    if not body.acknowledge_loss:
+        raise HTTPException(422, "Explicit derived DXF loss acknowledgement required")
+    return Response(
+        payload,
+        media_type="application/dxf",
+        headers={
+            "Content-Disposition": f'attachment; filename="derived-{document_id}-v{version}.dxf"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            "X-Content-SHA256": hashlib.sha256(payload).hexdigest(),
+            "X-CAD-Preview-Fingerprint": fingerprint,
+        },
+    )

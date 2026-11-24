@@ -1,10 +1,11 @@
 """MCP server for a paired live GIS workspace; no GIS account secret."""
 from typing import Any
 from mcp.server import MCPServer
+from gis_engineering_policy import GIS_INSTRUCTIONS
 from mcp.types import ToolAnnotations
 from bridge_client import BridgeClient, BridgeSettings
 
-mcp = MCPServer("OpenVietGIS Live Workspace")
+mcp = MCPServer("OpenVietGIS Live Workspace", instructions=GIS_INSTRUCTIONS)
 
 
 def bridge():

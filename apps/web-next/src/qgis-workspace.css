@@ -93,3 +93,19 @@
 .qgis-palette-resize::after{content:"";width:10px;height:10px;margin:0 3px 3px 0;background:repeating-linear-gradient(135deg,transparent 0 3px,#739083 3px 4px,transparent 4px 6px);clip-path:polygon(100% 0,100% 100%,0 100%)}
 .qgis-palette-resize:hover,.qgis-palette-resize:focus-visible{background:linear-gradient(135deg,transparent 0 40%,#cce7d9 41%)!important;outline:1px solid #268b75;outline-offset:-1px}
 .qgis-floating-palette[data-sizing=resizing]{outline:1px solid #238d74;outline-offset:-1px;cursor:nwse-resize}
+
+/* Spec 038: concise dock, full tool access via ribbon and explicit detail toggle. */
+.qgis-tools-compact .qgis-toolrow .qgis-icon-button[data-tool-detail="advanced"]{display:none!important}
+.qgis-tools-detail{flex:0 0 auto;white-space:nowrap;font-size:12px!important;padding:4px 9px!important;min-height:30px;border:1px solid #a6b8b0!important;background:#fff!important;color:#234b41!important;border-radius:5px}
+.qgis-tools-detail[aria-pressed=true]{background:#dcece5!important;border-color:#6e9b86!important}
+.qgis-icon-button:focus-visible,.qgis-tools-detail:focus-visible,.core-ribbon button:focus-visible,.core-ribbon-menu-fixed button:focus-visible{outline:2px solid #1558aa!important;outline-offset:2px}
+.qgis-studio .core-ribbon{min-width:0;max-width:100%;overflow-x:auto;flex-wrap:nowrap;scrollbar-width:thin}
+.core-ribbon-search-trigger{flex:0 0 auto}.core-ribbon-search-trigger>button{background:#294559;border:1px solid #688495}
+.qgis-studio .core-command-status{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+@media(max-width:600px){
+ .qgis-studio .core-ribbon{padding:3px 6px}
+ .qgis-studio .core-ribbon-group>button{font-size:12px;padding:7px 9px;min-height:36px}
+ .qgis-toolrow .qgis-icon-button{min-height:36px;min-width:36px;width:36px;height:36px}
+ .qgis-tools-detail{min-height:36px}
+ .core-ribbon-menu-fixed .core-menu-items button{min-height:48px}
+}

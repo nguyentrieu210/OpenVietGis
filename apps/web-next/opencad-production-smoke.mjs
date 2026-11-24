@@ -52,7 +52,7 @@ try{
   return r.fulfill({path:file,contentType:type});
  });
  await p.goto(origin+"/app",{waitUntil:"domcontentloaded"});
- const modes=p.getByRole("group",{name:"Chế độ không gian"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ const modes=p.getByRole("group",{name:"Không gian làm việc"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
  if(mode==="history"){
  await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:60000});
  await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();

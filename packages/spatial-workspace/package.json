@@ -17,7 +17,10 @@
     "./maplibre3d": "./src/maplibre3d.ts",
     "./cesium3d": "./src/cesium3d.ts",
     "./tileset": "./src/tileset.ts",
-    "./tiles3d": "./src/tiles3d.ts"
+    "./tiles3d": "./src/tiles3d.ts",
+    "./snap-math": "./src/snap-math.ts",
+    "./survey-math": "./src/survey-math.ts",
+    "./terrain-analysis": "./src/terrain-analysis.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,10 +28,12 @@
   },
   "dependencies": {
     "cesium": "1.147.0",
+    "delaunator": "5.0.1",
     "maplibre-gl": "6.18.0",
     "react": "^19.3.1"
   },
   "devDependencies": {
+    "@types/delaunator": "5.0.3",
     "@types/geojson": "7946.0.16",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

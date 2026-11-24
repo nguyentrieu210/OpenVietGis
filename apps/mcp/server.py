@@ -1,10 +1,11 @@
 """Local MCP server: read-only, fixed organization and project."""
 from typing import Any
 from mcp.server import MCPServer
+from gis_engineering_policy import GIS_INSTRUCTIONS
 from mcp.types import ToolAnnotations
 from gis_client import GisClient, Settings
 
-mcp = MCPServer("OpenVietGIS")
+mcp = MCPServer("OpenVietGIS", instructions=GIS_INSTRUCTIONS)
 
 
 def gis():

@@ -21,7 +21,7 @@ else if(p.endsWith("/auth/providers"))body=[{id:"keycloak",display_name:"Keycloa
 else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Bình Hưng",status:"active"}];
 else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Khảo sát số nhà xã Bình Hưng",status:"active"}];
 else if(p.endsWith("/layers"))body={items:layers,next_after_id:null};
-else if(p.endsWith("/extensions/activations"))body={items:[{extension_key:"house_numbering",status:"active"}]};
+else if(p.endsWith("/extensions/activations"))body={items:[{extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]};
 else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit"]};
 else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings"))body={items:[]};
 else if(p.endsWith("/features")){const [id,,items]=definitions.find(([id])=>p.includes("/"+id+"/"));body={context:{source_id:"source-"+id,project_id:pid,response_crs:{code:4326}},items,next_after_feature_id:null};}

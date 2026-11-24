@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -16,12 +17,13 @@ SKIP_DIRS = {
     "__pycache__",
 }
 
-# Core is allowed to know that official extensions exist only through these two
+# Core is allowed to know that official extensions exist only through these
 # generic discovery gateways. They discover by manifest/directory convention and
 # never import a named business module.
 MODULE_GATEWAYS = {
-    "apps/api/openvietgis_api/domains/extensions/runtime.py",
+    "apps/api/openvietgis_api/adapters/http/official_modules.py",
     "apps/web/src/features/extensions/registry.ts",
+    "apps/web-next/src/official-module-registry.ts",
 }
 
 PYTHON_MODULE_IMPORT = re.compile(r"(?m)^\s*(?:from|import)\s+modules(?:\.|\s|$)")
@@ -29,7 +31,9 @@ JS_MODULE_IMPORT = re.compile(
     r"""(?m)\b(?:from\s+|import\s*(?:\(\s*)?)["'][^"']*modules/[^"']*["']"""
 )
 MODULE_PACKAGE_IMPORT = re.compile(r"""["']@openvietgis/module-[^"']+["']""")
-MODULE_GLOB = re.compile(r"""import\.meta\.glob\(\s*["'][^"']*modules/[^"']*["']""")
+MODULE_GLOB = re.compile(
+    r"""import\.meta\.glob(?:\s*<[^>]+>)?\s*\(\s*["'][^"']*modules/[^"']*["']"""
+)
 
 
 def references_vertical_module_code(content: str) -> bool:
@@ -42,6 +46,83 @@ def references_vertical_module_code(content: str) -> bool:
             MODULE_GLOB,
         )
     )
+
+
+# Runtime packages must not import app internals. Browser fixtures may exercise apps.
+# A single explicit transitional bridge owns all web-next -> legacy source imports.
+LEGACY_BRIDGE = "apps/web-next/src/legacy-workbench-bridge.ts"
+JS_IMPORT = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"']+)["']"""
+)
+DOMAIN_FRAMEWORKS = {"fastapi", "starlette", "sqlalchemy", "psycopg", "psycopg2"}
+
+
+def runtime_source(relative: str) -> bool:
+    parts = relative.split("/")
+    return (
+        "src" in parts
+        and "tests" not in parts
+        and not any(
+            part.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx"))
+            for part in parts
+        )
+    )
+
+
+def frontend_boundary_violations(root: Path, path: Path, content: str) -> list[str]:
+    relative = path.relative_to(root).as_posix()
+    if not runtime_source(relative) or path.suffix not in {
+        ".ts",
+        ".tsx",
+        ".js",
+        ".jsx",
+    }:
+        return []
+    errors = []
+    for match in JS_IMPORT.finditer(content):
+        imported = match.group(1)
+        target = ""
+        if imported.startswith("."):
+            resolved = (path.parent / imported).resolve()
+            if resolved.is_relative_to(root.resolve()):
+                target = resolved.relative_to(root.resolve()).as_posix()
+        elif imported.startswith("@openvietgis/web-next"):
+            target = "apps/web-next/"
+        elif imported.startswith("@openvietgis/web"):
+            target = "apps/web/"
+        if relative.startswith("packages/") and target.startswith("apps/"):
+            errors.append(f"{relative} imports app internals: {imported}")
+        if relative.startswith("apps/web/src/") and target.startswith("apps/web-next/"):
+            errors.append(f"{relative} imports canonical app internals: {imported}")
+        if (
+            relative.startswith("apps/web-next/src/")
+            and relative != LEGACY_BRIDGE
+            and target.startswith("apps/web/")
+        ):
+            errors.append(f"{relative} bypasses legacy workbench bridge: {imported}")
+    return errors
+
+
+def domain_framework_violations(relative: str, content: str) -> list[str]:
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return [f"{relative} cannot be parsed for domain dependency validation"]
+    errors = []
+    for node in ast.walk(tree):
+        names = (
+            [alias.name for alias in node.names]
+            if isinstance(node, ast.Import)
+            else [node.module or ""]
+            if isinstance(node, ast.ImportFrom)
+            else []
+        )
+        for name in names:
+            if name.split(".")[0] in DOMAIN_FRAMEWORKS:
+                errors.append(
+                    f"{relative}:{node.lineno} domain imports framework {name}"
+                )
+    return errors
 
 
 def find_violations(root: Path = ROOT) -> list[str]:
@@ -57,6 +138,14 @@ def find_violations(root: Path = ROOT) -> list[str]:
                 continue
             content = path.read_text(encoding="utf-8", errors="ignore")
             relative_to_root = path.relative_to(root).as_posix()
+            violations.extend(frontend_boundary_violations(root, path, content))
+            if (
+                relative_to_root.startswith("apps/api/openvietgis_api/domains/")
+                and path.suffix == ".py"
+            ):
+                violations.extend(
+                    domain_framework_violations(relative_to_root, content)
+                )
             if (
                 relative_to_root not in MODULE_GATEWAYS
                 and references_vertical_module_code(content)

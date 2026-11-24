@@ -1,0 +1,11 @@
+# Tasks
+- [x] Review existing data, CRS, editing and desktop contracts.
+- [x] Remove duplicate backend CRS code sets and Mercator constant.
+- [x] Validate managed snapshot pins, IDs, schema and progress.
+- [x] Prevent silent non-null geometry decode failure.
+- [x] Add cross-registry consistency and snapshot regression cases.
+- [x] Rebuild connector ZIP and canonical frontend; run focused regressions.
+- [x] Document supported scope and open risks.
+- [ ] Independent geodetic controls and native Windows QGIS fidelity tests.
+- [ ] PostGIS transactional snapshot and alias-layer delta acceptance.
+- [ ] WKT/PRJ authority-vs-parameters conflict validation and remaining SDK wire parity.

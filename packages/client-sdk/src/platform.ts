@@ -1,4 +1,4 @@
-import { ApiClient } from "./http";
+import { ApiClient, projectApiPath } from "./http";
 
 export interface ChangesetOperation {
   id: string;
@@ -276,6 +276,8 @@ export interface ExtensionRecord {
 export type ExtensionDataRecord = ExtensionRecord;
 
 export interface ExtensionActivation {
+  manifest_version?: string | null;
+  runtime_compatible?: boolean;
   id: string;
   manifest_id: string;
   extension_key: string;
@@ -366,7 +368,7 @@ export interface OpsHealthReadiness {
 }
 
 function projBase(orgId: string, projectId: string): string {
-  return `/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}`;
+  return projectApiPath(orgId, projectId);
 }
 
 function csrfHeaders(csrf: string): Record<string, string> {

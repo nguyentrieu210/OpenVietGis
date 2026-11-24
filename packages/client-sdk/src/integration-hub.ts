@@ -1,4 +1,4 @@
-import type { ApiClient } from "./http";
+import { projectApiPath, type ApiClient } from "./http";
 
 export type ConnectorLifecycle = "existing_read_only" | "candidate" | "planned";
 
@@ -195,13 +195,7 @@ export interface QgisGpkgSyncPushInput {
 }
 
 function integrationHubRoot(organizationId: string, projectId: string): string {
-  return (
-    "/organizations/" +
-    encodeURIComponent(organizationId) +
-    "/projects/" +
-    encodeURIComponent(projectId) +
-    "/integration-hub"
-  );
+  return projectApiPath(organizationId, projectId) + "/integration-hub";
 }
 
 function extensionForExportFormat(format: IntegrationExportFormat): string {

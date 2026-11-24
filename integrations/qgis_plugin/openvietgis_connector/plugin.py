@@ -2076,7 +2076,7 @@ class OpenVietGisConnectorDialog(QDialog):
             opened_names: list[str] = []
             for first_page, all_feats in downloaded:
                 if first_page is None or not first_page.crs_code:
-                    continue
+                    raise ApiError("Không thể mở lớp không có CRS hợp lệ.")
                 geom_type = first_page.geometry_family or "Point"
                 uri = f"{geom_type}?crs=EPSG:{first_page.crs_code}"
                 vlayer = QgsVectorLayer(uri, f"OpenVietGIS · {first_page.name}", "memory")
@@ -2223,6 +2223,8 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def _has_uncommitted_managed_changes(self) -> bool:
         for info in self._managed_layers.values():
+            if info.get("recovery_blocked"):
+                return True
             local_layer = QgsProject.instance().mapLayer(info["map_layer_id"])
             if isinstance(local_layer, QgsVectorLayer) and (
                 local_layer.isModified() or self._managed_is_dirty(local_layer, info)
@@ -2263,8 +2265,11 @@ class OpenVietGisConnectorDialog(QDialog):
         QgsApplication.taskManager().addTask(task)
 
     def _apply_managed_delta(self, delta) -> None:
+        applying = None
         try:
-            if delta.reset_required:
+            if self._managed_session is None:
+                return
+            if delta.reset_required or delta.permission_epoch != self._managed_session.permission_epoch:
                 self._on_managed_session_revoked()
                 self.ws_status.setText(
                     "🔔 Quyền hoặc cấu trúc lớp đã thay đổi. Lưu bản nháp trước khi mở lại."
@@ -2286,6 +2291,9 @@ class OpenVietGisConnectorDialog(QDialog):
                 if layer.isModified() or self._managed_is_dirty(layer, info):
                     blocked_cursor = min(blocked_cursor or int(change["cursor"]), int(change["cursor"]))
                     continue
+                if str(change["source_id"]) != info["source_id"]:
+                    raise ApiError("Nguồn dữ liệu cập nhật không khớp lớp đang mở.")
+                applying = (info, layer)
                 was_edit = layer.isEditable()
                 if was_edit and not layer.commitChanges():
                     raise ApiError("Không thể kết thúc phiên sửa cục bộ.")
@@ -2330,6 +2338,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 info["cursor"] = int(change["cursor"])
                 if was_edit:
                     layer.startEditing()
+                applying = None
             self._managed_cursor = min(delta.next_cursor, blocked_cursor - 1) if blocked_cursor else delta.next_cursor
             if delta.has_more and blocked_cursor is None:
                 self._managed_delta_debounce.start()
@@ -2340,11 +2349,26 @@ class OpenVietGisConnectorDialog(QDialog):
                     f"Đã nhận {applied_count} đối tượng cập nhật từ Web."
                 )
         except OpenVietGisError as exc:
+            if applying is not None:
+                info, layer = applying
+                info["recovery_blocked"] = True
+                layer.setReadOnly(True)
+                self._managed_poll.stop()
+                self.managed_auto_save.setChecked(False)
+                self.r029_save_button.setEnabled(False)
+                self.ws_status.setText("Cập nhật cục bộ chưa hoàn tất. Mở lại lớp trước khi lưu lên Web.")
+                return
             if getattr(exc, "status_code", None) in (401, 403):
                 self._on_managed_session_revoked()
             else:
                 self.ws_status.setText(f"Tạm dừng nhận cập nhật: {exc}")
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, KeyError) as exc:
+            if applying is not None:
+                info, layer = applying
+                info["recovery_blocked"] = True
+                layer.setReadOnly(True)
+                self.managed_auto_save.setChecked(False)
+                self.r029_save_button.setEnabled(False)
             self._managed_poll.stop()
             self.ws_status.setText(f"Dữ liệu cập nhật không hợp lệ: {exc}")
 

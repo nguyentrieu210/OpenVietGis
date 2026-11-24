@@ -65,12 +65,17 @@ def test_initial_load_uses_large_pages_and_rejects_revision_change(monkeypatch):
                         lambda *a, **k: SimpleNamespace(id="s", permission_epoch=1))
     def bootstrap(*a, **kw):
         calls.append(kw)
-        return SimpleNamespace(content_revision="a", schema_revision="b", permission_epoch=1,
-                               features=[kw["offset"]], has_more=kw["offset"] == 0,
-                               next_offset=5000 if kw["offset"] == 0 else None)
+        offset = kw["offset"]
+        return client.ManagedBootstrapPage(
+            layer_id="l", source_id="src", name="fixture", geometry_family="Point",
+            dimensions="XY", crs_code=4326, content_revision="a"*64, schema_revision="b"*64,
+            cursor=1, permission_epoch=1, fields=(),
+            features=({"feature_id": f"p{offset}"},), has_more=offset == 0,
+            next_offset=1 if offset == 0 else None,
+        )
     monkeypatch.setattr(client, "bootstrap_managed_layer", bootstrap)
     result = client.load_managed_layers(None, ["l"], None)
-    assert result[1][0][1] == [0, 5000]
+    assert result[1][0][1] == [{"feature_id":"p0"},{"feature_id":"p1"}]
     assert [c["limit"] for c in calls] == [5000, 5000]
     assert client.load_managed_layers(None, ["l"], None, cancelled=lambda: True) is None
 

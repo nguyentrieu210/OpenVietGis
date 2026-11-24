@@ -268,3 +268,8 @@ Maintainer và reviewer quyết định phạm vi release dựa trên bằng ch�
 Use only data you are authorized to access, edit or publish. Do not upload personal, classified, restricted or official cadastral data to the public demo. All GIS plugins, AI agents and integrations must respect permissions. No production testing or pentesting without explicit authorization.
 
 [Demo](https://openvietgis.cloud) · [Issues](https://github.com/nguyentrieu210/OpenVietGis/issues) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [License](LICENSE)
+
+
+### Ứng viên ổn định hóa
+
+Xem [Candidate runbook](docs/community/CANDIDATE_RUNBOOK.md) và Spec 031–047 trong [ROADMAP](ROADMAP.md). Kết quả kiểm thử local không đồng nghĩa đã phát hành live hoặc chứng nhận production.

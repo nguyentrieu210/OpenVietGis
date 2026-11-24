@@ -320,6 +320,24 @@ def manifest_contract(manifest: ExtensionManifestRecord) -> dict[str, Any]:
     }
 
 
+def matches_official_manifest(stored: dict[str, Any], shipped: dict[str, Any]) -> bool:
+    """Exact declared runtime contract, independent of tenant-specific IDs and timestamps."""
+    if stored.get("enabled") is not True:
+        return False
+    defaults: dict[str, Any] = {
+        "permissions": [],
+        "commands": [],
+        "capabilities": [],
+        "ui_contributions": [],
+        "entity_schemas": {},
+    }
+    return all(
+        stored.get(k, default) == shipped.get(k, default) for k, default in defaults.items()
+    ) and all(
+        stored.get(k) == shipped.get(k) for k in ("extension_key", "version", "api_compatibility")
+    )
+
+
 def validate_stored_manifest_for_mutation(manifest: ExtensionManifestRecord) -> None:
     """Recheck retained metadata before a new mutation, never execute a contribution.
 

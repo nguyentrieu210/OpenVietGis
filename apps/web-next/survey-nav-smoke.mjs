@@ -13,7 +13,7 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Bình Hưng",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Khảo sát số nhà xã Bình Hưng",status:"active"}];
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
-  else if(p.endsWith("/extensions/activations"))body={items:[{extension_key:"house_numbering",status:"active"}]};
+  else if(p.endsWith("/extensions/activations"))body={items:[{extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit"]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules"))body={items:[]};
   else if(p.endsWith("/buildings"))body={items:[{id:"b1",linked_source_id:"source1",linked_feature_id:"f0",area_id:null,route_id:null}]};

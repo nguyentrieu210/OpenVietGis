@@ -52,8 +52,8 @@ from openvietgis_api.adapters.http import (
 )
 from openvietgis_api.adapters.http.errors import install_error_handlers
 from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
+from openvietgis_api.adapters.http.official_modules import discover_official_module_runtimes
 from openvietgis_api.config import get_settings
-from openvietgis_api.domains.extensions.runtime import discover_official_module_runtimes
 
 
 def create_app() -> FastAPI:

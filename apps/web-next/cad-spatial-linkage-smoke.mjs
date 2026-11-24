@@ -50,20 +50,21 @@ try{
   return route.fulfill({json:body});
  });
  await page.goto(testUrl,{waitUntil:"domcontentloaded"});
- const modes=page.getByRole("group",{name:"Chế độ không gian"});
+ const modes=page.getByRole("group",{name:"Không gian làm việc"});
  await modes.waitFor({timeout:30000});
- await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ await page.locator("#ovg-3d-height option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});
  await page.locator(".live-table-row").first().click({noWaitAfter:true});
- await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg3d-engine="cesium"] canvas').waitFor({timeout:30000});
  await page.getByText(/Đối tượng: source1:building/).waitFor();
- assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ await page.locator('.ovg-cad-actions input[type="file"]:enabled').waitFor();
  await page.getByLabel("Thêm bản vẽ").setInputFiles({name:"building.dxf",mimeType:"application/octet-stream",buffer:Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")});
 
  await page.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor();
@@ -90,9 +91,9 @@ try{
  await page.getByRole("button",{name:"Tra liên kết GIS"}).click({noWaitAfter:true});
  await page.getByRole("button",{name:"Chọn trên GIS"}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
- await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.getByText(/Đối tượng: source1:building/).waitFor();
- await modes.getByRole("button",{name:"GIS 2D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"2D",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
  console.log("PASS version-pinned CAD → GIS selection → 3D selection and reverse lookup");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});

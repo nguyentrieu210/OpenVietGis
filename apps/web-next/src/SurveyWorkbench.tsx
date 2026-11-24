@@ -1,5 +1,5 @@
 import React,{useMemo,useState} from "react";
-import {traverse,inverse,polygonMetrics,bowditch,type XY} from "./SurveyMath";
+import {traverse,inverse,polygonMetrics,bowditch,type XY} from "@openvietgis/spatial-workspace/survey-math";
 import {Modal} from "./studio-ui";
 import "./survey.css";
 type Mode="traverse"|"inverse"|"area";

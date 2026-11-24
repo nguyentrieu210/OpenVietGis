@@ -14,6 +14,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from uuid import UUID
 
+from openvietgis_api.domains.spatial.crs import CRS_PROFILES, WEB_MERCATOR_MAX_COORDINATE_METRE
 from openvietgis_api.domains.tenancy.domain import ActorType
 
 MAX_REVISION = 2**53 - 1
@@ -21,9 +22,11 @@ MAX_FEATURE_COUNT = 2**31 - 1
 MAX_FIELDS = 100
 MAX_POSITIONS = 4096
 MAX_TEXT_LENGTH = 4096
-KNOWN_CRS_CODES = frozenset({4326, 3857, 4756, 5899, 3405, 3406})
-READABLE_CRS_CODES = frozenset({4326, 3857, 4756, 5899})
-WEB_MERCATOR_MAX = 20037508.342789244
+KNOWN_CRS_CODES = frozenset(profile.code for profile in CRS_PROFILES)
+READABLE_CRS_CODES = frozenset(
+    profile.code for profile in CRS_PROFILES if profile.disposition == "readable"
+)
+WEB_MERCATOR_MAX = WEB_MERCATOR_MAX_COORDINATE_METRE
 
 _FIELD_ID = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,63}", re.ASCII)
 _FEATURE_ID = re.compile(r"[A-Za-z0-9_-]{1,128}", re.ASCII)

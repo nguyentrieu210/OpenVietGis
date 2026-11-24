@@ -1,13 +1,7 @@
 """Managed QGIS session scopes against isolated real PostGIS and service credentials."""
+
 from __future__ import annotations
 
-from uuid import UUID
-
-from sqlalchemy import text
-
-from openvietgis_api.adapters.http.managed_sync import _session_still_valid
-from openvietgis_api.domains.authorization.context import Actor, AuthorizationContext
-from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.integration_hub.test_integration_hub_rls_acl import (
     _credential,
@@ -31,9 +25,7 @@ def test_managed_qgis_session_preserves_project_scope_and_edit_capability(
 
         editor_id = _principal(owner, world)
         _grant(owner, world, "service_principal", editor_id, "editor")
-        _, editor_token = _credential(
-            owner, world, editor_id, ["project.read", "project.edit"]
-        )
+        _, editor_token = _credential(owner, world, editor_id, ["project.read", "project.edit"])
 
     for token, want_edit in ((viewer_token, False), (editor_token, True)):
         with _service_client(token) as client:
@@ -45,6 +37,7 @@ def test_managed_qgis_session_preserves_project_scope_and_edit_capability(
             assert data["state"] == "active"
             assert client.get(f"{url}/{data['id']}").status_code == 200
 
+
 def test_real_pairing_credential_can_open_only_its_binding(migrated_database: None) -> None:
     from uuid import uuid4
 
@@ -55,43 +48,81 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
     sessions = root + "/managed/sessions"
     with _client(world.owner_user_id) as owner:
         project = _root(world)
-        created = owner.post(project + "/layers/manual", json={
-            "operation_id": str(uuid4()), "name": "QGIS auth layer",
-            "geometry_family": "Point",
-            "fields": [{"field_id": "fld_name", "name": "Display name",
-                        "type": "text", "nullable": False}],
-        })
+        created = owner.post(
+            project + "/layers/manual",
+            json={
+                "operation_id": str(uuid4()),
+                "name": "QGIS auth layer",
+                "geometry_family": "Point",
+                "fields": [
+                    {
+                        "field_id": "fld_name",
+                        "name": "Display name",
+                        "type": "text",
+                        "nullable": False,
+                    }
+                ],
+            },
+        )
         assert created.status_code == 201, created.text
         layer = created.json()["layer_id"]
         source = owner.get(project + "/layers/" + layer).json()["source"]
         seed_url = project + "/sources/" + created.json()["source_id"] + "/changesets"
-        seed = owner.post(seed_url, json={
-            "operation_id": str(uuid4()), "base_content_revision": source["content_revision"],
-            "base_schema_revision": source["schema_revision"],
-            "operations": [{"op_type": "create", "feature_id": "initial",
-                            "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
-                            "properties": {"fld_name": "Initial"}}],
-        })
+        seed = owner.post(
+            seed_url,
+            json={
+                "operation_id": str(uuid4()),
+                "base_content_revision": source["content_revision"],
+                "base_schema_revision": source["schema_revision"],
+                "operations": [
+                    {
+                        "op_type": "create",
+                        "feature_id": "initial",
+                        "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                        "properties": {"fld_name": "Initial"},
+                    }
+                ],
+            },
+        )
         assert seed.status_code == 201, seed.text
+        alias = owner.post(
+            project + "/layers",
+            json={
+                "source_id": created.json()["source_id"],
+                "name": "Alias layer",
+            },
+        )
+        assert alias.status_code == 201, alias.text
+        alias_id = alias.json()["resource_id"]
         candidates = owner.get(bindings + "/candidates")
         assert candidates.status_code == 200, candidates.text
         candidate = next(row for row in candidates.json()["items"] if row["layer_id"] == layer)
 
         def pair(name):
-            response = owner.post(bindings, json={
-                "layer_id": layer, "adapter_key": "qgis", "external_dataset_ref": name,
-                "direction": "bidirectional_manual", "source_crs_code": 4326,
-                "target_crs_code": 4326, "external_primary_key": "ovg_feature_id",
-                "allowed_field_ids": candidate["allowed_field_ids"],
-            })
+            response = owner.post(
+                bindings,
+                json={
+                    "layer_id": layer,
+                    "adapter_key": "qgis",
+                    "external_dataset_ref": name,
+                    "direction": "bidirectional_manual",
+                    "source_crs_code": 4326,
+                    "target_crs_code": 4326,
+                    "external_primary_key": "ovg_feature_id",
+                    "allowed_field_ids": candidate["allowed_field_ids"],
+                },
+            )
             assert response.status_code == 201, response.text
             binding = response.json()
             bid = binding["id"]
-            active = owner.post(bindings + "/" + bid + "/activate",
-                                json={"expected_revision": binding["revision"]})
+            active = owner.post(
+                bindings + "/" + bid + "/activate", json={"expected_revision": binding["revision"]}
+            )
             assert active.status_code == 200, active.text
-            issued = owner.post(bindings + "/" + bid + "/pairing-tokens",
-                                json={"label": "QGIS isolated fixture", "expires_in_days": 1})
+            issued = owner.post(
+                bindings + "/" + bid + "/pairing-tokens",
+                json={"label": "QGIS isolated fixture", "expires_in_days": 1},
+            )
             assert issued.status_code == 201, issued.text
             return bid, issued.json()
 
@@ -101,6 +132,17 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         _grant(owner, world, "service_principal", generic_id, "editor")
         _, generic_token = _credential(owner, world, generic_id, ["project.read", "project.edit"])
 
+    from starlette.requests import Request
+
+    from openvietgis_api.adapters.http.managed_sync import _session_still_valid
+
+    recheck = Request(
+        {
+            "type": "http",
+            "headers": [(b"authorization", ("Bearer " + issued["bearer_token"]).encode())],
+            "path_params": {"organization_id": str(world.organization_id)},
+        }
+    )
     with _service_client(issued["bearer_token"]) as device:
         assert device.get(root + "/adapters/qgis").status_code == 200
         response = device.post(sessions, json={"binding_id": bid})
@@ -108,22 +150,18 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert response.json()["binding_id"] == bid
         assert response.json()["capabilities"]["can_edit"] is True
         sid = response.json()["id"]
-        with get_admin_engine().connect() as db:
-            credential_id = db.execute(text(
-                "SELECT service_credential_id FROM integration_hub.binding_pairing_tokens "
-                "WHERE id=:id"
-            ), {"id": UUID(issued["token"]["id"])}).scalar_one()
-        ctx = AuthorizationContext(
-            actor=Actor("service_principal", UUID(response.json()["actor_id"]), "QGIS"),
-            organization_id=world.organization_id,
-            project_id=world.project_id,
-            credential_id=credential_id,
-        )
-        assert _session_still_valid(ctx, UUID(sid))
+        from uuid import UUID
+
+        assert _session_still_valid(recheck, world.organization_id, world.project_id, UUID(sid))
         managed = root + "/managed"
-        page_response = device.get(managed + "/bootstrap", params={
-            "layer_id": layer, "session_id": sid, "limit": 1,
-        })
+        page_response = device.get(
+            managed + "/bootstrap",
+            params={
+                "layer_id": layer,
+                "session_id": sid,
+                "limit": 1,
+            },
+        )
         assert page_response.status_code == 200, page_response.text
         page = page_response.json()
         assert page["crs_code"] == 4326
@@ -135,35 +173,93 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         second = device.post(sessions, json={"binding_id": bid})
         assert second.status_code == 201, second.text
         second_id = second.json()["id"]
-        commit = device.post(managed + "/commits", json={
-            "session_id": sid, "source_id": page["source_id"],
-            "base_content_revision": page["content_revision"],
-            "base_schema_revision": page["schema_revision"],
-            "operation_id": "qgis-fixture-create",
-            "operations": [{
-                "op_type": "create", "feature_id": "qgis-fixture-new",
-                "geometry": feature["geometry"], "properties": feature["properties"],
-            }],
-        })
+        commit = device.post(
+            managed + "/commits",
+            json={
+                "session_id": sid,
+                "source_id": page["source_id"],
+                "base_content_revision": page["content_revision"],
+                "base_schema_revision": page["schema_revision"],
+                "operation_id": "qgis-fixture-create",
+                "operations": [
+                    {
+                        "op_type": "create",
+                        "feature_id": "qgis-fixture-new",
+                        "geometry": feature["geometry"],
+                        "properties": feature["properties"],
+                    }
+                ],
+            },
+        )
         assert commit.status_code == 201, commit.text
         receipt = commit.json()
         assert receipt["event_cursor"] > page["cursor"]
-        delta = device.get(managed + "/delta", params={
-            "session_id": second_id, "cursor": page["cursor"],
-        })
+        delta = device.get(
+            managed + "/delta",
+            params={
+                "session_id": second_id,
+                "cursor": page["cursor"],
+            },
+        )
         assert delta.status_code == 200, delta.text
+        assert {c["layer_id"] for c in delta.json()["changes"]} == {layer, alias_id}
+        # Delivered pages are not acknowledgements. The next request reports applied cursor.
+        assert device.get(sessions + "/" + second_id).json()["last_ack_cursor"] == page["cursor"]
+        next_cursor = delta.json()["next_cursor"]
+        next_page = device.get(
+            managed + "/delta", params={"session_id": second_id, "cursor": next_cursor}
+        )
+        assert next_page.status_code == 200
+        assert device.get(sessions + "/" + second_id).json()["last_ack_cursor"] == next_cursor
         assert any(
             item["feature_id"] == "qgis-fixture-new"
-            for change in delta.json()["changes"] for item in change["upserts"]
+            for change in delta.json()["changes"]
+            for item in change["upserts"]
         )
         recovered = device.get(managed + "/commits/qgis-fixture-create")
         assert recovered.status_code == 200, recovered.text
         assert recovered.json()["changeset_id"] == receipt["changeset_id"]
+        second_commit = device.post(
+            managed + "/commits",
+            json={
+                "session_id": sid,
+                "source_id": page["source_id"],
+                "base_content_revision": receipt["resulting_content_revision"],
+                "base_schema_revision": page["schema_revision"],
+                "operation_id": "qgis-fixture-second",
+                "operations": [
+                    {
+                        "op_type": "update",
+                        "feature_id": "qgis-fixture-new",
+                        "properties": {"fld_name": "newest"},
+                    }
+                ],
+            },
+        )
+        assert second_commit.status_code == 201, second_commit.text
+        combined = device.get(
+            managed + "/delta", params={"session_id": second_id, "cursor": page["cursor"]}
+        ).json()
+        assert not combined["reset_required"]
+        assert all(change["coalesced_changesets"] == 2 for change in combined["changes"])
+        assert all(
+            change["content_revision"] == second_commit.json()["resulting_content_revision"]
+            for change in combined["changes"]
+        )
+        assert all(
+            change["upserts"][0]["properties"]["fld_name"] == "newest"
+            for change in combined["changes"]
+        )
+        stale = device.get(
+            managed + "/delta",
+            params={"session_id": second_id, "cursor": page["cursor"], "limit": 1},
+        ).json()
+        assert stale["reset_required"] and stale["changes"] == []
         # Cross-engine acceptance: 100 new features, alternating the public
         # Web ChangeSet path and the managed desktop path, ten commits total.
         # Both use the real restricted database and authenticated API.
-        cursor = receipt["event_cursor"]
-        revision = receipt["resulting_content_revision"]
+        cursor = second_commit.json()["event_cursor"]
+        revision = second_commit.json()["resulting_content_revision"]
         expected_ids = set()
         last_payload = None
         last_receipt = None
@@ -208,30 +304,23 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert replay.json()["changeset_id"] == last_receipt["changeset_id"]
         assert replay.json()["event_cursor"] == last_receipt["event_cursor"]
 
-        # Simulated disconnected consumer catches up without a full bootstrap.
-        observed_ids = []
-        observed_cursors = []
-        while True:
-            reply = device.get(managed + "/delta", params={
-                "session_id": second_id, "cursor": cursor, "limit": 3,
-            })
-            assert reply.status_code == 200, reply.text
-            body = reply.json()
-            assert not body["reset_required"], body
-            for change in body["changes"]:
-                observed_cursors.append(change["cursor"])
-                observed_ids.extend(item["feature_id"] for item in change["upserts"])
-                assert not change["removals"]
-            assert body["next_cursor"] >= cursor
-            if body["has_more"]:
-                assert body["next_cursor"] > cursor
-            cursor = body["next_cursor"]
-            if not body["has_more"]:
-                break
-        assert len(observed_ids) == 100
-        assert set(observed_ids) == expected_ids
-        assert len(observed_cursors) == 10
-        assert observed_cursors == sorted(set(observed_cursors))
+        # A full bounded page coalesces all ten commits per source/alias.
+        # Partial pages that cannot prove a coherent revision must reset.
+        reply = device.get(managed + "/delta", params={
+            "session_id": second_id, "cursor": cursor, "limit": 20,
+        })
+        assert reply.status_code == 200, reply.text
+        body = reply.json()
+        assert not body["reset_required"], body
+        assert not body["has_more"]
+        assert {change["layer_id"] for change in body["changes"]} == {layer, alias_id}
+        for change in body["changes"]:
+            ids = [item["feature_id"] for item in change["upserts"]]
+            assert len(ids) == 100 and set(ids) == expected_ids
+            assert change["coalesced_changesets"] == 10
+            assert change["content_revision"] == revision
+            assert not change["removals"]
+        cursor = body["next_cursor"]
         empty_delta = device.get(managed + "/delta", params={
             "session_id": second_id, "cursor": cursor,
         })
@@ -240,19 +329,180 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         print("R031: 100 alternating Web/QGIS mutations converged over 10 ordered commits")
 
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
-        assert device.post(_root(foreign) + "/integration-hub/managed/sessions",
-                           json={"binding_id": bid}).status_code in (401, 403, 404)
+        assert device.post(
+            _root(foreign) + "/integration-hub/managed/sessions", json={"binding_id": bid}
+        ).status_code in (401, 403, 404)
     with _service_client(generic_token) as other:
         assert other.post(sessions, json={"binding_id": bid}).status_code == 403
-        assert other.get(managed + "/delta", params={"session_id": sid}).status_code == 403
-        assert other.get(managed + "/bootstrap", params={
-            "session_id": sid, "layer_id": layer,
-        }).status_code == 403
     with _client(world.owner_user_id) as owner:
         revoke = owner.post(
             bindings + "/" + bid + "/pairing-tokens/" + issued["token"]["id"] + "/revoke"
         )
         assert revoke.status_code == 200, revoke.text
-    assert not _session_still_valid(ctx, UUID(sid))
     with _service_client(issued["bearer_token"]) as device:
         assert device.post(sessions, json={"binding_id": bid}).status_code == 401
+        assert not _session_still_valid(recheck, world.organization_id, world.project_id, UUID(sid))
+
+
+def test_managed_session_actor_isolation_and_epoch_authority(migrated_database: None) -> None:
+    from uuid import uuid4
+
+    world = seed_access_world()
+    root = _root(world) + "/integration-hub/managed"
+    url = root + "/sessions"
+    with _client(world.owner_user_id) as owner:
+        tokens = []
+        for _ in range(2):
+            principal = _principal(owner, world)
+            _grant(owner, world, "service_principal", principal, "editor")
+            _, token = _credential(owner, world, principal, ["project.read", "project.edit"])
+            tokens.append(token)
+    with _service_client(tokens[0]) as a, _service_client(tokens[1]) as b:
+        created = a.post(url, json={"device_label": "A"})
+        assert created.status_code == 201, created.text
+        sid = created.json()["id"]
+        second = b.post(url, json={"device_label": "B"})
+        assert second.status_code == 201, second.text
+        bid = second.json()["id"]
+        commands = root + "/desktop-sessions/" + sid + "/commands"
+        assert {item["id"] for item in b.get(url).json()["items"]} == {bid}
+        assert b.get(url + "/" + sid).status_code == 404
+        assert b.get(root + "/delta", params={"session_id": sid}).status_code == 404
+        assert (
+            b.get(
+                root + "/bootstrap", params={"session_id": sid, "layer_id": str(uuid4())}
+            ).status_code
+            == 404
+        )
+        assert b.get(commands).status_code == 404
+        assert b.post(commands, json={"tool_name": "inspect_project"}).status_code == 404
+        assert (
+            b.post(
+                commands + "/" + str(uuid4()) + "/respond", json={"status": "completed"}
+            ).status_code
+            == 404
+        )
+        assert (
+            b.post(
+                root + "/commits",
+                json={
+                    "session_id": sid,
+                    "source_id": str(uuid4()),
+                    "base_content_revision": "a" * 64,
+                    "operation_id": "foreign",
+                    "operations": [{"op_type": "delete", "feature_id": "p1"}],
+                },
+            ).status_code
+            == 404
+        )
+        assert b.delete(url + "/" + sid).status_code == 403
+        assert a.delete(url + "/" + sid + "?bump_epoch=true").status_code == 403
+        assert a.get(url + "/" + sid).json()["state"] == "active"
+        assert a.get(root + "/delta", params={"session_id": sid}).status_code == 200
+        with _client(world.owner_user_id) as owner:
+            assert {sid, bid} <= {item["id"] for item in owner.get(url).json()["items"]}
+            cmd = owner.post(commands, json={"tool_name": "inspect_project"})
+            assert cmd.status_code == 201, cmd.text
+            assert (
+                owner.post(
+                    commands + "/" + cmd.json()["id"] + "/respond", json={"status": "completed"}
+                ).status_code
+                == 404
+            )
+            assert (
+                a.post(
+                    commands + "/" + cmd.json()["id"] + "/respond", json={"status": "rejected"}
+                ).status_code
+                == 200
+            )
+            revoked = owner.delete(url + "/" + bid + "?bump_epoch=true")
+            assert revoked.status_code == 200, revoked.text
+        assert a.get(root + "/delta", params={"session_id": sid}).json()["reset_required"] is True
+        assert a.get(commands).status_code == 403
+        assert (
+            a.get(
+                root + "/bootstrap", params={"session_id": sid, "layer_id": str(uuid4())}
+            ).status_code
+            == 403
+        )
+        assert b.get(root + "/delta", params={"session_id": bid}).status_code == 403
+        assert a.delete(url + "/" + sid).status_code == 200
+
+
+def test_scoped_delta_does_not_reveal_hidden_feature_ids(migrated_database: None) -> None:
+    from uuid import uuid4
+
+    world = seed_access_world()
+    root = _root(world)
+    managed = root + "/integration-hub/managed"
+    with _client(world.owner_user_id) as owner, _client(world.member_user_id) as member:
+        _grant(owner, world, "membership", str(world.member_membership_id), "editor")
+        created = owner.post(
+            root + "/layers/manual",
+            json={
+                "operation_id": str(uuid4()),
+                "name": "Scope fixture",
+                "geometry_family": "Point",
+                "fields": [
+                    {"field_id": "label", "name": "Label", "type": "text", "nullable": False}
+                ],
+            },
+        )
+        assert created.status_code == 201, created.text
+        layer, source = created.json()["layer_id"], created.json()["source_id"]
+
+        def commit(ops):
+            pin = owner.get(root + "/layers/" + layer).json()["source"]
+            response = owner.post(
+                root + "/sources/" + source + "/changesets",
+                json={
+                    "operation_id": str(uuid4()),
+                    "base_content_revision": pin["content_revision"],
+                    "base_schema_revision": pin["schema_revision"],
+                    "operations": ops,
+                },
+            )
+            assert response.status_code == 201, response.text
+
+        commit(
+            [
+                {
+                    "op_type": "create",
+                    "feature_id": fid,
+                    "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                    "properties": {"label": fid},
+                }
+                for fid in ("visible", "hidden")
+            ]
+        )
+        rule = owner.post(
+            root + "/access/rules",
+            json={
+                "user_id": str(world.member_user_id),
+                "layer_id": layer,
+                "actions": ["read"],
+                "feature_ids": ["visible"],
+            },
+        )
+        assert rule.status_code == 201, rule.text
+        session = member.post(managed + "/sessions", json={})
+        assert session.status_code == 201, session.text
+        sid = session.json()["id"]
+        page = member.get(managed + "/bootstrap", params={"session_id": sid, "layer_id": layer})
+        assert page.status_code == 200, page.text
+        assert [f["feature_id"] for f in page.json()["features"]] == ["visible"]
+        commit([{"op_type": "update", "feature_id": "hidden", "properties": {"label": "changed"}}])
+        delta = member.get(
+            managed + "/delta", params={"session_id": sid, "cursor": page.json()["cursor"]}
+        )
+        assert delta.status_code == 200, delta.text
+        assert delta.json()["reset_required"] is True
+        assert delta.json()["changes"] == []
+        assert "hidden" not in delta.text
+        revoked = owner.delete(root + "/access/rules/" + rule.json()["id"])
+        assert revoked.status_code == 204, revoked.text
+        stale = member.get(managed + "/bootstrap", params={"session_id": sid, "layer_id": layer})
+        assert stale.status_code == 403
+        assert member.get(
+            managed + "/delta", params={"session_id": sid, "cursor": page.json()["cursor"]}
+        ).json()["reset_required"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -17,6 +18,7 @@ from openvietgis_api.module_sdk import (
     AuthorizationContext,
     append_project_audit,
     prepare_module_scope,
+    require_official_activation,
     set_extension_private_access,
 )
 from sqlalchemy import text
@@ -25,6 +27,10 @@ from sqlalchemy.orm import Session
 
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.numbering_audit import find_tree_collisions
+
+_SHIPPED_MANIFEST = json.loads(
+    Path(__file__).with_name("manifest.json").read_text(encoding="utf-8")
+)
 
 
 class HouseNumberingRepository:
@@ -51,18 +57,7 @@ class HouseNumberingRepository:
         if access not in {"read", "edit", "manage"}:
             raise ValueError("invalid module access level")
         prepare_module_scope(self.session, self.context, access=access)  # type: ignore[arg-type]
-        active = self.session.execute(
-            text("""
-                SELECT 1 FROM extensions.project_activations
-                WHERE organization_id=:org AND project_id=:project
-                  AND extension_key='house_numbering' AND status='active'
-            """),
-            {"org": self.org_id, "project": self.project_id},
-        ).first()
-        if active is None:
-            raise PlatformNotFoundError(
-                "house_numbering module is not active in this project"
-            )
+        require_official_activation(self.session, self.context, _SHIPPED_MANIFEST)
 
     def audit(
         self,

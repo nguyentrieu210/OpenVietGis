@@ -34,6 +34,8 @@ MAP_ENGINE_ADAPTER = MAP_UI_ROOT + "maplibre-engine.ts"
 RENDERER_OWNERS = {
     MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
+    # SurveyTerrain owns the native MapLibre DEM interaction.
+    "apps/web-next/src/SurveyTerrain.tsx",
     "packages/spatial-workspace/src/maplibre3d.ts",
     "packages/spatial-workspace/src/renderer3d.ts",
     # Isolated browser fixture bootstraps a renderer worker; never production.
@@ -57,9 +59,16 @@ EDITING_ENGINE_OWNERS = {
 RENDERER_NON_API_REFERENCES = {
     "apps/web-next/src/SpatialWorkspace.tsx": (
         '"3d tiles · maplibre (tương thích)"',
+        '"địa hình thực tế trên bản đồ gis (maplibre)"',
+        'import type {geographiccamera} from "@openvietgis/spatial-workspace/maplibre3d";',
     ),
+    "apps/web-next/src/TerrainEngineering.tsx": (
+        'import type {map as mlmap} from "maplibre-gl";',
+    ),
+    "apps/web-next/src/LiveApp.tsx": ('"cập nhật nguồn maplibre"',),
     "packages/spatial-workspace/src/cesium3d.ts": (
         'import type {geographiccamera,namedmodel,selectablefootprintengine} from "./maplibre3d";',
+        'import type {geographiccamera,namedmodel,selectablefootprintengine,sharedvector} from "./maplibre3d";',
     ),
 }
 RENDERER_IMPORT = re.compile(

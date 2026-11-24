@@ -8,7 +8,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
- const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
+ const layer={organization_id:org,project_id:pid,id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
  const original=Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n"),revision=Buffer.concat([original,Buffer.from("\n")]);
  const hash=b=>createHash("sha256").update(b).digest("hex");
  const saved=[];let restricted=false,imported=false;
@@ -34,6 +34,8 @@ try{
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
+  else if(p.endsWith("/layers/layer1"))body=layer;
+  else if(p.endsWith("/features/building"))body={context:{organization_id:org,project_id:pid,layer_id:"layer1",source_id:"source1",content_revision:"a".repeat(64),schema_revision:"b".repeat(64),response_crs:{code:4326}},feature};
   else if(p.endsWith("/features"))body={context:{source_id:"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
     if(m==="POST"){if(saved.length){const multipart=route.request().postDataBuffer().toString();assert.match(multipart,/name="expected_version"\r\n\r\n1/);assert.ok(multipart.includes(revision.toString()))}const x=ver();saved.unshift(x);body=x}
@@ -46,18 +48,19 @@ try{
   return route.fulfill({json:body});
  });
  await page.goto(testUrl,{waitUntil:"domcontentloaded"});
- const modes=page.getByRole("group",{name:"Chế độ không gian"});
+ const modes=page.getByRole("group",{name:"Không gian làm việc"});
  await modes.waitFor({timeout:30000});
- await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
- await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator("#ovg-3d-height option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg3d-engine="cesium"] canvas').waitFor({timeout:30000});
  await page.getByText(/mốc phẳng 0 m/).waitFor();
- assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ await page.locator('.ovg-cad-actions input[type="file"]:enabled').waitFor();
  await page.getByLabel("Thêm bản vẽ").setInputFiles({name:"building.dxf",mimeType:"application/octet-stream",buffer:Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")});
 
  await page.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor();

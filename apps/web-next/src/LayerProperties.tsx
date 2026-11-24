@@ -16,7 +16,7 @@ const palette=["#3a83c4","#e69c38","#25a184","#8d63cb","#d05264","#40a5b8","#a1a
 export function categoryColor(key:string,view:LayerView){if(Object.hasOwn(view.categoryColors,key))return view.categoryColors[key];let hash=0;for(const c of key)hash=(Math.imul(hash,31)+c.charCodeAt(0))|0;return palette[(hash>>>0)%palette.length]}
 export function matchesLayerView(r:StudioRow,view:LayerView|undefined){if(!view?.filterField)return true;const value=r.feature.attributes[view.filterField];if(view.filterOp==="not_empty")return value!==null&&value!==undefined&&String(value).trim()!=="";const a=canon(value),b=canon(view.filterValue);return view.filterOp==="contains"?a.includes(b):view.filterOp==="not_equals"?a!==b:a===b}
 export function categoriesFor(rows:StudioRow[],field:string){const counts=new Map<string,number>();if(field)for(const r of rows){const k=categoryKey(r.feature.attributes[field]);counts.set(k,(counts.get(k)??0)+1)}return [...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,100)}
-import {findScreenSnap,snapLabel,type SnapKind,type SnapMode,type Segment,type XY} from "./SnapMath";
+import {findScreenSnap,snapLabel,type SnapKind,type SnapMode,type Segment,type XY} from "@openvietgis/spatial-workspace/snap-math";
 export {snapLabel};
 export type SnapPrefs={enabled:boolean;mode:SnapMode;tolerance:number};
 import {getBasemap,cleanSentinelScene,type BasemapId,type SentinelScene} from "./Basemaps";

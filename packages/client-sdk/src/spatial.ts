@@ -1,4 +1,4 @@
-import { ApiClient, ApiError } from "./http";
+import { ApiClient, ApiError, projectApiPath } from "./http";
 import type { components, operations } from "./generated/spatial-catalog";
 
 export type SpatialSource = components["schemas"]["Source"];
@@ -37,14 +37,8 @@ async function spatialRequest<T>(client: ApiClient, path: string, init?: Request
     return await client.request<T>(path, init);
   } catch (error) {
     if (error instanceof ApiError) {
-      let payload: unknown;
-      try {
-        payload = await error.response.clone().json();
-      } catch {
-        throw error;
-      }
-      if (payload !== null && typeof payload === "object" && "code" in payload &&
-          typeof payload.code === "string" && spatialCodes.has(payload.code)) {
+      const payload = await error.readPayload();
+      if (payload.code && spatialCodes.has(payload.code)) {
         throw new SpatialApiError(error.status, error.response, payload.code as SpatialErrorCode);
       }
     }
@@ -53,8 +47,7 @@ async function spatialRequest<T>(client: ApiClient, path: string, init?: Request
 }
 
 function sourceRoot(organizationId: string, projectId: string): string {
-  return "/organizations/" + encodeURIComponent(organizationId) +
-    "/projects/" + encodeURIComponent(projectId) + "/spatial/sources";
+  return projectApiPath(organizationId, projectId) + "/spatial/sources";
 }
 
 function sourcePath(organizationId: string, projectId: string, sourceId: string): string {
@@ -112,8 +105,7 @@ export type CreateSpatialLayerInput = components["schemas"]["CreateLayer"];
 export type RenameSpatialLayerInput = components["schemas"]["RenameLayer"];
 
 function layerRoot(organizationId: string, projectId: string): string {
-  return "/organizations/" + encodeURIComponent(organizationId) +
-    "/projects/" + encodeURIComponent(projectId) + "/layers";
+  return projectApiPath(organizationId, projectId) + "/layers";
 }
 
 function layerPath(organizationId: string, projectId: string, layerId: string): string {

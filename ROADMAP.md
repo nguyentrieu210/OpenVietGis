@@ -211,3 +211,52 @@ Production & Commercial Readiness.
 ### R031
 
 **Engine-first architecture migration** — in progress (specification / partial baseline inventory). Supports unified v1.0 (R030), depends on R002/R003/R004/R006/R008/R012/R014, R022 and R027/R029. Reuse proven engines through existing contracts; freeze net-new scope, preserve tenant/revision/CRS and data, replace only after measured parity, security/license review and rollback. No deployment or certification implied. [Spec](specs/031-engine-first/spec.md) · [Plan](specs/031-engine-first/plan.md) · [Tasks](specs/031-engine-first/tasks.md) · [Research](specs/031-engine-first/research.md).
+Cross-cutting [Spec 031 — Product inventory & audit](specs/031-product-inventory-audit/spec.md): static baseline and remediation backlog for Spec 030 unified v1.0; [audit evidence](specs/031-product-inventory-audit/AUDIT.md). Runtime acceptance remains open; prioritize repository/release consolidation before new features.
+
+
+Cross-cutting [Spec 032 — Repository and release consolidation](specs/032-release-consolidation/spec.md): isolated unified candidate, ref inventory and artifact integrity; [findings](specs/032-release-consolidation/AUDIT.md). Live promotion and full runtime certification remain gated.
+
+
+Cross-cutting [Spec 033 — Core architecture standardization](specs/033-core-standardization/spec.md): enforce domain/adapter and package/app boundaries; isolate legacy workbench bridge, generic module discovery and shared spatial math. [Evidence](specs/033-core-standardization/AUDIT.md); real parity acceptance remains open.
+
+
+Cross-cutting [Spec 034 — Spatial data and CRS standardization](specs/034-spatial-data-standardization/spec.md): unify CRS registry ownership and enforce coherent native QGIS snapshots; [evidence and limits](specs/034-spatial-data-standardization/AUDIT.md). Full geodetic and native runtime acceptance remains open.
+
+
+Cross-cutting [Spec 035 — Unified API and SDK](specs/035-unified-api-sdk/spec.md): single API transport base, managed QGIS URL fix, shared scoped paths and normalized error parsing; [evidence](specs/035-unified-api-sdk/AUDIT.md). Full contract coverage and live acceptance remain open.
+
+
+Cross-cutting [Spec 036 — Identity and access control](specs/036-identity-access-control/spec.md): managed-session ownership, management authority, epoch checks and scoped delta fail-closed behavior; [evidence and limitations](specs/036-identity-access-control/AUDIT.md). Full cross-client security acceptance remains open.
+
+
+Cross-cutting [Spec 037 — Unified GIS/CAD/3D workspace](specs/037-unified-spatial-workspace/spec.md): independent authorized mode entry, adapter lifecycle isolation and browser regression; [evidence](specs/037-unified-spatial-workspace/AUDIT.md). Real CAD/3D acceptance remains open.
+
+
+Cross-cutting [Spec 038 — Design system and workspace UX](specs/038-design-system-ux/spec.md): compact/full tool dock, discoverable ribbon search, consistent command feedback and keyboard/mode isolation; [evidence](specs/038-design-system-ux/AUDIT.md). Wider design-system and user acceptance remain open.
+
+
+Cross-cutting [Spec 039 — Unified Plugin Framework](specs/039-unified-plugin-framework/spec.md): exact official manifest/runtime pinning, activation validation and Core fallback; [evidence and rollout limits](specs/039-unified-plugin-framework/AUDIT.md). Existing tenant manifest compatibility requires reviewed pre-deploy audit.
+
+
+Cross-cutting [Spec 040 — Connector & Realtime](specs/040-connector-realtime/spec.md): [scope, evidence and open gates](specs/040-connector-realtime/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 041 — AI & MCP](specs/041-ai-mcp/spec.md): [scope, evidence and open gates](specs/041-ai-mcp/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 042 — Quality Gate](specs/042-quality-gate/spec.md): [scope, evidence and open gates](specs/042-quality-gate/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 043 — Performance](specs/043-performance/spec.md): [scope, evidence and open gates](specs/043-performance/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 044 — Security](specs/044-security/spec.md): [scope, evidence and open gates](specs/044-security/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 045 — Release & Deployment](specs/045-release-deployment/spec.md): [scope, evidence and open gates](specs/045-release-deployment/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 046 — Documentation & Governance](specs/046-docs-governance/spec.md): [scope, evidence and open gates](specs/046-docs-governance/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 047 — Stable Acceptance](specs/047-stable-acceptance/spec.md): [scope, evidence and open gates](specs/047-stable-acceptance/AUDIT.md). No automatic live promotion.

@@ -1,0 +1,502 @@
+[
+  {
+    "id": "F01",
+    "title": "Platform/bootstrap",
+    "priority": "P0",
+    "owner": "Platform",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "infra/dev/*"
+    ],
+    "test_patterns": [
+      "*test_foundation*",
+      "*test_bootstrap*",
+      "*bootstrap*.spec.ts"
+    ],
+    "acceptance": "CQ-00 clean installation and project open"
+  },
+  {
+    "id": "F02",
+    "title": "Identity, OAuth, accounts",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/auth.py",
+      "apps/api/openvietgis_api/domains/identity/*",
+      "apps/mcp/remote_oauth.py"
+    ],
+    "test_patterns": [
+      "*tests/*/identity/*",
+      "*auth-navigation*",
+      "*test_identity*"
+    ],
+    "acceptance": "CQ-01 two tenants, revoke/logout"
+  },
+  {
+    "id": "F03",
+    "title": "Organization, projects, workspaces, ACL",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "apps/api/openvietgis_api/adapters/http/projects.py",
+      "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "apps/api/openvietgis_api/domains/authorization/*"
+    ],
+    "test_patterns": [
+      "*tenant*.spec.ts",
+      "*tests/*/rls/*",
+      "*tests/*/authorization/*"
+    ],
+    "acceptance": "CQ-01 deny cross-tenant and viewer writes"
+  },
+  {
+    "id": "F04",
+    "title": "Spatial catalog and CRS",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/spatial/*",
+      "apps/api/openvietgis_api/adapters/http/spatial.py"
+    ],
+    "test_patterns": [
+      "*test_spatial*",
+      "*spatial-catalog.spec.ts"
+    ],
+    "acceptance": "CQ-02 VN-2000 control points and persistence"
+  },
+  {
+    "id": "F05",
+    "title": "2D map and layer tree",
+    "priority": "P0",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/web-next/src/LiveApp.tsx",
+      "apps/web-next/src/QgisWorkspace.tsx",
+      "apps/web/src/features/map/*"
+    ],
+    "test_patterns": [
+      "*map-workspace*.spec.ts",
+      "*test_maps.py"
+    ],
+    "acceptance": "CQ-02 actual web-next render, reload and inspect"
+  },
+  {
+    "id": "F06",
+    "title": "Import/export",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/transfers/*",
+      "apps/api/openvietgis_api/adapters/http/transfers.py"
+    ],
+    "test_patterns": [
+      "*tests/*/transfers/*",
+      "*import-export*.spec.ts"
+    ],
+    "acceptance": "CQ-03 independent roundtrip by supported format"
+  },
+  {
+    "id": "F07",
+    "title": "Geometry editing, history, snap",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/editing/*",
+      "apps/web-next/src/AdvancedEditor.tsx",
+      "apps/web-next/src/SnapMath.ts"
+    ],
+    "test_patterns": [
+      "*test_editing*",
+      "*native-editing*.spec.ts",
+      "*test_r006*"
+    ],
+    "acceptance": "CQ-04 stale revision, undo and history"
+  },
+  {
+    "id": "F08",
+    "title": "Attribute / spatial queries",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/queries/*",
+      "apps/api/openvietgis_api/adapters/http/queries.py"
+    ],
+    "test_patterns": [
+      "*test_query*"
+    ],
+    "acceptance": "CQ-05 typed predicates, PostGIS oracle"
+  },
+  {
+    "id": "F09",
+    "title": "Vector processing",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/processing/*",
+      "apps/web-next/src/ProcessingToolbox.tsx"
+    ],
+    "test_patterns": [
+      "*test_processing*"
+    ],
+    "acceptance": "CQ-06 Buffer/Clip/Dissolve result layer"
+  },
+  {
+    "id": "F10",
+    "title": "Processing modeler",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/processing_models.py",
+      "apps/web-next/src/ProcessingModeler.tsx"
+    ],
+    "test_patterns": [
+      "*test*model*",
+      "*test_advanced_tools.py"
+    ],
+    "acceptance": "Spec 030 DAG provenance, repeatability and errors"
+  },
+  {
+    "id": "F11",
+    "title": "Cartography and layout",
+    "priority": "P1",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/cartography/*",
+      "apps/web-next/src/LayoutDesigner.tsx",
+      "apps/web-next/src/LayoutRender.ts"
+    ],
+    "test_patterns": [
+      "*test_cartography*",
+      "*test_print*"
+    ],
+    "acceptance": "CQ-07 independent PDF/PNG geometry and scale"
+  },
+  {
+    "id": "F12",
+    "title": "External sources and basemaps",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/external_sources/*",
+      "apps/web-next/src/Basemaps.ts"
+    ],
+    "test_patterns": [
+      "*test_external*",
+      "*test_r010*"
+    ],
+    "acceptance": "CQ-08 source license, attribution, Vietnam boundary review"
+  },
+  {
+    "id": "F13",
+    "title": "Raster, Sentinel, terrain",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/raster.py",
+      "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "apps/web-next/src/RasterWorkbench.tsx",
+      "apps/web-next/src/SentinelWorkbench.tsx"
+    ],
+    "test_patterns": [
+      "*test*provider*",
+      "*test*raster*"
+    ],
+    "acceptance": "Spec 030 nodata/cloud/CRS and provenance"
+  },
+  {
+    "id": "F14",
+    "title": "CAD, precision, georeferencing",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/cad/*",
+      "apps/web-next/src/CadEditorPanel.tsx",
+      "apps/web-next/src/CadGeorefPanel.tsx"
+    ],
+    "test_patterns": [
+      "*test_dxf*",
+      "*test_cogo*"
+    ],
+    "acceptance": "CQ-10 DXF roundtrip, units and loss"
+  },
+  {
+    "id": "F15",
+    "title": "GIS/CAD/3D mode lifecycle",
+    "priority": "P0",
+    "owner": "Frontend",
+    "source_patterns": [
+      "packages/spatial-workspace/src/*",
+      "apps/web-next/src/SpatialWorkspace.tsx",
+      "apps/web-next/src/Spatial3DSettings.tsx"
+    ],
+    "test_patterns": [
+      "packages/spatial-workspace/tests/*"
+    ],
+    "acceptance": "CQ-14 real WebGL, selection, dirty state, failures"
+  },
+  {
+    "id": "F16",
+    "title": "3D assets, scenes, tiles",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/web-next/src/ModelVault.tsx",
+      "apps/web-next/src/SavedScenePanel.tsx",
+      "apps/web-next/src/TilesetPanel.tsx",
+      "apps/api/openvietgis_api/adapters/http/model_vault.py"
+    ],
+    "test_patterns": [
+      "*test*tiles*",
+      "*test*scene*",
+      "*test*terrain*"
+    ],
+    "acceptance": "Spec 030 authorized model and terrain loading"
+  },
+  {
+    "id": "F17",
+    "title": "Collaboration, chat, tasks, leases",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/team_*.py",
+      "apps/web-next/src/TeamCollaboration.tsx",
+      "apps/web-next/src/LivePresence.tsx"
+    ],
+    "test_patterns": [
+      "*test_collaboration*",
+      "*test*team*"
+    ],
+    "acceptance": "CQ-09 two-user conflict, revocation and isolation"
+  },
+  {
+    "id": "F18",
+    "title": "Offline field and replay",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/field/*",
+      "apps/web/src/features/offline/*"
+    ],
+    "test_patterns": [
+      "*r013*",
+      "*offline*.spec.ts"
+    ],
+    "acceptance": "CQ-11 restart, durable outbox and replay"
+  },
+  {
+    "id": "F19",
+    "title": "Plugin framework and marketplace",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "packages/plugin-sdk/*",
+      "apps/api/openvietgis_api/domains/extensions/*",
+      "apps/web-next/src/MarketplacePage.tsx"
+    ],
+    "test_patterns": [
+      "*test_extension*",
+      "*test_marketplace*",
+      "*extension-lifecycle.spec.ts"
+    ],
+    "acceptance": "CQ-12 manifest, scoped activation and distribution"
+  },
+  {
+    "id": "F20",
+    "title": "House numbering",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "modules/house_numbering/*"
+    ],
+    "test_patterns": [
+      "modules/house_numbering/tests/*",
+      "*house-numbering.spec.ts"
+    ],
+    "acceptance": "CQ-12 synthetic workflow, module boundary"
+  },
+  {
+    "id": "F21",
+    "title": "Land asset",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "modules/land_asset/*"
+    ],
+    "test_patterns": [
+      "modules/land_asset/tests/*",
+      "*test_land_asset*"
+    ],
+    "acceptance": "Module contract, permissions and fixture-based acceptance"
+  },
+  {
+    "id": "F22",
+    "title": "QGIS desktop authentication",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/qgis_plugin/*"
+    ],
+    "test_patterns": [
+      "*test*r029*",
+      "*test*qgis*",
+      "*smoke_qgis*"
+    ],
+    "acceptance": "Spec 030 real Windows QGIS OAuth PKCE consent logout"
+  },
+  {
+    "id": "F23",
+    "title": "QGIS managed realtime",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/qgis_plugin/*managed_client.py",
+      "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "apps/web-next/src/QgisBindingManager.tsx"
+    ],
+    "test_patterns": [
+      "*test_r029*",
+      "*test_r027*"
+    ],
+    "acceptance": "Spec 030 bidirectional, conflict, reconnect, revocation"
+  },
+  {
+    "id": "F24",
+    "title": "MicroStation V8i bridge",
+    "priority": "P1",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/microstation-v8i-bridge/*",
+      "apps/api/openvietgis_api/adapters/http/v8i_bridge.py"
+    ],
+    "test_patterns": [
+      "*test*v8i*"
+    ],
+    "acceptance": "Real supported Windows receiver interoperability"
+  },
+  {
+    "id": "F25",
+    "title": "Integration hub and external bindings",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/integration_hub/*",
+      "apps/web-next/src/IntegrationCatalog.tsx",
+      "apps/api/openvietgis_api/adapters/http/integration_bindings.py"
+    ],
+    "test_patterns": [
+      "*tests/*/integration_hub/*"
+    ],
+    "acceptance": "Scoped adapter policy and deny by default"
+  },
+  {
+    "id": "F26",
+    "title": "AI Copilot and remote MCP",
+    "priority": "P0",
+    "owner": "AI",
+    "source_patterns": [
+      "apps/mcp/*",
+      "apps/web-next/src/AiCopilotPanel.tsx"
+    ],
+    "test_patterns": [
+      "apps/mcp/test_*.py"
+    ],
+    "acceptance": "CQ-15 real OAuth, explicit write consent and revoke"
+  },
+  {
+    "id": "F27",
+    "title": "Unified API and client SDK",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "packages/client-sdk/*",
+      "apps/api/openvietgis_api/adapters/http/*"
+    ],
+    "test_patterns": [
+      "apps/api/tests/contract/*",
+      "packages/client-sdk/tests/*"
+    ],
+    "acceptance": "Generated contracts, scope and compatibility"
+  },
+  {
+    "id": "F28",
+    "title": "UX, accessibility, responsive",
+    "priority": "P1",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/web-next/src/*",
+      "apps/web/src/ui/*"
+    ],
+    "test_patterns": [
+      "*accessibility*.spec.ts",
+      "*responsive*.spec.ts",
+      "*visual*.spec.ts"
+    ],
+    "acceptance": "CQ-16 actual web-next keyboard/mobile"
+  },
+  {
+    "id": "F29",
+    "title": "Performance",
+    "priority": "P0",
+    "owner": "QA",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/persistence/*",
+      "apps/web-next/src/map-surface.ts"
+    ],
+    "test_patterns": [
+      "apps/api/tests/performance/*",
+      "*performance*.spec.ts"
+    ],
+    "acceptance": "CQ-17 measured approved profile"
+  },
+  {
+    "id": "F30",
+    "title": "Security and audit",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/security/*",
+      "apps/api/openvietgis_api/domains/audit/*",
+      ".gitleaks.toml"
+    ],
+    "test_patterns": [
+      "*test*security*",
+      "*test*rls*",
+      "*test*authorization*"
+    ],
+    "acceptance": "Spec 030 authz, tenant, secret and license review"
+  },
+  {
+    "id": "F31",
+    "title": "Deployment, backup, restore",
+    "priority": "P0",
+    "owner": "Release",
+    "source_patterns": [
+      "infra/*",
+      "tools/backup_restore.py",
+      "tools/check_release_gate.py"
+    ],
+    "test_patterns": [
+      "*test*release*",
+      "*test*ops*",
+      "*test*migrations*"
+    ],
+    "acceptance": "CQ-13 exact release manifest and isolated restore"
+  },
+  {
+    "id": "F32",
+    "title": "Repository and release governance",
+    "priority": "P0",
+    "owner": "Release",
+    "source_patterns": [
+      ".github/workflows/*",
+      "tools/control_kit_audit.py",
+      "specs/030-v1-unified-release/*"
+    ],
+    "test_patterns": [
+      "*test*control_kit*",
+      "*test*release*"
+    ],
+    "acceptance": "One source SHA, frontend, API/MCP, connector checksums"
+  }
+]

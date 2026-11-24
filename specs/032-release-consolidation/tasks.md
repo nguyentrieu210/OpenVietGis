@@ -1,0 +1,11 @@
+# Tasks
+- [x] Inventory repository and service topology.
+- [x] Integrate selected newer commits in isolated branch.
+- [x] Build web-next with frozen lockfile and run targeted regression tests.
+- [x] Check migration graph and deterministic connector package.
+- [x] Implement and test ref inventory and artifact integrity checks.
+- [x] Document disposition, blockers and release procedure.
+- [ ] Build and verify final local candidate artifact manifest after commit.
+- [ ] Independent full CI and real environment acceptance.
+- [ ] Approved promotion to main and remote, then approved live rollout/rollback rehearsal.
+- [ ] Retire legacy frontend and inactive refs only after parity, ownership review and retention approval.

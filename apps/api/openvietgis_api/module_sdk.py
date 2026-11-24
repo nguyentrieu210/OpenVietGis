@@ -31,6 +31,8 @@ from openvietgis_api.adapters.persistence.scope_helper import (
 from openvietgis_api.config import get_settings
 from openvietgis_api.domains.authorization.context import AuthorizationContext
 from openvietgis_api.domains.authorization.permissions import Permission
+from openvietgis_api.domains.extensions.domain import matches_official_manifest
+from openvietgis_api.domains.platform_errors import PlatformNotFoundError
 
 __all__ = [
     "AuthenticatedRequest",
@@ -43,6 +45,7 @@ __all__ = [
     "put_module_artifact",
     "read_module_artifact",
     "prepare_module_scope",
+    "require_official_activation",
     "require_csrf",
     "set_extension_private_access",
 ]
@@ -60,6 +63,34 @@ def prepare_module_scope(
         "manage": Permission.PROJECT_MANAGE,
     }[access]
     prepare_project_scope(session, context, permission=permission)
+
+
+def require_official_activation(
+    session: Session,
+    context: AuthorizationContext,
+    manifest: dict,
+) -> None:
+    """Called after prepare_module_scope; never treat metadata as an executable grant."""
+    row = (
+        session.execute(
+            text("""
+            SELECT m.* FROM extensions.project_activations a
+            JOIN extensions.manifests m ON m.organization_id=a.organization_id
+                AND m.id=a.manifest_id AND m.extension_key=a.extension_key
+            WHERE a.organization_id=:org AND a.project_id=:project
+                AND a.extension_key=:key AND a.status='active'
+        """),
+            {
+                "org": context.organization_id,
+                "project": context.project_id,
+                "key": manifest["extension_key"],
+            },
+        )
+        .mappings()
+        .first()
+    )
+    if row is None or not matches_official_manifest(dict(row), manifest):
+        raise PlatformNotFoundError("official module activation does not match shipped runtime")
 
 
 def set_extension_private_access(session: Session, *, extension_key: str, enabled: bool) -> None:

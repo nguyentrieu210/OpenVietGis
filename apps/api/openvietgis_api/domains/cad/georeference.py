@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from dataclasses import dataclass, replace
 from typing import Any, NoReturn
 from uuid import UUID
 
 from openvietgis_api.domains.cad.domain import UNIT_TO_METERS, CadUnit
-from openvietgis_api.domains.platform_errors import PlatformValidationError
+from openvietgis_api.domains.editing.domain import validate_geometry_payload
+from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
+from openvietgis_api.domains.spatial.domain import MAX_POSITIONS, GeometryFamily
 
 Point = tuple[float, float]
 Control = tuple[Point, Point]
@@ -56,6 +59,26 @@ class CadPlacement:
             and math.dist(result, self.translation) > self.local_radius_m
         ):
             _fail("Local VN-2000 placement exceeds supported control-centre radius")
+        return result
+
+    def inverse_m(self, p: Point) -> Point:
+        """Invert this exact calibrated grid placement; return CAD-local metres."""
+        if not _grid_valid(p, self.crs_code):
+            _fail("GIS coordinate outside declared grid bounds")
+        if self.local_radius_m is not None and math.dist(p, self.translation) > self.local_radius_m:
+            _fail("Local VN-2000 placement exceeds supported control-centre radius")
+        if not math.isfinite(self.scale) or self.scale <= 0:
+            _fail("Invalid placement scale")
+        x, y = p[0] - self.translation[0], p[1] - self.translation[1]
+        c, s = math.cos(self.rotation), math.sin(self.rotation)
+        result = (
+            self.origin_m[0] + (c * x + s * y) / self.scale,
+            self.origin_m[1] + (-s * x + c * y) / self.scale,
+        )
+        if not _valid(result):
+            _fail("Inverse CAD coordinate outside bounded input")
+        if math.dist(self.transform_m(result), p) > self.tolerance_m:
+            _fail("Inverse placement exceeds declared numeric tolerance")
         return result
 
     def metadata(self) -> dict[str, Any]:
@@ -247,3 +270,63 @@ def place_features(features: list[dict[str, Any]], placement: CadPlacement) -> d
     if not all(math.isfinite(v) for v in bounds):
         _fail("No placed geometry")
     return dict(zip(("min_x", "min_y", "max_x", "max_y"), bounds, strict=True))
+
+
+def restore_features(
+    features: list[dict[str, Any]],
+    placement: CadPlacement,
+    *,
+    document_id: UUID,
+    version: int,
+    source_crs_code: int,
+) -> list[dict[str, Any]]:
+    """Prepare an isolated local-XY preview, not an authoritative CAD write.
+
+    Input must already be authorized and read at a pinned GIS revision by the
+    caller. Output remains in local metres for the existing DXF writer. There
+    is deliberately no inferred CRS transform, native entity rewrite or save.
+    """
+    if (document_id, version) != (placement.document_id, placement.version):
+        raise PlatformConflictError("CAD placement revision changed", code="STALE_CAD_REVISION")
+    if source_crs_code != placement.crs_code:
+        _fail("GIS source CRS does not match the calibrated grid")
+    if not 1 <= len(features) <= 10_000:
+        _fail("Inverse preview requires 1–10000 features")
+    result = []
+    total_positions = 0
+    for feature in features:
+        geom = feature.get("geometry")
+        if not isinstance(geom, dict) or geom.get("type") not in ("Point", "LineString", "Polygon"):
+            _fail("Unsupported inverse geometry type")
+        kind, coords = validate_geometry_payload(geom, GeometryFamily(geom["type"]))
+        positions = (
+            [coords]
+            if kind == "Point"
+            else (coords if kind == "LineString" else [p for ring in coords for p in ring])
+        )
+        total_positions += len(positions)
+        if len(positions) > MAX_POSITIONS or total_positions > 200_000:
+            _fail("Inverse preview position limit exceeded")
+
+        def point(p: list[float]) -> list[float]:
+            local = placement.inverse_m((float(p[0]), float(p[1])))
+            # Enforce the independently calibrated native domain too.
+            if placement.native_reference is not None:
+                placement.native_reference.transform_m(local)
+            return list(local)
+
+        new_geometry = {
+            "type": kind,
+            "coordinates": (
+                point(coords)
+                if kind == "Point"
+                else (
+                    [point(p) for p in coords]
+                    if kind == "LineString"
+                    else [[point(p) for p in ring] for ring in coords]
+                )
+            ),
+        }
+        validate_geometry_payload(new_geometry, GeometryFamily(kind))
+        result.append({**deepcopy(feature), "geometry": new_geometry})
+    return result

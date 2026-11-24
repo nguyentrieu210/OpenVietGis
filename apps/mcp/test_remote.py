@@ -203,6 +203,7 @@ def test_remote_http_mcp_and_workspace():
         )
         assert init.status_code == 200, init.text
         assert init.json()["result"]["protocolVersion"] == "2025-11-25"
+        assert "without asking whether to continue" in init.json()["result"]["instructions"]
         assert (
             client.post(
                 "/ai-copilot/sessions",

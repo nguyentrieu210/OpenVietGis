@@ -44,6 +44,8 @@ def test_long_task_tickets_bound_to_subject_and_version():
     with pytest.raises(BridgeError):asyncio.run(store.execute("alice","map_view",{},time.time()+600))
     store.store.ack(sid,bk,ticket,True,{"id":LAYER})
     assert store.operation_status("alice",ticket)=={"state":"done","result":{"id":LAYER}}
+    assert store.operation_status("alice",ticket)=={"state":"done","result":{"id":LAYER}}
+    store.create(owner,2)
     with pytest.raises(BridgeError):store.operation_status("alice",ticket)
 
 def test_long_expiry_and_denial():

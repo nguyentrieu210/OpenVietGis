@@ -1,4 +1,4 @@
-import { ApiClient, ApiError } from "./http";
+import { ApiClient, ApiError, projectApiPath } from "./http";
 import type { components, operations } from "./generated/map-workspace";
 
 export type MapViewpoint = components["schemas"]["MapViewpoint"];
@@ -39,14 +39,8 @@ async function mapRequest<T>(client: ApiClient, path: string, init?: RequestInit
     return await client.request<T>(path, init);
   } catch (error) {
     if (error instanceof ApiError && [409, 422, 503].includes(error.status)) {
-      let payload: unknown;
-      try {
-        payload = await error.response.clone().json();
-      } catch {
-        throw error;
-      }
-      if (payload !== null && typeof payload === "object" && "code" in payload &&
-          typeof payload.code === "string" && mapCodes.has(payload.code)) {
+      const payload = await error.readPayload();
+      if (payload.code && mapCodes.has(payload.code)) {
         throw new MapApiError(error.status, error.response, payload.code as MapErrorCode);
       }
     }
@@ -55,8 +49,7 @@ async function mapRequest<T>(client: ApiClient, path: string, init?: RequestInit
 }
 
 function projectRoot(organizationId: string, projectId: string): string {
-  return "/organizations/" + encodeURIComponent(organizationId) +
-    "/projects/" + encodeURIComponent(projectId);
+  return projectApiPath(organizationId, projectId);
 }
 
 function mapRoot(organizationId: string, projectId: string): string {

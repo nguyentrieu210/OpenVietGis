@@ -1,0 +1,57 @@
+{
+  "source_sha": "27f0b35af966b7a46e7b17929395d9bc01515e51",
+  "files": 1583,
+  "test_files": 376,
+  "area_counts": {
+    ".claude": 9,
+    ".dockerignore": 1,
+    ".env.example": 1,
+    ".github": 7,
+    ".gitignore": 1,
+    ".gitleaks.toml": 1,
+    ".gitleaksignore": 1,
+    ".specify": 20,
+    "CLAUDE.md": 1,
+    "CONTRIBUTING.md": 1,
+    "LICENSE": 1,
+    "README.md": 1,
+    "ROADMAP.md": 1,
+    "SECURITY.md": 1,
+    "apps": 823,
+    "docs": 46,
+    "eslint.config.js": 1,
+    "fixtures": 9,
+    "infra": 35,
+    "integrations": 16,
+    "modules": 108,
+    "package.json": 1,
+    "packages": 106,
+    "playwright.bootstrap.config.ts": 1,
+    "playwright.config.ts": 1,
+    "playwright.house-numbering.config.ts": 1,
+    "playwright.offline-client.config.ts": 1,
+    "pnpm-lock.yaml": 1,
+    "pnpm-workspace.yaml": 1,
+    "pytest.ini": 1,
+    "specs": 289,
+    "tests": 47,
+    "tools": 47,
+    "tsconfig.base.json": 1
+  },
+  "static_surfaces": {
+    "http_route": 267,
+    "mcp_tool": 44,
+    "ui_candidate": 2645
+  },
+  "capabilities": 32,
+  "priority_counts": {
+    "P0": 22,
+    "P1": 10
+  },
+  "source_present": 32,
+  "groups_without_test_candidates": [
+    "F21"
+  ],
+  "runtime_verified": 0,
+  "parse_errors": []
+}

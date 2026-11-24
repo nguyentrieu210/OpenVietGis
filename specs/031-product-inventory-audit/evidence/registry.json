@@ -1,0 +1,1556 @@
+[
+  {
+    "id": "F01",
+    "title": "Platform/bootstrap",
+    "priority": "P0",
+    "owner": "Platform",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "infra/dev/*"
+    ],
+    "test_patterns": [
+      "*test_foundation*",
+      "*test_bootstrap*",
+      "*bootstrap*.spec.ts"
+    ],
+    "acceptance": "CQ-00 clean installation and project open",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "infra/dev/compose.identity.yaml",
+      "infra/dev/compose.yaml",
+      "infra/dev/keycloak/realm-openvietgis.json",
+      "infra/dev/keycloak/themes/openvietgis/login/messages/messages_en.properties",
+      "infra/dev/keycloak/themes/openvietgis/login/messages/messages_vi.properties",
+      "infra/dev/keycloak/themes/openvietgis/login/register.ftl",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis-modal-v3.css",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis.css",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/favicon.ico",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/ovg-mark.png",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-map.svg",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-mark.svg",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch-modal-v2.js",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch.js",
+      "infra/dev/keycloak/themes/openvietgis/login/theme.properties",
+      "infra/dev/postgres/001-runtime-role.sql"
+    ],
+    "test_candidates": [
+      "apps/api/tests/contract/test_foundation_contract.py",
+      "apps/api/tests/integration/identity/test_bootstrap.py",
+      "apps/api/tests/integration/identity/test_bootstrap_concurrency.py",
+      "apps/api/tests/integration/identity/test_bootstrap_storage.py",
+      "tests/e2e/bootstrap-service-identity.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F02",
+    "title": "Identity, OAuth, accounts",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/auth.py",
+      "apps/api/openvietgis_api/domains/identity/*",
+      "apps/mcp/remote_oauth.py"
+    ],
+    "test_patterns": [
+      "*tests/*/identity/*",
+      "*auth-navigation*",
+      "*test_identity*"
+    ],
+    "acceptance": "CQ-01 two tenants, revoke/logout",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/auth.py",
+      "apps/api/openvietgis_api/domains/identity/__init__.py",
+      "apps/api/openvietgis_api/domains/identity/domain.py",
+      "apps/api/openvietgis_api/domains/identity/ports.py",
+      "apps/api/openvietgis_api/domains/identity/service.py",
+      "apps/mcp/remote_oauth.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/contract/test_identity_tenancy_contracts.py",
+      "apps/api/tests/integration/identity/test_account_avatar.py",
+      "apps/api/tests/integration/identity/test_bootstrap.py",
+      "apps/api/tests/integration/identity/test_bootstrap_concurrency.py",
+      "apps/api/tests/integration/identity/test_bootstrap_storage.py",
+      "apps/api/tests/integration/identity/test_http_security.py",
+      "apps/api/tests/integration/identity/test_link_conflict_callback.py",
+      "apps/api/tests/integration/identity/test_live_keycloak_oidc.py",
+      "apps/api/tests/integration/identity/test_logout_switch.py",
+      "apps/api/tests/integration/identity/test_multi_org_session.py",
+      "apps/api/tests/integration/identity/test_oidc_callback_concurrency.py",
+      "apps/api/tests/integration/identity/test_oidc_login.py",
+      "apps/api/tests/integration/identity/test_p2_secret_surfaces.py",
+      "apps/api/tests/integration/identity/test_unlink_concurrency.py",
+      "apps/api/tests/integration/tenancy/test_identity_tenancy_migration_cycle.py",
+      "apps/api/tests/integration/tenancy/test_identity_tenant_migrations.py",
+      "apps/api/tests/unit/identity/test_csrf.py",
+      "apps/api/tests/unit/identity/test_identity_claim_refresh.py",
+      "apps/api/tests/unit/identity/test_link_conflict_audit.py",
+      "apps/api/tests/unit/identity/test_oidc_link_binding.py",
+      "apps/api/tests/unit/identity/test_oidc_provider_validation.py",
+      "apps/api/tests/unit/identity/test_secrets.py",
+      "apps/api/tests/unit/identity/test_service_credentials.py",
+      "apps/api/tests/unit/identity/test_sessions.py",
+      "tests/e2e/auth-navigation.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F03",
+    "title": "Organization, projects, workspaces, ACL",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "apps/api/openvietgis_api/adapters/http/projects.py",
+      "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "apps/api/openvietgis_api/domains/authorization/*"
+    ],
+    "test_patterns": [
+      "*tenant*.spec.ts",
+      "*tests/*/rls/*",
+      "*tests/*/authorization/*"
+    ],
+    "acceptance": "CQ-01 deny cross-tenant and viewer writes",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "apps/api/openvietgis_api/adapters/http/projects.py",
+      "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "apps/api/openvietgis_api/domains/authorization/__init__.py",
+      "apps/api/openvietgis_api/domains/authorization/context.py",
+      "apps/api/openvietgis_api/domains/authorization/domain.py",
+      "apps/api/openvietgis_api/domains/authorization/permissions.py",
+      "apps/api/openvietgis_api/domains/authorization/ports.py",
+      "apps/api/openvietgis_api/domains/authorization/roles.py",
+      "apps/api/openvietgis_api/domains/authorization/service.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/rls/test_cross_tenant_api.py",
+      "apps/api/tests/integration/rls/test_cross_tenant_constraints.py",
+      "apps/api/tests/integration/rls/test_cross_tenant_repository.py",
+      "apps/api/tests/integration/rls/test_pool_tenant_leak.py",
+      "apps/api/tests/integration/rls/test_runtime_role.py",
+      "apps/api/tests/integration/rls/test_transaction_context.py",
+      "apps/api/tests/unit/authorization/test_audit_redaction.py",
+      "apps/api/tests/unit/authorization/test_authorization_service.py",
+      "apps/api/tests/unit/authorization/test_context.py",
+      "apps/api/tests/unit/authorization/test_repository_context.py",
+      "apps/api/tests/unit/authorization/test_role_grant_union.py",
+      "apps/api/tests/unit/authorization/test_service_permission_ceiling.py",
+      "tests/e2e/tenant-core.spec.ts",
+      "tests/e2e/tenant-foundation.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F04",
+    "title": "Spatial catalog and CRS",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/spatial/*",
+      "apps/api/openvietgis_api/adapters/http/spatial.py"
+    ],
+    "test_patterns": [
+      "*test_spatial*",
+      "*spatial-catalog.spec.ts"
+    ],
+    "acceptance": "CQ-02 VN-2000 control points and persistence",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/spatial.py",
+      "apps/api/openvietgis_api/domains/spatial/__init__.py",
+      "apps/api/openvietgis_api/domains/spatial/crs.py",
+      "apps/api/openvietgis_api/domains/spatial/domain.py",
+      "apps/api/openvietgis_api/domains/spatial/ports.py",
+      "apps/api/openvietgis_api/domains/spatial/service.py",
+      "apps/api/openvietgis_api/domains/spatial/tiles_generator.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/contract/test_spatial_catalog.py",
+      "apps/api/tests/contract/test_spatial_changes.py",
+      "apps/api/tests/contract/test_spatial_consumer.py",
+      "apps/api/tests/contract/test_spatial_crs.py",
+      "apps/api/tests/contract/test_spatial_features.py",
+      "apps/api/tests/contract/test_spatial_layers.py",
+      "apps/api/tests/contract/test_spatial_transform_wire.py",
+      "apps/api/tests/performance/test_spatial_benchmark.py",
+      "apps/api/tests/unit/spatial/test_spatial_fixtures.py",
+      "tests/e2e/spatial-catalog.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F05",
+    "title": "2D map and layer tree",
+    "priority": "P0",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/web-next/src/LiveApp.tsx",
+      "apps/web-next/src/QgisWorkspace.tsx",
+      "apps/web/src/features/map/*"
+    ],
+    "test_patterns": [
+      "*map-workspace*.spec.ts",
+      "*test_maps.py"
+    ],
+    "acceptance": "CQ-02 actual web-next render, reload and inspect",
+    "source_candidates": [
+      "apps/web-next/src/LiveApp.tsx",
+      "apps/web-next/src/QgisWorkspace.tsx",
+      "apps/web/src/features/map/AddDataDialog.tsx",
+      "apps/web/src/features/map/AttributeTable.tsx",
+      "apps/web/src/features/map/CommandBar.tsx",
+      "apps/web/src/features/map/FeatureInspector.tsx",
+      "apps/web/src/features/map/LayerTree.tsx",
+      "apps/web/src/features/map/MapActivityRail.tsx",
+      "apps/web/src/features/map/MapCommandLine.tsx",
+      "apps/web/src/features/map/MapCrsPicker.tsx",
+      "apps/web/src/features/map/MapRibbon.tsx",
+      "apps/web/src/features/map/MapToolDock.tsx",
+      "apps/web/src/features/map/MapWorkspace.tsx",
+      "apps/web/src/features/map/SaveStateIndicator.tsx",
+      "apps/web/src/features/map/TechnicalDetailsDrawer.tsx",
+      "apps/web/src/features/map/WorkspaceLayout.tsx",
+      "apps/web/src/features/map/accessibility-summary.ts",
+      "apps/web/src/features/map/add-data.ts",
+      "apps/web/src/features/map/commands.ts",
+      "apps/web/src/features/map/engine.ts",
+      "apps/web/src/features/map/feature-presentation.ts",
+      "apps/web/src/features/map/layer-view.ts",
+      "apps/web/src/features/map/map-engine-loader.ts",
+      "apps/web/src/features/map/map-initialization.ts",
+      "apps/web/src/features/map/map.css",
+      "apps/web/src/features/map/maplibre-engine.ts",
+      "apps/web/src/features/map/render-frame.ts",
+      "apps/web/src/features/map/responsive-mode.ts",
+      "apps/web/src/features/map/save-indicator.ts",
+      "apps/web/src/features/map/save.ts",
+      "apps/web/src/features/map/technical-details.ts",
+      "apps/web/src/features/map/unsaved-navigation.ts",
+      "apps/web/src/features/map/workspace-layout.ts",
+      "apps/web/src/features/map/workspace.ts"
+    ],
+    "test_candidates": [
+      "apps/api/tests/contract/test_maps.py",
+      "tests/e2e/map-workspace-accessibility.spec.ts",
+      "tests/e2e/map-workspace-responsive.spec.ts",
+      "tests/e2e/map-workspace-visual.spec.ts",
+      "tests/e2e/map-workspace.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F06",
+    "title": "Import/export",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/transfers/*",
+      "apps/api/openvietgis_api/adapters/http/transfers.py"
+    ],
+    "test_patterns": [
+      "*tests/*/transfers/*",
+      "*import-export*.spec.ts"
+    ],
+    "acceptance": "CQ-03 independent roundtrip by supported format",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "apps/api/openvietgis_api/domains/transfers/__init__.py",
+      "apps/api/openvietgis_api/domains/transfers/domain.py",
+      "apps/api/openvietgis_api/domains/transfers/ports.py",
+      "apps/api/openvietgis_api/domains/transfers/service.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+      "apps/api/tests/integration/transfers/test_transfers_real.py",
+      "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+      "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+      "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+      "tests/e2e/import-export-m1.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F07",
+    "title": "Geometry editing, history, snap",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/editing/*",
+      "apps/web-next/src/AdvancedEditor.tsx",
+      "apps/web-next/src/SnapMath.ts"
+    ],
+    "test_patterns": [
+      "*test_editing*",
+      "*native-editing*.spec.ts",
+      "*test_r006*"
+    ],
+    "acceptance": "CQ-04 stale revision, undo and history",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/editing/__init__.py",
+      "apps/api/openvietgis_api/domains/editing/domain.py",
+      "apps/web-next/src/AdvancedEditor.tsx",
+      "apps/web-next/src/SnapMath.ts"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m2/test_r006_r009_real.py",
+      "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+      "apps/api/tests/unit/test_editing_domain.py",
+      "apps/api/tests/unit/test_editing_replay_and_rebase.py",
+      "tests/e2e/native-editing.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F08",
+    "title": "Attribute / spatial queries",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/queries/*",
+      "apps/api/openvietgis_api/adapters/http/queries.py"
+    ],
+    "test_patterns": [
+      "*test_query*"
+    ],
+    "acceptance": "CQ-05 typed predicates, PostGIS oracle",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/queries.py",
+      "apps/api/openvietgis_api/domains/queries/__init__.py",
+      "apps/api/openvietgis_api/domains/queries/domain.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m2/test_query_integrity.py",
+      "apps/api/tests/unit/test_query_domain.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F09",
+    "title": "Vector processing",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/processing/*",
+      "apps/web-next/src/ProcessingToolbox.tsx"
+    ],
+    "test_patterns": [
+      "*test_processing*"
+    ],
+    "acceptance": "CQ-06 Buffer/Clip/Dissolve result layer",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/processing/__init__.py",
+      "apps/api/openvietgis_api/domains/processing/domain.py",
+      "apps/web-next/src/ProcessingToolbox.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m2/test_processing_integrity.py",
+      "apps/api/tests/integration/spatial/test_processing_models.py",
+      "apps/api/tests/unit/test_processing_domain.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F10",
+    "title": "Processing modeler",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/processing_models.py",
+      "apps/web-next/src/ProcessingModeler.tsx"
+    ],
+    "test_patterns": [
+      "*test*model*",
+      "*test_advanced_tools.py"
+    ],
+    "acceptance": "Spec 030 DAG provenance, repeatability and errors",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/processing_models.py",
+      "apps/web-next/src/ProcessingModeler.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/spatial/test_model_vault.py",
+      "apps/api/tests/integration/spatial/test_processing_models.py",
+      "apps/mcp/test_advanced_tools.py",
+      "packages/spatial-workspace/tests/terrain-model-fixture.mjs",
+      "packages/spatial-workspace/tests/terrain-model.test.mjs"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F11",
+    "title": "Cartography and layout",
+    "priority": "P1",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/cartography/*",
+      "apps/web-next/src/LayoutDesigner.tsx",
+      "apps/web-next/src/LayoutRender.ts"
+    ],
+    "test_patterns": [
+      "*test_cartography*",
+      "*test_print*"
+    ],
+    "acceptance": "CQ-07 independent PDF/PNG geometry and scale",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/cartography/__init__.py",
+      "apps/api/openvietgis_api/domains/cartography/domain.py",
+      "apps/web-next/src/LayoutDesigner.tsx",
+      "apps/web-next/src/LayoutRender.ts"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m2/test_cartography_completeness.py",
+      "apps/api/tests/integration/m2/test_print_revision_pins.py",
+      "apps/api/tests/unit/test_cartography_output.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F12",
+    "title": "External sources and basemaps",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/external_sources/*",
+      "apps/web-next/src/Basemaps.ts"
+    ],
+    "test_patterns": [
+      "*test_external*",
+      "*test_r010*"
+    ],
+    "acceptance": "CQ-08 source license, attribution, Vietnam boundary review",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/external_sources/__init__.py",
+      "apps/api/openvietgis_api/domains/external_sources/cog_provider.py",
+      "apps/api/openvietgis_api/domains/external_sources/domain.py",
+      "apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py",
+      "apps/api/openvietgis_api/domains/external_sources/provider.py",
+      "apps/api/openvietgis_api/domains/external_sources/tile_provider.py",
+      "apps/web-next/src/Basemaps.ts"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+      "apps/api/tests/integration/m3/test_r010_live_provider.py",
+      "apps/api/tests/integration/m3/test_r010_r013_real.py",
+      "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+      "apps/api/tests/unit/test_external_cog_provider.py",
+      "apps/api/tests/unit/test_external_provider.py",
+      "apps/api/tests/unit/test_external_raster_provider.py",
+      "specs/018-full-product-audit/probes/test_r010_capability_truth.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F13",
+    "title": "Raster, Sentinel, terrain",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/raster.py",
+      "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "apps/web-next/src/RasterWorkbench.tsx",
+      "apps/web-next/src/SentinelWorkbench.tsx"
+    ],
+    "test_patterns": [
+      "*test*provider*",
+      "*test*raster*"
+    ],
+    "acceptance": "Spec 030 nodata/cloud/CRS and provenance",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/raster.py",
+      "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "apps/web-next/src/RasterWorkbench.tsx",
+      "apps/web-next/src/SentinelWorkbench.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_r010_live_provider.py",
+      "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+      "apps/api/tests/integration/spatial/test_persistent_raster.py",
+      "apps/api/tests/integration/spatial/test_raster_advanced.py",
+      "apps/api/tests/integration/spatial/test_raster_analysis.py",
+      "apps/api/tests/integration/spatial/test_raster_terrain.py",
+      "apps/api/tests/unit/identity/test_oidc_provider_validation.py",
+      "apps/api/tests/unit/test_external_cog_provider.py",
+      "apps/api/tests/unit/test_external_provider.py",
+      "apps/api/tests/unit/test_external_raster_provider.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F14",
+    "title": "CAD, precision, georeferencing",
+    "priority": "P0",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/cad/*",
+      "apps/web-next/src/CadEditorPanel.tsx",
+      "apps/web-next/src/CadGeorefPanel.tsx"
+    ],
+    "test_patterns": [
+      "*test_dxf*",
+      "*test_cogo*"
+    ],
+    "acceptance": "CQ-10 DXF roundtrip, units and loss",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/cad/__init__.py",
+      "apps/api/openvietgis_api/domains/cad/domain.py",
+      "apps/api/openvietgis_api/domains/cad/georeference.py",
+      "apps/web-next/src/CadEditorPanel.tsx",
+      "apps/web-next/src/CadGeorefPanel.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_cogo_authorization.py",
+      "apps/api/tests/unit/test_cogo_bounds.py",
+      "apps/api/tests/unit/test_dxf_integrity.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F15",
+    "title": "GIS/CAD/3D mode lifecycle",
+    "priority": "P0",
+    "owner": "Frontend",
+    "source_patterns": [
+      "packages/spatial-workspace/src/*",
+      "apps/web-next/src/SpatialWorkspace.tsx",
+      "apps/web-next/src/Spatial3DSettings.tsx"
+    ],
+    "test_patterns": [
+      "packages/spatial-workspace/tests/*"
+    ],
+    "acceptance": "CQ-14 real WebGL, selection, dirty state, failures",
+    "source_candidates": [
+      "apps/web-next/src/Spatial3DSettings.tsx",
+      "apps/web-next/src/SpatialWorkspace.tsx",
+      "packages/spatial-workspace/src/ModeSwitch.tsx",
+      "packages/spatial-workspace/src/cad-editor.ts",
+      "packages/spatial-workspace/src/cad-embed.ts",
+      "packages/spatial-workspace/src/cad-georeference.ts",
+      "packages/spatial-workspace/src/coordinator.ts",
+      "packages/spatial-workspace/src/footprint3d.ts",
+      "packages/spatial-workspace/src/gltf.ts",
+      "packages/spatial-workspace/src/maplibre3d.ts",
+      "packages/spatial-workspace/src/mesh-layer.ts",
+      "packages/spatial-workspace/src/mesh-picking.ts",
+      "packages/spatial-workspace/src/mode-switch.css",
+      "packages/spatial-workspace/src/renderer3d.ts",
+      "packages/spatial-workspace/src/session.ts",
+      "packages/spatial-workspace/src/terrain.ts",
+      "packages/spatial-workspace/src/tiles3d.ts",
+      "packages/spatial-workspace/src/tileset.ts"
+    ],
+    "test_candidates": [
+      "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/3d.ts",
+      "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+      "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/cad.ts",
+      "packages/spatial-workspace/tests/browser/fixture.tsx",
+      "packages/spatial-workspace/tests/browser/generator-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/generator.tsx",
+      "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/multi-scene.ts",
+      "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/scene.ts",
+      "packages/spatial-workspace/tests/browser/selection-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/selection.tsx",
+      "packages/spatial-workspace/tests/browser/smoke.mjs",
+      "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/tiles.ts",
+      "packages/spatial-workspace/tests/browser/worker.ts",
+      "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+      "packages/spatial-workspace/tests/coordinator.test.mjs",
+      "packages/spatial-workspace/tests/footprint3d.test.mjs",
+      "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+      "packages/spatial-workspace/tests/session.test.mjs",
+      "packages/spatial-workspace/tests/terrain-model-fixture.mjs",
+      "packages/spatial-workspace/tests/terrain-model.test.mjs",
+      "packages/spatial-workspace/tests/tileset.test.mjs"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F16",
+    "title": "3D assets, scenes, tiles",
+    "priority": "P1",
+    "owner": "Spatial",
+    "source_patterns": [
+      "apps/web-next/src/ModelVault.tsx",
+      "apps/web-next/src/SavedScenePanel.tsx",
+      "apps/web-next/src/TilesetPanel.tsx",
+      "apps/api/openvietgis_api/adapters/http/model_vault.py"
+    ],
+    "test_patterns": [
+      "*test*tiles*",
+      "*test*scene*",
+      "*test*terrain*"
+    ],
+    "acceptance": "Spec 030 authorized model and terrain loading",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "apps/web-next/src/ModelVault.tsx",
+      "apps/web-next/src/SavedScenePanel.tsx",
+      "apps/web-next/src/TilesetPanel.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/spatial/test_raster_terrain.py",
+      "apps/api/tests/integration/spatial/test_saved_scenes.py",
+      "apps/api/tests/integration/spatial/test_terrain_preview.py",
+      "apps/api/tests/integration/spatial/test_tiles_generator.py",
+      "apps/api/tests/integration/spatial/test_tilesets.py",
+      "apps/api/tests/unit/spatial/test_tiles_generator.py",
+      "apps/api/tests/unit/spatial/test_tiles_generator_math.py",
+      "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/multi-scene.ts",
+      "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/scene.ts",
+      "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+      "packages/spatial-workspace/tests/browser/tiles.ts",
+      "packages/spatial-workspace/tests/terrain-model-fixture.mjs",
+      "packages/spatial-workspace/tests/terrain-model.test.mjs",
+      "packages/spatial-workspace/tests/tileset.test.mjs"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F17",
+    "title": "Collaboration, chat, tasks, leases",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/http/team_*.py",
+      "apps/web-next/src/TeamCollaboration.tsx",
+      "apps/web-next/src/LivePresence.tsx"
+    ],
+    "test_patterns": [
+      "*test_collaboration*",
+      "*test*team*"
+    ],
+    "acceptance": "CQ-09 two-user conflict, revocation and isolation",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "apps/api/openvietgis_api/adapters/http/team_presence.py",
+      "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+      "apps/web-next/src/LivePresence.tsx",
+      "apps/web-next/src/TeamCollaboration.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+      "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+      "apps/api/tests/integration/spatial/test_team_chat.py",
+      "apps/api/tests/integration/spatial/test_team_locks.py",
+      "apps/api/tests/integration/spatial/test_team_presence.py",
+      "apps/api/tests/integration/spatial/test_team_realtime.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F18",
+    "title": "Offline field and replay",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/field/*",
+      "apps/web/src/features/offline/*"
+    ],
+    "test_patterns": [
+      "*r013*",
+      "*offline*.spec.ts"
+    ],
+    "acceptance": "CQ-11 restart, durable outbox and replay",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/field/__init__.py",
+      "apps/api/openvietgis_api/domains/field/domain.py",
+      "apps/web/src/features/offline/OfflineFieldPage.tsx",
+      "apps/web/src/features/offline/OfflineMap.tsx",
+      "apps/web/src/features/offline/offline-store.ts",
+      "apps/web/src/features/offline/offline.css"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_r010_r013_real.py",
+      "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+      "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+      "tests/e2e/r013-offline-real.spec.ts",
+      "tests/offline-client/r013-client.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F19",
+    "title": "Plugin framework and marketplace",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "packages/plugin-sdk/*",
+      "apps/api/openvietgis_api/domains/extensions/*",
+      "apps/web-next/src/MarketplacePage.tsx"
+    ],
+    "test_patterns": [
+      "*test_extension*",
+      "*test_marketplace*",
+      "*extension-lifecycle.spec.ts"
+    ],
+    "acceptance": "CQ-12 manifest, scoped activation and distribution",
+    "source_candidates": [
+      "apps/api/openvietgis_api/domains/extensions/__init__.py",
+      "apps/api/openvietgis_api/domains/extensions/contributions.py",
+      "apps/api/openvietgis_api/domains/extensions/domain.py",
+      "apps/api/openvietgis_api/domains/extensions/external.py",
+      "apps/api/openvietgis_api/domains/extensions/marketplace.py",
+      "apps/api/openvietgis_api/domains/extensions/runtime.py",
+      "apps/web-next/src/MarketplacePage.tsx",
+      "packages/plugin-sdk/examples/index.html",
+      "packages/plugin-sdk/marketplace_sign.py",
+      "packages/plugin-sdk/native_webhook_worker.py",
+      "packages/plugin-sdk/openvietgis-partner.js",
+      "packages/plugin-sdk/webhook_relay.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+      "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+      "apps/api/tests/integration/m3/test_marketplace_developers.py",
+      "apps/api/tests/unit/test_extension_history_domain.py",
+      "apps/api/tests/unit/test_extension_metadata_boundary.py",
+      "tests/e2e/extension-lifecycle.spec.ts",
+      "tests/modules/test_extension_portability.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F20",
+    "title": "House numbering",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "modules/house_numbering/*"
+    ],
+    "test_patterns": [
+      "modules/house_numbering/tests/*",
+      "*house-numbering.spec.ts"
+    ],
+    "acceptance": "CQ-12 synthetic workflow, module boundary",
+    "source_candidates": [
+      "modules/house_numbering/address_batch.py",
+      "modules/house_numbering/address_prefix.py",
+      "modules/house_numbering/address_suggestions.py",
+      "modules/house_numbering/address_verification.py",
+      "modules/house_numbering/application.py",
+      "modules/house_numbering/assignment_audit.py",
+      "modules/house_numbering/batch_numbering.py",
+      "modules/house_numbering/building_assignment.py",
+      "modules/house_numbering/catalog_recovery.py",
+      "modules/house_numbering/cluster_correction.py",
+      "modules/house_numbering/documents.py",
+      "modules/house_numbering/domain.py",
+      "modules/house_numbering/exports.py",
+      "modules/house_numbering/frontend/AddressBatchPanel.tsx",
+      "modules/house_numbering/frontend/AddressVerificationPanel.tsx",
+      "modules/house_numbering/frontend/BuildingAssignmentPanel.tsx",
+      "modules/house_numbering/frontend/CatalogRecoveryPanel.tsx",
+      "modules/house_numbering/frontend/ClusterCorrectionPanel.tsx",
+      "modules/house_numbering/frontend/DocumentsPanel.tsx",
+      "modules/house_numbering/frontend/GeometryReviewPanel.tsx",
+      "modules/house_numbering/frontend/NumberingPanel.tsx",
+      "modules/house_numbering/frontend/PrefixRecoveryPanel.tsx",
+      "modules/house_numbering/frontend/ProposalPanel.tsx",
+      "modules/house_numbering/frontend/ReconcilePanel.tsx",
+      "modules/house_numbering/frontend/RouteImportPanel.tsx",
+      "modules/house_numbering/frontend/SearchExportPanel.tsx",
+      "modules/house_numbering/frontend/StudioWorkbench.tsx",
+      "modules/house_numbering/frontend/SurveyConflictPanel.tsx",
+      "modules/house_numbering/frontend/SurveyNavigator.tsx",
+      "modules/house_numbering/frontend/SurveyPanel.tsx",
+      "modules/house_numbering/frontend/TopologyRecoveryPanel.tsx",
+      "modules/house_numbering/frontend/VerifiedLinkPanel.tsx",
+      "modules/house_numbering/frontend/Workspace.tsx",
+      "modules/house_numbering/frontend/api.ts",
+      "modules/house_numbering/frontend/client.ts",
+      "modules/house_numbering/frontend/global.d.ts",
+      "modules/house_numbering/frontend/hooks.ts",
+      "modules/house_numbering/frontend/house-numbering.css",
+      "modules/house_numbering/frontend/index.tsx",
+      "modules/house_numbering/frontend/package.json",
+      "modules/house_numbering/frontend/studio-workbench.css",
+      "modules/house_numbering/frontend/studio.tsx",
+      "modules/house_numbering/frontend/survey-nav.css",
+      "modules/house_numbering/frontend/tsconfig.json",
+      "modules/house_numbering/geometry_review.py",
+      "modules/house_numbering/imports.py",
+      "modules/house_numbering/manifest.json",
+      "modules/house_numbering/migrate.py",
+      "modules/house_numbering/migrations/env.py",
+      "modules/house_numbering/migrations/script.py.mako",
+      "modules/house_numbering/migrations/versions/0001_house_numbering.py",
+      "modules/house_numbering/migrations/versions/0002_private_access_gate.py",
+      "modules/house_numbering/migrations/versions/0003_performance_indexes.py",
+      "modules/house_numbering/migrations/versions/0004_survey_gps_delegation.py",
+      "modules/house_numbering/migrations/versions/0005_building_lineage_plaque.py",
+      "modules/house_numbering/migrations/versions/0006_route_segments.py",
+      "modules/house_numbering/migrations/versions/0007_route_lines_fast_path.py",
+      "modules/house_numbering/migrations/versions/0008_reviewed_route_aliases.py",
+      "modules/house_numbering/migrations/versions/0009_geometry_review.py",
+      "modules/house_numbering/migrations/versions/0010_address_verification.py",
+      "modules/house_numbering/numbering_audit.py",
+      "modules/house_numbering/persistence.py",
+      "modules/house_numbering/prefix_recovery.py",
+      "modules/house_numbering/privacy.py",
+      "modules/house_numbering/progress.py",
+      "modules/house_numbering/proposal_packet.py",
+      "modules/house_numbering/reconciliation.py",
+      "modules/house_numbering/route_import.py",
+      "modules/house_numbering/route_recovery.py",
+      "modules/house_numbering/route_topology.py",
+      "modules/house_numbering/runtime.py",
+      "modules/house_numbering/survey.py",
+      "modules/house_numbering/verified_links.py",
+      "modules/house_numbering/workflow.py"
+    ],
+    "test_candidates": [
+      "modules/house_numbering/tests/integration/conftest.py",
+      "modules/house_numbering/tests/integration/test_batch_numbering.py",
+      "modules/house_numbering/tests/integration/test_building_assignment_api.py",
+      "modules/house_numbering/tests/integration/test_catalog_recovery.py",
+      "modules/house_numbering/tests/integration/test_cluster_correction.py",
+      "modules/house_numbering/tests/integration/test_house_numbering_batch_100.py",
+      "modules/house_numbering/tests/integration/test_house_numbering_edge_acceptance.py",
+      "modules/house_numbering/tests/integration/test_house_numbering_runtime.py",
+      "modules/house_numbering/tests/integration/test_house_numbering_us4_us5.py",
+      "modules/house_numbering/tests/integration/test_house_numbering_us6_us7.py",
+      "modules/house_numbering/tests/integration/test_integration_address_lookup.py",
+      "modules/house_numbering/tests/integration/test_prefix_recovery.py",
+      "modules/house_numbering/tests/integration/test_route_recovery.py",
+      "modules/house_numbering/tests/integration/test_route_segments.py",
+      "modules/house_numbering/tests/integration/test_route_topology_recovery.py",
+      "modules/house_numbering/tests/integration/test_route_tree_import.py",
+      "modules/house_numbering/tests/integration/test_survey_conflict_review.py",
+      "modules/house_numbering/tests/performance/run_benchmark.py",
+      "modules/house_numbering/tests/recovery/run_recovery.py",
+      "modules/house_numbering/tests/test_address_batch.py",
+      "modules/house_numbering/tests/test_address_prefix.py",
+      "modules/house_numbering/tests/test_address_suggestions.py",
+      "modules/house_numbering/tests/test_batch_numbering.py",
+      "modules/house_numbering/tests/test_building_assignment.py",
+      "modules/house_numbering/tests/test_numbering_audit.py",
+      "modules/house_numbering/tests/test_proposal_packet.py",
+      "modules/house_numbering/tests/test_route_import.py",
+      "modules/house_numbering/tests/test_route_recovery.py",
+      "modules/house_numbering/tests/test_route_topology.py",
+      "modules/house_numbering/tests/test_verified_links.py",
+      "tests/e2e/house-numbering.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F21",
+    "title": "Land asset",
+    "priority": "P1",
+    "owner": "Extensions",
+    "source_patterns": [
+      "modules/land_asset/*"
+    ],
+    "test_patterns": [
+      "modules/land_asset/tests/*",
+      "*test_land_asset*"
+    ],
+    "acceptance": "Module contract, permissions and fixture-based acceptance",
+    "source_candidates": [
+      "modules/land_asset/manifest.json",
+      "modules/land_asset/workflow.py"
+    ],
+    "test_candidates": [],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F22",
+    "title": "QGIS desktop authentication",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/qgis_plugin/*"
+    ],
+    "test_patterns": [
+      "*test*r029*",
+      "*test*qgis*",
+      "*smoke_qgis*"
+    ],
+    "acceptance": "Spec 030 real Windows QGIS OAuth PKCE consent logout",
+    "source_candidates": [
+      "integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md",
+      "integrations/qgis_plugin/openvietgis_connector/README.md",
+      "integrations/qgis_plugin/openvietgis_connector/__init__.py",
+      "integrations/qgis_plugin/openvietgis_connector/client.py",
+      "integrations/qgis_plugin/openvietgis_connector/managed_client.py",
+      "integrations/qgis_plugin/openvietgis_connector/metadata.txt",
+      "integrations/qgis_plugin/openvietgis_connector/plugin.py",
+      "integrations/qgis_plugin/openvietgis_connector/workspace.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+      "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+      "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+      "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+      "tools/tests/test_package_qgis_plugin.py",
+      "tools/tests/test_qgis_connector_simple_ui.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F23",
+    "title": "QGIS managed realtime",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/qgis_plugin/*managed_client.py",
+      "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "apps/web-next/src/QgisBindingManager.tsx"
+    ],
+    "test_patterns": [
+      "*test_r029*",
+      "*test_r027*"
+    ],
+    "acceptance": "Spec 030 bidirectional, conflict, reconnect, revocation",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "apps/web-next/src/QgisBindingManager.tsx",
+      "integrations/qgis_plugin/openvietgis_connector/managed_client.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+      "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+      "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+      "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+      "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F24",
+    "title": "MicroStation V8i bridge",
+    "priority": "P1",
+    "owner": "Integration",
+    "source_patterns": [
+      "integrations/microstation-v8i-bridge/*",
+      "apps/api/openvietgis_api/adapters/http/v8i_bridge.py"
+    ],
+    "test_patterns": [
+      "*test*v8i*"
+    ],
+    "acceptance": "Real supported Windows receiver interoperability",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/v8i_bridge.py",
+      "integrations/microstation-v8i-bridge/README.md",
+      "integrations/microstation-v8i-bridge/bridge.py",
+      "integrations/microstation-v8i-bridge/bridge_contract.py",
+      "integrations/microstation-v8i-bridge/fixtures/sample-snapshot-v2.json",
+      "integrations/microstation-v8i-bridge/fixtures/sample-snapshot.json",
+      "integrations/microstation-v8i-bridge/windows_com.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+      "apps/api/tests/unit/test_v8i_capabilities.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F25",
+    "title": "Integration hub and external bindings",
+    "priority": "P0",
+    "owner": "Integration",
+    "source_patterns": [
+      "apps/api/openvietgis_api/domains/integration_hub/*",
+      "apps/web-next/src/IntegrationCatalog.tsx",
+      "apps/api/openvietgis_api/adapters/http/integration_bindings.py"
+    ],
+    "test_patterns": [
+      "*tests/*/integration_hub/*"
+    ],
+    "acceptance": "Scoped adapter policy and deny by default",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "apps/api/openvietgis_api/domains/integration_hub/__init__.py",
+      "apps/api/openvietgis_api/domains/integration_hub/bidirectional.py",
+      "apps/api/openvietgis_api/domains/integration_hub/catalog.py",
+      "apps/api/openvietgis_api/domains/integration_hub/profiles.py",
+      "apps/api/openvietgis_api/domains/integration_hub/sync_diff.py",
+      "apps/web-next/src/IntegrationCatalog.tsx"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/integration_hub/__init__.py",
+      "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+      "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+      "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+      "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+      "apps/api/tests/unit/integration_hub/test_bidirectional.py",
+      "apps/api/tests/unit/integration_hub/test_catalog.py",
+      "apps/api/tests/unit/integration_hub/test_http_catalog.py",
+      "apps/api/tests/unit/integration_hub/test_postgis_sql.py",
+      "apps/api/tests/unit/integration_hub/test_profiles.py",
+      "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+      "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+      "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+      "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+      "apps/api/tests/unit/integration_hub/test_sync_diff.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F26",
+    "title": "AI Copilot and remote MCP",
+    "priority": "P0",
+    "owner": "AI",
+    "source_patterns": [
+      "apps/mcp/*",
+      "apps/web-next/src/AiCopilotPanel.tsx"
+    ],
+    "test_patterns": [
+      "apps/mcp/test_*.py"
+    ],
+    "acceptance": "CQ-15 real OAuth, explicit write consent and revoke",
+    "source_candidates": [
+      "apps/mcp/README.md",
+      "apps/mcp/advanced_tools.py",
+      "apps/mcp/bridge_client.py",
+      "apps/mcp/bridge_http.py",
+      "apps/mcp/deploy/README.md",
+      "apps/mcp/deploy/keycloak-chatgpt-client.example.json",
+      "apps/mcp/deploy/keycloak-client.example.json",
+      "apps/mcp/deploy/keycloak-scope.example.json",
+      "apps/mcp/deploy/nginx.locations.example.conf",
+      "apps/mcp/deploy/real-keycloak-smoke.mjs",
+      "apps/mcp/deploy/remote.env.example",
+      "apps/mcp/deploy/verify-keycloak-token.py",
+      "apps/mcp/gis_client.py",
+      "apps/mcp/live-browser-smoke.mjs",
+      "apps/mcp/live_bridge.py",
+      "apps/mcp/live_probe.py",
+      "apps/mcp/live_server.py",
+      "apps/mcp/plugin/index.html",
+      "apps/mcp/plugin/partner-manifest.example.json",
+      "apps/mcp/plugin/plugin.js",
+      "apps/mcp/plugin/style.css",
+      "apps/mcp/pyproject.toml",
+      "apps/mcp/remote_oauth.py",
+      "apps/mcp/remote_server.py",
+      "apps/mcp/remote_workspace.py",
+      "apps/mcp/server.py",
+      "apps/mcp/uv.lock",
+      "apps/mcp/verify_live_contract.py",
+      "apps/mcp/web/advanced-actions.ts",
+      "apps/mcp/web/advanced-integration-smoke.mjs",
+      "apps/mcp/web/browser-smoke.mjs",
+      "apps/mcp/web/build-consent-hotfix.mjs",
+      "apps/mcp/web/first-party.css",
+      "apps/mcp/web/first-party.d.ts",
+      "apps/mcp/web/first-party.js",
+      "apps/mcp/web/layout-export.ts",
+      "apps/mcp/web/workspace-actions.ts",
+      "apps/mcp/workspace_tools.py",
+      "apps/web-next/src/AiCopilotPanel.tsx"
+    ],
+    "test_candidates": [
+      "apps/mcp/test_advanced_tools.py",
+      "apps/mcp/test_live_bridge.py",
+      "apps/mcp/test_mcp.py",
+      "apps/mcp/test_remote.py",
+      "apps/mcp/test_workspace_tools.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F27",
+    "title": "Unified API and client SDK",
+    "priority": "P0",
+    "owner": "Backend",
+    "source_patterns": [
+      "packages/client-sdk/*",
+      "apps/api/openvietgis_api/adapters/http/*"
+    ],
+    "test_patterns": [
+      "apps/api/tests/contract/*",
+      "packages/client-sdk/tests/*"
+    ],
+    "acceptance": "Generated contracts, scope and compatibility",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/http/__init__.py",
+      "apps/api/openvietgis_api/adapters/http/audit.py",
+      "apps/api/openvietgis_api/adapters/http/auth.py",
+      "apps/api/openvietgis_api/adapters/http/authorization.py",
+      "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "apps/api/openvietgis_api/adapters/http/cad.py",
+      "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "apps/api/openvietgis_api/adapters/http/cartography.py",
+      "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "apps/api/openvietgis_api/adapters/http/editing.py",
+      "apps/api/openvietgis_api/adapters/http/errors.py",
+      "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "apps/api/openvietgis_api/adapters/http/external_provider_transport.py",
+      "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "apps/api/openvietgis_api/adapters/http/field.py",
+      "apps/api/openvietgis_api/adapters/http/gis_access.py",
+      "apps/api/openvietgis_api/adapters/http/gis_access_guard.py",
+      "apps/api/openvietgis_api/adapters/http/grants.py",
+      "apps/api/openvietgis_api/adapters/http/health.py",
+      "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "apps/api/openvietgis_api/adapters/http/invitation_mail.py",
+      "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "apps/api/openvietgis_api/adapters/http/layout_designer.py",
+      "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "apps/api/openvietgis_api/adapters/http/map_viewport.py",
+      "apps/api/openvietgis_api/adapters/http/maps.py",
+      "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "apps/api/openvietgis_api/adapters/http/me.py",
+      "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "apps/api/openvietgis_api/adapters/http/ops.py",
+      "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "apps/api/openvietgis_api/adapters/http/processing.py",
+      "apps/api/openvietgis_api/adapters/http/processing_models.py",
+      "apps/api/openvietgis_api/adapters/http/professional.py",
+      "apps/api/openvietgis_api/adapters/http/projects.py",
+      "apps/api/openvietgis_api/adapters/http/queries.py",
+      "apps/api/openvietgis_api/adapters/http/raster.py",
+      "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "apps/api/openvietgis_api/adapters/http/security.py",
+      "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "apps/api/openvietgis_api/adapters/http/spatial.py",
+      "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "apps/api/openvietgis_api/adapters/http/team_presence.py",
+      "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+      "apps/api/openvietgis_api/adapters/http/tenant_access.py",
+      "apps/api/openvietgis_api/adapters/http/tenant_serialization.py",
+      "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "apps/api/openvietgis_api/adapters/http/v8i_bridge.py",
+      "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "packages/client-sdk/package.json",
+      "packages/client-sdk/src/auth.ts",
+      "packages/client-sdk/src/bootstrap.ts",
+      "packages/client-sdk/src/external-plugins.ts",
+      "packages/client-sdk/src/generated/auth-session.ts",
+      "packages/client-sdk/src/generated/import-export.ts",
+      "packages/client-sdk/src/generated/map-workspace.ts",
+      "packages/client-sdk/src/generated/service-admin.ts",
+      "packages/client-sdk/src/generated/spatial-catalog.ts",
+      "packages/client-sdk/src/generated/tenant-core.ts",
+      "packages/client-sdk/src/health.ts",
+      "packages/client-sdk/src/http.ts",
+      "packages/client-sdk/src/index.ts",
+      "packages/client-sdk/src/integration-hub.ts",
+      "packages/client-sdk/src/invitations.ts",
+      "packages/client-sdk/src/managed-sync.ts",
+      "packages/client-sdk/src/maps.ts",
+      "packages/client-sdk/src/marketplace-developers.ts",
+      "packages/client-sdk/src/organizations.ts",
+      "packages/client-sdk/src/platform.ts",
+      "packages/client-sdk/src/projects.ts",
+      "packages/client-sdk/src/service-principals.ts",
+      "packages/client-sdk/src/spatial.ts",
+      "packages/client-sdk/src/transfers.ts",
+      "packages/client-sdk/src/workspaces.ts",
+      "packages/client-sdk/tsconfig.json"
+    ],
+    "test_candidates": [
+      "apps/api/tests/contract/test_foundation_contract.py",
+      "apps/api/tests/contract/test_identity_tenancy_contracts.py",
+      "apps/api/tests/contract/test_map_viewport_http.py",
+      "apps/api/tests/contract/test_maps.py",
+      "apps/api/tests/contract/test_permission_registry.py",
+      "apps/api/tests/contract/test_spatial_catalog.py",
+      "apps/api/tests/contract/test_spatial_changes.py",
+      "apps/api/tests/contract/test_spatial_consumer.py",
+      "apps/api/tests/contract/test_spatial_crs.py",
+      "apps/api/tests/contract/test_spatial_features.py",
+      "apps/api/tests/contract/test_spatial_layers.py",
+      "apps/api/tests/contract/test_spatial_transform_wire.py",
+      "packages/client-sdk/tests/auth-session.test.ts",
+      "packages/client-sdk/tests/bootstrap.test.ts",
+      "packages/client-sdk/tests/grants-invitations.test.ts",
+      "packages/client-sdk/tests/http.test.ts",
+      "packages/client-sdk/tests/integration-bindings.test.ts",
+      "packages/client-sdk/tests/integration-hub.test.ts",
+      "packages/client-sdk/tests/maps.test.ts",
+      "packages/client-sdk/tests/platform.test.ts",
+      "packages/client-sdk/tests/service-principals.test.ts",
+      "packages/client-sdk/tests/spatial-changes.test.ts",
+      "packages/client-sdk/tests/spatial-crs.test.ts",
+      "packages/client-sdk/tests/spatial-features.test.ts",
+      "packages/client-sdk/tests/spatial-layers.test.ts",
+      "packages/client-sdk/tests/spatial.test.ts",
+      "packages/client-sdk/tests/tenant-foundation.test.ts",
+      "packages/client-sdk/tests/transfers.test.ts",
+      "packages/client-sdk/tests/workspace-project.test.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F28",
+    "title": "UX, accessibility, responsive",
+    "priority": "P1",
+    "owner": "Frontend",
+    "source_patterns": [
+      "apps/web-next/src/*",
+      "apps/web/src/ui/*"
+    ],
+    "test_patterns": [
+      "*accessibility*.spec.ts",
+      "*responsive*.spec.ts",
+      "*visual*.spec.ts"
+    ],
+    "acceptance": "CQ-16 actual web-next keyboard/mobile",
+    "source_candidates": [
+      "apps/web-next/src/AccessRules.tsx",
+      "apps/web-next/src/AccountMenu.tsx",
+      "apps/web-next/src/AdvancedEditor.tsx",
+      "apps/web-next/src/AiCopilotPanel.tsx",
+      "apps/web-next/src/Basemaps.ts",
+      "apps/web-next/src/Brand.tsx",
+      "apps/web-next/src/CadEditorPanel.tsx",
+      "apps/web-next/src/CadGeorefPanel.tsx",
+      "apps/web-next/src/CoreCommandBar.tsx",
+      "apps/web-next/src/CoreMapTools.tsx",
+      "apps/web-next/src/CoreWorkbench.tsx",
+      "apps/web-next/src/DeveloperPortal.tsx",
+      "apps/web-next/src/EditHistoryDetails.tsx",
+      "apps/web-next/src/ExcelJoin.ts",
+      "apps/web-next/src/ExternalPluginHub.tsx",
+      "apps/web-next/src/GisIcon.tsx",
+      "apps/web-next/src/HouseQrLink.ts",
+      "apps/web-next/src/IntegrationCatalog.tsx",
+      "apps/web-next/src/InviteFlow.tsx",
+      "apps/web-next/src/Landing.tsx",
+      "apps/web-next/src/LandingSwarm.tsx",
+      "apps/web-next/src/LandingSwarmStandalone.tsx",
+      "apps/web-next/src/LayerProperties.tsx",
+      "apps/web-next/src/LayoutDesigner.tsx",
+      "apps/web-next/src/LayoutRender.ts",
+      "apps/web-next/src/LiveApp.tsx",
+      "apps/web-next/src/LivePresence.tsx",
+      "apps/web-next/src/MarketplacePage.tsx",
+      "apps/web-next/src/ModelVault.tsx",
+      "apps/web-next/src/PrintDesigner.tsx",
+      "apps/web-next/src/ProcessingModeler.tsx",
+      "apps/web-next/src/ProcessingToolbox.tsx",
+      "apps/web-next/src/ProfessionalTiles.ts",
+      "apps/web-next/src/ProfessionalTools.tsx",
+      "apps/web-next/src/ProjectRaster.tsx",
+      "apps/web-next/src/PublisherPortal.tsx",
+      "apps/web-next/src/QgisBindingManager.tsx",
+      "apps/web-next/src/QgisWorkspace.tsx",
+      "apps/web-next/src/RasterReportWorkbench.tsx",
+      "apps/web-next/src/RasterWorkbench.tsx",
+      "apps/web-next/src/SavedScenePanel.tsx",
+      "apps/web-next/src/SentinelWorkbench.tsx",
+      "apps/web-next/src/SnapMath.ts",
+      "apps/web-next/src/Spatial3DSettings.tsx",
+      "apps/web-next/src/SpatialWorkspace.tsx",
+      "apps/web-next/src/SurveyMath.ts",
+      "apps/web-next/src/SurveyWorkbench.tsx",
+      "apps/web-next/src/TeamAccess.tsx",
+      "apps/web-next/src/TeamCollaboration.tsx",
+      "apps/web-next/src/TileFeaturePanel.tsx",
+      "apps/web-next/src/TilesetPanel.tsx",
+      "apps/web-next/src/WorkspacePicker.tsx",
+      "apps/web-next/src/access-rules.css",
+      "apps/web-next/src/advanced-editor.css",
+      "apps/web-next/src/ai-copilot/advanced-actions.ts",
+      "apps/web-next/src/ai-copilot/first-party.css",
+      "apps/web-next/src/ai-copilot/first-party.d.ts",
+      "apps/web-next/src/ai-copilot/first-party.js",
+      "apps/web-next/src/ai-copilot/layout-export.ts",
+      "apps/web-next/src/ai-copilot/workspace-actions.ts",
+      "apps/web-next/src/basemap.css",
+      "apps/web-next/src/brand.css",
+      "apps/web-next/src/core-toolkit.css",
+      "apps/web-next/src/developer-portal.css",
+      "apps/web-next/src/external-plugin-hub.css",
+      "apps/web-next/src/header-status.css",
+      "apps/web-next/src/integration-catalog.css",
+      "apps/web-next/src/landing.css",
+      "apps/web-next/src/layer-properties.css",
+      "apps/web-next/src/layout-designer.css",
+      "apps/web-next/src/live-presence.css",
+      "apps/web-next/src/live.css",
+      "apps/web-next/src/main.tsx",
+      "apps/web-next/src/map-surface.ts",
+      "apps/web-next/src/marketplace-page.css",
+      "apps/web-next/src/partner-map-bridge.ts",
+      "apps/web-next/src/processing-modeler.css",
+      "apps/web-next/src/processing-toolbox.css",
+      "apps/web-next/src/professional.css",
+      "apps/web-next/src/publisher-portal.css",
+      "apps/web-next/src/qgis-donate-inline.css",
+      "apps/web-next/src/qgis-founders.css",
+      "apps/web-next/src/qgis-home-fidelity.css",
+      "apps/web-next/src/qgis-landing.css",
+      "apps/web-next/src/qgis-motion.css",
+      "apps/web-next/src/qgis-poster-hero.css",
+      "apps/web-next/src/qgis-workspace.css",
+      "apps/web-next/src/raster-workbench.css",
+      "apps/web-next/src/sentinel-month.css",
+      "apps/web-next/src/spatial-workspace.css",
+      "apps/web-next/src/studio-contract.ts",
+      "apps/web-next/src/studio-shell.css",
+      "apps/web-next/src/studio-ui.tsx",
+      "apps/web-next/src/style.css",
+      "apps/web-next/src/survey.css",
+      "apps/web-next/src/swarm-landing.css",
+      "apps/web-next/src/team-access.css",
+      "apps/web-next/src/team-collaboration.css",
+      "apps/web-next/src/useFeatureLeases.ts",
+      "apps/web-next/src/workspace-picker.css",
+      "apps/web/src/ui/global.css",
+      "apps/web/src/ui/primitives/Button.tsx",
+      "apps/web/src/ui/primitives/IconButton.tsx",
+      "apps/web/src/ui/primitives/ResizablePanel.tsx",
+      "apps/web/src/ui/primitives/StatusMessage.tsx",
+      "apps/web/src/ui/tailwind.css",
+      "apps/web/src/ui/tokens.css"
+    ],
+    "test_candidates": [
+      "tests/e2e/app-shell-accessibility.spec.ts",
+      "tests/e2e/app-shell-visual.spec.ts",
+      "tests/e2e/map-workspace-accessibility.spec.ts",
+      "tests/e2e/map-workspace-responsive.spec.ts",
+      "tests/e2e/map-workspace-visual.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F29",
+    "title": "Performance",
+    "priority": "P0",
+    "owner": "QA",
+    "source_patterns": [
+      "apps/api/openvietgis_api/adapters/persistence/*",
+      "apps/web-next/src/map-surface.ts"
+    ],
+    "test_patterns": [
+      "apps/api/tests/performance/*",
+      "*performance*.spec.ts"
+    ],
+    "acceptance": "CQ-17 measured approved profile",
+    "source_candidates": [
+      "apps/api/openvietgis_api/adapters/persistence/__init__.py",
+      "apps/api/openvietgis_api/adapters/persistence/audit_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/authorization_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/cad_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/cartography_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/collaboration_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/db.py",
+      "apps/api/openvietgis_api/adapters/persistence/editing_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/extensions_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/external_sources_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/field_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/gis_access.py",
+      "apps/api/openvietgis_api/adapters/persistence/identity_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/map_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/map_viewport.py",
+      "apps/api/openvietgis_api/adapters/persistence/ops_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/platform_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/processing_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/query_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/rls.py",
+      "apps/api/openvietgis_api/adapters/persistence/scope_helper.py",
+      "apps/api/openvietgis_api/adapters/persistence/spatial_fixtures.py",
+      "apps/api/openvietgis_api/adapters/persistence/spatial_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/spatial_transform.py",
+      "apps/api/openvietgis_api/adapters/persistence/tenancy_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/transfer_repository.py",
+      "apps/api/openvietgis_api/adapters/persistence/web_transform_guard.py",
+      "apps/web-next/src/map-surface.ts"
+    ],
+    "test_candidates": [
+      "apps/api/tests/performance/test_authorization_benchmark.py",
+      "apps/api/tests/performance/test_spatial_benchmark.py",
+      "tests/e2e/map-performance.spec.ts"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F30",
+    "title": "Security and audit",
+    "priority": "P0",
+    "owner": "Security",
+    "source_patterns": [
+      "apps/api/openvietgis_api/security/*",
+      "apps/api/openvietgis_api/domains/audit/*",
+      ".gitleaks.toml"
+    ],
+    "test_patterns": [
+      "*test*security*",
+      "*test*rls*",
+      "*test*authorization*"
+    ],
+    "acceptance": "Spec 030 authz, tenant, secret and license review",
+    "source_candidates": [
+      ".gitleaks.toml",
+      "apps/api/openvietgis_api/domains/audit/__init__.py",
+      "apps/api/openvietgis_api/domains/audit/domain.py",
+      "apps/api/openvietgis_api/domains/audit/ports.py",
+      "apps/api/openvietgis_api/domains/audit/service.py",
+      "apps/api/openvietgis_api/security/__init__.py",
+      "apps/api/openvietgis_api/security/csrf.py",
+      "apps/api/openvietgis_api/security/secrets.py",
+      "apps/api/openvietgis_api/security/sessions.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/identity/test_http_security.py",
+      "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+      "apps/api/tests/integration/m3/test_cogo_authorization.py",
+      "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+      "apps/api/tests/integration/maps/test_authorization_matrix.py",
+      "apps/api/tests/integration/maps/test_map_warm_revision_security.py",
+      "apps/api/tests/integration/rls/test_cross_tenant_api.py",
+      "apps/api/tests/integration/rls/test_cross_tenant_constraints.py",
+      "apps/api/tests/integration/rls/test_cross_tenant_repository.py",
+      "apps/api/tests/integration/rls/test_pool_tenant_leak.py",
+      "apps/api/tests/integration/rls/test_runtime_role.py",
+      "apps/api/tests/integration/rls/test_transaction_context.py",
+      "apps/api/tests/integration/service_identity/test_service_authorization.py",
+      "apps/api/tests/integration/spatial/test_authorization.py",
+      "apps/api/tests/integration/spatial/test_lifecycle_security.py",
+      "apps/api/tests/integration/spatial/test_migration_rls.py",
+      "apps/api/tests/performance/test_authorization_benchmark.py",
+      "apps/api/tests/unit/authorization/test_audit_redaction.py",
+      "apps/api/tests/unit/authorization/test_authorization_service.py",
+      "apps/api/tests/unit/authorization/test_context.py",
+      "apps/api/tests/unit/authorization/test_repository_context.py",
+      "apps/api/tests/unit/authorization/test_role_grant_union.py",
+      "apps/api/tests/unit/authorization/test_service_permission_ceiling.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F31",
+    "title": "Deployment, backup, restore",
+    "priority": "P0",
+    "owner": "Release",
+    "source_patterns": [
+      "infra/*",
+      "tools/backup_restore.py",
+      "tools/check_release_gate.py"
+    ],
+    "test_patterns": [
+      "*test*release*",
+      "*test*ops*",
+      "*test*migrations*"
+    ],
+    "acceptance": "CQ-13 exact release manifest and isolated restore",
+    "source_candidates": [
+      "infra/cad-relay/relay.css",
+      "infra/cad-relay/relay.html",
+      "infra/cad-relay/relay.js",
+      "infra/cad-relay/release.sha256",
+      "infra/cad-relay/serve-test.py",
+      "infra/cad-relay/stage-test.py",
+      "infra/cad-relay/tests/fixture.dxf",
+      "infra/cad-relay/tests/index.html",
+      "infra/cad-relay/tests/smoke.cjs",
+      "infra/dev/compose.identity.yaml",
+      "infra/dev/compose.yaml",
+      "infra/dev/keycloak/realm-openvietgis.json",
+      "infra/dev/keycloak/themes/openvietgis/login/messages/messages_en.properties",
+      "infra/dev/keycloak/themes/openvietgis/login/messages/messages_vi.properties",
+      "infra/dev/keycloak/themes/openvietgis/login/register.ftl",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis-modal-v3.css",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis.css",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/favicon.ico",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/ovg-mark.png",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-map.svg",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-mark.svg",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch-modal-v2.js",
+      "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch.js",
+      "infra/dev/keycloak/themes/openvietgis/login/theme.properties",
+      "infra/dev/postgres/001-runtime-role.sql",
+      "infra/prod/001-runtime-role.sh",
+      "infra/prod/Dockerfile.api",
+      "infra/prod/Dockerfile.postgres",
+      "infra/prod/Dockerfile.web",
+      "infra/prod/README.md",
+      "infra/prod/docker-compose.prod.yml",
+      "infra/prod/nginx.conf",
+      "infra/prod/openvietgis-webhook@.service.example",
+      "infra/prod/postgres/ensure-runtime-role.sh",
+      "infra/prod/webhook.env.example",
+      "tools/backup_restore.py",
+      "tools/check_release_gate.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/integration/m3/test_r015_ops_real.py",
+      "apps/api/tests/integration/maps/test_map_migrations.py",
+      "apps/api/tests/integration/tenancy/test_identity_tenant_migrations.py",
+      "apps/api/tests/integration/test_migrations.py",
+      "apps/api/tests/unit/test_ops_release_gate.py",
+      "tools/tests/test_release_gate.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  },
+  {
+    "id": "F32",
+    "title": "Repository and release governance",
+    "priority": "P0",
+    "owner": "Release",
+    "source_patterns": [
+      ".github/workflows/*",
+      "tools/control_kit_audit.py",
+      "specs/030-v1-unified-release/*"
+    ],
+    "test_patterns": [
+      "*test*control_kit*",
+      "*test*release*"
+    ],
+    "acceptance": "One source SHA, frontend, API/MCP, connector checksums",
+    "source_candidates": [
+      ".github/workflows/ci.yml",
+      ".github/workflows/qgis-connector.yml",
+      "specs/030-v1-unified-release/plan.md",
+      "specs/030-v1-unified-release/spec.md",
+      "specs/030-v1-unified-release/tasks.md",
+      "tools/control_kit_audit.py"
+    ],
+    "test_candidates": [
+      "apps/api/tests/unit/test_ops_release_gate.py",
+      "tools/tests/test_control_kit_audit.py",
+      "tools/tests/test_release_gate.py"
+    ],
+    "status": "SOURCE_PRESENT",
+    "runtime_status": "NOT_RUN"
+  }
+]

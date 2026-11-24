@@ -157,7 +157,16 @@ def test_managed_client_session_bootstrap_delta_commit_and_commands() -> None:
                 "next_cursor": 7,
                 "permission_epoch": 1,
                 "has_more": False,
-                "changes": [{"cursor": 7, "layer_id": "L1", "upserts": [], "removals": ["F1"]}],
+                "changes": [
+                    {
+                        "cursor": 7,
+                        "layer_id": "L1",
+                        "source_id": "S1",
+                        "content_revision": "d" * 64,
+                        "upserts": [],
+                        "removals": ["F1"],
+                    }
+                ],
             }
         ),
     ):
@@ -241,12 +250,12 @@ def test_r029_metadata_writes_use_read_scope_but_gis_commits_require_edit(monkey
         managed_sync.commit_managed_changes(org, proj, object(), auth, session)
     assert calls[-1] == (Permission.PROJECT_EDIT, True)
 
+
 def test_edit_capability_does_not_clear_authenticated_read_scope(monkeypatch) -> None:
     """A rejected EDIT probe must never invalidate the managed session INSERT RLS pin."""
     from uuid import uuid4
 
     from openvietgis_api.adapters.http import managed_sync
-    from openvietgis_api.adapters.persistence import authorization_repository
     from openvietgis_api.domains.authorization.permissions import Permission
 
     org, proj = uuid4(), uuid4()
@@ -268,7 +277,8 @@ def test_edit_capability_does_not_clear_authenticated_read_scope(monkeypatch) ->
             return frozenset({Permission.PROJECT_READ, Permission.PROJECT_EDIT})
 
     monkeypatch.setattr(managed_sync, "_prep_scope", forbid_rebinding)
-    monkeypatch.setattr(authorization_repository, "SqlEffectivePermissionProvider", FakeProvider)
+    monkeypatch.setattr(managed_sync, "SqlEffectivePermissionProvider", FakeProvider)
+
     def fake_context(actor, *, organization_id, project_id):
         return type("Scope", (), {"organization_id": organization_id, "project_id": project_id})()
 
@@ -280,7 +290,5 @@ def test_edit_capability_does_not_clear_authenticated_read_scope(monkeypatch) ->
         def resolve(self, context):
             return frozenset({Permission.PROJECT_READ})
 
-    monkeypatch.setattr(
-        authorization_repository, "SqlEffectivePermissionProvider", ReadOnlyProvider
-    )
+    monkeypatch.setattr(managed_sync, "SqlEffectivePermissionProvider", ReadOnlyProvider)
     assert managed_sync._can_edit_project(session, actor, org, proj) is False

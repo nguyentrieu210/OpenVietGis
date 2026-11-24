@@ -63,3 +63,23 @@ After the Spec 002 P1 browser gate, migration 0005 retires the disposable Founda
 The real tenant Project slice now exercises the same create/read, process restart and persistent
 browser acceptance path. Health endpoints, dependency boundaries and historical R001 evidence
 remain available; the retired sample data is not a product domain or a migration target.
+
+## Core boundary standardization (Spec 033)
+
+The canonical frontend is web-next; legacy workbench access is restricted to
+its legacy-workbench-bridge.ts. The bridge is transitional and retains lazy
+loading until parity is independently demonstrated. Shared snap and projected
+survey calculations belong to the spatial-workspace package; they do not
+replace authoritative backend CRS/geometry validation.
+
+Official module discovery is an adapter responsibility: HTTP router discovery
+lives under adapters/http/official_modules.py, and generic browser discovery
+lives in the respective extension registry. Domain code must not import
+transport or persistence frameworks. Reusable frontend runtime packages cannot
+depend on application internals; test fixtures may exercise applications.
+These constraints are checked by tools/check_architecture.py as part of the
+existing CI architecture gate. The static check is not a substitute for
+security review or real runtime acceptance.
+
+See [Spec 033](../specs/033-core-standardization/spec.md) and
+[implementation evidence](../specs/033-core-standardization/AUDIT.md).

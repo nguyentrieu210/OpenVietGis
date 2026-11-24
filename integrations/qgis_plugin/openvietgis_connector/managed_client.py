@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -198,6 +199,66 @@ def bootstrap_managed_layer(
     )
 
 
+def load_managed_snapshot(
+    config: OpenVietGisConfig, *, layer_id: str, session_id: str,
+    permission_epoch: int, limit: int = 1000, cancelled=lambda: False,
+) -> tuple[ManagedBootstrapPage, list[dict[str, Any]]]:
+    """Load a coherent native snapshot before materializing any QGIS layer."""
+    first = None
+    offset = 0
+    features: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    while True:
+        if cancelled():
+            raise ApiError("Đã hủy tải lớp.")
+        page = bootstrap_managed_layer(
+            config, layer_id=layer_id, session_id=session_id, limit=limit, offset=offset,
+        )
+        if page.layer_id != layer_id or page.permission_epoch != permission_epoch:
+            raise ApiError("Phạm vi hoặc quyền của lớp đã thay đổi; hãy mở lại.")
+        if page.crs_code not in (4326, 3857, 4756, 5899) or page.dimensions != "XY":
+            raise ApiError("CRS hoặc số chiều chưa được hỗ trợ cho đồng bộ trực tiếp.")
+        if page.geometry_family not in ("Point", "LineString", "Polygon"):
+            raise ApiError("Kiểu hình học chưa được hỗ trợ cho đồng bộ trực tiếp.")
+        if not page.source_id or not all(
+            re.fullmatch(r"[a-f0-9]{64}", token)
+            for token in (page.content_revision, page.schema_revision)
+        ):
+            raise ApiError("Định danh nguồn hoặc revision không hợp lệ.")
+        if first is None:
+            first = page
+            names = [f.get("name") for f in page.fields]
+            if any(not isinstance(n, str) or not n for n in names):
+                raise ApiError("Tên trường không hợp lệ.")
+            if len({n.casefold() for n in names}) != len(names) or any(
+                n.casefold() in {"ovg_feature_id","ovg_local_fid"} for n in names
+            ):
+                raise ApiError("Tên trường bị trùng hoặc trùng mã định danh hệ thống.")
+        elif (
+            page.source_id, page.crs_code, page.geometry_family, page.dimensions,
+            page.content_revision, page.schema_revision, page.fields
+        ) != (
+            first.source_id, first.crs_code, first.geometry_family, first.dimensions,
+            first.content_revision, first.schema_revision, first.fields
+        ):
+            raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
+        if len(page.features) > limit:
+            raise ApiError("Trang dữ liệu vượt quá giới hạn.")
+        for item in page.features:
+            oid = item.get("feature_id")
+            if not isinstance(oid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", oid) or oid in ids:
+                raise ApiError("Mã đối tượng không hợp lệ hoặc trùng lặp.")
+            ids.add(oid)
+            features.append(item)
+        if not page.has_more:
+            if page.next_offset is not None:
+                raise ApiError("Con trỏ trang cuối không hợp lệ.")
+            return first, features
+        if not page.features or page.next_offset != offset + len(page.features):
+            raise ApiError("Con trỏ phân trang không hợp lệ; hãy mở lại lớp.")
+        offset = page.next_offset
+
+
 def fetch_managed_delta(
     config: OpenVietGisConfig,
     *,
@@ -207,14 +268,46 @@ def fetch_managed_delta(
 ) -> ManagedDeltaPage:
     qs = urllib.parse.urlencode({"session_id": session_id, "cursor": cursor, "limit": limit})
     res = _json_request(config, "GET", f"{_managed_base(config)}/delta?{qs}")
-    return ManagedDeltaPage(
-        reset_required=bool(res.get("reset_required", False)),
-        next_cursor=int(res.get("next_cursor", cursor)),
-        permission_epoch=int(res.get("permission_epoch", 1)),
-        has_more=bool(res.get("has_more", False)),
-        changes=tuple(res.get("changes") or ()),
-        reason=str(res["reason"]) if res.get("reason") else None,
-    )
+    return validate_managed_delta(res, cursor=cursor)
+
+
+def validate_managed_delta(res: dict[str, Any], *, cursor: int) -> ManagedDeltaPage:
+    """Validate the complete cursor envelope before any provider mutation."""
+    reset, more = res.get("reset_required"), res.get("has_more")
+    nxt, epoch = res.get("next_cursor"), res.get("permission_epoch")
+    changes = res.get("changes")
+    if (type(reset) is not bool or type(more) is not bool or type(nxt) is not int
+            or nxt < 0 or type(epoch) is not int or epoch < 1 or not isinstance(changes, list)):
+        raise ApiError("Phản hồi đồng bộ không hợp lệ.")
+    if reset:
+        if changes or more:
+            raise ApiError("Phản hồi yêu cầu tải lại không hợp lệ.")
+    else:
+        if nxt < cursor or (more and nxt == cursor):
+            raise ApiError("Con trỏ đồng bộ không tiến hợp lệ.")
+        previous = cursor
+        seen: set[tuple[int, str]] = set()
+        for item in changes:
+            if not isinstance(item, dict):
+                raise ApiError("Thay đổi đồng bộ không hợp lệ.")
+            seq, lid, src = item.get("cursor"), item.get("layer_id"), item.get("source_id")
+            if (type(seq) is not int or seq <= cursor or seq < previous or seq > nxt
+                    or not isinstance(lid, str) or not lid or not isinstance(src, str) or not src
+                    or (seq, lid) in seen
+                    or not isinstance(item.get("content_revision"), str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", item["content_revision"])):
+                raise ApiError("Revision hoặc định danh đồng bộ không hợp lệ.")
+            seen.add((seq, lid))
+            previous = seq
+            ups, removals = item.get("upserts"), item.get("removals")
+            if not isinstance(ups, list) or not isinstance(removals, list):
+                raise ApiError("Danh sách cập nhật đồng bộ không hợp lệ.")
+            ids = [u.get("feature_id") if isinstance(u, dict) else None for u in ups] + removals
+            if any(not isinstance(x, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", x)
+                   for x in ids) or len(ids) != len(set(ids)):
+                raise ApiError("Mã đối tượng đồng bộ không hợp lệ hoặc trùng lặp.")
+    return ManagedDeltaPage(reset, nxt, epoch, more, tuple(changes), res.get("reason"))
+
 
 
 def commit_managed_changes(
@@ -368,7 +461,7 @@ def catch_up_cached_layer(config, session, probe, record, cancelled):
             if str(change["source_id"]) != probe.source_id:
                 continue
             if str(change["layer_id"]) != probe.layer_id:
-                return None
+                continue
             for oid in change.get("removals", []):
                 features.pop(str(oid), None)
             for f in change.get("upserts", []):
@@ -429,25 +522,15 @@ def load_managed_layers(
                 result.append((probe, cached))
                 progress(100 * (index + 1) / len(layer_ids))
                 continue
-        while True:
+        try:
+            first, features = load_managed_snapshot(
+                config, layer_id=layer_id, session_id=session.id,
+                permission_epoch=session.permission_epoch, limit=5000, cancelled=cancelled,
+            )
+        except ApiError:
             if cancelled():
                 return None
-            page = bootstrap_managed_layer(config, layer_id=layer_id,
-                                           session_id=session.id, limit=5000, offset=offset)
-            if first is None:
-                first = page
-            elif (page.content_revision, page.schema_revision, page.permission_epoch) != (
-                first.content_revision, first.schema_revision, first.permission_epoch
-            ):
-                raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại.")
-            if page.permission_epoch != session.permission_epoch:
-                raise ApiError("Quyền thay đổi trong lúc tải; hãy mở lại.")
-            features.extend(page.features)
-            if not page.has_more:
-                break
-            if page.next_offset is None or page.next_offset <= offset:
-                raise ApiError("Phân trang máy chủ không hợp lệ.")
-            offset = page.next_offset
+            raise
         if path is not None and not cancelled():
             write_snapshot(path, first, features)
         result.append((first, features))
