@@ -1059,7 +1059,7 @@ class SpatialFeatureService:
             include_geometry=include_geometry,
             response_crs=response_crs,
         )
-        if type(limit) is not int or not 1 <= limit <= 100:
+        if type(limit) is not int or not 1 <= limit <= 1000:
             raise SpatialValidationError("feature page limit out of bounds")
         if after_feature_id is not None:
             validate_feature_id(after_feature_id)
