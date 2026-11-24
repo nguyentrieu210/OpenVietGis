@@ -141,10 +141,13 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
       projectId,
       {
         layer_id: layer.layer_id,
-        external_dataset_ref: `${slugPart(layer.name)}_${layer.layer_id.slice(0, 6)}`,
+        adapter_key: "qgis",
+        external_dataset_ref: `${slugPart(layer.layer_name)}_${layer.layer_id.slice(0, 6)}`,
+        direction: "bidirectional_manual",
         source_crs_code: layer.stored_crs_code,
         target_crs_code: layer.stored_crs_code,
-        allowed_field_ids: layer.fields.map((f) => f.name)
+        external_primary_key: "ovg_feature_id",
+        allowed_field_ids: layer.allowed_field_ids
       },
       csrf
     );
@@ -169,14 +172,14 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
           existing.revision,
           csrf
         );
-        setNotice(`Đã tạm tắt đồng bộ lớp "${layer.name}".`);
+        setNotice(`Đã tạm tắt đồng bộ lớp "${layer.layer_name}".`);
       } else {
         await ensureBindingActive(layer);
-        setNotice(`✓ Đã bật đồng bộ 2 chiều cho lớp "${layer.name}".`);
+        setNotice(`✓ Đã bật đồng bộ 2 chiều cho lớp "${layer.layer_name}".`);
       }
       await refreshAll();
     } catch {
-      setError(`Không thể cập nhật trạng thái đồng bộ cho lớp "${layer.name}".`);
+      setError(`Không thể cập nhật trạng thái đồng bộ cho lớp "${layer.layer_name}".`);
     } finally {
       setSaving(false);
     }
@@ -354,8 +357,8 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     setError("");
     try {
       const csrf = await loadCsrfToken(client);
-      const payload: { resolution: "keep_web" | "keep_qgis" | "merge" | "dismiss"; merged_value?: unknown } = {
-        resolution
+      const payload: { decision: "keep_web" | "keep_qgis" | "merge" | "dismiss"; merged_value?: unknown } = {
+        decision: resolution
       };
       if (resolution === "merge") {
         payload.merged_value = mergeDrafts[conflict.id] ?? "";
@@ -541,13 +544,13 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
             options.map((layer) => {
               const binding = findBindingForLayer(layer.layer_id);
               const isOn = binding?.state === "active";
-              const openConflicts = binding?.open_conflict_count ?? 0;
+              const openConflicts = binding?.open_conflicts_count ?? 0;
 
               return (
                 <div key={layer.layer_id} className="qgis-layer-item">
                   <div className="qgis-layer-row">
                     <div className="qgis-layer-info">
-                      <strong>{layer.name}</strong>
+                      <strong>{layer.layer_name}</strong>
                       <small>{geomLabel(layer.geometry_family)} · EPSG:{layer.stored_crs_code}</small>
                     </div>
 
@@ -572,7 +575,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                         type="button"
                         role="switch"
                         aria-checked={isOn}
-                        aria-label={`Bật đồng bộ 2 chiều cho ${layer.name}`}
+                        aria-label={`Bật đồng bộ 2 chiều cho ${layer.layer_name}`}
                         disabled={saving}
                         className={`qgis-switch ${isOn ? "is-on" : ""}`}
                         onClick={() => { void handleToggleLayer(layer); }}
