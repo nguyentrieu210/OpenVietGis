@@ -391,7 +391,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
             </span>
           </div>
           <p>
-            Dùng 1 mã kết nối cho cả dự án. Sửa trực tiếp trên QGIS và đồng bộ thời gian thực với Web. Không tự ghi/xóa ngầm.
+            Lấy mã kết nối, mở bản đồ trong QGIS và bấm Lưu để gửi thay đổi lên Web. Khi có cập nhật từ nhóm, công cụ sẽ thông báo và tải phần thay đổi mới.
           </p>
         </div>
         <div className="qgis-hero-actions">
@@ -405,10 +405,10 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
           </button>
           <a
             className="qgis-btn-secondary"
-            href="/rewrite/downloads/openvietgis_connector-0.9.2.zip"
-            download="openvietgis_connector-0.9.2.zip"
+            href="/rewrite/downloads/openvietgis_connector-0.9.3.zip"
+            download="openvietgis_connector-0.9.3.zip"
           >
-            ⬇ Tải Plugin 0.9.1
+            ⬇ Tải công cụ QGIS
           </a>
         </div>
       </div>

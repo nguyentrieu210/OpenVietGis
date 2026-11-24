@@ -1,8 +1,8 @@
 [general]
 name=OpenVietGIS Connector
 qgisMinimumVersion=3.34
-version=0.9.2
-description=R026/R027 controlled QGIS GeoPackage sync and R029 managed realtime; scoped permissions and safe recovery.
+version=0.9.3
+description=Connect QGIS to OpenVietGIS maps, edit layers and save safely to Web; GeoPackage recovery under Advanced.
 about=OpenVietGIS QGIS Connector R026/R027/R029. Project-scoped HTTPS service credentials, explicit project.read for session and export, project.edit plus GIS ACL for writes. R027 maintains a local baseline and conflict-aware pending recovery; R029 supports server-managed realtime with durable changesets. Denied sync never deletes local edits. No internal PostGIS credentials.
 author=OpenVietGIS
 email=security@openvietgis.org

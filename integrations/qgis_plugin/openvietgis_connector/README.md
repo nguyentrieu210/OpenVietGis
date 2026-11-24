@@ -1,12 +1,17 @@
-# OpenVietGIS Connector for QGIS Desktop (3.34+, Python 3.10+)
+# OpenVietGIS · Công cụ kết nối QGIS
 
-**Phiên bản 0.9.2 (R026/R027/R029):** hỗ trợ tải GeoPackage, đồng bộ hai chiều kiểm soát qua R006 Changeset, và **R029 Managed Realtime** không cần tệp GeoPackage. Đây vẫn là plugin thử nghiệm; chỉ dùng với dự án/tài khoản được cấp quyền. Với R027, các lần ghi không chắc kết quả được giữ lại để xác minh, tuyệt đối không tự gửi lại mù quáng. Xem [R027-MANUAL-SYNC.md](R027-MANUAL-SYNC.md) cho cơ chế khôi phục.
+**Cách sử dụng (phiên bản 0.9.3):**
 
-**Sửa lỗi 0.9.2:** backend sử dụng phạm vi đọc hợp lệ khi tạo/thu hồi phiên R029 và xử lý lệnh desktop; thao tác thay đổi GIS vẫn phải có quyền `project.edit`. Khi một lượt ghi R027 bị từ chối rõ ràng bằng HTTP 403, plugin dừng tự đồng bộ, giữ bản chỉnh sửa và cho phép khôi phục sau khi xác minh bản trên Web không bị thay đổi.
+1. Trên [OpenVietGIS Web](https://openvietgis.cloud), mở dự án → **Lấy mã kết nối**.
+2. Trong QGIS, mở **Kết nối OpenVietGIS**, dán mã và bấm **Kết nối**.
+3. Tích chọn các lớp → **Mở bản đồ trong QGIS**.
+4. Biên tập rồi bấm **Lưu thay đổi lên Web** trong công cụ. Trình đồng bộ nhận thông báo cập nhật từ nhóm qua realtime; các thao tác chỉnh sửa chỉ được gửi lên Web sau khi người dùng xác nhận lưu.
 
-**Nếu đang gặp HTTP 403:** mở đúng Organization/Project trên Web → mục kết nối QGIS → tạo mã ghép nối mới và kiểm tra quyền `project.read`, `project.edit` (nếu cần ghi), cùng GIS ACL. **Không xóa các thư mục `ovg_qgis_...` hoặc tệp `working.gpkg` để xử lý lỗi.** Dùng `Công cụ nâng cao → Khôi phục giao dịch` nếu có pending. Các trạng thái pending từ phiên bản cũ chưa xác định kết quả phải được xác minh trước khi tiếp tục; bản mới không tự bỏ bảo vệ đó.
+**Tùy chọn & khôi phục:** Các thao tác GeoPackage cũ, xem trước, đồng bộ bằng tệp và khôi phục giao dịch nằm ở phần nâng cao. Nếu có giao dịch trước đó chưa rõ kết quả, **không xóa `workspace.json`, `baseline.gpkg`, `working.gpkg` hay `.pending-merged.gpkg`**. Dùng **Khôi phục giao dịch** để đối chiếu dữ liệu trước khi làm tiếp.
 
-**Đặc tả:** R026 + R027 + R029. **Chính sách mặc định:** quyền ghi bị từ chối trừ khi được ủy quyền hợp lệ; các phép xóa vẫn bị chặn theo mặc định.
+**An toàn dữ liệu:** Công cụ cần `project.read` để mở lớp và `project.edit` cùng GIS ACL để lưu. Không tự xóa dữ liệu theo mặc định. Không mở đồng thời một lớp bằng hai chế độ đồng bộ. Bản nháp chưa gửi từ QGIS không phải bản sao lưu bền vững nếu QGIS bị đóng đột ngột; hãy lưu lên Web hoặc xuất tệp dự phòng trước khi thoát.
+
+**Lưu ý:** Công cụ vẫn đang thử nghiệm. Không dùng dữ liệu không có quyền truy cập, không gỡ bỏ các kiểm tra phiên/CRS/revision. Các mã R026/R027/R029 là tên đặc tả kỹ thuật nội bộ, không phải chế độ người dùng cần lựa chọn.
 
 ---
 
