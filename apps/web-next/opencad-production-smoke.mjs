@@ -7,6 +7,9 @@ import {resolve,extname} from "node:path";
 import {fileURLToPath} from "node:url";
 const blankDxf=readFileSync(new URL("./public/cad/blank-r2018.dxf",import.meta.url));
 const dist=fileURLToPath(new URL("./dist/",import.meta.url)), origin="https://openvietgis.cloud",cad="https://cad.gpcds.site";
+// Pin the observed immutable release directory; fail closed for other CAD paths.
+const cadRelease=process.env.OVG_CAD_RELEASE_PATH||"/ovg-cad-2bc3537/";
+assert.match(cadRelease,/^\/ovg-cad-(?:[a-f0-9]{7,40}|[0-9]{4}\.[0-9]{2})\/$/);
 const fixture=readFileSync(process.env.OVG_DWG_FIXTURE||"/tmp/ovg-full-cad-fixture.dwg");
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--use-angle=swiftshader","--enable-unsafe-swiftshader","--enable-unsafe-webgpu"]});
 try{
@@ -17,7 +20,7 @@ try{
  p.on("pageerror",e=>{errors.push(e.message);console.log("pageerror",e.message)});
  await p.route("**/*",async r=>{
   const u=new URL(r.request().url());
-  if(u.origin===cad&&(u.pathname==="/relay.html"||u.pathname.startsWith("/ovg-cad-2026.46/")))return r.continue();
+  if(u.origin===cad&&(u.pathname==="/relay.html"||u.pathname.startsWith(cadRelease)))return r.continue();
   if(u.origin!==origin){if(u.origin===cad)outside.push(u.pathname);return r.abort()}
   if(u.pathname.startsWith("/api/v1/")){
    const path=u.pathname,m=r.request().method();let body;
