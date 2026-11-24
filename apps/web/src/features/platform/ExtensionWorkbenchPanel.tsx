@@ -137,6 +137,7 @@ function ExtensionWorkspace({ organizationId, projectId, accountId }: Scope & {a
   const [busy, setBusy] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [search, setSearch] = useState("");
+  const [rawToolsOpen, setRawToolsOpen] = useState(false);
   const lock = useRef(false);
 
   const permissions = useQuery({queryKey: [...prefix, "permissions"],
@@ -266,7 +267,8 @@ function ExtensionWorkspace({ organizationId, projectId, accountId }: Scope & {a
         <pre>{JSON.stringify({permissions:candidate.permissions,commands:candidate.commands,capabilities:candidate.capabilities,entity_schemas:candidate.entity_schemas},null,2)}</pre>
       </details>}
     </>}
-    {activation && <details className="mt-4 rounded-xl border border-line bg-surface-muted p-3.5"><summary className="cursor-pointer text-xs font-bold text-ink-secondary">Công cụ kỹ thuật nâng cao (Nhập/Xuất JSON & Dữ liệu bản ghi thô)</summary><div className="mt-3 space-y-3">
+    {activation && <details open={rawToolsOpen} onToggle={event=>setRawToolsOpen(event.currentTarget.open)}
+      className="mt-4 rounded-xl border border-line bg-surface-muted p-3.5"><summary className="cursor-pointer text-xs font-bold text-ink-secondary">Công cụ kỹ thuật nâng cao (Nhập/Xuất JSON & Dữ liệu bản ghi thô)</summary><div className="mt-3 space-y-3">
       <div className="ovg-form-row">
         <button type="button" className="ovg-btn" disabled={busy} onClick={download}>Xuất dữ liệu & lịch sử JSON</button>
         <label>Chọn gói JSON để sao chép vào dự án

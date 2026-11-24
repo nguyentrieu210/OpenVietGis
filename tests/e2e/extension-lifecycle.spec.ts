@@ -31,7 +31,6 @@ test("R014 actual browser activates, edits, exports and retains extension histor
   const first = await mapRead<{items:ExtensionRecord[]}>(page,recordPath);
   expect(first.items).toHaveLength(1);
   expect(first.items[0]?.payload.text).toBe("Initial note");
-  await panel.getByRole("button", { name: /note · rev 1/ }).click();
   await panel.getByLabel("text · text (bắt buộc)",{exact:true}).fill("Updated note");
   await panel.getByRole("button",{name:"Lưu thay đổi theo phiên bản",exact:true}).click();
   await expect(panel.getByText("Đã lưu bản ghi phiên bản 2.")).toBeVisible();

@@ -17,7 +17,7 @@ async function hnSignIn(page: Page, member = false): Promise<void> {
 
 test.use({ viewport: { width: 1440, height: 1000 }, trace: "off", screenshot: "off", video: "off" });
 
-test("House Numbering official module lifecycle and seven UI journeys", async ({ page, browser }) => {
+test("House Numbering official module lifecycle and seven UI journeys", async ({ page, browser, baseURL }) => {
   test.setTimeout(180_000);
   await hnSignIn(page);
   const fixture = await createMapProject(page, Date.now().toString() + "-hn");
@@ -111,7 +111,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
   await expect(page.getByText(/Đã tạo gói 0 bản ghi/)).toBeVisible();
 
   // Viewer can enter an active module through project read grant but cannot mutate private data.
-  const viewerContext = await browser.newContext({ baseURL: "http://127.0.0.1:5178" });
+  const viewerContext = await browser.newContext({ baseURL });
   const viewer = await viewerContext.newPage();
   await hnSignIn(viewer, true);
   await grantMapCollaborator(page, viewer, fixture, "viewer");
@@ -123,7 +123,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
 
   // Mobile regression — active module must remain usable without page-level horizontal overflow.
   const mobileContext = await browser.newContext({
-    baseURL: "http://127.0.0.1:5178",
+    baseURL,
     viewport: { width: 390, height: 844 },
     permissions: ["geolocation"],
     geolocation: { longitude: 106.7, latitude: 10.8, accuracy: 7 }
