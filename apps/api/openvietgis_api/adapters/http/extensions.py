@@ -25,8 +25,9 @@ from openvietgis_api.domains.extensions.domain import (
     ExtensionDataRecord,
     ExtensionManifestRecord,
     ProjectActivationRecord,
+    matches_official_manifest,
 )
-from openvietgis_api.domains.platform_errors import PlatformNotFoundError
+from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformNotFoundError
 
 router = APIRouter(tags=["extensions"])
 _ORG = "/organizations/{organization_id}"
@@ -50,6 +51,15 @@ def _manifest_wire(m: ExtensionManifestRecord) -> dict[str, Any]:
         "enabled": m.enabled,
         "created_at": m.created_at.isoformat(),
     }
+
+
+def _validate_official_runtime(manifest: ExtensionManifestRecord) -> None:
+    shipped = official_manifest(manifest.extension_key)
+    if shipped is not None and not matches_official_manifest(_manifest_wire(manifest), shipped):
+        raise PlatformConflictError(
+            "stored official manifest differs from shipped runtime",
+            code="OFFICIAL_MANIFEST_MISMATCH",
+        )
 
 
 def _act_wire(a: ProjectActivationRecord) -> dict[str, Any]:
@@ -140,6 +150,11 @@ def register_extension_manifest(
     auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, Any]:
+    if official_manifest(body.extension_key) is not None:
+        raise PlatformConflictError(
+            "official runtime keys must use the official registration endpoint",
+            code="OFFICIAL_MANIFEST_REQUIRED",
+        )
     ctx = context_for(auth, organization_id=organization_id)
     rec = SqlExtensionsRepository(session).register_manifest(
         context=ctx,
@@ -195,6 +210,11 @@ def register_official_extension_manifest(
     repo = SqlExtensionsRepository(session)
     for item in repo.list_manifests(context=ctx):
         if item.extension_key == extension_key and item.version == str(manifest["version"]):
+            if not matches_official_manifest(_manifest_wire(item), manifest):
+                raise PlatformConflictError(
+                    "stored official manifest differs from shipped runtime",
+                    code="OFFICIAL_MANIFEST_MISMATCH",
+                )
             return _manifest_wire(item)
     rec = repo.register_manifest(
         context=ctx,
@@ -234,7 +254,7 @@ def activate_project_extension(
     ctx = context_for(auth, organization_id=organization_id, project_id=project_id)
     return _act_wire(
         SqlExtensionsRepository(session).activate_for_project(
-            context=ctx, manifest_id=body.manifest_id
+            context=ctx, manifest_id=body.manifest_id, validate_runtime=_validate_official_runtime
         )
     )
 
@@ -279,8 +299,23 @@ def list_project_activations(
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, Any]:
     ctx = context_for(auth, organization_id=organization_id, project_id=project_id)
-    items = SqlExtensionsRepository(session).list_activations(context=ctx)
-    return {"items": [_act_wire(a) for a in items]}
+    repo = SqlExtensionsRepository(session)
+    items = repo.list_activations(context=ctx)
+    if not items:
+        return {"items": []}
+    shipped = {r.extension_key: r.manifest for r in discover_official_module_runtimes()}
+    manifests = {m.id: _manifest_wire(m) for m in repo.list_manifests(context=ctx)}
+    result = []
+    for a in items:
+        wire = _act_wire(a)
+        registered = manifests.get(a.manifest_id, {})
+        wire["manifest_version"] = registered.get("version")
+        if a.extension_key in shipped:
+            wire["runtime_compatible"] = matches_official_manifest(
+                registered, shipped[a.extension_key]
+            )
+        result.append(wire)
+    return {"items": result}
 
 
 @router.post(f"{_PROJ}/extensions/{{extension_key}}/records", status_code=201)
@@ -339,6 +374,7 @@ def transition_project_extension(
             activation_id=activation_id,
             expected_manifest_id=body.expected_manifest_id,
             target_manifest_id=body.target_manifest_id,
+            validate_runtime=_validate_official_runtime,
         )
     )
 

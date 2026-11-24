@@ -110,6 +110,9 @@ def seed() -> tuple[UUID, UUID, UUID, UUID, list[UUID]]:
             {"org": org},
         ).scalar_one_or_none()
         if manifest_id is None:
+            manifest = json.loads(
+                (Path(__file__).resolve().parents[2] / "manifest.json").read_text()
+            )
             manifest_id = uuid4()
             c.execute(
                 text(
@@ -119,9 +122,10 @@ def seed() -> tuple[UUID, UUID, UUID, UUID, list[UUID]]:
                         display_name,description,permissions,commands,capabilities,
                         entity_schemas,ui_contributions,enabled,registered_by_actor_id,created_at
                     ) VALUES (
-                        :id,:org,'house_numbering','2.0.0','1.x','House Numbering',
-                        'HN019 benchmark','[]'::jsonb,'[]'::jsonb,'[]'::jsonb,
-                        CAST(:schemas AS jsonb),'[]'::jsonb,true,:actor,now()
+                        :id,:org,'house_numbering',:version,:api,:name,
+                        :description,CAST(:permissions AS jsonb),CAST(:commands AS jsonb),
+                        CAST(:capabilities AS jsonb),CAST(:schemas AS jsonb),
+                        CAST(:ui AS jsonb),true,:actor,now()
                     )
                     """
                 ),
@@ -129,13 +133,15 @@ def seed() -> tuple[UUID, UUID, UUID, UUID, list[UUID]]:
                     "id": manifest_id,
                     "org": org,
                     "actor": owner,
-                    "schemas": json.dumps(
-                        {
-                            "record": {
-                                "fields": {"value": {"type": "text", "required": False}}
-                            }
-                        }
-                    ),
+                    "version": manifest["version"],
+                    "api": manifest["api_compatibility"],
+                    "name": manifest["display_name"],
+                    "description": manifest["description"],
+                    "permissions": json.dumps(manifest["permissions"]),
+                    "commands": json.dumps(manifest["commands"]),
+                    "capabilities": json.dumps(manifest["capabilities"]),
+                    "schemas": json.dumps(manifest["entity_schemas"]),
+                    "ui": json.dumps(manifest["ui_contributions"]),
                 },
             )
         c.execute(

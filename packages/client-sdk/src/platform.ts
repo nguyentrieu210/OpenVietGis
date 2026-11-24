@@ -276,6 +276,8 @@ export interface ExtensionRecord {
 export type ExtensionDataRecord = ExtensionRecord;
 
 export interface ExtensionActivation {
+  manifest_version?: string | null;
+  runtime_compatible?: boolean;
   id: string;
   manifest_id: string;
   extension_key: string;

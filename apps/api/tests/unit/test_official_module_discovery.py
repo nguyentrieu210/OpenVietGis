@@ -31,3 +31,25 @@ def test_shipped_modules_discovered() -> None:
         if (path.parent / "runtime.py").is_file()
     }
     assert {runtime.extension_key for runtime in runtimes} == expected
+
+
+def test_unsupported_manifest_fails_before_import(tmp_path: Path) -> None:
+    import json
+
+    from openvietgis_api.domains.platform_errors import PlatformValidationError
+
+    module = tmp_path / "fixture"
+    module.mkdir()
+    (module / "manifest.json").write_text(
+        json.dumps(
+            {
+                "extension_key": "fixture",
+                "version": "1.0.0",
+                "api_compatibility": "9.x",
+                "entity_schemas": {},
+            }
+        )
+    )
+    (module / "runtime.py").write_text("raise AssertionError('must not import')")
+    with pytest.raises(PlatformValidationError):
+        discover_official_module_runtimes(module_root=tmp_path)

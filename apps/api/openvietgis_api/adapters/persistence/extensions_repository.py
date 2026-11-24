@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -244,7 +245,11 @@ class SqlExtensionsRepository:
         return [_manifest_from_row(r) for r in rows]
 
     def activate_for_project(
-        self, *, context: AuthorizationContext, manifest_id: UUID
+        self,
+        *,
+        context: AuthorizationContext,
+        manifest_id: UUID,
+        validate_runtime: Callable[[ExtensionManifestRecord], None] | None = None,
     ) -> ProjectActivationRecord:
         prepare_project_scope(self._session, context, permission=Permission.PROJECT_MANAGE)
         assert context.organization_id is not None and context.project_id is not None
@@ -264,7 +269,10 @@ class SqlExtensionsRepository:
         )
         if mrow is None:
             raise PlatformNotFoundError("extension manifest not found")
-        validate_stored_manifest_for_mutation(self._manifest(context, manifest_id))
+        manifest = self._manifest(context, manifest_id)
+        validate_stored_manifest_for_mutation(manifest)
+        if validate_runtime is not None:
+            validate_runtime(manifest)
 
         existing = self._session.execute(
             text("""
@@ -549,6 +557,7 @@ class SqlExtensionsRepository:
         activation_id: UUID,
         expected_manifest_id: UUID,
         target_manifest_id: UUID,
+        validate_runtime: Callable[[ExtensionManifestRecord], None] | None = None,
     ) -> ProjectActivationRecord:
         prepare_project_scope(self._session, context, permission=Permission.PROJECT_MANAGE)
         params = self._params(context)
@@ -574,6 +583,8 @@ class SqlExtensionsRepository:
         validate_stored_manifest_for_mutation(old)
         validate_stored_manifest_for_mutation(target)
         verify_transition(old, target)
+        if validate_runtime is not None:
+            validate_runtime(target)
         now = datetime.now(UTC)
         row = (
             self._session.execute(

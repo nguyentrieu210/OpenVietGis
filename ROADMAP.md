@@ -230,3 +230,6 @@ Cross-cutting [Spec 037 — Unified GIS/CAD/3D workspace](specs/037-unified-spat
 
 
 Cross-cutting [Spec 038 — Design system and workspace UX](specs/038-design-system-ux/spec.md): compact/full tool dock, discoverable ribbon search, consistent command feedback and keyboard/mode isolation; [evidence](specs/038-design-system-ux/AUDIT.md). Wider design-system and user acceptance remain open.
+
+
+Cross-cutting [Spec 039 — Unified Plugin Framework](specs/039-unified-plugin-framework/spec.md): exact official manifest/runtime pinning, activation validation and Core fallback; [evidence and rollout limits](specs/039-unified-plugin-framework/AUDIT.md). Existing tenant manifest compatibility requires reviewed pre-deploy audit.
