@@ -38,6 +38,7 @@ from openvietgis_api.adapters.http.security import (
     require_csrf,
 )
 from openvietgis_api.adapters.persistence import gis_access
+from openvietgis_api.adapters.persistence.db import get_session_factory
 from openvietgis_api.adapters.persistence.editing_repository import SqlEditingRepository
 from openvietgis_api.adapters.persistence.rls import require_project_context
 from openvietgis_api.adapters.persistence.scope_helper import (
@@ -464,12 +465,18 @@ def bootstrap_managed_layer(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     if session_id is not None:
-        _load_active_session(session, organization_id, project_id, session_id)
+        device_session = _load_active_session(session, organization_id, project_id, session_id)
+        if (
+            device_session["actor_id"] != auth.actor.actor_id
+            or str(device_session["actor_type"]) != auth.actor.actor_type
+        ):
+            raise HTTPException(403, "Managed session belongs to another device.")
 
     layer = session.execute(
         text(
             "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
-            "s.stored_crs_code, s.content_revision, s.schema_revision "
+            "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision, "
+            "s.feature_count "
             "FROM spatial.layers l "
             "JOIN spatial.data_sources s "
             "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
@@ -481,7 +488,8 @@ def bootstrap_managed_layer(
     if layer is None:
         raise HTTPException(404, "Layer not found.")
 
-    if gis_access.scoped(session, ctx) and not gis_access.source_allowed(
+    restricted = gis_access.scoped(session, ctx)
+    if restricted and not gis_access.source_allowed(
         session, ctx, layer["source_id"], "read"
     ):
         raise HTTPException(403, "Layer is outside your authorized GIS scope.")
@@ -489,7 +497,8 @@ def bootstrap_managed_layer(
     last_cursor, perm_epoch, _ = _ensure_counter(session, organization_id, project_id)
     fields = session.execute(
         text(
-            "SELECT name, data_type, nullable FROM spatial.source_fields "
+            "SELECT field_id AS name, name AS display_name, type AS data_type, nullable "
+            "FROM spatial.source_fields "
             "WHERE organization_id=:o AND project_id=:p AND source_id=:sid "
             "ORDER BY ordinal ASC"
         ),
@@ -505,9 +514,9 @@ def bootstrap_managed_layer(
     }
     rows = session.execute(
         text(
-            "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
-            "f.properties, f.content_revision "
-            "FROM spatial.features f "
+            "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+            "f.attributes AS properties, f.content_revision "
+            "FROM spatial.reference_features f "
             "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
             "ORDER BY f.feature_id ASC LIMIT :lim OFFSET :off"
         ),
@@ -535,9 +544,15 @@ def bootstrap_managed_layer(
         "schema_revision": str(layer["schema_revision"]),
         "cursor": last_cursor,
         "permission_epoch": perm_epoch,
+        "cacheable": not restricted and layer["feature_count"] is not None,
+        "feature_count": (
+            int(layer["feature_count"])
+            if not restricted and layer["feature_count"] is not None else None
+        ),
         "fields": [
             {
                 "name": str(f["name"]),
+                "display_name": str(f["display_name"]),
                 "data_type": str(f["data_type"]),
                 "nullable": bool(f["nullable"]),
             }
@@ -564,6 +579,11 @@ def fetch_managed_delta(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     sess_row = _load_active_session(session, organization_id, project_id, session_id)
+    if (
+        sess_row["actor_id"] != auth.actor.actor_id
+        or str(sess_row["actor_type"]) != auth.actor.actor_type
+    ):
+        raise HTTPException(403, "Managed session belongs to another device.")
     last_cursor, perm_epoch, retention_floor = _ensure_counter(
         session, organization_id, project_id
     )
@@ -621,7 +641,7 @@ def fetch_managed_delta(
             continue
         layer_row = session.execute(
             text(
-                "SELECT l.id AS layer_id, s.stored_crs_code, s.content_revision "
+                "SELECT l.id AS layer_id, s.stored_crs AS stored_crs_code, s.content_revision "
                 "FROM spatial.layers l "
                 "JOIN spatial.data_sources s ON s.id=l.source_id "
                 "WHERE l.organization_id=:o AND l.project_id=:p AND l.source_id=:sid "
@@ -646,9 +666,9 @@ def fetch_managed_delta(
 
         live_rows = session.execute(
             text(
-                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
-                "f.properties, f.content_revision "
-                "FROM spatial.features f "
+                "SELECT f.feature_id, ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json, "
+                "f.attributes AS properties, f.content_revision "
+                "FROM spatial.reference_features f "
                 "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
                 "AND f.feature_id = ANY(CAST(:fids AS varchar[]))"
             ),
@@ -714,6 +734,11 @@ def commit_managed_changes(
         session, auth, organization_id, project_id, Permission.PROJECT_EDIT, mutation=True
     )
     sess_row = _load_active_session(session, organization_id, project_id, body.session_id)
+    if (
+        sess_row["actor_id"] != auth.actor.actor_id
+        or str(sess_row["actor_type"]) != auth.actor.actor_type
+    ):
+        raise HTTPException(403, "Managed session belongs to another device.")
     caps = dict(sess_row["capabilities"] or {})
     if not caps.get("can_edit", False):
         raise HTTPException(403, "Managed session does not have edit capability.")
@@ -747,6 +772,8 @@ def commit_managed_changes(
         summary=body.summary,
         operations=edit_ops,
     )
+    # Rebind verified scope after the editing repository commits its transaction.
+    _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
     ev_row = session.execute(
         text(
             "SELECT cursor FROM integration_hub.project_events "
@@ -823,22 +850,21 @@ def get_managed_commit_receipt(
     }
 
 
-def _session_still_valid(
-    dsn: str, org: UUID, proj: UUID, session_id: UUID
-) -> bool:
+def _session_still_valid(ctx: AuthorizationContext, session_id: UUID) -> bool:
+    """Re-check live authorization on a fresh restricted transaction, not raw SQL without RLS."""
     try:
-        with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT state, revoked_at, expires_at FROM integration_hub.managed_sessions "
-                "WHERE organization_id=%s AND project_id=%s AND id=%s",
-                (str(org), str(proj), str(session_id)),
+        with get_session_factory()() as session:
+            prepare_project_scope(session, ctx, permission=Permission.PROJECT_READ, mutation=False)
+            assert ctx.project_id is not None
+            row = _load_active_session(session, ctx.organization_id, ctx.project_id, session_id)
+            _, epoch, _ = _ensure_counter(session, ctx.organization_id, ctx.project_id)
+            return (
+                row["actor_id"] == ctx.actor.actor_id
+                and str(row["actor_type"]) == ctx.actor.actor_type
+                and int(row["permission_epoch"]) == epoch
             )
-            row = cur.fetchone()
-            if row is None:
-                return False
-            state, revoked_at, expires_at = row
-            return state == "active" and revoked_at is None and expires_at > datetime.now(UTC)
     except Exception:
+        # A failed authorization/DB recheck must never grant further access.
         return False
 
 
@@ -852,8 +878,12 @@ async def stream_managed_events(
     session_id: Annotated[UUID, Query()],
 ) -> StreamingResponse:
     """SSE wake-up stream with 15s bounded session/revocation recheck."""
-    _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    ctx = _prep_scope(
+        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
+    )
+    row = _load_active_session(session, organization_id, project_id, session_id)
+    if row["actor_id"] != ctx.actor.actor_id or str(row["actor_type"]) != ctx.actor.actor_type:
+        raise HTTPException(403, "Managed stream belongs to another device.")
     dsn = make_url(get_settings().database_url).set(drivername="postgresql").render_as_string(
         hide_password=False
     )
@@ -880,14 +910,15 @@ async def stream_managed_events(
                         continue
                     if p.get("o") == org_s and p.get("p") == proj_s:
                         kind = str(p.get("kind") or "spatial_change")
-                        if kind == "session_revoked" and not _session_still_valid(
-                            dsn, organization_id, project_id, session_id
-                        ):
-                            yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
-                            return
+                        if kind == "session_revoked":
+                            if not await asyncio.to_thread(_session_still_valid, ctx, session_id):
+                                yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
+                                return
+                            # A different device was revoked; do not forward the event.
+                            continue
                         yield f"event: {kind}\ndata: {json.dumps({'kind': kind})}\n\n"
                 if time.monotonic() - last_hb >= 15.0:
-                    if not _session_still_valid(dsn, organization_id, project_id, session_id):
+                    if not await asyncio.to_thread(_session_still_valid, ctx, session_id):
                         yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
                         return
                     yield 'event: heartbeat\ndata: {"ok":true}\n\n'
@@ -996,7 +1027,12 @@ def list_desktop_commands(
 ) -> dict[str, Any]:
     """List pending or recent allowlisted commands for a managed QGIS session."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    device_session = _load_active_session(session, organization_id, project_id, session_id)
+    if (
+        device_session["actor_id"] != auth.actor.actor_id
+        or str(device_session["actor_type"]) != auth.actor.actor_type
+    ):
+        raise HTTPException(403, "Managed session belongs to another device.")
     sql = (
         "SELECT * FROM integration_hub.desktop_commands "
         "WHERE organization_id=:o AND project_id=:p AND session_id=:sid "
@@ -1022,7 +1058,12 @@ def respond_desktop_command(
 ) -> dict[str, Any]:
     """Record user consent decision and bounded command result from QGIS."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    device_session = _load_active_session(session, organization_id, project_id, session_id)
+    if (
+        device_session["actor_id"] != auth.actor.actor_id
+        or str(device_session["actor_type"]) != auth.actor.actor_type
+    ):
+        raise HTTPException(403, "Managed session belongs to another device.")
     now = datetime.now(UTC)
     row = session.execute(
         text(
