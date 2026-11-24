@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import {glbFixture,terrainFixture} from "../../packages/spatial-workspace/tests/terrain-model-fixture.mjs";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
- const page=await browser.newPage({viewport:{width:1380,height:900}}),errors=[],grid=terrainFixture();let restricted=false,requested=0,rasterRequests=0;
+ const page=await browser.newPage({viewport:{width:1380,height:900}}),errors=[],grid=terrainFixture();let restricted=false,requested=0,rasterRequests=0,googleRequests=[];
  page.on("pageerror",e=>{errors.push(e.message);console.error(e.message)});
  const org="fixture-org",pid="fixture-project",id="source1",dem=grid.source_id,[l,b,r,t]=grid.extent;
  const ll=(x,y)=>[x*180/20037508.342789244,Math.atan(Math.sinh(y*Math.PI/20037508.342789244))*180/Math.PI];
  const feature={feature_id:"building",geometry_state:"present",attributes:{height_m:12},geometry:{type:"Polygon",coordinates:[[ll(l+20,t-20),ll(l+40,t-20),ll(l+40,t-40),ll(l+20,t-40),ll(l+20,t-20)]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:id,name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
  const raster={id:dem,name:grid.name,method:"band",width:3,height:3,epsg:3857,bands:1,output_bands:1,bounds:[...ll(l,b),...ll(r,t)],legend:[-5,15],maxzoom:18,tile_count:1,byte_size:50,created_at:"2026-01-01",stats:{valid:8,nodata:1,min:-5,max:15,mean:5,std:5}};
- await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
+ await page.route("**/*",route=>{const u=new URL(route.request().url());if(u.hostname==="mt0.google.com"){googleRequests.push((u.pathname.match(/lyrs=([sy])(?:&|$)/)||[])[1]??u.searchParams.get("lyrs"));return route.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aH1sAAAAASUVORK5CYII=","base64")})}return u.hostname==="127.0.0.1"?route.continue():route.abort()});
  await page.route("**/api/v1/**",async route=>{
   const p=new URL(route.request().url()).pathname;let body;
   if(p.endsWith("/me"))body={id:"fixture",display_name:"Terrain Test",status:"active"};
@@ -51,6 +51,13 @@ try{
  await page.getByLabel("Chất lượng 3D").selectOption("sharp");
  await page.waitForFunction(()=>document.querySelector('[data-ovg3d-engine="cesium"]').dataset.ovgQuality==="sharp");
  const sharp=await canvas.evaluate(el=>el.width*el.height);assert.ok(sharp>smooth,"sharp must increase rendered pixel count");
+ assert.equal(googleRequests.length,0,"Google is opt-in");
+ for(const [id,lyrs] of [["google-satellite","s"],["google-hybrid","y"]]){
+  await page.getByLabel("Ảnh nền 3D").selectOption(id);
+  for(let i=0;i<80&&!googleRequests.includes(lyrs);i++)await page.waitForTimeout(100);
+  assert.ok(googleRequests.includes(lyrs),"legacy imagery request "+id);
+ }
+ console.log("PASS Google Satellite/Hybrid opt-in tile URLs (mocked imagery)");
  await page.getByLabel("Ảnh nền 3D").selectOption("project-0");
  await page.waitForFunction(()=>document.querySelector(".ovg-earth-imagery-status")?.textContent==="Synthetic DEM");
  for(let i=0;i<40&&!rasterRequests;i++)await page.waitForTimeout(100);
@@ -61,6 +68,18 @@ try{
  const before=await hud.innerText();await page.getByRole("button",{name:"Phóng to 3D",exact:true}).click();await page.waitForFunction(v=>document.querySelector(".ovg-earth-camera-hud").textContent!==v,before);
  await canvas.focus();await page.keyboard.press("r");await hud.filter({hasText:"Nghiêng 0°"}).waitFor();
  const pos=await canvas.boundingBox(),beforeFly=await hud.innerText();await page.mouse.dblclick(pos.x+pos.width*.55,pos.y+pos.height*.52);await page.waitForFunction(v=>document.querySelector(".ovg-earth-camera-hud").textContent!==v,beforeFly,{timeout:10000});
+ await page.waitForTimeout(800);
+ await page.locator(".ovg-earth-settings-menu summary").click();await page.getByLabel("Chất lượng 3D").selectOption("smooth");await page.locator(".ovg-earth-settings-menu summary").click();
+ await page.getByRole("button",{name:"Về góc nhìn ban đầu",exact:true}).click();await page.getByRole("button",{name:"Nhìn thẳng từ trên",exact:true}).click();await hud.filter({hasText:"Nghiêng 0°"}).waitFor();
+ const box=await canvas.boundingBox(),cx=box.x+box.width*.5,cy=box.y+box.height*.5;
+ const altitude=async()=>Number(await hud.getAttribute("data-altitude"));
+ let old=await altitude();await page.mouse.move(cx,cy);await page.mouse.down({button:"right"});await page.mouse.move(cx,cy+55);await page.mouse.up({button:"right"});
+ await page.waitForFunction(v=>Number(document.querySelector(".ovg-earth-camera-hud").dataset.altitude)<v*.95,old,{timeout:15000});
+ old=await altitude();await page.mouse.move(cx,cy);await page.mouse.down({button:"right"});await page.mouse.move(cx,cy-55);await page.mouse.up({button:"right"});
+ await page.waitForFunction(v=>Number(document.querySelector(".ovg-earth-camera-hud").dataset.altitude)>v*1.05,old,{timeout:15000});
+ old=await altitude();await page.mouse.move(cx,cy);await page.mouse.wheel(0,-160);
+ await page.waitForFunction(v=>Number(document.querySelector(".ovg-earth-camera-hud").dataset.altitude)<v*.95,old,{timeout:15000});
+ console.log("PASS right-down zoom in, right-up zoom out and wheel zoom in");
  if(process.env.OVG_EARTH_GESTURES==="1"){
  await page.waitForTimeout(800);
  await page.locator(".ovg-earth-settings-menu summary").click();await page.getByLabel("Chất lượng 3D").selectOption("smooth");await page.locator(".ovg-earth-settings-menu summary").click();
