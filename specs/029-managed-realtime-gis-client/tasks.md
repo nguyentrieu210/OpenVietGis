@@ -1,6 +1,6 @@
 # Tasks — R029 (all pending)
 ## Gate A — architecture and native spike
-- [ ] T001 [US1,US2] Inventory R002/R006/R027/R021 source and tests; ADR exact transaction/ACL paths.
+- [x] T001 [US1,US2] Inventory R002/R006/R027/R021 source and tests; ADR exact transaction/ACL paths.
 - [ ] T002 [US2] Native QGIS provider/interception spike: save, rejection, offline, undo; record Linux/Windows evidence; choose transparent provider or explicit managed save fallback.
 - [ ] T003 [US3] ADR commit-ordered cursor and atomic event coverage; map schema/catalog/ACL visibility changes.
 - [ ] T004 [US1] Verify human auth provider PKCE/device flow and session threat model.
