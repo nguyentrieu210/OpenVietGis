@@ -6,7 +6,7 @@ try{
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
- const saved=[];let restricted=false;
+ const saved=[];let restricted=false,pluginActive=false;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -17,6 +17,7 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",status:"active"}]:[]};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
@@ -33,9 +34,16 @@ try{
  const modes=page.getByRole("group",{name:"Chế độ không gian"});
  await modes.waitFor({timeout:30000});
  await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ // A project with no configured 3D source must still open the workspace.
+ await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ await page.getByRole("button",{name:"Chiều cao polygon",exact:true}).click();
+ await page.getByLabel("Chiều cao 3D (m)").waitFor();
+ console.log("PASS empty 3D workspace and configuration entry");
  await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/mốc phẳng 0 m/).waitFor();
  assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
@@ -53,6 +61,40 @@ try{
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
+ await page.getByText("Tài khoản bị giới hạn phạm vi GIS hoặc chưa xác minh được quyền.",{exact:true}).waitFor();
+ assert.equal(await modes.getByRole("button",{name:/^CAD/}).getAttribute("aria-disabled"),"true");
+ restricted=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await modes.getByRole("button",{name:"CAD",exact:true}).waitFor();
+ await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ console.log("PASS permission revocation, explicit restriction and restored access");
+ pluginActive=true;
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ const pluginNavigator=page.getByRole("button",{name:"Địa bàn",exact:true});
+ await pluginNavigator.waitFor();
+ await pluginNavigator.click();
+ await page.getByText("PLUGIN SỐ NHÀ · ĐỊA BÀN",{exact:true}).waitFor();
+ await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached"});
+ assert.equal(await page.getByRole("button",{name:"Mở GIS Core",exact:true}).count(),0);
+ await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ await modes.getByRole("button",{name:"GIS 2D",exact:true}).click();
+ await page.getByText("PLUGIN SỐ NHÀ · ĐỊA BÀN",{exact:true}).waitFor();
+ assert.equal(await pluginNavigator.getAttribute("aria-expanded"),"true");
+ await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
+ await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor();
+ await modes.getByRole("button",{name:"GIS 2D",exact:true}).click();
+ await page.getByText("PLUGIN SỐ NHÀ · ĐỊA BÀN",{exact:true}).waitFor();
+ assert.equal(await pluginNavigator.getAttribute("aria-expanded"),"true");
+ console.log("PASS CAD, empty and configured 3D with plugin state preserved");
+ restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await page.getByText("Tài khoản bị giới hạn phạm vi GIS hoặc chưa xác minh được quyền.",{exact:true}).waitFor();
+ assert.equal(await modes.getByRole("button",{name:/^CAD/}).getAttribute("aria-disabled"),"true");
+ assert.equal(await modes.getByRole("button",{name:/^3D/}).getAttribute("aria-disabled"),"true");
+ console.log("PASS plugin does not bypass spatial authorization");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");
 }finally{await browser.close()}

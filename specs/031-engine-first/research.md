@@ -22,3 +22,6 @@ Baseline 27f0b35af966b7a46e7b17929395d9bc01515e51. Repository files inspected vi
 - OpenCAD: inspect existing relay upstream pin, licenses and artifact checksum before changes; do not assume native DWG support or replace safe origin isolation.
 
 For each candidate record exact upstream tag/SHA, artifact hash, release/license metadata, transitive notices, maintenance/security, sample API, benchmark, functional comparison, rejection reason and ADR when warranted. All upstream claims require verification. Initial inventory is deliberately incomplete; G0 is open.
+
+## Baseline refresh 2026-11-24
+Main 9c71db0 already contains Cesium 1.147.0 and R039 Spatial Data Engine. The initial research above is historical. See [measured checkpoint](evidence/baseline-20261124.md), [static inventory](evidence/source-inventory.json), and [isolated Terra Draw smoke](evidence/terra-draw-smoke.json). Do not replace proven PostGIS processing or duplicate existing cache/delta/3D implementations.

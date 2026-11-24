@@ -1,0 +1,93 @@
+{
+  "status": "pass",
+  "point": [
+    106.9,
+    11.5
+  ],
+  "polygon": [
+    [
+      [
+        106.9,
+        11.5
+      ],
+      [
+        106.91,
+        11.5
+      ],
+      [
+        106.91,
+        11.51
+      ],
+      [
+        106.9,
+        11.5
+      ]
+    ]
+  ],
+  "expected": [
+    [
+      [
+        106.9,
+        11.5
+      ],
+      [
+        106.91,
+        11.5
+      ],
+      [
+        106.91,
+        11.51
+      ],
+      [
+        106.9,
+        11.5
+      ]
+    ]
+  ],
+  "attribute": "R031",
+  "added": [
+    {
+      "id": "e3d7a50a-a26f-4178-be18-ae8cdede6761",
+      "valid": true
+    }
+  ],
+  "updated": [
+    106.905,
+    11.505
+  ],
+  "moved": [
+    106.905,
+    11.505
+  ],
+  "idPreserved": true,
+  "stopped": true,
+  "layersBefore": 6,
+  "layersAfter": 1,
+  "proposal": {
+    "operation_id": "14e30b94-a299-464a-8391-b13507457686",
+    "base_content_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "base_schema_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "summary": "R031 experimental drawing",
+    "operations": [
+      {
+        "op_type": "create",
+        "feature_id": "feat_fixture",
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            106.905,
+            11.505
+          ]
+        },
+        "properties": {
+          "name": "fixture"
+        }
+      }
+    ]
+  },
+  "identicalRetry": true,
+  "staleRejected": true,
+  "revokedRejected": true,
+  "cycles": 20,
+  "cycleP95ms": 11.300000011920929
+}

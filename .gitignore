@@ -19,3 +19,6 @@ test-results/
 *.egg-info/
 *.tsbuildinfo
 !.env.example
+
+# Generated from the pinned Cesium npm distribution by web-next Vite config
+/apps/web-next/public/cesium/

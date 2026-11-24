@@ -1,4 +1,4 @@
-name: R027 QGIS Connector - package and desktop smoke
+name: QGIS Connector 1.0 - package and desktop smoke
 
 on:
   pull_request:
@@ -8,6 +8,11 @@ on:
       - "tools/package_qgis_plugin.py"
       - "tools/smoke_qgis_native.py"
       - "tools/tests/test_package_qgis_plugin.py"
+      - "tools/tests/test_qgis_connector_simple_ui.py"
+      - "tools/tests/test_qgis_managed_snapshots.py"
+      - "tools/tests/test_qgis_desktop_recovery.py"
+      - "apps/web-next/src/QgisConnectPage.tsx"
+      - "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py"
       - ".github/workflows/qgis-connector.yml"
   push:
     branches: ["main"]
@@ -43,18 +48,22 @@ jobs:
         run: |
           uv run --project apps/api python -m pytest -q \
             apps/api/tests/unit/integration_hub/test_qgis_workspace.py \
-            tools/tests/test_package_qgis_plugin.py
+            tools/tests/test_package_qgis_plugin.py \
+            tools/tests/test_qgis_connector_simple_ui.py \
+            tools/tests/test_qgis_managed_snapshots.py \
+            tools/tests/test_qgis_desktop_recovery.py \
+            apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py
       - name: Package installable experimental QGIS plugin
         run: |
           uv run --project apps/api python tools/package_qgis_plugin.py \
-            --output dist/openvietgis_connector-r027.zip
-          (cd dist && sha256sum -c openvietgis_connector-r027.zip.sha256)
+            --output dist/openvietgis_connector-1.0.0.zip
+          (cd dist && sha256sum -c openvietgis_connector-1.0.0.zip.sha256)
       - uses: actions/upload-artifact@v4
         with:
-          name: openvietgis-qgis-r027-experimental
+          name: openvietgis-qgis-1.0.0-experimental
           path: |
-            dist/openvietgis_connector-r027.zip
-            dist/openvietgis_connector-r027.zip.sha256
+            dist/openvietgis_connector-1.0.0.zip
+            dist/openvietgis_connector-1.0.0.zip.sha256
           if-no-files-found: error
           retention-days: 14
 

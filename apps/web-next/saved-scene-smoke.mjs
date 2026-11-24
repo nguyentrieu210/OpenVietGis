@@ -51,6 +51,7 @@ try{
  });
  await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ không gian"});await modes.waitFor({timeout:30000});
+ await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000});
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});await page.locator(".live-table-row").first().click({noWaitAfter:true});
  await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
  await page.getByLabel("Raster địa hình").selectOption(dem);
@@ -63,7 +64,7 @@ try{
  await page.getByLabel("Góc xoay (°)").fill("90");
  await page.getByRole("button",{name:"Lưu phiên bản định vị"}).click({noWaitAfter:true});
  await page.getByText("Đã lưu định vị v2.").waitFor();
- await page.reload({waitUntil:"domcontentloaded"});
+ await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  await modes.waitFor({timeout:30000});
  await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
  await page.locator(".ovg-model-item").filter({hasText:"fixture.glb"}).getByRole("button",{name:"Lịch sử định vị",exact:true}).click({noWaitAfter:true});
@@ -80,14 +81,14 @@ try{
  await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
  await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["66666666-6666-4666-8666-666666666666","height_m"]));
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
  await page.getByText(/fixture.glb · kho v2/).waitFor();
  assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
  const layers=page.getByRole("complementary",{name:"Các lớp 3D"});
  await layers.getByRole("checkbox",{name:"fixture.glb · v2"}).uncheck();
  await layers.getByRole("checkbox",{name:"Buildings · height_m"}).uncheck();
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-ctrl-zoom-in').click({noWaitAfter:true});
+ await page.locator('[data-ovg-alternate-active="3d"] button[aria-label="Phóng to 3D"]').click({noWaitAfter:true});
  await page.waitForTimeout(500);
  await page.getByRole("button",{name:"Cảnh 3D",exact:true}).click({noWaitAfter:true});
  await page.getByLabel("Tên cảnh 3D").fill("Factory overview");
@@ -99,7 +100,7 @@ try{
  await page.getByRole("button",{name:"Lưu phiên bản cảnh"}).click({noWaitAfter:true});
  await page.getByText("Đã lưu cảnh v2.").waitFor();
  versions.unshift({...versions[0],version:3,profile:{...versions[0].profile,rotation_deg:180}});
- await page.reload({waitUntil:"domcontentloaded"});
+ await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  await modes.waitFor({timeout:30000});
  await page.getByRole("button",{name:"Cảnh 3D",exact:true}).click({noWaitAfter:true});
  await page.getByRole("button",{name:"Lịch sử cảnh",exact:true}).click({noWaitAfter:true});
@@ -108,7 +109,7 @@ try{
  await page.getByRole("button",{name:"Cảnh 3D",exact:true}).click({noWaitAfter:true});
  await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  assert.equal(await layers.getByRole("checkbox",{name:"fixture.glb · v2"}).isChecked(),false);
  assert.equal(await layers.getByRole("checkbox",{name:"warehouse.glb · v1"}).isChecked(),true);
  assert.equal(await layers.getByRole("checkbox",{name:"Synthetic DEM"}).isChecked(),true);

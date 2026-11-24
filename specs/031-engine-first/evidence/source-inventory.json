@@ -1,0 +1,1324 @@
+{
+  "source_sha": "4b7023aade529ca687722ae52d3fca7fbe714f77",
+  "scope": "literal web-next aliases, literal Python route decorators, engine source signals and direct JS manifests",
+  "limitations": [
+    "Dynamic registrations and runtime availability require separate reconciliation.",
+    "Signals are not proof of license, correct behavior or deployment."
+  ],
+  "counts": {
+    "literal_commands": 92,
+    "unique_aliases": 92,
+    "literal_routes": 67,
+    "engine_signal_files": 53
+  },
+  "duplicate_aliases": [],
+  "commands": [
+    {
+      "alias": "NEWLAYER",
+      "group": "Layer",
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "line": 53
+    },
+    {
+      "alias": "VERTEX",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "line": 53
+    },
+    {
+      "alias": "SPLIT",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "line": 53
+    },
+    {
+      "alias": "MERGE",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "line": 53
+    },
+    {
+      "alias": "BULK",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "line": 53
+    },
+    {
+      "alias": "ADD",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "LA",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "LABEL",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "LAYER",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "UP",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "DOWN",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "HIDE",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "SHOW",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "LAYERS",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "ATTR",
+      "group": "Layer",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 79
+    },
+    {
+      "alias": "ZE",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "ZL",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "ZS",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "ZI",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "ZO",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "ZOOM",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "PAN",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "CLR",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "SAVE",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "VIEW",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "HISTORY",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "RELOAD",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 80
+    },
+    {
+      "alias": "EDIT",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 81
+    },
+    {
+      "alias": "MOVE",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 81
+    },
+    {
+      "alias": "POINT",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 82
+    },
+    {
+      "alias": "LINE",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 82
+    },
+    {
+      "alias": "POLYGON",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 82
+    },
+    {
+      "alias": "ERASE",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 83
+    },
+    {
+      "alias": "UNDO",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 83
+    },
+    {
+      "alias": "REDO",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 83
+    },
+    {
+      "alias": "EDITHISTORY",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 83
+    },
+    {
+      "alias": "DIST",
+      "group": "Đo đạc",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 84
+    },
+    {
+      "alias": "AREA",
+      "group": "Đo đạc",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 84
+    },
+    {
+      "alias": "END",
+      "group": "Đo đạc",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 84
+    },
+    {
+      "alias": "ESC",
+      "group": "Đo đạc",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 84
+    },
+    {
+      "alias": "QUERY",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "BUFFER",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "CLIP",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "DISSOLVE",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "JOBS",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "DXF",
+      "group": "CAD",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 86
+    },
+    {
+      "alias": "COGO",
+      "group": "CAD",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 86
+    },
+    {
+      "alias": "CRS",
+      "group": "CAD",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 86
+    },
+    {
+      "alias": "IMPORT",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 87
+    },
+    {
+      "alias": "EXPORT",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 87
+    },
+    {
+      "alias": "STYLE",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 87
+    },
+    {
+      "alias": "PLOT",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 87
+    },
+    {
+      "alias": "SNAP",
+      "group": "Biên tập",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "WORKSPACE",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "BASE",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "WMS",
+      "group": "Khác",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "FIELD",
+      "group": "Khác",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "REVIEW",
+      "group": "Khác",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "PLUGIN",
+      "group": "Khác",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "OPS",
+      "group": "Khác",
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "MODELER",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "RASTER",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "NDVI",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "NDWI",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "NDBI",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "HILLSHADE",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "RASTERCALC",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "RGB",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "RASTERCLIP",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "CHANGE",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "SLOPE",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "ASPECT",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "MOSAIC",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "RESAMPLE",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "ZONAL",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "CONTOUR",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "SENTINEL",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "SURVEY",
+      "group": "CAD",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "TOOLBOX",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "line": 250
+    },
+    {
+      "alias": "TOPOLOGY",
+      "group": "Phân tích",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 81
+    },
+    {
+      "alias": "SCHEMA",
+      "group": "Layer",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 82
+    },
+    {
+      "alias": "CALC",
+      "group": "Layer",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 83
+    },
+    {
+      "alias": "JOIN",
+      "group": "Layer",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 84
+    },
+    {
+      "alias": "STATS",
+      "group": "Layer",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 85
+    },
+    {
+      "alias": "SELRECT",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 86
+    },
+    {
+      "alias": "SELPOLY",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 87
+    },
+    {
+      "alias": "DESELECT",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 88
+    },
+    {
+      "alias": "ORTHO",
+      "group": "CAD",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 89
+    },
+    {
+      "alias": "OSNAP",
+      "group": "CAD",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 90
+    },
+    {
+      "alias": "TILES",
+      "group": "Bản đồ",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 91
+    },
+    {
+      "alias": "LAYOUT",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 92
+    },
+    {
+      "alias": "PRINTCLASSIC",
+      "group": "Xuất bản",
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "line": 93
+    }
+  ],
+  "routes": [
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/audit-events",
+      "path": "apps/api/openvietgis_api/adapters/http/audit.py",
+      "line": 40
+    },
+    {
+      "method": "GET",
+      "route": "/auth/providers",
+      "path": "apps/api/openvietgis_api/adapters/http/auth.py",
+      "line": 55
+    },
+    {
+      "method": "GET",
+      "route": "/auth/login/{provider}",
+      "path": "apps/api/openvietgis_api/adapters/http/auth.py",
+      "line": 65
+    },
+    {
+      "method": "GET",
+      "route": "/auth/callback/{provider}",
+      "path": "apps/api/openvietgis_api/adapters/http/auth.py",
+      "line": 127
+    },
+    {
+      "method": "GET",
+      "route": "/auth/csrf",
+      "path": "apps/api/openvietgis_api/adapters/http/auth.py",
+      "line": 262
+    },
+    {
+      "method": "POST",
+      "route": "/auth/logout",
+      "path": "apps/api/openvietgis_api/adapters/http/auth.py",
+      "line": 277
+    },
+    {
+      "method": "GET",
+      "route": "/bootstrap/status",
+      "path": "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "line": 34
+    },
+    {
+      "method": "POST",
+      "route": "/bootstrap/initialize",
+      "path": "apps/api/openvietgis_api/adapters/http/bootstrap.py",
+      "line": 41
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/grants",
+      "path": "apps/api/openvietgis_api/adapters/http/grants.py",
+      "line": 56
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/grants",
+      "path": "apps/api/openvietgis_api/adapters/http/grants.py",
+      "line": 73
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/grants/{grant_id}/revoke",
+      "path": "apps/api/openvietgis_api/adapters/http/grants.py",
+      "line": 118
+    },
+    {
+      "method": "GET",
+      "route": "/health/live",
+      "path": "apps/api/openvietgis_api/adapters/http/health.py",
+      "line": 11
+    },
+    {
+      "method": "GET",
+      "route": "/health/ready",
+      "path": "apps/api/openvietgis_api/adapters/http/health.py",
+      "line": 16
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}/integration-hub/events",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 973
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}/integration-hub/catalog",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 435
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 462
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 867
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/projects/{project_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1083
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/projects/{project_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1151
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/invitations",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 131
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/invitations",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 154
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/invitations/email",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 194
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/invitations/{invitation_id}/revoke",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 246
+    },
+    {
+      "method": "POST",
+      "route": "/invitations/check",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 271
+    },
+    {
+      "method": "POST",
+      "route": "/invitations/accept",
+      "path": "apps/api/openvietgis_api/adapters/http/invitations.py",
+      "line": 289
+    },
+    {
+      "method": "GET",
+      "route": "/marketplace/catalog",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "line": 29
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/marketplace/install/{publisher_id}/{extension_key}/{version}",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "route": "/me",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 144
+    },
+    {
+      "method": "POST",
+      "route": "/publisher",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 168
+    },
+    {
+      "method": "POST",
+      "route": "/submissions",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 213
+    },
+    {
+      "method": "POST",
+      "route": "/submissions/{submission_id}/withdraw",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 270
+    },
+    {
+      "method": "GET",
+      "route": "/review-queue",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 301
+    },
+    {
+      "method": "POST",
+      "route": "/review-queue/{submission_id}/decision",
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 333
+    },
+    {
+      "method": "GET",
+      "route": "/me",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 45
+    },
+    {
+      "method": "GET",
+      "route": "/me/organizations",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 63
+    },
+    {
+      "method": "GET",
+      "route": "/me/identity-links",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 83
+    },
+    {
+      "method": "DELETE",
+      "route": "/me/identity-links",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 101
+    },
+    {
+      "method": "GET",
+      "route": "/me/avatar",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 133
+    },
+    {
+      "method": "PUT",
+      "route": "/me/avatar",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 147
+    },
+    {
+      "method": "DELETE",
+      "route": "/me/avatar",
+      "path": "apps/api/openvietgis_api/adapters/http/me.py",
+      "line": 177
+    },
+    {
+      "method": "GET",
+      "route": "/ops/health/live",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 58
+    },
+    {
+      "method": "GET",
+      "route": "/ops/health/ready",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 63
+    },
+    {
+      "method": "GET",
+      "route": "/ops/metrics",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 75
+    },
+    {
+      "method": "GET",
+      "route": "/ops/release-capabilities",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 83
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/ops/entitlement",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 88
+    },
+    {
+      "method": "PUT",
+      "route": "/organizations/{organization_id}/ops/entitlement",
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 111
+    },
+    {
+      "method": "POST",
+      "route": "/organizations",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 107
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 133
+    },
+    {
+      "method": "PATCH",
+      "route": "/organizations/{organization_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 147
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/members",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 180
+    },
+    {
+      "method": "PATCH",
+      "route": "/organizations/{organization_id}/members/{membership_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 211
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/ownership-transfer",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 246
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/effective-permissions",
+      "path": "apps/api/openvietgis_api/adapters/http/organizations.py",
+      "line": 292
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects",
+      "path": "apps/api/openvietgis_api/adapters/http/projects.py",
+      "line": 84
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/projects",
+      "path": "apps/api/openvietgis_api/adapters/http/projects.py",
+      "line": 135
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/projects.py",
+      "line": 170
+    },
+    {
+      "method": "PATCH",
+      "route": "/organizations/{organization_id}/projects/{project_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/projects.py",
+      "line": 201
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/service-principals",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 69
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/service-principals",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 91
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/service-principals/{service_principal_id}/revoke",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 119
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/service-principals/{service_principal_id}/credentials",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 155
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/service-principals/{service_principal_id}/credentials",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 188
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/service-principals/",
+      "path": "apps/api/openvietgis_api/adapters/http/service_principals.py",
+      "line": 235
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/projects/{project_id}/spatial/crs-profiles",
+      "path": "apps/api/openvietgis_api/adapters/http/spatial.py",
+      "line": 67
+    },
+    {
+      "method": "GET",
+      "route": "/organizations/{organization_id}/workspaces",
+      "path": "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "line": 76
+    },
+    {
+      "method": "POST",
+      "route": "/organizations/{organization_id}/workspaces",
+      "path": "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "line": 114
+    },
+    {
+      "method": "PATCH",
+      "route": "/organizations/{organization_id}/workspaces/{workspace_id}",
+      "path": "apps/api/openvietgis_api/adapters/http/workspaces.py",
+      "line": 134
+    }
+  ],
+  "engine_signals": [
+    {
+      "path": "apps/api/migrations/versions/0006_spatial_catalog.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/migrations/versions/0023_gis_access.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py",
+      "engine_signals": [
+        "gdal_ogr"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/postgis_sql.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/raster_worker.py",
+      "engine_signals": [
+        "gdal_ogr"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/terrain_worker.py",
+      "engine_signals": [
+        "gdal_ogr"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/gis_access.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/professional.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/spatial.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/cad_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/cartography_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/editing_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/field_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/gis_access.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/map_viewport.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/processing_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/query_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/spatial_fixtures.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/spatial_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/spatial_transform.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/transfer_repository.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/web_transform_guard.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "apps/web-next/src/CadEditorPanel.tsx",
+      "engine_signals": [
+        "opencad"
+      ]
+    },
+    {
+      "path": "apps/web-next/src/SpatialWorkspace.tsx",
+      "engine_signals": [
+        "cesium"
+      ]
+    },
+    {
+      "path": "apps/web-next/src/map-surface.ts",
+      "engine_signals": [
+        "maplibre"
+      ]
+    },
+    {
+      "path": "apps/web-next/vite.config.ts",
+      "engine_signals": [
+        "cesium"
+      ]
+    },
+    {
+      "path": "apps/web/src/features/map/maplibre-engine.test.ts",
+      "engine_signals": [
+        "maplibre"
+      ]
+    },
+    {
+      "path": "apps/web/src/features/map/maplibre-engine.ts",
+      "engine_signals": [
+        "maplibre"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/address_suggestions.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/address_verification.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/assignment_audit.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/building_assignment.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/catalog_recovery.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/cluster_correction.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/documents.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/exports.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/migrations/versions/0006_route_segments.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/migrations/versions/0007_route_lines_fast_path.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/persistence.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/prefix_recovery.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/route_import.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/route_recovery.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/route_topology.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/survey.py",
+      "engine_signals": [
+        "postgis"
+      ]
+    },
+    {
+      "path": "packages/spatial-workspace/src/cad-editor.ts",
+      "engine_signals": [
+        "opencad"
+      ]
+    },
+    {
+      "path": "packages/spatial-workspace/src/cesium3d.ts",
+      "engine_signals": [
+        "cesium"
+      ]
+    },
+    {
+      "path": "packages/spatial-workspace/src/maplibre3d.ts",
+      "engine_signals": [
+        "maplibre"
+      ]
+    },
+    {
+      "path": "packages/spatial-workspace/src/renderer3d.ts",
+      "engine_signals": [
+        "maplibre"
+      ]
+    }
+  ],
+  "manifests": {
+    "apps/web-next/package.json": {
+      "@openvietgis/client-sdk": "workspace:*",
+      "react": "^19.3.1",
+      "react-dom": "^19.3.1",
+      "maplibre-gl": "6.18.0",
+      "@tanstack/react-query": "5.107.1",
+      "react-router-dom": "7.18.5",
+      "@openvietgis/spatial-workspace": "workspace:*"
+    },
+    "apps/web/package.json": {
+      "@openvietgis/client-sdk": "workspace:*",
+      "@tanstack/react-query": "5.107.1",
+      "maplibre-gl": "6.18.0",
+      "react": "^19.3.1",
+      "react-dom": "^19.3.1",
+      "react-router-dom": "7.18.5"
+    },
+    "modules/house_numbering/frontend/package.json": {
+      "@openvietgis/client-sdk": "workspace:*",
+      "react": "^19.3.1",
+      "react-router-dom": "7.18.5"
+    },
+    "package.json": {},
+    "packages/client-sdk/package.json": {},
+    "packages/spatial-workspace/package.json": {
+      "cesium": "1.147.0",
+      "maplibre-gl": "6.18.0",
+      "react": "^19.3.1"
+    }
+  }
+}

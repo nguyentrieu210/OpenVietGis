@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-USER_AGENT = "OpenVietGIS-QGIS-Connector/0.8.0"
+USER_AGENT = "OpenVietGIS-QGIS-Connector/1.0.0"
 DEFAULT_PROFILE_TIMEOUT_SECONDS = 30.0
 DEFAULT_EXPORT_TIMEOUT_SECONDS = 60.0
 DEFAULT_SYNC_TIMEOUT_SECONDS = 60.0
@@ -395,6 +395,9 @@ def _extract_http_error_detail(exc: urllib.error.HTTPError, secret: str) -> str:
             decoded = json.loads(raw_body.decode("utf-8", errors="replace"))
             if isinstance(decoded, dict) and isinstance(decoded.get("detail"), str):
                 detail = decoded["detail"]
+            elif isinstance(decoded, dict) and isinstance(decoded.get("message"), str):
+                code = decoded.get("code")
+                detail = f"{code}: {decoded['message']}" if isinstance(code, str) else decoded["message"]
         except (ValueError, TypeError):
             pass
     sanitized = _redact_secret(str(detail).strip(), secret)
