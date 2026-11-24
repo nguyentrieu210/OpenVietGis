@@ -249,12 +249,6 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
 
 
 def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database):
-    from uuid import UUID
-
-    from openvietgis_api.adapters.cad.native_delta import cad_to_gis_preview
-    from openvietgis_api.domains.cad.domain import CadUnit
-    from openvietgis_api.domains.cad.georeference import fit_placement
-
     world = seed_access_world()
     root = f"/api/v1/organizations/{world.organization_id}/projects/{world.project_id}"
     base = root + "/cad/documents"
@@ -313,39 +307,33 @@ def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database)
             201,
         )
         assert version["version"] == 2
-        placement = fit_placement(
-            document_id=UUID(saved["id"]),
-            version=1,
-            crs_code=3857,
-            units=CadUnit.MILLIMETER,
-            controls=tuple((tuple(a), tuple(b)) for a, b in controls),
-            tolerance_m=0.001,
-            max_scale_deviation=0.001,
+        preview_path = path + "/preview-native-import"
+        preview_body = {
+            "conversion_id": source["id"],
+            "expected_candidate_sha256": version["sha256"],
+        }
+        assert (
+            owner.post(
+                preview_path, json=preview_body | {"expected_candidate_sha256": "0" * 64}
+            ).status_code
+            == 409
         )
-        # Orchestrate the internal pure planner with trusted snapshot values.
-        # This deliberately is NOT a public preview route.
-        ops = cad_to_gis_preview(
-            original,
-            candidate,
-            base_sha256=saved["sha256"],
-            candidate_sha256=version["sha256"],
-            placement=placement,
-            mapping=mapping,
-            imported_content_revision=layer["content_revision"],
-            current_content_revision=layer["content_revision"],
-            imported_schema_revision=layer["schema_revision"],
-            current_schema_revision=layer["schema_revision"],
-        )
-        assert len(ops) == 1 and ops[0].feature_id == mapping[0]["feature_id"]
+        with _client(world.wrong_user_id) as outsider:
+            assert outsider.post(preview_path, json=preview_body).status_code in (403, 404)
+        draft = check(owner.post(preview_path, json=preview_body))
+        assert draft["published"] is False
+        assert draft["source_id"] == source["source_id"]
+        assert draft["candidate_version"] == 2
+        assert len(draft["operations"]) == 1
+        assert draft["operations"][0]["feature_id"] == mapping[0]["feature_id"]
+        assert draft["base_content_revision"] == layer["content_revision"]
+        assert draft["base_schema_revision"] == layer["schema_revision"]
         request = {
             "operation_id": str(uuid4()),
             "summary": "Reviewed CAD native XY proposal",
-            "base_content_revision": layer["content_revision"],
-            "base_schema_revision": layer["schema_revision"],
-            "operations": [
-                {"op_type": op.op_type.value, "feature_id": op.feature_id, "geometry": op.geometry}
-                for op in ops
-            ],
+            "base_content_revision": draft["base_content_revision"],
+            "base_schema_revision": draft["base_schema_revision"],
+            "operations": draft["operations"],
         }
         changes = root + "/sources/" + source["source_id"] + "/changesets"
         with _client(world.wrong_user_id) as outsider:
@@ -354,6 +342,7 @@ def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database)
         repeated = owner.post(changes, json=request)
         assert repeated.status_code in (200, 201), repeated.text
         assert repeated.json()["id"] == accepted["id"]
+        assert owner.post(preview_path, json=preview_body).status_code == 409
         assert owner.post(changes, json=request | {"operation_id": str(uuid4())}).status_code == 409
         # R006 geometry and revision authority stay on PostGIS, not in CAD.
         from sqlalchemy import text
