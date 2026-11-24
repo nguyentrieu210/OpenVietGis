@@ -1747,7 +1747,7 @@ class OpenVietGisConnectorDialog(QDialog):
         total_ops = 0
         try:
             config = self._build_config()
-            for lid, info in self._managed_layers.items():
+            for info in self._managed_layers.values():
                 layer = QgsProject.instance().mapLayer(info["map_layer_id"])
                 if not isinstance(layer, QgsVectorLayer) or not layer.isEditable():
                     continue

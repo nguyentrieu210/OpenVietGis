@@ -1,9 +1,20 @@
 """Isolated native QGIS feasibility probe, no server or production data."""
+
 import os
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+
 def main():
-    from qgis.core import QgsApplication, QgsFeature, QgsGeometry, QgsPointXY, QgsVectorLayer, Qgis
+    from qgis.core import (
+        Qgis,
+        QgsApplication,
+        QgsFeature,
+        QgsGeometry,
+        QgsPointXY,
+        QgsVectorLayer,
+    )
+
     app = QgsApplication([], False)
     app.initQgis()
     try:
@@ -11,9 +22,11 @@ def main():
         assert layer.isValid()
         assert hasattr(layer, "setAllowCommit"), "Native commit veto API unavailable"
         state = {"accepted": False, "calls": 0}
-        def gate(*args):
+
+        def gate(*args, target=layer):
             state["calls"] += 1
-            layer.setAllowCommit(state["accepted"])
+            target.setAllowCommit(state["accepted"])
+
         layer.beforeCommitChanges.connect(gate)
         assert layer.startEditing()
         feature = QgsFeature(layer.fields())

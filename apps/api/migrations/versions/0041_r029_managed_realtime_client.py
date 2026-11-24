@@ -118,7 +118,9 @@ def upgrade() -> None:
             project_id uuid NOT NULL,
             cursor bigint NOT NULL,
             kind varchar(32) NOT NULL
-                CHECK (kind IN ('changeset', 'schema_change', 'catalog_change', 'visibility_reset')),
+                CHECK (
+                    kind IN ('changeset', 'schema_change', 'catalog_change', 'visibility_reset')
+                ),
             source_id uuid NULL,
             changeset_id uuid NULL,
             actor_id uuid NULL,
@@ -167,7 +169,8 @@ def upgrade() -> None:
             next_cur bigint;
         BEGIN
             INSERT INTO integration_hub.project_event_counters (
-                organization_id, project_id, last_cursor, permission_epoch, retention_floor, updated_at
+                organization_id, project_id, last_cursor,
+                permission_epoch, retention_floor, updated_at
             ) VALUES (
                 NEW.organization_id, NEW.project_id, 1, 1, 0, now()
             )
@@ -210,7 +213,9 @@ def upgrade() -> None:
             arguments jsonb NOT NULL DEFAULT '{}'::jsonb,
             requires_consent boolean NOT NULL DEFAULT true,
             status varchar(24) NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending', 'approved', 'rejected', 'completed', 'failed', 'expired')),
+                CHECK (
+                    status IN ('pending', 'approved', 'rejected', 'completed', 'failed', 'expired')
+                ),
             result jsonb NULL,
             requested_by uuid NOT NULL,
             expires_at timestamptz NOT NULL,

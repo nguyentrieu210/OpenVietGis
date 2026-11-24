@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from openvietgis_api.adapters.http.managed_sync import (
     ALLOWED_DESKTOP_TOOLS,
@@ -48,7 +49,7 @@ def test_r029_request_models_forbid_extra_fields() -> None:
     assert req.mode == "managed"
     cmd = CreateDesktopCommandRequest(tool_name="inspect_project", arguments={})
     assert cmd.ttl_seconds == 120
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         ManagedCommitRequest(
             session_id="00000000-0000-0000-0000-000000000001",
             source_id="00000000-0000-0000-0000-000000000002",

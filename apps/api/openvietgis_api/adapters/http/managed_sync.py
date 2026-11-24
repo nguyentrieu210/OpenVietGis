@@ -82,7 +82,9 @@ class CreateManagedSessionRequest(BaseModel):
 class ManagedOperationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     op_type: EditOpType
-    feature_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
+    feature_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)
+    ]
     geometry: dict[str, Any] | None = None
     properties: dict[str, Any] | None = None
 
@@ -98,9 +100,9 @@ class ManagedCommitRequest(BaseModel):
     operation_id: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)
     ]
-    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)] = (
-        "QGIS Managed Realtime Edit"
-    )
+    summary: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+    ] = "QGIS Managed Realtime Edit"
     allow_deletes: bool = False
     operations: list[ManagedOperationRequest] = Field(min_length=1, max_length=1000)
 
@@ -376,7 +378,7 @@ def revoke_managed_session(
     session_id: UUID,
     auth: WriteAuth,
     session: DB,
-    bump_epoch: bool = Query(default=False),
+    bump_epoch: Annotated[bool, Query()] = False,
 ) -> dict[str, Any]:
     """Revoke a managed session immediately and notify connected clients."""
     ctx = prepare_project_scope(
@@ -419,10 +421,12 @@ def revoke_managed_session(
         session.execute(
             text(
                 "INSERT INTO integration_hub.project_event_counters "
-                "(organization_id, project_id, last_cursor, permission_epoch, retention_floor, updated_at) "
+                "(organization_id, project_id, last_cursor, "
+                "permission_epoch, retention_floor, updated_at) "
                 "VALUES (:o, :p, 0, 2, 0, :now) "
                 "ON CONFLICT (organization_id, project_id) "
-                "DO UPDATE SET permission_epoch = integration_hub.project_event_counters.permission_epoch + 1, "
+                "DO UPDATE SET permission_epoch = "
+                "integration_hub.project_event_counters.permission_epoch + 1, "
                 "updated_at = :now"
             ),
             {"o": organization_id, "p": project_id, "now": now},
@@ -448,10 +452,10 @@ def bootstrap_managed_layer(
     project_id: UUID,
     auth: ReadAuth,
     session: DB,
-    layer_id: UUID = Query(...),
-    session_id: UUID | None = Query(default=None),
-    limit: int = Query(default=1000, ge=1, le=5000),
-    offset: int = Query(default=0, ge=0),
+    layer_id: Annotated[UUID, Query()],
+    session_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> dict[str, Any]:
     """Return ACL-filtered layer features pinned atomically with cursor and revision."""
     ctx = prepare_project_scope(
@@ -558,9 +562,9 @@ def fetch_managed_delta(
     project_id: UUID,
     auth: ReadAuth,
     session: DB,
-    session_id: UUID = Query(...),
-    cursor: int = Query(default=0, ge=0),
-    limit: int = Query(default=200, ge=1, le=500),
+    session_id: Annotated[UUID, Query()],
+    cursor: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> dict[str, Any]:
     """Fetch commit-ordered authorized deltas after cursor without full layer reload."""
     ctx = prepare_project_scope(
@@ -876,7 +880,7 @@ async def stream_managed_events(
     request: Request,
     auth: ReadAuth,
     session: DB,
-    session_id: UUID = Query(...),
+    session_id: Annotated[UUID, Query()],
 ) -> StreamingResponse:
     """SSE wake-up stream with 15s bounded session/revocation recheck."""
     prepare_project_scope(
@@ -979,7 +983,8 @@ def enqueue_desktop_command(
             "id, organization_id, project_id, session_id, tool_name, arguments, "
             "requires_consent, status, requested_by, expires_at, created_at"
             ") VALUES ("
-            ":id, :o, :p, :sid, :tool, CAST(:args AS jsonb), :consent, 'pending', :req_by, :exp, :now"
+            ":id, :o, :p, :sid, :tool, CAST(:args AS jsonb), "
+            ":consent, 'pending', :req_by, :exp, :now"
             ") RETURNING *"
         ),
         {
@@ -1032,7 +1037,7 @@ def list_desktop_commands(
     session_id: UUID,
     auth: ReadAuth,
     session: DB,
-    status: str | None = Query(default=None),
+    status: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
     """List pending or recent allowlisted commands for a managed QGIS session."""
     prepare_project_scope(
