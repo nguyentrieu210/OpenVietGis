@@ -17,7 +17,7 @@ test("R014 actual browser activates, edits, exports and retains extension histor
   });
   expect(registered.status).toBe(201);
   await page.goto(fixture.root+"/platform-hub");
-  await page.getByRole("tab",{name:"Nền tảng Module",exact:true}).click();
+  await page.getByRole("tab",{name:"Quản lý Plugin & Số nhà",exact:true}).click();
   const panel = page.getByTestId("extension-workbench");
   await expect(panel).toBeVisible();
   await panel.getByRole("button",{name:"Kích hoạt",exact:true}).click();

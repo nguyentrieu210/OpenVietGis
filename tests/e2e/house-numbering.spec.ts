@@ -6,7 +6,7 @@ import {
 
 
 async function hnSignIn(page: Page, member = false): Promise<void> {
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByRole("link", { name: /Đăng nhập với OpenVietGIS Development|Continue with OpenVietGIS Development/ }).click();
   await page.locator("#username").fill(member ? "member-a" : "owner-a");
   await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
@@ -22,7 +22,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
   const fixture = await createMapProject(page, Date.now().toString() + "-hn");
 
   await page.goto(fixture.root + "/platform-hub");
-  await page.getByRole("tab", { name: /R014 Nền tảng Module/i }).click();
+  await page.getByRole("tab", { name: "Quản lý Plugin & Số nhà" }).click();
   const row = page.getByRole("row").filter({ hasText: "Quản lý và đánh số nhà" });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Đăng ký" }).click();
@@ -144,7 +144,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
 
   // Disable must hide runtime without deleting module data.
   await page.goto(fixture.root + "/platform-hub");
-  await page.getByRole("tab", { name: /R014 Nền tảng Module/i }).click();
+  await page.getByRole("tab", { name: "Quản lý Plugin & Số nhà" }).click();
   const activeRow = page.getByRole("row").filter({ hasText: "Quản lý và đánh số nhà" });
   await activeRow.getByRole("button", { name: "Tắt" }).click();
   await expect(page.getByText(/Đã tắt Quản lý và đánh số nhà/)).toBeVisible();
