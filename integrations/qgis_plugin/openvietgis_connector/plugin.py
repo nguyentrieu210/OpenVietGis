@@ -25,7 +25,7 @@ from typing import Any
 from uuid import uuid4
 
 from qgis.core import QgsProject, QgsVectorLayer
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QAction,
@@ -90,6 +90,10 @@ class OpenVietGisConnectorDialog(QDialog):
         self._workspace_preview: WorkspaceSyncPreview | None = None
         self._workspace_map_layer_id: str | None = None
         self._preferred_layer_id: str | None = None
+        self._auto_sync_busy: bool = False
+        self._auto_sync_timer = QTimer(self)
+        self._auto_sync_timer.setInterval(15_000)
+        self._auto_sync_timer.timeout.connect(self._on_auto_sync_tick)
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -192,7 +196,7 @@ class OpenVietGisConnectorDialog(QDialog):
         layers_layout.addWidget(self.layers_table)
         root_layout.addWidget(layers_group)
 
-        # 3. Primary Two-Way Sync Box (top-level, 3 big buttons, no scrolling!)
+        # 3. Primary Two-Way Sync Box (top-level, 1-click sync + auto-sync!)
         workspace_group = QGroupBox("Bước 3 · Sửa & Đồng bộ 2 chiều (QGIS ↔ Web)")
         ws_layout = QVBoxLayout(workspace_group)
 
@@ -204,30 +208,44 @@ class OpenVietGisConnectorDialog(QDialog):
         )
         self.ws_create_button.clicked.connect(self._on_create_workspace)
 
+        self.ws_sync_now_button = QPushButton("⇄ Đồng bộ 2 chiều ngay (1 chạm)")
+        self.ws_sync_now_button.setStyleSheet(
+            "background-color: #16a34a; color: #ffffff; font-weight: bold; "
+            "padding: 8px 12px; border-radius: 4px;"
+        )
+        self.ws_sync_now_button.clicked.connect(self._on_sync_now_one_click)
+
+        self.auto_sync_checkbox = QCheckBox(
+            "Tự động đồng bộ 2 chiều mỗi 15 giây (chỉ khi không xung đột)"
+        )
+        self.auto_sync_checkbox.setChecked(False)
+        self.auto_sync_checkbox.toggled.connect(self._on_toggle_auto_sync)
+
         ws_sync_row = QHBoxLayout()
         self.ws_preview_button = QPushButton("2. Xem thay đổi")
         self.ws_preview_button.setStyleSheet(
-            "padding: 7px 10px; font-weight: bold; border-radius: 4px;"
+            "padding: 5px 8px; border-radius: 4px;"
         )
         self.ws_preview_button.clicked.connect(self._on_preview_workspace)
 
-        self.ws_commit_button = QPushButton("3. Đồng bộ lên Web")
+        self.ws_commit_button = QPushButton("3. Xác nhận đồng bộ")
         self.ws_commit_button.setEnabled(False)
         self.ws_commit_button.setStyleSheet(
-            "background-color: #16a34a; color: #ffffff; font-weight: bold; "
-            "padding: 7px 10px; border-radius: 4px;"
+            "padding: 5px 8px; border-radius: 4px;"
         )
         self.ws_commit_button.clicked.connect(self._on_commit_workspace)
 
         ws_sync_row.addWidget(self.ws_preview_button)
         ws_sync_row.addWidget(self.ws_commit_button)
         ws_buttons.addWidget(self.ws_create_button)
+        ws_buttons.addWidget(self.ws_sync_now_button)
+        ws_buttons.addWidget(self.auto_sync_checkbox)
         ws_buttons.addLayout(ws_sync_row)
         ws_layout.addLayout(ws_buttons)
 
         self.ws_status = QLabel(
-            "Chọn lớp → bấm '1. Mở lớp để sửa' → vẽ/sửa trực tiếp trên bản đồ → "
-            "bấm '2. Xem thay đổi' → '3. Đồng bộ lên Web'."
+            "Chọn lớp → bấm '1. Mở lớp để sửa' (tự bật chế độ sửa) → "
+            "kéo/sửa trực tiếp trên bản đồ → bấm '⇄ Đồng bộ 2 chiều ngay'."
         )
         self.ws_status.setWordWrap(True)
         self.ws_status.setStyleSheet(
@@ -537,9 +555,12 @@ class OpenVietGisConnectorDialog(QDialog):
             self._workspace_preview = None
             self.ws_commit_button.setEnabled(False)
             self._open_working_layer()
+            opened = self._workspace_layer()
+            if opened is not None and not opened.isEditable():
+                opened.startEditing()
             self.ws_status.setText(
-                "Đã tạo bản làm việc: lưu chỉnh sửa trong QGIS rồi bấm Xem trước 2 chiều. "
-                "Tất cả thay đổi đều yêu cầu xác nhận, không có đồng bộ tự động."
+                "Đã mở lớp và bật sẵn chế độ sửa! Hãy sửa điểm/đường/thuộc tính "
+                "trên bản đồ QGIS rồi bấm '⇄ Đồng bộ 2 chiều ngay'."
             )
         except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
             QMessageBox.warning(self, "R027 Workspace", str(exc))
@@ -569,6 +590,98 @@ class OpenVietGisConnectorDialog(QDialog):
         except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
             QMessageBox.warning(self, "R027 Workspace", str(exc))
             self.ws_status.setText(f"Không thể mở workspace: {exc}")
+
+    def _on_toggle_auto_sync(self, checked: bool) -> None:
+        if checked:
+            self._auto_sync_timer.start()
+            self.ws_status.setText(
+                "Đã bật Tự động đồng bộ 2 chiều (15 giây/lần). "
+                "Lưu chỉnh sửa (Ctrl+S) trên QGIS để tự đẩy lên Web, hoặc sửa trên Web để tự kéo về."
+            )
+        else:
+            self._auto_sync_timer.stop()
+            self.ws_status.setText("Đã tắt tự động đồng bộ. Bạn có thể bấm '⇄ Đồng bộ 2 chiều ngay'.")
+
+    def _on_auto_sync_tick(self) -> None:
+        if self._auto_sync_busy or self._workspace_root is None:
+            return
+        layer = self._workspace_layer()
+        # Do not interrupt while user is actively editing in QGIS edit mode.
+        if layer is not None and layer.isEditable():
+            return
+        self._auto_sync_busy = True
+        try:
+            config = self._build_config()
+            preview = preview_workspace(config, self._workspace_file().parent)
+            if preview.conflicts:
+                self.auto_sync_checkbox.setChecked(False)
+                self.ws_status.setText(
+                    "Tạm dừng tự động đồng bộ do CÓ XUNG ĐỘT: "
+                    + "; ".join(preview.conflicts[:3])
+                )
+                return
+            if not preview.to_server and not preview.to_local:
+                return
+            self._require_workspace_layer_closed()
+            receipt = commit_workspace(config, preview, confirmed_digest=preview.digest)
+            self._open_working_layer()
+            self.ws_status.setText(
+                f"✓ Tự động đồng bộ xong — Đẩy lên Web: {receipt['pushed']} · "
+                f"Kéo về QGIS: {receipt['pulled']}."
+            )
+        except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
+            self.ws_status.setText(f"Tự động đồng bộ gặp lỗi: {exc}")
+        finally:
+            self._auto_sync_busy = False
+
+    def _on_sync_now_one_click(self) -> None:
+        if self._workspace_root is None:
+            QMessageBox.warning(
+                self, "OpenVietGIS", "Hãy bấm '1. Mở lớp để sửa trên QGIS' trước."
+            )
+            return
+        try:
+            config = self._build_config()
+            layer = self._workspace_layer()
+            if layer is not None and layer.isEditable() and not layer.commitChanges():
+                raise WorkspaceConflict(
+                    "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
+                )
+            preview = preview_workspace(config, self._workspace_file().parent)
+            if preview.conflicts:
+                self._workspace_preview = preview
+                self.ws_commit_button.setEnabled(False)
+                self.ws_status.setText(
+                    "CÓ XUNG ĐỘT — KHÔNG GHI DỮ LIỆU: "
+                    + "; ".join(preview.conflicts[:5])
+                )
+                QMessageBox.warning(
+                    self,
+                    "Phát hiện xung đột",
+                    "Không thể tự đồng bộ do có xung đột:\n" + "\n".join(preview.conflicts[:5]),
+                )
+                return
+            if not preview.to_server and not preview.to_local:
+                self.ws_status.setText(
+                    "Đã khớp 100% — chưa có chỉnh sửa mới ở cả QGIS lẫn Web. "
+                    "Hãy sửa 1 điểm/thuộc tính rồi bấm lại."
+                )
+                return
+            self._require_workspace_layer_closed()
+            receipt = commit_workspace(config, preview, confirmed_digest=preview.digest)
+            self._workspace_preview = None
+            self.ws_commit_button.setEnabled(False)
+            self._open_working_layer()
+            opened = self._workspace_layer()
+            if opened is not None and not opened.isEditable():
+                opened.startEditing()
+            self.ws_status.setText(
+                f"✓ Đã đồng bộ 2 chiều! Đẩy lên Web: {receipt['pushed']} · "
+                f"Kéo về QGIS: {receipt['pulled']}."
+            )
+        except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
+            self.ws_status.setText(f"Lỗi đồng bộ: {exc}")
+            QMessageBox.warning(self, "Lỗi đồng bộ OpenVietGIS", str(exc))
 
     def _on_preview_workspace(self) -> None:
         try:
@@ -911,7 +1024,8 @@ class OpenVietGisConnectorDialog(QDialog):
         )
 
     def closeEvent(self, event: Any) -> None:
-        """Clear sensitive bearer token from memory when closing the dialog."""
+        """Clear sensitive bearer token and stop auto-sync timer when closing."""
+        self._auto_sync_timer.stop()
         self.bearer_key_input.clear()
         self._invalidate_sync_preview()
         self._workspace_preview = None
