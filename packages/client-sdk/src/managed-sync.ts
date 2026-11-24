@@ -1,4 +1,4 @@
-import type { ApiClient } from "./http";
+import { projectApiPath, type ApiClient } from "./http";
 
 export interface ManagedSessionItem {
   id: string;
@@ -48,7 +48,7 @@ export interface DesktopCommandResponse {
 }
 
 function managedBase(orgId: string, projectId: string): string {
-  return `/api/v1/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}/integration-hub/managed`;
+  return projectApiPath(orgId, projectId) + "/integration-hub/managed";
 }
 
 export function listManagedSessions(

@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent,type DragEvent,type RefObject} from "react";
 import * as ml from "./map-surface";
 import {createPortal} from "react-dom";
-import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
+import {ApiClient,ApiError,loadCsrfToken,projectApiPath} from "@openvietgis/client-sdk";
 import "./team-collaboration.css";
 
 type Status="todo"|"in_progress"|"done";
@@ -24,7 +24,7 @@ export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition
  const [body,setBody]=useState(""),[title,setTitle]=useState(""),[description,setDescription]=useState(""),[assignee,setAssignee]=useState(accountId),[due,setDue]=useState(""),[priority,setPriority]=useState<Priority>("normal"),[position,setPosition]=useState<Position|null>(null),[creating,setCreating]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[loaded,setLoaded]=useState(false);
  const [peer,setPeer]=useState(""),[notices,setNotices]=useState<Notice[]>([]),[unread,setUnread]=useState(0),[live,setLive]=useState(false),[revoked,setRevoked]=useState(false),[board,setBoard]=useState(false),[source,setSource]=useState<Message|null>(null);
  const [thread,setThread]=useState<FeatureTarget|null>(selectedFeature??null),[comments,setComments]=useState<Message[]>([]),[commentBody,setCommentBody]=useState(""),[mentionIds,setMentionIds]=useState<string[]>([]),[taskFeature,setTaskFeature]=useState<FeatureTarget|null>(null),[pins,setPins]=useState<CommentPin[]>([]),[showPins,setShowPins]=useState(true);
- const base="/organizations/"+org+"/projects/"+pid+"/collaboration", generation=useRef(0),inFlight=useRef(false),scroll=useRef<HTMLDivElement|null>(null),first=useRef(true),lastMessage=useRef(""),requestRef=useRef<AbortController|null>(null);
+ const base=projectApiPath(org,pid)+"/collaboration", generation=useRef(0),inFlight=useRef(false),scroll=useRef<HTMLDivElement|null>(null),first=useRef(true),lastMessage=useRef(""),requestRef=useRef<AbortController|null>(null);
  const selectedKey=selectedFeature?selectedFeature.source_id+":"+selectedFeature.feature_id:"";
  useEffect(()=>{if(selectedFeature){setThread(selectedFeature);setComments([]);setCommentBody("");setMentionIds([])}},[selectedKey]);
  const threadQuery=thread?"?source_id="+encodeURIComponent(thread.source_id)+"&feature_id="+encodeURIComponent(thread.feature_id):"";
@@ -50,7 +50,7 @@ export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition
  // One server-push subscription per mounted project. No interval polling.
  useEffect(()=>{
   setRevoked(false);setLive(false);let timer:ReturnType<typeof setTimeout>|undefined;
-  const es=new EventSource("/api/v1"+base+"/events",{withCredentials:true});
+  const es=new EventSource(client.url(base+"/events"),{withCredentials:true});
   const push=()=>{if(timer!==undefined)clearTimeout(timer);timer=setTimeout(()=>{timer=undefined;void latest.current()},50)};
   let connected=false;
   es.addEventListener("ready",()=>{setLive(true);push();locks.current?.();if(connected)spatial.current?.();connected=true});
@@ -61,7 +61,7 @@ export function TeamCollaboration({client,org,pid,accountId,canWrite,getPosition
   es.addEventListener("revoked",()=>{es.close();requestRef.current?.abort();generation.current++;setLive(false);setRevoked(true);setMessages([]);setComments([]);setTasks([]);setMembers([]);setNotices([]);setPins([]);setUnread(0);setBody("");setCommentBody("");setMentionIds([]);setThread(null);setTaskFeature(null);setDescription("");setTitle("");setSource(null);setError("Quyền truy cập đã thay đổi. Hãy tải lại dự án.")});
   es.onerror=()=>setLive(false);
   return()=>{es.close();if(timer!==undefined)clearTimeout(timer);requestRef.current?.abort();generation.current++};
- },[base,accountId]);
+ },[base,accountId,client]);
  useEffect(()=>{setLoaded(false);void refresh();return()=>{requestRef.current?.abort();generation.current++}},[refresh]);
  useEffect(()=>{if(!open||tab!=="chat")return;const last=messages.at(-1)?.id??"";const el=scroll.current;const nearBottom=!!el&&el.scrollHeight-el.scrollTop-el.clientHeight<80;if(el&&(first.current||nearBottom)&&last!==lastMessage.current)el.scrollTop=el.scrollHeight;first.current=false;lastMessage.current=last},[messages,open,tab]);
  useEffect(()=>{if(!open||!canWrite){setCreating(false);setPosition(null);setSource(null)}},[open,canWrite]);

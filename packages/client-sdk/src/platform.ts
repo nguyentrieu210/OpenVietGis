@@ -1,4 +1,4 @@
-import { ApiClient } from "./http";
+import { ApiClient, projectApiPath } from "./http";
 
 export interface ChangesetOperation {
   id: string;
@@ -366,7 +366,7 @@ export interface OpsHealthReadiness {
 }
 
 function projBase(orgId: string, projectId: string): string {
-  return `/organizations/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}`;
+  return projectApiPath(orgId, projectId);
 }
 
 function csrfHeaders(csrf: string): Record<string, string> {

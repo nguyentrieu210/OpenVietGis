@@ -218,3 +218,6 @@ Cross-cutting [Spec 033 — Core architecture standardization](specs/033-core-st
 
 
 Cross-cutting [Spec 034 — Spatial data and CRS standardization](specs/034-spatial-data-standardization/spec.md): unify CRS registry ownership and enforce coherent native QGIS snapshots; [evidence and limits](specs/034-spatial-data-standardization/AUDIT.md). Full geodetic and native runtime acceptance remains open.
+
+
+Cross-cutting [Spec 035 — Unified API and SDK](specs/035-unified-api-sdk/spec.md): single API transport base, managed QGIS URL fix, shared scoped paths and normalized error parsing; [evidence](specs/035-unified-api-sdk/AUDIT.md). Full contract coverage and live acceptance remain open.
