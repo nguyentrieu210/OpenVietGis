@@ -14,7 +14,7 @@
 - [ ] T007 [US6] Test runtime branding/theme/locale preferences; preserve old settings and license; OpenVietCAD web/ and src/app/
 - [x] T008 [US6] Add pinned Cargo caching and artifact performance gates in OpenVietCAD .github/workflows/
 - [ ] T009 [US6] Verify lazy CAD initialization and hashed caching in packages/spatial-workspace/src/cad-editor.ts (after R031 if shared contract affected)
-- [ ] T010 [US6] Run CAD regression, license/source archive, rollback test; evidence/
+- [x] T010 [US6] Run CAD regression, license/source archive, rollback test; evidence/
 
 ## Phase 3 — US1 identity and navigation (R031 gate)
 - [ ] T011 [P] [US1] Write link identity, cardinality, stale/denied and generation tests in apps/api/tests/integration/spatial/
@@ -25,10 +25,10 @@
 
 ## Phase 4 — US2 precise interchange
 - [x] T016 [P] [US2] Add independent projected/VN-2000 control and units/Z tests in apps/api/tests/integration/spatial/
-- [ ] T017 [US2] Extend georeference.py and current placement contract; reject unknown transform and report residuals
+- [x] T017 [US2] Extend georeference.py and current placement contract; reject unknown transform and report residuals
 - [ ] T018 [US2] Implement versioned entity/layer/attribute/style mapping + loss manifest using existing CAD domain
 - [ ] T019 [US2] Validate topology, schema, precision and native blob lineage; test unsupported curves/blocks/solids
-- [ ] T020 [US2] Build preview and approved export UI using existing CAD panel and client SDK
+- [x] T020 [US2] Build preview and approved export UI using existing CAD panel and client SDK
 - [ ] T021 [US2] Qualify DXF roundtrip and separate DWG adapter capability; compare geometry and metadata independently
 
 ## Phase 5 — US3 two-way reviewed edits
