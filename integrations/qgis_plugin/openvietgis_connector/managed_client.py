@@ -5,12 +5,14 @@ Zero PyQt/QGIS imports so it can be unit tested in any standard Python environme
 
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Any
+from uuid import uuid4
 
 from .client import (
     DEFAULT_SYNC_TIMEOUT_SECONDS,
@@ -75,6 +77,47 @@ class ManagedCommitReceipt:
     operation_count: int
     event_cursor: int
     audit_event_id: str
+
+
+@dataclass(frozen=True)
+class PendingManagedWrite:
+    """In-process idempotency pin; never contains credentials or feature content."""
+
+    operation_id: str
+    digest: str
+
+
+def pin_managed_write(
+    *,
+    previous: PendingManagedWrite | None,
+    source_id: str,
+    base_content_revision: str,
+    base_schema_revision: str | None,
+    operations: list[dict[str, Any]],
+    allow_deletes: bool,
+) -> PendingManagedWrite:
+    """Reuse the exact operation identity after uncertain transport outcomes."""
+    encoded = json.dumps(
+        {
+            "source_id": source_id,
+            "base_content_revision": base_content_revision,
+            "base_schema_revision": base_schema_revision,
+            "operations": operations,
+            "allow_deletes": allow_deletes,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    digest = hashlib.sha256(encoded).hexdigest()
+    if previous is not None:
+        if previous.digest != digest:
+            raise ApiError(
+                "Còn lần lưu chưa xác nhận. Không thay đổi nội dung giao dịch "
+                "đang chờ; hãy đối chiếu lịch sử Web và sao lưu bản nháp."
+            )
+        return previous
+    return PendingManagedWrite(operation_id=str(uuid4()), digest=digest)
 
 
 def _managed_base(config: OpenVietGisConfig) -> str:

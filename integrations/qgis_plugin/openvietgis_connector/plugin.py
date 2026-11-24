@@ -86,6 +86,7 @@ from .managed_client import (
     create_managed_session,
     fetch_managed_delta,
     list_desktop_commands,
+    pin_managed_write,
     respond_desktop_command,
 )
 from .workspace import (
@@ -104,13 +105,14 @@ ACTION_LABEL = "Kết nối OpenVietGIS"
 
 
 def _dpapi_protect(secret: str) -> str:
-    """Encrypt secret for the current Windows user via DPAPI; falls back to base64 on POSIX."""
+    """Encrypt for the current Windows user, or return empty on failure."""
     raw = secret.encode("utf-8")
     if sys.platform == "win32":
         class _Blob(ctypes.Structure):
             _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
-        in_blob = _Blob(len(raw), ctypes.create_string_buffer(raw, len(raw)))
+        raw_buffer = ctypes.create_string_buffer(raw, len(raw))
+        in_blob = _Blob(len(raw), ctypes.cast(raw_buffer, ctypes.POINTER(ctypes.c_char)))
         out_blob = _Blob()
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
@@ -122,7 +124,7 @@ def _dpapi_protect(secret: str) -> str:
                 return "dpapi:" + base64.b64encode(enc).decode("ascii")
             finally:
                 kernel32.LocalFree(out_blob.pbData)
-    return "b64:" + base64.b64encode(raw).decode("ascii")
+    return ""
 
 
 def _dpapi_unprotect(stored: str) -> str:
@@ -134,7 +136,8 @@ def _dpapi_unprotect(stored: str) -> str:
             _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
 
         enc = base64.b64decode(stored[6:])
-        in_blob = _Blob(len(enc), ctypes.create_string_buffer(enc, len(enc)))
+        enc_buffer = ctypes.create_string_buffer(enc, len(enc))
+        in_blob = _Blob(len(enc), ctypes.cast(enc_buffer, ctypes.POINTER(ctypes.c_char)))
         out_blob = _Blob()
         crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
@@ -146,8 +149,7 @@ def _dpapi_unprotect(stored: str) -> str:
             finally:
                 kernel32.LocalFree(out_blob.pbData)
         return ""
-    if stored.startswith("b64:"):
-        return base64.b64decode(stored[4:]).decode("utf-8")
+    # Legacy Base64 is not a protected credential; require re-pairing.
     return ""
 
 
@@ -672,13 +674,19 @@ class OpenVietGisConnectorDialog(QDialog):
     def _on_apply_pairing_code(self) -> None:
         if any(
             isinstance(layer := QgsProject.instance().mapLayer(info["map_layer_id"]), QgsVectorLayer)
-            and layer.isModified()
+            and (layer.isModified() or info.get("pending_write") is not None)
             for info in self._managed_layers.values()
         ):
             QMessageBox.warning(
                 self, "Còn chỉnh sửa chưa lưu",
                 "Hãy lưu lên Web hoặc xuất bản sao dữ liệu từ QGIS "
                 "trước khi thay mã kết nối."
+            )
+            return
+        if self._managed_layers:
+            QMessageBox.warning(
+                self, "Bản đồ đang mở",
+                "Hãy lưu thay đổi rồi đăng xuất trước khi đổi tài khoản hoặc dự án."
             )
             return
         raw = self.pairing_code_input.text().strip()
@@ -758,6 +766,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self._sync_push_enabled = bool(profile.sync_push_enabled)
         if self.remember_session_checkbox.isChecked():
             self._save_local_session()
+        else:
+            QSettings("OpenVietGIS", "Connector").remove("protected_token")
         self._populate_layers_table()
         scoped_note = "scoped ACL" if profile.scoped_access else "quyền dự án"
         sync_note = "Đã có quyền đồng bộ" if self._sync_push_enabled else "Chỉ xem"
@@ -1641,13 +1651,25 @@ class OpenVietGisConnectorDialog(QDialog):
         settings.setValue("allow_localhost", self.allow_localhost_checkbox.isChecked())
         settings.setValue("download_dir", self.download_dir_input.text().strip())
         token = self.bearer_key_input.text().strip()
-        if token:
-            settings.setValue("protected_token", _dpapi_protect(token))
+        try:
+            protected = _dpapi_protect(token) if token else ""
+        except (OSError, ValueError, TypeError):
+            protected = ""
+        if protected:
+            settings.setValue("protected_token", protected)
+        else:
+            settings.remove("protected_token")
+            if token:
+                self.ws_status.setText(
+                    "Không có kho mật khẩu an toàn. Phiên chỉ được giữ trong lần mở này."
+                )
 
     def _on_clear_saved_session(self) -> None:
         for info in self._managed_layers.values():
             layer = QgsProject.instance().mapLayer(info["map_layer_id"])
-            if isinstance(layer, QgsVectorLayer) and layer.isModified():
+            if info.get("pending_write") is not None or (
+                isinstance(layer, QgsVectorLayer) and layer.isModified()
+            ):
                 QMessageBox.warning(
                     self, "Còn chỉnh sửa chưa lưu",
                     "Hãy lưu lên Web hoặc xuất bản sao lớp từ QGIS "
@@ -1655,6 +1677,12 @@ class OpenVietGisConnectorDialog(QDialog):
                 )
                 return
         self._stop_managed_worker()
+        self._managed_delta_debounce.stop()
+        for info in self._managed_layers.values():
+            QgsProject.instance().removeMapLayer(info["map_layer_id"])
+        self._managed_layers.clear()
+        self._managed_session = None
+        self._managed_cursor = 0
         self._stop_realtime_worker()
         self._auto_sync_timer.stop()
         self._preferred_binding_id = None
@@ -1677,8 +1705,15 @@ class OpenVietGisConnectorDialog(QDialog):
         protected_token = str(settings.value("protected_token", "") or "").strip()
         if not (server_url and org_id and project_id and protected_token):
             return
-        token = _dpapi_unprotect(protected_token)
+        try:
+            token = _dpapi_unprotect(protected_token)
+        except (OSError, ValueError, TypeError):
+            token = ""
         if not token:
+            settings.remove("protected_token")
+            self.status_label.setText(
+                "Phiên lưu cũ không được bảo vệ. Hãy kết nối lại."
+            )
             return
         self.server_url_input.setText(server_url)
         self.org_id_input.setText(org_id)
@@ -1811,13 +1846,22 @@ class OpenVietGisConnectorDialog(QDialog):
                     )
                     if first_page is None:
                         first_page = page
+                    elif (
+                        page.content_revision != first_page.content_revision
+                        or page.schema_revision != first_page.schema_revision
+                        or page.permission_epoch != first_page.permission_epoch
+                        or page.layer_id != first_page.layer_id
+                    ):
+                        raise OpenVietGisError(
+                            "Lớp đã thay đổi khi đang tải. Vui lòng mở lại bản đồ."
+                        )
                     all_feats.extend(page.features)
                     if not page.has_more or page.next_offset is None:
                         break
                     offset = page.next_offset
                 if first_page is None or not first_page.crs_code:
                     continue
-                self._managed_cursor = max(self._managed_cursor, first_page.cursor)
+                # Keep the session cursor until all pending project events are applied.
                 geom_type = first_page.geometry_family or "Point"
                 uri = f"{geom_type}?crs=EPSG:{first_page.crs_code}"
                 vlayer = QgsVectorLayer(uri, f"OpenVietGIS · {first_page.name}", "memory")
@@ -1864,12 +1908,20 @@ class OpenVietGisConnectorDialog(QDialog):
             worker.status_changed.connect(self.realtime_status.setText)
             self._managed_worker = worker
             worker.start()
+            self._managed_delta_debounce.start()
             mode_txt = "Có quyền chỉnh sửa" if sess.can_edit else "Chỉ xem"
             self.ws_status.setText(
                 f"Đã mở {len(opened_names)} lớp ({mode_txt}). "
                 "Chỉnh sửa trong QGIS rồi bấm ‘Lưu thay đổi lên Web’ ở công cụ này."
             )
         except (OpenVietGisError, OSError, ValueError) as exc:
+            self._stop_managed_worker()
+            self._managed_delta_debounce.stop()
+            for info in self._managed_layers.values():
+                QgsProject.instance().removeMapLayer(info["map_layer_id"])
+            self._managed_layers.clear()
+            self._managed_session = None
+            self.r029_save_button.setEnabled(False)
             reason = str(exc)
             if isinstance(exc, ApiError) and exc.status_code == 403:
                 reason = (
@@ -1913,6 +1965,9 @@ class OpenVietGisConnectorDialog(QDialog):
         # Never acknowledge a server cursor while QGIS has uncommitted changes.
         # The same delta must remain available after the user saves their work.
         for info in self._managed_layers.values():
+            if info.get("pending_write") is not None:
+                self.ws_status.setText("Còn lần lưu chưa xác nhận. Hãy lưu lại cùng giao dịch.")
+                return
             local_layer = QgsProject.instance().mapLayer(info["map_layer_id"])
             if isinstance(local_layer, QgsVectorLayer) and local_layer.isModified():
                 self.ws_status.setText(
@@ -1945,17 +2000,18 @@ class OpenVietGisConnectorDialog(QDialog):
                     self.ws_status.setText(
                         "🔔 Có cập nhật từ Web. Lưu chỉnh sửa đang làm rồi nhận cập nhật mới."
                     )
-                    continue
+                    return
                 was_edit = layer.isEditable()
-                if was_edit:
-                    layer.commitChanges()
+                if was_edit and not layer.commitChanges():
+                    raise OpenVietGisError("QGIS không thể kết thúc phiên chỉnh sửa để cập nhật.")
                 prov = layer.dataProvider()
                 id_to_fid: dict[str, int] = {}
                 for feat in layer.getFeatures():
                     id_to_fid[str(feat["ovg_feature_id"])] = feat.id()
                 removals = [id_to_fid[str(oid)] for oid in change.get("removals", []) if str(oid) in id_to_fid]
                 if removals:
-                    prov.deleteFeatures(removals)
+                    if not prov.deleteFeatures(removals):
+                        raise OpenVietGisError("QGIS không thể áp dụng cập nhật xóa.")
                     applied_count += len(removals)
                 field_names = info["field_names"]
                 to_add: list[QgsFeature] = []
@@ -1977,18 +2033,22 @@ class OpenVietGisConnectorDialog(QDialog):
                         qf.setAttributes([oid, *(props.get(fn) for fn in field_names)])
                         to_add.append(qf)
                     applied_count += 1
-                if geom_updates:
-                    prov.changeGeometryValues(geom_updates)
-                if attr_updates:
-                    prov.changeAttributeValues(attr_updates)
+                if geom_updates and not prov.changeGeometryValues(geom_updates):
+                    raise OpenVietGisError("QGIS không thể áp dụng cập nhật hình học.")
+                if attr_updates and not prov.changeAttributeValues(attr_updates):
+                    raise OpenVietGisError("QGIS không thể áp dụng cập nhật thuộc tính.")
                 if to_add:
-                    prov.addFeatures(to_add)
+                    ok, _ = prov.addFeatures(to_add)
+                    if not ok:
+                        raise OpenVietGisError("QGIS không thể thêm đối tượng cập nhật.")
                 layer.updateExtents()
                 layer.triggerRepaint()
                 info["content_revision"] = str(change["content_revision"])
                 if was_edit:
                     layer.startEditing()
             self._managed_cursor = delta.next_cursor
+            if delta.has_more:
+                self._managed_delta_debounce.start()
             if applied_count > 0:
                 self.ws_status.setText(
                     f"Đã nhận {applied_count} đối tượng cập nhật từ Web."
@@ -2019,7 +2079,11 @@ class OpenVietGisConnectorDialog(QDialog):
 
                 for fid, feat in buf.addedFeatures().items():
                     oid = str(feat["ovg_feature_id"] or "").strip() or str(uuid4())
-                    layer.changeAttributeValue(fid, 0, oid)
+                    if (
+                        str(feat["ovg_feature_id"] or "").strip() != oid
+                        and not layer.changeAttributeValue(fid, 0, oid)
+                    ):
+                        raise OpenVietGisError("Không thể gán mã đối tượng cho bản nháp.")
                     geom_dict = json.loads(feat.geometry().asJson()) if not feat.geometry().isEmpty() else None
                     props = {fn: feat[fn] for fn in field_names}
                     ops.append({
@@ -2056,23 +2120,54 @@ class OpenVietGisConnectorDialog(QDialog):
                         ops.append({"op_type": "delete", "feature_id": oid})
 
                 if not ops:
+                    if info.get("pending_write") is not None:
+                        raise OpenVietGisError("Còn lần lưu chưa xác nhận; hãy kiểm tra lịch sử Web.")
                     continue
-                # Server-First: ONLY commit local memory buffer AFTER durable server receipt!
-                receipt = commit_managed_changes(
-                    config,
-                    session_id=self._managed_session.id,
+                ops.sort(key=lambda op: (str(op["op_type"]), str(op["feature_id"])))
+                previous = info.get("pending_write")
+                pending = pin_managed_write(
+                    previous=previous,
                     source_id=info["source_id"],
                     base_content_revision=info["content_revision"],
                     base_schema_revision=info["schema_revision"],
-                    operation_id=str(uuid4()),
                     operations=ops,
-                    summary="QGIS R029 Managed Realtime Edit",
                     allow_deletes=allow_deletes,
                 )
-                layer.commitChanges()
+                info["pending_write"] = pending
+                # Server-First: ONLY commit local memory buffer AFTER durable server receipt!
+                try:
+                    receipt = commit_managed_changes(
+                        config,
+                        session_id=self._managed_session.id,
+                        source_id=info["source_id"],
+                        base_content_revision=info["content_revision"],
+                        base_schema_revision=info["schema_revision"],
+                        operation_id=pending.operation_id,
+                        operations=ops,
+                        summary="QGIS R029 Managed Realtime Edit",
+                        allow_deletes=allow_deletes,
+                    )
+                except ApiError as exc:
+                    # A first explicit rejection is not an ambiguous network result.
+                    # Do not clear a pin after a previous uncertain request.
+                    if previous is None and exc.status_code in (400, 401, 403, 404, 409, 422):
+                        info.pop("pending_write", None)
+                    raise
+                if (
+                    receipt.operation_id != pending.operation_id
+                    or receipt.source_id != info["source_id"]
+                    or receipt.status != "accepted"
+                ):
+                    raise OpenVietGisError("Máy chủ trả biên nhận không khớp giao dịch.")
+                if not layer.commitChanges():
+                    raise OpenVietGisError(
+                        "Máy chủ đã nhận thay đổi, nhưng QGIS chưa lưu được bản cục bộ. "
+                        "Giữ bản nháp và thử lại cùng giao dịch."
+                    )
+                info.pop("pending_write", None)
                 layer.startEditing()
                 info["content_revision"] = receipt.resulting_content_revision
-                self._managed_cursor = max(self._managed_cursor, receipt.event_cursor)
+                # A write receipt does not acknowledge other layers' earlier events.
                 total_ops += receipt.operation_count
 
             if total_ops == 0:
@@ -2082,7 +2177,7 @@ class OpenVietGisConnectorDialog(QDialog):
                     f"✓ Đã lưu thành công {total_ops} thay đổi lên Web."
                 )
                 self._managed_delta_debounce.start()
-        except OpenVietGisError as exc:
+        except (OpenVietGisError, ValueError, TypeError) as exc:
             self.ws_status.setText(
                 f"⚠ Server từ chối/chưa xác nhận lưu (bản nháp trên QGIS được giữ nguyên): {exc}"
             )
