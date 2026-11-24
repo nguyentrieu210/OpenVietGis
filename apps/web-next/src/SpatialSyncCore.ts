@@ -19,3 +19,19 @@ export async function parallelBounded<T>(items:readonly T[],concurrency:number,r
   }));
 }
 
+
+type RenderFeature={id?:string|number;geometry:unknown;properties:Record<string,unknown>|null};
+export function renderDiff<T extends RenderFeature>(before:readonly T[],after:readonly T[]){
+  const old=new Map(before.map(f=>[f.id,f])),next=new Map(after.map(f=>[f.id,f]));
+  if(old.size!==before.length||next.size!==after.length||old.has(undefined)||next.has(undefined))return null;
+  const remove:(string|number)[]=[],add:T[]=[],update:{id:string|number;newGeometry?:T["geometry"];removeAllProperties?:boolean;addOrUpdateProperties?:{key:string;value:unknown}[]}[]=[];
+  for(const id of old.keys())if(!next.has(id))remove.push(id!);
+  for(const [id,f] of next){
+    const previous=old.get(id);
+    if(!previous){add.push(f);continue;}
+    const geometryChanged=previous.geometry!==f.geometry&&JSON.stringify(previous.geometry)!==JSON.stringify(f.geometry);
+    const propertiesChanged=JSON.stringify(previous.properties)!==JSON.stringify(f.properties);
+    if(geometryChanged||propertiesChanged)update.push({id:id!,...(geometryChanged?{newGeometry:f.geometry}:{}),...(propertiesChanged?{removeAllProperties:true,addOrUpdateProperties:Object.entries(f.properties??{}).map(([key,value])=>({key,value}))}:{})});
+  }
+  return {remove,add,update};
+}

@@ -19,3 +19,14 @@ test('initial and incremental reads respect concurrency bound',async()=>{
   });
   assert.equal(peak,3);assert.equal(done,36);
 });
+
+test('one selection / edit among 35000 points produces one render update',async()=>{
+  const {renderDiff}=await import('./src/SpatialSyncCore.ts');
+  const rows=Array.from({length:35000},(_,i)=>({id:String(i),geometry:{type:'Point',coordinates:[i,1]},properties:{selected:false,color:'#aaa'}}));
+  const updated=rows.map((r,i)=>i===100?{...r,properties:{...r.properties,selected:true}}:r);
+  const start=performance.now();const diff=renderDiff(rows,updated);
+  assert.equal(diff.update.length,1);assert.equal(diff.update[0].id,'100');
+  assert.equal(diff.add.length+diff.remove.length,0);
+  console.log('35k render diff ms:',(performance.now()-start).toFixed(1));
+  assert.equal(renderDiff(rows,[...rows,rows[0]]),null);
+});
