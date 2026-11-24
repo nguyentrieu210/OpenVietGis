@@ -39,9 +39,7 @@ def test_managed_qgis_session_preserves_project_scope_and_edit_capability(
             assert client.get(f"{url}/{data['id']}").status_code == 200
 
 def test_real_pairing_credential_can_open_only_its_binding(migrated_database: None) -> None:
-    from tests.integration.spatial.test_layers import _create
-    from tests.integration.spatial.test_sources import _path as source_path
-    from tests.integration.spatial.test_sources import _register
+    from uuid import uuid4
 
     world = seed_access_world()
     foreign = seed_access_world()
@@ -49,8 +47,25 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
     bindings = root + "/bindings"
     sessions = root + "/managed/sessions"
     with _client(world.owner_user_id) as owner:
-        source = _register(owner, source_path(world), "reference_points_5899", "QGIS auth fixture")
-        layer = _create(owner, world, source["resource_id"], "QGIS auth layer")["resource_id"]
+        project = _root(world)
+        created = owner.post(project + "/layers/manual", json={
+            "operation_id": str(uuid4()), "name": "QGIS auth layer",
+            "geometry_family": "Point",
+            "fields": [{"field_id": "fld_name", "name": "Display name",
+                        "type": "text", "nullable": False}],
+        })
+        assert created.status_code == 201, created.text
+        layer = created.json()["layer_id"]
+        source = owner.get(project + "/layers/" + layer).json()["source"]
+        seed_url = project + "/sources/" + created.json()["source_id"] + "/changesets"
+        seed = owner.post(seed_url, json={
+            "operation_id": str(uuid4()), "base_content_revision": source["content_revision"],
+            "base_schema_revision": source["schema_revision"],
+            "operations": [{"op_type": "create", "feature_id": "initial",
+                            "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                            "properties": {"fld_name": "Initial"}}],
+        })
+        assert seed.status_code == 201, seed.text
         candidates = owner.get(bindings + "/candidates")
         assert candidates.status_code == 200, candidates.text
         candidate = next(row for row in candidates.json()["items"] if row["layer_id"] == layer)
@@ -58,8 +73,8 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         def pair(name):
             response = owner.post(bindings, json={
                 "layer_id": layer, "adapter_key": "qgis", "external_dataset_ref": name,
-                "direction": "bidirectional_manual", "source_crs_code": 5899,
-                "target_crs_code": 5899, "external_primary_key": "ovg_feature_id",
+                "direction": "bidirectional_manual", "source_crs_code": 4326,
+                "target_crs_code": 4326, "external_primary_key": "ovg_feature_id",
                 "allowed_field_ids": candidate["allowed_field_ids"],
             })
             assert response.status_code == 201, response.text
@@ -85,6 +100,45 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert response.status_code == 201, response.text
         assert response.json()["binding_id"] == bid
         assert response.json()["capabilities"]["can_edit"] is True
+        sid = response.json()["id"]
+        managed = root + "/managed"
+        page_response = device.get(managed + "/bootstrap", params={
+            "layer_id": layer, "session_id": sid, "limit": 1,
+        })
+        assert page_response.status_code == 200, page_response.text
+        page = page_response.json()
+        assert page["crs_code"] == 4326
+        assert page["fields"] and page["features"]
+        feature = page["features"][0]
+        assert set(feature["properties"]) == {field["name"] for field in page["fields"]}
+        assert feature["geometry"]["type"] == "Point"
+        second = device.post(sessions, json={"binding_id": bid})
+        assert second.status_code == 201, second.text
+        second_id = second.json()["id"]
+        commit = device.post(managed + "/commits", json={
+            "session_id": sid, "source_id": page["source_id"],
+            "base_content_revision": page["content_revision"],
+            "base_schema_revision": page["schema_revision"],
+            "operation_id": "qgis-fixture-create",
+            "operations": [{
+                "op_type": "create", "feature_id": "qgis-fixture-new",
+                "geometry": feature["geometry"], "properties": feature["properties"],
+            }],
+        })
+        assert commit.status_code == 201, commit.text
+        receipt = commit.json()
+        assert receipt["event_cursor"] > page["cursor"]
+        delta = device.get(managed + "/delta", params={
+            "session_id": second_id, "cursor": page["cursor"],
+        })
+        assert delta.status_code == 200, delta.text
+        assert any(
+            item["feature_id"] == "qgis-fixture-new"
+            for change in delta.json()["changes"] for item in change["upserts"]
+        )
+        recovered = device.get(managed + "/commits/qgis-fixture-create")
+        assert recovered.status_code == 200, recovered.text
+        assert recovered.json()["changeset_id"] == receipt["changeset_id"]
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
         assert device.post(_root(foreign) + "/integration-hub/managed/sessions",
                            json={"binding_id": bid}).status_code in (401, 403, 404)
