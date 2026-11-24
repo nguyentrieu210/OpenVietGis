@@ -1,10 +1,12 @@
 """WebSocket presence identity, access checks and peer lifecycle."""
 
 import pytest
+from sqlalchemy import text
 from starlette.websockets import WebSocketDisconnect
 
 from openvietgis_api.adapters.http.team_presence import Peer, update
 from openvietgis_api.config import get_settings
+from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
 
@@ -76,3 +78,17 @@ def test_presence_access_and_broadcast(migrated_database):
                     "cursor"
                 ] == [106.7, 10.8]
             assert len(a.receive_json()["users"]) == 1
+
+        # The WebSocket uses its own scope guard, not HTTP-only dependencies.
+        # A restricted editor must still be unable to subscribe to presence.
+        with get_admin_engine().begin() as db:
+            db.execute(
+                text(
+                    "INSERT INTO gis_access.scoped_members(organization_id,project_id,user_id) "
+                    "VALUES(:o,:p,:u)"
+                ),
+                {"o": world.organization_id, "p": world.project_id, "u": world.member_user_id},
+            )
+        with pytest.raises(WebSocketDisconnect):
+            with owner.websocket_connect(path, headers=headers(member)):
+                pass

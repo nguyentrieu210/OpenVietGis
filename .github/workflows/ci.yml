@@ -38,6 +38,12 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
+      - name: Install system GDAL runtime for raster fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin python3-gdal python3-numpy
+          /usr/bin/python3 -c "from osgeo import gdal, osr; import numpy; print(gdal.VersionInfo())"
+
       - name: Validate Python, contracts, scope, architecture and docs
         run: |
           uv run --project apps/api ruff check apps/api tools tests
@@ -120,6 +126,12 @@ jobs:
 
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
+
+      - name: Install system GDAL runtime for raster fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin python3-gdal python3-numpy
+          /usr/bin/python3 -c "from osgeo import gdal, osr; import numpy; print(gdal.VersionInfo())"
 
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium

@@ -127,7 +127,10 @@ def create_app() -> FastAPI:
     api_v1.include_router(tilesets.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(team_chat.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(team_locks.router, dependencies=[Depends(project_access_guard)])
-    api_v1.include_router(team_presence.router, dependencies=[Depends(project_access_guard)])
+    # WebSocket presence authenticates its cookie, checks project read and
+    # rejects scoped users in team_presence.authorize, including revalidation.
+    # HTTP-only Request dependencies cannot be injected into a WebSocket.
+    api_v1.include_router(team_presence.router)
     api_v1.include_router(team_realtime.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(field.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(extensions.router, dependencies=[Depends(project_access_guard)])
