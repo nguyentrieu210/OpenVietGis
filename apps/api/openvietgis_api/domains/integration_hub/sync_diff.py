@@ -36,7 +36,7 @@ class UploadedFeatureSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class SyncOperationPreview:
-    op_type: Literal["create", "update"]
+    op_type: Literal["create", "update", "delete"]
     feature_id: str
     geometry: dict[str, Any]
     properties: dict[str, Any]
@@ -52,6 +52,7 @@ class SyncDiffPlan:
     unchanged_count: int
     omitted_server_feature_ids: tuple[str, ...]
     diff_sha256: str
+    delete_count: int = 0
 
 
 def _normalize_coords(coords: Any, depth: int = 0) -> Any:
@@ -135,6 +136,7 @@ def compute_sync_diff(
     base_content_revision: str,
     base_schema_revision: str,
     max_operations: int = MAX_SYNC_OPERATIONS,
+    allow_deletes: bool = False,
 ) -> SyncDiffPlan:
     """Compute a deterministic, deletion-free sync diff plan.
 
@@ -208,14 +210,30 @@ def compute_sync_diff(
         )
         update_count += 1
 
+    missing_server_ids = sorted(fid for fid in server_by_id if fid not in seen_uploaded_ids)
+    delete_count = 0
+    if allow_deletes:
+        for fid in missing_server_ids:
+            operations.append(
+                SyncOperationPreview(
+                    op_type="delete",
+                    feature_id=fid,
+                    geometry={},
+                    properties={},
+                    changed_fields=(),
+                    geometry_changed=False,
+                )
+            )
+            delete_count += 1
+        omitted_server_feature_ids: tuple[str, ...] = ()
+    else:
+        omitted_server_feature_ids = tuple(missing_server_ids)
+
     if len(operations) > max_operations:
         raise ValueError(f"Sync push exceeds maximum {max_operations:,} changed operations")
 
     sorted_operations = tuple(
         sorted(operations, key=lambda op: (op.feature_id, op.op_type))
-    )
-    omitted_server_feature_ids = tuple(
-        sorted(fid for fid in server_by_id if fid not in seen_uploaded_ids)
     )
     diff_sha256 = _compute_diff_sha256(
         base_content_revision=base_content_revision,
@@ -229,4 +247,5 @@ def compute_sync_diff(
         unchanged_count=unchanged_count,
         omitted_server_feature_ids=omitted_server_feature_ids,
         diff_sha256=diff_sha256,
+        delete_count=delete_count,
     )

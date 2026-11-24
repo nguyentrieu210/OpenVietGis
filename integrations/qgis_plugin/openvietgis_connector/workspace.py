@@ -58,7 +58,7 @@ class Dataset:
 @dataclass(frozen=True)
 class LocalAction:
     feature_id: str
-    action: str  # "create" | "update"
+    action: str  # "create" | "update" | "delete"
     changed_fields: tuple[str, ...]
     geometry_changed: bool
 
@@ -240,7 +240,13 @@ def _compatible(base: Dataset, local: Dataset, remote: Dataset) -> None:
         raise WorkspaceConflict("Layer schema or CRS changed; manual remapping required.")
 
 
-def _plan(base: Dataset, local: Dataset, remote: Dataset):
+def _plan(
+    base: Dataset,
+    local: Dataset,
+    remote: Dataset,
+    *,
+    allow_deletes: bool = False,
+):
     to_local: list[LocalAction] = []
     to_remote: list[LocalAction] = []
     conflicts: list[str] = []
@@ -255,8 +261,31 @@ def _plan(base: Dataset, local: Dataset, remote: Dataset):
                 to_local.append(LocalAction(key, "create", base.fields, True))
             continue
         if l is None or r is None:
-            conflicts.append(f"{key}: deleted/missing on one side; deletion blocked")
-            continue
+            if not allow_deletes:
+                conflicts.append(f"{key}: deleted/missing on one side; deletion blocked")
+                continue
+            if l is None and r is None:
+                continue
+            if l is None and r is not None:
+                remote_changed = (
+                    any(r.attrs[f] != b.attrs[f] for f in base.fields)
+                    or r.canonical_geometry != b.canonical_geometry
+                )
+                if remote_changed:
+                    conflicts.append(f"{key}: deleted on QGIS while edited on Web")
+                else:
+                    to_remote.append(LocalAction(key, "delete", (), False))
+                continue
+            if r is None and l is not None:
+                local_changed = (
+                    any(l.attrs[f] != b.attrs[f] for f in base.fields)
+                    or l.canonical_geometry != b.canonical_geometry
+                )
+                if local_changed:
+                    conflicts.append(f"{key}: deleted on Web while edited on QGIS")
+                else:
+                    to_local.append(LocalAction(key, "delete", (), False))
+                continue
         changed_local = {f for f in base.fields if l.attrs[f] != b.attrs[f]}
         changed_remote = {f for f in base.fields if r.attrs[f] != b.attrs[f]}
         clashes = sorted(f for f in changed_local & changed_remote if l.attrs[f] != r.attrs[f])
@@ -344,7 +373,12 @@ def initialize_workspace(
     return root
 
 
-def preview_workspace(config: OpenVietGisConfig, root: str | Path) -> SyncPreview:
+def preview_workspace(
+    config: OpenVietGisConfig,
+    root: str | Path,
+    *,
+    allow_deletes: bool = False,
+) -> SyncPreview:
     folder = Path(root).expanduser().resolve()
     data = _manifest(folder, config)
     layer_id = str(UUID(data["layer_id"]))
@@ -362,8 +396,8 @@ def preview_workspace(config: OpenVietGisConfig, root: str | Path) -> SyncPrevie
     if downloaded.crs != f"EPSG:{base.crs}":
         raise WorkspaceConflict("Remote CRS changed.")
     _compatible(base, work, remote)
-    pull, push, conflicts = _plan(base, work, remote)
-    digest = hashlib.sha256(json.dumps({
+    pull, push, conflicts = _plan(base, work, remote, allow_deletes=allow_deletes)
+    digest_payload: dict[str, Any] = {
         "baseline": data["baseline_sha256"],
         "working": _sha(working_path),
         "remote": downloaded.sha256,
@@ -372,7 +406,12 @@ def preview_workspace(config: OpenVietGisConfig, root: str | Path) -> SyncPrevie
         "pull": [a.__dict__ for a in pull],
         "push": [a.__dict__ for a in push],
         "conflicts": conflicts,
-    }, sort_keys=True, default=lambda obj: list(obj)).encode()).hexdigest()
+    }
+    if allow_deletes:
+        digest_payload["allow_deletes"] = True
+    digest = hashlib.sha256(
+        json.dumps(digest_payload, sort_keys=True, default=lambda obj: list(obj)).encode()
+    ).hexdigest()
     return SyncPreview(
         folder, downloaded.path, _sha(working_path), data["baseline_sha256"],
         downloaded.sha256, downloaded.content_revision, downloaded.schema_revision,
@@ -388,6 +427,12 @@ def _apply_pull(working: Path, remote: Dataset, tasks: tuple[LocalAction, ...]) 
     with closing(sqlite3.connect(working)) as conn:
         conn.execute("BEGIN IMMEDIATE")
         for task in tasks:
+            if task.action == "delete":
+                conn.execute(
+                    f'DELETE FROM {_quote(local.table)} WHERE "ovg_feature_id"=?',
+                    (task.feature_id,),
+                )
+                continue
             source = remote.rows[task.feature_id]
             if task.action == "create":
                 cols = ("ovg_feature_id", local.geom_col, *local.fields)
@@ -463,6 +508,7 @@ def commit_workspace(
     preview: SyncPreview,
     *,
     confirmed_digest: str,
+    allow_deletes: bool = False,
 ) -> dict[str, Any]:
     """Human-confirmed manual sync. Close/QGIS-commit local layer before calling."""
     root = preview.workspace
@@ -491,12 +537,13 @@ def commit_workspace(
             config, layer_id=data["layer_id"], gpkg_path=merged,
             base_content_revision=preview.remote_content_revision,
             base_schema_revision=data["schema_revision"],
+            allow_deletes=allow_deletes,
         )
         if result.stale_revision or not result.can_commit:
             raise WorkspaceConflict("Remote changed since download; preview again.")
-        if (result.create_count + result.update_count) != remote_count:
+        if (result.create_count + result.update_count + result.delete_count) != remote_count:
             raise WorkspaceConflict("Server diff differs from reviewed edits; abort.")
-        if result.omitted_server_feature_count:
+        if not allow_deletes and result.omitted_server_feature_count:
             raise WorkspaceConflict("Server reports missing features; abort.")
         operation_id = str(uuid4())
         data["pending"] = {
@@ -513,7 +560,8 @@ def commit_workspace(
             base_schema_revision=data["schema_revision"],
             expected_diff_sha256=result.diff_sha256,
             operation_id=operation_id,
-            summary="R027 manual bidirectional QGIS workspace commit"
+            summary="R027 bidirectional QGIS workspace commit",
+            allow_deletes=allow_deletes,
         )
         if receipt.operation_count != remote_count:
             raise WorkspaceConflict("Unexpected server receipt count; recover pending operation.")
@@ -566,7 +614,7 @@ def commit_workspace(
         "new_content_revision": content_rev,
         "pulled": len(preview.to_local),
         "pushed": remote_count,
-        "deletions_blocked": True
+        "deletions_blocked": not allow_deletes,
     }
 
 

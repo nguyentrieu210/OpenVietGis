@@ -7,13 +7,16 @@ import {
   issueBindingPairingToken,
   listBindingConflicts,
   listBindingPairingTokens,
+  listChangesets,
   listIntegrationBindingDrafts,
   listQgisBindingCandidates,
   loadCsrfToken,
   resolveBindingConflict,
+  revertChangeset,
   revokeBindingPairingToken,
   type ApiClient,
   type BindingPairingToken,
+  type Changeset,
   type IntegrationBindingDraft,
   type IssuedPairingTokenResponse,
   type QgisBindingCandidate,
@@ -87,6 +90,10 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
   const [conflictsOpenId, setConflictsOpenId] = useState<string | null>(null);
   const [conflictsByBinding, setConflictsByBinding] = useState<Record<string, SyncConflictRecord[]>>({});
   const [mergeDrafts, setMergeDrafts] = useState<Record<string, string>>({});
+
+  // Version History & Revert state (Google Sheets style via R006)
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyByBinding, setHistoryByBinding] = useState<Record<string, Changeset[]>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -377,15 +384,70 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     }
   }
 
+  async function toggleHistory(binding: IntegrationBindingDraft) {
+    if (historyOpenId === binding.id) {
+      setHistoryOpenId(null);
+      return;
+    }
+    const sourceId = options.find((item) => item.layer_id === binding.layer_id)?.source_id;
+    if (!sourceId) {
+      setError("Không tìm thấy nguồn dữ liệu (source_id) của lớp này.");
+      return;
+    }
+    setHistoryOpenId(binding.id);
+    setError("");
+    try {
+      const res = await listChangesets(client, org, projectId, sourceId, 30);
+      setHistoryByBinding((prev) => ({ ...prev, [binding.id]: res.items }));
+    } catch {
+      setError("Không thể tải lịch sử phiên bản R006.");
+    }
+  }
+
+  async function undoVersion(binding: IntegrationBindingDraft, cs: Changeset) {
+    if (saving) return;
+    if (!confirm(`Hoàn tác phiên bản "${cs.summary}" (${cs.operation_count} thao tác)? Mọi đối tượng bị sửa hoặc xóa trong phiên bản này sẽ được khôi phục nguyên vẹn.`)) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const csrf = await loadCsrfToken(client);
+      const opId = typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `revert-${Date.now()}`;
+      await revertChangeset(
+        client,
+        org,
+        projectId,
+        cs.id,
+        opId,
+        csrf,
+        `Hoàn tác phiên bản: ${cs.summary}`.slice(0, 200)
+      );
+      const sourceId = options.find((item) => item.layer_id === binding.layer_id)?.source_id;
+      if (sourceId) {
+        const refreshed = await listChangesets(client, org, projectId, sourceId, 30);
+        setHistoryByBinding((prev) => ({ ...prev, [binding.id]: refreshed.items }));
+      }
+      setNotice(`✓ Đã khôi phục phiên bản thành công! QGIS và Web đang tự cập nhật realtime.`);
+    } catch {
+      setError("Không thể hoàn tác phiên bản (có thể dữ liệu đã thay đổi hoặc đã được hoàn tác).");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="integration-binding-manager is-compact" aria-label="Quản lý cấu hình QGIS R027">
       <header className="integration-binding-header">
         <h4>QGIS – Đồng bộ 2 chiều & Mã ghép nối (R027)</h4>
         <div className="integration-binding-links">
           <a
-            href="/rewrite/downloads/openvietgis_connector-0.7.0.zip"
-            download="openvietgis_connector-0.7.0.zip"
-          >⬇ Plugin QGIS 0.7.0 (Khung lớn · Đa lớp · 2 chiều)</a>
+            href="/rewrite/downloads/openvietgis_connector-0.8.0.zip"
+            download="openvietgis_connector-0.8.0.zip"
+          >⬇ Plugin QGIS 0.8.0 (Realtime · Cả Workspace · Hoàn tác)</a>
           {" · "}
           <a
             href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
@@ -491,6 +553,10 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                       <button type="button" className={openCount > 0 ? "is-conflict-alert" : ""} disabled={saving}
                         onClick={() => { void toggleConflicts(binding.id); }}>
                         ⚠ Xung đột ({openCount})
+                      </button>
+                      <button type="button" disabled={saving}
+                        onClick={() => { void toggleHistory(binding); }}>
+                        🕒 Lịch sử
                       </button>
                       {(binding.state === "draft" || binding.state === "active") && (
                         <button type="button" disabled={saving}
@@ -600,6 +666,35 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                                 ) : (
                                   <small>Đã chốt: <code>{formatJsonValue(c.resolved_value)}</code></small>
                                 )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {historyOpenId === binding.id && (
+                      <div className="integration-conflict-panel">
+                        <h6>🕒 Lịch sử phiên bản & Hoàn tác (giống Google Sheets · R006)</h6>
+                        {(historyByBinding[binding.id] ?? []).length === 0 ? (
+                          <p>Chưa có phiên bản chỉnh sửa nào trên lớp này.</p>
+                        ) : (
+                          <div className="integration-token-list">
+                            {(historyByBinding[binding.id] ?? []).map((cs) => (
+                              <div key={cs.id} className="integration-token-row">
+                                <span>
+                                  <strong>{cs.summary}</strong> · {cs.actor_display_snapshot} ·{" "}
+                                  {cs.operation_count} thao tác ·{" "}
+                                  {new Date(cs.created_at).toLocaleString("vi-VN")}
+                                  {cs.reverted_from_changeset_id ? " · (Bản khôi phục)" : ""}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() => { void undoVersion(binding, cs); }}
+                                >
+                                  ↩ Hoàn tác
+                                </button>
                               </div>
                             ))}
                           </div>

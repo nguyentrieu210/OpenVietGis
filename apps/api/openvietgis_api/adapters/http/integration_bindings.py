@@ -11,18 +11,23 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
 import re
+import time
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from sqlalchemy import text
-from sqlalchemy.engine import RowMapping
+from sqlalchemy.engine import RowMapping, make_url
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.authorization import context_for
@@ -43,6 +48,7 @@ from openvietgis_api.adapters.persistence.scope_helper import (
     prepare_project_scope,
 )
 from openvietgis_api.adapters.persistence.tenancy_repository import SqlTenancyRepository
+from openvietgis_api.config import get_settings
 from openvietgis_api.domains.authorization.permissions import Permission
 from openvietgis_api.domains.authorization.service import ServicePrincipalService
 from openvietgis_api.domains.integration_hub.profiles import is_explicit_readable_crs
@@ -430,6 +436,7 @@ def list_binding_candidates(
             continue
         items.append({
             "layer_id": str(row["layer_id"]),
+            "source_id": str(row["source_id"]),
             "layer_name": str(row["layer_name"]),
             "stored_crs_code": int(row["stored_crs"]),
             "geometry_family": str(row["geometry_family"]),
@@ -909,3 +916,81 @@ def resolve_binding_conflict(
         created_at=datetime.now(UTC),
     )
     return _public_conflict(resolved)
+
+
+_REALTIME_CHANNEL = "ovg_team_collaboration"
+_REALTIME_SLOTS = asyncio.Semaphore(40)
+
+
+async def _integration_event_stream(
+    request: Request,
+    organization_id: UUID,
+    project_id: UUID,
+) -> AsyncIterator[str]:
+    if _REALTIME_SLOTS.locked():
+        yield "event: unavailable\ndata: {}\n\n"
+        return
+    async with _REALTIME_SLOTS:
+        settings = get_settings()
+        dsn = (
+            make_url(settings.runtime_db_url)
+            .set(drivername="postgresql")
+            .render_as_string(hide_password=False)
+        )
+        try:
+            async with await psycopg.AsyncConnection.connect(
+                dsn, autocommit=True, connect_timeout=5
+            ) as conn:
+                await conn.execute("LISTEN " + _REALTIME_CHANNEL)
+                yield "retry: 3000\nevent: ready\ndata: {}\n\n"
+                heartbeat = time.monotonic() + 15.0
+                while not await request.is_disconnected():
+                    emitted = False
+                    async for notice in conn.notifies(
+                        timeout=max(0.05, heartbeat - time.monotonic()),
+                        stop_after=1,
+                    ):
+                        try:
+                            payload = json.loads(notice.payload)
+                        except ValueError:
+                            continue
+                        if (
+                            payload.get("o") == str(organization_id)
+                            and payload.get("p") == str(project_id)
+                            and payload.get("kind") == "spatial_change"
+                        ):
+                            yield "event: spatial_change\ndata: {}\n\n"
+                            emitted = True
+                    if not emitted and time.monotonic() >= heartbeat:
+                        yield ": heartbeat\n\n"
+                        heartbeat = time.monotonic() + 15.0
+                    elif emitted:
+                        heartbeat = time.monotonic() + 15.0
+        except psycopg.Error:
+            yield "event: unavailable\ndata: {}\n\n"
+
+
+@router.get(
+    "/organizations/{organization_id}/projects/{project_id}/integration-hub/events"
+)
+def stream_integration_spatial_events(
+    organization_id: UUID,
+    project_id: UUID,
+    request: Request,
+    auth: ReadAuth,
+    session: DB,
+) -> StreamingResponse:
+    """SSE stream of project spatial_change invalidations for QGIS/external Bearer clients."""
+    context = context_for(auth, organization_id=organization_id, project_id=project_id)
+    prepare_project_scope(
+        session, context, permission=Permission.PROJECT_READ, mutation=False
+    )
+    return StreamingResponse(
+        _integration_event_stream(request, organization_id, project_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )

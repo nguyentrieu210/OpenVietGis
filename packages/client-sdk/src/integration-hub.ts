@@ -617,6 +617,7 @@ export async function changeQgisBindingDraftLifecycle(
 /** Eligible verified 2D layers/fields for a QGIS binding draft (manager-only). */
 export interface QgisBindingCandidate {
   layer_id: string;
+  source_id?: string;
   layer_name: string;
   stored_crs_code: number;
   geometry_family: "Point" | "LineString" | "Polygon";

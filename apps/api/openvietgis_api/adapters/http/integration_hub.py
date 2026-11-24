@@ -730,6 +730,7 @@ def _prepare_sync_plan(
     file: UploadFile,
     base_content_revision: str,
     base_schema_revision: str,
+    allow_deletes: bool = False,
 ) -> _PreparedSyncContext:
     adapter = get_adapter(adapter_key)
     if adapter is None:
@@ -814,6 +815,7 @@ def _prepare_sync_plan(
             allowed_field_ids=allowed_field_ids,
             base_content_revision=base_content_revision,
             base_schema_revision=base_schema_revision,
+            allow_deletes=allow_deletes,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -1093,6 +1095,7 @@ def preview_integration_layer_sync(
     base_schema_revision: Annotated[str, Form(pattern=r"^[a-f0-9]{64}$")],
     auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
+    allow_deletes: Annotated[bool, Form()] = False,
 ) -> dict[str, object]:
     context = context_for(auth, organization_id=organization_id, project_id=project_id)
     prepare_project_scope(session, context, permission=Permission.PROJECT_EDIT)
@@ -1106,6 +1109,7 @@ def preview_integration_layer_sync(
         file=file,
         base_content_revision=base_content_revision,
         base_schema_revision=base_schema_revision,
+        allow_deletes=allow_deletes,
     )
     plan = prepared.plan
     return {
@@ -1120,9 +1124,10 @@ def preview_integration_layer_sync(
         "base_schema_revision": base_schema_revision,
         "current_schema_revision": prepared.current_schema_revision,
         "stale_revision": prepared.stale_revision,
-        "deletions_blocked": True,
+        "deletions_blocked": not allow_deletes,
         "create_count": plan.create_count,
         "update_count": plan.update_count,
+        "delete_count": plan.delete_count,
         "unchanged_count": plan.unchanged_count,
         "omitted_server_feature_count": len(plan.omitted_server_feature_ids),
         "omitted_server_feature_ids": list(
@@ -1130,7 +1135,7 @@ def preview_integration_layer_sync(
         ),
         "diff_sha256": plan.diff_sha256,
         "can_commit": not prepared.stale_revision
-        and (plan.create_count + plan.update_count) > 0,
+        and (plan.create_count + plan.update_count + plan.delete_count) > 0,
         "operations": [
             {
                 "op_type": op.op_type,
@@ -1162,6 +1167,7 @@ def push_integration_layer_sync(
     auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
     summary: Annotated[str, Form(max_length=500)] = "QGIS GeoPackage sync push",
+    allow_deletes: Annotated[bool, Form()] = False,
 ) -> dict[str, object]:
     context = context_for(auth, organization_id=organization_id, project_id=project_id)
     prepare_project_scope(session, context, permission=Permission.PROJECT_EDIT)
@@ -1182,6 +1188,7 @@ def push_integration_layer_sync(
         file=file,
         base_content_revision=base_content_revision,
         base_schema_revision=base_schema_revision,
+        allow_deletes=allow_deletes,
     )
     if prepared.stale_revision:
         raise HTTPException(
@@ -1201,15 +1208,21 @@ def push_integration_layer_sync(
     if len(plan.operations) == 0:
         raise HTTPException(
             status_code=409,
-            detail="No material creates or updates to sync.",
+            detail="No material creates, updates, or deletes to sync.",
         )
 
     edit_operations = [
         EditOperationInput(
-            op_type=EditOpType.CREATE if op.op_type == "create" else EditOpType.UPDATE,
+            op_type=(
+                EditOpType.CREATE
+                if op.op_type == "create"
+                else EditOpType.DELETE
+                if op.op_type == "delete"
+                else EditOpType.UPDATE
+            ),
             feature_id=op.feature_id,
-            geometry=op.geometry,
-            properties=op.properties,
+            geometry=None if op.op_type == "delete" else op.geometry,
+            properties=None if op.op_type == "delete" else op.properties,
         )
         for op in plan.operations
     ]
@@ -1233,8 +1246,9 @@ def push_integration_layer_sync(
         "operation_count": changeset.operation_count,
         "create_count": plan.create_count,
         "update_count": plan.update_count,
+        "delete_count": plan.delete_count,
         "omitted_server_feature_count": len(plan.omitted_server_feature_ids),
-        "deletions_blocked": True,
+        "deletions_blocked": not allow_deletes,
         "diff_sha256": plan.diff_sha256,
         "audit_event_id": str(changeset.audit_event_id),
     }

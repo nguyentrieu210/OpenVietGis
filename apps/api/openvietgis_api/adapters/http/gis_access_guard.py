@@ -33,6 +33,7 @@ SAFE_GET = {
     "/integration-hub/catalog",
     "/integration-hub/adapters/{adapter_key}",
     "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export",
+    "/integration-hub/events",
 }
 SAFE_POST = {
     "/sources/{source_id}/changesets",

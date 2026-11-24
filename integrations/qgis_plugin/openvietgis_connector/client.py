@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-USER_AGENT = "OpenVietGIS-QGIS-Connector/0.3.0"
+USER_AGENT = "OpenVietGIS-QGIS-Connector/0.8.0"
 DEFAULT_PROFILE_TIMEOUT_SECONDS = 30.0
 DEFAULT_EXPORT_TIMEOUT_SECONDS = 60.0
 DEFAULT_SYNC_TIMEOUT_SECONDS = 60.0
@@ -326,6 +326,7 @@ class SyncPreviewResult:
     diff_sha256: str
     can_commit: bool
     operations: tuple[dict[str, Any], ...]
+    delete_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -341,6 +342,17 @@ class SyncPushResult:
     deletions_blocked: bool
     diff_sha256: str
     audit_event_id: str
+    delete_count: int = 0
+
+
+def build_integration_events_url(config: OpenVietGisConfig) -> str:
+    """Build the authenticated SSE endpoint URL for project spatial change events."""
+    if not isinstance(config, OpenVietGisConfig):
+        raise ConfigurationError("config must be an OpenVietGisConfig instance.")
+    return (
+        f"{config.base_url}/api/v1/organizations/{config.organization_id}"
+        f"/projects/{config.project_id}/integration-hub/events"
+    )
 
 
 def _execute_request(
@@ -790,10 +802,11 @@ def preview_layer_geopackage_sync(
     gpkg_path: str | Path,
     base_content_revision: str,
     base_schema_revision: str,
+    allow_deletes: bool = False,
     opener: Callable[..., Any] | Any | None = None,
     timeout: float = DEFAULT_SYNC_TIMEOUT_SECONDS,
 ) -> SyncPreviewResult:
-    """Preview non-destructive GeoPackage edits against a pinned server layer revision."""
+    """Preview GeoPackage edits against a pinned server layer revision."""
     if not isinstance(config, OpenVietGisConfig):
         raise ConfigurationError("config must be an OpenVietGisConfig instance.")
     validated_layer_id = _validate_uuid(layer_id, "layer_id")
@@ -801,11 +814,15 @@ def preview_layer_geopackage_sync(
     validated_schema_rev = _validate_sha256_hex(base_schema_revision, "base_schema_revision")
     filename, gpkg_bytes = _read_validated_gpkg(gpkg_path)
 
+    fields = {
+        "base_content_revision": validated_content_rev,
+        "base_schema_revision": validated_schema_rev,
+    }
+    if allow_deletes:
+        fields["allow_deletes"] = "true"
+
     body, content_type_header = _build_multipart_body(
-        fields={
-            "base_content_revision": validated_content_rev,
-            "base_schema_revision": validated_schema_rev,
-        },
+        fields=fields,
         file_field="file",
         filename=filename,
         payload=gpkg_bytes,
@@ -839,6 +856,7 @@ def preview_layer_geopackage_sync(
         deletions_blocked=_require_bool_field(payload, "deletions_blocked", context=ctx),
         create_count=_require_int_field(payload, "create_count", context=ctx, minimum=0),
         update_count=_require_int_field(payload, "update_count", context=ctx, minimum=0),
+        delete_count=int(payload.get("delete_count", 0)),
         unchanged_count=_require_int_field(payload, "unchanged_count", context=ctx, minimum=0),
         omitted_server_feature_count=_require_int_field(
             payload, "omitted_server_feature_count", context=ctx, minimum=0
@@ -859,6 +877,7 @@ def push_layer_geopackage_sync(
     expected_diff_sha256: str,
     operation_id: str,
     summary: str = "QGIS GeoPackage sync push",
+    allow_deletes: bool = False,
     opener: Callable[..., Any] | Any | None = None,
     timeout: float = DEFAULT_SYNC_TIMEOUT_SECONDS,
 ) -> SyncPushResult:
@@ -873,14 +892,18 @@ def push_layer_geopackage_sync(
     validated_summary = _validate_summary(summary)
     filename, gpkg_bytes = _read_validated_gpkg(gpkg_path)
 
+    fields = {
+        "base_content_revision": validated_content_rev,
+        "base_schema_revision": validated_schema_rev,
+        "operation_id": validated_operation_id,
+        "expected_diff_sha256": validated_diff_sha,
+        "summary": validated_summary,
+    }
+    if allow_deletes:
+        fields["allow_deletes"] = "true"
+
     body, content_type_header = _build_multipart_body(
-        fields={
-            "base_content_revision": validated_content_rev,
-            "base_schema_revision": validated_schema_rev,
-            "operation_id": validated_operation_id,
-            "expected_diff_sha256": validated_diff_sha,
-            "summary": validated_summary,
-        },
+        fields=fields,
         file_field="file",
         filename=filename,
         payload=gpkg_bytes,
@@ -910,6 +933,7 @@ def push_layer_geopackage_sync(
         operation_count=_require_int_field(payload, "operation_count", context=ctx, minimum=0),
         create_count=_require_int_field(payload, "create_count", context=ctx, minimum=0),
         update_count=_require_int_field(payload, "update_count", context=ctx, minimum=0),
+        delete_count=int(payload.get("delete_count", 0)),
         omitted_server_feature_count=_require_int_field(
             payload, "omitted_server_feature_count", context=ctx, minimum=0
         ),
