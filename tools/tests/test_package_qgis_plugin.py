@@ -21,6 +21,8 @@ def test_plugin_zip_installable_deterministic_and_no_secrets(tmp_path: Path) -> 
         "openvietgis_connector/metadata.txt",
         "openvietgis_connector/client.py",
         "openvietgis_connector/managed_client.py",
+        "openvietgis_connector/drafts.py",
+        "openvietgis_connector/browser_login.py",
         "openvietgis_connector/plugin.py",
         "openvietgis_connector/workspace.py",
         "openvietgis_connector/README.md",

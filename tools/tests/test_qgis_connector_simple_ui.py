@@ -31,7 +31,7 @@ def test_simple_plugin_preserves_edit_recovery_guards() -> None:
     source = PLUGIN.read_text(encoding="utf-8")
     assert 'if state.get("pending"):' in source
     assert 'self._managed_delta_debounce.start()' in source
-    assert 'if isinstance(local_layer, QgsVectorLayer) and local_layer.isModified():' in source
+    assert 'local_layer.isModified() or self._managed_is_dirty(local_layer, info)' in source
     assert 'def _on_recover_workspace(self)' in source
     assert 'if self._managed_layers:' in source
     assert '"Còn chỉnh sửa chưa lưu"' in source
@@ -41,7 +41,7 @@ def test_simple_plugin_preserves_edit_recovery_guards() -> None:
 def test_download_and_version_are_consistent() -> None:
     web = WEB.read_text(encoding="utf-8")
     meta = (PLUGIN.parent / "metadata.txt").read_text(encoding="utf-8")
-    assert 'version=0.9.3' in meta
-    assert 'openvietgis_connector-0.9.3.zip' in web
+    assert 'version=1.0.0' in meta
+    assert 'openvietgis_connector-1.0.0.zip' in web
     assert '⬇ Tải công cụ QGIS' in web
     assert 'R029 Managed Realtime (Không .gpkg)' not in PLUGIN.read_text(encoding="utf-8")

@@ -1,17 +1,18 @@
 # OpenVietGIS · Công cụ kết nối QGIS
 
-**Cách sử dụng (phiên bản 0.9.3):**
+**Cách sử dụng (phiên bản 1.0.0):**
 
-1. Trên [OpenVietGIS Web](https://openvietgis.cloud), mở dự án → **Lấy mã kết nối**.
-2. Trong QGIS, mở **Kết nối OpenVietGIS**, dán mã và bấm **Kết nối**.
+1. Trong QGIS, bấm **Đăng nhập bằng tài khoản OpenVietGIS**. Trình duyệt mở trang xác thực chính thức.
+2. Chọn tổ chức, dự án và cấp quyền. Plugin nhận khóa kết nối qua callback cục bộ một lần (5 phút); không nhập mật khẩu trong QGIS. Có thể dùng mã kết nối thủ công nếu trình duyệt chặn callback.
 3. Tích chọn các lớp → **Mở bản đồ trong QGIS**.
-4. Biên tập rồi bấm **Lưu thay đổi lên Web** trong công cụ. Trình đồng bộ nhận thông báo cập nhật từ nhóm qua realtime; các thao tác chỉnh sửa chỉ được gửi lên Web sau khi người dùng xác nhận lưu.
+4. Biên tập rồi bấm **Lưu thay đổi lên Web**. Có thể bật **Tự lưu thay đổi lên Web (không tự xóa)**; công cụ lưu theo chu kỳ 10 giây, dừng khi có lỗi hoặc xung đột, không tự xóa đối tượng. Web → QGIS nhận sự kiện realtime và có kiểm tra dự phòng.
+5. Bản nháp được ghi mỗi 3 giây trong thư mục profile QGIS, và ngay trước khi gửi giao dịch. Khi mở lại cùng dự án, plugin đối chiếu ba chiều; nếu có xung đột, thay đổi quyền hoặc giao dịch chưa rõ kết quả, giữ nguyên journal và chặn ghi. Bản nháp nằm trên máy và có thể chứa dữ liệu GIS nhạy cảm; bảo vệ profile Windows/Linux/macOS.
 
 **Tùy chọn & khôi phục:** Các thao tác GeoPackage cũ, xem trước, đồng bộ bằng tệp và khôi phục giao dịch nằm ở phần nâng cao. Nếu có giao dịch trước đó chưa rõ kết quả, **không xóa `workspace.json`, `baseline.gpkg`, `working.gpkg` hay `.pending-merged.gpkg`**. Dùng **Khôi phục giao dịch** để đối chiếu dữ liệu trước khi làm tiếp.
 
-**An toàn dữ liệu:** Công cụ cần `project.read` để mở lớp và `project.edit` cùng GIS ACL để lưu. Không tự xóa dữ liệu theo mặc định. Không mở đồng thời một lớp bằng hai chế độ đồng bộ. Bản nháp chưa gửi từ QGIS không phải bản sao lưu bền vững nếu QGIS bị đóng đột ngột; hãy lưu lên Web hoặc xuất tệp dự phòng trước khi thoát.
+**An toàn dữ liệu:** Công cụ cần `project.read` để mở lớp và `project.edit` cùng GIS ACL để lưu. Không tự xóa dữ liệu theo mặc định. Không mở đồng thời một lớp bằng hai chế độ đồng bộ. Nút Save gốc của QGIS chỉ lưu trong lớp cục bộ; công cụ phát hiện thay đổi qua baseline và vẫn cần bấm Lưu thay đổi lên Web. Journal cục bộ có cửa sổ tối đa khoảng 3 giây trong điều kiện bình thường; không thay thế bản sao lưu dự án. Hãy lưu lên Web hoặc xuất tệp dự phòng trước khi thoát.
 
-**Lưu ý:** Công cụ vẫn đang thử nghiệm. Không dùng dữ liệu không có quyền truy cập, không gỡ bỏ các kiểm tra phiên/CRS/revision. Các mã R026/R027/R029 là tên đặc tả kỹ thuật nội bộ, không phải chế độ người dùng cần lựa chọn.
+**Lưu ý:** Bản 1.0.0 đang ở trạng thái ứng viên nghiệm thu; chỉ dùng dữ liệu thử nghiệm trước khi kiểm tra QGIS thật và máy chủ. Không dùng dữ liệu không có quyền truy cập, không gỡ bỏ các kiểm tra phiên/CRS/revision. Các mã R026/R027/R029 là tên đặc tả kỹ thuật nội bộ, không phải chế độ người dùng cần lựa chọn.
 
 ---
 
@@ -25,7 +26,7 @@
 | **Không truy cập CSDL nội bộ / No Direct Internal DB Access** | OpenVietGIS **không bao giờ** cấp host, cổng, hay tài khoản PostgreSQL/PostGIS nội bộ. Mọi trao đổi đều đi qua HTTPS API có xác thực, RLS, và kiểm soát ACL theo từng lớp/đối tượng. |
 | **Bảo toàn hệ tọa độ VN-2000 / Explicit CRS Preserved** | Chỉ xuất và đồng bộ các lớp có CRS tường minh theo danh mục R003 (ví dụ: `EPSG:4756`, `EPSG:5899`, `EPSG:4326`, `EPSG:3857`). Không bao giờ tự đoán CRS từ tọa độ; các lớp thiếu CRS hoặc chỉ ở mức khai báo (`EPSG:3405`, `EPSG:3406`) bị chặn xuất và chặn đồng bộ. |
 | **Kiểm tra toàn vẹn SHA-256 / Fail-Closed SHA-256** | Mọi tệp `.gpkg` tải về bắt buộc có header `X-Content-SHA256` hợp lệ và khớp chính xác trước khi ghi nguyên tử ra đĩa và nạp vào QGIS. |
-| **An toàn khóa API / Bearer Key Hygiene** | Khóa Service Principal nhập qua ô ẩn mật khẩu, chỉ giữ trong bộ nhớ tạm khi mở hộp thoại, tự xóa khi đóng và **không bao giờ** lưu dạng văn bản thuần vào tệp dự án QGIS (`.qgs`/`.qgz`). |
+| **An toàn khóa API / Bearer Key Hygiene** | Khóa Service Principal nhập qua ô ẩn mật khẩu, chỉ giữ trong bộ nhớ khi sử dụng; Windows có tùy chọn ghi nhớ bằng DPAPI, Linux/macOS không lưu token và **không bao giờ** lưu dạng văn bản thuần vào tệp dự án QGIS (`.qgs`/`.qgz`). |
 | **Tách biệt phạm vi R010 & R025 / Scope Boundaries** | Kết nối WMS/WMTS/WFS/COG từ xa thuộc R010 (`external-sources`); cầu nối MicroStation V8i thuộc nhánh R025 Windows riêng biệt. Không liên kết thư viện nhị phân độc quyền của hãng thứ ba. |
 
 ---

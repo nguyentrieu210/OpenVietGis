@@ -24,14 +24,17 @@ def main() -> None:
     app.initQgis()
     try:
         dialog = OpenVietGisConnectorDialog()
-        assert dialog.ws_create_button.text().startswith("1.")
-        assert dialog.ws_preview_button.text().startswith("2.")
+        assert dialog.r029_open_button.text() == "Mở bản đồ trong QGIS"
+        assert dialog.r029_save_button.text() == "Lưu thay đổi lên Web"
+        assert not dialog.r029_save_button.isEnabled()
+        assert not dialog.managed_auto_save.isChecked()
+        assert dialog.browser_login_button.isEnabled()
         assert dialog.ws_commit_button.isEnabled() is False
         assert dialog.ws_recover_button.text()
         assert dialog.bearer_key_input.echoMode() == dialog.bearer_key_input.Password
         assert dialog._workspace_preview is None
         dialog.close()
-        print("PASS PyQGIS native plugin window: manual sync controls and default deny")
+        print("PASS PyQGIS native plugin window: primary controls, browser login and default deny")
     finally:
         app.exitQgis()
 
