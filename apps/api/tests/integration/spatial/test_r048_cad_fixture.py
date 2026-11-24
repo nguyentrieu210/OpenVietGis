@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import math
+from copy import deepcopy
 from uuid import UUID
 
 import ezdxf
@@ -15,8 +16,9 @@ from openvietgis_api.domains.cad.georeference import (
     fit_placement,
     fit_web_placement,
     place_features,
+    restore_features,
 )
-from openvietgis_api.domains.platform_errors import PlatformValidationError
+from openvietgis_api.domains.platform_errors import PlatformConflictError, PlatformValidationError
 
 DOC = UUID("00000000-0000-4000-8000-000000000048")
 
@@ -126,3 +128,108 @@ def test_invalid_controls_and_unsupported_crs_fail_closed():
                 max_scale_deviation=0.001,
             )
         assert err.value.code == "CAD_GEOREFERENCE_INVALID"
+
+
+def _paired_placement():
+    return fit_web_placement(
+        document_id=DOC,
+        version=2,
+        crs_code=5899,
+        units=CadUnit.MILLIMETER,
+        controls=(
+            ((0, 0), (440000, 2290000)),
+            ((8000, 0), (440000, 2290008)),
+            ((0, 3000), (439997, 2290000)),
+        ),
+        web_controls=(
+            ((0, 0), (11929000, 2359000)),
+            ((8000, 0), (11929000, 2359008)),
+            ((0, 3000), (11928997, 2359000)),
+        ),
+        tolerance_m=0.001,
+        max_scale_deviation=0.001,
+    )
+
+
+def test_inverse_edit_to_local_dxf_roundtrip():
+    placement = _paired_placement()
+    _, local, _, _ = parse_dxf_2d(drawing(), units=CadUnit.MILLIMETER)
+    projected = deepcopy(local)
+    place_features(projected, placement)
+    # Simulate a reviewed GIS edit: change the local 8 m width to 9 m.
+    ring = projected[0]["geometry"]["coordinates"][0]
+    ring[1][1] += 1
+    ring[2][1] += 1
+    snapshot = deepcopy(projected)
+    restored = restore_features(
+        projected, placement, document_id=DOC, version=2, source_crs_code=3857
+    )
+    assert projected == snapshot
+    assert restored[0]["feature_id"] == local[0]["feature_id"]
+    assert restored[0]["attributes"] == local[0]["attributes"]
+    payload = write_dxf_2d(restored, layer_name="R048", units=CadUnit.MILLIMETER)
+    _, reread, _, _ = parse_dxf_2d(payload, units=CadUnit.MILLIMETER)
+    expected = [(0, 0), (9, 0), (9, 3), (0, 3), (0, 0)]
+    for a, b in zip(reread[0]["geometry"]["coordinates"][0], expected, strict=True):
+        assert math.dist(a, b) <= 0.001
+    place_features(reread, placement)
+    for a, b in zip(reread[0]["geometry"]["coordinates"][0], ring, strict=True):
+        assert math.dist(a, b) <= 0.001
+
+
+@pytest.mark.parametrize("kind", ["Point", "LineString", "Polygon"])
+def test_inverse_supported_geometry_non_mutating(kind):
+    placement = _paired_placement()
+    a, b, c = [list(placement.transform_m(x)) for x in [(0, 0), (8, 0), (8, 3)]]
+    coords = a if kind == "Point" else [a, b] if kind == "LineString" else [[a, b, c, a]]
+    features = [{"feature_id": "test", "geometry": {"type": kind, "coordinates": coords}}]
+    original = deepcopy(features)
+    restored = restore_features(
+        features, placement, document_id=DOC, version=2, source_crs_code=3857
+    )
+    assert original == features
+    place_features(restored, placement)
+    assert restored[0]["geometry"]["type"] == kind
+    expected = [a] if kind == "Point" else [a, b] if kind == "LineString" else [a, b, c, a]
+    got = restored[0]["geometry"]["coordinates"]
+    actual = [got] if kind == "Point" else got if kind == "LineString" else got[0]
+    for p, q in zip(actual, expected, strict=True):
+        assert math.dist(p, q) <= 0.001
+
+
+def test_inverse_rejects_stale_version_wrong_crs_z_and_radius():
+    placement = _paired_placement()
+    feature = {"geometry": {"type": "Point", "coordinates": [11929000, 2359000]}}
+    for doc, version in [(UUID(int=1), 2), (DOC, 1)]:
+        with pytest.raises(PlatformConflictError) as err:
+            restore_features(
+                [feature], placement, document_id=doc, version=version, source_crs_code=3857
+            )
+        assert err.value.code == "STALE_CAD_REVISION"
+    for crs in (4326, 5899):
+        with pytest.raises(PlatformValidationError):
+            restore_features([feature], placement, document_id=DOC, version=2, source_crs_code=crs)
+    for coords in ([11929000, 2359000, 1], [float("nan"), 0], [11949000, 2359000]):
+        with pytest.raises(PlatformValidationError):
+            restore_features(
+                [{"geometry": {"type": "Point", "coordinates": coords}}],
+                placement,
+                document_id=DOC,
+                version=2,
+                source_crs_code=3857,
+            )
+
+
+def test_inverse_rejects_open_ring_and_unsupported_geometry():
+    placement = _paired_placement()
+    a = [11929000, 2359000]
+    b = [11929000, 2359001]
+    c = [11928999, 2359001]
+    for geom in (
+        {"type": "Polygon", "coordinates": [[a, b, c, b]]},
+        {"type": "MultiPoint", "coordinates": [a, b]},
+    ):
+        with pytest.raises(PlatformValidationError):
+            restore_features(
+                [{"geometry": geom}], placement, document_id=DOC, version=2, source_crs_code=3857
+            )
