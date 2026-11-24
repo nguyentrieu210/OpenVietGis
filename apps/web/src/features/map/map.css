@@ -651,7 +651,7 @@
 }
 
 /* Hide redundant floating toggle pills inside map layout because Ribbon & Statusbar already control panels */
-.gis-workstation-main .map-layout-controls {
+.gis-workstation-main .map-workspace-layout:not(.is-mobile) .map-layout-controls {
   display: none !important;
 }
 .gis-workstation-main .map-inspector {

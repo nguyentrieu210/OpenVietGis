@@ -11,7 +11,8 @@ async function hnSignIn(page: Page, member = false): Promise<void> {
   await page.locator("#username").fill(member ? "member-a" : "owner-a");
   await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
   await page.locator("#kc-login").click();
-  await expect(page.getByText(member ? "Member Alpha" : "Owner Alpha", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mở menu tài khoản" }))
+    .toContainText(member ? "Member Alpha" : "Owner Alpha");
 }
 
 test.use({ viewport: { width: 1440, height: 1000 }, trace: "off", screenshot: "off", video: "off" });

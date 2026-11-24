@@ -119,7 +119,9 @@ test("three real 10000-feature reference layers settle and pick a real rendered 
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-feature-id","point-000001");
   const extentDetail=page.waitForResponse(r=>new URL(r.url()).pathname===fixture.api+"/layers/"+points.id+"/features/point-000001");
   const selectedViewport=page.waitForResponse(r=>new URL(r.url()).pathname===fixture.api+"/layers/"+points.id+"/viewport");
-  await page.getByRole("button",{name:"Thu phóng vùng chọn",exact:true}).click();
+  const command = page.getByRole("textbox", { name: "Nhập lệnh bản đồ" });
+  await command.fill("ZS");
+  await command.press("Enter");
   expect((await extentDetail).status()).toBe(200);
   const selectedFrame=await selectedViewport;
   expect(selectedFrame.status()).toBe(200);

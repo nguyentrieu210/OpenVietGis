@@ -111,12 +111,12 @@ test("supports keyboard and textual alternatives across the GIS workspace", asyn
 
   // Focus indication is not color-only/hidden.
   await page
-    .getByLabel("Điều khiển bố cục")
-    .getByRole("button", { name: "Lớp dữ liệu", exact: true })
+    .getByRole("complementary", { name: "Thanh công cụ GIS dọc" })
+    .getByRole("button", { name: "Lớp", exact: true })
     .focus();
   const focusStyle = await page
-    .getByLabel("Điều khiển bố cục")
-    .getByRole("button", { name: "Lớp dữ liệu", exact: true })
+    .getByRole("complementary", { name: "Thanh công cụ GIS dọc" })
+    .getByRole("button", { name: "Lớp", exact: true })
     .evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -130,9 +130,8 @@ test("supports keyboard and textual alternatives across the GIS workspace", asyn
   // Search activates an exact currently authorized map layer and exposes the
   // observed (not inferred) content/schema pins only in the secondary inspector.
   async function searchCommand(label: string) {
-    await page.getByText("Tìm nhanh lệnh", { exact: true }).click();
-    await page.getByRole("textbox", { name: "Tìm lệnh bản đồ" }).fill(label);
-    await page.getByRole("button", { name: label, exact: true }).click();
+    await page.getByRole("textbox", { name: "Nhập lệnh bản đồ" }).fill(label);
+    await page.getByRole("option").filter({ hasText: label }).click();
   }
   await searchCommand("Mở lớp: Points");
   await expect(page.getByTestId("accessible-map-summary")).toContainText("Lớp hiện hành: Points");

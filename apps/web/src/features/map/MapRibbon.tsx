@@ -123,6 +123,7 @@ export function MapRibbon({
         <button
           type="button"
           className={tableOpen ? "is-on" : undefined}
+          aria-pressed={tableOpen}
           onClick={onToggleTable}
         >
           Bảng thuộc tính
@@ -130,6 +131,7 @@ export function MapRibbon({
         <button
           type="button"
           className={rightOpen ? "is-on" : undefined}
+          aria-pressed={rightOpen}
           onClick={onToggleRight}
         >
           Chi tiết
@@ -137,6 +139,7 @@ export function MapRibbon({
         <button
           type="button"
           className={cmdLineOpen ? "is-on" : undefined}
+          aria-pressed={cmdLineOpen}
           title="Bật / Tắt dòng lệnh AutoCAD (phím /)"
           onClick={onToggleCmdLine}
         >

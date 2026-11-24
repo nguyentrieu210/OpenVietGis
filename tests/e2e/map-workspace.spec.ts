@@ -119,7 +119,9 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
   const extentDetail = page.waitForResponse(response =>
     new URL(response.url()).pathname.endsWith("/features/point-000001") && response.request().method() === "GET"
   );
-  await page.getByRole("button", { name: "Thu phóng vùng chọn", exact: true }).click();
+  const command = page.getByRole("textbox", { name: "Nhập lệnh bản đồ" });
+  await command.fill("ZS");
+  await command.press("Enter");
   expect((await extentDetail).status()).toBe(200);
   await expect(page.getByTestId("map-engine-ready")).toHaveAttribute("data-ready", "true");
   await page.keyboard.press("Escape");
@@ -144,6 +146,7 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
   await page.getByRole("button", { name: "Đưa Polygons lên trên", exact: true }).click();
   await page.getByTestId("map-layer-" + points.id).getByText("Tùy chỉnh hiển thị", { exact: true }).click();
   await page.getByTestId("color-" + points.id).fill("#224466");
+  await page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ }).click();
   const shared = page.getByRole("region", { name: "Cấu hình bản đồ dùng chung" });
   const savedResponse = page.waitForResponse(response =>
     new URL(response.url()).pathname === fixture.api + "/map" && response.request().method() === "PUT"
@@ -336,6 +339,7 @@ test("two real actors receive CAS conflicts and revoked access clears a warm ren
     await openFixtureMap(owner, fixture);
     await openFixtureMap(editor, fixture);
     await owner.getByRole("checkbox", { name: "Hiển thị Points", exact: true }).uncheck();
+    await owner.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ }).click();
     await owner.getByRole("region", { name: "Cấu hình bản đồ dùng chung" })
       .getByRole("button", { name: "Lưu bản đồ", exact: true }).click();
     await expect(owner.getByTestId("map-save-indicator")).toHaveAttribute(
@@ -345,6 +349,7 @@ test("two real actors receive CAS conflicts and revoked access clears a warm ren
     await expect(owner.getByTestId("map-save-indicator")).toContainText(
       "Đã lưu phiên bản bản đồ 2"
     );
+    await editor.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ }).click();
     const shared = editor.getByRole("region", { name: "Cấu hình bản đồ dùng chung" });
     await shared.getByRole("button", { name: "Xóa góc nhìn mặc định", exact: true }).click();
     await shared.getByRole("button", { name: "Lưu bản đồ", exact: true }).click();
@@ -402,6 +407,7 @@ test("a real viewer can preview locally while direct shared mutation stays denie
     await openFixtureMap(viewer, fixture);
     await viewer.getByRole("checkbox", { name: "Hiển thị Points", exact: true }).uncheck();
     await expect(viewer.getByRole("checkbox", { name: "Hiển thị Points", exact: true })).not.toBeChecked();
+    await viewer.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ }).click();
     await expect(viewer.getByRole("region", { name: "Cấu hình bản đồ dùng chung" })
       .getByRole("button", { name: "Lưu bản đồ", exact: true })).toBeDisabled();
     const attempted = await mapMutation(viewer, fixture.api + "/map", "PUT", {
@@ -460,9 +466,13 @@ test("keeps camera and selection stable across panel collapse and keyboard resiz
     .getByTestId("map-camera-summary")
     .innerText();
 
-  const controls = page.getByLabel("Điều khiển bố cục");
-  for (const label of ["Lớp dữ liệu", "Chi tiết", "Bảng thuộc tính"]) {
-    const button = controls.getByRole("button", { name: label, exact: true });
+  const controls = page.getByRole("navigation", { name: "Lệnh bản đồ" });
+  const layerToggle = page.getByRole("complementary", { name: "Thanh công cụ GIS dọc" })
+    .getByRole("button", { name: "Lớp", exact: true });
+  const panelToggles = ["Chi tiết", "Bảng thuộc tính"].map(name =>
+    controls.getByRole("button", { name, exact: true })
+  );
+  for (const button of [layerToggle, ...panelToggles]) {
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "false");
   }
@@ -473,10 +483,6 @@ test("keeps camera and selection stable across panel collapse and keyboard resiz
     "point-000001"
   );
 
-  const layerToggle = controls.getByRole("button", {
-    name: "Lớp dữ liệu",
-    exact: true
-  });
   await layerToggle.click();
   await expect(layerToggle).toHaveAttribute("aria-pressed", "true");
 
@@ -491,8 +497,7 @@ test("keeps camera and selection stable across panel collapse and keyboard resiz
     String(widthBefore)
   );
 
-  for (const label of ["Chi tiết", "Bảng thuộc tính"]) {
-    const button = controls.getByRole("button", { name: label, exact: true });
+  for (const button of panelToggles) {
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
   }
@@ -519,11 +524,11 @@ test("warns only for unsaved shared configuration changes", async ({ page }) => 
   await saveFixtureMap(page, fixture);
   await openFixtureMap(page, fixture);
 
-  const indicator = page.getByTestId("map-save-indicator");
+  const indicator = page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ });
   await expect(indicator).toHaveAttribute("data-save-state", "clean");
 
   // Camera, selection and local panel layout are personal/transient state.
-  await page.getByRole("button", { name: "Phóng to (+)", exact: true }).click();
+  await page.keyboard.press("+");
   await expect(indicator).toHaveAttribute("data-save-state", "clean");
 
   await page
@@ -541,7 +546,7 @@ test("warns only for unsaved shared configuration changes", async ({ page }) => 
   await expect(indicator).toHaveAttribute("data-save-state", "clean");
 
   const detailToggle = page
-    .getByLabel("Điều khiển bố cục")
+    .getByRole("navigation", { name: "Lệnh bản đồ" })
     .getByRole("button", { name: "Chi tiết", exact: true });
   await detailToggle.click();
   await expect(indicator).toHaveAttribute("data-save-state", "clean");
@@ -563,6 +568,7 @@ test("warns only for unsaved shared configuration changes", async ({ page }) => 
   await expect(page).toHaveURL(new RegExp(fixture.root + "/map$"));
   await expect(indicator).toHaveAttribute("data-save-state", "dirty");
 
+  await indicator.click();
   await page
     .getByRole("region", { name: "Cấu hình bản đồ dùng chung" })
     .getByRole("button", { name: "Lưu bản đồ", exact: true })
@@ -595,7 +601,7 @@ test("keeps technical identifiers secondary and returns focus after closing the 
   const persisted = await currentMap(page, fixture);
   await openFixtureMap(page, fixture);
 
-  const primaryContext = page.locator(".map-context");
+  const primaryContext = page.getByTestId("gis-ribbon");
   await expect(primaryContext).not.toContainText(fixture.organizationId);
   await expect(primaryContext).not.toContainText(fixture.projectId);
   await expect(primaryContext).not.toContainText(persisted.map_id);
@@ -639,5 +645,5 @@ test("keeps technical identifiers secondary and returns focus after closing the 
   await expect(
     page.getByRole("dialog", { name: "Thông tin kỹ thuật" })
   ).toHaveCount(0);
-  await expect(page.locator(".map-context")).not.toContainText(fixture.projectId);
+  await expect(page.getByTestId("gis-ribbon")).not.toContainText(fixture.projectId);
 });
