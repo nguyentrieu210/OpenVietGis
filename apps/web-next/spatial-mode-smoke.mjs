@@ -6,7 +6,7 @@ try{
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
- const saved=[];let restricted=false;
+ const saved=[];let restricted=false,pluginActive=false;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -17,6 +17,7 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",status:"active"}]:[]};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
@@ -67,6 +68,17 @@ try{
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  console.log("PASS permission revocation, explicit restriction and restored access");
+ pluginActive=true;
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ await page.getByText("Đang mở plugin nghiệp vụ. Chọn CAD hoặc 3D để chuyển sang GIS Core.",{exact:true}).waitFor({timeout:8000}).catch(async e=>{console.log("PLUGIN PAGE",page.url(),(await page.locator("body").innerText()).slice(0,2500));throw e});
+ await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ console.log("PASS direct CAD from activated business plugin");
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ await page.getByText("Đang mở plugin nghiệp vụ. Chọn CAD hoặc 3D để chuyển sang GIS Core.",{exact:true}).waitFor({timeout:8000}).catch(async e=>{console.log("PLUGIN PAGE",page.url(),(await page.locator("body").innerText()).slice(0,2500));throw e});
+ await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ console.log("PASS direct 3D from activated business plugin");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");
 }finally{await browser.close()}

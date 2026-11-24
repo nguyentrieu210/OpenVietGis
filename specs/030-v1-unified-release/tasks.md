@@ -27,3 +27,5 @@ The connector hardening candidate based on main 8d6a914 passed 65 focused Python
 - CAD/3D disabled states explain loading, access restrictions, missing permission or an active business plugin, with an explicit return to GIS Core. No authorization grants are widened.
 - Project Studio remounts on a confirmed scope/permission change so stale alternate-mode state is discarded.
 - Isolated candidate checks: web-next TypeScript and production build passed; spatial-workspace unit suite 36/36 passed; Playwright spatial-mode smoke with synthetic API fixtures passed empty 3D, configured 3D, CAD upload/revisions, GIS return, permission revocation and access restoration. These are not production or real PostGIS/OIDC acceptance.
+
+- Follow-up candidate: direct CAD/3D mode requests from an authorized business plugin switch to GIS Core automatically. Browser fixture tests for both modes passed; restricted access remains denied.
