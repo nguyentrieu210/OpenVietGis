@@ -66,6 +66,7 @@ from qgis.PyQt.QtWidgets import (
 
 from .client import (
     USER_AGENT,
+    ApiError,
     OpenVietGisConfig,
     OpenVietGisError,
     QgisLayerInfo,
@@ -311,7 +312,7 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("OpenVietGIS Connector (0.9.1 — R029 Managed)")
+        self.setWindowTitle("OpenVietGIS Connector (0.9.2 — R029 Managed)")
         self.setMinimumSize(620, 620)
 
         self._layers: list[QgisLayerInfo] = []
@@ -324,6 +325,7 @@ class OpenVietGisConnectorDialog(QDialog):
         self._workspace_map_layer_id: str | None = None
         self._active_workspaces: dict[str, tuple[Path, str]] = {}
         self._preferred_layer_id: str | None = None
+        self._preferred_binding_id: str | None = None
         self._auto_sync_busy: bool = False
         self._sync_in_progress: bool = False
         self._realtime_worker: _RealtimeEventWorker | None = None
@@ -678,6 +680,7 @@ class OpenVietGisConnectorDialog(QDialog):
         self.project_id_input.setText(parsed["project_id"])
         self.bearer_key_input.setText(parsed["bearer_token"])
         self._preferred_layer_id = parsed.get("layer_id")
+        self._preferred_binding_id = parsed.get("binding_id")
         self.pairing_code_input.clear()
         self._on_load_layers()
         if self._preferred_layer_id:
@@ -1143,7 +1146,24 @@ class OpenVietGisConnectorDialog(QDialog):
                 f"Kéo về QGIS: {receipt['pulled']}."
             )
         except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
-            self.ws_status.setText(f"Tự động đồng bộ gặp lỗi: {exc}")
+            blocked = (
+                isinstance(exc, ApiError) and exc.status_code in (401, 403)
+                or isinstance(exc, WorkspaceConflict) and (
+                    "recover pending work" in str(exc)
+                    or "HTTP 403" in str(exc)
+                )
+            )
+            if blocked:
+                # Never retry a refused or indeterminate server write on a timer.
+                self.auto_sync_checkbox.setChecked(False)
+                self.ws_status.setText(
+                    f"🔴 Đã tắt tự đồng bộ để bảo vệ dữ liệu: {exc}. "
+                    "Kiểm tra mã ghép nối/quyền project.edit + GIS ACL. "
+                    "Nếu có pending, mở Công cụ nâng cao → Khôi phục giao dịch; "
+                    "không xóa thư mục workspace hay tạo lại lớp."
+                )
+            else:
+                self.ws_status.setText(f"Tự động đồng bộ gặp lỗi: {exc}")
         finally:
             self._auto_sync_busy = False
             self._sync_in_progress = False
@@ -1586,6 +1606,8 @@ class OpenVietGisConnectorDialog(QDialog):
         settings.setValue("server_url", self.server_url_input.text().strip())
         settings.setValue("organization_id", self.org_id_input.text().strip())
         settings.setValue("project_id", self.project_id_input.text().strip())
+        settings.setValue("binding_id", self._preferred_binding_id or "")
+        settings.setValue("preferred_layer_id", self._preferred_layer_id or "")
         settings.setValue("allow_localhost", self.allow_localhost_checkbox.isChecked())
         settings.setValue("download_dir", self.download_dir_input.text().strip())
         token = self.bearer_key_input.text().strip()
@@ -1596,6 +1618,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self._stop_managed_worker()
         self._stop_realtime_worker()
         self._auto_sync_timer.stop()
+        self._preferred_binding_id = None
+        self._preferred_layer_id = None
         settings = QSettings("OpenVietGIS", "Connector")
         settings.clear()
         self.bearer_key_input.clear()
@@ -1620,6 +1644,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self.server_url_input.setText(server_url)
         self.org_id_input.setText(org_id)
         self.project_id_input.setText(project_id)
+        self._preferred_binding_id = str(settings.value("binding_id", "") or "") or None
+        self._preferred_layer_id = str(settings.value("preferred_layer_id", "") or "") or None
         self.allow_localhost_checkbox.setChecked(
             str(settings.value("allow_localhost", "false")).lower() == "true"
         )
@@ -1688,7 +1714,10 @@ class OpenVietGisConnectorDialog(QDialog):
         try:
             config = self._build_config()
             self._stop_managed_worker()
-            sess = create_managed_session(config, device_label="QGIS Desktop", client_version="0.9.0")
+            sess = create_managed_session(
+                config, device_label="QGIS Desktop", client_version="0.9.2",
+                binding_id=self._preferred_binding_id,
+            )
             self._managed_session = sess
             self._managed_cursor = sess.current_cursor
             self._managed_layers.clear()
@@ -1767,8 +1796,17 @@ class OpenVietGisConnectorDialog(QDialog):
                 "Vẽ/sửa bình thường trên QGIS rồi bấm '💾 Lưu lên Server (R029)'."
             )
         except (OpenVietGisError, OSError, ValueError) as exc:
-            QMessageBox.warning(self, "OpenVietGIS R029", str(exc))
-            self.ws_status.setText(f"Lỗi mở R029 Managed: {exc}")
+            reason = str(exc)
+            if isinstance(exc, ApiError) and exc.status_code == 403:
+                reason = (
+                    "HTTP 403: Server từ chối tạo phiên R029 cho tổ chức/dự án này.\n"
+                    "Hãy mở đúng Project trên Web, cấp quyền project.read "
+                    "(và project.edit để ghi), kiểm tra GIS ACL, rồi tạo mã ghép "
+                    "nối QGIS MỚI từ chính Project đó. Không dùng mã đã lưu của dự án khác.\n"
+                    "Không có thao tác ghi nào được thực hiện."
+                )
+            QMessageBox.warning(self, "OpenVietGIS R029", reason)
+            self.ws_status.setText(f"Lỗi mở R029 Managed: {reason}")
 
     def _on_managed_session_revoked(self) -> None:
         self._stop_managed_worker()

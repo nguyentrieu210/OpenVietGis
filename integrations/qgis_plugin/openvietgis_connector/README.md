@@ -1,15 +1,12 @@
 # OpenVietGIS Connector for QGIS Desktop (3.34+, Python 3.10+)
 
-> **R027 experimental — đồng bộ hai chiều có kiểm soát:** Phiên bản 0.3.0 bổ sung
-> workspace QGIS **thủ công** với bản gốc, bộ đối chiếu ba phiên bản, xác nhận ghi và
-> khôi phục sau mất mạng. Xem [R027-MANUAL-SYNC.md](R027-MANUAL-SYNC.md) để sử dụng.
-> **Chưa có đồng bộ tự động**, chưa nghiệm thu trên QGIS Desktop thật, và không kích hoạt
-> R027 server binding draft. Chức năng R026 cũ vẫn giữ nguyên.
+**Phiên bản 0.9.2 (R026/R027/R029):** hỗ trợ tải GeoPackage, đồng bộ hai chiều kiểm soát qua R006 Changeset, và **R029 Managed Realtime** không cần tệp GeoPackage. Đây vẫn là plugin thử nghiệm; chỉ dùng với dự án/tài khoản được cấp quyền. Với R027, các lần ghi không chắc kết quả được giữ lại để xác minh, tuyệt đối không tự gửi lại mù quáng. Xem [R027-MANUAL-SYNC.md](R027-MANUAL-SYNC.md) cho cơ chế khôi phục.
 
+**Sửa lỗi 0.9.2:** backend sử dụng phạm vi đọc hợp lệ khi tạo/thu hồi phiên R029 và xử lý lệnh desktop; thao tác thay đổi GIS vẫn phải có quyền `project.edit`. Khi một lượt ghi R027 bị từ chối rõ ràng bằng HTTP 403, plugin dừng tự đồng bộ, giữ bản chỉnh sửa và cho phép khôi phục sau khi xác minh bản trên Web không bị thay đổi.
 
-**Phiên bản / Version:** `0.3.0`
-**Đặc tả / Specification:** `R026 + R027 (manual workspace preview)`
-**Chính sách ghi mặc định / Default Write Policy:** `deny` (chỉ đọc mặc định; đồng bộ ngược hai bước có kiểm soát qua R006 Changeset khi có quyền `project.edit`)
+**Nếu đang gặp HTTP 403:** mở đúng Organization/Project trên Web → mục kết nối QGIS → tạo mã ghép nối mới và kiểm tra quyền `project.read`, `project.edit` (nếu cần ghi), cùng GIS ACL. **Không xóa các thư mục `ovg_qgis_...` hoặc tệp `working.gpkg` để xử lý lỗi.** Dùng `Công cụ nâng cao → Khôi phục giao dịch` nếu có pending. Các trạng thái pending từ phiên bản cũ chưa xác định kết quả phải được xác minh trước khi tiếp tục; bản mới không tự bỏ bảo vệ đó.
+
+**Đặc tả:** R026 + R027 + R029. **Chính sách mặc định:** quyền ghi bị từ chối trừ khi được ủy quyền hợp lệ; các phép xóa vẫn bị chặn theo mặc định.
 
 ---
 

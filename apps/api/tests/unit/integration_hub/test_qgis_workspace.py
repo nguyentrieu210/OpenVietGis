@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 from integrations.qgis_plugin.openvietgis_connector import workspace as sync
-from integrations.qgis_plugin.openvietgis_connector.client import OpenVietGisConfig
+from integrations.qgis_plugin.openvietgis_connector.client import ApiError, OpenVietGisConfig
 
 from openvietgis_api.adapters.formats.geopackage import write_geopackage
 from openvietgis_api.domains.spatial.domain import FieldType, NativeGeometry
@@ -317,3 +317,53 @@ def test_revision_extraction_rejects_invalid_geopackage_srid(assets):
         conn.execute("UPDATE gpkg_spatial_ref_sys SET organization='NOT_EPSG' WHERE srs_id=5899")
     with pytest.raises(sync.WorkspaceConflict, match="not verified EPSG"):
         sync.preview_workspace(config, root)
+
+
+def test_http_403_sync_never_retries_and_verified_recovery_preserves_local(assets, monkeypatch):
+    root, wire, config = assets
+    with sqlite3.connect(root / "working.gpkg") as conn:
+        conn.execute("UPDATE parcels SET name='QGIS unsent' WHERE ovg_feature_id='A-001'")
+    before = sync.read_dataset(root / "working.gpkg")
+    preview = sync.preview_workspace(config, root)
+    calls = []
+
+    def deny(*args, **kwargs):
+        calls.append(kwargs["operation_id"])
+        raise ApiError("HTTP 403: permission denied", status_code=403)
+
+    monkeypatch.setattr(sync, "push_layer_geopackage_sync", deny)
+    with pytest.raises(sync.WorkspaceConflict, match="HTTP 403"):
+        sync.commit_workspace(config, preview, confirmed_digest=preview.digest)
+    assert len(calls) == 1
+    pending = json.loads((root / "workspace.json").read_text())["pending"]
+    assert pending["definitive_denial"] is True
+    with pytest.raises(sync.WorkspaceConflict, match="recover pending work"):
+        sync.preview_workspace(config, root)
+    assert sync.recover_workspace(config, root) is True
+    assert json.loads((root / "workspace.json").read_text())["pending"] is None
+    assert sync.read_dataset(root / "working.gpkg").rows == before.rows
+    assert sync.read_dataset(root / "baseline.gpkg").rows["A-001"].attrs["name"] == "Old"
+    result = sync.preview_workspace(config, root)
+    assert len(result.to_server) == 1
+    assert len(calls) == 1
+
+
+def test_denied_pending_recovery_fails_closed_on_remote_change(assets, monkeypatch):
+    root, wire, config = assets
+    with sqlite3.connect(root / "working.gpkg") as conn:
+        conn.execute("UPDATE parcels SET name='QGIS unsent' WHERE ovg_feature_id='A-001'")
+    preview = sync.preview_workspace(config, root)
+
+    def deny(*args, **kwargs):
+        raise ApiError("HTTP 403: permission denied", status_code=403)
+
+    monkeypatch.setattr(sync, "push_layer_geopackage_sync", deny)
+    with pytest.raises(sync.WorkspaceConflict, match="HTTP 403"):
+        sync.commit_workspace(config, preview, confirmed_digest=preview.digest)
+    # A concurrent Web modification prevents automatic clearing of pending.
+    gpkg(wire.current, a_name="Remote changed")
+    wire.revision = REV_B
+    with pytest.raises(sync.WorkspaceConflict, match="cannot be verified"):
+        sync.recover_workspace(config, root)
+    assert json.loads((root / "workspace.json").read_text())["pending"]
+    assert sync.read_dataset(root / "working.gpkg").rows["A-001"].attrs["name"] == "QGIS unsent"

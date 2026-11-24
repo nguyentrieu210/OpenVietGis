@@ -207,3 +207,36 @@ def test_managed_client_session_bootstrap_delta_commit_and_commands() -> None:
             cfg, session_id="sid-1", command_id="cmd-1", status="completed", result={"ok": True}
         )
         assert resp["status"] == "completed"
+
+
+def test_r029_metadata_writes_use_read_scope_but_gis_commits_require_edit(monkeypatch) -> None:
+    """Regression: PROJECT_READ with mutation=True always fails the GIS scope gate."""
+    from uuid import uuid4
+
+    from openvietgis_api.adapters.http import managed_sync
+    from openvietgis_api.domains.authorization.permissions import Permission
+
+    class ScopeObserved(Exception):
+        pass
+
+    calls = []
+
+    def check_scope(session, auth, org, proj, permission, *, mutation):
+        calls.append((permission, mutation))
+        raise ScopeObserved
+
+    monkeypatch.setattr(managed_sync, "_prep_scope", check_scope)
+    org, proj, sid, cmd = (uuid4() for _ in range(4))
+    auth, session = object(), object()
+    for endpoint, arguments in [
+        (managed_sync.create_managed_session, (org, proj, object(), auth, session)),
+        (managed_sync.revoke_managed_session, (org, proj, sid, auth, session)),
+        (managed_sync.enqueue_desktop_command, (org, proj, sid, object(), auth, session)),
+        (managed_sync.respond_desktop_command, (org, proj, sid, cmd, object(), auth, session)),
+    ]:
+        with pytest.raises(ScopeObserved):
+            endpoint(*arguments)
+    assert calls == [(Permission.PROJECT_READ, False)] * 4
+    with pytest.raises(ScopeObserved):
+        managed_sync.commit_managed_changes(org, proj, object(), auth, session)
+    assert calls[-1] == (Permission.PROJECT_EDIT, True)

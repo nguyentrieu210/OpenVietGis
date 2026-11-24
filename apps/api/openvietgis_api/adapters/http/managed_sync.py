@@ -232,7 +232,7 @@ def create_managed_session(
 ) -> dict[str, Any]:
     """Negotiate a server-managed realtime GIS client session."""
     ctx = _prep_scope(
-        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=True
+        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     if body.binding_id is not None:
         binding = session.execute(
@@ -371,7 +371,7 @@ def revoke_managed_session(
 ) -> dict[str, Any]:
     """Revoke a managed session immediately and notify connected clients."""
     ctx = _prep_scope(
-        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=True
+        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     row = session.execute(
         text(
@@ -893,7 +893,7 @@ def enqueue_desktop_command(
 ) -> dict[str, Any]:
     """Enqueue an allowlisted typed command for an active opted-in QGIS session."""
     ctx = _prep_scope(
-        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=True
+        session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     if body.tool_name not in ALLOWED_DESKTOP_TOOLS:
         raise HTTPException(
@@ -996,7 +996,7 @@ def respond_desktop_command(
     session: DB,
 ) -> dict[str, Any]:
     """Record user consent decision and bounded command result from QGIS."""
-    _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=True)
+    _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
     _load_active_session(session, organization_id, project_id, session_id)
     now = datetime.now(UTC)
     row = session.execute(

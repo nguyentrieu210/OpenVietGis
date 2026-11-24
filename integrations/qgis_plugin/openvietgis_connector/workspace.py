@@ -21,6 +21,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from .client import (
+    ApiError,
     IntegrityError,
     OpenVietGisConfig,
     download_layer_geopackage,
@@ -556,15 +557,29 @@ def commit_workspace(
         _write_json(root / STATE_FILE, data)
         # Network error after HTTP commit is indeterminate. The journal is
         # deliberately kept until recovery confirms the exact remote dataset.
-        receipt = push_layer_geopackage_sync(
-            config, layer_id=data["layer_id"], gpkg_path=merged,
-            base_content_revision=preview.remote_content_revision,
-            base_schema_revision=data["schema_revision"],
-            expected_diff_sha256=result.diff_sha256,
-            operation_id=operation_id,
-            summary="R027 bidirectional QGIS workspace commit",
-            allow_deletes=allow_deletes,
-        )
+        try:
+            receipt = push_layer_geopackage_sync(
+                config, layer_id=data["layer_id"], gpkg_path=merged,
+                base_content_revision=preview.remote_content_revision,
+                base_schema_revision=data["schema_revision"],
+                expected_diff_sha256=result.diff_sha256,
+                operation_id=operation_id,
+                summary="R027 bidirectional QGIS workspace commit",
+                allow_deletes=allow_deletes,
+            )
+        except ApiError as exc:
+            # A synchronous 403 definitively refuses this request before the
+            # R006 changeset, unlike a network timeout whose result is unknown.
+            # Persist the distinction; never delete or overwrite local edits.
+            if exc.status_code == 403:
+                data["pending"]["definitive_denial"] = True
+                _write_json(root / STATE_FILE, data)
+                raise WorkspaceConflict(
+                    "Server refused sync (HTTP 403). Check project.edit, GIS ACL "
+                    "and the project's pairing key; use Khôi phục giao dịch "
+                    "after permissions are corrected. Local edits are intact."
+                ) from exc
+            raise
         if receipt.operation_count != remote_count:
             raise WorkspaceConflict("Unexpected server receipt count; recover pending operation.")
         content_rev = receipt.resulting_content_revision
@@ -643,14 +658,41 @@ def recover_workspace(config: OpenVietGisConfig, root: str | Path) -> bool:
         latest = download_layer_geopackage(config, data["layer_id"], td)
         merged_dataset, remote_dataset = read_dataset(merged), read_dataset(latest.path)
         _compatible(merged_dataset, merged_dataset, remote_dataset)
-        if set(merged_dataset.rows) != set(remote_dataset.rows) or any(
-            merged_dataset.rows[k].attrs != remote_dataset.rows[k].attrs or
-            merged_dataset.rows[k].canonical_geometry != remote_dataset.rows[k].canonical_geometry
-            for k in merged_dataset.rows
-        ):
-            raise WorkspaceConflict(
-                "Remote data does not exactly match staged payload; manual investigation required."
-            )
-        _finish(folder, merged, latest.content_revision, latest.schema_revision)
+        if pending.get("definitive_denial"):
+            # Explicitly denied HTTP 403: do not advance the local baseline.
+            # Only unlock after confirming the server still matches the exact
+            # PRE-PUSH remote download (revision, schema, and every feature).
+            preview_dir = folder / ".remote-preview"
+            snapshots = list(preview_dir.glob("*.gpkg")) if preview_dir.is_dir() else []
+            if len(snapshots) != 1 or latest.content_revision != pending["base_remote_revision"]:
+                raise WorkspaceConflict("Denied sync cannot be verified; keep pending and investigate.")
+            original = read_dataset(snapshots[0])
+            _compatible(original, original, remote_dataset)
+            if (
+                set(original.rows) != set(remote_dataset.rows)
+                or any(
+                    original.rows[k].attrs != remote_dataset.rows[k].attrs
+                    or original.rows[k].canonical_geometry
+                    != remote_dataset.rows[k].canonical_geometry
+                    for k in original.rows
+                )
+            ):
+                raise WorkspaceConflict("Remote changed after denied push; manual review required.")
+            if _sha(folder / "baseline.gpkg") != data["baseline_sha256"]:
+                raise WorkspaceConflict("Local baseline changed; keep pending for investigation.")
+            # Leave baseline and edited working.gpkg as-is; a fresh preview
+            # will perform the required three-way merge once ACL is fixed.
+            data["pending"] = None
+            _write_json(folder / STATE_FILE, data)
+        else:
+            if set(merged_dataset.rows) != set(remote_dataset.rows) or any(
+                merged_dataset.rows[k].attrs != remote_dataset.rows[k].attrs or
+                merged_dataset.rows[k].canonical_geometry != remote_dataset.rows[k].canonical_geometry
+                for k in merged_dataset.rows
+            ):
+                raise WorkspaceConflict(
+                    "Remote data does not exactly match staged payload; manual investigation required."
+                )
+            _finish(folder, merged, latest.content_revision, latest.schema_revision)
     merged.unlink(missing_ok=True)
     return True
