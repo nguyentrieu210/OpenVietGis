@@ -120,3 +120,48 @@ export function gridGeoTiff(g:TerrainGrid):ArrayBuffer{
  for(let i=0;i<nodata.length;i++)v.setUint8(ndAt+i,nodata.charCodeAt(i));
  g.values.forEach((z,i)=>v.setFloat32(dataAt+i*4,z??-99999,true));return buf;
 }
+
+/** Difference only on exactly matching sampled grids and declared height reference. */
+export function differenceTerrain(actual:TerrainGrid,design:TerrainGrid):TerrainGrid{
+ if(actual.vertical_reference!==design.vertical_reference||actual.reference_label!==design.reference_label)throw Error("Hai DEM phải cùng mốc cao độ đã khai báo.");
+ if(actual.width!==design.width||actual.height!==design.height||actual.extent.some((v,i)=>Math.abs(v-design.extent[i]!)>1e-6))throw Error("Hai DEM phải cùng lưới lấy mẫu; hãy căn chỉnh raster nguồn trước.");
+ const values=actual.values.map((z,i)=>z==null||design.values[i]==null?null:z-design.values[i]!);
+ const valid=values.filter((v):v is number=>v!==null);
+ if(!valid.length)throw Error("Không có mẫu chồng phủ hợp lệ.");
+ const g:TerrainGrid={...actual,source_id:"difference-preview",name:"Chênh lệch DEM",values,min_m:Math.min(...valid),max_m:Math.max(...valid),render_origin_m:Math.min(...valid),valid_count:valid.length,nodata_count:values.length-valid.length};
+ terrainTriangles(g);return g;
+}
+
+/** Priority flood conditioning; outer boundary is open, NoData is an impermeable mask.
+ * Disconnected valid islands with no outer-edge outlet are retained as closed basins.
+ * Receiver links follow the earlier flood parent on flats; strict descent elsewhere.
+ */
+export function conditionedFlow(g:TerrainGrid){
+ const n=g.values.length,w=g.width,h=g.height,filled=g.values.slice(),seen=new Uint8Array(n),rank=new Int32Array(n).fill(-1),parent=new Int32Array(n).fill(-1),heap:number[]=[],order:number[]=[];
+ const less=(a:number,b:number)=>filled[a]!<filled[b]!||filled[a]===filled[b]&&a<b;
+ const push=(i:number)=>{heap.push(i);let k=heap.length-1;while(k){const p=(k-1)>>1;if(!less(heap[k]!,heap[p]!))break;[heap[k],heap[p]]=[heap[p]!,heap[k]!];k=p}};
+ const pop=()=>{const v=heap[0]!,last=heap.pop()!;if(heap.length){heap[0]=last;let k=0;while(true){let a=k*2+1;if(a>=heap.length)break;const b=a+1;if(b<heap.length&&less(heap[b]!,heap[a]!))a=b;if(!less(heap[a]!,heap[k]!))break;[heap[k],heap[a]]=[heap[a]!,heap[k]!];k=a}}return v};
+ const neighbors=(i:number,fn:(j:number,ox:number,oy:number)=>void)=>{const x=i%w,y=Math.floor(i/w);for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){if(!ox&&!oy||x+ox<0||x+ox>=w||y+oy<0||y+oy>=h)continue;const j=i+oy*w+ox;if(g.values[j]==null)continue;if(ox&&oy&&(g.values[i+ox]==null||g.values[i+oy*w]==null))continue;fn(j,ox,oy)}};
+ for(let i=0;i<n;i++){const x=i%w,y=Math.floor(i/w);if(g.values[i]!=null&&(x===0||x===w-1||y===0||y===h-1)){seen[i]=1;push(i)}}
+ while(heap.length){const i=pop();rank[i]=order.length;order.push(i);neighbors(i,j=>{if(seen[j])return;seen[j]=1;parent[j]=i;filled[j]=Math.max(g.values[j]!,filled[i]!);push(j)})}
+ const down=new Int32Array(n).fill(-1),acc=new Float64Array(n),{dx,dy}=range(g);
+ let raised=0,maxRaise=0,closed=0;
+ for(let i=0;i<n;i++){if(g.values[i]==null)continue;if(!seen[i]){closed++;filled[i]=null;continue}const x=i%w,y=Math.floor(i/w);acc[i]=area(g,i)*(x===0||x===w-1?.5:1)*(y===0||y===h-1?.5:1);const dz=filled[i]!-g.values[i]!;if(dz>0){raised++;maxRaise=Math.max(maxRaise,dz)}let best=0;neighbors(i,(j,ox,oy)=>{if(rank[j]<0||rank[j]>=rank[i]!)return;const slope=(filled[i]!-filled[j]!)/Math.hypot(ox*dx,oy*dy);if(slope>best){best=slope;down[i]=j}});if(down[i]===-1&&parent[i]!==-1)down[i]=parent[i]!}
+ for(let k=order.length-1;k>=0;k--){const i=order[k]!,j=down[i]!;if(j>=0)acc[j]!+=acc[i]!}
+ return {filled,down,acc,raised,maxRaise,closed,outlets:order.filter(i=>down[i]===-1).length};
+}
+export function conditionedFlowFeatures(g:TerrainGrid):FeatureCollection{
+ const f=conditionedFlow(g),features:Feature[]=[];
+ for(let i=0;i<g.values.length;i++){const j=f.down[i]!;if(j<0)continue;const v=f.acc[i]!;features.push({type:"Feature",geometry:{type:"LineString",coordinates:[geographic3857(...node(g,i)),geographic3857(...node(g,j))]},properties:{upstream_area_m2:v,color:"#0c7890",width:bounded(Math.log10(Math.max(1,v)),1,5)}})}
+ return {type:"FeatureCollection",features};
+}
+/** Boundary-connected low cells on the sampled grid; not a hydraulic model. */
+export function connectedInundation(g:TerrainGrid,level:number):{features:FeatureCollection;connected:number;isolated:number}{
+ if(!finite(level)||level< -12000||level>10000)throw Error("Mực nước không hợp lệ");
+ const w=g.width-1,h=g.height-1,low=new Uint8Array(w*h),seen=new Uint8Array(w*h),queue:number[]=[],features:Feature[]=[];
+ const {dx,dy}=range(g);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*g.width+x,k=y*w+x,z=[g.values[i],g.values[i+1],g.values[i+g.width],g.values[i+g.width+1]];if(z.some(v=>v==null)||Math.max(...z as number[])>level)continue;low[k]=1;if(x===0||x===w-1||y===0||y===h-1){seen[k]=1;queue.push(k)}}
+ for(let p=0;p<queue.length;p++){const k=queue[p]!,x=k%w,y=Math.floor(k/w);for(const [ox,oy] of [[1,0],[-1,0],[0,1],[0,-1]] as const){const nx=x+ox,ny=y+oy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const j=ny*w+nx;if(low[j]&&!seen[j]){seen[j]=1;queue.push(j)}}}
+ for(const k of queue){const x=k%w,y=Math.floor(k/w),i=y*g.width+x,[a,b]=node(g,i);features.push({type:"Feature",geometry:{type:"Polygon",coordinates:[[geographic3857(a,b),geographic3857(a+dx,b),geographic3857(a+dx,b-dy),geographic3857(a,b-dy),geographic3857(a,b)]]},properties:{color:"#267fbd",water_level_m:level,mode:"boundary-connected"}})}
+ return {features:{type:"FeatureCollection",features},connected:queue.length,isolated:low.reduce((s,v)=>s+v,0)-queue.length};
+}

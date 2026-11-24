@@ -46,3 +46,23 @@ test("contours, mask, no extrapolation and TIFF nodata tags",()=>{
  const bytes=new DataView(gridGeoTiff(g));assert.equal(bytes.getUint16(2,true),42);assert.equal(bytes.getUint16(8,true),16);
  assert.throws(()=>elevationPoints({type:"Polygon",coordinates:[]},10),/điểm/);
 });
+
+import {differenceTerrain,conditionedFlow,connectedInundation} from "../src/terrain-analysis.ts";
+test("two-surface volume with explicit grid and datum agreement",()=>{
+ const a=grid(Array(9).fill(12)),b=grid([10,12,14,10,12,14,10,12,14]),d=differenceTerrain(a,b),v=cutFill(d,0);
+ near(v.cut,200);near(v.fill,200);near(v.net,0);
+ assert.throws(()=>differenceTerrain(a,{...b,reference_label:"other"}),/mốc/);
+ assert.throws(()=>differenceTerrain(a,{...b,extent:[0,0,20,21]}),/lưới/);
+});
+test("priority flood fills interior pit and routes flat acyclically",()=>{
+ const g=grid([5,5,5,5,0,5,5,5,5]),r=conditionedFlow(g);
+ assert.equal(r.filled[4],5);assert.equal(r.raised,1);assert.equal(r.maxRaise,5);assert.ok(r.down[4]>=0);
+ for(let i=0;i<9;i++){let j=i;const seen=new Set();while(j>=0){assert.ok(!seen.has(j));seen.add(j);j=r.down[j]}}
+ const total=Array.from(r.acc).reduce((s,v,i)=>s+(r.down[i]===-1?v:0),0);near(total,400);
+});
+test("connected flood excludes closed interior low cells and nodata",()=>{
+ const a=Array(25).fill(10);for(const i of [6,7,11,12])a[i]=0;
+ const r=connectedInundation(grid(a,5,5),5);assert.equal(r.connected,0);assert.equal(r.isolated,1);
+ const b=grid(Array(9).fill(0));assert.equal(connectedInundation(b,1).connected,4);
+ assert.equal(connectedInundation(grid([0,0,null,0,0,null,0,0,null]),1).connected,2);
+});

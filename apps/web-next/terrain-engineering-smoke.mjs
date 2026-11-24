@@ -24,8 +24,8 @@ try{
   else if(p.endsWith("/access/mine"))body={restricted};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
-  else if(p.endsWith("/raster/layers")){if(route.request().method()==="POST"){const raw=route.request().postDataBuffer();assert.ok(raw.includes(Buffer.from("tin-dem-3857.tif")));assert.ok(raw.includes(Buffer.from([73,73,42,0])));saved++;body={...raster,id:"saved-tin",name:"DEM TIN · Synthetic"}}else body={items:[raster]}}
-  else if(p.endsWith("/terrain-preview")){const o=route.request().postDataJSON();assert.deepEqual(o,{elevation_unit:"metre",vertical_reference:"local",reference_label:"Synthetic",acknowledge_dem:true});requested++;body=grid}
+  else if(p.endsWith("/raster/layers")){if(route.request().method()==="POST"){const raw=route.request().postDataBuffer();assert.ok(raw.includes(Buffer.from("tin-dem-3857.tif")));assert.ok(raw.includes(Buffer.from([73,73,42,0])));saved++;body={...raster,id:"saved-tin",name:"DEM TIN · Synthetic"}}else body={items:[raster,{...raster,id:"design-dem",name:"Design DEM"}]}}
+  else if(p.endsWith("/terrain-preview")){const o=route.request().postDataJSON();assert.deepEqual(o,{elevation_unit:"metre",vertical_reference:"local",reference_label:"Synthetic",acknowledge_dem:true});requested++;body=p.includes("/design-dem/")?{...grid,source_id:"design-dem",name:"Design DEM",values:grid.values.map(v=>v===null?null:v-2),min_m:grid.min_m-2,max_m:grid.max_m-2,render_origin_m:grid.min_m-2}:grid}
   else if(p.includes("/raster/layers/")&&p.includes("/tiles/"))return route.fulfill({status:404,body:""});
   else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
   else if(p.endsWith("/features"))body={context:{source_id:id,project_id:pid,response_crs:{code:4326}},items:features,next_after_feature_id:null};
@@ -42,14 +42,15 @@ try{
  await page.getByRole("checkbox",{name:/Xác nhận cao độ/}).check();
  await page.getByRole("button",{name:"Tạo lưới phân tích"}).click();
  await page.getByText(/Cao độ -5–15 m/).waitFor();
- for(const mode of ["contour","slope","aspect","cutfill","flow","flood"]){
+ for(const mode of ["contour","slope","aspect","cutfill","flow","flood","conditioned","connected","compare"]){
   await page.getByLabel("Phân tích địa hình").selectOption(mode);
-  if(["cutfill","flood"].includes(mode))await page.getByLabel("Cao độ thiết kế hoặc mực nước").fill("5");
+  if(["cutfill","flood","connected"].includes(mode))await page.getByLabel("Cao độ thiết kế hoặc mực nước").fill("5");
+  if(mode==="compare"){await page.getByLabel("DEM thiết kế",{exact:true}).selectOption("design-dem");await page.getByRole("checkbox",{name:/Hai DEM có cùng/}).check()}
   await page.getByRole("button",{name:"Tính & hiển thị kết quả"}).click();
   await page.getByRole("button",{name:"Tải GeoJSON kết quả"}).waitFor();
   assert.equal(await page.locator(".ovg-terrain-engineering [role=alert]").count(),0);
  }
- assert.equal(requested,1);
+ await page.getByText(/Hai DEM · Đào/).waitFor();assert.equal(requested,2);
  await page.getByLabel("Nguồn cao độ").selectOption("tin");
  await page.getByLabel("Lớp bình độ").selectOption("layer1");
  await page.getByLabel("Trường cao độ",{exact:true}).selectOption("height_m");
@@ -60,5 +61,5 @@ try{
  await page.getByRole("button",{name:"Lưu TIN thành DEM dự án"}).click();await page.getByRole("dialog",{name:"Địa hình kỹ thuật"}).waitFor({state:"detached"});assert.equal(saved,1);
  await open();restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.getByRole("dialog",{name:"Địa hình kỹ thuật"}).waitFor({state:"detached"});
  assert.equal(errors.length,0,errors.join("\n"));
- console.log("PASS project DEM request, six analysis overlays, contour TIN, GeoTIFF download, scoped raster save fixture, permission revocation");
+ console.log("PASS project DEM request, nine analysis overlays including dual DEM and conditioned hydrology, contour TIN, GeoTIFF download, scoped raster save fixture, permission revocation");
 }finally{await browser.close()}
