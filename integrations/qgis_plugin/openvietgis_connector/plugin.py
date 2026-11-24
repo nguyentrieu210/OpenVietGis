@@ -21,6 +21,7 @@ Security boundaries:
 from __future__ import annotations
 
 import contextlib
+import json
 import time
 import urllib.error
 import urllib.request
@@ -28,8 +29,15 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from qgis.core import QgsProject, QgsVectorLayer
-from qgis.PyQt.QtCore import Qt, QThread, QTimer, pyqtSignal
+from qgis.core import (
+    QgsFeature,
+    QgsField,
+    QgsGeometry,
+    QgsJsonUtils,
+    QgsProject,
+    QgsVectorLayer,
+)
+from qgis.PyQt.QtCore import Qt, QThread, QTimer, QVariant, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QAction,
@@ -64,6 +72,16 @@ from .client import (
     fetch_qgis_profile,
     preview_layer_geopackage_sync,
     push_layer_geopackage_sync,
+)
+from .managed_client import (
+    ManagedSessionInfo,
+    bootstrap_managed_layer,
+    build_managed_events_url,
+    commit_managed_changes,
+    create_managed_session,
+    fetch_managed_delta,
+    list_desktop_commands,
+    respond_desktop_command,
 )
 from .workspace import (
     SyncPreview as WorkspaceSyncPreview,
@@ -151,12 +169,97 @@ class _RealtimeEventWorker(QThread):
                     time.sleep(0.1)
 
 
+class _ManagedRealtimeWorker(QThread):
+    """R029 SSE listener: delta wakeups, session revocation, and AI desktop commands."""
+
+    spatial_changed = pyqtSignal()
+    session_revoked = pyqtSignal()
+    desktop_command = pyqtSignal()
+    status_changed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        config: OpenVietGisConfig,
+        session_id: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._config = config
+        self._session_id = session_id
+        self._stop_requested = False
+        self._active_response: Any = None
+
+    def stop(self) -> None:
+        self._stop_requested = True
+        resp = self._active_response
+        self._active_response = None
+        if resp is not None:
+            with contextlib.suppress(OSError, ValueError):
+                resp.close()
+
+    def run(self) -> None:
+        url = build_managed_events_url(self._config, self._session_id)
+        while not self._stop_requested:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {self._config.bearer_token}",
+                    "Accept": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "User-Agent": USER_AGENT,
+                },
+                method="GET",
+            )
+            try:
+                resp = urllib.request.urlopen(req, timeout=65.0)
+                self._active_response = resp
+                self.status_changed.emit("🟢 R029 Managed Realtime: Đã kết nối (Server-First)")
+                current_event = ""
+                while not self._stop_requested:
+                    raw_line = resp.readline()
+                    if not raw_line:
+                        break
+                    line = raw_line.decode("utf-8", errors="ignore").strip()
+                    if line.startswith("event:"):
+                        current_event = line.split(":", 1)[1].strip()
+                    elif line.startswith("data:"):
+                        if current_event == "spatial_change":
+                            self.spatial_changed.emit()
+                        elif current_event == "session_revoked":
+                            self.session_revoked.emit()
+                            return
+                        elif current_event == "desktop_command":
+                            self.desktop_command.emit()
+                        current_event = ""
+                    elif not line:
+                        current_event = ""
+            except urllib.error.HTTPError as exc:
+                if exc.code in (401, 403):
+                    self.session_revoked.emit()
+                    break
+                self.status_changed.emit("🟡 R029 Managed: Đang kết nối lại...")
+            except (urllib.error.URLError, OSError, TimeoutError):
+                if not self._stop_requested:
+                    self.status_changed.emit("🟡 R029 Managed: Mất kết nối, đang thử lại...")
+            finally:
+                resp = self._active_response
+                self._active_response = None
+                if resp is not None:
+                    with contextlib.suppress(OSError, ValueError):
+                        resp.close()
+            if not self._stop_requested:
+                for _ in range(30):
+                    if self._stop_requested:
+                        break
+                    time.sleep(0.1)
+
+
 class OpenVietGisConnectorDialog(QDialog):
     """Dialog for read-only GeoPackage download and controlled two-step R006 sync."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("OpenVietGIS Connector (0.8.0)")
+        self.setWindowTitle("OpenVietGIS Connector (0.9.0 — R029 Managed)")
         self.setMinimumSize(620, 620)
 
         self._layers: list[QgisLayerInfo] = []
@@ -172,6 +275,14 @@ class OpenVietGisConnectorDialog(QDialog):
         self._auto_sync_busy: bool = False
         self._sync_in_progress: bool = False
         self._realtime_worker: _RealtimeEventWorker | None = None
+        self._managed_session: ManagedSessionInfo | None = None
+        self._managed_cursor: int = 0
+        self._managed_layers: dict[str, dict[str, Any]] = {}
+        self._managed_worker: _ManagedRealtimeWorker | None = None
+        self._managed_delta_debounce = QTimer(self)
+        self._managed_delta_debounce.setSingleShot(True)
+        self._managed_delta_debounce.setInterval(300)
+        self._managed_delta_debounce.timeout.connect(self._on_managed_fetch_delta)
         self._realtime_debounce = QTimer(self)
         self._realtime_debounce.setSingleShot(True)
         self._realtime_debounce.setInterval(500)
@@ -295,6 +406,25 @@ class OpenVietGisConnectorDialog(QDialog):
         ws_layout = QVBoxLayout(workspace_group)
 
         ws_buttons = QVBoxLayout()
+        r029_row = QHBoxLayout()
+        self.r029_open_button = QPushButton("⚡ R029 Managed Realtime (Không .gpkg)")
+        self.r029_open_button.setStyleSheet(
+            "background-color: #7c3aed; color: #ffffff; font-weight: bold; "
+            "padding: 8px 12px; border-radius: 4px;"
+        )
+        self.r029_open_button.clicked.connect(self._on_open_r029_managed)
+
+        self.r029_save_button = QPushButton("💾 Lưu lên Server (R029)")
+        self.r029_save_button.setEnabled(False)
+        self.r029_save_button.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; font-weight: bold; "
+            "padding: 8px 12px; border-radius: 4px;"
+        )
+        self.r029_save_button.clicked.connect(self._on_commit_r029_managed)
+        r029_row.addWidget(self.r029_open_button)
+        r029_row.addWidget(self.r029_save_button)
+        ws_buttons.addLayout(r029_row)
+
         open_row = QHBoxLayout()
         self.ws_open_all_button = QPushButton("🚀 Mở toàn bộ Workspace (Realtime)")
         self.ws_open_all_button.setStyleSheet(
@@ -1389,8 +1519,378 @@ class OpenVietGisConnectorDialog(QDialog):
             f"Audit Event ID: {result.audit_event_id}",
         )
 
+    def _stop_managed_worker(self) -> None:
+        worker = self._managed_worker
+        self._managed_worker = None
+        if worker is not None:
+            worker.stop()
+            worker.wait(1500)
+
+    def _qgis_field_type(self, data_type: str) -> Any:
+        dt = data_type.lower()
+        if "int" in dt:
+            return QVariant.LongLong
+        if "float" in dt or "double" in dt or "numeric" in dt or "real" in dt:
+            return QVariant.Double
+        if "bool" in dt:
+            return QVariant.Bool
+        return QVariant.String
+
+    def _geojson_to_qgs_geometry(self, geom_obj: dict[str, Any] | None) -> QgsGeometry:
+        if not geom_obj:
+            return QgsGeometry()
+        fc = json.dumps({"type": "Feature", "geometry": geom_obj, "properties": {}})
+        feats = QgsJsonUtils.stringToFeatureList(fc, QgsVectorLayer("Point", "t", "memory").fields())
+        if feats:
+            return QgsGeometry(feats[0].geometry())
+        return QgsGeometry()
+
+    def _on_open_r029_managed(self) -> None:
+        targets = [
+            lyr for lyr in self._checked_or_selected_layers()
+            if lyr.export_permitted and lyr.crs_explicit
+        ]
+        if not targets:
+            targets = [
+                lyr for lyr in self._layers if lyr.export_permitted and lyr.crs_explicit
+            ]
+        if not targets:
+            QMessageBox.warning(
+                self, "OpenVietGIS R029", "Không có lớp bản đồ hợp lệ (có CRS) để mở."
+            )
+            return
+        try:
+            config = self._build_config()
+            self._stop_managed_worker()
+            sess = create_managed_session(config, device_label="QGIS Desktop", client_version="0.9.0")
+            self._managed_session = sess
+            self._managed_cursor = sess.current_cursor
+            self._managed_layers.clear()
+
+            opened_names: list[str] = []
+            for target in targets:
+                offset = 0
+                all_feats: list[dict[str, Any]] = []
+                first_page = None
+                while True:
+                    page = bootstrap_managed_layer(
+                        config,
+                        layer_id=target.layer_id,
+                        session_id=sess.id,
+                        limit=1000,
+                        offset=offset,
+                    )
+                    if first_page is None:
+                        first_page = page
+                    all_feats.extend(page.features)
+                    if not page.has_more or page.next_offset is None:
+                        break
+                    offset = page.next_offset
+                if first_page is None or not first_page.crs_code:
+                    continue
+                self._managed_cursor = max(self._managed_cursor, first_page.cursor)
+                geom_type = first_page.geometry_family or "Point"
+                uri = f"{geom_type}?crs=EPSG:{first_page.crs_code}"
+                vlayer = QgsVectorLayer(uri, f"⚡ R029 · {first_page.name}", "memory")
+                prov = vlayer.dataProvider()
+                qfields = [QgsField("ovg_feature_id", QVariant.String)]
+                field_names: list[str] = []
+                for fld in first_page.fields:
+                    fname = str(fld["name"])
+                    field_names.append(fname)
+                    qfields.append(QgsField(fname, self._qgis_field_type(str(fld["data_type"]))))
+                prov.addAttributes(qfields)
+                vlayer.updateFields()
+
+                qfeatures: list[QgsFeature] = []
+                for item in all_feats:
+                    qf = QgsFeature(vlayer.fields())
+                    qf.setGeometry(self._geojson_to_qgs_geometry(item.get("geometry")))
+                    props = item.get("properties") or {}
+                    attrs = [str(item["feature_id"]), *(props.get(fn) for fn in field_names)]
+                    qf.setAttributes(attrs)
+                    qfeatures.append(qf)
+                if qfeatures:
+                    prov.addFeatures(qfeatures)
+                vlayer.updateExtents()
+                if not sess.can_edit:
+                    vlayer.setReadOnly(True)
+                QgsProject.instance().addMapLayer(vlayer)
+                if sess.can_edit:
+                    vlayer.startEditing()
+                self._managed_layers[first_page.layer_id] = {
+                    "map_layer_id": vlayer.id(),
+                    "source_id": first_page.source_id,
+                    "content_revision": first_page.content_revision,
+                    "schema_revision": first_page.schema_revision,
+                    "field_names": field_names,
+                }
+                opened_names.append(first_page.name)
+
+            self.r029_save_button.setEnabled(sess.can_edit and bool(self._managed_layers))
+            worker = _ManagedRealtimeWorker(config, sess.id, self)
+            worker.spatial_changed.connect(lambda: self._managed_delta_debounce.start())
+            worker.session_revoked.connect(self._on_managed_session_revoked)
+            worker.desktop_command.connect(self._on_managed_desktop_command)
+            worker.status_changed.connect(self.realtime_status.setText)
+            self._managed_worker = worker
+            worker.start()
+            mode_txt = "Sửa & Lưu Server-First" if sess.can_edit else "Chỉ đọc (Viewer)"
+            self.ws_status.setText(
+                f"⚡ R029 Managed đã mở {len(opened_names)} lớp ({mode_txt}, cursor={self._managed_cursor}). "
+                "Vẽ/sửa bình thường trên QGIS rồi bấm '💾 Lưu lên Server (R029)'."
+            )
+        except (OpenVietGisError, OSError, ValueError) as exc:
+            QMessageBox.warning(self, "OpenVietGIS R029", str(exc))
+            self.ws_status.setText(f"Lỗi mở R029 Managed: {exc}")
+
+    def _on_managed_session_revoked(self) -> None:
+        self._stop_managed_worker()
+        self.r029_save_button.setEnabled(False)
+        for info in self._managed_layers.values():
+            layer = QgsProject.instance().mapLayer(info["map_layer_id"])
+            if isinstance(layer, QgsVectorLayer):
+                if layer.isEditable():
+                    layer.rollBack()
+                layer.setReadOnly(True)
+        self.realtime_status.setText("🔒 R029: Phiên đã bị thu hồi — toàn bộ lớp chuyển Chỉ đọc.")
+        self.ws_status.setText(
+            "Phiên R029 Managed đã bị thu hồi hoặc hết hạn. Các lớp đã khóa Chỉ đọc."
+        )
+
+    def _on_managed_fetch_delta(self) -> None:
+        if self._managed_session is None or not self._managed_layers:
+            return
+        try:
+            config = self._build_config()
+            delta = fetch_managed_delta(
+                config,
+                session_id=self._managed_session.id,
+                cursor=self._managed_cursor,
+            )
+            if delta.reset_required:
+                self.ws_status.setText(
+                    "🔔 Quyền hoặc cấu trúc lớp đã đổi trên Server — hãy bấm '⚡ R029 Managed' để tải lại."
+                )
+                return
+            applied_count = 0
+            for change in delta.changes:
+                lid = str(change["layer_id"])
+                info = self._managed_layers.get(lid)
+                if info is None:
+                    continue
+                layer = QgsProject.instance().mapLayer(info["map_layer_id"])
+                if not isinstance(layer, QgsVectorLayer):
+                    continue
+                if layer.isEditable() and layer.isModified():
+                    self.ws_status.setText(
+                        "🔔 Có cập nhật delta từ Web/AI — bấm '💾 Lưu lên Server (R029)' để đồng bộ."
+                    )
+                    continue
+                was_edit = layer.isEditable()
+                if was_edit:
+                    layer.commitChanges()
+                prov = layer.dataProvider()
+                id_to_fid: dict[str, int] = {}
+                for feat in layer.getFeatures():
+                    id_to_fid[str(feat["ovg_feature_id"])] = feat.id()
+                removals = [id_to_fid[str(oid)] for oid in change.get("removals", []) if str(oid) in id_to_fid]
+                if removals:
+                    prov.deleteFeatures(removals)
+                    applied_count += len(removals)
+                field_names = info["field_names"]
+                to_add: list[QgsFeature] = []
+                geom_updates: dict[int, QgsGeometry] = {}
+                attr_updates: dict[int, dict[int, Any]] = {}
+                for item in change.get("upserts", []):
+                    oid = str(item["feature_id"])
+                    qgeom = self._geojson_to_qgs_geometry(item.get("geometry"))
+                    props = item.get("properties") or {}
+                    if oid in id_to_fid:
+                        fid = id_to_fid[oid]
+                        geom_updates[fid] = qgeom
+                        attr_updates[fid] = {
+                            idx + 1: props.get(fn) for idx, fn in enumerate(field_names)
+                        }
+                    else:
+                        qf = QgsFeature(layer.fields())
+                        qf.setGeometry(qgeom)
+                        qf.setAttributes([oid, *(props.get(fn) for fn in field_names)])
+                        to_add.append(qf)
+                    applied_count += 1
+                if geom_updates:
+                    prov.changeGeometryValues(geom_updates)
+                if attr_updates:
+                    prov.changeAttributeValues(attr_updates)
+                if to_add:
+                    prov.addFeatures(to_add)
+                layer.updateExtents()
+                layer.triggerRepaint()
+                info["content_revision"] = str(change["content_revision"])
+                if was_edit:
+                    layer.startEditing()
+            self._managed_cursor = delta.next_cursor
+            if applied_count > 0:
+                self.ws_status.setText(
+                    f"⚡ R029 Delta: Đã cập nhật {applied_count} đối tượng từ Web/AI (cursor={self._managed_cursor})."
+                )
+        except OpenVietGisError as exc:
+            if getattr(exc, "status_code", None) in (401, 403):
+                self._on_managed_session_revoked()
+            else:
+                self.ws_status.setText(f"R029 Delta tạm dừng: {exc}")
+
+    def _on_commit_r029_managed(self) -> None:
+        if self._managed_session is None or not self._managed_layers:
+            return
+        allow_deletes = self.allow_deletes_checkbox.isChecked()
+        total_ops = 0
+        try:
+            config = self._build_config()
+            for lid, info in self._managed_layers.items():
+                layer = QgsProject.instance().mapLayer(info["map_layer_id"])
+                if not isinstance(layer, QgsVectorLayer) or not layer.isEditable():
+                    continue
+                buf = layer.editBuffer()
+                if buf is None:
+                    continue
+                field_names: list[str] = info["field_names"]
+                ops: list[dict[str, Any]] = []
+                prov_by_fid = {f.id(): f for f in layer.dataProvider().getFeatures()}
+
+                for fid, feat in buf.addedFeatures().items():
+                    oid = str(feat["ovg_feature_id"] or "").strip() or str(uuid4())
+                    layer.changeAttributeValue(fid, 0, oid)
+                    geom_dict = json.loads(feat.geometry().asJson()) if not feat.geometry().isEmpty() else None
+                    props = {fn: feat[fn] for fn in field_names}
+                    ops.append({
+                        "op_type": "create",
+                        "feature_id": oid,
+                        "geometry": geom_dict,
+                        "properties": props,
+                    })
+
+                changed_fids = set(buf.changedGeometries().keys()) | set(buf.changedAttributeValues().keys())
+                for fid in changed_fids:
+                    if fid in buf.addedFeatures():
+                        continue
+                    live_feat = layer.getFeature(fid)
+                    orig_feat = prov_by_fid.get(fid)
+                    oid = str((orig_feat["ovg_feature_id"] if orig_feat else live_feat["ovg_feature_id"]) or "").strip()
+                    if not oid:
+                        continue
+                    geom_dict = json.loads(live_feat.geometry().asJson()) if not live_feat.geometry().isEmpty() else None
+                    props = {fn: live_feat[fn] for fn in field_names}
+                    ops.append({
+                        "op_type": "update",
+                        "feature_id": oid,
+                        "geometry": geom_dict,
+                        "properties": props,
+                    })
+
+                for fid in buf.deletedFeatureIds():
+                    orig_feat = prov_by_fid.get(fid)
+                    if orig_feat is None:
+                        continue
+                    oid = str(orig_feat["ovg_feature_id"] or "").strip()
+                    if oid:
+                        ops.append({"op_type": "delete", "feature_id": oid})
+
+                if not ops:
+                    continue
+                # Server-First: ONLY commit local memory buffer AFTER durable server receipt!
+                receipt = commit_managed_changes(
+                    config,
+                    session_id=self._managed_session.id,
+                    source_id=info["source_id"],
+                    base_content_revision=info["content_revision"],
+                    base_schema_revision=info["schema_revision"],
+                    operation_id=str(uuid4()),
+                    operations=ops,
+                    summary="QGIS R029 Managed Realtime Edit",
+                    allow_deletes=allow_deletes,
+                )
+                layer.commitChanges()
+                layer.startEditing()
+                info["content_revision"] = receipt.resulting_content_revision
+                self._managed_cursor = max(self._managed_cursor, receipt.event_cursor)
+                total_ops += receipt.operation_count
+
+            if total_ops == 0:
+                self.ws_status.setText("R029 Managed: Chưa có chỉnh sửa mới cần lưu lên Server.")
+            else:
+                self.ws_status.setText(
+                    f"✓ Server đã xác nhận lưu {total_ops} thao tác (R006 durable receipt, cursor={self._managed_cursor})."
+                )
+        except OpenVietGisError as exc:
+            self.ws_status.setText(
+                f"⚠ Server từ chối/chưa xác nhận lưu (bản nháp trên QGIS được giữ nguyên): {exc}"
+            )
+            QMessageBox.warning(self, "R029 Server-First Save", str(exc))
+
+    def _on_managed_desktop_command(self) -> None:
+        if self._managed_session is None:
+            return
+        try:
+            config = self._build_config()
+            cmds = list_desktop_commands(config, session_id=self._managed_session.id, status="pending")
+            for cmd in cmds:
+                tool = str(cmd["tool_name"])
+                args = dict(cmd.get("arguments") or {})
+                choice = QMessageBox.question(
+                    self,
+                    "Xác nhận lệnh AI Desktop (R029)",
+                    f"AI / Web yêu cầu chạy công cụ QGIS được cấp phép:\n\n"
+                    f"- Công cụ: {tool}\n"
+                    f"- Tham số: {json.dumps(args, ensure_ascii=False)}\n\n"
+                    "Bạn có đồng ý cho phép thực thi không?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if choice != QMessageBox.Yes:
+                    respond_desktop_command(
+                        config,
+                        session_id=self._managed_session.id,
+                        command_id=str(cmd["id"]),
+                        status="rejected",
+                        result={"reason": "user_declined"},
+                    )
+                    continue
+                res_payload: dict[str, Any] = {"ok": True}
+                if tool == "inspect_project":
+                    res_payload["layers"] = [
+                        {"layer_id": lid, "name": QgsProject.instance().mapLayer(i["map_layer_id"]).name()}
+                        for lid, i in self._managed_layers.items()
+                        if QgsProject.instance().mapLayer(i["map_layer_id"]) is not None
+                    ]
+                elif tool == "inspect_layer":
+                    lid = str(args.get("layer_id") or "")
+                    info = self._managed_layers.get(lid)
+                    layer = QgsProject.instance().mapLayer(info["map_layer_id"]) if info else None
+                    res_payload["feature_count"] = layer.featureCount() if isinstance(layer, QgsVectorLayer) else 0
+                elif tool == "select_features":
+                    lid = str(args.get("layer_id") or "")
+                    target_ids = {str(x) for x in args.get("feature_ids", [])}
+                    info = self._managed_layers.get(lid)
+                    layer = QgsProject.instance().mapLayer(info["map_layer_id"]) if info else None
+                    if isinstance(layer, QgsVectorLayer):
+                        fids = [f.id() for f in layer.getFeatures() if str(f["ovg_feature_id"]) in target_ids]
+                        layer.selectByIds(fids)
+                        res_payload["selected_count"] = len(fids)
+                respond_desktop_command(
+                    config,
+                    session_id=self._managed_session.id,
+                    command_id=str(cmd["id"]),
+                    status="completed",
+                    result=res_payload,
+                )
+        except OpenVietGisError as exc:
+            self.ws_status.setText(f"R029 AI command error: {exc}")
+
     def closeEvent(self, event: Any) -> None:
         """Clear sensitive bearer token and stop realtime & auto-sync timers when closing."""
+        self._stop_managed_worker()
+        self._managed_delta_debounce.stop()
         self._stop_realtime_worker()
         self._realtime_debounce.stop()
         self._auto_sync_timer.stop()

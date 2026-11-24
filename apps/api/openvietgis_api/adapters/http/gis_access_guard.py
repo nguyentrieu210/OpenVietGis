@@ -34,6 +34,13 @@ SAFE_GET = {
     "/integration-hub/adapters/{adapter_key}",
     "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export",
     "/integration-hub/events",
+    "/integration-hub/managed/sessions",
+    "/integration-hub/managed/sessions/{session_id}",
+    "/integration-hub/managed/bootstrap",
+    "/integration-hub/managed/delta",
+    "/integration-hub/managed/commits/{operation_id}",
+    "/integration-hub/managed/events",
+    "/integration-hub/managed/desktop-sessions/{session_id}/commands",
 }
 SAFE_POST = {
     "/sources/{source_id}/changesets",
@@ -43,6 +50,13 @@ SAFE_POST = {
     "/access/reviews/{changeset_id}",
     "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-preview",
     "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-push",
+    "/integration-hub/managed/sessions",
+    "/integration-hub/managed/commits",
+    "/integration-hub/managed/desktop-sessions/{session_id}/commands",
+    "/integration-hub/managed/desktop-sessions/{session_id}/commands/{command_id}/respond",
+}
+SAFE_DELETE = {
+    "/integration-hub/managed/sessions/{session_id}",
 }
 
 
@@ -79,8 +93,10 @@ def project_access_guard(
     path = str(getattr(request.scope.get("route"), "path", ""))
     marker = "/projects/{project_id}"
     suffix = path.split(marker, 1)[1] if marker in path else "__unknown__"
-    if (request.method == "GET" and suffix in SAFE_GET) or (
-        request.method == "POST" and suffix in SAFE_POST
+    if (
+        (request.method == "GET" and suffix in SAFE_GET)
+        or (request.method == "POST" and suffix in SAFE_POST)
+        or (request.method == "DELETE" and suffix in SAFE_DELETE)
     ):
         return
     raise HTTPException(403, detail="Thao tác chưa được cấp quyền trong phạm vi GIS")

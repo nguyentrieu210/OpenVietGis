@@ -9,16 +9,20 @@ import {
   listBindingPairingTokens,
   listChangesets,
   listIntegrationBindingDrafts,
+  listManagedSessions,
   listQgisBindingCandidates,
   loadCsrfToken,
   resolveBindingConflict,
   revertChangeset,
   revokeBindingPairingToken,
+  revokeManagedSession,
+  sendDesktopCommand,
   type ApiClient,
   type BindingPairingToken,
   type Changeset,
   type IntegrationBindingDraft,
   type IssuedPairingTokenResponse,
+  type ManagedSessionItem,
   type QgisBindingCandidate,
   type SyncConflictRecord
 } from "@openvietgis/client-sdk";
@@ -94,6 +98,10 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
   // Version History & Revert state (Google Sheets style via R006)
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
   const [historyByBinding, setHistoryByBinding] = useState<Record<string, Changeset[]>>({});
+  const [managedSessions, setManagedSessions] = useState<ManagedSessionItem[]>([]);
+  const [managedCursor, setManagedCursor] = useState<number>(0);
+  const [managedEpoch, setManagedEpoch] = useState<number>(1);
+  const [managedOpen, setManagedOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,15 +447,75 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     }
   }
 
+  async function refreshManagedSessions() {
+    try {
+      const res = await listManagedSessions(client, org, projectId);
+      setManagedSessions(res.items);
+      setManagedCursor(res.current_cursor);
+      setManagedEpoch(res.permission_epoch);
+    } catch {
+      setError("Không thể tải danh sách phiên R029 Managed Realtime.");
+    }
+  }
+
+  async function handleRevokeManagedSession(sessionId: string) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const csrf = await loadCsrfToken(client);
+      await revokeManagedSession(client, org, projectId, sessionId, csrf, true);
+      await refreshManagedSessions();
+      setNotice("🔒 Đã thu hồi phiên QGIS R029 — máy trạm đã tự khóa về Chỉ đọc.");
+    } catch {
+      setError("Không thể thu hồi phiên R029.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePingDesktopBridge(sessionId: string) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const csrf = await loadCsrfToken(client);
+      await sendDesktopCommand(
+        client,
+        org,
+        projectId,
+        sessionId,
+        { tool_name: "inspect_project", arguments: {} },
+        csrf
+      );
+      setNotice("🤖 Đã gửi lệnh 'inspect_project' (AI Desktop Bridge) — chờ người dùng xác nhận trên QGIS.");
+    } catch {
+      setError("Không thể gửi lệnh AI Desktop Bridge.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="integration-binding-manager is-compact" aria-label="Quản lý cấu hình QGIS R027">
       <header className="integration-binding-header">
-        <h4>QGIS – Đồng bộ 2 chiều & Mã ghép nối (R027)</h4>
+        <h4>QGIS – Đồng bộ Realtime (R029 Managed) & Mã ghép nối</h4>
         <div className="integration-binding-links">
           <a
-            href="/rewrite/downloads/openvietgis_connector-0.8.0.zip"
-            download="openvietgis_connector-0.8.0.zip"
-          >⬇ Plugin QGIS 0.8.0 (Realtime · Cả Workspace · Hoàn tác)</a>
+            href="/rewrite/downloads/openvietgis_connector-0.9.0.zip"
+            download="openvietgis_connector-0.9.0.zip"
+          >⬇ Plugin QGIS 0.9.0 (R029 Managed Realtime · AI Bridge)</a>
+          <button
+            type="button"
+            className="btn-compact-toggle"
+            onClick={() => {
+              const next = !managedOpen;
+              setManagedOpen(next);
+              if (next) void refreshManagedSessions();
+            }}
+          >
+            {managedOpen ? "Ẩn phiên R029 ▴" : "⚡ Phiên R029 Realtime ▾"}
+          </button>
           {" · "}
           <a
             href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
@@ -464,6 +532,48 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
       {forbidden && <p role="status">Cần quyền quản trị dự án và phạm vi GIS đầy đủ.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+
+      {managedOpen && (
+        <div className="integration-conflict-panel">
+          <div className="integration-conflict-head">
+            <h6>⚡ Phiên R029 Managed Realtime (Cursor #{managedCursor} · Epoch #{managedEpoch})</h6>
+            <button type="button" onClick={() => { void refreshManagedSessions(); }}>↻ Làm mới</button>
+          </div>
+          {managedSessions.length === 0 ? (
+            <p>Chưa có máy QGIS nào mở phiên R029 Managed trong dự án này.</p>
+          ) : (
+            <div className="integration-token-list">
+              {managedSessions.map((s) => (
+                <div key={s.id} className="integration-token-row">
+                  <span>
+                    <strong>{s.device_label}</strong> ({s.client_version}) · {s.actor_display} ·{" "}
+                    {s.capabilities.can_edit ? "Sửa 2 chiều" : "Chỉ đọc"} · Cursor #{s.last_ack_cursor} ·{" "}
+                    {s.state === "active" ? "🟢 Đang hoạt động" : "🔴 Đã thu hồi"}
+                  </span>
+                  {s.state === "active" && (
+                    <span className="integration-binding-actions">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => { void handlePingDesktopBridge(s.id); }}
+                      >
+                        🤖 AI Kiểm tra
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => { void handleRevokeManagedSession(s.id); }}
+                      >
+                        🔒 Thu hồi
+                      </button>
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {!loading && !forbidden && (
         <>

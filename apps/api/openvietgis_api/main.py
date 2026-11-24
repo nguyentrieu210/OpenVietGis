@@ -21,6 +21,7 @@ from openvietgis_api.adapters.http import (
     integration_hub,
     invitations,
     layout_designer,
+    managed_sync,
     map_viewport,
     maps,
     marketplace,
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(external_sources.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(integration_hub.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(integration_bindings.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(managed_sync.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(collaboration.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cad_documents.router, dependencies=[Depends(project_access_guard)])
