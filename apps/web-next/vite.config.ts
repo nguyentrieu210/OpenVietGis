@@ -1,0 +1,16 @@
+import {defineConfig} from "vite";
+import {cpSync,mkdirSync,existsSync,readFileSync} from "node:fs";
+import {fileURLToPath} from "node:url";
+import {join} from "node:path";
+const pkg=fileURLToPath(new URL("../../packages/spatial-workspace/node_modules/cesium/",import.meta.url));
+const source=join(pkg,"Build/Cesium");
+const version=JSON.parse(readFileSync(join(pkg,"package.json"),"utf8")).version;
+if(version!=="1.147.0")throw Error("Update the reviewed Cesium version and its runtime path together.");
+const target=fileURLToPath(new URL("./public/cesium/"+version+"/",import.meta.url));
+// Use the pinned, prebuilt ESM distribution. Avoid re-bundling the 3D engine.
+if(!existsSync(join(source,"index.js")))throw Error("Install the locked Cesium package first.");
+mkdirSync(target,{recursive:true});
+for(const name of ["index.js","Assets","Workers","Widgets","ThirdParty"])cpSync(join(source,name),join(target,name),{recursive:true});
+for(const name of ["LICENSE.md","CONTRIBUTORS.md"])cpSync(join(pkg,name),join(target,name));
+
+export default defineConfig({});

@@ -41,6 +41,7 @@ try{
  });
  await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ không gian"});await modes.waitFor({timeout:30000});
+ await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000});
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});await page.locator(".live-table-row").first().click({noWaitAfter:true});
  await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
  await page.getByLabel("Raster địa hình").selectOption(dem);
@@ -53,7 +54,7 @@ try{
  await page.getByLabel("Góc xoay (°)").fill("90");
  await page.getByRole("button",{name:"Lưu phiên bản định vị"}).click({noWaitAfter:true});
  await page.getByText("Đã lưu định vị v2.").waitFor();
- await page.reload({waitUntil:"domcontentloaded"});
+ await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  await modes.waitFor({timeout:30000});
  await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
  await page.locator(".ovg-model-item").filter({hasText:"fixture.glb"}).getByRole("button",{name:"Lịch sử định vị",exact:true}).click({noWaitAfter:true});
@@ -70,7 +71,7 @@ try{
  await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
  await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
  await page.getByText(/fixture.glb · kho v2/).waitFor();
  assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
@@ -78,7 +79,7 @@ try{
  await layers.getByRole("checkbox",{name:"fixture.glb · v2"}).uncheck();
  await layers.getByRole("checkbox",{name:"Buildings · height_m"}).uncheck();
  await layers.getByRole("checkbox",{name:"Synthetic DEM"}).uncheck();
- const canvas=page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas');let red;
+ const canvas=page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas');let red;
  for(let i=0;i<8;i++){const png=await canvas.screenshot();red=await page.evaluate(async data=>{const image=await createImageBitmap(await(await fetch("data:image/png;base64,"+data)).blob());const c=document.createElement("canvas");c.width=image.width;c.height=image.height;const ctx=c.getContext("2d");ctx.drawImage(image,0,0);const p=ctx.getImageData(0,0,c.width,c.height).data;let n=0,x=0,y=0;for(let i=0;i<p.length;i+=4)if(p[i]>100&&p[i+1]<50&&p[i+2]<50){n++;x+=(i/4)%c.width;y+=Math.floor(i/4/c.width)}return n>100?{x:x/n,y:y/n}:null},png.toString("base64"));if(red)break}
  assert.ok(red,"second model has red pixels");
  const bounds=await canvas.boundingBox();await page.mouse.click(bounds.x+red.x,bounds.y+red.y);
@@ -87,7 +88,7 @@ try{
  await selected.getByRole("button",{name:"Xem đối tượng GIS"}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
  assert.equal(errors.length,0,errors.join("\n"));console.log("PASS pins two project models, rejects mismatched datum, real layer visibility and model-to-GIS selection, revocation");
