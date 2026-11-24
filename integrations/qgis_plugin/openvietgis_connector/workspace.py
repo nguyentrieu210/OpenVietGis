@@ -541,7 +541,9 @@ def commit_workspace(
         )
         if result.stale_revision or not result.can_commit:
             raise WorkspaceConflict("Remote changed since download; preview again.")
-        if (result.create_count + result.update_count + result.delete_count) != remote_count:
+        if (
+            result.create_count + result.update_count + getattr(result, "delete_count", 0)
+        ) != remote_count:
             raise WorkspaceConflict("Server diff differs from reviewed edits; abort.")
         if not allow_deletes and result.omitted_server_feature_count:
             raise WorkspaceConflict("Server reports missing features; abort.")
