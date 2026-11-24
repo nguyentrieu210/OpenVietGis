@@ -280,7 +280,7 @@ def test_native_read_flags_cursor_and_scoped_detail(migrated_database: None) -> 
                 ).status_code
                 == 422
             )
-        for invalid_limit in (0, 101):
+        for invalid_limit in (0, 1001):
             assert client.get(path, params={**pins, "limit": invalid_limit}).status_code == 422
 
         missing = client.get(f"{path}/not-a-real-id", params=pins)
@@ -337,3 +337,19 @@ def test_empty_and_unavailable_native_reads(migrated_database: None) -> None:
                     409,
                     "SOURCE_NOT_READY",
                 )
+
+
+def test_transform_expanded_page_preserves_order_and_coordinates(migrated_database: None) -> None:
+    world = seed_access_world()
+    with _client(world.owner_user_id) as client:
+        path, _, _, pins = _setup(client, world, "reference_points_4326")
+        page = _read(client, path, {**pins, "response_crs": 3857, "limit": 1000})
+        assert len(page["items"]) == 1000
+        assert [item["feature_id"] for item in page["items"]] == [
+            f"point-{n:06d}" for n in range(1, 1001)
+        ]
+        assert page["next_after_feature_id"] == "point-001000"
+        for index in (0, 100, 101, 999):
+            item = page["items"][index]
+            single = _read(client, path + "/" + item["feature_id"], {**pins, "response_crs": 3857})
+            assert single["feature"] == item

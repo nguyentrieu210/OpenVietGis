@@ -6,6 +6,7 @@ Zero PyQt/QGIS imports so it can be unit tested in any standard Python environme
 from __future__ import annotations
 
 import json
+import math
 import re
 import urllib.error
 import urllib.parse
@@ -22,6 +23,7 @@ from .client import (
     _extract_http_error_detail,
     _redact_secret,
 )
+from .snapshot_cache import cache_path, read_cached_record, write_snapshot
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,8 @@ class ManagedBootstrapPage:
     features: tuple[dict[str, Any], ...]
     has_more: bool
     next_offset: int | None
+    cacheable: bool = False
+    feature_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -190,12 +194,14 @@ def bootstrap_managed_layer(
         features=tuple(res.get("features") or ()),
         has_more=bool(res.get("has_more", False)),
         next_offset=int(res["next_offset"]) if res.get("next_offset") is not None else None,
+        cacheable=res.get("cacheable") is True,
+        feature_count=int(res["feature_count"]) if res.get("feature_count") is not None else None,
     )
 
 
 def load_managed_snapshot(
     config: OpenVietGisConfig, *, layer_id: str, session_id: str,
-    permission_epoch: int, limit: int = 1000,
+    permission_epoch: int, limit: int = 1000, cancelled=lambda: False,
 ) -> tuple[ManagedBootstrapPage, list[dict[str, Any]]]:
     """Load a coherent native snapshot before materializing any QGIS layer."""
     first = None
@@ -203,6 +209,8 @@ def load_managed_snapshot(
     features: list[dict[str, Any]] = []
     ids: set[str] = set()
     while True:
+        if cancelled():
+            raise ApiError("Đã hủy tải lớp.")
         page = bootstrap_managed_layer(
             config, layer_id=layer_id, session_id=session_id, limit=limit, offset=offset,
         )
@@ -223,7 +231,7 @@ def load_managed_snapshot(
             if any(not isinstance(n, str) or not n for n in names):
                 raise ApiError("Tên trường không hợp lệ.")
             if len({n.casefold() for n in names}) != len(names) or any(
-                n.casefold() == "ovg_feature_id" for n in names
+                n.casefold() in {"ovg_feature_id","ovg_local_fid"} for n in names
             ):
                 raise ApiError("Tên trường bị trùng hoặc trùng mã định danh hệ thống.")
         elif (
@@ -398,7 +406,7 @@ def diff_managed_snapshots(
     """Diff server-confirmed snapshot against QGIS, including native local saves."""
     removed = baseline.keys() - current.keys()
     if removed and not allow_deletes:
-        raise ApiError("Có đối tượng bị xóa; hãy khôi phục hoặc bật cho phép xóa.")
+        raise ApiError("Có đối tượng bị xóa; cần xác nhận trước khi lưu lên Web.")
     ops = [
         {"op_type": "delete", "feature_id": oid}
         for oid in sorted(removed)
@@ -409,3 +417,159 @@ def diff_managed_snapshots(
         elif current[oid] != baseline[oid]:
             ops.append({"op_type": "update", "feature_id": oid, **current[oid]})
     return ops
+
+
+def native_geometry_wkt(geometry: dict[str, Any]) -> str:
+    """Convert supported native XY coordinates without allocating a temporary layer."""
+    def position(value):
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ApiError("Hình học phải có đúng hai tọa độ XY.")
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in value):
+            raise ApiError("Tọa độ không hợp lệ.")
+        return " ".join(str(v) for v in value)
+
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates")
+    if kind == "Point":
+        return "POINT (" + position(coords) + ")"
+    if kind == "LineString" and isinstance(coords, list) and len(coords) >= 2:
+        return "LINESTRING (" + ", ".join(map(position, coords)) + ")"
+    if kind == "Polygon" and isinstance(coords, list) and coords:
+        if any(not isinstance(r, list) or len(r) < 4 or r[0] != r[-1] for r in coords):
+            raise ApiError("Vòng polygon không hợp lệ.")
+        return "POLYGON (" + ", ".join("(" + ", ".join(map(position, r)) + ")" for r in coords) + ")"
+    raise ApiError("Kiểu hình học chưa được hỗ trợ trong chế độ đồng bộ.")
+
+
+def catch_up_cached_layer(config, session, probe, record, cancelled):
+    """Apply a bounded, complete event interval and verify the final server pin."""
+    cursor = record["cursor"]
+    if cursor < 0 or cursor > probe.cursor:
+        return None
+    features = {str(f["feature_id"]): f for f in record["features"]}
+    if len(features) != len(record["features"]):
+        return None
+    revision = record["revision"]
+    for _ in range(8):
+        if cancelled():
+            return None
+        delta = fetch_managed_delta(config, session_id=session.id, cursor=cursor)
+        if (delta.reset_required or delta.permission_epoch != probe.permission_epoch
+                or delta.next_cursor < cursor or delta.next_cursor > probe.cursor):
+            return None
+        for change in delta.changes:
+            if str(change["source_id"]) != probe.source_id:
+                continue
+            if str(change["layer_id"]) != probe.layer_id:
+                continue
+            for oid in change.get("removals", []):
+                features.pop(str(oid), None)
+            for f in change.get("upserts", []):
+                features[str(f["feature_id"])] = f
+            revision = str(change["content_revision"])
+        if not delta.has_more:
+            if (delta.next_cursor != probe.cursor or revision != probe.content_revision
+                    or len(features) != probe.feature_count):
+                return None
+            # Delta queries read live rows. Re-probe to rule out a concurrent edit or ACL change.
+            final = bootstrap_managed_layer(config, layer_id=probe.layer_id,
+                                            session_id=session.id, limit=1, offset=0)
+            if (not final.cacheable or final.cursor != probe.cursor
+                    or final.permission_epoch != probe.permission_epoch
+                    or final.content_revision != probe.content_revision
+                    or final.schema_revision != probe.schema_revision):
+                return None
+            return list(features.values())
+        if delta.next_cursor <= cursor:
+            return None
+        cursor = delta.next_cursor
+    return None
+
+
+def load_managed_layers(
+    config, layer_ids, binding_id, cancelled=lambda: False, progress=lambda n: None, cache_root=None
+):
+    """Network-only initial load, safe to run outside the QGIS GUI thread."""
+    if cancelled():
+        return None
+    session = create_managed_session(config, binding_id=binding_id)
+    result = []
+    for index, layer_id in enumerate(layer_ids):
+        offset = 0
+        first = None
+        features = []
+        path = cache_path(cache_root, config, layer_id) if cache_root is not None else None
+        if path is not None and path.is_file():
+            # Tiny authenticated read validates current access and revisions before reuse.
+            probe = bootstrap_managed_layer(config, layer_id=layer_id,
+                                            session_id=session.id, limit=1, offset=0)
+            if probe.permission_epoch != session.permission_epoch:
+                raise ApiError("Quyền thay đổi trong lúc tải; hãy mở lại.")
+            record = read_cached_record(path, probe, allow_older=True)
+            cached = None
+            if record is not None:
+                if record["revision"] == probe.content_revision:
+                    cached = record["features"]
+                else:
+                    try:
+                        cached = catch_up_cached_layer(config, session, probe, record, cancelled)
+                    except ApiError as exc:
+                        if exc.status_code in (401, 403):
+                            raise
+                    if cached is not None and not cancelled():
+                        write_snapshot(path, probe, cached)
+            if cached is not None and not cancelled():
+                result.append((probe, cached))
+                progress(100 * (index + 1) / len(layer_ids))
+                continue
+        try:
+            first, features = load_managed_snapshot(
+                config, layer_id=layer_id, session_id=session.id,
+                permission_epoch=session.permission_epoch, limit=5000, cancelled=cancelled,
+            )
+        except ApiError:
+            if cancelled():
+                return None
+            raise
+        if path is not None and not cancelled():
+            write_snapshot(path, first, features)
+        result.append((first, features))
+        progress(100 * (index + 1) / len(layer_ids))
+    return session, result
+
+
+def send_pending_commit(config, pending, *, recover=False, permit_replay=True):
+    """Only network I/O. A retry checks the durable receipt before sending again."""
+    if recover:
+        try:
+            return get_managed_commit_receipt(config, operation_id=pending["operation_id"])
+        except ApiError as exc:
+            if exc.status_code != 404:
+                raise
+            if not permit_replay:
+                raise ApiError("Giao dịch chưa xác nhận; cần đối chiếu trước khi gửi lại.") from exc
+    return commit_managed_changes(config, **pending["request"])
+
+
+def validate_managed_operations(operations, fields):
+    """Preflight mandatory fields without inventing business values."""
+    required = {f["name"]: f.get("display_name") or f["name"] for f in fields
+                if not f.get("nullable", True)}
+    missing = set()
+    affected = 0
+    for op in operations:
+        if op["op_type"] == "delete":
+            continue
+        props = op.get("properties") or {}
+        bad = {label for name, label in required.items() if props.get(name) is None}
+        if bad:
+            affected += 1
+            missing.update(bad)
+        if not op.get("geometry"):
+            raise ApiError("Đối tượng chưa có hình học hợp lệ. Hãy hoàn tất hình học trước khi lưu.")
+    if affected:
+        raise ApiError(
+            f"{affected} đối tượng thiếu trường bắt buộc: {', '.join(sorted(missing))}. "
+            "Mở bảng thuộc tính hoặc biểu mẫu đối tượng, điền các trường này rồi lưu lại. "
+            "Bản nháp vẫn được giữ."
+        )

@@ -165,6 +165,7 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert page_response.status_code == 200, page_response.text
         page = page_response.json()
         assert page["crs_code"] == 4326
+        assert page["cacheable"] is True and page["feature_count"] == 1
         assert page["fields"] and page["features"]
         feature = page["features"][0]
         assert set(feature["properties"]) == {field["name"] for field in page["fields"]}

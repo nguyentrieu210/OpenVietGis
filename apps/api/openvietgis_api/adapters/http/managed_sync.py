@@ -552,7 +552,8 @@ def bootstrap_managed_layer(
         session.execute(
             text(
                 "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
-                "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision "
+                "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision, "
+                "s.feature_count "
                 "FROM spatial.layers l "
                 "JOIN spatial.data_sources s "
                 "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
@@ -577,7 +578,8 @@ def bootstrap_managed_layer(
     fields = (
         session.execute(
             text(
-                "SELECT field_id AS name, type AS data_type, nullable FROM spatial.source_fields "
+                "SELECT field_id AS name, name AS display_name, type AS data_type, nullable "
+                "FROM spatial.source_fields "
                 "WHERE organization_id=:o AND project_id=:p AND source_id=:sid "
                 "ORDER BY ordinal ASC"
             ),
@@ -648,9 +650,14 @@ def bootstrap_managed_layer(
         "schema_revision": str(layer["schema_revision"]),
         "cursor": last_cursor,
         "permission_epoch": perm_epoch,
+        "cacheable": not gis_access.scoped(session, ctx) and layer["feature_count"] is not None,
+        "feature_count": int(layer["feature_count"])
+        if not gis_access.scoped(session, ctx) and layer["feature_count"] is not None
+        else None,
         "fields": [
             {
                 "name": str(f["name"]),
+                "display_name": str(f["display_name"]),
                 "data_type": str(f["data_type"]),
                 "nullable": bool(f["nullable"]),
             }

@@ -941,13 +941,19 @@ class SqlSpatialRepository:
         )
         if current != source:
             raise SpatialValidationError("transform source snapshot disagrees")
-        return transform_response_geometries(
-            self._session,
-            scope=self._scope(context, permission=Permission.PROJECT_READ),
-            source=current,
-            features=features,
-            target_code=target_code,
-            decode=_read_native_wkb,
+        scope = self._scope(context, permission=Permission.PROJECT_READ)
+        if len(features) > 1001:
+            raise SpatialValidationError("transform page exceeds supported limit")
+        if len({f.feature_id for f in features}) != len(features):
+            raise SpatialValidationError("duplicate feature in transform page")
+        return tuple(
+            geometry
+            for start in range(0, max(1, len(features)), 101)
+            for geometry in transform_response_geometries(
+                self._session, scope=scope, source=current,
+                features=features[start:start + 101], target_code=target_code,
+                decode=_read_native_wkb,
+            )
         )
 
     def read_features(

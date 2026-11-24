@@ -19,6 +19,7 @@ REQUIRED = (
     "metadata.txt",
     "client.py",
     "managed_client.py",
+    "snapshot_cache.py",
     "drafts.py",
     "browser_login.py",
     "plugin.py",

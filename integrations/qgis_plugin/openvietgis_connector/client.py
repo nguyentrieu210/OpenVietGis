@@ -395,6 +395,9 @@ def _extract_http_error_detail(exc: urllib.error.HTTPError, secret: str) -> str:
             decoded = json.loads(raw_body.decode("utf-8", errors="replace"))
             if isinstance(decoded, dict) and isinstance(decoded.get("detail"), str):
                 detail = decoded["detail"]
+            elif isinstance(decoded, dict) and isinstance(decoded.get("message"), str):
+                code = decoded.get("code")
+                detail = f"{code}: {decoded['message']}" if isinstance(code, str) else decoded["message"]
         except (ValueError, TypeError):
             pass
     sanitized = _redact_secret(str(detail).strip(), secret)
