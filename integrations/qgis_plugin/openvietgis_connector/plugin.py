@@ -79,16 +79,18 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("OpenVietGIS Connector (0.5.0)")
-        self.setMinimumWidth(420)
+        self.setWindowTitle("OpenVietGIS Connector (0.7.0)")
+        self.setMinimumSize(620, 620)
 
         self._layers: list[QgisLayerInfo] = []
+        self._sync_push_enabled: bool = False
         self._pinned_revisions: dict[str, tuple[str, str]] = {}
         self._pending_preview: SyncPreviewResult | None = None
         self._pending_preview_context: tuple[str, str, str, str] | None = None
         self._workspace_root: Path | None = None
         self._workspace_preview: WorkspaceSyncPreview | None = None
         self._workspace_map_layer_id: str | None = None
+        self._active_workspaces: dict[str, tuple[Path, str]] = {}
         self._preferred_layer_id: str | None = None
         self._auto_sync_busy: bool = False
         self._auto_sync_timer = QTimer(self)
@@ -175,17 +177,26 @@ class OpenVietGisConnectorDialog(QDialog):
         pair_layout.addWidget(self.manual_conn_box)
         root_layout.addWidget(pair_group)
 
-        # 2. Layer Picker (compact, directly visible)
-        layers_group = QGroupBox("Bước 2 · Chọn lớp bản đồ")
+        # 2. Layer Picker (multi-layer checkboxes, wide readable table)
+        layers_group = QGroupBox("Bước 2 · Chọn một hoặc nhiều lớp bản đồ")
         layers_layout = QVBoxLayout(layers_group)
+        select_bar = QHBoxLayout()
+        self.select_all_layers_btn = QPushButton("☑ Chọn tất cả")
+        self.select_all_layers_btn.clicked.connect(lambda: self._set_all_layers_checked(True))
+        self.clear_all_layers_btn = QPushButton("☐ Bỏ chọn")
+        self.clear_all_layers_btn.clicked.connect(lambda: self._set_all_layers_checked(False))
+        select_bar.addWidget(self.select_all_layers_btn)
+        select_bar.addWidget(self.clear_all_layers_btn)
+        select_bar.addStretch(1)
+        layers_layout.addLayout(select_bar)
+
         self.layers_table = QTableWidget(0, 4)
-        self.layers_table.setMinimumHeight(150)
-        self.layers_table.setMaximumHeight(220)
+        self.layers_table.setMinimumHeight(200)
         self.layers_table.setHorizontalHeaderLabels(
-            ["Tên lớp", "Loại", "CRS", "Trạng thái"]
+            ["Tên lớp (tích chọn)", "Loại", "CRS", "Chế độ"]
         )
         self.layers_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.layers_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.layers_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.layers_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.layers_table.itemSelectionChanged.connect(self._on_layer_selection_changed)
         header = self.layers_table.horizontalHeader()
@@ -424,31 +435,57 @@ class OpenVietGisConnectorDialog(QDialog):
             return
 
         self._layers = list(profile.layers)
+        self._sync_push_enabled = bool(profile.sync_push_enabled)
         self._populate_layers_table()
-        scoped_note = "scoped ACL" if profile.scoped_access else "project role"
-        sync_note = "two-step sync enabled" if profile.sync_push_enabled else "read-only"
+        scoped_note = "scoped ACL" if profile.scoped_access else "quyền dự án"
+        sync_note = "⇄ ĐỒNG BỘ 2 CHIỀU SẴN SÀNG" if self._sync_push_enabled else "chỉ đọc"
         self.status_label.setText(
-            f"Loaded {len(self._layers)} authorized layer(s) "
-            f"[policy={profile.default_write_policy}, status={profile.execution_status}, "
-            f"access={scoped_note}, mode={sync_note}]."
+            f"Đã tải {len(self._layers)} lớp ({scoped_note} · {sync_note})."
         )
         self._update_action_button_states()
+
+    def _set_all_layers_checked(self, checked: bool) -> None:
+        state = Qt.Checked if checked else Qt.Unchecked
+        for row_idx in range(self.layers_table.rowCount()):
+            item = self.layers_table.item(row_idx, 0)
+            if item is not None:
+                item.setCheckState(state)
+
+    def _checked_or_selected_layers(self) -> list[QgisLayerInfo]:
+        checked: list[QgisLayerInfo] = []
+        for row_idx, layer in enumerate(self._layers):
+            item = self.layers_table.item(row_idx, 0)
+            if item is not None and item.checkState() == Qt.Checked:
+                checked.append(layer)
+        if checked:
+            return checked
+        selected_rows = sorted({idx.row() for idx in self.layers_table.selectedIndexes()})
+        if selected_rows:
+            return [self._layers[r] for r in selected_rows if 0 <= r < len(self._layers)]
+        single = self._selected_layer()
+        return [single] if single is not None else []
 
     def _populate_layers_table(self) -> None:
         self.layers_table.setRowCount(len(self._layers))
         for row_idx, layer in enumerate(self._layers):
             name_item = QTableWidgetItem(layer.name)
             name_item.setData(Qt.UserRole, layer.layer_id)
+            name_item.setFlags(name_item.flags() | Qt.ItemIsUserCheckable)
+            name_item.setCheckState(
+                Qt.Checked if layer.layer_id == self._preferred_layer_id else Qt.Unchecked
+            )
 
             geom_item = QTableWidgetItem(f"{layer.geometry_family} ({layer.dimensions})")
             crs_item = QTableWidgetItem(layer.crs_display)
 
-            if layer.export_permitted:
-                export_text = "Export Ready (Read-Only)"
+            if layer.export_permitted and self._sync_push_enabled:
+                export_text = "⇄ 2 chiều (Sửa & Đồng bộ)"
+            elif layer.export_permitted:
+                export_text = "Chỉ đọc (Read-Only)"
             elif not layer.crs_explicit:
-                export_text = "Blocked (Explicit CRS Required)"
+                export_text = "Thiếu CRS rõ ràng"
             else:
-                export_text = "Not Permitted"
+                export_text = "Không có quyền"
             export_item = QTableWidgetItem(export_text)
 
             self.layers_table.setItem(row_idx, 0, name_item)
@@ -541,30 +578,39 @@ class OpenVietGisConnectorDialog(QDialog):
             self._workspace_map_layer_id = None
 
     def _on_create_workspace(self) -> None:
-        layer = self._selected_layer()
-        if layer is None or not layer.export_permitted or not layer.crs_explicit:
-            QMessageBox.warning(self, "R027 Workspace", "Chọn lớp QGIS được phép xuất và có CRS hợp lệ.")
+        targets = [
+            lyr for lyr in self._checked_or_selected_layers()
+            if lyr.export_permitted and lyr.crs_explicit
+        ]
+        if not targets:
+            QMessageBox.warning(
+                self, "OpenVietGIS", "Hãy tích chọn ít nhất 1 lớp hợp lệ (có CRS) để mở sửa."
+            )
             return
         try:
             config = self._build_config()
-            root = initialize_workspace(
-                config, layer.layer_id,
-                self.download_dir_input.text().strip() or str(Path.home()),
-            )
-            self._workspace_root = root
-            self._workspace_preview = None
-            self.ws_commit_button.setEnabled(False)
-            self._open_working_layer()
-            opened = self._workspace_layer()
-            if opened is not None and not opened.isEditable():
-                opened.startEditing()
+            base_dir = self.download_dir_input.text().strip() or str(Path.home())
+            opened_names: list[str] = []
+            for target in targets:
+                root = initialize_workspace(config, target.layer_id, base_dir)
+                self._workspace_root = root
+                self._workspace_preview = None
+                self.ws_commit_button.setEnabled(False)
+                self._open_working_layer()
+                opened = self._workspace_layer()
+                if opened is not None:
+                    if not opened.isEditable():
+                        opened.startEditing()
+                    self._active_workspaces[target.layer_id] = (root, opened.id())
+                opened_names.append(target.name)
             self.ws_status.setText(
-                "Đã mở lớp và bật sẵn chế độ sửa! Hãy sửa điểm/đường/thuộc tính "
-                "trên bản đồ QGIS rồi bấm '⇄ Đồng bộ 2 chiều ngay'."
+                f"Đã mở {len(opened_names)} lớp và bật sẵn chế độ sửa ({', '.join(opened_names[:3])}"
+                + ("..." if len(opened_names) > 3 else "")
+                + "). Sửa trực tiếp trên bản đồ rồi bấm '⇄ Đồng bộ 2 chiều ngay'."
             )
         except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
-            QMessageBox.warning(self, "R027 Workspace", str(exc))
-            self.ws_status.setText(f"Lỗi tạo workspace: {exc}")
+            QMessageBox.warning(self, "OpenVietGIS", str(exc))
+            self.ws_status.setText(f"Lỗi mở lớp: {exc}")
 
     def _on_open_workspace(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
@@ -635,50 +681,62 @@ class OpenVietGisConnectorDialog(QDialog):
             self._auto_sync_busy = False
 
     def _on_sync_now_one_click(self) -> None:
-        if self._workspace_root is None:
+        items: list[tuple[str, Path, str | None]] = [
+            (lid, root, map_lid) for lid, (root, map_lid) in self._active_workspaces.items()
+        ]
+        if not items and self._workspace_root is not None:
+            items = [("current", self._workspace_root, self._workspace_map_layer_id)]
+        if not items:
             QMessageBox.warning(
                 self, "OpenVietGIS", "Hãy bấm '1. Mở lớp để sửa trên QGIS' trước."
             )
             return
+        total_pushed = 0
+        total_pulled = 0
+        conflicts_found: list[str] = []
         try:
             config = self._build_config()
-            layer = self._workspace_layer()
-            if layer is not None and layer.isEditable() and not layer.commitChanges():
-                raise WorkspaceConflict(
-                    "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
-                )
-            preview = preview_workspace(config, self._workspace_file().parent)
-            if preview.conflicts:
-                self._workspace_preview = preview
-                self.ws_commit_button.setEnabled(False)
-                self.ws_status.setText(
-                    "CÓ XUNG ĐỘT — KHÔNG GHI DỮ LIỆU: "
-                    + "; ".join(preview.conflicts[:5])
-                )
-                QMessageBox.warning(
-                    self,
-                    "Phát hiện xung đột",
-                    "Không thể tự đồng bộ do có xung đột:\n" + "\n".join(preview.conflicts[:5]),
-                )
-                return
-            if not preview.to_server and not preview.to_local:
-                self.ws_status.setText(
-                    "Đã khớp 100% — chưa có chỉnh sửa mới ở cả QGIS lẫn Web. "
-                    "Hãy sửa 1 điểm/thuộc tính rồi bấm lại."
-                )
-                return
-            self._require_workspace_layer_closed()
-            receipt = commit_workspace(config, preview, confirmed_digest=preview.digest)
+            for lid, root, map_lid in items:
+                self._workspace_root = root
+                self._workspace_map_layer_id = map_lid
+                layer = self._workspace_layer()
+                if layer is not None and layer.isEditable() and not layer.commitChanges():
+                    raise WorkspaceConflict(
+                        "Không thể tự lưu chỉnh sửa trên QGIS. Hãy bấm Save và tắt Edit Mode."
+                    )
+                preview = preview_workspace(config, root)
+                if preview.conflicts:
+                    conflicts_found.extend(preview.conflicts[:3])
+                    continue
+                if not preview.to_server and not preview.to_local:
+                    continue
+                self._require_workspace_layer_closed()
+                receipt = commit_workspace(config, preview, confirmed_digest=preview.digest)
+                total_pushed += int(receipt["pushed"])
+                total_pulled += int(receipt["pulled"])
+                self._open_working_layer()
+                reopened = self._workspace_layer()
+                if reopened is not None:
+                    if not reopened.isEditable():
+                        reopened.startEditing()
+                    if lid != "current":
+                        self._active_workspaces[lid] = (root, reopened.id())
             self._workspace_preview = None
             self.ws_commit_button.setEnabled(False)
-            self._open_working_layer()
-            opened = self._workspace_layer()
-            if opened is not None and not opened.isEditable():
-                opened.startEditing()
-            self.ws_status.setText(
-                f"✓ Đã đồng bộ 2 chiều! Đẩy lên Web: {receipt['pushed']} · "
-                f"Kéo về QGIS: {receipt['pulled']}."
-            )
+            if conflicts_found:
+                self.ws_status.setText("CÓ XUNG ĐỘT: " + "; ".join(conflicts_found[:5]))
+                QMessageBox.warning(
+                    self, "Phát hiện xung đột", "\n".join(conflicts_found[:5])
+                )
+            elif total_pushed == 0 and total_pulled == 0:
+                self.ws_status.setText(
+                    f"Đã kiểm tra {len(items)} lớp — khớp 100%, chưa có chỉnh sửa mới ở QGIS hay Web."
+                )
+            else:
+                self.ws_status.setText(
+                    f"✓ Đã đồng bộ 2 chiều ({len(items)} lớp)! "
+                    f"Đẩy lên Web: {total_pushed} · Kéo về QGIS: {total_pulled}."
+                )
         except (OpenVietGisError, WorkspaceConflict, OSError, ValueError) as exc:
             self.ws_status.setText(f"Lỗi đồng bộ: {exc}")
             QMessageBox.warning(self, "Lỗi đồng bộ OpenVietGIS", str(exc))
@@ -1072,6 +1130,8 @@ class OpenVietGisConnectorPlugin:
             self.dock.setObjectName("OpenVietGisConnectorDock")
             self.dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
             self.dock.setWidget(self.dialog)
+            self.dock.setMinimumWidth(620)
+            self.dock.resize(660, 740)
             self.iface.addDockWidget(Qt.RightDockWidgetArea, self.dock)
         self.dock.show()
         self.dock.raise_()

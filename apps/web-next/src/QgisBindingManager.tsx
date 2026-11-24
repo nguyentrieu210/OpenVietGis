@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ApiError,
   activateQgisBinding,
@@ -36,6 +36,16 @@ function formatJsonValue(value: unknown): string {
   }
 }
 
+function slugPart(raw: string): string {
+  const cleaned = raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return cleaned || "layer";
+}
+
 function stateLabel(binding: IntegrationBindingDraft): string {
   if (binding.state === "active") {
     return binding.connected ? "Đang hoạt động · Đã ghép nối" : "Đang hoạt động";
@@ -61,9 +71,10 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [selectedLayer, setSelectedLayer] = useState("");
-  const [selectedFields, setSelectedFields] = useState<string[]>([]);
-  const [datasetRef, setDatasetRef] = useState("");
+
+  // Compact multi-layer selection
+  const [selectedLayers, setSelectedLayers] = useState<string[]>([]);
+  const [datasetPrefix, setDatasetPrefix] = useState("qgis_sync");
 
   // Pha A: Pairing Token state
   const [pairingOpenId, setPairingOpenId] = useState<string | null>(null);
@@ -83,9 +94,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     setError("");
     setForbidden(false);
     setNotice("");
-    setSelectedLayer("");
-    setSelectedFields([]);
-    setDatasetRef("");
+    setSelectedLayers([]);
     setBindings([]);
     setOptions([]);
     setPairingOpenId(null);
@@ -111,19 +120,6 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     return () => { cancelled = true; };
   }, [client, org, projectId]);
 
-  const candidate = useMemo(
-    () => options.find((item) => item.layer_id === selectedLayer) ?? null,
-    [options, selectedLayer]
-  );
-
-  function selectLayer(id: string) {
-    setSelectedLayer(id);
-    const next = options.find((item) => item.layer_id === id);
-    setSelectedFields(next ? next.allowed_field_ids.slice(0, 100) : []);
-    setError("");
-    setNotice("");
-  }
-
   async function copyText(text: string, label: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -133,43 +129,79 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     }
   }
 
-  async function createDraft() {
-    if (!candidate || selectedFields.length === 0 || saving) return;
-    const name = datasetRef.trim();
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(name)) {
-      setError("Mã bộ dữ liệu chỉ được dùng chữ, số, dấu chấm, gạch nối hoặc gạch dưới.");
+  function toggleLayer(id: string) {
+    setSelectedLayers((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+    setError("");
+  }
+
+  async function createBatchBindings() {
+    const targets = options.filter((item) => selectedLayers.includes(item.layer_id));
+    if (targets.length === 0 || saving) return;
+    const prefix = slugPart(datasetPrefix.trim() || "qgis_sync");
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(prefix)) {
+      setError("Tiền tố mã chỉ được dùng chữ không dấu, số, dấu chấm, gạch nối hoặc gạch dưới.");
       return;
     }
     setSaving(true);
     setError("");
     setNotice("");
+    let createdCount = 0;
+    let skippedCount = 0;
+    const added: IntegrationBindingDraft[] = [];
     try {
       const csrf = await loadCsrfToken(client);
-      const created = await createQgisBindingDraft(
-        client, org, projectId,
-        {
-          adapter_key: "qgis",
-          layer_id: candidate.layer_id,
-          external_dataset_ref: name,
-          direction: "bidirectional_manual",
-          source_crs_code: candidate.stored_crs_code,
-          target_crs_code: candidate.stored_crs_code,
-          external_primary_key: "ovg_feature_id",
-          allowed_field_ids: selectedFields
-        },
-        csrf
-      );
-      setBindings((previous) => [created, ...previous]);
-      setDatasetRef("");
-      setNotice("Đã tạo cấu hình QGIS. Bấm 'Kích hoạt' hoặc 'Mã ghép nối QGIS' để kết nối trực tiếp.");
-    } catch (reason: unknown) {
-      if (reason instanceof ApiError && reason.status === 409) {
-        setError("Cấu hình với mã bộ dữ liệu này đã tồn tại trên lớp đã chọn.");
-      } else if (reason instanceof ApiError && reason.status === 422) {
-        setError("Dữ liệu cấu hình không hợp lệ (kiểm tra lớp, CRS và trường đã chọn).");
-      } else {
-        setError("Không thể tạo cấu hình QGIS.");
+      for (let i = 0; i < targets.length; i += 1) {
+        const target = targets[i]!;
+        const refName = targets.length === 1
+          ? prefix
+          : `${prefix}_${slugPart(target.layer_name)}`.slice(0, 128);
+        try {
+          const draft = await createQgisBindingDraft(
+            client,
+            org,
+            projectId,
+            {
+              adapter_key: "qgis",
+              layer_id: target.layer_id,
+              external_dataset_ref: refName,
+              direction: "bidirectional_manual",
+              source_crs_code: target.stored_crs_code,
+              target_crs_code: target.stored_crs_code,
+              external_primary_key: "ovg_feature_id",
+              allowed_field_ids: target.allowed_field_ids.slice(0, 100)
+            },
+            csrf
+          );
+          const activated = await activateQgisBinding(
+            client,
+            org,
+            projectId,
+            draft.id,
+            draft.revision,
+            csrf
+          );
+          added.push(activated);
+          createdCount += 1;
+        } catch (reason: unknown) {
+          if (reason instanceof ApiError && reason.status === 409) {
+            skippedCount += 1;
+          } else {
+            throw reason;
+          }
+        }
       }
+      if (added.length > 0) {
+        setBindings((prev) => [...added, ...prev]);
+      }
+      setSelectedLayers([]);
+      setNotice(
+        `Đã tạo & kích hoạt ${createdCount} cấu hình QGIS` +
+        (skippedCount > 0 ? ` (bỏ qua ${skippedCount} cấu hình đã tồn tại).` : ".")
+      );
+    } catch {
+      setError("Không thể tạo cấu hình cho một số lớp đã chọn.");
     } finally {
       setSaving(false);
     }
@@ -186,11 +218,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
         client, org, projectId, binding.id, binding.revision, csrf
       );
       setBindings((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-      setNotice(`Đã kích hoạt cấu hình '${binding.external_dataset_ref}'.`);
-    } catch (reason: unknown) {
-      setError(reason instanceof ApiError && reason.status === 409
-        ? "Phiên bản cấu hình đã thay đổi; hãy tải lại."
-        : "Không thể kích hoạt cấu hình.");
+      setNotice(`Đã kích hoạt '${binding.external_dataset_ref}'.`);
+    } catch {
+      setError("Không thể kích hoạt cấu hình.");
     } finally {
       setSaving(false);
     }
@@ -210,15 +240,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
       if (action === "revoke" && issuedPairing?.binding.id === binding.id) {
         setIssuedPairing(null);
       }
-      setNotice(action === "pause"
-        ? "Đã tạm dừng cấu hình."
-        : "Đã thu hồi vĩnh viễn cấu hình và toàn bộ mã ghép nối liên quan.");
-    } catch (reason: unknown) {
-      if (reason instanceof ApiError && reason.status === 409) {
-        setError("Phiên bản cấu hình đã thay đổi; hãy đóng mở lại hộp thoại.");
-      } else {
-        setError("Không thể cập nhật trạng thái cấu hình.");
-      }
+      setNotice(action === "pause" ? "Đã tạm dừng." : "Đã thu hồi cấu hình & mã ghép nối.");
+    } catch {
+      setError("Không thể cập nhật trạng thái cấu hình.");
     } finally {
       setSaving(false);
     }
@@ -260,9 +284,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
         ...prev,
         [binding.id]: [res.token, ...(prev[binding.id] ?? [])]
       }));
-      setNotice("Đã tạo mã ghép nối QGIS & kích hoạt cấu hình. Hãy sao chép mã ngay (chỉ hiện 1 lần).");
+      setNotice("Đã tạo mã ghép nối QGIS — sao chép ngay (chỉ hiện 1 lần).");
     } catch {
-      setError("Không thể tạo mã ghép nối QGIS (kiểm tra quyền quản trị tổ chức/dự án).");
+      setError("Không thể tạo mã ghép nối QGIS.");
     } finally {
       setSaving(false);
     }
@@ -280,7 +304,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
         ...prev,
         [bindingId]: (prev[bindingId] ?? []).map((t) => (t.id === revoked.id ? revoked : t))
       }));
-      setNotice("Đã thu hồi mã ghép nối QGIS ngay lập tức.");
+      setNotice("Đã thu hồi mã ghép nối.");
     } catch {
       setError("Không thể thu hồi mã ghép nối.");
     } finally {
@@ -313,7 +337,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     if (decision === "merge") {
       const raw = (mergeDrafts[conflict.id] ?? "").trim();
       if (!raw) {
-        setError("Nhập giá trị gộp trước khi bấm 'Lưu giá trị gộp'.");
+        setError("Nhập giá trị gộp trước khi lưu.");
         return;
       }
       try {
@@ -345,7 +369,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
           ? { ...b, open_conflicts_count: Math.max(0, (b.open_conflicts_count ?? 1) - 1) }
           : b
       )));
-      setNotice(`Đã xử lý xung đột đối tượng ${conflict.feature_id}: ${conflictStatusLabel(updated.status)}.`);
+      setNotice(`Đã xử lý xung đột ${conflict.feature_id}: ${conflictStatusLabel(updated.status)}.`);
     } catch {
       setError("Không thể lưu quyết định xử lý xung đột.");
     } finally {
@@ -354,99 +378,100 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
   }
 
   return (
-    <section className="integration-binding-manager" aria-label="Quản lý cấu hình QGIS R027">
+    <section className="integration-binding-manager is-compact" aria-label="Quản lý cấu hình QGIS R027">
       <header className="integration-binding-header">
-        <h4>QGIS – Liên thông hai chiều & Mã ghép nối (R027)</h4>
-        <span>Pha A + B · Pairing & Xung đột</span>
+        <h4>QGIS – Đồng bộ 2 chiều & Mã ghép nối (R027)</h4>
+        <div className="integration-binding-links">
+          <a
+            href="/rewrite/downloads/openvietgis_connector-0.7.0.zip"
+            download="openvietgis_connector-0.7.0.zip"
+          >⬇ Plugin QGIS 0.7.0 (Khung lớn · Đa lớp · 2 chiều)</a>
+          {" · "}
+          <a
+            href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >Hướng dẫn</a>
+        </div>
       </header>
-      <p>
-        Tạo cấu hình, cấp <strong>Mã ghép nối QGIS</strong> trực tiếp (không cần vào Developer Portal) và xử lý xung đột giữa bản Web / bản QGIS ngay tại đây. Không tự ghi/xóa ngầm — mọi đồng bộ đều qua xem trước & R006 Changeset.
-        {" "}<a
-          href="/rewrite/downloads/openvietgis_connector-0.6.0.zip"
-          download="openvietgis_connector-0.6.0.zip"
-        >⬇ Tải Plugin QGIS 0.6.0 (Đồng bộ 1 chạm + Tự động 15s)</a>
-        {" · "}<a
-          href="https://github.com/nguyentrieu210/OpenVietGis/blob/main/integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md"
-          target="_blank"
-          rel="noopener noreferrer"
-        >Hướng dẫn cài & sử dụng (Tiếng Việt)</a>.
+      <p className="integration-binding-sub">
+        Chọn 1 hoặc nhiều lớp bên dưới để tạo & kích hoạt kết nối QGIS 2 chiều. Không tự ghi/xóa ngầm.
       </p>
-      {loading && <p role="status">Đang kiểm tra quyền và các lớp đủ điều kiện…</p>}
-      {forbidden && <p role="status">Quản lý cấu hình dành cho tài khoản có quyền quản trị dự án và phạm vi GIS đầy đủ.</p>}
+
+      {loading && <p role="status">Đang tải danh sách lớp…</p>}
+      {forbidden && <p role="status">Cần quyền quản trị dự án và phạm vi GIS đầy đủ.</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+
       {!loading && !forbidden && (
         <>
-          <div className="integration-binding-form">
-            <label>
-              Lớp bản đồ
-              <select
-                aria-label="Chọn lớp kết nối QGIS"
-                value={selectedLayer}
-                onChange={(e) => selectLayer(e.target.value)}
-                disabled={saving}
-              >
-                <option value="">Chọn lớp có CRS kiểm chứng và hình học 2D…</option>
-                {options.map((item) => (
-                  <option key={item.layer_id} value={item.layer_id}>
-                    {item.layer_name} · EPSG:{item.stored_crs_code}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Mã bộ dữ liệu QGIS (không phải đường dẫn hoặc URL)
-              <input
-                type="text"
-                value={datasetRef}
-                maxLength={128}
-                autoComplete="off"
-                placeholder="vi_du_ban_do_dia_chinh_01"
-                disabled={saving}
-                onChange={(e) => setDatasetRef(e.target.value)}
-              />
-            </label>
-          </div>
-          {candidate && (
-            <fieldset className="integration-binding-fields">
-              <legend>Trường được phép ánh xạ ({selectedFields.length}/{candidate.allowed_field_ids.length})</legend>
-              {candidate.allowed_field_ids.map((field) => (
-                <label key={field}>
+          <div className="integration-compact-picker">
+            <div className="integration-compact-picker-bar">
+              <strong>Chọn lớp ({selectedLayers.length}/{options.length})</strong>
+              <div className="integration-binding-actions">
+                <button
+                  type="button"
+                  disabled={saving || options.length === 0}
+                  onClick={() => setSelectedLayers(options.map((o) => o.layer_id))}
+                >☑ Chọn tất cả</button>
+                <button
+                  type="button"
+                  disabled={saving || selectedLayers.length === 0}
+                  onClick={() => setSelectedLayers([])}
+                >☐ Bỏ chọn</button>
+              </div>
+            </div>
+            <div className="integration-layer-checklist">
+              {options.map((item) => (
+                <label key={item.layer_id} className={selectedLayers.includes(item.layer_id) ? "is-checked" : ""}>
                   <input
                     type="checkbox"
-                    checked={selectedFields.includes(field)}
+                    checked={selectedLayers.includes(item.layer_id)}
                     disabled={saving}
-                    onChange={(event) => {
-                      setSelectedFields((previous) => event.target.checked
-                        ? [...previous, field].slice(0, 100)
-                        : previous.filter((value) => value !== field));
-                    }}
+                    onChange={() => toggleLayer(item.layer_id)}
                   />
-                  {field}
+                  <span>
+                    <b>{item.layer_name}</b>
+                    <small>EPSG:{item.stored_crs_code} · {item.allowed_field_ids.length} trường</small>
+                  </span>
                 </label>
               ))}
-            </fieldset>
-          )}
-          <button
-            type="button"
-            className="integration-binding-create"
-            disabled={saving || !candidate || selectedFields.length === 0 || !datasetRef.trim()}
-            onClick={() => { void createDraft(); }}
-          >
-            {saving ? "Đang xử lý…" : "＋ Tạo cấu hình QGIS"}
-          </button>
-          <h5>Cấu hình trong dự án ({bindings.length})</h5>
+            </div>
+            <div className="integration-compact-create-row">
+              <input
+                type="text"
+                value={datasetPrefix}
+                maxLength={64}
+                autoComplete="off"
+                placeholder="Tiền tố mã (VD: qgis_sync)"
+                disabled={saving}
+                onChange={(e) => setDatasetPrefix(e.target.value)}
+              />
+              <button
+                type="button"
+                className="integration-binding-create"
+                disabled={saving || selectedLayers.length === 0}
+                onClick={() => { void createBatchBindings(); }}
+              >
+                {saving
+                  ? "Đang xử lý…"
+                  : `＋ Tạo & Kích hoạt (${selectedLayers.length} lớp)`}
+              </button>
+            </div>
+          </div>
+
+          <h5 className="integration-compact-heading">Cấu hình đang có ({bindings.length})</h5>
           {bindings.length === 0 ? (
-            <p>Chưa có cấu hình. Tạo một cấu hình phía trên rồi bấm "🔑 Mã ghép nối QGIS" để kết nối thẳng từ QGIS Desktop.</p>
+            <p className="integration-binding-sub">Chưa có cấu hình. Tích chọn các lớp ở trên rồi bấm Tạo & Kích hoạt.</p>
           ) : (
-            <div className="integration-binding-list">
+            <div className="integration-binding-list is-compact">
               {bindings.map((binding) => {
                 const openCount = binding.open_conflicts_count ?? 0;
                 const tokens = pairingTokens[binding.id] ?? [];
                 const conflicts = conflictsByBinding[binding.id] ?? [];
                 return (
                   <article key={binding.id} className={binding.state === "active" ? "is-active-binding" : ""}>
-                    <div>
+                    <div className="integration-binding-summary">
                       <strong>{binding.external_dataset_ref}</strong>
                       <small>
                         {options.find((item) => item.layer_id === binding.layer_id)?.layer_name ?? binding.layer_id}
@@ -461,7 +486,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                       )}
                       {binding.state !== "revoked" && (
                         <button type="button" className="is-pair" disabled={saving}
-                          onClick={() => { void togglePairing(binding.id); }}>🔑 Mã ghép nối QGIS</button>
+                          onClick={() => { void togglePairing(binding.id); }}>🔑 Mã ghép nối</button>
                       )}
                       <button type="button" className={openCount > 0 ? "is-conflict-alert" : ""} disabled={saving}
                         onClick={() => { void toggleConflicts(binding.id); }}>
@@ -479,10 +504,9 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
 
                     {pairingOpenId === binding.id && (
                       <div className="integration-pairing-panel">
-                        <h6>🔑 Ghép nối trực tiếp QGIS Desktop (Pha A)</h6>
                         <div className="integration-pairing-row">
                           <label>
-                            Tên máy / thiết bị
+                            Tên máy
                             <input
                               type="text"
                               value={pairingLabel}
@@ -492,7 +516,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                             />
                           </label>
                           <label>
-                            Thời hạn
+                            Hạn
                             <select value={pairingDays} disabled={saving} onChange={(e) => setPairingDays(e.target.value)}>
                               <option value="7">7 ngày</option>
                               <option value="30">30 ngày</option>
@@ -507,16 +531,16 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
 
                         {issuedPairing && issuedPairing.binding.id === binding.id && (
                           <div className="integration-pairing-secret" role="status">
-                            <strong>Sao chép Mã ghép nối nhanh (chỉ hiển thị 1 lần — dán thẳng vào QGIS Plugin 0.4.0):</strong>
+                            <strong>Mã ghép nối nhanh (chỉ hiện 1 lần — dán vào QGIS Plugin 0.7.0):</strong>
                             <input readOnly aria-label="Mã ghép nối nhanh QGIS" value={issuedPairing.pairing_code} />
                             <div className="integration-binding-actions">
                               <button type="button" className="is-pair" onClick={() => { void copyText(issuedPairing.pairing_code, "Mã ghép nối QGIS"); }}>
                                 📋 Sao chép Mã ghép nối
                               </button>
                               <button type="button" onClick={() => { void copyText(issuedPairing.bearer_token, "Khóa Bearer"); }}>
-                                Sao chép khóa Bearer lẻ
+                                Copy Bearer lẻ
                               </button>
-                              <button type="button" onClick={() => setIssuedPairing(null)}>Ẩn mã</button>
+                              <button type="button" onClick={() => setIssuedPairing(null)}>Ẩn</button>
                             </div>
                           </div>
                         )}
@@ -526,12 +550,12 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
                             {tokens.map((t) => (
                               <div key={t.id} className="integration-token-row">
                                 <span>
-                                  <strong>{t.label}</strong> · <code>{t.token_prefix}…</code> · Hết hạn: {new Date(t.expires_at).toLocaleDateString("vi-VN")}
+                                  <strong>{t.label}</strong> · <code>{t.token_prefix}…</code> · Hết hạn {new Date(t.expires_at).toLocaleDateString("vi-VN")}
                                   {t.revoked_at ? " · Đã thu hồi" : " · Đang hiệu lực"}
                                 </span>
                                 {!t.revoked_at && (
                                   <button type="button" disabled={saving} onClick={() => { void revokeToken(binding.id, t.id); }}>
-                                    Thu hồi mã
+                                    Thu hồi
                                   </button>
                                 )}
                               </div>
@@ -543,55 +567,38 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
 
                     {conflictsOpenId === binding.id && (
                       <div className="integration-conflict-panel">
-                        <h6>⚠ Giải quyết xung đột Web ↔ QGIS (Pha B)</h6>
+                        <h6>⚠ Giải quyết xung đột Web ↔ QGIS</h6>
                         {conflicts.length === 0 ? (
-                          <p>Không có xung đột nào được ghi nhận trên cấu hình này.</p>
+                          <p>Không có xung đột nào trên cấu hình này.</p>
                         ) : (
                           <div className="integration-conflict-list">
                             {conflicts.map((c) => (
                               <div key={c.id} className={`integration-conflict-card is-${c.status}`}>
                                 <div className="integration-conflict-head">
-                                  <strong>Đối tượng: <code>{c.feature_id}</code>{c.field_name ? ` · Trường: ${c.field_name}` : ""} ({c.conflict_kind})</strong>
+                                  <strong>Đối tượng: <code>{c.feature_id}</code>{c.field_name ? ` · ${c.field_name}` : ""} ({c.conflict_kind})</strong>
                                   <span className={`conflict-pill is-${c.status}`}>{conflictStatusLabel(c.status)}</span>
                                 </div>
                                 <div className="integration-conflict-diff">
-                                  <div>
-                                    <small>Bản gốc (Baseline)</small>
-                                    <pre>{formatJsonValue(c.baseline_value)}</pre>
-                                  </div>
-                                  <div className="is-web">
-                                    <small>Bản Web (OpenVietGIS)</small>
-                                    <pre>{formatJsonValue(c.web_value)}</pre>
-                                  </div>
-                                  <div className="is-qgis">
-                                    <small>Bản QGIS Desktop</small>
-                                    <pre>{formatJsonValue(c.qgis_value)}</pre>
-                                  </div>
+                                  <div><small>Bản gốc</small><pre>{formatJsonValue(c.baseline_value)}</pre></div>
+                                  <div className="is-web"><small>Bản Web</small><pre>{formatJsonValue(c.web_value)}</pre></div>
+                                  <div className="is-qgis"><small>Bản QGIS</small><pre>{formatJsonValue(c.qgis_value)}</pre></div>
                                 </div>
                                 {c.status === "open" ? (
                                   <div className="integration-conflict-actions">
-                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "keep_web"); }}>
-                                      Giữ bản Web
-                                    </button>
-                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "keep_qgis"); }}>
-                                      Giữ bản QGIS
-                                    </button>
+                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "keep_web"); }}>Giữ bản Web</button>
+                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "keep_qgis"); }}>Giữ bản QGIS</button>
                                     <input
                                       type="text"
-                                      placeholder="Hoặc nhập giá trị gộp tùy chỉnh…"
+                                      placeholder="Giá trị gộp tùy chỉnh…"
                                       value={mergeDrafts[c.id] ?? ""}
                                       disabled={saving}
                                       onChange={(e) => setMergeDrafts((prev) => ({ ...prev, [c.id]: e.target.value }))}
                                     />
-                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "merge"); }}>
-                                      Lưu giá trị gộp
-                                    </button>
-                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "dismiss"); }}>
-                                      Bỏ qua
-                                    </button>
+                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "merge"); }}>Lưu gộp</button>
+                                    <button type="button" disabled={saving} onClick={() => { void resolveConflict(binding.id, c, "dismiss"); }}>Bỏ qua</button>
                                   </div>
                                 ) : (
-                                  <small>Giá trị đã chốt: <code>{formatJsonValue(c.resolved_value)}</code></small>
+                                  <small>Đã chốt: <code>{formatJsonValue(c.resolved_value)}</code></small>
                                 )}
                               </div>
                             ))}

@@ -1148,3 +1148,97 @@
   padding: 4px 8px;
   font-size: 12px;
 }
+
+/* Compact multi-layer QGIS binding manager */
+.integration-binding-manager.is-compact {
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+.integration-binding-links {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.integration-binding-sub {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.integration-compact-picker {
+  border: 1px solid #dbe3ed;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.integration-compact-picker-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.integration-layer-checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.integration-layer-checklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.integration-layer-checklist label.is-checked {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.integration-layer-checklist label span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.integration-layer-checklist label small {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.integration-compact-create-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.integration-compact-create-row input {
+  flex: 1 1 200px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.integration-compact-heading {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #334155;
+}
+
+.integration-binding-list.is-compact article {
+  padding: 8px 10px;
+  gap: 6px;
+}
