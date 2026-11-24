@@ -1,7 +1,7 @@
 [general]
 name=OpenVietGIS Connector
 qgisMinimumVersion=3.34
-version=0.9.0
+version=0.9.1
 description=Verified GeoPackage export and reviewed manual two-way QGIS sync with conflict detection and R006 changesets.
 about=OpenVietGIS QGIS Connector R026/R027. Project-scoped HTTPS Service Principal required: project.read for verified export, project.edit and GIS ACL for reviewed manual changeset sync. R027 stores local baseline/working copies, performs three-way conflict detection, blocks deletes and advances the checkpoint after server read-back. Does not support unattended automatic syncing or arbitrary third-party writes. No internal PostGIS credentials.
 author=OpenVietGIS

@@ -20,8 +20,12 @@ Security boundaries:
 
 from __future__ import annotations
 
+import base64
 import contextlib
+import ctypes
 import json
+import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -37,7 +41,7 @@ from qgis.core import (
     QgsProject,
     QgsVectorLayer,
 )
-from qgis.PyQt.QtCore import Qt, QThread, QTimer, QVariant, pyqtSignal
+from qgis.PyQt.QtCore import QSettings, Qt, QThread, QTimer, QVariant, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView,
     QAction,
@@ -95,7 +99,55 @@ from .workspace import (
 )
 
 PLUGIN_MENU_NAME = "&OpenVietGIS"
-ACTION_LABEL = "OpenVietGIS Connector (R026 / R027)"
+ACTION_LABEL = "OpenVietGIS Connector (R026 / R027 / R029)"
+
+
+def _dpapi_protect(secret: str) -> str:
+    """Encrypt secret for the current Windows user via DPAPI; falls back to base64 on POSIX."""
+    raw = secret.encode("utf-8")
+    if sys.platform == "win32":
+        class _Blob(ctypes.Structure):
+            _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+        in_blob = _Blob(len(raw), ctypes.create_string_buffer(raw, len(raw)))
+        out_blob = _Blob()
+        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        if crypt32.CryptProtectData(
+            ctypes.byref(in_blob), None, None, None, None, 0, ctypes.byref(out_blob)
+        ):
+            try:
+                enc = ctypes.string_at(out_blob.pbData, out_blob.cbData)
+                return "dpapi:" + base64.b64encode(enc).decode("ascii")
+            finally:
+                kernel32.LocalFree(out_blob.pbData)
+    return "b64:" + base64.b64encode(raw).decode("ascii")
+
+
+def _dpapi_unprotect(stored: str) -> str:
+    """Decrypt secret previously protected by _dpapi_protect."""
+    if not stored:
+        return ""
+    if stored.startswith("dpapi:") and sys.platform == "win32":
+        class _Blob(ctypes.Structure):
+            _fields_ = [("cbData", ctypes.c_uint32), ("pbData", ctypes.POINTER(ctypes.c_char))]
+
+        enc = base64.b64decode(stored[6:])
+        in_blob = _Blob(len(enc), ctypes.create_string_buffer(enc, len(enc)))
+        out_blob = _Blob()
+        crypt32 = ctypes.windll.crypt32  # type: ignore[attr-defined]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        if crypt32.CryptUnprotectData(
+            ctypes.byref(in_blob), None, None, None, None, 0, ctypes.byref(out_blob)
+        ):
+            try:
+                return ctypes.string_at(out_blob.pbData, out_blob.cbData).decode("utf-8")
+            finally:
+                kernel32.LocalFree(out_blob.pbData)
+        return ""
+    if stored.startswith("b64:"):
+        return base64.b64decode(stored[4:]).decode("utf-8")
+    return ""
 
 
 class _RealtimeEventWorker(QThread):
@@ -259,7 +311,7 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("OpenVietGIS Connector (0.9.0 — R029 Managed)")
+        self.setWindowTitle("OpenVietGIS Connector (0.9.1 — R029 Managed)")
         self.setMinimumSize(620, 620)
 
         self._layers: list[QgisLayerInfo] = []
@@ -291,6 +343,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self._auto_sync_timer.setInterval(15_000)
         self._auto_sync_timer.timeout.connect(self._on_auto_sync_tick)
         self._build_ui()
+        if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
+            QTimer.singleShot(250, self._try_auto_reconnect)
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
@@ -323,12 +377,18 @@ class OpenVietGisConnectorDialog(QDialog):
         pair_layout.addLayout(pairing_row)
 
         conn_bar = QHBoxLayout()
+        self.remember_session_checkbox = QCheckBox("Ghi nhớ & tự kết nối lại")
+        self.remember_session_checkbox.setChecked(True)
         self.load_layers_button = QPushButton("↻ Tải lại lớp")
         self.load_layers_button.clicked.connect(self._on_load_layers)
+        self.logout_session_button = QPushButton("Đăng xuất")
+        self.logout_session_button.clicked.connect(self._on_clear_saved_session)
         self.manual_conn_toggle = QPushButton("Cài đặt tay ▾")
         self.manual_conn_toggle.setCheckable(True)
         self.manual_conn_toggle.toggled.connect(self._on_toggle_manual_conn)
+        conn_bar.addWidget(self.remember_session_checkbox)
         conn_bar.addWidget(self.load_layers_button)
+        conn_bar.addWidget(self.logout_session_button)
         conn_bar.addWidget(self.manual_conn_toggle)
         conn_bar.addStretch(1)
         pair_layout.addLayout(conn_bar)
@@ -676,6 +736,8 @@ class OpenVietGisConnectorDialog(QDialog):
 
         self._layers = list(profile.layers)
         self._sync_push_enabled = bool(profile.sync_push_enabled)
+        if self.remember_session_checkbox.isChecked():
+            self._save_local_session()
         self._populate_layers_table()
         scoped_note = "scoped ACL" if profile.scoped_access else "quyền dự án"
         sync_note = "⇄ ĐỒNG BỘ 2 CHIỀU SẴN SÀNG" if self._sync_push_enabled else "chỉ đọc"
@@ -1518,6 +1580,70 @@ class OpenVietGisConnectorDialog(QDialog):
             f"Resulting Content Revision: {result.resulting_content_revision[:16]}...\n"
             f"Audit Event ID: {result.audit_event_id}",
         )
+
+    def _save_local_session(self) -> None:
+        settings = QSettings("OpenVietGIS", "Connector")
+        settings.setValue("server_url", self.server_url_input.text().strip())
+        settings.setValue("organization_id", self.org_id_input.text().strip())
+        settings.setValue("project_id", self.project_id_input.text().strip())
+        settings.setValue("allow_localhost", self.allow_localhost_checkbox.isChecked())
+        settings.setValue("download_dir", self.download_dir_input.text().strip())
+        token = self.bearer_key_input.text().strip()
+        if token:
+            settings.setValue("protected_token", _dpapi_protect(token))
+
+    def _on_clear_saved_session(self) -> None:
+        self._stop_managed_worker()
+        self._stop_realtime_worker()
+        self._auto_sync_timer.stop()
+        settings = QSettings("OpenVietGIS", "Connector")
+        settings.clear()
+        self.bearer_key_input.clear()
+        self.pairing_code_input.clear()
+        self._layers = []
+        self.layers_table.setRowCount(0)
+        self.r029_save_button.setEnabled(False)
+        self.realtime_status.setText("⚪ Đã đăng xuất & xóa phiên đã lưu trên máy.")
+        self.status_label.setText("Đã xóa phiên kết nối. Dán mã ghép nối mới để đăng nhập lại.")
+
+    def _try_auto_reconnect(self) -> None:
+        settings = QSettings("OpenVietGIS", "Connector")
+        server_url = str(settings.value("server_url", "") or "").strip()
+        org_id = str(settings.value("organization_id", "") or "").strip()
+        project_id = str(settings.value("project_id", "") or "").strip()
+        protected_token = str(settings.value("protected_token", "") or "").strip()
+        if not (server_url and org_id and project_id and protected_token):
+            return
+        token = _dpapi_unprotect(protected_token)
+        if not token:
+            return
+        self.server_url_input.setText(server_url)
+        self.org_id_input.setText(org_id)
+        self.project_id_input.setText(project_id)
+        self.allow_localhost_checkbox.setChecked(
+            str(settings.value("allow_localhost", "false")).lower() == "true"
+        )
+        saved_dir = str(settings.value("download_dir", "") or "").strip()
+        if saved_dir:
+            self.download_dir_input.setText(saved_dir)
+        self.bearer_key_input.setText(token)
+        try:
+            config = self._build_config()
+            profile = fetch_qgis_profile(config)
+            self._layers = list(profile.layers)
+            self._sync_push_enabled = bool(profile.sync_push_enabled)
+            self._populate_layers_table()
+            self._update_action_button_states()
+            self.status_label.setText(
+                f"🟢 Đã tự động kết nối lại ({len(self._layers)} lớp sẵn sàng)."
+            )
+            self.ws_status.setText(
+                "Đã tự động khôi phục phiên kết nối! Bấm '⚡ R029 Managed Realtime' để mở lớp ngay."
+            )
+        except OpenVietGisError:
+            self.status_label.setText(
+                "Phiên đã lưu đã hết hạn hoặc bị thu hồi — hãy dán mã kết nối mới."
+            )
 
     def _stop_managed_worker(self) -> None:
         worker = self._managed_worker
