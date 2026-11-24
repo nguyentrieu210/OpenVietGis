@@ -405,8 +405,8 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
           </button>
           <a
             className="qgis-btn-secondary"
-            href="/rewrite/downloads/openvietgis_connector-0.9.3.zip"
-            download="openvietgis_connector-0.9.3.zip"
+            href="/rewrite/downloads/openvietgis_connector-1.0.0-a2afa72.zip"
+            download="openvietgis_connector-1.0.0.zip"
           >
             ⬇ Tải công cụ QGIS
           </a>

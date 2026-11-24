@@ -29,6 +29,7 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
  frame.referrerPolicy="no-referrer";frame.setAttribute("sandbox","allow-scripts allow-same-origin");
  frame.style.cssText="display:block;width:100%;height:100%;border:0;background:#1e1e1e";
  let disposed=false,ready=false,loaded=false,saving=false,requested=false,loads=0,selectionSupported=false;
+ let engineDirty=false,saveFailed=false;
  const seen=new Set<string>();
  let resolveReady:(handle:CadEditorHandle)=>void,rejectReady:(error:Error)=>void;
  const promise=new Promise<CadEditorHandle>((resolve,reject)=>{resolveReady=resolve;rejectReady=reject});
@@ -48,9 +49,9 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
   saveTimer=setTimeout(()=>{clearRequest();events.onSaving(false);events.onError("CAD chưa trả về bản lưu. Hãy thử lại.")},30000);
  }};
  async function save(data:{saveId:string;format:CadFormat;buffer:ArrayBuffer}){
-  clearRequest();saving=true;seen.add(data.saveId);events.onSaving(true);events.onDirty(true);
-  try{await events.onSave(data.buffer,data.format);if(!disposed)send("saved",{ok:true,saveId:data.saveId})}
-  catch{if(!disposed){send("saved",{ok:false,saveId:data.saveId});events.onError("Không lưu được phiên bản CAD. Bản sửa vẫn chưa được lưu.")}}
+  clearRequest();saving=true;seen.add(data.saveId);events.onSaving(true);
+  try{await events.onSave(data.buffer,data.format);if(!disposed){saveFailed=false;events.onDirty(engineDirty);send("saved",{ok:true,saveId:data.saveId})}}
+  catch{if(!disposed){saveFailed=true;events.onDirty(true);send("saved",{ok:false,saveId:data.saveId});events.onError("Không lưu được phiên bản CAD. Bản sửa vẫn chưa được lưu.")}}
   finally{saving=false;if(!disposed)events.onSaving(false)}
  }
  function receive(e:MessageEvent){
@@ -64,7 +65,7 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
    events.onSelection?.(d.handle===null?null:d.handle.toUpperCase());
   }else if(d.type==="dirty"&&ready&&typeof d.dirty==="boolean"){
    if(input.readOnly&&d.dirty){fail("Read-only CAD modified");return}
-   events.onDirty(d.dirty||saving);
+   engineDirty=d.dirty;events.onDirty(engineDirty||saveFailed);
   }else if(d.type==="save"&&loaded&&typeof d.saveId==="string"&&/^save-[0-9]{1,20}$/.test(d.saveId)){
    if(seen.has(d.saveId))return;
    if(input.readOnly||saving||seen.size>=64||d.format!==format||!(d.buffer instanceof ArrayBuffer)||!d.buffer.byteLength||d.buffer.byteLength>max){send("saved",{ok:false,saveId:d.saveId});if(requested){clearRequest();events.onSaving(false)}return}

@@ -1,4 +1,4 @@
-"""Deterministic, installable OpenVietGIS QGIS plugin ZIP for QGIS 3.28+.
+"""Deterministic, installable OpenVietGIS QGIS plugin ZIP for QGIS 3.34+.
 
 Only the explicitly reviewed plugin source/metadata/docs is included. This tool
 never copies local tokens, user projects, GeoPackage data or hidden workspace
@@ -18,6 +18,10 @@ REQUIRED = (
     "__init__.py",
     "metadata.txt",
     "client.py",
+    "managed_client.py",
+    "snapshot_cache.py",
+    "drafts.py",
+    "browser_login.py",
     "plugin.py",
     "workspace.py",
     "README.md",
@@ -39,9 +43,9 @@ def package_qgis_plugin(output: Path, *, plugin_root: Path = PLUGIN_ROOT) -> str
     if "[general]" not in metadata or "qgisMinimumVersion=" not in metadata:
         raise ValueError("Invalid QGIS plugin metadata.")
     if "experimental=True" not in metadata:
-        raise ValueError("R027 plugin must remain explicitly experimental.")
+        raise ValueError("Plugin remains experimental pending native and live acceptance.")
     if "qgisMinimumVersion=3.34" not in metadata:
-        raise ValueError("R027 Python 3.10+ plugin requires reviewed QGIS 3.34+ profile.")
+        raise ValueError("Python 3.10+ plugin requires reviewed QGIS 3.34+ profile.")
 
     files = sorted(
         path for path in plugin_root.iterdir()
