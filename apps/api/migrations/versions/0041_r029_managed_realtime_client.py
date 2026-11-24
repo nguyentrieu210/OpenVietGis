@@ -13,7 +13,7 @@ Strictly additive migration (down_revision = 0040_r027_pairing_and_conflicts):
 
 from alembic import op
 
-revision = "0041_r029_managed_realtime_client"
+revision = "0041_r029_managed_realtime"
 down_revision = "0040_r027_pairing_and_conflicts"
 branch_labels = None
 depends_on = None
