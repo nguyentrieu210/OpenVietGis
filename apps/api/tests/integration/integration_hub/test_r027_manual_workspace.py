@@ -94,12 +94,14 @@ def test_qgis_workspace_manual_roundtrip_real_http_postgis(
                 feature_count=int(res.headers["x-openvietgis-feature-count"]),
             )
 
-        def preview(_config, *, gpkg_path, base_content_revision, base_schema_revision, **extra):
+        def preview(_config, *, gpkg_path, base_content_revision, base_schema_revision,
+                    allow_deletes, **extra):
             res = owner.post(
                 preview_url,
                 data={
                     "base_content_revision": base_content_revision,
                     "base_schema_revision": base_schema_revision,
+                    "allow_deletes": str(allow_deletes).lower(),
                 },
                 files={"file": ("edited.gpkg", Path(gpkg_path).read_bytes(),
                                 "application/geopackage+sqlite3")},
@@ -108,13 +110,14 @@ def test_qgis_workspace_manual_roundtrip_real_http_postgis(
             return SimpleNamespace(**res.json())
 
         def push(_config, *, layer_id, gpkg_path, base_content_revision, base_schema_revision,
-                 expected_diff_sha256, operation_id, summary):
+                 expected_diff_sha256, operation_id, summary, allow_deletes):
             assert layer_id == create.json()["layer_id"]
             res = owner.post(
                 push_url,
                 data={
                     "base_content_revision": base_content_revision,
                     "base_schema_revision": base_schema_revision,
+                    "allow_deletes": str(allow_deletes).lower(),
                     "expected_diff_sha256": expected_diff_sha256,
                     "operation_id": operation_id,
                     "summary": summary,
