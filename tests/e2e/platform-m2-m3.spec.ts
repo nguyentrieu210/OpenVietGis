@@ -121,6 +121,7 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
 
   // 5. R010–R015 Platform Hub (Ops Readiness + COGO)
   await page.goto(`${base}/platform-hub`);
+  await page.getByRole("tab", { name: "Vận hành & Sẵn sàng" }).click();
   await expect(page.getByTestId("ops-readiness-panel")).toBeVisible();
   await expect(
     page.getByRole("cell", {

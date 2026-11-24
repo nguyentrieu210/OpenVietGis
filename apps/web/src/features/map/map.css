@@ -971,10 +971,21 @@
 
 
 /* === Final 4 Pixel-Perfection Fixes for Full-Bleed GIS/CAD Workstation === */
-/* 1. Reclaim +120px vertical map height: hide legacy bottom save panel & session bar (Lưu bản đồ is in floating HUD & Statusbar is flush at bottom!) */
-.gis-workspace .map-sessionbar,
-.gis-workspace .map-save-panel {
+/* Keep shared map actions reachable without shrinking the viewport. */
+.gis-workspace .map-sessionbar {
   display: none !important;
+}
+.map-shared-controls:not([hidden]) {
+  position: absolute;
+  z-index: 60;
+  inset: 52px 10px auto auto;
+  width: min(510px, calc(100% - 20px));
+  max-height: calc(100% - 96px);
+  overflow: auto;
+  background: var(--ovg-surface, #fff);
+  border: 1px solid var(--ovg-border, #c7d4e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #172c4330;
 }
 
 /* 2. Keep 42px Top Menubar strictly single-row with zero wrapping/clipping */

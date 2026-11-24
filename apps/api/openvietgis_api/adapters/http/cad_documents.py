@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.cad.dxf_codec import write_dxf_2d
-from openvietgis_api.adapters.cad.native_delta import gis_to_cad_preview
+from openvietgis_api.adapters.cad.native_delta import cad_to_gis_preview, gis_to_cad_preview
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
@@ -516,6 +516,36 @@ def import_georef(
     }
 
 
+def _reviewed_placement(
+    summary: Mapping[str, Any], document_id: UUID, version: int
+) -> CadPlacement:
+    # Use immutable conversion provenance, not request-supplied controls.
+    meta = summary.get("placement")
+    if not isinstance(meta, dict) or meta.get("algorithm") != "similarity-grid-2d-v1":
+        raise HTTPException(422, "Missing reviewed CAD placement")
+    native = meta.get("native_reference")
+    control = GeorefRequest.model_validate(
+        {
+            "crs_code": native["crs_code"] if native else meta["crs_code"],
+            "units": meta["units"],
+            "controls": native["controls"] if native else meta["controls"],
+            "web_controls": meta["controls"] if native else None,
+            "tolerance_m": meta["tolerance_grid_m"],
+            "max_scale_deviation": meta["max_scale_deviation"],
+        }
+    )
+    return fit_web_placement(
+        document_id=document_id,
+        version=version,
+        crs_code=control.crs_code,
+        units=control.units,
+        controls=control.controls,
+        web_controls=control.web_controls,
+        tolerance_m=control.tolerance_m,
+        max_scale_deviation=control.max_scale_deviation,
+    )
+
+
 class GeorefDraftRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     conversion_id: UUID
@@ -594,31 +624,7 @@ def export_georef_draft(
         raise HTTPException(422, "Only calibrated local XY DXF supported")
     if not 1 <= row["feature_count"] <= 10_000:
         raise HTTPException(422, "Draft requires 1–10000 features")
-    # Use immutable conversion provenance, not request-supplied controls.
-    meta = row["entity_summary"].get("placement")
-    if not isinstance(meta, dict) or meta.get("algorithm") != "similarity-grid-2d-v1":
-        raise HTTPException(422, "Missing reviewed CAD placement")
-    native = meta.get("native_reference")
-    control = GeorefRequest.model_validate(
-        {
-            "crs_code": native["crs_code"] if native else meta["crs_code"],
-            "units": meta["units"],
-            "controls": native["controls"] if native else meta["controls"],
-            "web_controls": meta["controls"] if native else None,
-            "tolerance_m": meta["tolerance_grid_m"],
-            "max_scale_deviation": meta["max_scale_deviation"],
-        }
-    )
-    placement = fit_web_placement(
-        document_id=document_id,
-        version=version,
-        crs_code=control.crs_code,
-        units=control.units,
-        controls=control.controls,
-        web_controls=control.web_controls,
-        tolerance_m=control.tolerance_m,
-        max_scale_deviation=control.max_scale_deviation,
-    )
+    placement = _reviewed_placement(row["entity_summary"], document_id, version)
     original = _store().get_bytes(row["storage_key"], expected_sha256=row["sha256"])
     # Bound database materialization before serializing any geometry to JSON.
     counts = (
@@ -747,4 +753,108 @@ def export_georef_draft(
             "X-Content-SHA256": hashlib.sha256(payload).hexdigest(),
             "X-CAD-Preview-Fingerprint": fingerprint,
         },
+    )
+
+
+class NativeImportDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    conversion_id: UUID
+    expected_candidate_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+@router.post(BASE + "/{document_id}/versions/{version}/preview-native-import")
+def preview_native_import(
+    organization_id: UUID,
+    project_id: UUID,
+    document_id: UUID,
+    version: int,
+    body: NativeImportDraftRequest,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> Response:
+    """Review geometry edits from the next saved DXF revision using the R006 request shape."""
+    ctx = _scope(session, auth, organization_id, project_id, Permission.PROJECT_EDIT)
+    session.execute(
+        text("SELECT pg_advisory_xact_lock_shared(hashtextextended(:key,0))"),
+        {"key": "cad-doc:" + str(ctx.project_id)},
+    )
+    row = (
+        session.execute(
+            text("""
+        SELECT c.entity_summary, c.source_id, c.content_revision AS imported_content_revision,
+               s.content_revision, s.schema_revision,
+               original.sha256 AS original_sha, original.storage_key AS original_key,
+               candidate.sha256 AS candidate_sha, candidate.storage_key AS candidate_key
+        FROM cad.conversions c
+        JOIN cad.document_versions original ON original.organization_id=c.organization_id
+          AND original.project_id=c.project_id AND original.document_id=:doc
+          AND original.version=:version AND original.sha256=c.sha256
+          AND original.document_id::text=c.entity_summary->>'cad_document_id'
+          AND original.version::text=c.entity_summary->>'cad_document_version'
+        JOIN cad.document_versions candidate ON candidate.organization_id=c.organization_id
+          AND candidate.project_id=c.project_id AND candidate.document_id=:doc
+          AND candidate.version=original.version+1
+        JOIN spatial.data_sources s ON s.organization_id=c.organization_id
+          AND s.project_id=c.project_id AND s.id=c.source_id
+        JOIN spatial.layers l ON l.organization_id=c.organization_id
+          AND l.project_id=c.project_id AND l.id=c.layer_id AND l.source_id=s.id
+        WHERE c.organization_id=:org AND c.project_id=:proj AND c.id=:conversion
+          AND c.direction='import' AND c.status='succeeded'
+          AND original.format='dxf' AND candidate.format='dxf'
+          AND s.lifecycle='active' AND s.validation_state='ready'
+          AND s.stored_crs=3857 AND s.dimensions='XY' AND l.lifecycle='active'
+          AND NOT EXISTS (
+            SELECT 1 FROM cad.document_versions newer
+            WHERE newer.organization_id=c.organization_id AND newer.project_id=c.project_id
+              AND newer.document_id=:doc AND newer.version>candidate.version
+          )
+        FOR SHARE OF s,l
+        """),
+            {
+                "org": ctx.organization_id,
+                "proj": ctx.project_id,
+                "doc": document_id,
+                "version": version,
+                "conversion": body.conversion_id,
+            },
+        )
+        .mappings()
+        .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(404, "Current next DXF revision and pinned CAD conversion required")
+    if row["candidate_sha"] != body.expected_candidate_sha256:
+        raise HTTPException(409, "Saved CAD candidate changed")
+    summary = row["entity_summary"]
+    imported_schema = summary.get("imported_schema_revision")
+    if not isinstance(imported_schema, str):
+        raise HTTPException(422, "CAD conversion lacks an immutable schema revision")
+    store = _store()
+    ops = cad_to_gis_preview(
+        store.get_bytes(row["original_key"], expected_sha256=row["original_sha"]),
+        store.get_bytes(row["candidate_key"], expected_sha256=row["candidate_sha"]),
+        base_sha256=row["original_sha"],
+        candidate_sha256=row["candidate_sha"],
+        placement=_reviewed_placement(summary, document_id, version),
+        mapping=summary["entity_mapping"],
+        imported_content_revision=row["imported_content_revision"],
+        current_content_revision=row["content_revision"],
+        imported_schema_revision=imported_schema,
+        current_schema_revision=row["schema_revision"],
+    )
+    return JSONResponse(
+        {
+            "conversion_id": str(body.conversion_id),
+            "source_id": str(row["source_id"]),
+            "candidate_sha256": row["candidate_sha"],
+            "candidate_version": version + 1,
+            "base_content_revision": row["content_revision"],
+            "base_schema_revision": row["schema_revision"],
+            "operations": [
+                {"op_type": op.op_type.value, "feature_id": op.feature_id, "geometry": op.geometry}
+                for op in ops
+            ],
+            "published": False,
+        },
+        headers={"Cache-Control": "no-store"},
     )

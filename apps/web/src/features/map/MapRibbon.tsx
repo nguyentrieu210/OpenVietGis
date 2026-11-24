@@ -15,6 +15,7 @@ interface MapRibbonProps {
   saveState: string;
   saveLabel: string;
   needsRecovery: boolean;
+  sharedControlsOpen: boolean;
   cmdLineOpen: boolean;
   commands: MapCommand[];
   activeTool: MapDockToolId | null;
@@ -28,7 +29,7 @@ interface MapRibbonProps {
   onToggleCmdLine: () => void;
   onSelectTool: (tool: MapDockToolId | null) => void;
   onOpenTechnical: () => void;
-  onReloadShared: () => void;
+  onToggleSharedControls: () => void;
 }
 
 export function MapRibbon({
@@ -39,6 +40,7 @@ export function MapRibbon({
   saveState,
   saveLabel,
   needsRecovery,
+  sharedControlsOpen,
   cmdLineOpen,
   commands,
   rightOpen,
@@ -47,7 +49,7 @@ export function MapRibbon({
   onToggleTable,
   onToggleCmdLine,
   onOpenTechnical,
-  onReloadShared
+  onToggleSharedControls
 }: MapRibbonProps) {
   const addCmd = commands.find((c) => c.id === "map.add-data");
   const fitAllCmd = commands.find((c) => c.id === "map.fit-all");
@@ -66,32 +68,27 @@ export function MapRibbon({
           {projectName}
           <small>v{revision}</small>
         </h1>
-        <span
-          className={
-            dirty
-              ? "map-context-unsaved map-status-pill"
-              : "map-context-saved map-status-pill"
-          }
+        <button
+          type="button"
+          className={dirty || needsRecovery
+            ? "map-context-unsaved map-status-pill"
+            : "map-context-saved map-status-pill"}
+          aria-label={`Cấu hình bản đồ dùng chung · ${saveLabel}`}
+          aria-controls="map-shared-controls"
+          aria-expanded={sharedControlsOpen}
           data-save-state={saveState}
+          onClick={onToggleSharedControls}
         >
           {saveLabel}
-        </span>
-        {needsRecovery ? (
-          <button
-            type="button"
-            className="gis-recovery-btn"
-            onClick={onReloadShared}
-          >
-            ↻ Tải lại bản đồ chung
-          </button>
-        ) : null}
+        </button>
       </div>
 
-      <div className="gis-header-meta">
+      <nav className="gis-header-meta" aria-label="Lệnh bản đồ">
         {addCmd ? (
           <button
             type="button"
             className="gis-top-primary"
+            aria-label={addCmd.label}
             disabled={!addCmd.enabled}
             title={addCmd.reason ?? addCmd.label}
             onClick={() => invokeCommand(commands, addCmd.id, "toolbar")}
@@ -103,6 +100,7 @@ export function MapRibbon({
           <button
             type="button"
             disabled={!fitAllCmd.enabled}
+            aria-label={fitAllCmd.label}
             title={fitAllCmd.reason ?? fitAllCmd.label}
             onClick={() => invokeCommand(commands, fitAllCmd.id, "toolbar")}
           >
@@ -146,6 +144,7 @@ export function MapRibbon({
         </button>
         <button
           type="button"
+          aria-label="Thông tin kỹ thuật"
           title="Thông tin kỹ thuật & CRS"
           onClick={onOpenTechnical}
         >
@@ -154,7 +153,7 @@ export function MapRibbon({
 
         <ThemeToggle />
         <AccountMenu />
-      </div>
+      </nav>
     </header>
   );
 }

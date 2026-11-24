@@ -8,12 +8,13 @@ test("public landing and dedicated login are separate surfaces", async ({ page }
   await page.goto("/");
   await expect(
     page.getByRole("heading", {
-      name: "Quản lý dữ liệu không gian trên một giao diện hiện đại, thuần Việt."
+      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
     })
   ).toBeVisible();
   await expect(page).toHaveURL("/");
 
-  await page.getByRole("link", { name: "Đăng nhập", exact: true }).first().click();
+  await page.getByRole("navigation", { name: "Điều hướng trang giới thiệu" })
+    .getByRole("link", { name: /^Đăng nhập/ }).click();
   await expect(
     page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
   ).toBeVisible();
@@ -64,7 +65,7 @@ test("sign out from a deep route invalidates the application session", async ({
   await expect(page).toHaveURL("/");
   await expect(
     page.getByRole("heading", {
-      name: "Quản lý dữ liệu không gian trên một giao diện hiện đại, thuần Việt."
+      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
     })
   ).toBeVisible();
 
