@@ -66,3 +66,56 @@ test("connected flood excludes closed interior low cells and nodata",()=>{
  const b=grid(Array(9).fill(0));assert.equal(connectedInundation(b,1).connected,4);
  assert.equal(connectedInundation(grid([0,0,null,0,0,null,0,0,null]),1).connected,2);
 });
+
+test("TIN forces the requested diagonal and rejects un-noded crossing breaklines", () => {
+ const points=[[0,0,0],[.001,0,10],[.001,.001,0],[0,.001,10]];
+ const low=interpolateTIN(points,300,"BM","local",17,[[0,2]]);
+ const high=interpolateTIN(points,300,"BM","local",17,[[1,3]]);
+ const middle=Math.floor(low.values.length/2);
+ near(low.values[middle],0);
+ near(high.values[middle],10);
+ assert.throws(()=>interpolateTIN(points,300,"BM","local",17,[[0,2],[1,3]]),/giao nhau/);
+});
+
+test("TIN splits breaklines at existing aligned vertices and checks elevations", async () => {
+ const {constrainTIN}=await import("../src/tin-breaklines.ts");
+ const {default:Delaunator}=await import("delaunator");
+ const points=[[0,0,0],[4,0,0],[4,4,0],[0,4,0],[2,0,0]];
+ const triangulation=Delaunator.from(points,p=>p[0],p=>p[1]).triangles;
+ const {triangles:constrained}=constrainTIN(points,triangulation,[[0,1]]);
+ const triangles=Array.from({length:constrained.length/3},(_,i)=>[...constrained.slice(i*3,i*3+3)]);
+ assert.ok(triangles.some(triangle=>triangle.includes(0)&&triangle.includes(4)));
+ assert.ok(triangles.some(triangle=>triangle.includes(1)&&triangle.includes(4)));
+ assert.throws(()=>constrainTIN([...points.slice(0,4),[2,0,1]],triangulation,[[0,1]]),/cao độ không khớp/);
+});
+
+test("dynamic Manning flow conserves volume and spreads rainfall downhill", async () => {
+ const {simulateSurfaceFlow,surfaceFlowFeatures}=await import("../src/terrain-analysis.ts");
+ const options={durationMinutes:10,rainMmHour:120,infiltrationMmHour:20,manningN:.035};
+ const g=grid([0,1,2,0,1,2,0,1,2]);
+ const frames=simulateSurfaceFlow(g,options);
+ assert.equal(frames.length,13);
+ assert.equal(frames[0].maxDepth,0);
+ for(const frame of frames){
+  near(frame.massResidual,0);
+  assert.ok(frame.depths.every(value=>value>=0));
+ }
+ const last=frames.at(-1);
+ assert.equal(last.seconds,600);
+ assert.ok(last.depths[0]>last.depths[1]);
+ near(last.storedVolume,400*(120-20)/6/1000);
+ const features=surfaceFlowFeatures(g,last.depths);
+ assert.ok(features.features.every(f=>f.properties.depth_m>=.001));
+});
+
+test("dynamic flow leaves NoData dry and preserves uniform depth on a flat bed", async () => {
+ const {simulateSurfaceFlow}=await import("../src/terrain-analysis.ts");
+ const last=simulateSurfaceFlow(grid([0,0,null,0,0,0,0,0,0]),{
+  durationMinutes:2,rainMmHour:60,infiltrationMmHour:0,manningN:.04,
+ }).at(-1);
+ near(last.depths[0],.002);
+ assert.equal(last.depths[1],0);
+ near(last.depths[2],.002);
+ near(last.depths[3],.002);
+ near(last.massResidual,0);
+});

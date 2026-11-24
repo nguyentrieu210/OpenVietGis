@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Annotated, Literal, TypedDict
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -699,21 +700,60 @@ def raster_file(
     organization_id: UUID,
     project_id: UUID,
     layer_id: UUID,
+    request: Request,
     auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ):
     raster_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ)
+    args = {"o": organization_id, "p": project_id, "id": layer_id}
+    headers = NO_CACHE | {
+        "Accept-Ranges": "bytes",
+        "Content-Disposition": f'attachment; filename="raster-{layer_id}.tif"',
+    }
+    if range_header := request.headers.get("range"):
+        size = session.execute(
+            text(f"SELECT byte_size FROM raster.layers WHERE {WHERE} AND id=:id"), args
+        ).scalar_one_or_none()
+        if size is None:
+            raise HTTPException(404, "Raster layer not found")
+        bounds = raster_byte_range(range_header, size)
+        if bounds is None:
+            return Response(status_code=416, headers=headers | {"Content-Range": f"bytes */{size}"})
+        start, end = bounds
+        data = session.execute(
+            text(
+                "SELECT substring(cog, :offset, :length) FROM raster.layers "
+                f"WHERE {WHERE} AND id=:id"
+            ),
+            args | {"offset": start + 1, "length": end - start + 1},
+        ).scalar_one_or_none()
+        if data is None:
+            raise HTTPException(404, "Raster layer not found")
+        return Response(
+            content=bytes(data),
+            status_code=206,
+            media_type="image/tiff",
+            headers=headers | {"Content-Range": f"bytes {start}-{end}/{size}"},
+        )
     data = session.execute(
-        text(f"SELECT cog FROM raster.layers WHERE {WHERE} AND id=:id"),
-        {"o": organization_id, "p": project_id, "id": layer_id},
+        text(f"SELECT cog FROM raster.layers WHERE {WHERE} AND id=:id"), args
     ).scalar_one_or_none()
     if data is None:
         raise HTTPException(404, "Raster layer not found")
-    return Response(
-        content=bytes(data),
-        media_type="image/tiff",
-        headers=NO_CACHE | {"Content-Disposition": f'attachment; filename="raster-{layer_id}.tif"'},
-    )
+    return Response(content=bytes(data), media_type="image/tiff", headers=headers)
+
+
+def raster_byte_range(header: str, size: int) -> tuple[int, int] | None:
+    match = re.fullmatch(r"bytes=([0-9]{0,19})-([0-9]{0,19})", header)
+    if not match or size <= 0:
+        return None
+    first, last = match.groups()
+    if not first:
+        suffix = int(last or 0)
+        return (max(0, size - suffix), size - 1) if suffix else None
+    start = int(first)
+    end = min(size - 1, int(last)) if last else size - 1
+    return (start, end) if start <= end else None
 
 
 @router.delete(BASE + "/layers/{layer_id}", status_code=204)
