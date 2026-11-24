@@ -58,6 +58,11 @@ SAFE_POST = {
 SAFE_DELETE = {
     "/integration-hub/managed/sessions/{session_id}",
 }
+WRITE_LOCK_GET = {
+    "/field/packages",
+    "/field/packages/{package_id}/download",
+    "/field/packages/{package_id}/snapshot",
+}
 
 
 def project_access_guard(
@@ -78,8 +83,13 @@ def project_access_guard(
         return
     ctx = context_for(auth, organization_id=org, project_id=proj)
     require_member_context(session, ctx, org)
+    path = str(getattr(request.scope.get("route"), "path", ""))
+    marker = "/projects/{project_id}"
+    suffix = path.split(marker, 1)[1] if marker in path else "__unknown__"
     # Serialize ACL changes with project operations using organization -> project lock order.
-    lock = " FOR SHARE" if request.method in ("GET", "HEAD") else " FOR UPDATE"
+    # Writable offline packages use the edit scope even when accessed by GET.
+    read_lock = request.method in ("GET", "HEAD") and suffix not in WRITE_LOCK_GET
+    lock = " FOR SHARE" if read_lock else " FOR UPDATE"
     session.execute(text("SELECT id FROM org.organizations WHERE id=:org" + lock), {"org": org})
     session.execute(
         text(
@@ -90,9 +100,6 @@ def project_access_guard(
     )
     if not scoped(session, ctx):
         return
-    path = str(getattr(request.scope.get("route"), "path", ""))
-    marker = "/projects/{project_id}"
-    suffix = path.split(marker, 1)[1] if marker in path else "__unknown__"
     if (
         (request.method == "GET" and suffix in SAFE_GET)
         or (request.method == "POST" and suffix in SAFE_POST)
