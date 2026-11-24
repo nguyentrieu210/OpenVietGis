@@ -397,7 +397,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
     setHistoryOpenId(binding.id);
     setError("");
     try {
-      const res = await listChangesets(client, org, projectId, sourceId, 30);
+      const res = await listChangesets(client, org, projectId, sourceId);
       setHistoryByBinding((prev) => ({ ...prev, [binding.id]: res.items }));
     } catch {
       setError("Không thể tải lịch sử phiên bản R006.");
@@ -428,7 +428,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
       );
       const sourceId = options.find((item) => item.layer_id === binding.layer_id)?.source_id;
       if (sourceId) {
-        const refreshed = await listChangesets(client, org, projectId, sourceId, 30);
+        const refreshed = await listChangesets(client, org, projectId, sourceId);
         setHistoryByBinding((prev) => ({ ...prev, [binding.id]: refreshed.items }));
       }
       setNotice(`✓ Đã khôi phục phiên bản thành công! QGIS và Web đang tự cập nhật realtime.`);
