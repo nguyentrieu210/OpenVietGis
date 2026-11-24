@@ -207,3 +207,7 @@ Child [Spec 021 — AI Copilot / MCP](specs/021-ai-copilot/spec.md): isolated MC
 ### R015
 
 Production & Commercial Readiness.
+
+### R031
+
+**Engine-first architecture migration** — in progress (specification / partial baseline inventory). Supports unified v1.0 (R030), depends on R002/R003/R004/R006/R008/R012/R014, R022 and R027/R029. Reuse proven engines through existing contracts; freeze net-new scope, preserve tenant/revision/CRS and data, replace only after measured parity, security/license review and rollback. No deployment or certification implied. [Spec](specs/031-engine-first/spec.md) · [Plan](specs/031-engine-first/plan.md) · [Tasks](specs/031-engine-first/tasks.md) · [Research](specs/031-engine-first/research.md).
