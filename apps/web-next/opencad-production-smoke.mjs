@@ -52,22 +52,22 @@ try{
  if(process.env.OVG_CAD_TEST!=="create"){
 
  const editor=p.locator(".ovg-cad-editor");
- await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000});
+ await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:120000});
  await editor.frameLocator("iframe").frameLocator("iframe").locator("canvas").first().waitFor({timeout:20000});
- console.log("PASS full OpenCADStudio canvas in GIS, DWG opened");
+ assert.equal(await editor.locator("header").count(),0);assert.equal(await p.locator("#ovg-cad-toolbar-slot").getByRole("button",{name:"Lưu",exact:true}).count(),1);console.log("PASS full CAD canvas and single integrated toolbar");
  await p.getByRole("button",{name:"Lưu",exact:true}).click();
  await p.getByText("Đã lưu phiên bản 2.",{exact:true}).waitFor({timeout:45000}).catch(async e=>{console.log("SAVE DEBUG",docs.get(id).length,(await editor.innerText()).slice(0,2000));throw e});
  assert.equal(docs.get(id).length,2);assert.ok(/^AC10\d{2}/.test(docs.get(id)[1].bytes.subarray(0,6).toString()));assert.deepEqual(docs.get(id)[0].bytes,fixture);
  await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  await p.getByRole("button",{name:"Xem CAD",exact:true}).click();
- await p.getByText("Chế độ chỉ đọc.",{exact:true}).waitFor({timeout:120000});
+ await p.locator("#ovg-cad-toolbar-slot").getByText("Chỉ đọc",{exact:true}).waitFor({timeout:120000});
  assert.equal(await p.getByRole("button",{name:"Lưu",exact:true}).isDisabled(),true);
  await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  console.log("PASS real DWG save receipt, immutable original and historical read-only");
  }
  if(process.env.OVG_CAD_TEST!=="dwg"){
  if(process.env.OVG_CAD_TEST!=="create")await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
- await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000}).catch(async e=>{console.log("CREATE DEBUG",docs.get("new-dxf")?.length,(await p.locator("body").innerText()).slice(0,1800));throw e});
+ await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:120000}).catch(async e=>{console.log("CREATE DEBUG",docs.get("new-dxf")?.length,(await p.locator("body").innerText()).slice(0,1800));throw e});
  assert.equal(docs.has("new-dxf"),false);
  await p.getByLabel("Tên bản vẽ",{exact:true}).fill("Test-new.dxf");
  await p.getByRole("button",{name:"Lưu",exact:true}).click();
