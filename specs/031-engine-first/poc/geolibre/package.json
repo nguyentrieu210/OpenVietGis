@@ -1,0 +1,9 @@
+{
+  "name": "ovg-r031-geolibre-poc",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "geolibre-wasm": "1.8.4"
+  }
+}
