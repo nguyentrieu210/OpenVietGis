@@ -1903,3 +1903,51 @@
   color: #64748b;
   text-align: center;
 }
+
+/* --- Prevent CSS Grid horizontal overflow from long tokens/strings --- */
+.live-modal:has(.integration-catalog) .live-modal-body {
+  overflow-x: hidden !important;
+}
+
+.integration-catalog,
+.integration-guided-shell,
+.integration-list,
+.integration-item,
+.integration-profile,
+.integration-profile-body,
+.qgis-clean-shell,
+.qgis-drawer,
+.qgis-inline-drawer,
+.qgis-layer-table,
+.qgis-layer-item,
+.qgis-sub-list {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.qgis-code-box {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.qgis-code-box code {
+  display: block !important;
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.integration-topbar {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.integration-logo-switcher {
+  min-width: 0;
+  max-width: 100%;
+}

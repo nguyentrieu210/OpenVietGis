@@ -693,19 +693,6 @@ export function IntegrationCatalog({
     <section className="integration-catalog" aria-label="Tích hợp phần mềm">
       <div className="integration-guided-shell is-minimal">
         <header className="integration-topbar">
-          <div className="integration-topbar-brand">
-            <img
-              src="/rewrite/brand/ovg-mark.png"
-              alt="OpenVietGIS"
-              className="integration-brand-img"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-            <div>
-              <h2>Kết nối phần mềm</h2>
-              <p>Chọn logo phần mềm bên cạnh để kết nối ngay.</p>
-            </div>
-          </div>
-
           {catalog && (
             <div className="integration-logo-switcher" role="tablist" aria-label="Chọn nhanh phần mềm">
               {catalog.adapters
