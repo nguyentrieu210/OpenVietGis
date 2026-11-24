@@ -30,3 +30,10 @@ without automatically moving the candidate while acceptance is underway.
 No release certification, agent termination, branch deletion, main merge
 or deployment performed. Full exact-commit CI and independent QGIS network
 and release gate acceptance remain open.
+
+Follow-up: CI 45376019103 on 8cd5e45 also reported two fixture failures
+registering the official house-numbering runtime through the legacy generic
+manifest endpoint. Updated both fixtures to assert the legacy request is
+rejected (409 OFFICIAL_MANIFEST_REQUIRED), then use the official registration
+endpoint; no runtime security change. Five lifecycle, portability, reference
+module and official runtime cases passed on disposable PostGIS (28.58 s).

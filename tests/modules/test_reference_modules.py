@@ -36,7 +36,10 @@ def test_two_independent_reference_modules_validate_core_extension_model() -> No
 
     with _client(world.owner_user_id) as client:
         # Register & activate Reference Module 1: House Numbering
-        m1 = client.post(f"{org_base}/extensions/manifests", json=house_manifest)
+        rejected = client.post(f"{org_base}/extensions/manifests", json=house_manifest)
+        assert rejected.status_code == 409
+        assert rejected.json()["code"] == "OFFICIAL_MANIFEST_REQUIRED"
+        m1 = client.post(f"{org_base}/extensions/official/house_numbering/register")
         assert m1.status_code == 201, m1.text
         a1 = client.post(
             f"{proj_base}/extensions/activations",

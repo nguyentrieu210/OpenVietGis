@@ -26,7 +26,13 @@ def manifest(name: str) -> dict:
 
 
 def registration(client, org, project, body):
-    created = client.post(f"{org}/extensions/manifests", json=body)
+    if body["extension_key"] == "house_numbering":
+        rejected = client.post(f"{org}/extensions/manifests", json=body)
+        assert rejected.status_code == 409
+        assert rejected.json()["code"] == "OFFICIAL_MANIFEST_REQUIRED"
+        created = client.post(f"{org}/extensions/official/house_numbering/register")
+    else:
+        created = client.post(f"{org}/extensions/manifests", json=body)
     assert created.status_code == 201, created.text
     mid = created.json()["id"]
     activation = client.post(
