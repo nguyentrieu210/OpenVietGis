@@ -158,9 +158,8 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
   await expect(collaboration.getByText("Ý kiến quyết định: Đã đối chiếu")).toBeVisible();
 
   await page.getByRole("tab", { name: "AutoCAD 2D (DXF) & COGO", exact: true }).click();
-  await expect(page.getByText(/chưa gắn CRS, không phải tọa độ khảo sát/i)).toBeVisible();
   await page.getByRole("button", { name: "Tính tọa độ điểm cuối" }).click();
   await expect(
-    page.getByText(/Tọa độ điểm tính được: \(500100\.0000, 2300000\.0000\)/i)
+    page.getByText(/Tọa độ điểm tính được: \(500100\.0000, 2300000\.0000\) · tính thử, chưa gắn CRS/i)
   ).toBeVisible();
 });
