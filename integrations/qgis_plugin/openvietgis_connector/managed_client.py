@@ -308,7 +308,7 @@ def diff_managed_snapshots(
     """Diff server-confirmed snapshot against QGIS, including native local saves."""
     removed = baseline.keys() - current.keys()
     if removed and not allow_deletes:
-        raise ApiError("Có đối tượng bị xóa; hãy khôi phục hoặc bật cho phép xóa.")
+        raise ApiError("Có đối tượng bị xóa; cần xác nhận trước khi lưu lên Web.")
     ops = [
         {"op_type": "delete", "feature_id": oid}
         for oid in sorted(removed)

@@ -27,6 +27,7 @@ def main() -> None:
         QgsVectorLayer,
     )
     from qgis.PyQt.QtCore import QVariant
+    from qgis.PyQt.QtWidgets import QMessageBox
 
     from integrations.qgis_plugin.openvietgis_connector.plugin import (
         OpenVietGisConnectorDialog,
@@ -121,6 +122,25 @@ def main() -> None:
             assert info["baseline"][str(layer.getFeature(fid)["ovg_feature_id"])]["properties"]["fld_name"] == "Edited"
             assert layer.getFeature(fid)["fld_name"] == "Edited while saving"
             assert dialog._managed_is_dirty(layer, info)
+        # Native delete: auto-save never deletes; manual Save prompts once.
+        assert layer.deleteFeature(fid)
+        with patch.object(dialog, "_write_managed_draft"), patch.object(
+            dialog, "_start_commit_task"
+        ) as start, patch.object(QMessageBox, "question", return_value=QMessageBox.No) as ask:
+            dialog._on_commit_r029_managed(automatic=True)
+            assert start.call_count == 0
+            assert ask.call_count == 0
+            dialog._on_commit_r029_managed()
+            assert start.call_count == 0
+            assert ask.call_count == 1
+            ask.return_value = QMessageBox.Yes
+            dialog._on_commit_r029_managed()
+            assert start.call_count == 1
+            pending = start.call_args.args[3]
+            assert pending["request"]["allow_deletes"] is True
+            assert pending["request"]["operations"][0]["op_type"] == "delete"
+            assert ask.call_count == 2
+        print("PASS native delete: auto-save defers, manual cancel preserves, confirm submits")
         dialog._managed_layers.clear()
         dialog._managed_config = None
         dialog._managed_session = None

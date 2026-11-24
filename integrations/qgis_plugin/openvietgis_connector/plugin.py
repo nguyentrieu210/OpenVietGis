@@ -539,7 +539,7 @@ class OpenVietGisConnectorDialog(QDialog):
         r029_row.addWidget(self.r029_open_button)
         r029_row.addWidget(self.r029_save_button)
         ws_layout.addLayout(r029_row)
-        self.managed_auto_save = QCheckBox("Tự lưu thay đổi lên Web (không tự xóa)")
+        self.managed_auto_save = QCheckBox("Tự lưu thêm/sửa · Xóa cần xác nhận")
         self.managed_auto_save.setChecked(False)
         ws_layout.addWidget(self.managed_auto_save)
 
@@ -2466,7 +2466,8 @@ class OpenVietGisConnectorDialog(QDialog):
             )
             if dirty:
                 self._on_commit_r029_managed(automatic=True)
-        self._on_managed_fetch_delta()
+        if self._commit_task is None and not self._has_uncommitted_managed_changes():
+            self._on_managed_fetch_delta()
 
     def _cancel_managed_commit(self) -> None:
         # Cancellation cannot undo an HTTP request that already reached the server.
@@ -2490,8 +2491,8 @@ class OpenVietGisConnectorDialog(QDialog):
         if not self._managed_session.can_edit or self._managed_config is None:
             return
         self._cancel_managed_delta()
-        allow_deletes = self.allow_deletes_checkbox.isChecked() and not automatic
         config = self._managed_config
+        deferred_deletes = 0
         try:
             for lid, info in self._managed_layers.items():
                 if info.get("recovery_blocked"):
@@ -2505,18 +2506,44 @@ class OpenVietGisConnectorDialog(QDialog):
                 pending = info.get("pending")
                 recover = pending is not None
                 permit_replay = True
+                deletion_count = (
+                    sum(op["op_type"] == "delete" for op in pending["request"]["operations"])
+                    if pending else len(info["baseline"].keys() - current.keys())
+                )
+                allow_deletes = False
+                if not pending:
+                    planned_ops = diff_managed_snapshots(info["baseline"], current, allow_deletes=True)
+                    if not (automatic and deletion_count):
+                        validate_managed_operations(planned_ops, info.get("field_specs", ()))
+                if deletion_count:
+                    if automatic and not pending:
+                        deferred_deletes += deletion_count
+                        continue
+                    if not automatic:
+                        confirm = QMessageBox.question(
+                            self, "Xác nhận xóa trên Web",
+                            f"Lớp: {layer.name()}\n\n"
+                            f"Lưu thay đổi và xóa {deletion_count} đối tượng khỏi bản đồ trên máy chủ? "
+                            "Các thiết bị khác sẽ nhận thay đổi này.\n\n"
+                            "Chọn Không để giữ bản nháp và tiếp tục chỉnh sửa.",
+                            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+                        )
+                        if confirm != QMessageBox.Yes:
+                            self._write_managed_draft(lid, info, current)
+                            self.ws_status.setText("Chưa xóa trên Web. Bản nháp vẫn được giữ.")
+                            return
+                        allow_deletes = True
                 if pending:
                     permit_replay = (current == pending["snapshot"]
                                      and (allow_deletes or not pending["request"]["allow_deletes"]))
                 else:
-                    ops = diff_managed_snapshots(info["baseline"], current, allow_deletes=allow_deletes)
+                    ops = planned_ops
                     if not ops:
                         if layer.isEditable() and layer.isModified():
                             if not layer.commitChanges():
                                 raise ApiError("Không thể lưu bộ đệm cục bộ.")
                             layer.startEditing()
                         continue
-                    validate_managed_operations(ops, info.get("field_specs", ()))
                     if len(ops) > 1000:
                         raise ApiError("Tối đa 1000 thay đổi/lần lưu trên một lớp. Hãy chia nhỏ chỉnh sửa.")
                     request = {
@@ -2534,6 +2561,12 @@ class OpenVietGisConnectorDialog(QDialog):
                     info["pending"] = pending
                 self._write_managed_draft(lid, info, current)
                 self._start_commit_task(config, lid, info, pending, recover, permit_replay, automatic)
+                return
+            if deferred_deletes:
+                self.ws_status.setText(
+                    f"Có {deferred_deletes} đối tượng chờ xác nhận xóa. "
+                    "Bấm Lưu thay đổi lên Web để xác nhận."
+                )
                 return
             self.ws_status.setText("Không có chỉnh sửa mới cần lưu.")
             self._managed_delta_debounce.start()
