@@ -456,10 +456,10 @@ def bootstrap_managed_layer(
     if layer is None:
         raise HTTPException(404, "Layer not found.")
 
-    if gis_access.scoped(session, ctx):
-        allowed_layers = gis_access.allowed_layer_ids(session, ctx)
-        if allowed_layers is not None and layer_id not in allowed_layers:
-            raise HTTPException(403, "Layer is outside your authorized GIS scope.")
+    if gis_access.scoped(session, ctx) and not gis_access.source_allowed(
+        session, ctx, layer["source_id"], "read"
+    ):
+        raise HTTPException(403, "Layer is outside your authorized GIS scope.")
 
     last_cursor, perm_epoch, _ = _ensure_counter(session, organization_id, project_id)
     fields = session.execute(
@@ -471,23 +471,19 @@ def bootstrap_managed_layer(
         {"o": organization_id, "p": project_id, "sid": layer["source_id"]},
     ).mappings().all()
 
-    where_extra, extra_params = gis_access.feature_sql(
-        session, ctx, layer_id, layer["stored_crs_code"], "f"
-    )
     params: dict[str, Any] = {
         "o": organization_id,
         "p": project_id,
         "sid": layer["source_id"],
         "lim": limit + 1,
         "off": offset,
-        **extra_params,
     }
     rows = session.execute(
         text(
             "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
             "f.properties, f.content_revision "
             "FROM spatial.features f "
-            f"WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid {where_extra} "
+            "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
             "ORDER BY f.feature_id ASC LIMIT :lim OFFSET :off"
         ),
         params,
@@ -582,7 +578,6 @@ def fetch_managed_delta(
 
     scanned_through = int(page[-1]["cursor"])
     is_scoped = gis_access.scoped(session, ctx)
-    allowed_layers = gis_access.allowed_layer_ids(session, ctx) if is_scoped else None
 
     changes: list[dict[str, Any]] = []
     for ev in page:
@@ -597,6 +592,8 @@ def fetch_managed_delta(
                 "changes": [],
             }
         src_id = ev["source_id"]
+        if is_scoped and not gis_access.source_allowed(session, ctx, src_id, "read"):
+            continue
         layer_row = session.execute(
             text(
                 "SELECT l.id AS layer_id, s.stored_crs_code, s.content_revision "
@@ -610,8 +607,6 @@ def fetch_managed_delta(
         if layer_row is None:
             continue
         lid = layer_row["layer_id"]
-        if allowed_layers is not None and lid not in allowed_layers:
-            continue
 
         op_rows = session.execute(
             text(
@@ -624,23 +619,19 @@ def fetch_managed_delta(
         if not touched_ids:
             continue
 
-        where_extra, extra_params = gis_access.feature_sql(
-            session, ctx, lid, layer_row["stored_crs_code"], "f"
-        )
         live_rows = session.execute(
             text(
                 "SELECT f.feature_id, ST_AsGeoJSON(f.geometry) AS geom_json, "
                 "f.properties, f.content_revision "
                 "FROM spatial.features f "
                 "WHERE f.organization_id=:o AND f.project_id=:p AND f.source_id=:sid "
-                f"AND f.feature_id = ANY(CAST(:fids AS varchar[])) {where_extra}"
+                "AND f.feature_id = ANY(CAST(:fids AS varchar[]))"
             ),
             {
                 "o": organization_id,
                 "p": project_id,
                 "sid": src_id,
                 "fids": touched_ids,
-                **extra_params,
             },
         ).mappings().all()
         live_by_id = {str(r["feature_id"]): r for r in live_rows}
@@ -723,9 +714,7 @@ def commit_managed_changes(
     ]
     repo = SqlEditingRepository(session)
     cs = repo.commit_changeset(
-        ctx,
-        organization_id=organization_id,
-        project_id=project_id,
+        context=ctx,
         source_id=body.source_id,
         base_content_revision=body.base_content_revision,
         base_schema_revision=body.base_schema_revision,
