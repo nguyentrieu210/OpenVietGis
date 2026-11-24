@@ -70,7 +70,10 @@ export function revokeManagedSession(
   const qs = bumpEpoch ? "?bump_epoch=true" : "";
   return client.request<ManagedSessionItem>(
     `${managedBase(orgId, projectId)}/sessions/${encodeURIComponent(sessionId)}${qs}`,
-    { method: "DELETE", csrfToken },
+    {
+      method: "DELETE",
+      headers: { "X-OpenVietGIS-CSRF": csrfToken },
+    },
   );
 }
 
@@ -84,6 +87,13 @@ export function sendDesktopCommand(
 ): Promise<DesktopCommandResponse> {
   return client.request<DesktopCommandResponse>(
     `${managedBase(orgId, projectId)}/desktop-sessions/${encodeURIComponent(sessionId)}/commands`,
-    { method: "POST", body: payload, csrfToken },
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-OpenVietGIS-CSRF": csrfToken,
+      },
+      body: JSON.stringify(payload),
+    },
   );
 }
