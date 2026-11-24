@@ -39,7 +39,7 @@ try{
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click();
  await page.locator(".live-table-row").first().click();
  const tree=page.getByLabel("Cây layer",{exact:true});await tree.waitFor();
- await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await modes.getByRole("button",{name:"Địa cầu",exact:true}).click();
  const globe=page.locator(".qgis-map-region [data-ovg3d-engine=cesium]");await globe.waitFor();
  assert.equal(await work.getByRole("button",{name:"GIS",exact:true}).getAttribute("aria-pressed"),"true");
  assert.equal(await globe.getAttribute("data-ovg-vector-count"),"1");
@@ -73,7 +73,7 @@ try{
  await work.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  await work.getByRole("button",{name:"GIS",exact:true}).click();
- await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await modes.getByRole("button",{name:"Địa cầu",exact:true}).click();
  await globe.waitFor();
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await globe.waitFor({state:"detached"});assert.equal(errors.length,0,errors.join("\n"));

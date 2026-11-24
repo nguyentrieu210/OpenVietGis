@@ -48,10 +48,10 @@ try{
  await modes.waitFor({timeout:30000});
  await page.locator("#ovg-3d-height option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
  await page.getByText(/mốc phẳng 0 m/).waitFor();
- assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();

@@ -30,12 +30,12 @@ try{
  });
  await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4218/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ bản đồ"});await modes.waitFor();
- await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"Địa cầu",exact:true}).click();
  await page.locator('[data-ovg3d-engine="cesium"] canvas').waitFor({timeout:60000});
  await modes.getByRole("button",{name:"2D",exact:true}).click();await modes.getByRole("button",{name:"2D",exact:true}).waitFor();await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);
  await page.getByRole("button",{name:"3D Tiles",exact:true}).last().click();
  await page.getByLabel("Bộ dữ liệu").selectOption(id);
- await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"3D",exact:true}).click();
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"Địa cầu",exact:true}).click();
  const canvas=page.locator('[data-ovg3d-engine="cesium-tiles"] canvas');await canvas.waitFor({timeout:60000});
  await page.getByText(/CesiumJS · (3D Tiles sẵn sàng|đã tải nội dung tile)/).waitFor({timeout:30000}).catch(async e=>{console.log("DEBUG",requests,errors,external,await page.locator(".ovg-3d-note").innerText());throw e});
  assert.ok(requests.length>0);

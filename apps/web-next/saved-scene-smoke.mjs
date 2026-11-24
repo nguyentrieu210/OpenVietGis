@@ -80,11 +80,11 @@ try{
  await page.getByText(/Đã thêm warehouse.glb/).waitFor();await page.getByText(/Cảnh hiện có 2\/8 mô hình/).waitFor();
  await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["66666666-6666-4666-8666-666666666666","height_m"]));
- await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
  await page.getByText(/fixture.glb · kho v2/).waitFor();
- assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  const layers=page.getByRole("complementary",{name:"Các lớp 3D"});
  await layers.getByRole("checkbox",{name:"fixture.glb · v2"}).uncheck();
  await layers.getByRole("checkbox",{name:"Buildings · height_m"}).uncheck();
@@ -108,7 +108,7 @@ try{
  await page.getByText(/Đã mở cảnh v1/).waitFor();
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByRole("button",{name:"Cảnh 3D",exact:true}).click({noWaitAfter:true});
  await page.getByRole("checkbox",{name:/Tôi xác nhận raster/}).check();
- await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  assert.equal(await layers.getByRole("checkbox",{name:"fixture.glb · v2"}).isChecked(),false);
  assert.equal(await layers.getByRole("checkbox",{name:"warehouse.glb · v1"}).isChecked(),true);

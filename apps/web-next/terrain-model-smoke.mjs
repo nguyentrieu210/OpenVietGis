@@ -40,11 +40,11 @@ try{
  await page.getByLabel("Gắn mô hình vào đối tượng GIS đang chọn").setInputFiles({name:"fixture.glb",mimeType:"model/gltf-binary",buffer:Buffer.from(glbFixture())});
  await page.getByText(/fixture.glb · 12 tam giác/).waitFor();
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=false);await modes.getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
  await page.getByText(/fixture.glb · mô hình phiên/).waitFor();
- assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
  assert.equal(errors.length,0,errors.join("\n"));console.log("PASS project UI terrain profile, local GLB upload, polygon elevation, WebGL and revocation");

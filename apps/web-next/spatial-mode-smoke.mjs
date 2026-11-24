@@ -63,22 +63,22 @@ try{
  await page.setViewportSize({width:1280,height:850});
  console.log("PASS mobile ribbon search within viewport");
  // A project with no configured 3D source must still open the workspace.
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] canvas').waitFor();
  // Hidden GIS command listeners must not consume keyboard events in alternate modes.
  const keyHandled=await page.evaluate(()=>!document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"L",bubbles:true,cancelable:true})));
  assert.equal(keyHandled,false);
  assert.equal(await page.locator('.core-command input').inputValue(),"");
  console.log("PASS alternate mode does not intercept GIS shortcuts");
- assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"2D",exact:true}).click();await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);
  await page.getByLabel("Chiều cao 3D (m)").waitFor();
  console.log("PASS empty 3D workspace and configuration entry");
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/mốc phẳng 0 m/).waitFor();
- assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -114,7 +114,7 @@ try{
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  await modes.getByRole("button",{name:"GIS",exact:true}).click();
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click();
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click();
  await page.locator('[data-ovg-alternate-active="3d"] canvas').waitFor();
  await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();

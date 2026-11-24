@@ -52,10 +52,10 @@ try{
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});
  await page.locator(".live-table-row").first().click({noWaitAfter:true});
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
  await page.getByText(/Đối tượng: source1:building/).waitFor();
- assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ assert.equal(await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).getAttribute("aria-pressed"),"true");
  console.log("PASS live 3D adapter");
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -84,7 +84,7 @@ try{
  await page.getByRole("button",{name:"Tra liên kết GIS"}).click({noWaitAfter:true});
  await page.getByRole("button",{name:"Chọn trên GIS"}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
- await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
  await page.getByText(/Đối tượng: source1:building/).waitFor();
  await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
