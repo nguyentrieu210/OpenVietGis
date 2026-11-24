@@ -284,6 +284,25 @@ def test_pro_tools(migrated_database):
         )
         assert result.status_code == 200, result.text
         assert result.content and b"features" in result.content
+        assert result.headers["cache-control"] == "private, no-cache"
+        etag = result.headers["etag"]
+        cached = c.get(
+            pro + "/tiles/" + q["layer_id"] + "/0/0/0.mvt",
+            params={"content_revision": q["content_revision"],
+                    "schema_revision": q["schema_revision"]},
+            headers={"If-None-Match": etag},
+        )
+        assert cached.status_code == 304
+        assert cached.content == b""
+        foreign = seed_access_world()
+        with _client(foreign.owner_user_id) as other:
+            denied = other.get(
+                pro + "/tiles/" + q["layer_id"] + "/0/0/0.mvt",
+                params={"content_revision": q["content_revision"],
+                        "schema_revision": q["schema_revision"]},
+                headers={"If-None-Match": etag},
+            )
+            assert denied.status_code in (403, 404)
         stale = c.get(
             pro + "/tiles/" + q["layer_id"] + "/0/0/0.mvt",
             params={"content_revision": "0" * 64, "schema_revision": q["schema_revision"]},

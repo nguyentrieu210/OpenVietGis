@@ -475,7 +475,8 @@ def bootstrap_managed_layer(
     layer = session.execute(
         text(
             "SELECT l.id, l.name, l.source_id, s.geometry_family, s.dimensions, "
-            "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision "
+            "s.stored_crs AS stored_crs_code, s.content_revision, s.schema_revision, "
+            "s.feature_count "
             "FROM spatial.layers l "
             "JOIN spatial.data_sources s "
             "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
@@ -487,7 +488,8 @@ def bootstrap_managed_layer(
     if layer is None:
         raise HTTPException(404, "Layer not found.")
 
-    if gis_access.scoped(session, ctx) and not gis_access.source_allowed(
+    restricted = gis_access.scoped(session, ctx)
+    if restricted and not gis_access.source_allowed(
         session, ctx, layer["source_id"], "read"
     ):
         raise HTTPException(403, "Layer is outside your authorized GIS scope.")
@@ -542,6 +544,11 @@ def bootstrap_managed_layer(
         "schema_revision": str(layer["schema_revision"]),
         "cursor": last_cursor,
         "permission_epoch": perm_epoch,
+        "cacheable": not restricted and layer["feature_count"] is not None,
+        "feature_count": (
+            int(layer["feature_count"])
+            if not restricted and layer["feature_count"] is not None else None
+        ),
         "fields": [
             {
                 "name": str(f["name"]),

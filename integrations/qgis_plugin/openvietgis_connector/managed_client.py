@@ -22,6 +22,7 @@ from .client import (
     _extract_http_error_detail,
     _redact_secret,
 )
+from .snapshot_cache import cache_path, read_cached_record, write_snapshot
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,8 @@ class ManagedBootstrapPage:
     features: tuple[dict[str, Any], ...]
     has_more: bool
     next_offset: int | None
+    cacheable: bool = False
+    feature_count: int | None = None
 
 
 @dataclass(frozen=True)
@@ -190,6 +193,8 @@ def bootstrap_managed_layer(
         features=tuple(res.get("features") or ()),
         has_more=bool(res.get("has_more", False)),
         next_offset=int(res["next_offset"]) if res.get("next_offset") is not None else None,
+        cacheable=res.get("cacheable") is True,
+        feature_count=int(res["feature_count"]) if res.get("feature_count") is not None else None,
     )
 
 
@@ -343,7 +348,54 @@ def native_geometry_wkt(geometry: dict[str, Any]) -> str:
     raise ApiError("Kiểu hình học chưa được hỗ trợ trong chế độ đồng bộ.")
 
 
-def load_managed_layers(config, layer_ids, binding_id, cancelled=lambda: False, progress=lambda n: None):
+def catch_up_cached_layer(config, session, probe, record, cancelled):
+    """Apply a bounded, complete event interval and verify the final server pin."""
+    cursor = record["cursor"]
+    if cursor < 0 or cursor > probe.cursor:
+        return None
+    features = {str(f["feature_id"]): f for f in record["features"]}
+    if len(features) != len(record["features"]):
+        return None
+    revision = record["revision"]
+    for _ in range(8):
+        if cancelled():
+            return None
+        delta = fetch_managed_delta(config, session_id=session.id, cursor=cursor)
+        if (delta.reset_required or delta.permission_epoch != probe.permission_epoch
+                or delta.next_cursor < cursor or delta.next_cursor > probe.cursor):
+            return None
+        for change in delta.changes:
+            if str(change["source_id"]) != probe.source_id:
+                continue
+            if str(change["layer_id"]) != probe.layer_id:
+                return None
+            for oid in change.get("removals", []):
+                features.pop(str(oid), None)
+            for f in change.get("upserts", []):
+                features[str(f["feature_id"])] = f
+            revision = str(change["content_revision"])
+        if not delta.has_more:
+            if (delta.next_cursor != probe.cursor or revision != probe.content_revision
+                    or len(features) != probe.feature_count):
+                return None
+            # Delta queries read live rows. Re-probe to rule out a concurrent edit or ACL change.
+            final = bootstrap_managed_layer(config, layer_id=probe.layer_id,
+                                            session_id=session.id, limit=1, offset=0)
+            if (not final.cacheable or final.cursor != probe.cursor
+                    or final.permission_epoch != probe.permission_epoch
+                    or final.content_revision != probe.content_revision
+                    or final.schema_revision != probe.schema_revision):
+                return None
+            return list(features.values())
+        if delta.next_cursor <= cursor:
+            return None
+        cursor = delta.next_cursor
+    return None
+
+
+def load_managed_layers(
+    config, layer_ids, binding_id, cancelled=lambda: False, progress=lambda n: None, cache_root=None
+):
     """Network-only initial load, safe to run outside the QGIS GUI thread."""
     if cancelled():
         return None
@@ -353,6 +405,30 @@ def load_managed_layers(config, layer_ids, binding_id, cancelled=lambda: False, 
         offset = 0
         first = None
         features = []
+        path = cache_path(cache_root, config, layer_id) if cache_root is not None else None
+        if path is not None and path.is_file():
+            # Tiny authenticated read validates current access and revisions before reuse.
+            probe = bootstrap_managed_layer(config, layer_id=layer_id,
+                                            session_id=session.id, limit=1, offset=0)
+            if probe.permission_epoch != session.permission_epoch:
+                raise ApiError("Quyền thay đổi trong lúc tải; hãy mở lại.")
+            record = read_cached_record(path, probe, allow_older=True)
+            cached = None
+            if record is not None:
+                if record["revision"] == probe.content_revision:
+                    cached = record["features"]
+                else:
+                    try:
+                        cached = catch_up_cached_layer(config, session, probe, record, cancelled)
+                    except ApiError as exc:
+                        if exc.status_code in (401, 403):
+                            raise
+                    if cached is not None and not cancelled():
+                        write_snapshot(path, probe, cached)
+            if cached is not None and not cancelled():
+                result.append((probe, cached))
+                progress(100 * (index + 1) / len(layer_ids))
+                continue
         while True:
             if cancelled():
                 return None
@@ -372,6 +448,8 @@ def load_managed_layers(config, layer_ids, binding_id, cancelled=lambda: False, 
             if page.next_offset is None or page.next_offset <= offset:
                 raise ApiError("Phân trang máy chủ không hợp lệ.")
             offset = page.next_offset
+        if path is not None and not cancelled():
+            write_snapshot(path, first, features)
         result.append((first, features))
         progress(100 * (index + 1) / len(layer_ids))
     return session, result

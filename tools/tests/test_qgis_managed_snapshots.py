@@ -122,3 +122,87 @@ def test_required_fields_preflight_preserves_draft_and_allows_valid_point():
     op["properties"]["id"] = "valid"
     validate_managed_operations([op], fields)
     validate_managed_operations([{"op_type": "delete", "feature_id": "new"}], fields)
+
+
+def test_sqlite_snapshot_requires_fresh_scope_and_revisions(tmp_path):
+    from types import SimpleNamespace
+
+    from integrations.qgis_plugin.openvietgis_connector.snapshot_cache import (
+        cache_path,
+        clear_snapshots,
+        read_snapshot,
+        write_snapshot,
+    )
+    c = SimpleNamespace(base_url="https://example.com", organization_id="o",
+                        project_id="p", bearer_token="secret")
+    p = cache_path(tmp_path, c, "l")
+    assert "secret" not in p.name
+    page = SimpleNamespace(layer_id="l", source_id="s", content_revision="a",
+                           schema_revision="b", permission_epoch=1, crs_code=4326,
+                           fields=[], cacheable=True, feature_count=1)
+    features = [{"feature_id": "f"}]
+    write_snapshot(p, page, features)
+    assert read_snapshot(p, page) == features
+    page.cacheable = False
+    assert read_snapshot(p, page) is None
+    page.cacheable = True
+    page.permission_epoch = 2
+    assert read_snapshot(p, page) is None
+    page.permission_epoch = 1
+    page.content_revision = "new"
+    assert read_snapshot(p, page) is None
+    c.bearer_token = "different"
+    assert cache_path(tmp_path, c, "l") != p
+    clear_snapshots(tmp_path)
+    assert not p.exists()
+
+
+def test_reopen_uses_one_authorized_probe_not_full_download(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    from integrations.qgis_plugin.openvietgis_connector.snapshot_cache import (
+        cache_path,
+        write_snapshot,
+    )
+    c = SimpleNamespace(base_url="https://example.com", organization_id="o",
+                        project_id="p", bearer_token="secret")
+    page = SimpleNamespace(layer_id="l", source_id="s", content_revision="a",
+                           schema_revision="b", permission_epoch=1, crs_code=4326,
+                           fields=[], cacheable=True, feature_count=2)
+    features = [{"feature_id": "a"}, {"feature_id": "b"}]
+    write_snapshot(cache_path(tmp_path, c, "l"), page, features)
+    calls = []
+    monkeypatch.setattr(client, "create_managed_session",
+                        lambda *a, **k: SimpleNamespace(id="s", permission_epoch=1))
+    monkeypatch.setattr(client, "bootstrap_managed_layer", lambda *a, **k: calls.append(k) or page)
+    result = client.load_managed_layers(c, ["l"], None, cache_root=tmp_path)
+    assert result[1][0][1] == features
+    assert len(calls) == 1 and calls[0]["limit"] == 1
+
+
+def test_reopen_changed_cache_uses_delta_and_revalidates(monkeypatch):
+    from types import SimpleNamespace
+
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    probe = SimpleNamespace(layer_id="l", source_id="s", content_revision="new",
+                            schema_revision="b", permission_epoch=1, cursor=3,
+                            cacheable=True, feature_count=2)
+    record = {"revision": "old", "cursor": 2,
+              "features": [{"feature_id": "a"}, {"feature_id": "b"}]}
+    delta = SimpleNamespace(reset_required=False, permission_epoch=1, next_cursor=3,
+                            has_more=False, changes=[{
+                                "source_id": "s", "layer_id": "l", "content_revision": "new",
+                                "removals": ["b"], "upserts": [{"feature_id": "c"}],
+                            }])
+    monkeypatch.setattr(client, "fetch_managed_delta", lambda *a, **kw: delta)
+    monkeypatch.setattr(client, "bootstrap_managed_layer", lambda *a, **kw: probe)
+    sess = SimpleNamespace(id="s")
+    assert client.catch_up_cached_layer(None, sess, probe, record, lambda: False) == [
+        {"feature_id": "a"}, {"feature_id": "c"},
+    ]
+    delta.next_cursor = 4
+    assert client.catch_up_cached_layer(None, sess, probe, record, lambda: False) is None
+    delta.next_cursor = 3
+    delta.reset_required = True
+    assert client.catch_up_cached_layer(None, sess, probe, record, lambda: False) is None

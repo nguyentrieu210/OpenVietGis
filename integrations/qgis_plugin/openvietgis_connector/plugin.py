@@ -107,6 +107,7 @@ from .managed_client import (
     send_pending_commit,
     validate_managed_operations,
 )
+from .snapshot_cache import clear_snapshots
 from .workspace import (
     SyncPreview as WorkspaceSyncPreview,
 )
@@ -1849,6 +1850,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 return
         self._stop_browser_login()
         self._disconnect_managed()
+        clear_snapshots(Path(QgsApplication.qgisSettingsDirPath()).resolve() / "openvietgis" / "snapshots")
         self._stop_realtime_worker()
         self._auto_sync_timer.stop()
         self._preferred_binding_id = None
@@ -1996,9 +1998,11 @@ class OpenVietGisConnectorDialog(QDialog):
             self.r029_open_button.setEnabled(False)
             self.ws_status.setText("Đang tải bản đồ trong nền… Bạn vẫn có thể dùng QGIS.")
 
+            cache_root = Path(QgsApplication.qgisSettingsDirPath()).resolve() / "openvietgis" / "snapshots"
+
             def fetch(task):
                 return load_managed_layers(config, layer_ids, binding_id,
-                                           task.isCanceled, task.setProgress)
+                                           task.isCanceled, task.setProgress, cache_root)
 
             def finished(error, result=None):
                 if generation != self._bootstrap_generation:

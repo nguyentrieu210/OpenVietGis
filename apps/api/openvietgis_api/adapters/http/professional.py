@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -734,6 +734,7 @@ def schema_change(
 
 @router.get(BASE + "/tiles/{layer_id}/{z}/{x}/{y}.mvt")
 def tile(
+    request: Request,
     organization_id: UUID,
     project_id: UUID,
     layer_id: UUID,
@@ -752,6 +753,21 @@ def tile(
         layer_id=layer_id, content_revision=content_revision, schema_revision=schema_revision
     )
     _, src = pinned(repo, ctx, spec)
+    # Authenticate and pin the authorized revision BEFORE allowing any cache hit.
+    restricted = scoped(session, ctx)
+    headers = {"Cache-Control": "private, no-store"}
+    if not restricted:
+        identity = [
+            "mvt-v2", str(ctx.actor.actor_id), str(ctx.actor.actor_type),
+            str(auth.credential_id), str(organization_id), str(project_id),
+            str(layer_id), content_revision, schema_revision, z, x, y,
+        ]
+        etag = '"' + hashlib.sha256(json.dumps(identity).encode()).hexdigest() + '"'
+        headers = {"Cache-Control": "private, no-cache", "ETag": etag,
+                   "Vary": "Cookie, Authorization"}
+        supplied = request.headers.get("if-none-match", "")
+        if etag in {value.strip().removeprefix("W/") for value in supplied.split(",")}:
+            return Response(status_code=304, headers=headers)
     p = params(ctx, src, spec) | {"z": z, "x": x, "y": y}
     base = (
         "WITH bounds AS (SELECT ST_TileEnvelope(:z,:x,:y) AS b), "
@@ -782,5 +798,5 @@ def tile(
     return Response(
         data,
         media_type="application/vnd.mapbox-vector-tile",
-        headers={"Cache-Control": "private, no-store"},
+        headers=headers,
     )
