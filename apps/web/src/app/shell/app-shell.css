@@ -144,6 +144,12 @@
 .ovg-app-topbar-actions { display: flex; align-items: center; gap: 8px; }
 .ovg-app-topbar .ovg-account-menu { color: var(--ovg-text); }
 
+.ovg-app-topbar .ovg-account-menu > summary,
+.ovg-app-topbar .ovg-command-trigger {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .ovg-theme-toggle {
   width: 34px;
   height: 34px;
