@@ -15,7 +15,8 @@
     "maplibre-gl": "6.18.0",
     "@tanstack/react-query": "5.107.1",
     "react-router-dom": "7.18.5",
-    "@openvietgis/spatial-workspace": "workspace:*"
+    "@openvietgis/spatial-workspace": "workspace:*",
+    "terra-draw": "1.40.0"
   },
   "devDependencies": {
     "@types/geojson": "7946.0.16",

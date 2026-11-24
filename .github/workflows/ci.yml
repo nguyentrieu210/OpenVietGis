@@ -152,6 +152,10 @@ jobs:
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
 
+      - name: Validate Engine-First editor and cache regression
+        if: ${{ !inputs.browser_only }}
+        run: bash tools/validate_engine_first.sh
+
       - name: Run focused browser diagnosis
         if: ${{ inputs.browser_only }}
         run: |
