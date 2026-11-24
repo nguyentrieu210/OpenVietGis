@@ -8,8 +8,9 @@ test("public shell exposes skip navigation and visible keyboard focus", async ({
   page
 }) => {
   await page.goto("/");
-  await page.keyboard.press("Tab");
   const skip = page.getByRole("link", { name: "Bỏ qua điều hướng" });
+  await expect(skip).toBeAttached();
+  await page.keyboard.press("Tab");
   await expect(skip).toBeFocused();
   await expect(skip).toHaveCSS("outline-style", "solid");
 });
