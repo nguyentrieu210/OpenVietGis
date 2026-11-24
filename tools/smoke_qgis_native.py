@@ -29,6 +29,10 @@ def main() -> None:
     from qgis.PyQt.QtCore import QVariant
     from qgis.PyQt.QtWidgets import QMessageBox
 
+    from integrations.qgis_plugin.openvietgis_connector.managed_client import (
+        ManagedDeltaPage,
+        ManagedSessionInfo,
+    )
     from integrations.qgis_plugin.openvietgis_connector.plugin import (
         OpenVietGisConnectorDialog,
     )
@@ -142,7 +146,11 @@ def main() -> None:
                      "content_revision": "a" * 64, "schema_revision": "b" * 64,
                      "cursor": 0, "permission_epoch": 1})
         dialog._managed_layers["l"] = info
-        dialog._managed_session = SimpleNamespace(id="test", can_edit=True)
+        dialog._managed_session = ManagedSessionInfo(
+            id="test", organization_id="org", project_id="project", state="active",
+            permission_epoch=1, last_ack_cursor=0, current_cursor=1,
+            expires_at="2099-01-01T00:00:00Z", can_edit=True, can_delete=True,
+        )
         dialog._managed_config = object()
         release = Event()
         def mock_send(*args, **kwargs):
@@ -173,28 +181,43 @@ def main() -> None:
         assert clean.dataProvider().addAttributes([QgsField("ovg_feature_id", QVariant.String),
                                                    QgsField("fld_name", QVariant.String)])
         clean.updateFields()
+        assert clean.dataProvider().addFeatures(features)[0]
         QgsProject.instance().addMapLayer(clean)
         clean_info = {"map_layer_id": clean.id(), "source_id": "s2", "field_names": ["fld_name"],
-                      "baseline": {}, "cursor": 0, "content_revision": "a" * 64}
+                      "baseline": dialog._managed_snapshot(clean, ["fld_name"]),
+                      "cursor": 0, "content_revision": "a" * 64}
         dialog._track_managed_layer(clean, clean_info)
         dialog._managed_layers["clean"] = clean_info
         dialog._managed_cursor = 1
-        delta = SimpleNamespace(reset_required=False, next_cursor=3, has_more=False, changes=[
-            {"layer_id": "l", "cursor": 2, "content_revision": "d" * 64,
+        delta = ManagedDeltaPage(reset_required=False, next_cursor=3, permission_epoch=1, has_more=False, changes=(
+            {"layer_id": "l", "source_id": "s", "cursor": 2, "content_revision": "d" * 64,
              "upserts": [], "removals": [str(layer.getFeature(fid)["ovg_feature_id"])]},
-            {"layer_id": "clean", "cursor": 3, "content_revision": "e" * 64,
-             "removals": [], "upserts": [{"feature_id": "new",
-               "geometry": {"type": "Point", "coordinates": [11800000, 1200000]},
-               "properties": {"fld_name": "Remote"}}]},
-        ])
-        dialog._apply_managed_delta(delta)
-        assert clean.featureCount() == 1
+            {"layer_id": "clean", "source_id": "s2", "cursor": 3, "content_revision": "e" * 64,
+             "removals": ["0"], "upserts": [
+                 {"feature_id": oid,
+                  "geometry": {"type": "Point", "coordinates": [11800009, 1200000]},
+                  "properties": {"fld_name": "Remote"}}
+                 for oid in ("1", "new")
+             ]},
+        ))
+        start_delta = perf_counter()
+        with patch.object(dialog, "_managed_snapshot", wraps=dialog._managed_snapshot) as snapshot:
+            dialog._apply_managed_delta(delta)
+            assert snapshot.call_count == 1
+            assert snapshot.call_args.kwargs.get("request") is not None
+            assert not dialog._managed_is_dirty(clean, clean_info)
+            dialog._apply_managed_delta(delta)
+            assert snapshot.call_count == 1
+        print(f"Native 8000 points: delta and replay in {(perf_counter()-start_delta)*1000:.1f} ms")
+        assert clean.featureCount() == 8000
         assert clean_info["cursor"] == 3
         assert dialog._managed_cursor == 1
         assert layer.getFeature(fid)["fld_name"] == "Edited while saving"
-        dialog._apply_managed_delta(delta)
-        assert clean.featureCount() == 1
-        assert dialog._managed_cursor == 1
+        baseline = clean_info["baseline"]
+        assert baseline == dialog._managed_snapshot(clean, ["fld_name"])
+        assert "0" not in baseline
+        assert baseline["1"]["properties"] == {"fld_name": "Remote"}
+        assert baseline["new"]["properties"] == {"fld_name": "Remote"}
         dialog._managed_layers.pop("clean")
         QgsProject.instance().removeMapLayer(clean.id())
         print("PASS native delta: clean layer updates, dirty layer and cursor preserved")

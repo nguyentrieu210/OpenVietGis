@@ -495,7 +495,6 @@ def load_managed_layers(
     session = create_managed_session(config, binding_id=binding_id)
     result = []
     for index, layer_id in enumerate(layer_ids):
-        offset = 0
         first = None
         features = []
         path = cache_path(cache_root, config, layer_id) if cache_root is not None else None
