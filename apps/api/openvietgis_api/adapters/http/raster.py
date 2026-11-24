@@ -712,7 +712,7 @@ def raster_file(
     }
     if range_header := request.headers.get("range"):
         size = session.execute(
-            text(f"SELECT byte_size FROM raster.layers WHERE {WHERE} AND id=:id"), args
+            text(f"SELECT octet_length(cog) FROM raster.layers WHERE {WHERE} AND id=:id"), args
         ).scalar_one_or_none()
         if size is None:
             raise HTTPException(404, "Raster layer not found")
