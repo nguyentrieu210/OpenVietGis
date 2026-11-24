@@ -1451,6 +1451,9 @@
   left: 12px !important;
   bottom: auto !important;
 }
+.map-workspace-layout.is-mobile .map-basemap-picker {
+  top: 60px !important;
+}
 .map-basemap-menu {
   top: calc(100% + 6px) !important;
   bottom: auto !important;

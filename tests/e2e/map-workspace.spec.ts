@@ -122,6 +122,7 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
   const command = page.getByRole("textbox", { name: "Nhập lệnh bản đồ" });
   await command.fill("ZS");
   await command.press("Enter");
+  await command.blur();
   expect((await extentDetail).status()).toBe(200);
   await expect(page.getByTestId("map-engine-ready")).toHaveAttribute("data-ready", "true");
   await page.keyboard.press("Escape");

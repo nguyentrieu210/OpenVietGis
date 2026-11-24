@@ -122,6 +122,7 @@ test("three real 10000-feature reference layers settle and pick a real rendered 
   const command = page.getByRole("textbox", { name: "Nhập lệnh bản đồ" });
   await command.fill("ZS");
   await command.press("Enter");
+  await command.blur();
   expect((await extentDetail).status()).toBe(200);
   const selectedFrame=await selectedViewport;
   expect(selectedFrame.status()).toBe(200);

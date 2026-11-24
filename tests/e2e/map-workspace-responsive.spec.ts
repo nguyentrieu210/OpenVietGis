@@ -108,8 +108,8 @@ test("adapts GIS workspace across desktop tablet and mobile reference widths", a
 
   // Mobile actions do not overwrite persisted desktop layout preferences.
   await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(controls).toBeHidden();
   for (const sheet of sheets) {
-    await expect(sheet.toggle).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(sheet.selector)).toBeVisible();
   }
 });
