@@ -122,6 +122,36 @@ def main() -> None:
             assert info["baseline"][str(layer.getFeature(fid)["ovg_feature_id"])]["properties"]["fld_name"] == "Edited"
             assert layer.getFeature(fid)["fld_name"] == "Edited while saving"
             assert dialog._managed_is_dirty(layer, info)
+        # A dirty layer must not block a clean layer, or lose its own deferred cursor.
+        clean = QgsVectorLayer("Point?crs=EPSG:3857", "clean layer", "memory")
+        assert clean.dataProvider().addAttributes([QgsField("ovg_feature_id", QVariant.String),
+                                                   QgsField("fld_name", QVariant.String)])
+        clean.updateFields()
+        QgsProject.instance().addMapLayer(clean)
+        clean_info = {"map_layer_id": clean.id(), "source_id": "s2", "field_names": ["fld_name"],
+                      "baseline": {}, "cursor": 0, "content_revision": "a" * 64}
+        dialog._track_managed_layer(clean, clean_info)
+        dialog._managed_layers["clean"] = clean_info
+        dialog._managed_cursor = 1
+        delta = SimpleNamespace(reset_required=False, next_cursor=3, has_more=False, changes=[
+            {"layer_id": "l", "cursor": 2, "content_revision": "d" * 64,
+             "upserts": [], "removals": [str(layer.getFeature(fid)["ovg_feature_id"])]},
+            {"layer_id": "clean", "cursor": 3, "content_revision": "e" * 64,
+             "removals": [], "upserts": [{"feature_id": "new",
+               "geometry": {"type": "Point", "coordinates": [11800000, 1200000]},
+               "properties": {"fld_name": "Remote"}}]},
+        ])
+        dialog._apply_managed_delta(delta)
+        assert clean.featureCount() == 1
+        assert clean_info["cursor"] == 3
+        assert dialog._managed_cursor == 1
+        assert layer.getFeature(fid)["fld_name"] == "Edited while saving"
+        dialog._apply_managed_delta(delta)
+        assert clean.featureCount() == 1
+        assert dialog._managed_cursor == 1
+        dialog._managed_layers.pop("clean")
+        QgsProject.instance().removeMapLayer(clean.id())
+        print("PASS native delta: clean layer updates, dirty layer and cursor preserved")
         # Native delete: auto-save never deletes; manual Save prompts once.
         assert layer.deleteFeature(fid)
         with patch.object(dialog, "_write_managed_draft"), patch.object(

@@ -353,7 +353,7 @@ class OpenVietGisConnectorDialog(QDialog):
         self._managed_layers: dict[str, dict[str, Any]] = {}
         self._managed_config: OpenVietGisConfig | None = None
         self._managed_poll = QTimer(self)
-        self._managed_poll.setInterval(10000)
+        self._managed_poll.setInterval(3000)
         self._managed_poll.timeout.connect(self._managed_tick)
         self._draft_timer = QTimer(self)
         self._draft_timer.setInterval(3000)
@@ -2175,9 +2175,6 @@ class OpenVietGisConnectorDialog(QDialog):
         if (self._managed_session is None or not self._managed_layers
                 or self._delta_task is not None or self._commit_task is not None):
             return
-        if self._has_uncommitted_managed_changes():
-            self.ws_status.setText("Có chỉnh sửa chưa lưu. Nhận cập nhật sau khi lưu để tránh xung đột.")
-            return
         config = self._managed_config
         if config is None:
             return
@@ -2199,7 +2196,7 @@ class OpenVietGisConnectorDialog(QDialog):
                     self._on_managed_session_revoked()
                 else:
                     self.ws_status.setText(f"Tạm dừng nhận cập nhật: {error}")
-            elif result is not None and not self._has_uncommitted_managed_changes():
+            elif result is not None:
                 self._apply_managed_delta(result)
 
         task = QgsTask.fromFunction("OpenVietGIS — nhận thay đổi", fetch, on_finished=finished)
@@ -2215,18 +2212,20 @@ class OpenVietGisConnectorDialog(QDialog):
                 )
                 return
             applied_count = 0
+            blocked_cursor = None
             for change in delta.changes:
                 lid = str(change["layer_id"])
                 info = self._managed_layers.get(lid)
-                if info is None or info.get("recovery_blocked") or int(change["cursor"]) <= info["cursor"]:
+                if info is None or int(change["cursor"]) <= info["cursor"]:
+                    continue
+                if info.get("recovery_blocked"):
+                    blocked_cursor = min(blocked_cursor or int(change["cursor"]), int(change["cursor"]))
                     continue
                 layer = QgsProject.instance().mapLayer(info["map_layer_id"])
                 if not isinstance(layer, QgsVectorLayer):
                     continue
-                if layer.isEditable() and layer.isModified():
-                    self.ws_status.setText(
-                        "🔔 Có cập nhật từ Web. Lưu chỉnh sửa đang làm rồi nhận cập nhật mới."
-                    )
+                if layer.isModified() or self._managed_is_dirty(layer, info):
+                    blocked_cursor = min(blocked_cursor or int(change["cursor"]), int(change["cursor"]))
                     continue
                 was_edit = layer.isEditable()
                 if was_edit and not layer.commitChanges():
@@ -2274,10 +2273,12 @@ class OpenVietGisConnectorDialog(QDialog):
                 info["cursor"] = int(change["cursor"])
                 if was_edit:
                     layer.startEditing()
-            self._managed_cursor = delta.next_cursor
-            if delta.has_more:
+            self._managed_cursor = min(delta.next_cursor, blocked_cursor - 1) if blocked_cursor else delta.next_cursor
+            if delta.has_more and blocked_cursor is None:
                 self._managed_delta_debounce.start()
-            if applied_count > 0:
+            if blocked_cursor is not None:
+                self.ws_status.setText(f"Đã nhận {applied_count} cập nhật ở lớp sạch; lớp đang sửa chờ lưu.")
+            elif applied_count > 0:
                 self.ws_status.setText(
                     f"Đã nhận {applied_count} đối tượng cập nhật từ Web."
                 )
@@ -2466,7 +2467,7 @@ class OpenVietGisConnectorDialog(QDialog):
             )
             if dirty:
                 self._on_commit_r029_managed(automatic=True)
-        if self._commit_task is None and not self._has_uncommitted_managed_changes():
+        if self._commit_task is None:
             self._on_managed_fetch_delta()
 
     def _cancel_managed_commit(self) -> None:
