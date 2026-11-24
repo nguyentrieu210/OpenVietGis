@@ -9,3 +9,9 @@ Native QGIS certification, auth provider validation, actual latency and RLS test
 - Reference contract tests: 6 passed (cursor scope, retention, failed apply, replay identity, save state); not API integration proof.
 - Native spike syntax passed; execution blocked by missing qgis Python package on VPS. Windows/Linux desktop verification not performed.
 - T002–T005 remain open; no gate approval or implementation/deploy claim.
+
+## Gate A isolated database verification
+- tools/spike_r029_postgres_cursor.py: 4/4 checks against disposable PostgreSQL 18/PostGIS image, no network.
+- Existing integration tests: test_scoped_layer_features_and_editing, test_feature_leases_enforce_core_writes_and_expire, test_oidc_authorization_redirect_contains_state_nonce_and_pkce: 3/3 passed using fresh loopback-only database with migrations and runtime RLS role.
+- No production changes; both database containers removed. T003 cursor prototype proven, mutation coverage remains open; T004 existing web OIDC proven, native desktop pairing remains open.
+- Native QGIS attempt: pinned-tag image not found; qgis/qgis:ltr pull did not finish within bounded 120-second attempt; image unavailable and spike not executed. No host packages installed. T002 remains open; Gate A still blocked.

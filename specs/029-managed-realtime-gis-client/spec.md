@@ -6,6 +6,7 @@
 **Input**: QGIS is a managed client of OpenVietGIS; server-authoritative edits, two-way realtime with Web and AI, permission revocation, optional AI control of an active QGIS session.
 
 ## Scope and boundaries
+Existing attribute_filter is a row predicate, not column ACL. Per-field permissions require a new shared core authorization extension; managed mode must fail closed for unsupported field-scoped policy.
 Reuse R002 tenancy/permissions, R003 spatial catalog/CRS, R006 changesets/audit/revert, R011 collaboration, R021 MCP, R026 Integration Hub and R027 binding/workspace. R028 branch number reserved for Windows V8i receiver. No new standalone server or direct internal PostGIS credentials. Keep R027 snapshot sync as a separately labeled legacy/offline mode. Git stores code, not operational spatial data.
 Managed mode is online-only for edits; no offline authoritative writes. Local copies and external QGIS installations cannot be made tamper-proof; authorized exports remain portable. Security guarantee is rejection of unauthorized official mutations and reads, not DRM over downloaded data. For a stronger no-local-data environment, consider a separately scoped hosted desktop/VDI, not an MVP promise.
 

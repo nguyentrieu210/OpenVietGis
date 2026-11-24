@@ -11,6 +11,7 @@
 - [ ] T008 [US3] Scoped bootstrap/delta, ordered pagination, visibility reset, retention.
 - [ ] T009 [US2,US4] R006 adapter/receipt lookup, revision conflicts, idempotency and deletion policy.
 - [ ] T010 [US1,US3] SSE bounded auth recheck, heartbeat, cursor reconnect; rate limit.
+- [ ] T027 [US1] Implement and verify field-level read/write ACL at core boundary; distinguish row attribute filter from field permissions. Block unsupported policies; depends T005, required before T011 and T023.
 - [ ] T011 [US1,US2,US3] Real PostGIS RLS/ACL, tenant and service ceiling adversarial tests.
 ## Gate C — QGIS (provider decision T002; contracts T005)
 - [ ] T012 [US1] Managed session controller + auth UX, independent of dock; read-only on invalid auth.
