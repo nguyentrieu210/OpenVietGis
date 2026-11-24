@@ -1,0 +1,22 @@
+{
+  "status": "pass",
+  "snapped": true,
+  "createdCoordinates": [
+    106.9,
+    11.5
+  ],
+  "undo": true,
+  "removed": true,
+  "redo": true,
+  "restoredIdentity": true,
+  "restoredGeometry": true,
+  "crossingRejected": true,
+  "crossingValidation": {
+    "id": "1b18ffc5-3360-4e27-8633-5618bb187b38",
+    "valid": false,
+    "reason": "Feature intersects itself"
+  },
+  "validPolygonAccepted": true,
+  "holeAccepted": false,
+  "holePreserved": false
+}
