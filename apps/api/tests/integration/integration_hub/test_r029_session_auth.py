@@ -236,8 +236,22 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
             },
         )
         assert second_commit.status_code == 201, second_commit.text
-        stale = device.get(
+        combined = device.get(
             managed + "/delta", params={"session_id": second_id, "cursor": page["cursor"]}
+        ).json()
+        assert not combined["reset_required"]
+        assert all(change["coalesced_changesets"] == 2 for change in combined["changes"])
+        assert all(
+            change["content_revision"] == second_commit.json()["resulting_content_revision"]
+            for change in combined["changes"]
+        )
+        assert all(
+            change["upserts"][0]["properties"]["fld_name"] == "newest"
+            for change in combined["changes"]
+        )
+        stale = device.get(
+            managed + "/delta",
+            params={"session_id": second_id, "cursor": page["cursor"], "limit": 1},
         ).json()
         assert stale["reset_required"] and stale["changes"] == []
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403

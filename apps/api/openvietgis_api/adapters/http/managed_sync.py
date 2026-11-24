@@ -759,6 +759,7 @@ def fetch_managed_delta(
     is_scoped = gis_access.scoped(session, ctx)
 
     changes: list[dict[str, Any]] = []
+    by_source: dict[UUID, list[RowMapping]] = {}
     for ev in page:
         kind = str(ev["kind"])
         if kind != "changeset" or ev["changeset_id"] is None or ev["source_id"] is None:
@@ -782,6 +783,15 @@ def fetch_managed_delta(
                 "has_more": False,
                 "changes": [],
             }
+        by_source.setdefault(src_id, []).append(ev)
+
+    # Collapse touched IDs at each source's final event in this bounded page.
+    # If newer events exist beyond the page, the source revision check below
+    # rejects rather than mixing an old revision with current geometry.
+    delivered_features = 0
+    for group in sorted(by_source.values(), key=lambda group: int(group[-1]["cursor"])):
+        ev = group[-1]
+        src_id = ev["source_id"]
         layer_rows = (
             session.execute(
                 text(
@@ -816,14 +826,28 @@ def fetch_managed_delta(
             session.execute(
                 text(
                     "SELECT DISTINCT feature_id, op_type FROM editing.changeset_operations "
-                    "WHERE organization_id=:o AND project_id=:p AND changeset_id=:cid"
+                    "WHERE organization_id=:o AND project_id=:p "
+                    "AND changeset_id=ANY(CAST(:cids AS uuid[])) LIMIT 5001"
                 ),
-                {"o": organization_id, "p": project_id, "cid": ev["changeset_id"]},
+                {
+                    "o": organization_id,
+                    "p": project_id,
+                    "cids": [item["changeset_id"] for item in group],
+                },
             )
             .mappings()
             .all()
         )
         touched_ids = sorted({str(op["feature_id"]) for op in op_rows})
+        if len(op_rows) > 5000:
+            return {
+                "reset_required": True,
+                "reason": "delta_operation_budget",
+                "next_cursor": last_cursor,
+                "permission_epoch": perm_epoch,
+                "has_more": False,
+                "changes": [],
+            }
         if not touched_ids:
             continue
 
@@ -857,6 +881,16 @@ def fetch_managed_delta(
             for fid, r in live_by_id.items()
         ]
         removals = [fid for fid in touched_ids if fid not in live_by_id]
+        delivered_features += len(touched_ids) * len(layer_rows)
+        if delivered_features > 5000:
+            return {
+                "reset_required": True,
+                "reason": "delta_delivery_budget",
+                "next_cursor": last_cursor,
+                "permission_epoch": perm_epoch,
+                "has_more": False,
+                "changes": [],
+            }
         for layer_row in layer_rows:
             changes.append(
                 {
@@ -864,6 +898,7 @@ def fetch_managed_delta(
                     "layer_id": str(layer_row["layer_id"]),
                     "source_id": str(src_id),
                     "changeset_id": str(ev["changeset_id"]),
+                    "coalesced_changesets": len(group),
                     "content_revision": str(
                         ev["content_revision"] or layer_row["content_revision"]
                     ),
