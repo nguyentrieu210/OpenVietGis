@@ -30,7 +30,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping, make_url
 from sqlalchemy.orm import Session
 
-from openvietgis_api.adapters.http.authorization import context_for
+from openvietgis_api.adapters.http.authorization import context_for, require_permission
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
     authenticate_request,
@@ -161,11 +161,21 @@ def _session_wire(row: RowMapping, current_cursor: int | None = None) -> dict[st
     return out
 
 
+def _owns_managed_session(row: RowMapping, auth: AuthenticatedRequest) -> bool:
+    return (
+        row["actor_id"] == auth.actor.actor_id
+        and str(row["actor_type"]) == auth.actor.actor_type
+    )
+
+
 def _load_active_session(
     session: Session,
     org: UUID,
     proj: UUID,
     session_id: UUID,
+    *,
+    auth: AuthenticatedRequest,
+    allow_manager: bool = False,
 ) -> RowMapping:
     row = session.execute(
         text(
@@ -176,6 +186,16 @@ def _load_active_session(
     ).mappings().first()
     if row is None:
         raise HTTPException(404, "Managed session not found.")
+    if not _owns_managed_session(row, auth):
+        if not allow_manager:
+            raise HTTPException(404, "Managed session not found.")
+        # Manager delegation is limited to sending approved desktop requests,
+        # not consuming a different actor's stream or submitting its edits.
+        require_permission(
+            session,
+            context_for(auth, organization_id=org, project_id=proj),
+            Permission.PROJECT_MANAGE,
+        )
     now = datetime.now(UTC)
     if str(row["state"]) != "active" or row["revoked_at"] is not None:
         raise HTTPException(403, "Managed session is revoked or inactive.")
@@ -390,7 +410,7 @@ def revoke_managed_session(
     ).mappings().first()
     if row is None:
         raise HTTPException(404, "Managed session not found.")
-    if row["actor_id"] != auth.actor.actor_id:
+    if not _owns_managed_session(row, auth):
         prepare_project_scope(session, ctx, permission=Permission.PROJECT_MANAGE, mutation=True)
     now = datetime.now(UTC)
     updated = session.execute(
@@ -447,7 +467,7 @@ def bootstrap_managed_layer(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
     if session_id is not None:
-        _load_active_session(session, organization_id, project_id, session_id)
+        _load_active_session(session, organization_id, project_id, session_id, auth=auth)
 
     layer = session.execute(
         text(
@@ -546,7 +566,7 @@ def fetch_managed_delta(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False
     )
-    sess_row = _load_active_session(session, organization_id, project_id, session_id)
+    sess_row = _load_active_session(session, organization_id, project_id, session_id, auth=auth)
     last_cursor, perm_epoch, retention_floor = _ensure_counter(
         session, organization_id, project_id
     )
@@ -696,7 +716,9 @@ def commit_managed_changes(
     ctx = _prep_scope(
         session, auth, organization_id, project_id, Permission.PROJECT_EDIT, mutation=True
     )
-    sess_row = _load_active_session(session, organization_id, project_id, body.session_id)
+    sess_row = _load_active_session(
+        session, organization_id, project_id, body.session_id, auth=auth
+    )
     caps = dict(sess_row["capabilities"] or {})
     if not caps.get("can_edit", False):
         raise HTTPException(403, "Managed session does not have edit capability.")
@@ -739,16 +761,7 @@ def commit_managed_changes(
         {"o": organization_id, "p": project_id, "cid": cs.id},
     ).mappings().first()
     event_cursor = int(ev_row["cursor"]) if ev_row else 0
-    if event_cursor > 0:
-        session.execute(
-            text(
-                "UPDATE integration_hub.managed_sessions "
-                "SET last_ack_cursor = GREATEST(last_ack_cursor, :cur), last_seen_at = now() "
-                "WHERE organization_id=:o AND project_id=:p AND id=:sid"
-            ),
-            {"o": organization_id, "p": project_id, "sid": body.session_id, "cur": event_cursor},
-        )
-        session.commit()
+    session.commit()
     return {
         "status": "accepted",
         "changeset_id": str(cs.id),
@@ -781,7 +794,7 @@ def get_managed_commit_receipt(
             "  ON e.organization_id=c.organization_id AND e.project_id=c.project_id "
             "  AND e.changeset_id=c.id "
             "WHERE c.organization_id=:o AND c.project_id=:p "
-            "  AND c.operation_id=:op_id AND c.actor_id=:aid "
+            "  AND c.operation_id=:op_id AND c.actor_id=:aid AND c.actor_type=:atype "
             "ORDER BY c.created_at DESC LIMIT 1"
         ),
         {
@@ -789,6 +802,7 @@ def get_managed_commit_receipt(
             "p": project_id,
             "op_id": operation_id.strip(),
             "aid": auth.actor.actor_id,
+            "atype": auth.actor.actor_type,
         },
     ).mappings().first()
     if row is None:
@@ -836,7 +850,7 @@ async def stream_managed_events(
 ) -> StreamingResponse:
     """SSE wake-up stream with 15s bounded session/revocation recheck."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth=auth)
     dsn = make_url(get_settings().database_url).set(drivername="postgresql").render_as_string(
         hide_password=False
     )
@@ -910,7 +924,9 @@ def enqueue_desktop_command(
         )
     if body.tool_name in MUTATING_DESKTOP_TOOLS:
         prepare_project_scope(session, ctx, permission=Permission.PROJECT_EDIT, mutation=True)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(
+        session, organization_id, project_id, session_id, auth=auth, allow_manager=True
+    )
     now = datetime.now(UTC)
     cmd_id = uuid4()
     expires_at = now + timedelta(seconds=body.ttl_seconds)
@@ -979,7 +995,7 @@ def list_desktop_commands(
 ) -> dict[str, Any]:
     """List pending or recent allowlisted commands for a managed QGIS session."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth=auth)
     sql = (
         "SELECT * FROM integration_hub.desktop_commands "
         "WHERE organization_id=:o AND project_id=:p AND session_id=:sid "
@@ -1005,7 +1021,7 @@ def respond_desktop_command(
 ) -> dict[str, Any]:
     """Record user consent decision and bounded command result from QGIS."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    _load_active_session(session, organization_id, project_id, session_id)
+    _load_active_session(session, organization_id, project_id, session_id, auth=auth)
     now = datetime.now(UTC)
     row = session.execute(
         text(

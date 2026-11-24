@@ -21,3 +21,8 @@ All tracks below are required; partial checks are not release acceptance.
 ## Evidence — 2026-11-24
 
 The connector hardening candidate based on main 8d6a914 passed 65 focused Python tests (including six new regression cases) and targeted Ruff checks. These include exact-payload retry identity, changed-payload denial, no insecure Base64 fallback and static cursor checks. Native QGIS/Windows and complete release evidence are still missing. No live deployment or stable tag is implied.
+### Managed session isolation — 2026-11-24
+
+Candidate implementation binds bootstrap/delta/commit/event stream and desktop command consumption/response to the authenticated actor type and ID. Project managers may enqueue allowlisted commands for another session only with the existing project-management grant. Commit receipts are actor-type scoped; submitting a write no longer advances the project's acknowledgment cursor.
+
+Evidence: 65 focused connector/unit/packaging tests PASS; three real PostGIS HTTP integration tests PASS on a disposable database migrated from zero. Tests cover viewer/editor session creation, two independent editors in the same project (cross-actor delta/commit/command denied), and manager enqueue with only the session owner allowed to respond. Targeted Ruff and diff checks PASS. This does not establish native QGIS runtime acceptance, per-credential session binding, full delta acknowledgment/restart recovery, desktop OAuth, or overall release readiness.
