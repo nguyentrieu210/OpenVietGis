@@ -16,7 +16,9 @@
     "./footprint-renderer": "./src/maplibre3d.ts",
     "./maplibre3d": "./src/maplibre3d.ts",
     "./tileset": "./src/tileset.ts",
-    "./tiles3d": "./src/tiles3d.ts"
+    "./tiles3d": "./src/tiles3d.ts",
+    "./snap-math": "./src/snap-math.ts",
+    "./survey-math": "./src/survey-math.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

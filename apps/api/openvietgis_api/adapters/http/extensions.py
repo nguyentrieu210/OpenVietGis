@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.http.authorization import context_for
+from openvietgis_api.adapters.http.official_modules import (
+    discover_official_module_runtimes,
+    official_manifest,
+)
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
     authenticate_request,
@@ -21,10 +25,6 @@ from openvietgis_api.domains.extensions.domain import (
     ExtensionDataRecord,
     ExtensionManifestRecord,
     ProjectActivationRecord,
-)
-from openvietgis_api.domains.extensions.runtime import (
-    discover_official_module_runtimes,
-    official_manifest,
 )
 from openvietgis_api.domains.platform_errors import PlatformNotFoundError
 

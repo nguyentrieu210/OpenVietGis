@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {findScreenSnap} from "./src/SnapMath.ts";
+import {findScreenSnap} from "@openvietgis/spatial-workspace/snap-math";
 const a={a:[0,0],b:[20,0]},b={a:[10,-20],b:[10,20]};
 const r=(p,mode,segments=[a,b],origin)=>findScreenSnap(p,5,mode,segments.flatMap(s=>[s.a,s.b]),segments,origin);
 assert.deepEqual(r([9,2],"midpoint").point,[10,0]);

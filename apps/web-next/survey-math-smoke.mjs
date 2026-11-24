@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {traverse,inverse,polygonMetrics,bowditch} from "./src/SurveyMath.ts";
+import {traverse,inverse,polygonMetrics,bowditch} from "@openvietgis/spatial-workspace/survey-math";
 const start=[500000,1200000],legs=traverse(start,[{distance:100,azimuth:90},{distance:50,azimuth:0},{distance:100,azimuth:270},{distance:50,azimuth:180}]);
 assert.equal(legs.at(-1).total,300);assert.ok(inverse(start,legs.at(-1).point).distance<1e-7);
 assert.equal(inverse(start,[500100,1200000]).azimuth,90);

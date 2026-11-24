@@ -7,7 +7,7 @@ import type {CoreCommand} from "./CoreCommandBar";
 import {Modal} from "./studio-ui";
 import {EditHistoryDetails} from "./EditHistoryDetails";
 import {LayerProperties,WorkspaceSettings,emptyLayerView,snapCoordinate,snapLabel,type WorkspacePrefs,type LayerView} from "./LayerProperties";
-import type {WorkbenchId} from "./CoreWorkbench";
+import type {WorkbenchId} from "./workbench-contract";
 import {attributeValue,fieldKey} from "./AdvancedEditor";
 type XY=[number,number];
 type SketchMode="distance"|"area"|"point"|"line"|"polygon";

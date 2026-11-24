@@ -1,18 +1,8 @@
-import React,{lazy,Suspense,useEffect,useState} from "react";
+import React,{Suspense,useEffect,useState} from "react";
 import {MemoryRouter,Routes,Route} from "react-router-dom";
 import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
-import "../../web/src/ui/tokens.css";
-import "../../web/src/features/platform/platform.css";
-const Spatial=lazy(()=>import("../../web/src/features/spatial/SpatialCatalogPage").then(m=>({default:m.SpatialCatalogPage})));
-const Transfer=lazy(()=>import("../../web/src/features/transfers/ImportExportPage").then(m=>({default:m.ImportExportPage})));
-const Edit=lazy(()=>import("../../web/src/features/platform/EditingWorkbenchPage").then(m=>({default:m.EditingWorkbenchPage})));
-const Query=lazy(()=>import("../../web/src/features/platform/QueryWorkbenchPage").then(m=>({default:m.QueryWorkbenchPage})));
-const Process=lazy(()=>import("../../web/src/features/platform/ProcessingWorkbenchPage").then(m=>({default:m.ProcessingWorkbenchPage})));
-const Cartography=lazy(()=>import("../../web/src/features/platform/CartographyWorkbenchPage").then(m=>({default:m.CartographyWorkbenchPage})));
-const Hub=lazy(()=>import("../../web/src/features/platform/PlatformHubPage").then(m=>({default:m.PlatformHubPage})));
-const Field=lazy(()=>import("../../web/src/features/offline/OfflineFieldPage").then(m=>({default:m.OfflineFieldPage})));
-export type WorkbenchId="spatial"|"transfers"|"editing"|"queries"|"processing"|"buffer"|"clip"|"dissolve"|"cartography"|"cad"|"external"|"collab"|"field"|"ops";
-export const workbenchTitles:Record<WorkbenchId,string>={spatial:"Danh mục, nguồn dữ liệu & CRS",transfers:"Nhập / xuất dữ liệu GIS",editing:"Biên tập & lịch sử thay đổi",queries:"Truy vấn thuộc tính & không gian",processing:"Phân tích không gian & tác vụ",buffer:"Vùng đệm (Buffer)",clip:"Cắt lớp (Clip)",dissolve:"Gộp vùng (Dissolve)",cartography:"Ký hiệu, bố cục & in bản đồ",cad:"CAD / DXF & trắc địa COGO",external:"Nguồn ngoài & OGC",collab:"Cộng tác & phê duyệt",field:"Thực địa & đồng bộ ngoại tuyến",ops:"Vận hành & khả năng nền tảng"};
+import {Spatial,Transfer,Edit,Query,Process,Cartography,Hub,Field} from "./legacy-workbench-bridge";
+import {workbenchTitles,type WorkbenchId} from "./workbench-contract";
 function Return({close}:{close:()=>void}){useEffect(close,[]);return null}
 export function CoreWorkbench({tool,org,pid,close}:{tool:WorkbenchId;org:string;pid:string;close:()=>void}){
  const [queryClient]=useState(()=>new QueryClient({defaultOptions:{queries:{retry:false,staleTime:0}}}));

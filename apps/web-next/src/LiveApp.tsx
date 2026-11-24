@@ -86,11 +86,7 @@ import {Modal,SimpleForm} from "./studio-ui";
 import {disableProjectExtension,type ExtensionActivation} from "@openvietgis/client-sdk";
 const layerColor=(_name:string,i:number)=>colors[i%colors.length]!;
 const fresh=():Data=>({layers:[],rows:[],warnings:[],permissions:[]});
-type Manifest={extension_key:string;display_name:string;version:string;description?:string};
-const manifests=Object.values(import.meta.glob<Manifest>("../../../modules/*/manifest.json",{eager:true,import:"default"}));
-const loaders=import.meta.glob<StudioPlugin>("../../../modules/*/frontend/studio.tsx",{import:"default"});
-const installed=manifests.filter(m=>Object.keys(loaders).some(path=>path.includes("/modules/"+m.extension_key+"/")));
-const loadPlugin=(id:string)=>Object.entries(loaders).find(([path])=>path.includes("/modules/"+id+"/"))?.[1]();
+import {installed,loadPlugin,type Manifest} from "./official-module-registry";
 function ProjectStudio({org,project,expire,accountId,openAccess,openIntegrations}:{org:string;project:Project;expire:()=>void;accountId:string;openAccess?:(scope:ScopeDraft)=>void;openIntegrations:()=>void}){
  const [activations,setActivations]=useState<ExtensionActivation[]>([]),[choice,setChoice]=useState<string|undefined>(undefined),[plugin,setPlugin]=useState<StudioPlugin|null>(null),[loading,setLoading]=useState(true),[pluginReady,setPluginReady]=useState(false),[manager,setManager]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[permissions,setPermissions]=useState<string[]>([]),[scopedProject,setScopedProject]=useState(true);
  const pid=project.id,partnerBridge=useRef<PartnerMapBridge|null>(null),[partnerDocked,setPartnerDocked]=useState(false),[partnerTools,setPartnerTools]=useState<PartnerTool[]>([]),[savedContributions,setSavedContributions]=useState<SavedPartnerContribution[]>([]);

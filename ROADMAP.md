@@ -212,3 +212,6 @@ Cross-cutting [Spec 031 — Product inventory & audit](specs/031-product-invento
 
 
 Cross-cutting [Spec 032 — Repository and release consolidation](specs/032-release-consolidation/spec.md): isolated unified candidate, ref inventory and artifact integrity; [findings](specs/032-release-consolidation/AUDIT.md). Live promotion and full runtime certification remain gated.
+
+
+Cross-cutting [Spec 033 — Core architecture standardization](specs/033-core-standardization/spec.md): enforce domain/adapter and package/app boundaries; isolate legacy workbench bridge, generic module discovery and shared spatial math. [Evidence](specs/033-core-standardization/AUDIT.md); real parity acceptance remains open.
