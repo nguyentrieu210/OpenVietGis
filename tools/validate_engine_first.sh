@@ -30,3 +30,12 @@ node apps/web-next/core-toolkit-smoke.mjs
 node apps/web-next/spatial-cache-smoke.mjs
 pnpm --filter @openvietgis/spatial-workspace test
 node --test apps/web-next/spatial-sync-core.test.mjs
+
+# Mock relay is isolated on another loopback origin; no external CAD fetches.
+export VITE_OVG_CAD_RELAY_ORIGIN=http://127.0.0.1:4281
+pnpm --filter @openvietgis/web-next exec vite build --base /rewrite/
+node apps/web-next/cad-editor-georef-smoke.mjs
+node apps/web-next/cad-spatial-linkage-smoke.mjs
+node apps/web-next/cesium-tiles-smoke.mjs
+unset VITE_OVG_CAD_RELAY_ORIGIN
+pnpm --filter @openvietgis/web-next exec vite build --base /rewrite/

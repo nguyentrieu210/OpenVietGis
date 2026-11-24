@@ -159,6 +159,86 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         recovered = device.get(managed + "/commits/qgis-fixture-create")
         assert recovered.status_code == 200, recovered.text
         assert recovered.json()["changeset_id"] == receipt["changeset_id"]
+        # Cross-engine acceptance: 100 new features, alternating the public
+        # Web ChangeSet path and the managed desktop path, ten commits total.
+        # Both use the real restricted database and authenticated API.
+        cursor = receipt["event_cursor"]
+        revision = receipt["resulting_content_revision"]
+        expected_ids = set()
+        last_payload = None
+        last_receipt = None
+        for batch in range(10):
+            operations = [
+                {
+                    "op_type": "create",
+                    "feature_id": f"r031-{batch}-{index}",
+                    "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                    "properties": feature["properties"],
+                }
+                for index in range(10)
+            ]
+            expected_ids.update(op["feature_id"] for op in operations)
+            payload = {
+                "source_id": page["source_id"],
+                "session_id": sid,
+                "base_content_revision": revision,
+                "base_schema_revision": page["schema_revision"],
+                "operation_id": str(uuid4()),
+                "operations": operations,
+            }
+            if batch % 2 == 0:
+                with _client(world.owner_user_id) as owner:
+                    reply = owner.post(
+                        seed_url,
+                        json={
+                            key: value for key, value in payload.items()
+                            if key not in {"source_id", "session_id"}
+                        },
+                    )
+            else:
+                reply = device.post(managed + "/commits", json=payload)
+            assert reply.status_code == 201, reply.text
+            revision = reply.json()["resulting_content_revision"]
+            if batch % 2:
+                last_payload, last_receipt = payload, reply.json()
+
+        assert last_payload is not None and last_receipt is not None
+        replay = device.post(managed + "/commits", json=last_payload)
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["changeset_id"] == last_receipt["changeset_id"]
+        assert replay.json()["event_cursor"] == last_receipt["event_cursor"]
+
+        # Simulated disconnected consumer catches up without a full bootstrap.
+        observed_ids = []
+        observed_cursors = []
+        while True:
+            reply = device.get(managed + "/delta", params={
+                "session_id": second_id, "cursor": cursor, "limit": 3,
+            })
+            assert reply.status_code == 200, reply.text
+            body = reply.json()
+            assert not body["reset_required"], body
+            for change in body["changes"]:
+                observed_cursors.append(change["cursor"])
+                observed_ids.extend(item["feature_id"] for item in change["upserts"])
+                assert not change["removals"]
+            assert body["next_cursor"] >= cursor
+            if body["has_more"]:
+                assert body["next_cursor"] > cursor
+            cursor = body["next_cursor"]
+            if not body["has_more"]:
+                break
+        assert len(observed_ids) == 100
+        assert set(observed_ids) == expected_ids
+        assert len(observed_cursors) == 10
+        assert observed_cursors == sorted(set(observed_cursors))
+        empty_delta = device.get(managed + "/delta", params={
+            "session_id": second_id, "cursor": cursor,
+        })
+        assert empty_delta.status_code == 200
+        assert empty_delta.json()["changes"] == []
+        print("R031: 100 alternating Web/QGIS mutations converged over 10 ordered commits")
+
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
         assert device.post(_root(foreign) + "/integration-hub/managed/sessions",
                            json={"binding_id": bid}).status_code in (401, 403, 404)

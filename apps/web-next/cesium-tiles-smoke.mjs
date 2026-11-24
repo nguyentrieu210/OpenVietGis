@@ -28,7 +28,7 @@ try{
   else body={items:[],next_after_id:null};
   return route.fulfill({json:body});
  });
- await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ không gian"});await modes.waitFor();
  await modes.getByRole("button",{name:"3D",exact:true}).click();
  await page.locator('[data-ovg3d-engine="cesium"] canvas').waitFor({timeout:60000});

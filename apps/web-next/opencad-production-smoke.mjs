@@ -15,7 +15,8 @@ const browser=await chromium.launch({headless:true,args:["--no-sandbox","--disab
 try{
  const p=await browser.newPage({viewport:{width:1440,height:950}}),errors=[],outside=[],docs=new Map();
  const org="fixture-org",pid="fixture-project",id="drawing-id";
- if(process.env.OVG_CAD_TEST!=="create")docs.set(id,[{filename:"Drawing1.dwg",bytes:fixture}]);
+ const mode=process.env.OVG_CAD_TEST||"all";
+ if(mode!=="create")docs.set(id,Array.from({length:mode==="history"?2:1},()=>({filename:"Drawing1.dwg",bytes:fixture})));
  const meta=(id,v)=>{const x=docs.get(id)[v-1];return {id,filename:x.filename,format:x.filename.split(".").at(-1),version:v,byte_size:x.bytes.length,sha256:createHash("sha256").update(x.bytes).digest("hex"),created_at:"2026-01-01T00:00:00Z"}};
  p.on("pageerror",e=>{errors.push(e.message);console.log("pageerror",e.message)});
  await p.route("**/*",async r=>{
@@ -52,24 +53,30 @@ try{
  });
  await p.goto(origin+"/app",{waitUntil:"domcontentloaded"});
  const modes=p.getByRole("group",{name:"Chế độ không gian"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
- if(process.env.OVG_CAD_TEST!=="create"){
-
+ if(mode==="history"){
+ await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:60000});
+ await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
+ await p.locator(".ovg-cad-version").filter({hasText:"v1 · Drawing1.dwg"}).getByRole("button",{name:"Xem CAD",exact:true}).click();
+ await p.locator("#ovg-cad-toolbar-slot").getByText("Chỉ đọc",{exact:true}).waitFor({timeout:60000}).catch(async e=>{console.log("HISTORY DEBUG", (await p.locator("body").innerText()).slice(-3000));throw e});
+ assert.equal(await p.getByRole("button",{name:"Lưu",exact:true}).isDisabled(),true);
+ assert.equal(docs.get(id).length,2);console.log("PASS historical DWG read-only");
+ }else if(mode!=="create"){
  const editor=p.locator(".ovg-cad-editor");
  await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:120000});
  await editor.frameLocator("iframe").frameLocator("iframe").locator("canvas").first().waitFor({timeout:20000});
  assert.equal(await editor.locator("header").count(),0);assert.equal(await p.locator("#ovg-cad-toolbar-slot").getByRole("button",{name:"Lưu",exact:true}).count(),1);console.log("PASS full CAD canvas and single integrated toolbar");
  await p.getByRole("button",{name:"Lưu",exact:true}).click();
  await p.getByText("Đã lưu phiên bản 2.",{exact:true}).waitFor({timeout:45000}).catch(async e=>{console.log("SAVE DEBUG",docs.get(id).length,(await editor.innerText()).slice(0,2000));throw e});
- assert.equal(docs.get(id).length,2);assert.ok(/^AC10\d{2}/.test(docs.get(id)[1].bytes.subarray(0,6).toString()));assert.deepEqual(docs.get(id)[0].bytes,fixture);
+ assert.equal(docs.get(id).length,2);assert.ok(/^AC10\d{2}/.test(docs.get(id)[1].bytes.subarray(0,6).toString()));assert.deepEqual(docs.get(id)[0].bytes,fixture);console.log("PASS DWG save v2 and immutable original");
  await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
- await p.getByRole("button",{name:"Xem CAD",exact:true}).click();
+ await p.locator(".ovg-cad-version").filter({hasText:"v1 · Drawing1.dwg"}).getByRole("button",{name:"Xem CAD",exact:true}).click();
  await p.locator("#ovg-cad-toolbar-slot").getByText("Chỉ đọc",{exact:true}).waitFor({timeout:120000});
  assert.equal(await p.getByRole("button",{name:"Lưu",exact:true}).isDisabled(),true);
  await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  console.log("PASS real DWG save receipt, immutable original and historical read-only");
  }
- if(process.env.OVG_CAD_TEST!=="dwg"){
- if(process.env.OVG_CAD_TEST!=="create")await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
+ if(mode==="all"||mode==="create"){
+ if(mode!=="create")await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
  await p.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor({timeout:120000}).catch(async e=>{console.log("CREATE DEBUG",docs.get("new-dxf")?.length,(await p.locator("body").innerText()).slice(0,1800));throw e});
  assert.equal(docs.has("new-dxf"),false);
  await p.getByLabel("Tên bản vẽ",{exact:true}).fill("Test-new.dxf");
@@ -78,6 +85,6 @@ try{
  assert.equal(docs.get("new-dxf").length,1);assert.equal(docs.get("new-dxf")[0].filename,"Test-new.dxf");
  console.log("PASS empty project opens full CAD immediately; draft saved only on explicit Save");
  }
- if(process.env.OVG_CAD_TEST!=="dwg"){await p.locator(".ovg-cad-about summary").click();await p.getByRole("link",{name:"Giấy phép GPL / mã nguồn"}).waitFor();}
+ if(mode==="all"||mode==="create"){await p.locator(".ovg-cad-about summary").click();await p.getByRole("link",{name:"Giấy phép GPL / mã nguồn"}).waitFor();}
  assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
 }finally{await browser.close()}
