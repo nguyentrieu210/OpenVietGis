@@ -1,0 +1,692 @@
+{
+  "candidate": "f5c0037c75bac26a1891ef2ca226eec1e12f1726",
+  "refs": [
+    {
+      "ref": "refs/heads/agentkit/architect-20261123",
+      "sha": "c82f5784c55c08874bbeda00da69ae191da8eed1",
+      "behind_candidate": 118,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/backend-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/backend-v8i-20261123",
+      "sha": "b50f198a9ec82151d57467113a146fedc7445875",
+      "behind_candidate": 121,
+      "ahead_candidate": 4,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/agentkit/frontend-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/frontend-v8i-20261123",
+      "sha": "1dc21faec2151c791869bd16f3e8fddfbcbf2505",
+      "behind_candidate": 121,
+      "ahead_candidate": 3,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/agentkit/git-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/qa-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/qa-v8i-20261123",
+      "sha": "fd9bbafd000cd16b3513fc255ebc88061d0843c2",
+      "behind_candidate": 121,
+      "ahead_candidate": 3,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/agentkit/release-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/agentkit/release-v8i-20261123",
+      "sha": "17d57ef1639a49a65e063a14bf2ffa1b8421134a",
+      "behind_candidate": 121,
+      "ahead_candidate": 2,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/agentkit/windows-v8i-20261123",
+      "sha": "7c1074b7701330588988f39cbabbab3f2fecbb5c",
+      "behind_candidate": 121,
+      "ahead_candidate": 3,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/archive/pre-main-merge-stash-20261123",
+      "sha": "5dcc7b49752ab7bcd5540659e5e43cd8df94dd4b",
+      "behind_candidate": 362,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/audit/031-product-inventory",
+      "sha": "40d5dbc39eacdbb155b5c5f709ab8df80459c737",
+      "behind_candidate": 9,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/backup/full-local-history-20261123",
+      "sha": "ab3a18ca3c06f4397f404f563481bf3e22895657",
+      "behind_candidate": 122,
+      "ahead_candidate": 9,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/backup/main-before-cad-cleanup-20261123",
+      "sha": "a3697a4cefca34614468844134f83ddf32989828",
+      "behind_candidate": 122,
+      "ahead_candidate": 4,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/backup/main-before-final-merge-20261123",
+      "sha": "ce3e0a3f9bd17d87c4f8573fee7268837c7247c0",
+      "behind_candidate": 225,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/backup/main-before-full-merge-20261123",
+      "sha": "e20b5932a8d914acf01d4f34490cf6995bf54768",
+      "behind_candidate": 226,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/docs/readme-community-legal-20261124",
+      "sha": "96897a2371f89ee3c75cecf57473fc387818f647",
+      "behind_candidate": 15,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/feat/landing-core-founder-poster-20261124",
+      "sha": "53ddfcdb1dff3059176966113dd43d5e091d4c15",
+      "behind_candidate": 43,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feat/landing-founders-motion-20261124",
+      "sha": "a8021bdd4366d667ce01004403ec975fa209d8c2",
+      "behind_candidate": 44,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feat/qgis-home-fidelity-20261123",
+      "sha": "7b29d95861402f622e062addd9d0587e91cf9381",
+      "behind_candidate": 47,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feat/qgis-landing-donate-20261123",
+      "sha": "54a59b7e9eead264de0f8221c32128bb6da1c995",
+      "behind_candidate": 53,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feature/025-microstation-v8i-bridge",
+      "sha": "c3752ee5d798231ca1ace015b8997af0bc155b36",
+      "behind_candidate": 121,
+      "ahead_candidate": 13,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feature/026-integration-hub-policy",
+      "sha": "6e2b001d8d26580e8e8e38a0eabc48908d384245",
+      "behind_candidate": 112,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/feature/027-bidirectional-integration-sync",
+      "sha": "e3811b915448cd5a2ae9683a0baf4c7563ad04ea",
+      "behind_candidate": 95,
+      "ahead_candidate": 6,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feature/028-windows-v8i-receiver",
+      "sha": "e03067c167c5b85ce5f593be46849be9b46326b8",
+      "behind_candidate": 106,
+      "ahead_candidate": 7,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/feature/029-managed-realtime-gis-client",
+      "sha": "a64cff0d935f64750bad289baef5bcd7bf2a8a32",
+      "behind_candidate": 33,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/fix/mcp-autonomous-gis-policy",
+      "sha": "022541e5967a0e8deb6f06bef0374bb82381b15f",
+      "behind_candidate": 29,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/fix/qgis-permission-scope2",
+      "sha": "6f868cab8f80c736c00d93366f3125f3b98adb86",
+      "behind_candidate": 13,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/fix/r029-qgis-permission-recovery",
+      "sha": "03ca5ec81ca09ea81b23611080706709062c124e",
+      "behind_candidate": 15,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/fix/spec030-spatial-mode-live-20261124",
+      "sha": "36eeb9df0bbda896cdbd1e3068dd9461bce577af",
+      "behind_candidate": 6,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/fix/spec030-spatial-mode-usability-20261124",
+      "sha": "22e79a8d12dda43c18591852752ec3aa360a833b",
+      "behind_candidate": 9,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/main",
+      "sha": "3c25f3b4d2f778395ffc4f00d028033075d6583f",
+      "behind_candidate": 29,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/maintenance/032-release-consolidation",
+      "sha": "f5c0037c75bac26a1891ef2ca226eec1e12f1726",
+      "behind_candidate": 0,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/maintenance/control-kit-20261123",
+      "sha": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "behind_candidate": 119,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/qa/spec030-connector-20261124",
+      "sha": "80beb0606962b1b1d3f399cc7828a394427f986a",
+      "behind_candidate": 10,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/qgis/v1.0-acceptance",
+      "sha": "f8865147883a5003c54ba50d32d42fc327f1bfb8",
+      "behind_candidate": 10,
+      "ahead_candidate": 2,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/heads/release/beta-20261123",
+      "sha": "d5f58da3b9285a0fbeef15f714a9489680812d43",
+      "behind_candidate": 226,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/release/v1.0-unified",
+      "sha": "8d6a914033a2b80e6e92c427edfe3d25ab942d0c",
+      "behind_candidate": 12,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/heads/ui/qgis-connector-simple",
+      "sha": "c3e5a063d92ca2bdf10bdd49282d1af6956a4dd9",
+      "behind_candidate": 14,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/003-spatial-catalog-crs",
+      "sha": "6290757c1981eb13c7643b00667f27dc935fbc3a",
+      "behind_candidate": 570,
+      "ahead_candidate": 10,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/docs/r005-r015-grill",
+      "sha": "410134ccd408f075ead3ce72d8b5322743e64c99",
+      "behind_candidate": 568,
+      "ahead_candidate": 81,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/feature/019-house-numbering-runtime",
+      "sha": "3193bd7682f674df0004b95151a7f615051c5007",
+      "behind_candidate": 357,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/feature/026-integration-hub-policy",
+      "sha": "6e2b001d8d26580e8e8e38a0eabc48908d384245",
+      "behind_candidate": 112,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/feature/028-windows-v8i-receiver",
+      "sha": "4547703de46e4f8b622f3ed80d8e4d8698b878ef",
+      "behind_candidate": 106,
+      "ahead_candidate": 8,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/fix/018-confirmed-blockers",
+      "sha": "9b1231020b91cfed94b815277b27d672f6136a02",
+      "behind_candidate": 262,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/integration/003-on-verified-main",
+      "sha": "c5cc5a9d47b611334327805cf5516782ecfb84cb",
+      "behind_candidate": 392,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/integration/004-on-verified-main",
+      "sha": "990e73502889f976068c1c96f122a8a684c2b9b7",
+      "behind_candidate": 377,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/integration/005-import-export",
+      "sha": "540ba3ea25a4665d6139be72de526de6c2b709d3",
+      "behind_candidate": 373,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/integration/r006-r015-complete",
+      "sha": "c6d449fc0ead93e259b79b87e63c1c894bd16c93",
+      "behind_candidate": 365,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/main",
+      "sha": "27f0b35af966b7a46e7b17929395d9bc01515e51",
+      "behind_candidate": 10,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/qgis/v1.0-acceptance",
+      "sha": "7b34685ee2af625e6c3c6acf793e2f19c5bdfc78",
+      "behind_candidate": 5,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/release/beta-20261123",
+      "sha": "8536d7c46d9050a4fc4ebf4db80862bc87391cc1",
+      "behind_candidate": 226,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/release/v1.0-unified",
+      "sha": "d352e3a56db843e38b535a3fa3c1d5ad6c42ec92",
+      "behind_candidate": 11,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/spec/016-app-shell-identity-ux",
+      "sha": "1bf528674e4e3f9fd621f118c191636ab7c4571d",
+      "behind_candidate": 392,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/spec/017-gis-workspace-ux",
+      "sha": "b5f8317d427afc2b804f552a039e53d9e1494f54",
+      "behind_candidate": 392,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/spec/019-house-numbering-plugin",
+      "sha": "4144431b2628142cd21177beca130b702c0d9b55",
+      "behind_candidate": 392,
+      "ahead_candidate": 2,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-bootstrap-resume",
+      "sha": "22d1615c745b97947c279934017f0202996db679",
+      "behind_candidate": 501,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-identity-tenancy",
+      "sha": "64f00e67c18c87ddd16e76498e100c30ddfad455",
+      "behind_candidate": 484,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-oidc-concurrency",
+      "sha": "87e0cd4361a5ee91f2f23bc10b684a61d251d0fc",
+      "behind_candidate": 491,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-p2-audit",
+      "sha": "6041f5b640ffc87f38e2ebacef5a85866f73ac50",
+      "behind_candidate": 502,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-p2-runtime-audit",
+      "sha": "d4624d543083bfdd21968fe40508e7909f2ed35e",
+      "behind_candidate": 499,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-p2-secret-resume",
+      "sha": "0cd16b165c6e87a2961313005084f28ec651adc8",
+      "behind_candidate": 499,
+      "ahead_candidate": 1,
+      "disposition": "RETAIN_REVIEW"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-p2-service",
+      "sha": "21b50c00dc6066917900a0ad11e14f88c862028d",
+      "behind_candidate": 503,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-retire-foundation",
+      "sha": "4837408e76acade8f09c70c546b064b8e31aa634",
+      "behind_candidate": 494,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/takeover/002-timing-evidence",
+      "sha": "31f7bd8867d65334c513b33d89377e95b459df8a",
+      "behind_candidate": 492,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-browser-sync",
+      "sha": "ea18f13722beeaa17e9c53b9a83a3df7c12db595",
+      "behind_candidate": 393,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-convergence-c5cc5a9",
+      "sha": "c5cc5a9d47b611334327805cf5516782ecfb84cb",
+      "behind_candidate": 392,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-final-1cdbe6d",
+      "sha": "1cdbe6dfbb1e050d05cdfe91ef7f8a87e2b32059",
+      "behind_candidate": 395,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-us3-52cee0b",
+      "sha": "52cee0b0411bc3ebf96cbaa48dd8d97d0301d1da",
+      "behind_candidate": 419,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-us4-4aef5be",
+      "sha": "4aef5be8eb6ec5065927a6f8d79f352d23d5d01b",
+      "behind_candidate": 412,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    },
+    {
+      "ref": "refs/remotes/origin/validation/r003-us4-d1019b5",
+      "sha": "d1019b56ca2e09d10446ecea16473703da5e7dd7",
+      "behind_candidate": 408,
+      "ahead_candidate": 0,
+      "disposition": "ANCESTRY_INCLUDED"
+    }
+  ],
+  "worktrees": [
+    {
+      "path": "/opt/openvietgis",
+      "head": "96897a2371f89ee3c75cecf57473fc387818f647",
+      "branch": "refs/heads/docs/readme-community-legal-20261124",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/.gis-source.voeiop",
+      "head": "022541e5967a0e8deb6f06bef0374bb82381b15f",
+      "branch": "refs/heads/fix/mcp-autonomous-gis-policy",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/architect",
+      "head": "c82f5784c55c08874bbeda00da69ae191da8eed1",
+      "branch": "refs/heads/agentkit/architect-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/backend",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/agentkit/backend-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/frontend",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/agentkit/frontend-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/git",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/agentkit/git-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/qa",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/agentkit/qa-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-agent-worktrees/release",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/agentkit/release-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-audit-031",
+      "head": "40d5dbc39eacdbb155b5c5f709ab8df80459c737",
+      "branch": "refs/heads/audit/031-product-inventory",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-consolidation-032",
+      "head": "f5c0037c75bac26a1891ef2ca226eec1e12f1726",
+      "branch": "refs/heads/maintenance/032-release-consolidation",
+      "changed_paths": 3
+    },
+    {
+      "path": "/opt/openvietgis-control-kit-20261123",
+      "head": "d8be26ac006bc31ef14841b86e5929f9f46705a3",
+      "branch": "refs/heads/maintenance/control-kit-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-fix-r029-perms",
+      "head": "03ca5ec81ca09ea81b23611080706709062c124e",
+      "branch": "refs/heads/fix/r029-qgis-permission-recovery",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-integration-hub",
+      "head": "6e2b001d8d26580e8e8e38a0eabc48908d384245",
+      "branch": "refs/heads/feature/026-integration-hub-policy",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-qgis-perm2",
+      "head": "6f868cab8f80c736c00d93366f3125f3b98adb86",
+      "branch": "refs/heads/fix/qgis-permission-scope2",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-qgis-simple",
+      "head": "c3e5a063d92ca2bdf10bdd49282d1af6956a4dd9",
+      "branch": "refs/heads/ui/qgis-connector-simple",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-qgis-v1-final",
+      "head": "64a5e3603009897d19abadb5928b783ea6d4fbfc",
+      "branch": null,
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-r027",
+      "head": "e3811b915448cd5a2ae9683a0baf4c7563ad04ea",
+      "branch": "refs/heads/feature/027-bidirectional-integration-sync",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-r029",
+      "head": "a64cff0d935f64750bad289baef5bcd7bf2a8a32",
+      "branch": "refs/heads/feature/029-managed-realtime-gis-client",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-v1-authz",
+      "head": "d352e3a56db843e38b535a3fa3c1d5ad6c42ec92",
+      "branch": null,
+      "changed_paths": 3
+    },
+    {
+      "path": "/opt/openvietgis-v11",
+      "head": "8d6a914033a2b80e6e92c427edfe3d25ab942d0c",
+      "branch": "refs/heads/release/v1.0-unified",
+      "changed_paths": 5
+    },
+    {
+      "path": "/opt/openvietgis-v8i-agent-worktrees/backend",
+      "head": "b50f198a9ec82151d57467113a146fedc7445875",
+      "branch": "refs/heads/agentkit/backend-v8i-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-v8i-agent-worktrees/frontend",
+      "head": "1dc21faec2151c791869bd16f3e8fddfbcbf2505",
+      "branch": "refs/heads/agentkit/frontend-v8i-20261123",
+      "changed_paths": 2
+    },
+    {
+      "path": "/opt/openvietgis-v8i-agent-worktrees/qa",
+      "head": "fd9bbafd000cd16b3513fc255ebc88061d0843c2",
+      "branch": "refs/heads/agentkit/qa-v8i-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-v8i-agent-worktrees/release",
+      "head": "17d57ef1639a49a65e063a14bf2ffa1b8421134a",
+      "branch": "refs/heads/agentkit/release-v8i-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-v8i-agent-worktrees/windows",
+      "head": "7c1074b7701330588988f39cbabbab3f2fecbb5c",
+      "branch": "refs/heads/agentkit/windows-v8i-20261123",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-v8i-bridge",
+      "head": "c3752ee5d798231ca1ace015b8997af0bc155b36",
+      "branch": "refs/heads/feature/025-microstation-v8i-bridge",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/openvietgis-windows-v8i-receiver",
+      "head": "e03067c167c5b85ce5f593be46849be9b46326b8",
+      "branch": "refs/heads/feature/028-windows-v8i-receiver",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/ovg-mode-live-wUkCTB",
+      "head": "36eeb9df0bbda896cdbd1e3068dd9461bce577af",
+      "branch": "refs/heads/fix/spec030-spatial-mode-live-20261124",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/ovg-mode-qa-zzROKz",
+      "head": "22e79a8d12dda43c18591852752ec3aa360a833b",
+      "branch": "refs/heads/fix/spec030-spatial-mode-usability-20261124",
+      "changed_paths": 0
+    },
+    {
+      "path": "/opt/ovg-spec030-qa-vHyIle",
+      "head": "80beb0606962b1b1d3f399cc7828a394427f986a",
+      "branch": "refs/heads/qa/spec030-connector-20261124",
+      "changed_paths": 0
+    }
+  ],
+  "cleanup_authorized": false
+}
