@@ -105,11 +105,13 @@ function ProjectStudio({org,project,expire,accountId,openAccess,openIntegrations
  </>;
 }
 import {getBasemap,findSentinelScene,sentinelTiles} from "./Basemaps";
+import {incrementalLayerRows,parallelBounded,isPermissionError} from "./SpatialIncremental";
 const style:ml.StyleSpecification={version:8,sources:{basemap:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,maxzoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'},core:{type:"geojson",data:empty}},layers:[{id:"bg",type:"background",paint:{"background-color":"#e9eff3"}},{id:"basemap",type:"raster",source:"basemap",paint:{"raster-opacity":.85}},{id:"polygon",type:"fill",source:"core",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":["get","color"],"fill-opacity":["case",["get","selected"],.46,["get","opacity"]]}},{id:"boundary",type:"line",source:"core",filter:["==",["geometry-type"],"Polygon"],paint:{"line-color":["get","color"],"line-width":["get","strokeWidth"]}},{id:"line",type:"line",source:"core",filter:["==",["geometry-type"],"LineString"],layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["case",["get","selected"],"#ef973d",["get","color"]],"line-width":["case",["get","selected"],["+",["get","width"],3],["get","width"]]}},{id:"point",type:"circle",source:"core",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":["case",["get","selected"],"#ef973d",["get","color"]],"circle-radius":["interpolate",["linear"],["zoom"],10,["case",["get","selected"],8,["*",["get","radius"],0.4]],16,["case",["get","selected"],10,["get","radius"]],20,["case",["get","selected"],12,["+",["get","radius"],2]]],"circle-stroke-color":"#ffffff","circle-stroke-width":0.7}}]};
 type Draft={row:Row;point:[number,number];operationId:string;locked:boolean};
 function LiveStudio({org,project,expire,extension,openManager,openIntegrations,moduleName,accountId,openAccess,partnerBridge,partnerTools,savedContributions}:{accountId:string;org:string;project:Project;expire:()=>void;extension:StudioPlugin|null;openManager:()=>void;openIntegrations:()=>void;moduleName?:string;openAccess?:(scope:ScopeDraft)=>void;partnerBridge:React.RefObject<PartnerMapBridge|null>;partnerTools:PartnerTool[];savedContributions:SavedPartnerContribution[]}){
- const pid=project.id,[data,setData]=useState<Data>(fresh),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[reload,setReload]=useState(0),[hidden,setHidden]=useState<Set<string>>(new Set()),[selected,setSelected]=useState(""),[drawer,setDrawer]=useState(""),[table,setTable]=useState(false),[draft,setDraft]=useState<Draft|null>(null),[query,setQuery]=useState(""),[results,setResults]=useState<StudioSearchResult[]>([]),[sources,setSources]=useState<SpatialSource[]>([]),[ready,setReady]=useState(false),[tableScope,setTableScope]=useState(""),[mouseMode,setMouseMode]=useState<"select"|"pan">("select");
+ const pid=project.id,[data,setData]=useState<Data>(fresh),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[reload,setReload]=useState(0),[fullReload,setFullReload]=useState(0),[hidden,setHidden]=useState<Set<string>>(new Set()),[selected,setSelected]=useState(""),[drawer,setDrawer]=useState(""),[table,setTable]=useState(false),[draft,setDraft]=useState<Draft|null>(null),[query,setQuery]=useState(""),[results,setResults]=useState<StudioSearchResult[]>([]),[sources,setSources]=useState<SpatialSource[]>([]),[ready,setReady]=useState(false),[tableScope,setTableScope]=useState(""),[mouseMode,setMouseMode]=useState<"select"|"pan">("select");
  const spatialRead=data.restricted===false&&data.permissions.includes("project.read"),spatialEdit=spatialRead&&data.permissions.includes("project.edit");
+ const syncRequest=useRef<()=>void>(()=>{});
  const tileDataRef=useRef({data,spatialRead,loading});tileDataRef.current={data,spatialRead,loading};
  const [toolbarHost,setToolbarHost]=useState<HTMLDivElement|null>(null);
  const [partnerOverlayData,setPartnerOverlayData]=useState<PartnerOverlay|null>(null);
@@ -118,11 +120,11 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
   const map=useRef<ml.Map|null>(null),container=useRef<HTMLDivElement>(null),marker=useRef<ml.Marker|null>(null),fit=useRef<"none"|"partial"|"full">("none"),alive=useRef(true),running=useRef(false),draftRef=useRef(draft),renderLayers=useRef<string[]>([]),mouseModeRef=useRef(mouseMode);draftRef.current=draft;mouseModeRef.current=mouseMode;
   const fail=(e:unknown)=>{if(e instanceof ApiError&&e.status===401){setData(fresh());expire()}else if(e instanceof ApiError&&e.status===403){setError(msg(e))}else setError(msg(e))};
   useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
- useEffect(()=>{let live=true;setLoading(true);setError("");(async()=>{const next=fresh();const [layers,permissions,access]=await Promise.all([listSpatialLayers(client,org,pid,{limit:100}),getEffectivePermissions(client,org,{project_id:pid}),client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+pid+"/access/mine").catch(()=>({restricted:true}))]);next.restricted=access.restricted;next.layers=layers.items.filter(x=>x.lifecycle==="active");if(layers.next_after_id)next.warnings.push("Danh sách lớp chỉ tải trang đầu.");next.permissions=permissions.permissions;
+ useEffect(()=>{let live=true;let publishTimer:number|undefined;setLoading(true);setError("");(async()=>{const next=fresh();const publish=()=>{if(live&&publishTimer===undefined)publishTimer=window.setTimeout(()=>{publishTimer=undefined;if(live)setData({...next,rows:[...next.rows],warnings:[...next.warnings]})},400)};const [layers,permissions,access]=await Promise.all([listSpatialLayers(client,org,pid,{limit:100}),getEffectivePermissions(client,org,{project_id:pid}),client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+pid+"/access/mine").catch(()=>({restricted:true}))]);next.restricted=access.restricted;next.layers=layers.items.filter(x=>x.lifecycle==="active");if(layers.next_after_id)next.warnings.push("Danh sách lớp chỉ tải trang đầu.");next.permissions=permissions.permissions;
   if(live)setData({...next,rows:[...next.rows],warnings:[...next.warnings]});
-  await Promise.all(next.layers.map(async(l,i)=>{if(!l.capabilities.some(x=>x.name==="feature_read"&&x.available&&x.actor_authorized))return;if(performance&&tileEligible(l)){next.warnings.push(l.name+": vector tiles · thuộc tính tải theo lựa chọn");return}let cursor:string|undefined;const pageLimit=Math.min(20,Math.max(1,Math.ceil((l.source.feature_count??10000)/1000)));try{for(let page=0;page<pageLimit&&live;page++){ const r=await readSpatialFeatures(client,org,pid,l.id,{content_revision:l.source.content_revision,schema_revision:l.source.schema_revision,include_geometry:true,response_crs:4326,limit:1000,...(cursor?{after_feature_id:cursor}:{})});if(r.context.source_id!==l.source_id||r.context.project_id!==pid||r.context.response_crs?.code!==4326)throw Error("Phản hồi CRS/phạm vi không khớp.");for(const f of r.items){const g=f.geometry_state==="present"&&f.geometry?.coordinate_reference.code===4326?{type:f.geometry.type,coordinates:f.geometry.coordinates} as Geometry:null;next.rows.push({key:featureKey(l.source_id,f.feature_id),layer:l,feature:f,geometry:g,color:layerColor(l.name,i)})}cursor=r.next_after_feature_id??undefined;if(live&&(page===0||!cursor))setData({...next,rows:[...next.rows],warnings:[...next.warnings]});if(!cursor)break}if(cursor&&live)next.warnings.push(l.name+": chỉ tải tối đa "+(pageLimit*1000)+" đối tượng.")}catch(e){if(e instanceof ApiError&&(e.status===401||e.status===403))throw e;next.warnings.push(l.name+": "+msg(e))}}));
-  if(live)setData(next)})().catch(e=>{if(live){setData(fresh());fail(e)}}).finally(()=>{if(live)setLoading(false)});return()=>{live=false}},[org,pid,reload,performance]);
-  useEffect(()=>{if(!container.current)return;let m:ml.Map;try{m=new ml.Map({container:container.current,style,center:[106.4,14.7],zoom:5,attributionControl:{compact:true}})}catch{setNotice("Thiết bị không hỗ trợ WebGL2. Vẫn có thể quản lý lớp và bảng thuộc tính.");return}map.current=m;m.addControl(new ml.NavigationControl(),"top-right");m.addControl(new ml.ScaleControl({maxWidth:120,unit:"metric"}),"bottom-left");const ro=new ResizeObserver(()=>m.resize());ro.observe(container.current);m.on("style.load",()=>setReady(true));m.on("load",()=>setReady(true));m.on("dragstart",()=>{if(fit.current!=="none")fit.current="full"});m.on("zoomstart",e=>{if(e.originalEvent&&fit.current!=="none")fit.current="full"});m.on("click",e=>{if(draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current||mouseModeRef.current==="pan")return;const f=m.queryRenderedFeatures(e.point,{layers:renderLayers.current.length?renderLayers.current:["point","line","polygon"]})[0];if(f?.properties?.key)setSelected(String(f.properties.key))});m.on("mousemove",e=>{if(m.isStyleLoaded())m.getCanvas().style.cursor=advanced.activeRef.current||pro.activeRef.current||toolkit.modeRef.current?"crosshair":mouseModeRef.current==="pan"?"grab":m.queryRenderedFeatures(e.point,{layers:renderLayers.current.length?renderLayers.current:["point","line","polygon"]}).length?"pointer":""});return()=>{ro.disconnect();m.remove();map.current=null}},[]);
+  await parallelBounded(next.layers,3,async(l,i)=>{if(!l.capabilities.some(x=>x.name==="feature_read"&&x.available&&x.actor_authorized))return;if(performance&&tileEligible(l)){next.warnings.push(l.name+": vector tiles · thuộc tính tải theo lựa chọn");return}let cursor:string|undefined;const pageLimit=Math.min(20,Math.max(1,Math.ceil((l.source.feature_count??10000)/1000)));try{for(let page=0;page<pageLimit&&live;page++){ const r=await readSpatialFeatures(client,org,pid,l.id,{content_revision:l.source.content_revision,schema_revision:l.source.schema_revision,include_geometry:true,response_crs:4326,limit:1000,...(cursor?{after_feature_id:cursor}:{})});if(r.context.source_id!==l.source_id||r.context.project_id!==pid||r.context.response_crs?.code!==4326)throw Error("Phản hồi CRS/phạm vi không khớp.");for(const f of r.items){const g=f.geometry_state==="present"&&f.geometry?.coordinate_reference.code===4326?{type:f.geometry.type,coordinates:f.geometry.coordinates} as Geometry:null;next.rows.push({key:featureKey(l.source_id,f.feature_id),layer:l,feature:f,geometry:g,color:layerColor(l.name,i)})}cursor=r.next_after_feature_id??undefined;if(live)publish();if(!cursor)break}if(cursor&&live)next.warnings.push(l.name+": chỉ tải tối đa "+(pageLimit*1000)+" đối tượng.")}catch(e){if(e instanceof ApiError&&(e.status===401||e.status===403))throw e;next.warnings.push(l.name+": "+msg(e))}});
+  if(publishTimer!==undefined)window.clearTimeout(publishTimer);if(live)setData(next)})().catch(e=>{if(live){setData(fresh());fail(e)}}).finally(()=>{if(live)setLoading(false)});return()=>{live=false;if(publishTimer!==undefined)window.clearTimeout(publishTimer)}},[org,pid,fullReload,performance]);
+  useEffect(()=>{if(!container.current)return;let m:ml.Map;try{m=new ml.Map({container:container.current,style,center:[106.4,14.7],zoom:5,attributionControl:{compact:true}})}catch{setNotice("Thiết bị không hỗ trợ WebGL2. Vẫn có thể quản lý lớp và bảng thuộc tính.");return}map.current=m;m.addControl(new ml.NavigationControl(),"top-right");m.addControl(new ml.ScaleControl({maxWidth:120,unit:"metric"}),"bottom-left");const ro=new ResizeObserver(()=>m.resize());ro.observe(container.current);m.on("style.load",()=>setReady(true));m.on("load",()=>setReady(true));m.on("dragstart",()=>{if(fit.current!=="none")fit.current="full"});m.on("zoomstart",e=>{if(e.originalEvent&&fit.current!=="none")fit.current="full"});m.on("click",e=>{if(draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current||mouseModeRef.current==="pan")return;const f=m.queryRenderedFeatures(e.point,{layers:renderLayers.current.length?renderLayers.current:["point","line","polygon"]})[0];if(f?.properties?.key)setSelected(String(f.properties.key))});let hoverFrame=0;m.on("mousemove",e=>{if(hoverFrame)return;hoverFrame=requestAnimationFrame(()=>{hoverFrame=0;if(m.isStyleLoaded())m.getCanvas().style.cursor=advanced.activeRef.current||pro.activeRef.current||toolkit.modeRef.current?"crosshair":mouseModeRef.current==="pan"?"grab":m.queryRenderedFeatures(e.point,{layers:renderLayers.current.length?renderLayers.current:["point","line","polygon"]}).length?"pointer":""})});return()=>{cancelAnimationFrame(hoverFrame);ro.disconnect();m.remove();map.current=null}},[]);
  const row=data.rows.find(r=>r.key===selected);
   const hasAction=(l:SpatialLayer|undefined,a:string)=>!data.restricted||!!(l as (SpatialLayer&{access_actions?:string[]})|undefined)?.access_actions?.includes(a);
   const canEdit=!!row&&hasAction(row.layer,"geometry")&&row.layer.source.stored_crs?.code===4326&&row.geometry?.type==="Point"&&row.layer.capabilities.some(x=>x.name==="edit"&&x.available&&x.actor_authorized);
@@ -130,7 +132,7 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
   useEffect(()=>{if(!draft||!map.current){marker.current?.remove();marker.current=null;return}if(!marker.current){const m=new ml.Marker({draggable:!draft.locked,color:"#ef973d"}).setLngLat(draft.point).addTo(map.current);m.on("dragend",()=>{const p=m.getLngLat(),raw:[number,number]=[p.lng,p.lat],snapped=map.current?snapCoordinate(map.current,raw,snapPrefsRef.current,draftRef.current?.row.key,key=>geometryLookupRef.current.get(key)):null;if(snapped)setNotice("Snapping · "+snapLabel[snapped.kind]);setDraft(d=>d&&!d.locked?{...d,point:snapped?.point??raw}:d)});marker.current=m}else{marker.current.setLngLat(draft.point);marker.current.setDraggable(!draft.locked)}},[draft]);
   useEffect(()=>()=>{marker.current?.remove()},[]);
   const action=async(fn:()=>Promise<void>)=>{if(running.current)return;running.current=true;setBusy(true);setError("");try{await loadCsrfToken(client);await fn()}catch(e){fail(e)}finally{running.current=false;setBusy(false)}};
-  const refresh=()=>{setSelection(new Set());setReload(x=>x+1)};
+  const refresh=()=>{setSelection(new Set());setReload(x=>x+1);syncRequest.current()};
  const requestAccess=(layerId:string,ids?:string[])=>{const b=map.current?.getBounds(),bounds=b?[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()] as [number,number,number,number]:undefined;openAccess?.({layerId,ids,bounds})};
  const exportScoped=async(l:SpatialLayer)=>{try{const r=await fetch("/api/v1/organizations/"+org+"/projects/"+pid+"/access/export/"+l.id+"?format=geojson",{credentials:"same-origin"});if(!r.ok)throw Error("Không được cấp quyền xuất dữ liệu.");const object=URL.createObjectURL(await r.blob()),a=document.createElement("a");a.href=object;a.download="features.geojson";a.click();setTimeout(()=>URL.revokeObjectURL(object),1000)}catch(e){fail(e)}};
  const removeLayer=(l:SpatialLayer)=>{if(data.restricted||!data.permissions.includes("project.edit")||busy||draft||advanced.activeRef.current||pro.activeRef.current)return;void action(async()=>{await retireSpatialLayer(client,org,pid,l.id,{expected_revision:l.layer_revision});setSelected("");setNotice("Đã gỡ layer · nguồn dữ liệu được giữ nguyên");refresh()})};
@@ -142,82 +144,79 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
  useProfessionalTiles({client,org,pid,map,ready,enabled:performance,layers:toolkit.ordered,hidden,styleFor:toolkit.styleFor,blocked:()=>!!draftRef.current||!!toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current||mouseModeRef.current==="pan",onRow:r=>{setData(d=>({...d,rows:[...d.rows.filter(x=>x.key!==r.key),r]}));setSelected(r.key);toolkit.setLayerId(r.layer.id)},notify:setNotice,fail});
   useEffect(()=>{
     if(!org||!pid)return;
-    let timer:number|undefined;
-    let inFlight=false;
-    const syncChangedLayers=async()=>{
-      if(inFlight||!alive.current||running.current||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current)return;
-      inFlight=true;
+    let timer:number|undefined,stopped=false,inFlight=false,pending=false;
+    const schedule=(delay=250)=>{
+      pending=true;
+      if(stopped||timer!==undefined)return;
+      timer=window.setTimeout(()=>{timer=undefined;void sync()},delay);
+    };
+    const sync=async()=>{
+      if(stopped||!pending||inFlight)return;
+      if(tileDataRef.current.loading||running.current||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current){schedule(500);return;}
+      pending=false;inFlight=true;
+      const active=()=>!stopped&&alive.current;
       try{
-        const res=await listSpatialLayers(client,org,pid,{limit:100});
-        const activeLayers=res.items.filter(x=>x.lifecycle==="active");
-        const curLayers=tileDataRef.current.data.layers;
-        const curById=new Map(curLayers.map(l=>[l.id,l]));
-        if(activeLayers.length!==curById.size||activeLayers.some(l=>!curById.has(l.id))){
-          fit.current="full";
-          refresh();
-          return;
+        const snapshot=tileDataRef.current.data;
+        // Scoped access needs the original permission-filtered complete refresh.
+        if(snapshot.restricted!==false){setFullReload(x=>x+1);return;}
+        const [res,permissions,access]=await Promise.all([
+          listSpatialLayers(client,org,pid,{limit:100}),
+          getEffectivePermissions(client,org,{project_id:pid}),
+          client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+pid+"/access/mine"),
+        ]);
+        if(!active())return;
+        const layers=res.items.filter(x=>x.lifecycle==="active");
+        const prevById=new Map(snapshot.layers.map(l=>[l.id,l]));
+        const permissionsChanged=access.restricted!==snapshot.restricted||[...permissions.permissions].sort().join("|")!==[...snapshot.permissions].sort().join("|");
+        if(permissionsChanged||layers.length!==prevById.size||layers.some(l=>!prevById.has(l.id))){
+          setFullReload(x=>x+1);return;
         }
-        const changed=activeLayers.filter(l=>{
-          const prev=curById.get(l.id);
-          return !prev||prev.source.content_revision!==l.source.content_revision||prev.layer_revision!==l.layer_revision;
+        const changed=layers.filter(l=>{
+          const prev=prevById.get(l.id)!;
+          return prev.source.content_revision!==l.source.content_revision||prev.source.schema_revision!==l.source.schema_revision||prev.layer_revision!==l.layer_revision||JSON.stringify(prev.capabilities)!==JSON.stringify(l.capabilities);
         });
-        if(!changed.length)return;
-        const updatedByLayer=new Map<string,Row[]>();
-        await Promise.all(changed.map(async l=>{
-          const idx=activeLayers.findIndex(x=>x.id===l.id);
-          const rowsForLayer:Row[]=[];
+        if(!changed.length){if(snapshot.warnings.length&&snapshot.rows.length===0)setFullReload(x=>x+1);return;}
+        const updates=new Map<string,Row[]>();
+        await parallelBounded(changed,2,async(l)=>{
+          if(!active())return;
+          const idx=layers.findIndex(x=>x.id===l.id),color=layerColor(l.name,idx);
+          const rows:Row[]=[];
           if(l.capabilities.some(x=>x.name==="feature_read"&&x.available&&x.actor_authorized)&&!(performance&&tileEligible(l))){
+            const oldRows=snapshot.rows.filter(r=>r.layer.id===l.id);
+            let delta:Row[]|null=null;
+            try{if(JSON.stringify(prevById.get(l.id)!.capabilities)===JSON.stringify(l.capabilities))delta=await incrementalLayerRows(client,org,pid,prevById.get(l.id)!,l,oldRows,color,active)}catch(e){if(isPermissionError(e))throw e;}
+            if(delta!==null){updates.set(l.id,delta);return;}
             let cursor:string|undefined;
-            const pageLimit=Math.min(20,Math.max(1,Math.ceil((l.source.feature_count??10000)/1000)));
-            for(let page=0;page<pageLimit&&alive.current;page++){
-              const r=await readSpatialFeatures(client,org,pid,l.id,{
-                content_revision:l.source.content_revision,
-                schema_revision:l.source.schema_revision,
-                include_geometry:true,
-                response_crs:4326,
-                limit:1000,
-                ...(cursor?{after_feature_id:cursor}:{})
-              });
-              for(const f of r.items){
-                const g=f.geometry_state==="present"&&f.geometry?.coordinate_reference.code===4326?{type:f.geometry.type,coordinates:f.geometry.coordinates} as Geometry:null;
-                rowsForLayer.push({key:featureKey(l.source_id,f.feature_id),layer:l,feature:f,geometry:g,color:layerColor(l.name,idx)});
-              }
-              cursor=r.next_after_feature_id??undefined;
-              if(!cursor)break;
+            for(let page=0;page<20&&active();page++){
+              const r=await readSpatialFeatures(client,org,pid,l.id,{content_revision:l.source.content_revision,schema_revision:l.source.schema_revision,include_geometry:true,response_crs:4326,limit:1000,...(cursor?{after_feature_id:cursor}:{})});
+              if(r.context.source_id!==l.source_id||r.context.project_id!==pid||r.context.response_crs?.code!==4326)throw Error("Phạm vi dữ liệu không khớp.");
+              for(const f of r.items){const g=f.geometry_state==="present"&&f.geometry?.coordinate_reference.code===4326?{type:f.geometry.type,coordinates:f.geometry.coordinates} as Geometry:null;rows.push({key:featureKey(l.source_id,f.feature_id),layer:l,feature:f,geometry:g,color});}
+              cursor=r.next_after_feature_id??undefined;if(!cursor)break;
             }
           }
-          updatedByLayer.set(l.id,rowsForLayer);
-        }));
-        if(!alive.current)return;
+          updates.set(l.id,rows);
+        });
+        if(!active())return;
+        if(tileDataRef.current.loading||running.current||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current){schedule(500);return;}
         fit.current="full";
-        setData(prev=>({
-          ...prev,
-          layers:activeLayers,
-          rows:[
-            ...prev.rows.filter(r=>!updatedByLayer.has(r.layer.id)).map(r=>{
-              const ul=activeLayers.find(al=>al.id===r.layer.id);
-              return ul?{...r,layer:ul}:r;
-            }),
-            ...Array.from(updatedByLayer.values()).flat()
-          ]
-        }));
-        setNotice("⚡ Đã cập nhật realtime: "+changed.map(l=>l.name).join(", "));
-      }catch{
-        // ignore transient background error
-      }finally{
-        inFlight=false;
-      }
+        setData(prev=>({...prev,layers:layers.map(l=>updates.has(l.id)?l:prevById.get(l.id)!),rows:[...prev.rows.filter(r=>!updates.has(r.layer.id)),...Array.from(updates.values()).flat()]}));
+        setNotice("Đã nhận cập nhật: "+changed.map(l=>l.name).join(", "));
+      }catch(e){
+        if(active()){
+          if(isPermissionError(e)){setData(fresh());setFullReload(x=>x+1);}
+          else {setNotice("Đang chờ đồng bộ lại…");schedule(2000);}
+        }
+      }finally{inFlight=false;if(pending&&timer===undefined&&!stopped)schedule();}
     };
-    const trigger=()=>{
-      if(timer!==undefined)window.clearTimeout(timer);
-      timer=window.setTimeout(()=>{timer=undefined;void syncChangedLayers()},250);
-    };
+    const trigger=()=>schedule();
+    syncRequest.current=trigger;
     const es=new EventSource("/api/v1/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(pid)+"/integration-hub/events",{withCredentials:true});
     es.addEventListener("spatial_change",trigger);
-    return()=>{
-      es.close();
-      if(timer!==undefined)window.clearTimeout(timer);
-    };
+    es.addEventListener("ready",()=>{if(tileDataRef.current.data.restricted===false)trigger()});
+    const fallback=window.setInterval(()=>{if(tileDataRef.current.data.restricted===false)trigger()},15000);
+    const onFocus=()=>{if(tileDataRef.current.data.restricted===false)trigger()};
+    window.addEventListener("focus",onFocus);
+    return()=>{stopped=true;es.close();window.clearInterval(fallback);window.removeEventListener("focus",onFocus);if(timer!==undefined)window.clearTimeout(timer);syncRequest.current=()=>{};};
   },[org,pid,performance]);
  const [toolbox,setToolbox]=useState(false),[special,setSpecial]=useState<RasterMethod|"survey"|"zonal"|"contour"|"sentinel"|"modeler"|null>(null),[rasterBusy,setRasterBusy]=useState(false);
  const raster=useProjectRaster({client,org,pid,map,ready,allowed:!data.restricted&&data.permissions.includes("project.read"),canWrite:!data.restricted&&data.permissions.includes("project.edit"),storageKey:workspaceKey,notify:setNotice});
@@ -260,8 +259,9 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
      m.addLayer({id:key+"-point",type:"circle",source:key,filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#7c3aed","circle-radius":8,"circle-stroke-color":"#fff","circle-stroke-width":2}});
    }};render();m.on("style.load",render);return()=>{m.off("style.load",render);if(map.current===m)remove()};
  },[partnerOverlayData,savedContributions,ready,data.restricted,data.permissions]);
+ const renderLayerSignature=JSON.stringify(toolkit.ordered.map(l=>l.id));
  const collection=useMemo<FeatureCollection>(()=>({type:"FeatureCollection",features:visible.filter(r=>r.geometry).sort((a,b)=>toolkit.layerOrder.length?toolkit.ordered.findIndex(l=>l.id===b.layer.id)-toolkit.ordered.findIndex(l=>l.id===a.layer.id):(contribution.rank?.(a)??(a.geometry?.type==="Polygon"?0:a.geometry?.type==="LineString"?1:2))-(contribution.rank?.(b)??(b.geometry?.type==="Polygon"?0:b.geometry?.type==="LineString"?1:2))).map(r=>{const style=toolkit.styleFor(r.layer),v=workspace.layerViews[r.layer.id],custom=v?.renderer==="single"||v?.renderer==="categorized";return {type:"Feature",geometry:r.geometry!,properties:{key:r.key,layerId:r.layer.id,color:style.color,selected:r.key===selected||selection.has(r.key),opacity:style.opacity,strokeWidth:style.width,width:style.width,radius:style.radius,...contribution.paint?.(r),...(custom?{color:v.renderer==="categorized"?categoryColor(categoryKey(r.feature.attributes[v.categoryField]),v):style.color,opacity:style.opacity,strokeWidth:style.width,width:style.width,radius:style.radius}:{})}}})}),[visible,selected,selection,contribution.mapRevision,toolkit.styles,toolkit.layerOrder,workspace.layerViews]);
- useEffect(()=>{const m=map.current;if(!ready||!m)return;const templates=style.layers.filter(l=>["point","line","polygon","boundary"].includes(l.id));for(const l of templates)m.setLayoutProperty(l.id,"visibility",toolkit.ordered.length?"none":"visible");for(const l of m.getStyle().layers??[])if(l.id.startsWith("data-layer-"))m.removeLayer(l.id);const clickIds:string[]=[];if(toolkit.ordered.length){for(const layer of [...toolkit.ordered].reverse()){for(const t of templates){const id="data-layer-"+layer.id+"-"+t.id;const view=workspace.layerViews[layer.id];const spec={...t,id,...(view?{minzoom:view.minZoom,maxzoom:view.maxZoom}:{}),filter:["all",(t as ml.FillLayerSpecification).filter,["==",["get","layerId"],layer.id]]} as ml.LayerSpecification;m.addLayer(spec,m.getLayer("core-sketch-fill")?"core-sketch-fill":undefined);if(t.id!=="boundary")clickIds.push(id)}}}renderLayers.current=clickIds},[ready,data.layers,toolkit.layerOrder,workspace.layerViews]);
+ useEffect(()=>{const m=map.current;if(!ready||!m)return;const templates=style.layers.filter(l=>["point","line","polygon","boundary"].includes(l.id));for(const l of templates)m.setLayoutProperty(l.id,"visibility",toolkit.ordered.length?"none":"visible");for(const l of m.getStyle().layers??[])if(l.id.startsWith("data-layer-"))m.removeLayer(l.id);const clickIds:string[]=[];if(toolkit.ordered.length){for(const layer of [...toolkit.ordered].reverse()){for(const t of templates){const id="data-layer-"+layer.id+"-"+t.id;const view=workspace.layerViews[layer.id];const spec={...t,id,...(view?{minzoom:view.minZoom,maxzoom:view.maxZoom}:{}),filter:["all",(t as ml.FillLayerSpecification).filter,["==",["get","layerId"],layer.id]]} as ml.LayerSpecification;m.addLayer(spec,m.getLayer("core-sketch-fill")?"core-sketch-fill":undefined);if(t.id!=="boundary")clickIds.push(id)}}}renderLayers.current=clickIds},[ready,renderLayerSignature,workspace.layerViews]);
  const [sentinelBusy,setSentinelBusy]=useState(false),[sentinelError,setSentinelError]=useState("");
  const selectSentinelMonth=async(month:string)=>{if(sentinelBusy)return;const m=map.current;if(!m)return;setSentinelBusy(true);setSentinelError("");try{const c=m.getCenter(),scene=await findSentinelScene(month,c.lng,c.lat);updatePrefs({sentinelScene:scene,basemapProvider:"sentinel-month",basemap:true});setNotice("Sentinel-2 · "+scene.captured+" · "+scene.clouds.toFixed(1)+"% mây toàn cảnh")}catch(e){setSentinelError(e instanceof Error?e.message:"Không tải được kho ảnh.")}finally{setSentinelBusy(false)}};
  const appliedBasemap=useRef("osm");
