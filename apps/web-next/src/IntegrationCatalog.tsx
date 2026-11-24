@@ -32,19 +32,93 @@ interface IntegrationCatalogProps {
 type IntegrationTask = "export" | "sync" | "service" | "details" | "bindings";
 
 const CONNECTOR_HELP: Record<string, string> = {
-  qgis: "Tải lớp bản đồ về QGIS hoặc gửi các chỉnh sửa GeoPackage trở lại dự án.",
-  postgis: "Xuất dữ liệu sang SQL hoặc GeoPackage để sử dụng trong cơ sở dữ liệu riêng.",
-  autocad: "Tải bản vẽ DXF 2D để mở trong AutoCAD; chưa hỗ trợ DWG và đồng bộ ngược.",
-  ogc_services: "Khai thác dịch vụ bản đồ WMS, WFS, COG và XYZ qua nguồn dữ liệu ngoài.",
-  microstation_v8i: "Cầu nối DGN V8i cần máy Windows và bản quyền phần mềm; chưa sử dụng trực tiếp tại đây.",
-  arcgis: "Kết nối ArcGIS chuyên dụng chưa được đưa vào vận hành.",
-  mapinfo: "Trao đổi dữ liệu MapInfo TAB/MIF/MID đang được phát triển.",
-  cadastral_vn: "Liên thông gCadas, FAMIS, TMV.Map và dữ liệu địa chính đang được phát triển.",
-  ogc_publisher: "Xuất bản dữ liệu đến máy chủ OGC chưa được tích hợp trong màn hình này.",
-  google_earth: "Bộ kết nối Google Earth KML/KMZ đang được phát triển.",
-  excel: "Bộ kết nối bảng tính Excel/CSV đang được phát triển.",
-  survey_3d: "Kết nối RTK, UAV, BIM và dữ liệu 3D đang được phát triển."
+  qgis: "Đồng bộ 2 chiều Realtime (R029) hoặc xuất GeoPackage về QGIS Desktop.",
+  postgis: "Xuất SQL hoặc GeoPackage sang cơ sở dữ liệu PostgreSQL / PostGIS.",
+  autocad: "Xuất bản vẽ DXF 2D chuẩn hệ tọa độ phẳng để mở trong AutoCAD.",
+  ogc_services: "Kết nối dịch vụ bản đồ WMS, WFS, COG và XYZ từ nguồn ngoài.",
+  microstation_v8i: "Cầu nối DGN V8i dành cho máy trạm Windows có MicroStation.",
+  arcgis: "Kết nối ArcGIS chuyên dụng (đang phát triển).",
+  mapinfo: "Trao đổi dữ liệu MapInfo TAB/MIF/MID (đang phát triển).",
+  cadastral_vn: "Liên thông gCadas, FAMIS, TMV.Map (đang phát triển).",
+  ogc_publisher: "Xuất bản dịch vụ OGC (đang phát triển).",
+  google_earth: "Xuất/nhập Google Earth KML/KMZ (đang phát triển).",
+  excel: "Liên thông bảng tính Excel / CSV (đang phát triển).",
+  survey_3d: "Dữ liệu đo đạc RTK, UAV, BIM & 3D (đang phát triển)."
 };
+
+function AdapterLogo({ adapterKey }: { adapterKey: string }) {
+  switch (adapterKey) {
+    case "qgis":
+      return (
+        <span className="integration-logo is-qgis" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <circle cx="19" cy="19" r="12" stroke="#589632" strokeWidth="5.2" />
+            <path d="M21 21L33 33" stroke="#93B023" strokeWidth="5.2" strokeLinecap="round" />
+            <path d="M20 20L27 27" stroke="#EE7913" strokeWidth="3.2" strokeLinecap="round" />
+          </svg>
+        </span>
+      );
+    case "postgis":
+      return (
+        <span className="integration-logo is-postgis" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <ellipse cx="20" cy="11" rx="11" ry="4.5" fill="#336791" />
+            <path d="M9 11V29C9 31.5 13.9 33.5 20 33.5C26.1 33.5 31 31.5 31 29V11" stroke="#336791" strokeWidth="2.8" fill="#E0F2FE" />
+            <path d="M9 20C9 22.5 13.9 24.5 20 24.5C26.1 24.5 31 22.5 31 20" stroke="#0284C7" strokeWidth="2.4" />
+            <circle cx="28" cy="27" r="5" fill="#0284C7" stroke="#FFFFFF" strokeWidth="1.8" />
+          </svg>
+        </span>
+      );
+    case "autocad":
+      return (
+        <span className="integration-logo is-autocad" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <path d="M20 6L32 33H25.8L23.4 27.2H16.6L14.2 33H8L20 6Z" fill="#E51937" />
+            <path d="M20 14.5L17.9 22.5H22.1L20 14.5Z" fill="#FFFFFF" />
+            <path d="M20 6L26 20L20 15L14 20L20 6Z" fill="#B91C1C" opacity="0.45" />
+          </svg>
+        </span>
+      );
+    case "ogc_services":
+    case "ogc_publisher":
+      return (
+        <span className="integration-logo is-ogc" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <circle cx="20" cy="20" r="13" stroke="#0F766E" strokeWidth="2.6" fill="#CCFBF1" />
+            <ellipse cx="20" cy="20" rx="6.5" ry="13" stroke="#0EA5E9" strokeWidth="2.2" />
+            <path d="M7.5 20H32.5M10 13.5H30M10 26.5H30" stroke="#0F766E" strokeWidth="2" />
+          </svg>
+        </span>
+      );
+    case "microstation_v8i":
+      return (
+        <span className="integration-logo is-v8i" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <polygon points="20,6 33,13.5 33,26.5 20,34 7,26.5 7,13.5" fill="#E0F2FE" stroke="#0072CE" strokeWidth="2.6" />
+            <path d="M13 25V15L20 20L27 15V25" stroke="#0072CE" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      );
+    case "excel":
+      return (
+        <span className="integration-logo is-excel" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <rect x="7" y="8" width="26" height="24" rx="4" fill="#DCFCE7" stroke="#1D6F42" strokeWidth="2.4" />
+            <path d="M15 14L25 26M25 14L15 26" stroke="#1D6F42" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        </span>
+      );
+    default:
+      return (
+        <span className="integration-logo is-generic" aria-hidden="true">
+          <svg viewBox="0 0 40 40" width="28" height="28" fill="none">
+            <polygon points="20,7 34,15 20,23 6,15" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2.4" />
+            <path d="M6 21L20 29L34 21M6 27L20 35L34 27" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        </span>
+      );
+  }
+}
 
 interface LayerExportStatus {
   kind: "success" | "error";
@@ -592,29 +666,29 @@ export function IntegrationCatalog({
 
   return (
     <section className="integration-catalog" aria-label="Tích hợp phần mềm">
-      <div className="integration-guided-shell">
-        <header className="integration-hero">
-          <div className="integration-hero-copy">
-            <span className="integration-eyebrow">OPENVIETGIS / INTEGRATION CENTER</span>
-            <h2>Kết nối phần mềm, không cần biết API</h2>
-            <p>Chọn công cụ đang dùng, chọn việc muốn làm. Hệ thống sẽ hiển thị đúng dữ liệu và thao tác được hỗ trợ.</p>
+      <div className="integration-guided-shell is-minimal">
+        <header className="integration-topbar">
+          <div className="integration-topbar-brand">
+            <img
+              src="/rewrite/brand/openvietgis-logo-mark.png"
+              alt="OpenVietGIS"
+              className="integration-brand-img"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+            <div>
+              <h2>Kết nối phần mềm</h2>
+              <p>Chọn phần mềm bạn đang dùng để đồng bộ hoặc xuất dữ liệu bản đồ.</p>
+            </div>
           </div>
-          <div className="integration-hero-meta">
-            <span className="integration-hero-meta-value">{catalog?.adapters.filter((item) => item.lifecycle === "existing_read_only").length ?? "—"}</span>
-            <span>nhóm có khả năng hoạt động</span>
-          </div>
+          <nav className="integration-steps is-inline" aria-label="Các bước kết nối">
+            <span className={expandedKey ? "is-done" : "is-current"}><b>1</b> Phần mềm</span>
+            <span className={expandedKey && !activeTask ? "is-current" : activeTask ? "is-done" : ""}><b>2</b> Thao tác</span>
+            <span className={activeTask && activeTask !== "details" && activeTask !== "service" ? "is-current" : ""}><b>3</b> Thực hiện</span>
+          </nav>
         </header>
-        <nav className="integration-steps" aria-label="Các bước kết nối">
-          <span className={expandedKey ? "is-done" : "is-current"}><b>1</b> Chọn phần mềm</span>
-          <span className={expandedKey && !activeTask ? "is-current" : activeTask ? "is-done" : ""}><b>2</b> Chọn việc cần làm</span>
-          <span className={activeTask && activeTask !== "details" && activeTask !== "service" ? "is-current" : ""}><b>3</b> Chọn dữ liệu và thực hiện</span>
-        </nav>
-        <p className="integration-user-note">Mỗi dự án có quyền truy cập riêng. Không có kết nối nào tự ý ghi hoặc xóa dữ liệu của bạn.</p>
-
-
 
         {catalog && (
-          <details className="integration-policy-disclosure">
+          <details className="integration-policy-disclosure is-compact">
             <summary>Chi tiết chính sách truy cập (quản trị viên)</summary>
             <div className="integration-policy-bar">
             <span className="integration-policy-pill is-deny">
@@ -647,52 +721,45 @@ export function IntegrationCatalog({
                 <button type="button" onClick={() => { setExpandedKey(null); setActiveTask(null); resetSyncPanelState(); }}>
                   ← Đổi phần mềm
                 </button>
-                <span>Đang chọn: <b>{catalog.adapters.find((item) => item.key === expandedKey)?.name}</b></span>
+                <span className="integration-selection-current">
+                  <AdapterLogo adapterKey={expandedKey} />
+                  <b>{catalog.adapters.find((item) => item.key === expandedKey)?.name}</b>
+                </span>
               </div>
             )}
-            {!expandedKey && <div className="integration-choose-heading">
-              <div><span className="integration-step-label">BƯỚC 1</span><h3>Bạn đang dùng phần mềm nào?</h3></div>
-              <p>Ưu tiên những phần mềm đã có chức năng sử dụng. Các mục đang phát triển vẫn được hiển thị riêng.</p>
-            </div>}
-            {!expandedKey && <div className="integration-filter-toolbar">
-              <label className="integration-search">
-                Nhóm phần mềm
-                <select
-                  aria-label="Lọc nhóm phần mềm"
-                  value={categoryFilter}
-                  onChange={(event) => setCategoryFilter(event.target.value)}
-                >
-                  <option value="all">
-                    Tất cả ({catalog.adapters.length} nhóm)
-                  </option>
-                  <option value="ready">
-                    ★ Đã sẵn sàng xuất / đồng bộ (
-                    {
-                      catalog.adapters.filter(
-                        (a) => a.lifecycle === "existing_read_only"
-                      ).length
-                    }
-                    )
-                  </option>
-                  <option value="gis">GIS (QGIS · ArcGIS · MapInfo · OGC)</option>
-                  <option value="cad">CAD (AutoCAD · MicroStation V8i)</option>
-                  <option value="database">Cơ sở dữ liệu (PostGIS)</option>
-                  <option value="cadastral">Địa chính (gCadas · FAMIS · TMV.Map)</option>
-                  <option value="survey_3d">Trắc địa / 3D (RTK · UAV · BIM)</option>
-                  <option value="tabular">Bảng tính (Excel · CSV)</option>
-                </select>
-              </label>
-
-              <label className="integration-search">
-                Tìm phần mềm hoặc định dạng
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="QGIS, PostGIS, AutoCAD, DGN, WFS…"
-                />
-              </label>
-            </div>}
+            {!expandedKey && (
+              <div className="integration-compact-toolbar">
+                <div className="integration-compact-step">
+                  <span className="integration-step-label">BƯỚC 1</span>
+                  <h3>Chọn phần mềm</h3>
+                </div>
+                <div className="integration-compact-controls">
+                  <select
+                    aria-label="Lọc nhóm phần mềm"
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value)}
+                  >
+                    <option value="ready">
+                      ★ Sẵn sàng ({catalog.adapters.filter((a) => a.lifecycle === "existing_read_only").length})
+                    </option>
+                    <option value="all">Tất cả ({catalog.adapters.length})</option>
+                    <option value="gis">GIS (QGIS · OGC)</option>
+                    <option value="cad">CAD (AutoCAD · V8i)</option>
+                    <option value="database">CSDL (PostGIS)</option>
+                    <option value="cadastral">Địa chính</option>
+                    <option value="survey_3d">Trắc địa / 3D</option>
+                    <option value="tabular">Bảng tính</option>
+                  </select>
+                  <input
+                    type="search"
+                    aria-label="Tìm phần mềm hoặc định dạng"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Tìm QGIS, PostGIS, AutoCAD, WFS…"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className={"integration-list" + (expandedKey ? " is-focused" : "")}>
               {visibleAdapters.map((adapter) => {
@@ -738,17 +805,18 @@ export function IntegrationCatalog({
                     data-adapter-key={adapter.key}
                   >
                     <div className="integration-item-header">
-                      <b>{adapter.name}</b>
+                      <div className="integration-item-title">
+                        <AdapterLogo adapterKey={adapter.key} />
+                        <div>
+                          <b>{adapter.name}</b>
+                          <div className="integration-meta">
+                            <span>{adapter.protocols.join(" · ")}</span>
+                          </div>
+                        </div>
+                      </div>
                       <span className={lifecycleBadgeClass(adapter.lifecycle)}>
                         {LIFECYCLE_LABELS[adapter.lifecycle]}
                       </span>
-                    </div>
-
-                    <div className="integration-meta">
-                      <span>
-                        {CATEGORY_LABELS[adapter.category] ?? adapter.category}
-                      </span>
-                      <span>{adapter.protocols.join(" · ")}</span>
                     </div>
 
                     <p>{CONNECTOR_HELP[adapter.key] ?? adapter.note}</p>
