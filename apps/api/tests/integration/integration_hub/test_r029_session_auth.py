@@ -425,3 +425,10 @@ def test_scoped_delta_does_not_reveal_hidden_feature_ids(migrated_database: None
         assert delta.json()["reset_required"] is True
         assert delta.json()["changes"] == []
         assert "hidden" not in delta.text
+        revoked = owner.delete(root + "/access/rules/" + rule.json()["id"])
+        assert revoked.status_code == 204, revoked.text
+        stale = member.get(managed + "/bootstrap", params={"session_id": sid, "layer_id": layer})
+        assert stale.status_code == 403
+        assert member.get(
+            managed + "/delta", params={"session_id": sid, "cursor": page.json()["cursor"]}
+        ).json()["reset_required"]

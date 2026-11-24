@@ -23,6 +23,7 @@ from openvietgis_api.adapters.http.security import (
 )
 from openvietgis_api.adapters.http.tenant_access import require_human_permission
 from openvietgis_api.adapters.persistence.gis_access import scoped, source_allowed
+from openvietgis_api.adapters.persistence.managed_events import bump_project_permission_epoch
 from openvietgis_api.adapters.persistence.scope_helper import (
     append_project_audit,
     prepare_project_scope,
@@ -243,6 +244,7 @@ def create_group(organization_id: UUID, project_id: UUID, body: GroupBody, auth:
             p | {"gid": gid, "uid": uid},
         )
     log(db, ctx, "group_created", gid, {"name": body.name, "members": len(body.user_ids)})
+    bump_project_permission_epoch(db, organization_id, project_id)
     return {"id": gid}
 
 
@@ -292,6 +294,7 @@ def replace_group(
             p | {"uid": uid},
         )
     log(db, ctx, "group_updated", group_id, {"name": body.name, "members": len(body.user_ids)})
+    bump_project_permission_epoch(db, organization_id, project_id)
     return {"id": group_id}
 
 
@@ -424,6 +427,7 @@ def _insert_rule(db, ctx, p, body: RuleBody, *, skip_identical=False):
 def create_rule(organization_id: UUID, project_id: UUID, body: RuleBody, auth: Write, db: DB):
     ctx, p = scope(db, auth, organization_id, project_id, admin=True, write=True)
     rid, _ = _insert_rule(db, ctx, p, body)
+    bump_project_permission_epoch(db, organization_id, project_id)
     return {"id": rid}
 
 
@@ -454,6 +458,8 @@ def batch_rules(organization_id: UUID, project_id: UUID, body: BatchRulesBody, a
         unchanged += int(not added)
     for rid in dict.fromkeys(body.revoke_ids):
         _revoke_rule(db, ctx, p, rid)
+    if created or body.revoke_ids:
+        bump_project_permission_epoch(db, organization_id, project_id)
     return {"created": created, "unchanged": unchanged, "revoked": len(set(body.revoke_ids))}
 
 
@@ -475,6 +481,7 @@ def _revoke_rule(db, ctx, p, rule_id):
 def revoke_rule(organization_id: UUID, project_id: UUID, rule_id: UUID, auth: Write, db: DB):
     ctx, p = scope(db, auth, organization_id, project_id, admin=True, write=True)
     _revoke_rule(db, ctx, p, rule_id)
+    bump_project_permission_epoch(db, organization_id, project_id)
 
 
 @router.get(BASE + "/export/{layer_id}")

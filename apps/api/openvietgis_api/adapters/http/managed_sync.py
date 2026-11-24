@@ -1106,15 +1106,17 @@ async def stream_managed_events(
                     try:
                         p = json.loads(note.payload)
                     except ValueError:
-                        continue
-                    if p.get("o") == org_s and p.get("p") == proj_s:
+                        p = {}
+                    if isinstance(p, dict) and p.get("o") == org_s and p.get("p") == proj_s:
                         kind = str(p.get("kind") or "spatial_change")
                         if not await asyncio.to_thread(
                             _session_still_valid, request, organization_id, project_id, session_id
                         ):
                             yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
                             return
-                        yield f"event: {kind}\ndata: {json.dumps({'kind': kind})}\n\n"
+                        # A valid session must ignore another session's revoke notice.
+                        if kind in {"spatial_change", "desktop_command"}:
+                            yield f"event: {kind}\ndata: {json.dumps({'kind': kind})}\n\n"
                 if time.monotonic() - last_hb >= 15.0:
                     if not await asyncio.to_thread(
                         _session_still_valid, request, organization_id, project_id, session_id
