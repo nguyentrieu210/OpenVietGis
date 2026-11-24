@@ -1,6 +1,10 @@
 """R048 existing CAD identity and ChangeSet acceptance on isolated PostGIS."""
 
+import hashlib
+import io
 from uuid import uuid4
+
+import ezdxf
 
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_cad_georef import _drawing
@@ -108,6 +112,67 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
         by_source = {x["source_id"]: x for x in linked}
         assert by_source[first["source_id"]]["original_revision"] is False
         assert by_source[sources[1]["source_id"]]["original_revision"] is True
+        current = check(owner.get(root + "/layers/" + first["layer_id"]))["source"]
+        draft_path = path + "/export-georef-draft"
+        draft_request = {
+            "conversion_id": first["id"],
+            "expected_document_sha256": document["sha256"],
+            "expected_content_revision": current["content_revision"],
+            "expected_schema_revision": current["schema_revision"],
+        }
+        preview = check(owner.post(draft_path, json=draft_request))
+        assert preview["feature_count"] == 1 and preview["published"] is False
+        assert preview["loss_report"]["native_handles_not_preserved"]
+        assert (
+            owner.post(draft_path, json=draft_request | {"acknowledge_loss": True}).status_code
+            == 422
+        )
+        confirm = draft_request | {
+            "expected_preview_fingerprint": preview["preview_fingerprint"],
+            "acknowledge_loss": True,
+        }
+        assert (
+            owner.post(
+                draft_path, json=confirm | {"expected_preview_fingerprint": "0" * 64}
+            ).status_code
+            == 409
+        )
+        assert (
+            owner.post(
+                draft_path, json=confirm | {"expected_content_revision": layer["content_revision"]}
+            ).status_code
+            == 409
+        )
+        assert owner.post(draft_path, json=confirm | {"acknowledge_loss": False}).status_code == 422
+        assert (
+            owner.post(
+                draft_path, json=confirm | {"expected_document_sha256": "0" * 64}
+            ).status_code
+            == 409
+        )
+        assert (
+            owner.post(
+                draft_path, json=confirm | {"expected_schema_revision": "0" * 64}
+            ).status_code
+            == 409
+        )
+        assert (
+            owner.post(draft_path, json=confirm | {"conversion_id": str(uuid4())}).status_code
+            == 404
+        )
+        exported = owner.post(draft_path, json=confirm)
+        assert exported.status_code == 200, exported.text
+        assert exported.headers["X-Content-SHA256"] == hashlib.sha256(exported.content).hexdigest()
+        doc = ezdxf.read(io.StringIO(exported.content.decode()))
+        assert doc.header["$INSUNITS"] == 4
+        poly = list(doc.modelspace())[0]
+        assert poly.closed
+        vertices = [tuple(map(float, p)) for p in poly.get_points("xy")]
+        assert abs(max(p[0] for p in vertices) - 11000) < 0.001
+        assert abs(max(p[1] for p in vertices) - 5000) < 0.001
+        assert owner.get(path + "/download").headers["X-Content-SHA256"] == document["sha256"]
+        with _client(world.wrong_user_id) as other:
+            assert other.post(draft_path, json=confirm).status_code in (403, 404)
         version = check(
             owner.post(
                 base + "/" + document["id"] + "/versions",
@@ -117,6 +182,7 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
             201,
         )
         assert version["version"] == 2
+        assert owner.post(draft_path, json=confirm).status_code == 409
         assert (
             check(
                 owner.get(
