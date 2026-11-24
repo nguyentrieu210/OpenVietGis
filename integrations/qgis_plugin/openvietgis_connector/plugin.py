@@ -39,8 +39,8 @@ from qgis.core import (
     QgsFeature,
     QgsField,
     QgsGeometry,
-    QgsJsonUtils,
     QgsProject,
+    QgsTask,
     QgsVariantUtils,
     QgsVectorLayer,
 )
@@ -95,14 +95,14 @@ from .client import (
 from .drafts import draft_path, merge_snapshots, read_draft, write_draft
 from .managed_client import (
     ManagedSessionInfo,
-    bootstrap_managed_layer,
     build_managed_events_url,
     commit_managed_changes,
-    create_managed_session,
     diff_managed_snapshots,
     fetch_managed_delta,
     get_managed_commit_receipt,
     list_desktop_commands,
+    load_managed_layers,
+    native_geometry_wkt,
     respond_desktop_command,
 )
 from .workspace import (
@@ -357,6 +357,10 @@ class OpenVietGisConnectorDialog(QDialog):
         self._draft_timer.setInterval(3000)
         self._draft_timer.timeout.connect(self._checkpoint_managed_drafts)
         self._managed_worker: _ManagedRealtimeWorker | None = None
+        self._bootstrap_task = None
+        self._bootstrap_generation = 0
+        self._delta_task = None
+        self._delta_generation = 0
         self._managed_delta_debounce = QTimer(self)
         self._managed_delta_debounce.setSingleShot(True)
         self._managed_delta_debounce.setInterval(300)
@@ -753,6 +757,9 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def _start_browser_login(self) -> None:
         self._stop_browser_login()
+        if self._bootstrap_task is not None:
+            self._cancel_managed_bootstrap()
+            self.r029_open_button.setEnabled(self._connected)
         if any(
             isinstance(layer := QgsProject.instance().mapLayer(info["map_layer_id"]), QgsVectorLayer)
             and self._managed_is_dirty(layer, info)
@@ -1804,6 +1811,8 @@ class OpenVietGisConnectorDialog(QDialog):
                 settings.remove("protected_token")
 
     def _disconnect_managed(self) -> None:
+        self._cancel_managed_bootstrap()
+        self._cancel_managed_delta()
         self._draft_timer.stop()
         self._managed_poll.stop()
         self._managed_delta_debounce.stop()
@@ -1917,14 +1926,13 @@ class OpenVietGisConnectorDialog(QDialog):
     def _geojson_to_qgs_geometry(self, geom_obj: dict[str, Any] | None) -> QgsGeometry:
         if not geom_obj:
             return QgsGeometry()
-        fc = json.dumps({"type": "Feature", "geometry": geom_obj, "properties": {}})
-        feats = QgsJsonUtils.stringToFeatureList(fc, QgsVectorLayer("Point", "t", "memory").fields())
-        if feats:
-            return QgsGeometry(feats[0].geometry())
-        return QgsGeometry()
+        geometry = QgsGeometry.fromWkt(native_geometry_wkt(geom_obj))
+        if geometry.isNull() or geometry.isEmpty():
+            raise ApiError("Không thể nạp hình học gốc.")
+        return geometry
 
     def _on_open_r029_managed(self) -> None:
-        if not self._connected:
+        if not self._connected or self._bootstrap_task is not None:
             return
         if self._managed_layers:
             QMessageBox.information(
@@ -1976,39 +1984,53 @@ class OpenVietGisConnectorDialog(QDialog):
                 return
         try:
             config = self._build_config()
+            binding_id = self._preferred_binding_id
+            layer_ids = tuple(target.layer_id for target in targets)
+            self._bootstrap_generation += 1
+            generation = self._bootstrap_generation
+            self.r029_open_button.setEnabled(False)
+            self.ws_status.setText("Đang tải bản đồ trong nền… Bạn vẫn có thể dùng QGIS.")
+
+            def fetch(task):
+                return load_managed_layers(config, layer_ids, binding_id,
+                                           task.isCanceled, task.setProgress)
+
+            def finished(error, result=None):
+                if generation != self._bootstrap_generation:
+                    return
+                self._bootstrap_task = None
+                self.r029_open_button.setEnabled(self._connected)
+                if error is not None:
+                    self.ws_status.setText(f"Không thể tải bản đồ: {error}")
+                    QMessageBox.warning(self, "Kết nối bản đồ", str(error))
+                elif result is not None:
+                    self._install_managed_layers(config, *result)
+                else:
+                    self.ws_status.setText("Đã hủy tải bản đồ.")
+
+            task = QgsTask.fromFunction("OpenVietGIS — tải lớp", fetch, on_finished=finished)
+            self._bootstrap_task = task
+            QgsApplication.taskManager().addTask(task)
+        except (OpenVietGisError, OSError, ValueError) as exc:
+            self._bootstrap_task = None
+            self.r029_open_button.setEnabled(self._connected)
+            self.ws_status.setText(str(exc))
+
+    def _cancel_managed_bootstrap(self) -> None:
+        self._bootstrap_generation += 1
+        if self._bootstrap_task is not None:
+            self._bootstrap_task.cancel()
+            self._bootstrap_task = None
+
+    def _install_managed_layers(self, config, sess, downloaded) -> None:
+        try:
             self._stop_managed_worker()
-            sess = create_managed_session(
-                config, device_label="QGIS Desktop", client_version="1.0.0",
-                binding_id=self._preferred_binding_id,
-            )
             self._managed_session = sess
             self._managed_config = config
             self._managed_cursor = sess.current_cursor
             self._managed_layers.clear()
-
             opened_names: list[str] = []
-            for target in targets:
-                offset = 0
-                all_feats: list[dict[str, Any]] = []
-                first_page = None
-                while True:
-                    page = bootstrap_managed_layer(
-                        config,
-                        layer_id=target.layer_id,
-                        session_id=sess.id,
-                        limit=1000,
-                        offset=offset,
-                    )
-                    if first_page is None:
-                        first_page = page
-                    elif (page.content_revision, page.schema_revision, page.permission_epoch) != (
-                        first_page.content_revision, first_page.schema_revision, first_page.permission_epoch
-                    ):
-                        raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
-                    all_feats.extend(page.features)
-                    if not page.has_more or page.next_offset is None:
-                        break
-                    offset = page.next_offset
+            for first_page, all_feats in downloaded:
                 if first_page is None or not first_page.crs_code:
                     continue
                 geom_type = first_page.geometry_family or "Point"
@@ -2035,6 +2057,7 @@ class OpenVietGisConnectorDialog(QDialog):
                     qfeatures.append(qf)
                 if qfeatures and not prov.addFeatures(qfeatures)[0]:
                     raise ApiError("Không thể nạp đầy đủ đối tượng vào QGIS.")
+                prov.createSpatialIndex()
                 vlayer.updateExtents()
                 if not sess.can_edit:
                     vlayer.setReadOnly(True)
@@ -2052,7 +2075,9 @@ class OpenVietGisConnectorDialog(QDialog):
                     "cursor": first_page.cursor,
                     "permission_epoch": first_page.permission_epoch,
                 }
-                self._restore_managed_draft(vlayer, self._managed_layers[first_page.layer_id], first_page.layer_id)
+                info = self._managed_layers[first_page.layer_id]
+                self._track_managed_layer(vlayer, info)
+                self._restore_managed_draft(vlayer, info, first_page.layer_id)
                 opened_names.append(first_page.name)
 
             self.r029_save_button.setEnabled(sess.can_edit and bool(self._managed_layers))
@@ -2086,6 +2111,7 @@ class OpenVietGisConnectorDialog(QDialog):
             self.ws_status.setText(f"Không thể mở bản đồ: {reason}")
 
     def _on_managed_session_revoked(self) -> None:
+        self._cancel_managed_delta()
         self._checkpoint_managed_drafts()
         self._managed_poll.stop()
         self.managed_auto_save.setChecked(False)
@@ -2115,30 +2141,57 @@ class OpenVietGisConnectorDialog(QDialog):
                 "Phiên đã hết hạn hoặc bị thu hồi. Hãy kết nối lại với dự án."
             )
 
-    def _on_managed_fetch_delta(self) -> None:
-        if self._managed_session is None or not self._managed_layers:
-            return
-        # Never acknowledge a server cursor while QGIS has uncommitted changes.
-        # The same delta must remain available after the user saves their work.
+    def _cancel_managed_delta(self) -> None:
+        self._delta_generation += 1
+        if self._delta_task is not None:
+            self._delta_task.cancel()
+            self._delta_task = None
+
+    def _has_uncommitted_managed_changes(self) -> bool:
         for info in self._managed_layers.values():
             local_layer = QgsProject.instance().mapLayer(info["map_layer_id"])
             if isinstance(local_layer, QgsVectorLayer) and (
                 local_layer.isModified() or self._managed_is_dirty(local_layer, info)
             ):
-                self.ws_status.setText(
-                    "Có thay đổi mới từ Web. Lưu bản chỉnh sửa trong công cụ "
-                    "trước khi tải cập nhật để tránh xung đột."
-                )
+                return True
+        return False
+
+    def _on_managed_fetch_delta(self) -> None:
+        if self._managed_session is None or not self._managed_layers or self._delta_task is not None:
+            return
+        if self._has_uncommitted_managed_changes():
+            self.ws_status.setText("Có chỉnh sửa chưa lưu. Nhận cập nhật sau khi lưu để tránh xung đột.")
+            return
+        config = self._managed_config
+        if config is None:
+            return
+        session_id, cursor = self._managed_session.id, self._managed_cursor
+        self._delta_generation += 1
+        generation = self._delta_generation
+
+        def fetch(task):
+            if task.isCanceled():
+                return None
+            return fetch_managed_delta(config, session_id=session_id, cursor=cursor)
+
+        def finished(error, result=None):
+            if generation != self._delta_generation:
                 return
+            self._delta_task = None
+            if error is not None:
+                if getattr(error, "status_code", None) in (401, 403):
+                    self._on_managed_session_revoked()
+                else:
+                    self.ws_status.setText(f"Tạm dừng nhận cập nhật: {error}")
+            elif result is not None and not self._has_uncommitted_managed_changes():
+                self._apply_managed_delta(result)
+
+        task = QgsTask.fromFunction("OpenVietGIS — nhận thay đổi", fetch, on_finished=finished)
+        self._delta_task = task
+        QgsApplication.taskManager().addTask(task)
+
+    def _apply_managed_delta(self, delta) -> None:
         try:
-            config = self._managed_config
-            if config is None:
-                raise ApiError("Phiên kết nối không hợp lệ.")
-            delta = fetch_managed_delta(
-                config,
-                session_id=self._managed_session.id,
-                cursor=self._managed_cursor,
-            )
             if delta.reset_required:
                 self._on_managed_session_revoked()
                 self.ws_status.setText(
@@ -2201,6 +2254,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 layer.triggerRepaint()
                 info["content_revision"] = str(change["content_revision"])
                 info["baseline"] = self._managed_snapshot(layer, field_names)
+                info["checked_generation"] = None
                 info["cursor"] = int(change["cursor"])
                 if was_edit:
                     layer.startEditing()
@@ -2255,11 +2309,33 @@ class OpenVietGisConnectorDialog(QDialog):
         json.dumps(result, allow_nan=False)
         return result
 
+    @staticmethod
+    def _track_managed_layer(layer: QgsVectorLayer, info: dict) -> None:
+        info["edit_generation"] = 0
+        info["checked_generation"] = 0
+        info["checkpoint_generation"] = 0
+        info["dirty"] = False
+
+        def changed(*_args):
+            info["edit_generation"] += 1
+
+        # Includes edits saved via QGIS's native toolbar, undo and provider changes.
+        for signal in (layer.featureAdded, layer.featureDeleted, layer.attributeValueChanged,
+                       layer.geometryChanged, layer.editingStopped, layer.dataChanged,
+                       layer.updatedFields):
+            signal.connect(changed)
+
     def _managed_is_dirty(self, layer: QgsVectorLayer, info: dict) -> bool:
+        if info.get("pending"):
+            return True
+        generation = info.get("edit_generation", -1)
+        if info.get("checked_generation") == generation:
+            return bool(info.get("dirty"))
         try:
-            return bool(info.get("pending")) or self._managed_snapshot(
-                layer, info["field_names"]
-            ) != info["baseline"]
+            dirty = self._managed_snapshot(layer, info["field_names"]) != info["baseline"]
+            info["checked_generation"] = generation
+            info["dirty"] = dirty
+            return dirty
         except (OpenVietGisError, TypeError, ValueError):
             return True
 
@@ -2290,9 +2366,14 @@ class OpenVietGisConnectorDialog(QDialog):
             layer = QgsProject.instance().mapLayer(info["map_layer_id"])
             if not isinstance(layer, QgsVectorLayer) or info.get("recovery_blocked"):
                 continue
+            if info.get("checkpoint_generation") == info.get("edit_generation") and not info.get("pending"):
+                continue
             try:
                 current = self._managed_snapshot(layer, info["field_names"], assign_ids=True)
                 self._write_managed_draft(lid, info, current)
+                info["checkpoint_generation"] = info.get("edit_generation")
+                info["checked_generation"] = info.get("edit_generation")
+                info["dirty"] = current != info["baseline"]
             except (OpenVietGisError, OSError, ValueError, TypeError) as exc:
                 self.managed_auto_save.setChecked(False)
                 self.ws_status.setText(f"Không thể lưu bản nháp: {exc}")
@@ -2374,6 +2455,7 @@ class OpenVietGisConnectorDialog(QDialog):
             return
         if not self._managed_session.can_edit or self._managed_config is None:
             return
+        self._cancel_managed_delta()
         allow_deletes = self.allow_deletes_checkbox.isChecked() and not automatic
         total_ops = 0
         try:
@@ -2428,8 +2510,10 @@ class OpenVietGisConnectorDialog(QDialog):
                 except ApiError as exc:
                     if exc.status_code in (400, 401, 403, 409, 422):
                         info.pop("pending", None)
+                        self._write_managed_draft(lid, info, current)
                     raise
                 info["baseline"] = current
+                info["checked_generation"] = None
                 info["content_revision"] = receipt.resulting_content_revision
                 info.pop("pending", None)
                 total_ops += receipt.operation_count
@@ -2514,6 +2598,8 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def closeEvent(self, event: Any) -> None:
         """Clear sensitive bearer token and stop realtime & auto-sync timers when closing."""
+        self._cancel_managed_bootstrap()
+        self._cancel_managed_delta()
         self._stop_browser_login()
         self._checkpoint_managed_drafts()
         self._draft_timer.stop()

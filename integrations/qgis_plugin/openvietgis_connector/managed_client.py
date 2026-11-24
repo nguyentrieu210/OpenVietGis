@@ -6,6 +6,7 @@ Zero PyQt/QGIS imports so it can be unit tested in any standard Python environme
 from __future__ import annotations
 
 import json
+import math
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -318,3 +319,59 @@ def diff_managed_snapshots(
         elif current[oid] != baseline[oid]:
             ops.append({"op_type": "update", "feature_id": oid, **current[oid]})
     return ops
+
+
+def native_geometry_wkt(geometry: dict[str, Any]) -> str:
+    """Convert supported native XY coordinates without allocating a temporary layer."""
+    def position(value):
+        if not isinstance(value, (list, tuple)) or len(value) != 2:
+            raise ApiError("Hình học phải có đúng hai tọa độ XY.")
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in value):
+            raise ApiError("Tọa độ không hợp lệ.")
+        return " ".join(str(v) for v in value)
+
+    kind = geometry.get("type")
+    coords = geometry.get("coordinates")
+    if kind == "Point":
+        return "POINT (" + position(coords) + ")"
+    if kind == "LineString" and isinstance(coords, list) and len(coords) >= 2:
+        return "LINESTRING (" + ", ".join(map(position, coords)) + ")"
+    if kind == "Polygon" and isinstance(coords, list) and coords:
+        if any(not isinstance(r, list) or len(r) < 4 or r[0] != r[-1] for r in coords):
+            raise ApiError("Vòng polygon không hợp lệ.")
+        return "POLYGON (" + ", ".join("(" + ", ".join(map(position, r)) + ")" for r in coords) + ")"
+    raise ApiError("Kiểu hình học chưa được hỗ trợ trong chế độ đồng bộ.")
+
+
+def load_managed_layers(config, layer_ids, binding_id, cancelled=lambda: False, progress=lambda n: None):
+    """Network-only initial load, safe to run outside the QGIS GUI thread."""
+    if cancelled():
+        return None
+    session = create_managed_session(config, binding_id=binding_id)
+    result = []
+    for index, layer_id in enumerate(layer_ids):
+        offset = 0
+        first = None
+        features = []
+        while True:
+            if cancelled():
+                return None
+            page = bootstrap_managed_layer(config, layer_id=layer_id,
+                                           session_id=session.id, limit=5000, offset=offset)
+            if first is None:
+                first = page
+            elif (page.content_revision, page.schema_revision, page.permission_epoch) != (
+                first.content_revision, first.schema_revision, first.permission_epoch
+            ):
+                raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại.")
+            if page.permission_epoch != session.permission_epoch:
+                raise ApiError("Quyền thay đổi trong lúc tải; hãy mở lại.")
+            features.extend(page.features)
+            if not page.has_more:
+                break
+            if page.next_offset is None or page.next_offset <= offset:
+                raise ApiError("Phân trang máy chủ không hợp lệ.")
+            offset = page.next_offset
+        result.append((first, features))
+        progress(100 * (index + 1) / len(layer_ids))
+    return session, result
