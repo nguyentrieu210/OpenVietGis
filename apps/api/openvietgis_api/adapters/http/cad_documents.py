@@ -17,6 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from openvietgis_api.adapters.cad.dxf_codec import write_dxf_2d
+from openvietgis_api.adapters.cad.native_delta import gis_to_cad_preview
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
@@ -523,6 +524,7 @@ class GeorefDraftRequest(BaseModel):
     expected_schema_revision: str = Field(pattern=r"^[a-f0-9]{64}$")
     expected_preview_fingerprint: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     acknowledge_loss: bool = False
+    profile: Literal["derived-local-dxf-v1", "native-xy-dxf-v1"] = "derived-local-dxf-v1"
 
 
 @router.post(BASE + "/{document_id}/versions/{version}/export-georef-draft")
@@ -617,7 +619,7 @@ def export_georef_draft(
         tolerance_m=control.tolerance_m,
         max_scale_deviation=control.max_scale_deviation,
     )
-    _store().get_bytes(row["storage_key"], expected_sha256=row["sha256"])
+    original = _store().get_bytes(row["storage_key"], expected_sha256=row["sha256"])
     # Bound database materialization before serializing any geometry to JSON.
     counts = (
         session.execute(
@@ -656,22 +658,44 @@ def export_georef_draft(
     ):
         raise HTTPException(422, "Source contains invalid, missing or excessive geometry")
     features = [{"feature_id": r["feature_id"], "geometry": dict(r["geom"])} for r in records]
-    local = restore_features(
-        features, placement, document_id=document_id, version=version, source_crs_code=3857
-    )
-    payload = write_dxf_2d(local, layer_name=str(row["layer_name"]), units=placement.units)
+    changed_handles: tuple[str, ...] = ()
+    if body.profile == "native-xy-dxf-v1":
+        payload, changed_handles = gis_to_cad_preview(
+            original,
+            base_sha256=row["sha256"],
+            placement=placement,
+            mapping=row["entity_summary"]["entity_mapping"],
+            features=features,
+        )
+        loss = {
+            "derived_document": True,
+            "original_document_unchanged": True,
+            "attributes_omitted": True,
+            "native_handles_not_preserved": False,
+            "qualified_entity_properties_preserved": True,
+            "other_native_metadata_not_certified": True,
+            "geometry_only": True,
+            "all_current_source_features_included": True,
+            "survey_grade": False,
+            "requires_acknowledgement": True,
+        }
+    else:
+        local = restore_features(
+            features, placement, document_id=document_id, version=version, source_crs_code=3857
+        )
+        payload = write_dxf_2d(local, layer_name=str(row["layer_name"]), units=placement.units)
+        loss = {
+            "derived_document": True,
+            "original_document_unchanged": True,
+            "attributes_omitted": True,
+            "native_handles_not_preserved": True,
+            "native_styles_layers_curves_blocks_text_and_unlinked_entities_not_preserved": True,
+            "all_current_source_features_included": True,
+            "survey_grade": False,
+            "requires_acknowledgement": True,
+        }
     if len(payload) > LIMIT:
         raise HTTPException(422, "Derived DXF exceeds 25 MiB")
-    loss = {
-        "derived_document": True,
-        "original_document_unchanged": True,
-        "attributes_omitted": True,
-        "native_handles_not_preserved": True,
-        "native_styles_layers_curves_blocks_text_and_unlinked_entities_not_preserved": True,
-        "all_current_source_features_included": True,
-        "survey_grade": False,
-        "requires_acknowledgement": True,
-    }
     preview = {
         "document_id": str(document_id),
         "version": version,
@@ -686,11 +710,13 @@ def export_georef_draft(
         "feature_count": len(features),
         "loss_report": loss,
         "published": False,
+        "profile": body.profile,
+        "changed_handles": list(changed_handles),
     }
     fingerprint = hashlib.sha256(
         json.dumps(
             {
-                "profile": "derived-local-dxf-v1",
+                "profile": body.profile,
                 "preview": preview,
                 "placement": placement.metadata(),
                 "features": features,

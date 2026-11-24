@@ -40,7 +40,7 @@
 - [ ] T027 [US3] Test true two-way edits, duplicate request, lost response and failure between stores
 
 ## Phase 6 — US4 realtime/conflict
-- [ ] T028 [P] [US4] Prove native CAD entity-delta support and handle stability; gate unsupported operations
+- [x] T028 [P] [US4] Prove native CAD entity-delta support and handle stability; gate unsupported operations
 - [ ] T029 [US4] Reuse R029 cursor/outbox and origin dedup; filter deltas on current ACL
 - [ ] T030 [US4] Apply incremental qualified changes or mark document stale; preserve dirty draft
 - [ ] T031 [US4] Reuse conflict records and authorized resolution; advisory leases optional

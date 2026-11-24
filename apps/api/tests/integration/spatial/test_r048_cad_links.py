@@ -173,6 +173,31 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
         vertices = [tuple(map(float, p)) for p in poly.get_points("xy")]
         assert abs(max(p[0] for p in vertices) - 11000) < 0.001
         assert abs(max(p[1] for p in vertices) - 5000) < 0.001
+        native_request = draft_request | {"profile": "native-xy-dxf-v1"}
+        native_preview = check(owner.post(draft_path, json=native_request))
+        assert native_preview["changed_handles"] == [handle]
+        assert native_preview["loss_report"]["native_handles_not_preserved"] is False
+        native_confirm = native_request | {
+            "expected_preview_fingerprint": native_preview["preview_fingerprint"],
+            "acknowledge_loss": True,
+        }
+        assert (
+            owner.post(
+                draft_path, json=native_confirm | {"profile": "derived-local-dxf-v1"}
+            ).status_code
+            == 409
+        )
+        native_export = owner.post(draft_path, json=native_confirm)
+        assert native_export.status_code == 200, native_export.text
+        native_doc = ezdxf.read(io.StringIO(native_export.content.decode()))
+        assert native_doc.entitydb[handle].closed
+        points = list(native_doc.entitydb[handle].get_points("xy"))
+        assert abs(max(p[0] for p in points) - 11000) < 0.001
+        assert abs(max(p[1] for p in points) - 5000) < 0.001
+        assert (
+            native_export.headers["X-Content-SHA256"]
+            == hashlib.sha256(native_export.content).hexdigest()
+        )
         assert owner.get(path + "/download").headers["X-Content-SHA256"] == document["sha256"]
         with _client(world.wrong_user_id) as other:
             assert other.post(draft_path, json=confirm).status_code in (403, 404)
@@ -221,3 +246,128 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
         assert len(after) == 1 and after[0]["source_id"] == sources[1]["source_id"]
     with _client(world.wrong_user_id) as outsider:
         assert outsider.get(path + "/links", params={"handle": handle}).status_code in (403, 404)
+
+
+def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database):
+    from uuid import UUID
+
+    from openvietgis_api.adapters.cad.native_delta import cad_to_gis_preview
+    from openvietgis_api.domains.cad.domain import CadUnit
+    from openvietgis_api.domains.cad.georeference import fit_placement
+
+    world = seed_access_world()
+    root = f"/api/v1/organizations/{world.organization_id}/projects/{world.project_id}"
+    base = root + "/cad/documents"
+    controls = [
+        [[0, 0], [11800000, 1200000]],
+        [[10000, 0], [11800000, 1200010]],
+        [[0, 5000], [11799995, 1200000]],
+    ]
+    profile = {
+        "crs_code": 3857,
+        "units": "millimeter",
+        "tolerance_m": 0.001,
+        "max_scale_deviation": 0.001,
+        "controls": controls,
+    }
+    original = _drawing()
+
+    with _client(world.owner_user_id) as owner:
+
+        def check(r, expected=200):
+            assert r.status_code == expected, r.text
+            return r.json()
+
+        saved = check(owner.post(base, files={"file": ("native.dxf", original)}), 201)
+        path = base + "/" + saved["id"] + "/versions/1"
+        inspected = check(owner.post(path + "/inspect-georef", json=profile))
+        source = check(
+            owner.post(
+                path + "/import-georef",
+                json=profile
+                | {
+                    "layer_name": "Native proposal",
+                    "expected_sha256": saved["sha256"],
+                    "expected_inspection_fingerprint": inspected["inspection_fingerprint"],
+                    "acknowledge_loss": True,
+                },
+            ),
+            201,
+        )
+        layer = check(owner.get(root + "/layers/" + source["layer_id"]))["source"]
+        mapping = inspected["entity_summary"]["entity_mapping"]
+        native = ezdxf.read(io.StringIO(original.decode()))
+        handle = mapping[0]["handle"]
+        native.entitydb[handle].set_points(
+            [(0, 0), (12000, 0), (12000, 5000), (0, 5000)], format="xy"
+        )
+        buffer = io.StringIO()
+        native.write(buffer)
+        candidate = buffer.getvalue().encode()
+        version = check(
+            owner.post(
+                base + "/" + saved["id"] + "/versions",
+                files={"file": ("native.dxf", candidate)},
+                data={"expected_version": 1},
+            ),
+            201,
+        )
+        assert version["version"] == 2
+        placement = fit_placement(
+            document_id=UUID(saved["id"]),
+            version=1,
+            crs_code=3857,
+            units=CadUnit.MILLIMETER,
+            controls=tuple((tuple(a), tuple(b)) for a, b in controls),
+            tolerance_m=0.001,
+            max_scale_deviation=0.001,
+        )
+        # Orchestrate the internal pure planner with trusted snapshot values.
+        # This deliberately is NOT a public preview route.
+        ops = cad_to_gis_preview(
+            original,
+            candidate,
+            base_sha256=saved["sha256"],
+            candidate_sha256=version["sha256"],
+            placement=placement,
+            mapping=mapping,
+            imported_content_revision=layer["content_revision"],
+            current_content_revision=layer["content_revision"],
+            imported_schema_revision=layer["schema_revision"],
+            current_schema_revision=layer["schema_revision"],
+        )
+        assert len(ops) == 1 and ops[0].feature_id == mapping[0]["feature_id"]
+        request = {
+            "operation_id": str(uuid4()),
+            "summary": "Reviewed CAD native XY proposal",
+            "base_content_revision": layer["content_revision"],
+            "base_schema_revision": layer["schema_revision"],
+            "operations": [
+                {"op_type": op.op_type.value, "feature_id": op.feature_id, "geometry": op.geometry}
+                for op in ops
+            ],
+        }
+        changes = root + "/sources/" + source["source_id"] + "/changesets"
+        with _client(world.wrong_user_id) as outsider:
+            assert outsider.post(changes, json=request).status_code in (403, 404)
+        accepted = check(owner.post(changes, json=request), 201)
+        repeated = owner.post(changes, json=request)
+        assert repeated.status_code in (200, 201), repeated.text
+        assert repeated.json()["id"] == accepted["id"]
+        assert owner.post(changes, json=request | {"operation_id": str(uuid4())}).status_code == 409
+        # R006 geometry and revision authority stay on PostGIS, not in CAD.
+        from sqlalchemy import text
+
+        from tests.fixtures.db_admin import get_admin_engine
+
+        with get_admin_engine().begin() as conn:
+            actual = conn.execute(
+                text(
+                    "SELECT ST_Area(geometry),ST_YMax(geometry),attributes "
+                    "FROM spatial.reference_features WHERE source_id=:src"
+                ),
+                {"src": source["source_id"]},
+            ).one()
+            assert abs(actual[0] - 60) < 1e-6 and abs(actual[1] - 1200012) < 1e-6
+            assert actual[2]["cad_entity"] == "LWPOLYLINE_CLOSED"
+        assert owner.get(path + "/download").headers["X-Content-SHA256"] == saved["sha256"]
