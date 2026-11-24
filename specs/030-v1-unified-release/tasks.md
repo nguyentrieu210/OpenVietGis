@@ -21,3 +21,9 @@ All tracks below are required; partial checks are not release acceptance.
 ## Evidence — 2026-11-24
 
 The connector hardening candidate based on main 8d6a914 passed 65 focused Python tests (including six new regression cases) and targeted Ruff checks. These include exact-payload retry identity, changed-payload denial, no insecure Base64 fallback and static cursor checks. Native QGIS/Windows and complete release evidence are still missing. No live deployment or stable tag is implied.
+
+### GIS/CAD/3D workspace usability — candidate evidence (2026-11-24)
+- An authorized project can enter a 3D workspace before choosing height, terrain, models or tiles. The empty state provides configuration entry points; source validation remains mandatory before rendering actual data.
+- CAD/3D disabled states explain loading, access restrictions, missing permission or an active business plugin, with an explicit return to GIS Core. No authorization grants are widened.
+- Project Studio remounts on a confirmed scope/permission change so stale alternate-mode state is discarded.
+- Isolated candidate checks: web-next TypeScript and production build passed; spatial-workspace unit suite 36/36 passed; Playwright spatial-mode smoke with synthetic API fixtures passed empty 3D, configured 3D, CAD upload/revisions, GIS return, permission revocation and access restoration. These are not production or real PostGIS/OIDC acceptance.

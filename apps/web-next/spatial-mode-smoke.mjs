@@ -33,6 +33,13 @@ try{
  const modes=page.getByRole("group",{name:"Chế độ không gian"});
  await modes.waitFor({timeout:30000});
  await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ // A project with no configured 3D source must still open the workspace.
+ await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
+ await page.getByRole("button",{name:"Chiều cao polygon",exact:true}).click();
+ await page.getByLabel("Chiều cao 3D (m)").waitFor();
+ console.log("PASS empty 3D workspace and configuration entry");
  await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
  await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
@@ -53,6 +60,13 @@ try{
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
+ await page.getByText("Tài khoản bị giới hạn phạm vi GIS hoặc chưa xác minh được quyền.",{exact:true}).waitFor();
+ assert.equal(await modes.getByRole("button",{name:/^CAD/}).getAttribute("aria-disabled"),"true");
+ restricted=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await modes.getByRole("button",{name:"CAD",exact:true}).waitFor();
+ await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ console.log("PASS permission revocation, explicit restriction and restored access");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");
 }finally{await browser.close()}
