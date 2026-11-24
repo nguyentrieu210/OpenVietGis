@@ -85,6 +85,15 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
             },
         )
         assert seed.status_code == 201, seed.text
+        alias = owner.post(
+            project + "/layers",
+            json={
+                "source_id": created.json()["source_id"],
+                "name": "Alias layer",
+            },
+        )
+        assert alias.status_code == 201, alias.text
+        alias_id = alias.json()["resource_id"]
         candidates = owner.get(bindings + "/candidates")
         assert candidates.status_code == 200, candidates.text
         candidate = next(row for row in candidates.json()["items"] if row["layer_id"] == layer)
@@ -123,6 +132,17 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         _grant(owner, world, "service_principal", generic_id, "editor")
         _, generic_token = _credential(owner, world, generic_id, ["project.read", "project.edit"])
 
+    from starlette.requests import Request
+
+    from openvietgis_api.adapters.http.managed_sync import _session_still_valid
+
+    recheck = Request(
+        {
+            "type": "http",
+            "headers": [(b"authorization", ("Bearer " + issued["bearer_token"]).encode())],
+            "path_params": {"organization_id": str(world.organization_id)},
+        }
+    )
     with _service_client(issued["bearer_token"]) as device:
         assert device.get(root + "/adapters/qgis").status_code == 200
         response = device.post(sessions, json={"binding_id": bid})
@@ -130,6 +150,9 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert response.json()["binding_id"] == bid
         assert response.json()["capabilities"]["can_edit"] is True
         sid = response.json()["id"]
+        from uuid import UUID
+
+        assert _session_still_valid(recheck, world.organization_id, world.project_id, UUID(sid))
         managed = root + "/managed"
         page_response = device.get(
             managed + "/bootstrap",
@@ -178,6 +201,15 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
             },
         )
         assert delta.status_code == 200, delta.text
+        assert {c["layer_id"] for c in delta.json()["changes"]} == {layer, alias_id}
+        # Delivered pages are not acknowledgements. The next request reports applied cursor.
+        assert device.get(sessions + "/" + second_id).json()["last_ack_cursor"] == page["cursor"]
+        next_cursor = delta.json()["next_cursor"]
+        next_page = device.get(
+            managed + "/delta", params={"session_id": second_id, "cursor": next_cursor}
+        )
+        assert next_page.status_code == 200
+        assert device.get(sessions + "/" + second_id).json()["last_ack_cursor"] == next_cursor
         assert any(
             item["feature_id"] == "qgis-fixture-new"
             for change in delta.json()["changes"]
@@ -186,6 +218,28 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         recovered = device.get(managed + "/commits/qgis-fixture-create")
         assert recovered.status_code == 200, recovered.text
         assert recovered.json()["changeset_id"] == receipt["changeset_id"]
+        second_commit = device.post(
+            managed + "/commits",
+            json={
+                "session_id": sid,
+                "source_id": page["source_id"],
+                "base_content_revision": receipt["resulting_content_revision"],
+                "base_schema_revision": page["schema_revision"],
+                "operation_id": "qgis-fixture-second",
+                "operations": [
+                    {
+                        "op_type": "update",
+                        "feature_id": "qgis-fixture-new",
+                        "properties": {"fld_name": "newest"},
+                    }
+                ],
+            },
+        )
+        assert second_commit.status_code == 201, second_commit.text
+        stale = device.get(
+            managed + "/delta", params={"session_id": second_id, "cursor": page["cursor"]}
+        ).json()
+        assert stale["reset_required"] and stale["changes"] == []
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
         assert device.post(
             _root(foreign) + "/integration-hub/managed/sessions", json={"binding_id": bid}
@@ -199,6 +253,7 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert revoke.status_code == 200, revoke.text
     with _service_client(issued["bearer_token"]) as device:
         assert device.post(sessions, json={"binding_id": bid}).status_code == 401
+        assert not _session_still_valid(recheck, world.organization_id, world.project_id, UUID(sid))
 
 
 def test_managed_session_actor_isolation_and_epoch_authority(migrated_database: None) -> None:

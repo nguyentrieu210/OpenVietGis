@@ -2102,6 +2102,8 @@ class OpenVietGisConnectorDialog(QDialog):
         # Never acknowledge a server cursor while QGIS has uncommitted changes.
         # The same delta must remain available after the user saves their work.
         for info in self._managed_layers.values():
+            if info.get("recovery_blocked"):
+                return
             local_layer = QgsProject.instance().mapLayer(info["map_layer_id"])
             if isinstance(local_layer, QgsVectorLayer) and (
                 local_layer.isModified() or self._managed_is_dirty(local_layer, info)
@@ -2111,6 +2113,7 @@ class OpenVietGisConnectorDialog(QDialog):
                     "trước khi tải cập nhật để tránh xung đột."
                 )
                 return
+        applying = None
         try:
             config = self._managed_config
             if config is None:
@@ -2120,7 +2123,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 session_id=self._managed_session.id,
                 cursor=self._managed_cursor,
             )
-            if delta.reset_required:
+            if delta.reset_required or delta.permission_epoch != self._managed_session.permission_epoch:
                 self._on_managed_session_revoked()
                 self.ws_status.setText(
                     "🔔 Quyền hoặc cấu trúc lớp đã thay đổi. Lưu bản nháp trước khi mở lại."
@@ -2140,6 +2143,9 @@ class OpenVietGisConnectorDialog(QDialog):
                         "🔔 Có cập nhật từ Web. Lưu chỉnh sửa đang làm rồi nhận cập nhật mới."
                     )
                     continue
+                if str(change["source_id"]) != info["source_id"]:
+                    raise ApiError("Nguồn dữ liệu cập nhật không khớp lớp đang mở.")
+                applying = (info, layer)
                 was_edit = layer.isEditable()
                 if was_edit and not layer.commitChanges():
                     raise ApiError("Không thể kết thúc phiên sửa cục bộ.")
@@ -2185,6 +2191,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 info["cursor"] = int(change["cursor"])
                 if was_edit:
                     layer.startEditing()
+                applying = None
             self._managed_cursor = delta.next_cursor
             if delta.has_more:
                 self._managed_delta_debounce.start()
@@ -2193,11 +2200,26 @@ class OpenVietGisConnectorDialog(QDialog):
                     f"Đã nhận {applied_count} đối tượng cập nhật từ Web."
                 )
         except OpenVietGisError as exc:
+            if applying is not None:
+                info, layer = applying
+                info["recovery_blocked"] = True
+                layer.setReadOnly(True)
+                self._managed_poll.stop()
+                self.managed_auto_save.setChecked(False)
+                self.r029_save_button.setEnabled(False)
+                self.ws_status.setText("Cập nhật cục bộ chưa hoàn tất. Mở lại lớp trước khi lưu lên Web.")
+                return
             if getattr(exc, "status_code", None) in (401, 403):
                 self._on_managed_session_revoked()
             else:
                 self.ws_status.setText(f"Tạm dừng nhận cập nhật: {exc}")
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, KeyError) as exc:
+            if applying is not None:
+                info, layer = applying
+                info["recovery_blocked"] = True
+                layer.setReadOnly(True)
+                self.managed_auto_save.setChecked(False)
+                self.r029_save_button.setEnabled(False)
             self._managed_poll.stop()
             self.ws_status.setText(f"Dữ liệu cập nhật không hợp lệ: {exc}")
 

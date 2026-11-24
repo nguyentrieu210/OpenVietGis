@@ -41,6 +41,7 @@ from openvietgis_api.adapters.persistence import gis_access
 from openvietgis_api.adapters.persistence.authorization_repository import (
     SqlEffectivePermissionProvider,
 )
+from openvietgis_api.adapters.persistence.db import get_session_factory
 from openvietgis_api.adapters.persistence.editing_repository import SqlEditingRepository
 from openvietgis_api.adapters.persistence.rls import require_project_context
 from openvietgis_api.adapters.persistence.scope_helper import (
@@ -556,7 +557,8 @@ def bootstrap_managed_layer(
                 "JOIN spatial.data_sources s "
                 "  ON s.id=l.source_id AND s.organization_id=l.organization_id "
                 "  AND s.project_id=l.project_id "
-                "WHERE l.organization_id=:o AND l.project_id=:p AND l.id=:lid"
+                "WHERE l.organization_id=:o AND l.project_id=:p AND l.id=:lid "
+                "AND l.lifecycle='active' AND s.lifecycle='active'"
             ),
             {"o": organization_id, "p": project_id, "lid": layer_id},
         )
@@ -606,6 +608,24 @@ def bootstrap_managed_layer(
         .mappings()
         .all()
     )
+    pin = (
+        session.execute(
+            text(
+                "SELECT content_revision, schema_revision FROM spatial.data_sources "
+                "WHERE organization_id=:o AND project_id=:p AND id=:sid AND lifecycle='active'"
+            ),
+            {"o": organization_id, "p": project_id, "sid": layer["source_id"]},
+        )
+        .mappings()
+        .first()
+    )
+    if (
+        pin is None
+        or pin["content_revision"] != layer["content_revision"]
+        or pin["schema_revision"] != layer["schema_revision"]
+        or _ensure_counter(session, organization_id, project_id)[:2] != (last_cursor, perm_epoch)
+    ):
+        raise HTTPException(409, "Snapshot changed during read; reopen layer.")
     has_more = len(rows) > limit
     page = rows[:limit]
     features = [
@@ -674,15 +694,42 @@ def fetch_managed_delta(
             "changes": [],
         }
 
+    # Quiet poll: skip event and feature queries entirely. Never advance an
+    # acknowledgement based on the server response rather than the caller cursor.
+    if cursor == last_cursor:
+        if cursor > int(sess_row["last_ack_cursor"]):
+            session.execute(
+                text(
+                    "UPDATE integration_hub.managed_sessions "
+                    "SET last_ack_cursor=GREATEST(last_ack_cursor,:cur), "
+                    "last_seen_at=now() WHERE organization_id=:o AND project_id=:p AND id=:sid"
+                ),
+                {"o": organization_id, "p": project_id, "sid": session_id, "cur": cursor},
+            )
+            session.commit()
+        return {
+            "reset_required": False,
+            "next_cursor": cursor,
+            "permission_epoch": perm_epoch,
+            "has_more": False,
+            "changes": [],
+        }
+
     events = (
         session.execute(
             text(
                 "SELECT cursor, kind, source_id, changeset_id, content_revision, committed_at "
                 "FROM integration_hub.project_events "
-                "WHERE organization_id=:o AND project_id=:p AND cursor > :cur "
+                "WHERE organization_id=:o AND project_id=:p AND cursor > :cur AND cursor <= :high "
                 "ORDER BY cursor ASC LIMIT :lim"
             ),
-            {"o": organization_id, "p": project_id, "cur": cursor, "lim": limit + 1},
+            {
+                "o": organization_id,
+                "p": project_id,
+                "cur": cursor,
+                "high": last_cursor,
+                "lim": limit + 1,
+            },
         )
         .mappings()
         .all()
@@ -690,6 +737,16 @@ def fetch_managed_delta(
     has_more = len(events) > limit
     page = events[:limit]
     if not page:
+        if cursor > int(sess_row["last_ack_cursor"]):
+            session.execute(
+                text(
+                    "UPDATE integration_hub.managed_sessions "
+                    "SET last_ack_cursor=GREATEST(last_ack_cursor,:cur), "
+                    "last_seen_at=now() WHERE organization_id=:o AND project_id=:p AND id=:sid"
+                ),
+                {"o": organization_id, "p": project_id, "sid": session_id, "cur": cursor},
+            )
+            session.commit()
         return {
             "reset_required": False,
             "next_cursor": cursor,
@@ -725,23 +782,35 @@ def fetch_managed_delta(
                 "has_more": False,
                 "changes": [],
             }
-        layer_row = (
+        layer_rows = (
             session.execute(
                 text(
                     "SELECT l.id AS layer_id, s.stored_crs AS stored_crs_code, s.content_revision "
-                    "FROM spatial.layers l "
-                    "JOIN spatial.data_sources s ON s.id=l.source_id "
+                    "FROM spatial.layers l JOIN spatial.data_sources s "
+                    "ON s.id=l.source_id AND s.organization_id=l.organization_id "
+                    "AND s.project_id=l.project_id "
                     "WHERE l.organization_id=:o AND l.project_id=:p AND l.source_id=:sid "
-                    "LIMIT 1"
+                    "AND l.lifecycle='active' AND s.lifecycle='active' "
+                    "ORDER BY l.id LIMIT 17"
                 ),
                 {"o": organization_id, "p": project_id, "sid": src_id},
             )
             .mappings()
-            .first()
+            .all()
         )
-        if layer_row is None:
+        if not layer_rows:
             continue
-        lid = layer_row["layer_id"]
+        if len(layer_rows) > 16 or str(ev["content_revision"]) != str(
+            layer_rows[0]["content_revision"]
+        ):
+            return {
+                "reset_required": True,
+                "reason": "source_revision_or_alias_limit",
+                "next_cursor": last_cursor,
+                "permission_epoch": perm_epoch,
+                "has_more": False,
+                "changes": [],
+            }
 
         op_rows = (
             session.execute(
@@ -788,26 +857,38 @@ def fetch_managed_delta(
             for fid, r in live_by_id.items()
         ]
         removals = [fid for fid in touched_ids if fid not in live_by_id]
-        changes.append(
-            {
-                "cursor": int(ev["cursor"]),
-                "layer_id": str(lid),
-                "source_id": str(src_id),
-                "changeset_id": str(ev["changeset_id"]),
-                "content_revision": str(ev["content_revision"] or layer_row["content_revision"]),
-                "committed_at": ev["committed_at"].isoformat(),
-                "upserts": upserts,
-                "removals": removals,
-            }
-        )
+        for layer_row in layer_rows:
+            changes.append(
+                {
+                    "cursor": int(ev["cursor"]),
+                    "layer_id": str(layer_row["layer_id"]),
+                    "source_id": str(src_id),
+                    "changeset_id": str(ev["changeset_id"]),
+                    "content_revision": str(
+                        ev["content_revision"] or layer_row["content_revision"]
+                    ),
+                    "committed_at": ev["committed_at"].isoformat(),
+                    "upserts": upserts,
+                    "removals": removals,
+                }
+            )
 
+    if _ensure_counter(session, organization_id, project_id)[:2] != (last_cursor, perm_epoch):
+        return {
+            "reset_required": True,
+            "reason": "concurrent_project_change",
+            "next_cursor": last_cursor,
+            "permission_epoch": perm_epoch,
+            "has_more": False,
+            "changes": [],
+        }
     session.execute(
         text(
             "UPDATE integration_hub.managed_sessions "
             "SET last_ack_cursor = GREATEST(last_ack_cursor, :cur), last_seen_at = now() "
             "WHERE organization_id=:o AND project_id=:p AND id=:sid"
         ),
-        {"o": organization_id, "p": project_id, "sid": session_id, "cur": scanned_through},
+        {"o": organization_id, "p": project_id, "sid": session_id, "cur": cursor},
     )
     session.commit()
     return {
@@ -880,16 +961,6 @@ def commit_managed_changes(
         .first()
     )
     event_cursor = int(ev_row["cursor"]) if ev_row else 0
-    if event_cursor > 0:
-        session.execute(
-            text(
-                "UPDATE integration_hub.managed_sessions "
-                "SET last_ack_cursor = GREATEST(last_ack_cursor, :cur), last_seen_at = now() "
-                "WHERE organization_id=:o AND project_id=:p AND id=:sid"
-            ),
-            {"o": organization_id, "p": project_id, "sid": body.session_id, "cur": event_cursor},
-        )
-        session.commit()
     return {
         "status": "accepted",
         "changeset_id": str(cs.id),
@@ -952,19 +1023,13 @@ def get_managed_commit_receipt(
     }
 
 
-def _session_still_valid(dsn: str, org: UUID, proj: UUID, session_id: UUID) -> bool:
+def _session_still_valid(request: Request, org: UUID, proj: UUID, session_id: UUID) -> bool:
     try:
-        with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
-            cur.execute(
-                "SELECT state, revoked_at, expires_at FROM integration_hub.managed_sessions "
-                "WHERE organization_id=%s AND project_id=%s AND id=%s",
-                (str(org), str(proj), str(session_id)),
-            )
-            row = cur.fetchone()
-            if row is None:
-                return False
-            state, revoked_at, expires_at = row
-            return state == "active" and revoked_at is None and expires_at > datetime.now(UTC)
+        with get_session_factory()() as session:
+            auth = authenticate_request(request, session, get_settings())
+            _prep_scope(session, auth, org, proj, Permission.PROJECT_READ, mutation=False)
+            _load_active_session(session, org, proj, session_id, auth)
+            return True
     except Exception:
         return False
 
@@ -982,7 +1047,7 @@ async def stream_managed_events(
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
     _load_active_session(session, organization_id, project_id, session_id, auth)
     dsn = (
-        make_url(get_settings().database_url)
+        make_url(get_settings().runtime_db_url)
         .set(drivername="postgresql")
         .render_as_string(hide_password=False)
     )
@@ -1009,14 +1074,16 @@ async def stream_managed_events(
                         continue
                     if p.get("o") == org_s and p.get("p") == proj_s:
                         kind = str(p.get("kind") or "spatial_change")
-                        if kind == "session_revoked" and not _session_still_valid(
-                            dsn, organization_id, project_id, session_id
+                        if not await asyncio.to_thread(
+                            _session_still_valid, request, organization_id, project_id, session_id
                         ):
                             yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
                             return
                         yield f"event: {kind}\ndata: {json.dumps({'kind': kind})}\n\n"
                 if time.monotonic() - last_hb >= 15.0:
-                    if not _session_still_valid(dsn, organization_id, project_id, session_id):
+                    if not await asyncio.to_thread(
+                        _session_still_valid, request, organization_id, project_id, session_id
+                    ):
                         yield 'event: session_revoked\ndata: {"revoked":true}\n\n'
                         return
                     yield 'event: heartbeat\ndata: {"ok":true}\n\n'

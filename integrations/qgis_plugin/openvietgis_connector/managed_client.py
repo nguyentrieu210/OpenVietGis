@@ -260,14 +260,46 @@ def fetch_managed_delta(
 ) -> ManagedDeltaPage:
     qs = urllib.parse.urlencode({"session_id": session_id, "cursor": cursor, "limit": limit})
     res = _json_request(config, "GET", f"{_managed_base(config)}/delta?{qs}")
-    return ManagedDeltaPage(
-        reset_required=bool(res.get("reset_required", False)),
-        next_cursor=int(res.get("next_cursor", cursor)),
-        permission_epoch=int(res.get("permission_epoch", 1)),
-        has_more=bool(res.get("has_more", False)),
-        changes=tuple(res.get("changes") or ()),
-        reason=str(res["reason"]) if res.get("reason") else None,
-    )
+    return validate_managed_delta(res, cursor=cursor)
+
+
+def validate_managed_delta(res: dict[str, Any], *, cursor: int) -> ManagedDeltaPage:
+    """Validate the complete cursor envelope before any provider mutation."""
+    reset, more = res.get("reset_required"), res.get("has_more")
+    nxt, epoch = res.get("next_cursor"), res.get("permission_epoch")
+    changes = res.get("changes")
+    if (type(reset) is not bool or type(more) is not bool or type(nxt) is not int
+            or nxt < 0 or type(epoch) is not int or epoch < 1 or not isinstance(changes, list)):
+        raise ApiError("Phản hồi đồng bộ không hợp lệ.")
+    if reset:
+        if changes or more:
+            raise ApiError("Phản hồi yêu cầu tải lại không hợp lệ.")
+    else:
+        if nxt < cursor or (more and nxt == cursor):
+            raise ApiError("Con trỏ đồng bộ không tiến hợp lệ.")
+        previous = cursor
+        seen: set[tuple[int, str]] = set()
+        for item in changes:
+            if not isinstance(item, dict):
+                raise ApiError("Thay đổi đồng bộ không hợp lệ.")
+            seq, lid, src = item.get("cursor"), item.get("layer_id"), item.get("source_id")
+            if (type(seq) is not int or seq <= cursor or seq < previous or seq > nxt
+                    or not isinstance(lid, str) or not lid or not isinstance(src, str) or not src
+                    or (seq, lid) in seen
+                    or not isinstance(item.get("content_revision"), str)
+                    or not re.fullmatch(r"[a-f0-9]{64}", item["content_revision"])):
+                raise ApiError("Revision hoặc định danh đồng bộ không hợp lệ.")
+            seen.add((seq, lid))
+            previous = seq
+            ups, removals = item.get("upserts"), item.get("removals")
+            if not isinstance(ups, list) or not isinstance(removals, list):
+                raise ApiError("Danh sách cập nhật đồng bộ không hợp lệ.")
+            ids = [u.get("feature_id") if isinstance(u, dict) else None for u in ups] + removals
+            if any(not isinstance(x, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", x)
+                   for x in ids) or len(ids) != len(set(ids)):
+                raise ApiError("Mã đối tượng đồng bộ không hợp lệ hoặc trùng lặp.")
+    return ManagedDeltaPage(reset, nxt, epoch, more, tuple(changes), res.get("reason"))
+
 
 
 def commit_managed_changes(
