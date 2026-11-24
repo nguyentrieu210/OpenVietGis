@@ -140,6 +140,85 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
  const advanced=useAdvancedEditor({client,org,pid,data,row,layer:toolkit.activeLayer,map,ready,loading,busy,editing:!!draft||toolkit.editingTool,snap:workspace.snap,geometryLookup:key=>geometryLookupRef.current.get(key),action,refresh,notify:setNotice,select:setSelected,setLayer:toolkit.setLayerId});
  const pro=useProfessionalTools({client,org,pid,data,row,layer:toolkit.activeLayer,map,ready,loading,busy,editing:!!draft||toolkit.editingTool||!!advanced.mode,hidden,selection,setSelection,select:setSelected,setLayer:toolkit.setLayerId,action,refresh,notify:setNotice,styleFor:toolkit.styleFor,performance,togglePerformance:()=>{if(extension){setNotice("Chế độ tiles trung lập chỉ dùng trong GIS Core; tắt plugin để không mất ký hiệu nghiệp vụ.");return}fit.current="full";setPerformance(p=>!p);setSelection(new Set());setSelected("");setNotice(performance?"Đã về chế độ chỉnh sửa toàn bộ":"Đã bật vector tiles · dữ liệu lớn tải theo vùng nhìn")},ortho,toggleOrtho:()=>{setOrtho(v=>!v);setNotice(ortho?"Đã tắt ORTHO":"ORTHO · vẽ theo trục Đông / Bắc")},toggleSnap:()=>toolkit.commands.find(c=>c.alias==="SNAP")?.run("")});
  useProfessionalTiles({client,org,pid,map,ready,enabled:performance,layers:toolkit.ordered,hidden,styleFor:toolkit.styleFor,blocked:()=>!!draftRef.current||!!toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current||mouseModeRef.current==="pan",onRow:r=>{setData(d=>({...d,rows:[...d.rows.filter(x=>x.key!==r.key),r]}));setSelected(r.key);toolkit.setLayerId(r.layer.id)},notify:setNotice,fail});
+  useEffect(()=>{
+    if(!org||!pid)return;
+    let timer:number|undefined;
+    let inFlight=false;
+    const syncChangedLayers=async()=>{
+      if(inFlight||!alive.current||running.current||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current)return;
+      inFlight=true;
+      try{
+        const res=await listSpatialLayers(client,org,pid,{limit:100});
+        const activeLayers=res.items.filter(x=>x.lifecycle==="active");
+        const curLayers=tileDataRef.current.data.layers;
+        const curById=new Map(curLayers.map(l=>[l.id,l]));
+        if(activeLayers.length!==curById.size||activeLayers.some(l=>!curById.has(l.id))){
+          fit.current="full";
+          refresh();
+          return;
+        }
+        const changed=activeLayers.filter(l=>{
+          const prev=curById.get(l.id);
+          return !prev||prev.source.content_revision!==l.source.content_revision||prev.layer_revision!==l.layer_revision;
+        });
+        if(!changed.length)return;
+        const updatedByLayer=new Map<string,Row[]>();
+        await Promise.all(changed.map(async l=>{
+          const idx=activeLayers.findIndex(x=>x.id===l.id);
+          const rowsForLayer:Row[]=[];
+          if(l.capabilities.some(x=>x.name==="feature_read"&&x.available&&x.actor_authorized)&&!(performance&&tileEligible(l))){
+            let cursor:string|undefined;
+            const pageLimit=Math.min(20,Math.max(1,Math.ceil((l.source.feature_count??10000)/1000)));
+            for(let page=0;page<pageLimit&&alive.current;page++){
+              const r=await readSpatialFeatures(client,org,pid,l.id,{
+                content_revision:l.source.content_revision,
+                schema_revision:l.source.schema_revision,
+                include_geometry:true,
+                response_crs:4326,
+                limit:1000,
+                ...(cursor?{after_feature_id:cursor}:{})
+              });
+              for(const f of r.items){
+                const g=f.geometry_state==="present"&&f.geometry?.coordinate_reference.code===4326?{type:f.geometry.type,coordinates:f.geometry.coordinates} as Geometry:null;
+                rowsForLayer.push({key:featureKey(l.source_id,f.feature_id),layer:l,feature:f,geometry:g,color:layerColor(l.name,idx)});
+              }
+              cursor=r.next_after_feature_id??undefined;
+              if(!cursor)break;
+            }
+          }
+          updatedByLayer.set(l.id,rowsForLayer);
+        }));
+        if(!alive.current)return;
+        fit.current="full";
+        setData(prev=>({
+          ...prev,
+          layers:activeLayers,
+          rows:[
+            ...prev.rows.filter(r=>!updatedByLayer.has(r.layer.id)).map(r=>{
+              const ul=activeLayers.find(al=>al.id===r.layer.id);
+              return ul?{...r,layer:ul}:r;
+            }),
+            ...Array.from(updatedByLayer.values()).flat()
+          ]
+        }));
+        setNotice("⚡ Đã cập nhật realtime: "+changed.map(l=>l.name).join(", "));
+      }catch{
+        // ignore transient background error
+      }finally{
+        inFlight=false;
+      }
+    };
+    const trigger=()=>{
+      if(timer!==undefined)window.clearTimeout(timer);
+      timer=window.setTimeout(()=>{timer=undefined;void syncChangedLayers()},250);
+    };
+    const es=new EventSource("/api/v1/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(pid)+"/integration-hub/events",{withCredentials:true});
+    es.addEventListener("spatial_change",trigger);
+    return()=>{
+      es.close();
+      if(timer!==undefined)window.clearTimeout(timer);
+    };
+  },[org,pid,performance]);
  const [toolbox,setToolbox]=useState(false),[special,setSpecial]=useState<RasterMethod|"survey"|"zonal"|"contour"|"sentinel"|"modeler"|null>(null),[rasterBusy,setRasterBusy]=useState(false);
  const raster=useProjectRaster({client,org,pid,map,ready,allowed:!data.restricted&&data.permissions.includes("project.read"),canWrite:!data.restricted&&data.permissions.includes("project.edit"),storageKey:workspaceKey,notify:setNotice});
  useEffect(()=>{if(reload)void raster.refresh()},[reload]);
