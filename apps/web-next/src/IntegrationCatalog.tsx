@@ -670,7 +670,7 @@ export function IntegrationCatalog({
         <header className="integration-topbar">
           <div className="integration-topbar-brand">
             <img
-              src="/rewrite/brand/openvietgis-logo-mark.png"
+              src="/rewrite/brand/ovg-mark.png"
               alt="OpenVietGIS"
               className="integration-brand-img"
               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
