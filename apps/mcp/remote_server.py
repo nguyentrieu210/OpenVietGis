@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from bridge_http import body
 from live_bridge import BridgeError
 from mcp.server import MCPServer
+from gis_engineering_policy import GIS_INSTRUCTIONS
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
@@ -35,6 +36,7 @@ def create_remote(
     verifier = verifier or KeycloakVerifier(config)
     mcp = MCPServer(
         "OpenVietGIS Live",
+        instructions=GIS_INSTRUCTIONS,
         token_verifier=verifier,
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(config.issuer),
