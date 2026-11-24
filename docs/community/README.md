@@ -1,6 +1,6 @@
 # OpenVietGIS Community QA & Beta Program
 
-**Trạng thái ngày 2026-11-23:** mời cộng đồng kiểm thử và đóng góp; **chưa nghiệm thu sản phẩm hay phát hành production**. Repo public không đồng nghĩa được cấp giấy phép OSS; xem [CONTRIBUTING](../../CONTRIBUTING.md).
+**Trạng thái cập nhật 2026-11-24:** mời cộng đồng kiểm thử và đóng góp; **chưa nghiệm thu sản phẩm hay phát hành production**. Dự án công bố giấy phép **AGPL-3.0-or-later** tại [LICENSE](../../LICENSE). Giấy phép Core không mặc nhiên bao phủ dữ liệu/ảnh/nhãn hiệu của bên thứ ba và không chứng nhận release. Xem [CONTRIBUTING](../../CONTRIBUTING.md).
 
 ## Mục tiêu
 

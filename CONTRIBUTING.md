@@ -2,7 +2,7 @@
 
 Cảm ơn bạn đã giúp OpenVietGIS trở thành một không gian làm việc GIS/CAD/3D đáng tin cậy. Dự án hiện là **public beta candidate**, **không phải bản đã nghiệm thu production**.
 
-> **Lưu ý pháp lý (2026-11-23):** Repo công khai nhưng chưa có file `LICENSE`. Vì vậy không mặc định có quyền sao chép, sửa đổi, phân phối hoặc tái sử dụng mã nguồn theo một giấy phép open-source. Maintainer cần chốt và công bố giấy phép trước khi tiếp nhận/phân phối đóng góp theo chính sách OSS. Không tự suy diễn dự án dùng MIT hay Apache-2.0.
+> **Lưu ý giấy phép (cập nhật 2026-11-24):** Dự án công bố **AGPL-3.0-or-later** tại [LICENSE](LICENSE). Việc sử dụng, sửa đổi và phân phối tuân theo giấy phép áp dụng; người gửi đóng góp phải có quyền đối với mã/tài sản cung cấp. Dữ liệu, plugin độc lập, bản đồ nền và thành phần bên thứ ba có thể có giấy phép riêng. Có file LICENSE **không đồng nghĩa** mọi quyền tác giả đã được rà soát hoặc sản phẩm được nghiệm thu production.
 
 ## Bắt đầu
 
@@ -44,4 +44,4 @@ Các suite integration/E2E cần DB và OIDC test riêng, và một số phép t
 Định dạng kết quả: [Ma trận nghiệm thu](docs/community/ACCEPTANCE_MATRIX.md) và [Runbook](docs/community/TEST_RUNBOOK.md). Xem thêm [chính sách release](docs/community/RELEASE_POLICY.md) và [báo cáo bảo mật](SECURITY.md).
 
 ### English quick note
-OpenVietGIS is a public, not-yet-release-certified candidate. There is currently **no LICENSE** in the repository; public visibility alone does not grant open-source reuse rights. Please use synthetic local/test data, file reproducible issues, and submit scoped draft PRs with pinned-commit evidence. No production-data testing or unreviewed deployment.
+OpenVietGIS is a public, not-yet-release-certified candidate. The project declares **AGPL-3.0-or-later** in [LICENSE](LICENSE); verify copyright notices and third-party licenses before redistribution. Please use synthetic local/test data, file reproducible issues, and submit scoped draft PRs with pinned-commit evidence. No production-data testing or unreviewed deployment.

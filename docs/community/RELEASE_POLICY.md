@@ -1,6 +1,6 @@
 # Community Beta và chính sách nghiệm thu phát hành
 
-**Hiện trạng 2026-11-23:** public repository, **không có LICENSE**, chưa có chứng nhận production/release. Chỉ công bố khả năng đã có bằng chứng theo đúng scope/version/profile.
+**Hiện trạng cập nhật 2026-11-24:** public repository, đã công bố [LICENSE](../../LICENSE) theo **AGPL-3.0-or-later**, nhưng **chưa có chứng nhận production/release**. Rà soát quyền tác giả và điều khoản các thành phần vẫn là gate độc lập. Chỉ công bố khả năng đã có bằng chứng theo đúng scope/version/profile.
 
 ## Quyền quyết định
 
@@ -8,7 +8,7 @@ Cộng đồng có thể thử nghiệm, báo lỗi, xác minh độc lập, đ�
 
 ## Điều kiện trước khi gắn nhãn `community-beta`
 
-1. **Pháp lý:** Chủ sở hữu quyết định license được phép phân phối (MIT/Apache-2.0 hoặc lựa chọn khác với xác minh quyền tác giả); có file LICENSE phù hợp. Không giả định public = OSS.
+1. **Pháp lý:** Dự án đã công bố AGPL-3.0-or-later ở `LICENSE`; trước release phải xác minh quyền tác giả, nghĩa vụ dependency/plugin, dữ liệu và tài sản bên thứ ba. Không coi giấy phép Core là giấy phép dữ liệu hoặc bằng chứng tuân thủ luật chuyên ngành.
 2. **An toàn:** Không commit secret hay dữ liệu hộ gia đình; quét lịch sử Git, rà soát auth/tenant/RLS, vulnerability workflow và dữ liệu demo. Có cách báo cáo bảo mật riêng.
 3. **Tái hiện:** README + bootstrap từ máy sạch; fixture synthetic có provenance; mọi artifact cùng một SHA/profile; CI pass trên candidate cuối.
 4. **Chức năng tối thiểu:** CQ-00/01/02/03/04/05/09 và các nhóm mà beta tuyên bố hỗ trợ được kiểm thử độc lập. Module CAD, 3D, raster, AI chỉ quảng bá ở mức đã nghiệm thu.
@@ -19,7 +19,7 @@ Cộng đồng có thể thử nghiệm, báo lỗi, xác minh độc lập, đ�
 
 | Gate | Mục đích | Trạng thái lúc thiết lập chương trình |
 | --- | --- | --- |
-| G-LICENSE | Có giấy phép và quyền sở hữu rõ | BLOCKED — chưa có LICENSE |
+| G-LICENSE | Có giấy phép và quyền sở hữu rõ | PARTIAL — đã có LICENSE/AGPL-3.0-or-later; còn rà soát quyền tác giả và giấy phép thành phần trước khi kết luận gate |
 | G-SECURITY | Quét secret/history, tenant/RLS/consent | NOT_RUN trên bản beta cộng đồng |
 | G-REPRO | Máy sạch clone/setup/build/test | NOT_RUN trên bản beta cộng đồng |
 | G-MINIMUM | Kiểm thử CQ-P0 bằng 2 người và fixture | NOT_RUN |
