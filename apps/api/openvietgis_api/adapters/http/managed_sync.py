@@ -204,11 +204,19 @@ def _can_edit_project(
     org: UUID,
     proj: UUID,
 ) -> bool:
-    try:
-        _prep_scope(session, auth, org, proj, Permission.PROJECT_EDIT, mutation=False)
-        return True
-    except Exception:
-        return False
+    """Inspect the current actor's grants without disturbing its READ RLS scope.
+
+    A PROJECT_EDIT + mutation=False call is invalid for SqlSpatialRepository.
+    Worse, prepare_scope() clears the established project claim *before*
+    rejecting that combination, so the subsequent R029 INSERT loses its RLS
+    context. Permission inspection must not re-bind or clear project scope.
+    """
+    from openvietgis_api.adapters.persistence.authorization_repository import (
+        SqlEffectivePermissionProvider,
+    )
+
+    ctx = context_for(auth, organization_id=org, project_id=proj)
+    return Permission.PROJECT_EDIT in SqlEffectivePermissionProvider(session).resolve(ctx)
 
 
 def _notify_project_channel(session: Session, org: UUID, proj: UUID, kind: str) -> None:

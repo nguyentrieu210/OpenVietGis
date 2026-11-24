@@ -240,3 +240,47 @@ def test_r029_metadata_writes_use_read_scope_but_gis_commits_require_edit(monkey
     with pytest.raises(ScopeObserved):
         managed_sync.commit_managed_changes(org, proj, object(), auth, session)
     assert calls[-1] == (Permission.PROJECT_EDIT, True)
+
+def test_edit_capability_does_not_clear_authenticated_read_scope(monkeypatch) -> None:
+    """A rejected EDIT probe must never invalidate the managed session INSERT RLS pin."""
+    from uuid import uuid4
+
+    from openvietgis_api.adapters.http import managed_sync
+    from openvietgis_api.adapters.persistence import authorization_repository
+    from openvietgis_api.domains.authorization.permissions import Permission
+
+    org, proj = uuid4(), uuid4()
+    session = object()
+    actor = object()
+    observed = []
+
+    def forbid_rebinding(*args, **kwargs):
+        raise AssertionError("capability probe must not rebind or clear RLS")
+
+    class FakeProvider:
+        def __init__(self, given_session):
+            assert given_session is session
+
+        def resolve(self, context):
+            assert context.organization_id == org
+            assert context.project_id == proj
+            observed.append(True)
+            return frozenset({Permission.PROJECT_READ, Permission.PROJECT_EDIT})
+
+    monkeypatch.setattr(managed_sync, "_prep_scope", forbid_rebinding)
+    monkeypatch.setattr(authorization_repository, "SqlEffectivePermissionProvider", FakeProvider)
+    def fake_context(actor, *, organization_id, project_id):
+        return type("Scope", (), {"organization_id": organization_id, "project_id": project_id})()
+
+    monkeypatch.setattr(managed_sync, "context_for", fake_context)
+    assert managed_sync._can_edit_project(session, actor, org, proj) is True
+    assert observed == [True]
+
+    class ReadOnlyProvider(FakeProvider):
+        def resolve(self, context):
+            return frozenset({Permission.PROJECT_READ})
+
+    monkeypatch.setattr(
+        authorization_repository, "SqlEffectivePermissionProvider", ReadOnlyProvider
+    )
+    assert managed_sync._can_edit_project(session, actor, org, proj) is False
