@@ -20,6 +20,7 @@ Security boundaries:
 
 from __future__ import annotations
 
+import contextlib
 import time
 import urllib.error
 import urllib.request
@@ -96,10 +97,8 @@ class _RealtimeEventWorker(QThread):
         resp = self._active_response
         self._active_response = None
         if resp is not None:
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 resp.close()
-            except Exception:
-                pass
 
     def run(self) -> None:
         url = build_integration_events_url(self._config)
@@ -136,17 +135,15 @@ class _RealtimeEventWorker(QThread):
                     self.status_changed.emit("🔴 Realtime: Hết phiên hoặc không đủ quyền.")
                     break
                 self.status_changed.emit("🟡 Realtime: Đang kết nối lại...")
-            except Exception:
+            except (urllib.error.URLError, OSError, TimeoutError):
                 if not self._stop_requested:
                     self.status_changed.emit("🟡 Realtime: Mất kết nối, đang thử lại...")
             finally:
                 resp = self._active_response
                 self._active_response = None
                 if resp is not None:
-                    try:
+                    with contextlib.suppress(OSError, ValueError):
                         resp.close()
-                    except Exception:
-                        pass
             if not self._stop_requested:
                 for _ in range(30):
                     if self._stop_requested:
