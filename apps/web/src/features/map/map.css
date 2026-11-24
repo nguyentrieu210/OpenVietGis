@@ -1038,10 +1038,15 @@
 
 
 /* === Ultra-Clean Minimalist GIS/CAD Workstation (Zero Duplication, Pure Map!) === */
-.gis-workspace .map-sessionbar,
-.gis-workspace .map-save-panel,
-.gis-workspace .map-notice {
+.gis-workspace .map-sessionbar {
   display: none !important;
+}
+.gis-workspace .map-notice {
+  position: absolute;
+  inset: auto 10px 35px auto;
+  z-index: 50;
+  max-width: min(480px, calc(100% - 20px));
+  border-radius: 6px;
 }
 .gis-workspace .map-stage-status {
   display: none !important;

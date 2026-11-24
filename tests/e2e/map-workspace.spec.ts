@@ -263,9 +263,11 @@ test("preserves the designated camera and reconciles a genuinely committed lost 
   await saveFixtureMap(page, fixture);
   await openFixtureMap(page, fixture);
   const original = await currentMap(page, fixture);
+  const configuration = page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ });
   const shared = page.getByRole("region", { name: "Cấu hình bản đồ dùng chung" });
-  await page.getByRole("button", { name: "Phóng to (+)", exact: true }).click();
+  await page.keyboard.press("+");
   await page.getByRole("checkbox", { name: "Hiển thị Points", exact: true }).uncheck();
+  await configuration.click();
   let capturedIntent: SaveMapInput | null = null;
   const saveUrl = (url: URL) => url.pathname === fixture.api + "/map";
   await page.route(saveUrl, async route => {
@@ -310,6 +312,7 @@ test("preserves the designated camera and reconciles a genuinely committed lost 
   expect(history.items.map(item => item.configuration_revision)).toEqual([3, 2, 1]);
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "Hiển thị Points", exact: true })).toBeChecked();
+  await configuration.click();
   await expect(page.getByTestId("map-save-indicator")).toHaveAttribute(
     "data-save-state",
     "clean"
