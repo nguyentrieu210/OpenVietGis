@@ -98,3 +98,21 @@ def test_callback_does_not_report_success_when_profile_fails():
         assert "Kết nối QGIS thành công" not in page
     finally:
         flow.close()
+
+
+def test_pending_rebind_only_when_server_revision_and_exact_base_match():
+    import pytest
+
+    from integrations.qgis_plugin.openvietgis_connector.drafts import rebind_pending
+    base = {"a": {"properties": {"name": "before"}}}
+    pending = {"operation_id": "op", "snapshot": {"a": {"properties": {"name": "after"}}},
+               "request": {"operation_id": "op", "session_id": "old",
+                           "source_id": "s", "base_content_revision": "c", "base_schema_revision": "b"}}
+    pins = {"content_revision": "c", "schema_revision": "b", "source_id": "s", "session_id": "new"}
+    result = rebind_pending(pending, base, base, **pins)
+    assert result["request"] == {**pending["request"], "session_id": "new"}
+    assert pending["request"]["session_id"] == "old"
+    with pytest.raises(ValueError):
+        rebind_pending(pending, base, {}, **pins)
+    with pytest.raises(ValueError):
+        rebind_pending(pending, base, base, **{**pins, "content_revision": "changed"})

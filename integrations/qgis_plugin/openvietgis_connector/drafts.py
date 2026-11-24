@@ -58,3 +58,17 @@ def merge_snapshots(
         if value is not missing:
             merged[oid] = value
     return merged, conflicts
+
+
+def rebind_pending(pending: dict[str, Any], baseline: dict, current: dict, *,
+                   content_revision: str, schema_revision: str, source_id: str,
+                   session_id: str) -> dict[str, Any]:
+    """Keep the exact idempotent request after a fresh, authorized receipt miss."""
+    request = pending["request"]
+    if (request["base_content_revision"] != content_revision
+            or request["base_schema_revision"] != schema_revision
+            or request["source_id"] != source_id
+            or request["operation_id"] != pending["operation_id"]
+            or baseline != current):
+        raise ValueError("Giao dịch chưa xác nhận và dữ liệu đã đổi; cần đối chiếu.")
+    return {**pending, "request": {**request, "session_id": session_id}}

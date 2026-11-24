@@ -69,7 +69,7 @@ def scope(session, auth, org, project, edit=False):
     return context, repo
 
 
-def pinned(repo, ctx, spec, editable=False):
+def pinned(repo, ctx, spec, editable=False, *, tile_read=False):
     layer = repo.get_layer(context=ctx, layer_id=spec.layer_id, lock=True)
     if not layer or layer.lifecycle != Lifecycle.ACTIVE:
         raise HTTPException(404, "Layer not found")
@@ -81,8 +81,8 @@ def pinned(repo, ctx, spec, editable=False):
         spec.schema_revision,
     ):
         raise HTTPException(409, "Source revision changed; reload")
-    if source.stored_crs != 4326:
-        raise HTTPException(422, "Tools currently require native EPSG:4326 XY")
+    if source.stored_crs not in ((4326, 3857) if tile_read else (4326,)):
+        raise HTTPException(422, "Unsupported native CRS for this tool")
     if editable and source.kind == SourceKind.REFERENCE_FIXTURE:
         raise HTTPException(403, "Reference source is read-only")
     if len(spec.feature_ids) != len(set(spec.feature_ids)):
@@ -752,13 +752,13 @@ def tile(
     spec = Selection(
         layer_id=layer_id, content_revision=content_revision, schema_revision=schema_revision
     )
-    _, src = pinned(repo, ctx, spec)
+    _, src = pinned(repo, ctx, spec, tile_read=True)
     # Authenticate and pin the authorized revision BEFORE allowing any cache hit.
     restricted = scoped(session, ctx)
     headers = {"Cache-Control": "private, no-store"}
     if not restricted:
         identity = [
-            "mvt-v2", str(ctx.actor.actor_id), str(ctx.actor.actor_type),
+            "mvt-v3", str(ctx.actor.actor_id), str(ctx.actor.actor_type),
             str(auth.credential_id), str(organization_id), str(project_id),
             str(layer_id), content_revision, schema_revision, z, x, y,
         ]
@@ -769,13 +769,16 @@ def tile(
         if etag in {value.strip().removeprefix("W/") for value in supplied.split(",")}:
             return Response(status_code=304, headers=headers)
     p = params(ctx, src, spec) | {"z": z, "x": x, "y": y}
+    # Native Web Mercator needs no transformation at all. Keep the indexed
+    # predicate in the stored CRS; never transform every row before filtering.
+    display = "geometry" if src.stored_crs == 3857 else "ST_Transform(geometry,3857)"
+    native_bounds = "b" if src.stored_crs == 3857 else "ST_Transform(b,4326)"
     base = (
         "WITH bounds AS (SELECT ST_TileEnvelope(:z,:x,:y) AS b), "
-        "source AS (SELECT feature_id,ST_Transform(geometry,3857) AS "
+        f"source AS (SELECT feature_id,{display} AS "
         "g,b FROM spatial.reference_features CROSS JOIN bounds WHERE "
         "organization_id=:org AND project_id=:project AND "
-        "source_id=:src AND geometry_state='present' AND geometry && "
-        "ST_Transform(b,4326))"
+        f"source_id=:src AND geometry_state='present' AND geometry && {native_bounds})"
     )
     if src.geometry_family.value == "Point" and z < 17:
         sql = base + (

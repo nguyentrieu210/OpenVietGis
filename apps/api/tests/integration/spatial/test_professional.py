@@ -348,3 +348,19 @@ def test_pro_tools(migrated_database):
             ).status_code in (403, 404)
     w, h = paper_dimensions_px(PaperSize.A0, Orientation.LANDSCAPE, 150)
     assert w > 7000 and h > 4900
+
+
+def test_projected_native_tile_is_revision_pinned(migrated_database):
+    from tests.integration.spatial.test_features import _setup
+
+    world = seed_access_world()
+    with _client(world.owner_user_id) as client:
+        path, _, layer, pins = _setup(client, world, "reference_points_3857")
+        root = path.split("/layers/")[0]
+        url = root + "/pro/tiles/" + layer + "/0/0/0.mvt"
+        response = client.get(url, params=pins)
+        assert response.status_code == 200, response.text
+        assert b"features" in response.content
+        cached = client.get(url, params=pins, headers={"If-None-Match": response.headers["etag"]})
+        assert cached.status_code == 304
+        assert client.get(url, params={**pins, "content_revision": "0" * 64}).status_code == 409
