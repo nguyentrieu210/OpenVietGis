@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import ctypes
+import hashlib
 import json
 import os
 import sys
@@ -36,6 +37,7 @@ from uuid import uuid4
 
 from qgis.core import (
     QgsApplication,
+    QgsEditorWidgetSetup,
     QgsFeature,
     QgsField,
     QgsFieldConstraints,
@@ -43,6 +45,7 @@ from qgis.core import (
     QgsProject,
     QgsTask,
     QgsVariantUtils,
+    QgsVectorFileWriter,
     QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import (
@@ -93,7 +96,7 @@ from .client import (
     preview_layer_geopackage_sync,
     push_layer_geopackage_sync,
 )
-from .drafts import draft_path, merge_snapshots, read_draft, write_draft
+from .drafts import draft_path, merge_snapshots, read_draft, rebind_pending, write_draft
 from .managed_client import (
     ManagedSessionInfo,
     build_managed_events_url,
@@ -2031,6 +2034,38 @@ class OpenVietGisConnectorDialog(QDialog):
             self._bootstrap_task.cancel()
             self._bootstrap_task = None
 
+    @staticmethod
+    def _persistent_layer(layer: QgsVectorLayer, root: Path) -> QgsVectorLayer:
+        """A fresh private GeoPackage never overwrites a previous local working copy."""
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path = root / (str(uuid4()) + ".gpkg")
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = "GPKG"
+        options.layerName = "features"
+        options.layerOptions = ["FID=ovg_local_fid", "SPATIAL_INDEX=YES"]
+        result = QgsVectorFileWriter.writeAsVectorFormatV3(
+            layer, str(path), QgsProject.instance().transformContext(), options,
+        )
+        if result[0] != QgsVectorFileWriter.NoError:
+            raise ApiError("Không tạo được bản làm việc GeoPackage.")
+        disk = QgsVectorLayer(str(path) + "|layername=features", layer.name(), "ogr")
+        if not disk.isValid() or disk.featureCount() != layer.featureCount():
+            raise ApiError("Không kiểm chứng được bản làm việc GeoPackage.")
+        if disk.fields().names() != ["ovg_local_fid", *layer.fields().names()]:
+            raise ApiError("Cấu trúc GeoPackage không tương thích.")
+        # Internal IDs are provider metadata; never send them as business attributes.
+        disk.setEditorWidgetSetup(0, QgsEditorWidgetSetup("Hidden", {}))
+        return disk
+
+    @staticmethod
+    def _managed_feature(layer, oid, properties, geometry, fields):
+        feat = QgsFeature(layer.fields())
+        feat.setGeometry(geometry)
+        feat.setAttribute("ovg_feature_id", oid)
+        for name in fields:
+            feat.setAttribute(name, properties.get(name))
+        return feat
+
     def _install_managed_layers(self, config, sess, downloaded) -> None:
         try:
             self._stop_managed_worker()
@@ -2076,6 +2111,25 @@ class OpenVietGisConnectorDialog(QDialog):
                     raise ApiError("Không thể nạp đầy đủ đối tượng vào QGIS.")
                 prov.createSpatialIndex()
                 vlayer.updateExtents()
+                # Only full, authorized, cacheable layers may persist on disk.
+                if first_page.cacheable and sess.can_edit and "ovg_local_fid" not in field_names:
+                    root = Path(QgsApplication.qgisSettingsDirPath()).resolve() / "openvietgis" / "working"
+                    memory_layer = vlayer
+                    try:
+                        disk = self._persistent_layer(memory_layer, root)
+                        if self._managed_snapshot(disk, field_names) != self._managed_snapshot(memory_layer, field_names):
+                            raise ApiError("GeoPackage làm thay đổi kiểu dữ liệu gốc.")
+                        vlayer = disk
+                    except (OpenVietGisError, OSError, ValueError, TypeError):
+                        # Preserve native types: disk is optional, never a reason to block a valid layer.
+                        vlayer = memory_layer
+                    for index, fld in enumerate(first_page.fields):
+                        field_index = vlayer.fields().indexFromName(field_names[index])
+                        if fld.get("display_name"):
+                            vlayer.setFieldAlias(field_index, str(fld["display_name"]))
+                        if not fld.get("nullable", True):
+                            vlayer.setFieldConstraint(field_index, QgsFieldConstraints.ConstraintNotNull,
+                                                      QgsFieldConstraints.ConstraintStrengthHard)
                 if not sess.can_edit:
                     vlayer.setReadOnly(True)
                 QgsProject.instance().addMapLayer(vlayer)
@@ -2096,6 +2150,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 info = self._managed_layers[first_page.layer_id]
                 self._track_managed_layer(vlayer, info)
                 self._restore_managed_draft(vlayer, info, first_page.layer_id)
+                self._wire_native_save(vlayer, info, first_page.layer_id)
                 opened_names.append(first_page.name)
 
             self.r029_save_button.setEnabled(sess.can_edit and bool(self._managed_layers))
@@ -2255,12 +2310,10 @@ class OpenVietGisConnectorDialog(QDialog):
                         fid = id_to_fid[oid]
                         geom_updates[fid] = qgeom
                         attr_updates[fid] = {
-                            idx + 1: props.get(fn) for idx, fn in enumerate(field_names)
+                            layer.fields().indexFromName(fn): props.get(fn) for fn in field_names
                         }
                     else:
-                        qf = QgsFeature(layer.fields())
-                        qf.setGeometry(qgeom)
-                        qf.setAttributes([oid, *(props.get(fn) for fn in field_names)])
+                        qf = self._managed_feature(layer, oid, props, qgeom, field_names)
                         to_add.append(qf)
                     applied_count += 1
                 if geom_updates and not prov.changeGeometryValues(geom_updates):
@@ -2297,7 +2350,10 @@ class OpenVietGisConnectorDialog(QDialog):
 
     @staticmethod
     def _managed_snapshot(layer: QgsVectorLayer, fields: list[str], assign_ids: bool = False) -> dict:
-        if layer.fields().names() != ["ovg_feature_id", *fields]:
+        names = layer.fields().names()
+        if names == ["ovg_local_fid", "ovg_feature_id", *fields]:
+            names = names[1:]
+        if names != ["ovg_feature_id", *fields]:
             raise ApiError("Cấu trúc lớp đã thay đổi; hãy xuất bản sao và mở lại.")
         result = {}
         for feat in layer.getFeatures():
@@ -2306,8 +2362,9 @@ class OpenVietGisConnectorDialog(QDialog):
             if not oid:
                 if assign_ids:
                     oid = str(uuid4())
-                    ok = (layer.changeAttributeValue(feat.id(), 0, oid) if layer.isEditable()
-                          else layer.dataProvider().changeAttributeValues({feat.id(): {0: oid}}))
+                    index = layer.fields().indexFromName("ovg_feature_id")
+                    ok = (layer.changeAttributeValue(feat.id(), index, oid) if layer.isEditable()
+                          else layer.dataProvider().changeAttributeValues({feat.id(): {index: oid}}))
                     if not ok:
                         raise ApiError("Không thể gán mã đối tượng.")
                 else:
@@ -2360,6 +2417,24 @@ class OpenVietGisConnectorDialog(QDialog):
         except (OpenVietGisError, TypeError, ValueError):
             return True
 
+    def _wire_native_save(self, layer: QgsVectorLayer, info: dict, lid: str) -> None:
+        """Native provider save schedules journal/remote save after the edit signal returns."""
+        def submit():
+            if self._managed_layers.get(lid) is not info or not self._managed_config:
+                return
+            if info.get("recovery_blocked") or info.get("pending") or self._commit_task is not None:
+                return
+            try:
+                current = self._managed_snapshot(layer, info["field_names"], assign_ids=True)
+                if current == info["baseline"]:
+                    return
+                self._write_managed_draft(lid, info, current)
+                self._on_commit_r029_managed()
+            except (OpenVietGisError, OSError, TypeError, ValueError) as exc:
+                self.ws_status.setText(f"Không thể ghi nhật ký cục bộ: {exc}")
+
+        layer.afterCommitChanges.connect(lambda: QTimer.singleShot(0, submit))
+
     def _draft_path(self, lid: str) -> Path:
         config = self._managed_config
         if config is None:
@@ -2374,6 +2449,7 @@ class OpenVietGisConnectorDialog(QDialog):
             return
         write_draft(path, {
             "version": 1, "source_id": info["source_id"],
+            "credential_fingerprint": hashlib.sha256(self._managed_config.bearer_token.encode()).hexdigest(),
             "schema_revision": info["schema_revision"],
             "permission_epoch": info["permission_epoch"],
             "baseline": info["baseline"], "local": current,
@@ -2408,22 +2484,32 @@ class OpenVietGisConnectorDialog(QDialog):
             if (draft["source_id"] != info["source_id"] or draft["schema_revision"] != info["schema_revision"]
                     or draft.get("permission_epoch") != info["permission_epoch"]):
                 raise ApiError("Quyền hoặc cấu trúc lớp đã đổi; cần đối chiếu bản nháp thủ công.")
+            fingerprint = hashlib.sha256(self._managed_config.bearer_token.encode()).hexdigest()
+            if draft.get("credential_fingerprint", fingerprint) != fingerprint:
+                raise ApiError("Bản nháp thuộc khóa thiết bị khác. Giữ bản gốc để đối chiếu.")
             base = draft["baseline"]
             pending = draft.get("pending")
+            replay = None
             if pending:
                 try:
                     get_managed_commit_receipt(self._managed_config, operation_id=pending["operation_id"])
                 except ApiError as exc:
                     if exc.status_code != 404:
                         raise
-                    # Keep uncertain operations for explicit review, never replay across sessions.
-                    raise ApiError("Giao dịch cũ chưa xác nhận; cần kiểm tra lịch sử trên Web.") from exc
+                    # A missing receipt is not proof of failure. Replay only the exact
+                    # request with the same ID and unchanged server revision.
+                    replay = rebind_pending(
+                        pending, base, info["baseline"],
+                        content_revision=info["content_revision"],
+                        schema_revision=info["schema_revision"], source_id=info["source_id"],
+                        session_id=self._managed_session.id,
+                    )
                 else:
                     base = pending["snapshot"]
             merged, conflicts = merge_snapshots(base, draft["local"], info["baseline"])
             if conflicts:
                 raise ApiError("Xung đột đối tượng: " + ", ".join(conflicts[:10]))
-            if merged == info["baseline"]:
+            if merged == info["baseline"] and replay is None:
                 path.unlink(missing_ok=True)
                 return
             if not self._managed_session.can_edit:
@@ -2443,15 +2529,16 @@ class OpenVietGisConnectorDialog(QDialog):
                     fid = existing[oid]
                     if not layer.changeGeometry(fid, geometry):
                         raise ApiError("Không thể khôi phục hình học.")
-                    for index, value in enumerate(values):
-                        if not layer.changeAttributeValue(fid, index, value):
+                    for name, value in zip(["ovg_feature_id", *info["field_names"]], values):
+                        if not layer.changeAttributeValue(fid, layer.fields().indexFromName(name), value):
                             raise ApiError("Không thể khôi phục thuộc tính.")
                 else:
-                    feat = QgsFeature(layer.fields())
-                    feat.setGeometry(geometry)
-                    feat.setAttributes(values)
+                    feat = self._managed_feature(layer, oid, item["properties"], geometry, info["field_names"])
                     if not layer.addFeature(feat):
                         raise ApiError("Không thể khôi phục đối tượng.")
+            if replay is not None:
+                info["pending"] = replay
+                info["retry_at"] = time.monotonic() + 3
             self._write_managed_draft(lid, info, merged)
         except (OpenVietGisError, OSError, ValueError, TypeError, KeyError) as exc:
             # Preserve original journal and prevent automatic overwrite of unresolved edits.
@@ -2463,6 +2550,12 @@ class OpenVietGisConnectorDialog(QDialog):
 
     def _managed_tick(self) -> None:
         self._checkpoint_managed_drafts()
+        if (self._managed_session and self._managed_session.can_edit and self._commit_task is None
+                and any(info.get("pending") and info.get("retry_at") is not None
+                        and time.monotonic() >= info["retry_at"] and not info.get("recovery_blocked")
+                        for info in self._managed_layers.values())):
+            self._on_commit_r029_managed(automatic=True, retry_only=True)
+            return
         if self.managed_auto_save.isChecked() and self._managed_session and self._managed_session.can_edit:
             dirty = any(
                 isinstance(layer := QgsProject.instance().mapLayer(info["map_layer_id"]), QgsVectorLayer)
@@ -2485,12 +2578,17 @@ class OpenVietGisConnectorDialog(QDialog):
     def _finish_commit_error(self, error, automatic: bool) -> None:
         self.ws_status.setText(f"Chưa lưu lên Web: {error}")
         self._checkpoint_managed_drafts()
+        if isinstance(error, ApiError) and (error.status_code is None or error.status_code in (502, 503, 504)):
+            self.ws_status.setText("Chưa kết nối máy chủ. Đã giữ bản nháp; lưu lại khi có mạng.")
+            return
         if automatic:
             self.managed_auto_save.setChecked(False)
         else:
             QMessageBox.warning(self, "Lưu thay đổi lên Web", str(error))
 
-    def _on_commit_r029_managed(self, checked: bool = False, *, automatic: bool = False) -> None:
+    def _on_commit_r029_managed(
+        self, checked: bool = False, *, automatic: bool = False, retry_only: bool = False,
+    ) -> None:
         if self._managed_session is None or not self._managed_layers or self._commit_task is not None:
             return
         if not self._managed_session.can_edit or self._managed_config is None:
@@ -2501,6 +2599,11 @@ class OpenVietGisConnectorDialog(QDialog):
         try:
             for lid, info in self._managed_layers.items():
                 if info.get("recovery_blocked"):
+                    continue
+                if automatic and not retry_only and info.get("pending"):
+                    continue
+                if retry_only and (not info.get("pending") or info.get("retry_at") is None
+                                   or time.monotonic() < info["retry_at"]):
                     continue
                 layer = QgsProject.instance().mapLayer(info["map_layer_id"])
                 if not isinstance(layer, QgsVectorLayer):
@@ -2515,7 +2618,8 @@ class OpenVietGisConnectorDialog(QDialog):
                     sum(op["op_type"] == "delete" for op in pending["request"]["operations"])
                     if pending else len(info["baseline"].keys() - current.keys())
                 )
-                allow_deletes = False
+                # Retry only a deletion explicitly authorized in the durable request.
+                allow_deletes = bool(retry_only and pending and pending["request"]["allow_deletes"])
                 if not pending:
                     planned_ops = diff_managed_snapshots(info["baseline"], current, allow_deletes=True)
                     if not (automatic and deletion_count):
@@ -2565,7 +2669,10 @@ class OpenVietGisConnectorDialog(QDialog):
                                "request": request}
                     info["pending"] = pending
                 self._write_managed_draft(lid, info, current)
-                self._start_commit_task(config, lid, info, pending, recover, permit_replay, automatic)
+                info.pop("retry_at", None)
+                self._start_commit_task(
+                    config, lid, info, pending, recover, permit_replay, automatic, retry_only=retry_only,
+                )
                 return
             if deferred_deletes:
                 self.ws_status.setText(
@@ -2578,7 +2685,9 @@ class OpenVietGisConnectorDialog(QDialog):
         except (OpenVietGisError, OSError, TypeError, ValueError) as exc:
             self._finish_commit_error(exc, automatic)
 
-    def _start_commit_task(self, config, lid, info, pending, recover, permit_replay, automatic) -> None:
+    def _start_commit_task(
+        self, config, lid, info, pending, recover, permit_replay, automatic, *, retry_only=False,
+    ) -> None:
         self._commit_generation += 1
         generation = self._commit_generation
         self.r029_save_button.setEnabled(False)
@@ -2600,10 +2709,29 @@ class OpenVietGisConnectorDialog(QDialog):
                     raise ApiError("Lớp đã đóng. Bản nháp được giữ để khôi phục biên nhận.")
                 current = self._managed_snapshot(layer, info["field_names"], assign_ids=True)
                 if error is not None:
-                    if getattr(error, "status_code", None) in (400, 401, 403, 409, 422):
+                    status = getattr(error, "status_code", None)
+                    transient = isinstance(error, ApiError) and (status is None or status in (502, 503, 504))
+                    # Do not retry a receipt miss which was deliberately blocked by replay checks.
+                    if recover and not permit_replay:
+                        transient = False
+                    if transient:
+                        attempts = int(info.get("retry_attempts", 0)) + 1
+                        info["retry_attempts"] = attempts
+                        # Bounded retries; after this, the exact transaction remains in the journal.
+                        if attempts <= 5:
+                            info["retry_at"] = time.monotonic() + min(60, 3 * 2 ** (attempts - 1))
+                    else:
+                        info.pop("retry_at", None)
+                        info.pop("retry_attempts", None)
+                    if not recover and status in (400, 422):
                         info.pop("pending", None)
                     self._write_managed_draft(lid, info, current)
-                    self._finish_commit_error(error, automatic)
+                    if transient and info.get("retry_at") is not None:
+                        self.ws_status.setText("Mất kết nối. Giao dịch đã lưu cục bộ, sẽ thử lại khi có mạng.")
+                    else:
+                        if automatic:
+                            self.managed_auto_save.setChecked(False)
+                        self._finish_commit_error(error, automatic)
                     return
                 if result is None:
                     self.ws_status.setText("Chưa xác nhận lưu. Bản nháp được giữ lại.")
@@ -2613,6 +2741,8 @@ class OpenVietGisConnectorDialog(QDialog):
                 # Only this source's confirmed cursor may advance; never skip other layers.
                 info["cursor"] = max(info["cursor"], result.event_cursor)
                 info.pop("pending", None)
+                info.pop("retry_at", None)
+                info.pop("retry_attempts", None)
                 info["checked_generation"] = None
                 self._write_managed_draft(lid, info, current)
                 if current == pending["snapshot"]:
@@ -2623,7 +2753,7 @@ class OpenVietGisConnectorDialog(QDialog):
                     self.ws_status.setText(f"Đã xác nhận {result.operation_count} thay đổi trên Web.")
                     # Continue with other dirty layers, if any. Do not auto-submit new edits
                     # in this layer from a manual click unless the user has opted into auto-save.
-                    if any(other is not info and isinstance(other_layer := QgsProject.instance().mapLayer(
+                    if not retry_only and any(other is not info and isinstance(other_layer := QgsProject.instance().mapLayer(
                             other["map_layer_id"]), QgsVectorLayer)
                             and self._managed_is_dirty(other_layer, other)
                             for other in self._managed_layers.values()):

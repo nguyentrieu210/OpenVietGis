@@ -90,6 +90,52 @@ def main() -> None:
             assert layer.commitChanges()
             assert dialog._managed_is_dirty(layer, info)
         print(f"Native 8000 points build + snapshot + native edit: {perf_counter()-started:.2f}s")
+        # Actual OGR GeoPackage provider: persistent native edits, no provider FID leakage.
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory(ignore_cleanup_errors=True) as folder:
+            disk = dialog._persistent_layer(layer, Path(folder))
+            original = dialog._managed_snapshot(disk, ["fld_name"])
+            assert original == dialog._managed_snapshot(layer, ["fld_name"])
+            assert disk.startEditing()
+            fid_disk = next(disk.getFeatures()).id()
+            feature_id = str(disk.getFeature(fid_disk)["ovg_feature_id"])
+            assert disk.changeAttributeValue(fid_disk, disk.fields().indexFromName("fld_name"), "Offline edit")
+            assert disk.commitChanges()
+            uri = disk.source()
+            disk = None
+            disk = QgsVectorLayer(uri, "reopen", "ogr")
+            assert disk.isValid()
+            restored = dialog._managed_snapshot(disk, ["fld_name"])
+            assert restored[feature_id]["properties"] == {"fld_name": "Offline edit"}
+            assert len(restored) == 8000
+            assert disk.startEditing()
+            extra = dialog._managed_feature(disk, "new-offline", {"fld_name": "New"},
+                dialog._geojson_to_qgs_geometry({"type":"Point","coordinates":[11800000,1200000]}), ["fld_name"])
+            assert disk.addFeature(extra)
+            assert disk.commitChanges()
+            assert "new-offline" in dialog._managed_snapshot(disk, ["fld_name"])
+            # A native Save must journal first, then schedule the network action.
+            native_info = {"baseline": dialog._managed_snapshot(disk, ["fld_name"]),
+                           "field_names": ["fld_name"]}
+            dialog._managed_layers["native-test"] = native_info
+            dialog._managed_config = object()
+            dialog._wire_native_save(disk, native_info, "native-test")
+            with patch.object(dialog, "_write_managed_draft") as journal, patch.object(
+                dialog, "_on_commit_r029_managed"
+            ) as send:
+                assert disk.startEditing()
+                native_fid = next(disk.getFeatures()).id()
+                assert disk.changeAttributeValue(native_fid, disk.fields().indexFromName("fld_name"), "Native Save")
+                assert disk.commitChanges()
+                app.processEvents()
+                assert journal.call_count == 1
+                assert send.call_count == 1
+            disk.afterCommitChanges.disconnect()
+            dialog._managed_layers.pop("native-test")
+            dialog._managed_config = None
+            disk = None
+        print("PASS GeoPackage actual OGR provider: reopen native edit and create; no FID leakage")
+
         # Real Qt task scheduling, with isolated mock transport (no production writes).
         QgsProject.instance().addMapLayer(layer)
         info.update({"map_layer_id": layer.id(), "source_id": "s",
@@ -152,6 +198,19 @@ def main() -> None:
         dialog._managed_layers.pop("clean")
         QgsProject.instance().removeMapLayer(clean.id())
         print("PASS native delta: clean layer updates, dirty layer and cursor preserved")
+        # A retry tick can submit only an existing pending request, not unrelated edits.
+        import time
+        info["pending"] = {"operation_id":"retry-test"}
+        info["retry_at"] = time.monotonic() - 1
+        with patch.object(dialog, "_checkpoint_managed_drafts"), patch.object(
+            dialog, "_on_commit_r029_managed"
+        ) as retry:
+            dialog._managed_tick()
+            retry.assert_called_once_with(automatic=True, retry_only=True)
+        info.pop("pending")
+        info.pop("retry_at")
+        print("PASS retry tick isolates previously approved transactions")
+
         # Native delete: auto-save never deletes; manual Save prompts once.
         assert layer.deleteFeature(fid)
         with patch.object(dialog, "_write_managed_draft"), patch.object(
