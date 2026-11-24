@@ -33,6 +33,20 @@ def main() -> None:
         assert dialog.ws_recover_button.text()
         assert dialog.bearer_key_input.echoMode() == dialog.bearer_key_input.Password
         assert dialog._workspace_preview is None
+        assert dialog.connection_summary.isHidden()
+        assert not dialog.browser_login_button.isHidden()
+        assert dialog.layers_group.isHidden()
+        dialog._set_connection_state(True)
+        assert not dialog.connection_summary.isHidden()
+        assert dialog.browser_login_button.isHidden()
+        assert dialog.pairing_box.isHidden()
+        assert dialog.manual_conn_toggle.isHidden()
+        assert not dialog.switch_project_button.isHidden()
+        assert not dialog.logout_session_button.isHidden()
+        assert not dialog.layers_group.isHidden()
+        dialog._set_connection_state(False)
+        assert not dialog.browser_login_button.isHidden()
+        assert dialog.logout_session_button.isHidden()
         dialog.close()
         print("PASS PyQGIS native plugin window: primary controls, browser login and default deny")
     finally:

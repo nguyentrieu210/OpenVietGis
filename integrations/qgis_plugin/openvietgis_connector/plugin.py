@@ -330,6 +330,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self.setWindowTitle("OpenVietGIS · Kết nối QGIS")
         self.setMinimumSize(580, 490)
 
+        self._connected = False
+        self._host_window = parent.window() if parent is not None else self
         self._layers: list[QgisLayerInfo] = []
         self._sync_push_enabled: bool = False
         self._pinned_revisions: dict[str, tuple[str, str]] = {}
@@ -372,6 +374,7 @@ class OpenVietGisConnectorDialog(QDialog):
         self._browser_timer.setInterval(300)
         self._browser_timer.timeout.connect(self._poll_browser_login)
         self._build_ui()
+        self._set_connection_state(False)
         if os.environ.get("QT_QPA_PLATFORM") != "offscreen":
             QTimer.singleShot(250, self._try_auto_reconnect)
 
@@ -389,7 +392,9 @@ class OpenVietGisConnectorDialog(QDialog):
         # 1. Quick Pairing Bar (always visible, 1 click)
         pair_group = QGroupBox("Kết nối")
         pair_layout = QVBoxLayout(pair_group)
-        pairing_row = QHBoxLayout()
+        self.pairing_box = QWidget()
+        pairing_row = QHBoxLayout(self.pairing_box)
+        pairing_row.setContentsMargins(0, 0, 0, 0)
         self.pairing_code_input = QLineEdit()
         self.pairing_code_input.setEchoMode(QLineEdit.Password)
         self.pairing_code_input.setPlaceholderText(
@@ -403,8 +408,14 @@ class OpenVietGisConnectorDialog(QDialog):
         self.apply_pairing_button.clicked.connect(self._on_apply_pairing_code)
         pairing_row.addWidget(self.pairing_code_input)
         pairing_row.addWidget(self.apply_pairing_button)
-        pair_layout.addLayout(pairing_row)
+        self.connection_summary = QLabel()
+        self.connection_summary.setTextFormat(Qt.PlainText)
+        self.connection_summary.setWordWrap(True)
+        self.connection_summary.setStyleSheet("background:#e9f7ef;color:#145c39;border:1px solid #a4d8b8;padding:10px;border-radius:5px;font-weight:bold;")
+        pair_layout.addWidget(self.connection_summary)
+        pair_layout.addWidget(self.pairing_box)
         self.browser_login_button = QPushButton("Đăng nhập bằng tài khoản OpenVietGIS")
+        self.browser_login_button.setStyleSheet("background:#155d72;color:white;padding:10px;border-radius:4px;font-weight:bold;")
         self.browser_login_button.clicked.connect(self._start_browser_login)
         pair_layout.addWidget(self.browser_login_button)
 
@@ -413,6 +424,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self.remember_session_checkbox.setChecked(True)
         self.load_layers_button = QPushButton("↻ Tải lại lớp")
         self.load_layers_button.clicked.connect(self._on_load_layers)
+        self.switch_project_button = QPushButton("Đổi dự án")
+        self.switch_project_button.clicked.connect(self._start_browser_login)
         self.logout_session_button = QPushButton("Đăng xuất")
         self.logout_session_button.clicked.connect(self._on_clear_saved_session)
         self.manual_conn_toggle = QPushButton("Thiết lập thủ công ▾")
@@ -420,6 +433,7 @@ class OpenVietGisConnectorDialog(QDialog):
         self.manual_conn_toggle.toggled.connect(self._on_toggle_manual_conn)
         conn_bar.addWidget(self.remember_session_checkbox)
         conn_bar.addWidget(self.load_layers_button)
+        conn_bar.addWidget(self.switch_project_button)
         conn_bar.addWidget(self.logout_session_button)
         conn_bar.addWidget(self.manual_conn_toggle)
         conn_bar.addStretch(1)
@@ -465,6 +479,7 @@ class OpenVietGisConnectorDialog(QDialog):
 
         # 2. Layer Picker (multi-layer checkboxes, wide readable table)
         layers_group = QGroupBox("Lớp bản đồ")
+        self.layers_group = layers_group
         layers_layout = QVBoxLayout(layers_group)
         select_bar = QHBoxLayout()
         self.select_all_layers_btn = QPushButton("☑ Chọn tất cả")
@@ -495,6 +510,7 @@ class OpenVietGisConnectorDialog(QDialog):
 
         # 3. Primary Two-Way Sync Box (Realtime Workspace Client + 1-click sync!)
         workspace_group = QGroupBox("Làm việc với bản đồ")
+        self.workspace_group = workspace_group
         ws_layout = QVBoxLayout(workspace_group)
 
         r029_row = QHBoxLayout()
@@ -535,7 +551,7 @@ class OpenVietGisConnectorDialog(QDialog):
         ws_layout.addWidget(self.ws_status)
         root_layout.addWidget(workspace_group)
 
-        self.status_label = QLabel("Dán mã kết nối từ Web để bắt đầu.")
+        self.status_label = QLabel("Đăng nhập để mở bản đồ từ OpenVietGIS.")
         self.status_label.setWordWrap(True)
         root_layout.addWidget(self.status_label)
 
@@ -683,8 +699,33 @@ class OpenVietGisConnectorDialog(QDialog):
         root_layout.addWidget(self.advanced_box)
         root_layout.addStretch(1)
 
+    def _set_connection_state(self, connected: bool) -> None:
+        self._connected = connected
+        self.connection_summary.setVisible(connected)
+        self.browser_login_button.setVisible(not connected)
+        self.manual_conn_toggle.setVisible(not connected)
+        self.load_layers_button.setVisible(connected)
+        self.switch_project_button.setVisible(connected)
+        self.logout_session_button.setVisible(connected)
+        self.remember_session_checkbox.setVisible(not connected)
+        self.manual_conn_toggle.setChecked(False)
+        self.pairing_box.setVisible(False)
+        self.manual_conn_box.setVisible(False)
+        self.layers_group.setVisible(connected or bool(self._managed_layers))
+        self.workspace_group.setVisible(connected or bool(self._managed_layers))
+        self.r029_open_button.setEnabled(connected)
+        if connected:
+            role = "Có quyền đồng bộ" if self._sync_push_enabled else "Chỉ xem"
+            self.connection_summary.setText(
+                f"● Đã kết nối OpenVietGIS\n{len(self._layers)} lớp bản đồ · {role}\n{self.server_url_input.text()}"
+            )
+        else:
+            self.connection_summary.clear()
+
     def _on_toggle_manual_conn(self, checked: bool) -> None:
-        self.manual_conn_box.setVisible(checked)
+        self.pairing_box.setVisible(checked and not self._connected)
+        self.load_layers_button.setVisible(self._connected or checked)
+        self.manual_conn_box.setVisible(checked and not self._connected)
         self.manual_conn_toggle.setText("Thiết lập thủ công ▴" if checked else "Thiết lập thủ công ▾")
 
     def _on_toggle_advanced(self, checked: bool) -> None:
@@ -708,6 +749,7 @@ class OpenVietGisConnectorDialog(QDialog):
             self._browser_login.close()
             self._browser_login = None
         self.browser_login_button.setEnabled(True)
+        self.switch_project_button.setEnabled(True)
 
     def _start_browser_login(self) -> None:
         self._stop_browser_login()
@@ -722,6 +764,7 @@ class OpenVietGisConnectorDialog(QDialog):
             self._browser_login = BrowserLogin(self.server_url_input.text().strip() or "https://openvietgis.cloud")
             self._browser_deadline = time.monotonic() + 300
             self.browser_login_button.setEnabled(False)
+            self.switch_project_button.setEnabled(False)
             if not webbrowser.open(self._browser_login.url):
                 raise OSError("Không mở được trình duyệt.")
             self.status_label.setText("Đăng nhập trên trình duyệt, chọn dự án và cấp quyền cho QGIS.")
@@ -735,14 +778,35 @@ class OpenVietGisConnectorDialog(QDialog):
             return
         code = self._browser_login.take()
         if code is not None:
-            self._stop_browser_login()
-            self.pairing_code_input.setText(code)
-            self._on_apply_pairing_code()
+            flow = self._browser_login
+            self._browser_timer.stop()
+            success = False
+            try:
+                self.pairing_code_input.setText(code)
+                success = self._on_apply_pairing_code()
+            finally:
+                flow.complete(success)
+                self._stop_browser_login()
+                self._return_to_qgis()
+
         elif time.monotonic() >= self._browser_deadline:
             self._stop_browser_login()
             self.status_label.setText("Hết thời gian đăng nhập. Hãy thử lại.")
+            self._return_to_qgis()
 
-    def _on_apply_pairing_code(self) -> None:
+    def _return_to_qgis(self) -> None:
+        # Qt first; Windows may decline foreground activation by design.
+        window = self._host_window
+        if window.isMinimized():
+            window.showNormal()
+        window.raise_()
+        window.activateWindow()
+        if sys.platform == "win32":
+            user32 = ctypes.windll.user32
+            user32.SetForegroundWindow(ctypes.c_void_p(int(window.winId())))
+        QgsApplication.alert(window, 4000)
+
+    def _on_apply_pairing_code(self) -> bool:
         if any(
             isinstance(layer := QgsProject.instance().mapLayer(info["map_layer_id"]), QgsVectorLayer)
             and (layer.isModified() or self._managed_is_dirty(layer, info))
@@ -753,19 +817,26 @@ class OpenVietGisConnectorDialog(QDialog):
                 "Hãy lưu lên Web hoặc xuất bản sao dữ liệu từ QGIS "
                 "trước khi thay mã kết nối."
             )
-            return
+            return False
         raw = self.pairing_code_input.text().strip()
         if not raw:
             QMessageBox.warning(
                 self, "OpenVietGIS Connector", "Hãy dán mã ghép nối ovg-pair-v1:... trước."
             )
-            return
+            return False
         try:
             parsed = decode_pairing_code(raw)
         except OpenVietGisError as exc:
             QMessageBox.warning(self, "Mã ghép nối không hợp lệ", str(exc))
-            return
+            return False
         self._disconnect_managed()
+        self._stop_realtime_worker()
+        self._auto_sync_timer.stop()
+        self._layers = []
+        self._sync_push_enabled = False
+        self.layers_table.setRowCount(0)
+        self._set_connection_state(False)
+        QSettings("OpenVietGIS", "Connector").remove("protected_token")
         self.server_url_input.setText(parsed["server_url"])
         self.org_id_input.setText(parsed["organization_id"])
         self.project_id_input.setText(parsed["project_id"])
@@ -773,12 +844,14 @@ class OpenVietGisConnectorDialog(QDialog):
         self._preferred_layer_id = parsed.get("layer_id")
         self._preferred_binding_id = parsed.get("binding_id")
         self.pairing_code_input.clear()
-        self._on_load_layers()
+        if not self._on_load_layers():
+            return False
         if self._preferred_layer_id:
             for row_idx, lyr in enumerate(self._layers):
                 if lyr.layer_id == self._preferred_layer_id:
                     self.layers_table.selectRow(row_idx)
                     break
+        return True
 
     def _on_browse_dir(self) -> None:
         selected = QFileDialog.getExistingDirectory(
@@ -813,7 +886,7 @@ class OpenVietGisConnectorDialog(QDialog):
             (layer.content_revision, layer.schema_revision),
         )
 
-    def _on_load_layers(self) -> None:
+    def _on_load_layers(self) -> bool:
         self.download_open_button.setEnabled(False)
         self.preview_sync_button.setEnabled(False)
         self._invalidate_sync_preview(
@@ -825,8 +898,13 @@ class OpenVietGisConnectorDialog(QDialog):
             profile = fetch_qgis_profile(config)
         except OpenVietGisError as exc:
             self.status_label.setText(f"Không thể kết nối: {exc}")
-            QMessageBox.warning(self, "OpenVietGIS Connector", str(exc))
-            return
+            if self._browser_login is None:
+                QMessageBox.warning(self, "OpenVietGIS Connector", str(exc))
+            if isinstance(exc, ApiError) and exc.status_code in (401, 403):
+                if self._managed_session is not None:
+                    self._on_managed_session_revoked()
+                self._set_connection_state(False)
+            return False
 
         self._layers = list(profile.layers)
         self._sync_push_enabled = bool(profile.sync_push_enabled)
@@ -839,6 +917,9 @@ class OpenVietGisConnectorDialog(QDialog):
             f"Đã tải {len(self._layers)} lớp ({scoped_note} · {sync_note})."
         )
         self._update_action_button_states()
+        self._set_connection_state(True)
+        self.ws_status.setText("Đã kết nối. Chọn lớp rồi bấm ‘Mở bản đồ trong QGIS’.")
+        return True
 
     def _set_all_layers_checked(self, checked: bool) -> None:
         state = Qt.Checked if checked else Qt.Unchecked
@@ -1766,7 +1847,8 @@ class OpenVietGisConnectorDialog(QDialog):
         self.layers_table.setRowCount(0)
         self.r029_save_button.setEnabled(False)
         self.realtime_status.setText("⚪ Đã đăng xuất & xóa phiên đã lưu trên máy.")
-        self.status_label.setText("Đã xóa phiên kết nối. Dán mã ghép nối mới để đăng nhập lại.")
+        self._set_connection_state(False)
+        self.status_label.setText("Đã đăng xuất. Đăng nhập để kết nối dự án.")
 
     def _try_auto_reconnect(self) -> None:
         settings = QSettings("OpenVietGIS", "Connector")
@@ -1803,6 +1885,7 @@ class OpenVietGisConnectorDialog(QDialog):
             self._sync_push_enabled = bool(profile.sync_push_enabled)
             self._populate_layers_table()
             self._update_action_button_states()
+            self._set_connection_state(True)
             self.status_label.setText(
                 f"🟢 Đã tự động kết nối lại ({len(self._layers)} lớp sẵn sàng)."
             )
@@ -1811,7 +1894,7 @@ class OpenVietGisConnectorDialog(QDialog):
             )
         except OpenVietGisError:
             self.status_label.setText(
-                "Phiên đã lưu đã hết hạn hoặc bị thu hồi — hãy dán mã kết nối mới."
+                "Không thể khôi phục phiên đã lưu — hãy đăng nhập lại."
             )
 
     def _stop_managed_worker(self) -> None:
@@ -1841,6 +1924,8 @@ class OpenVietGisConnectorDialog(QDialog):
         return QgsGeometry()
 
     def _on_open_r029_managed(self) -> None:
+        if not self._connected:
+            return
         if self._managed_layers:
             QMessageBox.information(
                 self, "Bản đồ đang mở",
@@ -2023,6 +2108,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 if layer.isEditable():
                     layer.rollBack()
                 layer.setReadOnly(True)
+        self._set_connection_state(False)
         self.realtime_status.setText("🔒 Phiên đã hết hạn hoặc bị thu hồi.")
         if not has_unsent:
             self.ws_status.setText(

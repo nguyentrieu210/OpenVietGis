@@ -2,8 +2,8 @@
 
 **Cách sử dụng (phiên bản 1.0.0):**
 
-1. Trong QGIS, bấm **Đăng nhập bằng tài khoản OpenVietGIS**. Trình duyệt mở trang xác thực chính thức.
-2. Chọn tổ chức, dự án và cấp quyền. Plugin nhận khóa kết nối qua callback cục bộ một lần (5 phút); không nhập mật khẩu trong QGIS. Có thể dùng mã kết nối thủ công nếu trình duyệt chặn callback.
+1. Trong QGIS, bấm **Đăng nhập bằng tài khoản OpenVietGIS**. Trình duyệt mở trang xác thực chính thức. Không cần cài máy chủ trên máy người dùng; cổng loopback cục bộ chỉ nhận callback trong lúc đăng nhập.
+2. Chọn tổ chức, dự án và cấp quyền. Plugin nhận khóa kết nối qua callback cục bộ một lần (5 phút); không nhập mật khẩu trong QGIS. Khi QGIS xác thực được hồ sơ dự án, trình duyệt báo thành công bằng tiếng Việt và plugin yêu cầu hệ điều hành đưa QGIS lên trước. Nếu bị chặn, dùng Alt+Tab. Có thể dùng mã kết nối thủ công nếu trình duyệt chặn callback.
 3. Tích chọn các lớp → **Mở bản đồ trong QGIS**.
 4. Biên tập rồi bấm **Lưu thay đổi lên Web**. Có thể bật **Tự lưu thay đổi lên Web (không tự xóa)**; công cụ lưu theo chu kỳ 10 giây, dừng khi có lỗi hoặc xung đột, không tự xóa đối tượng. Web → QGIS nhận sự kiện realtime và có kiểm tra dự phòng.
 5. Bản nháp được ghi mỗi 3 giây trong thư mục profile QGIS, và ngay trước khi gửi giao dịch. Khi mở lại cùng dự án, plugin đối chiếu ba chiều; nếu có xung đột, thay đổi quyền hoặc giao dịch chưa rõ kết quả, giữ nguyên journal và chặn ghi. Bản nháp nằm trên máy và có thể chứa dữ liệu GIS nhạy cảm; bảo vệ profile Windows/Linux/macOS.

@@ -1,7 +1,9 @@
 import base64
 import json
+import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -49,15 +51,50 @@ def test_browser_handoff_state_origin_and_one_time():
                 headers={"Origin": request_origin, "Content-Type": "application/x-www-form-urlencoded"},
             )
             with urllib.request.urlopen(request, timeout=3) as response:
-                return response.status
+                return response.status, response.read().decode()
         for state, request_origin in [("wrong", origin), (flow.state, "https://evil.example")]:
             with pytest.raises(urllib.error.HTTPError) as exc:
                 send(state, request_origin)
             assert exc.value.code == 400
         assert flow.take() is None
-        assert send(flow.state, origin) == 200
-        assert flow.take() == code
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(send, flow.state, origin)
+            received = None
+            for _ in range(100):
+                received = flow.take()
+                if received is not None:
+                    break
+                time.sleep(0.01)
+            assert received == code
+            assert not future.done()
+            flow.complete(True)
+            status, page = future.result(timeout=3)
+            assert status == 200
+            assert "Kết nối QGIS thành công" in page
+            assert "Alt + Tab" in page
+            assert "test-key" not in page
         with pytest.raises(urllib.error.HTTPError):
             send(flow.state, origin)
+    finally:
+        flow.close()
+
+
+def test_callback_does_not_report_success_when_profile_fails():
+    origin = "https://openvietgis.cloud"
+    flow = BrowserLogin(origin)
+    try:
+        payload = {"v": 1, "server_url": origin, "organization_id": "00000000-0000-4000-8000-000000000001",
+                   "project_id": "00000000-0000-4000-8000-000000000002", "bearer_token": "test-only"}
+        code = "ovg-pair-v1:" + base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{flow.port}/callback",
+            data=urllib.parse.urlencode({"state": flow.state, "pairing_code": code}).encode(),
+            headers={"Origin": origin, "Content-Type": "application/x-www-form-urlencoded"},
+        )
+        flow.complete(False)
+        with urllib.request.urlopen(request, timeout=3) as response:
+            page = response.read().decode()
+        assert "Chưa kết nối được QGIS" in page
+        assert "Kết nối QGIS thành công" not in page
     finally:
         flow.close()

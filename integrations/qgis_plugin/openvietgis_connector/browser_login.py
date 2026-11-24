@@ -20,6 +20,8 @@ class BrowserLogin:
         self.state = secrets.token_urlsafe(32)
         self.result: queue.Queue[str] = queue.Queue(maxsize=1)
         self.used = False
+        self.confirmed = threading.Event()
+        self.success = False
         self.lock = threading.Lock()
         owner = self
 
@@ -52,10 +54,40 @@ class BrowserLogin:
                 except (ValueError, KeyError, OSError, OpenVietGisError, queue.Full):
                     self.send_error(400, "Invalid or expired connection")
                     return
-                content = b"<!doctype html><meta charset=utf-8><title>OpenVietGIS</title><p>Connected. Return to QGIS.</p>"
-                self.send_response(200)
+                # A received credential is not yet a successful GIS connection.
+                # Wait until the QGIS UI has validated its server profile.
+                confirmed = owner.confirmed.wait(40)
+                if confirmed and owner.success:
+                    title = "Kết nối QGIS thành công"
+                    detail = "Plugin đã xác thực và tải quyền dự án. QGIS sẽ tự chuyển về cửa sổ làm việc nếu hệ điều hành cho phép."
+                    action = "Nếu cửa sổ chưa tự chuyển, hãy bấm biểu tượng QGIS trên thanh tác vụ hoặc Alt + Tab. Bạn có thể đóng tab này."
+                    color = "#087c65"
+                    status = 200
+                elif confirmed:
+                    title = "Chưa kết nối được QGIS"
+                    detail = "QGIS đã nhận kết quả cấp quyền nhưng chưa xác thực được kết nối máy chủ."
+                    action = "Quay lại QGIS để xem lỗi và thử đăng nhập lại."
+                    color = "#a13b24"
+                    status = 200
+                else:
+                    title = "QGIS đang kiểm tra kết nối"
+                    detail = "Đã chuyển yêu cầu cấp quyền tới QGIS, nhưng chưa nhận xác nhận."
+                    action = "Quay lại QGIS để kiểm tra trạng thái. Không cần tải lại trang này."
+                    color = "#93600c"
+                    status = 200
+                content = f"""<!doctype html><html lang="vi"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title} · OpenVietGIS</title>
+<style>body{{margin:0;background:#f0f5f5;font:16px system-ui;color:#19343c}}
+main{{max-width:520px;margin:12vh auto;padding:32px;background:white;border:1px solid #d6e3e4;border-radius:16px}}
+h1{{font-size:25px;color:{color}}}p{{line-height:1.6}}small{{color:#53646a}}button{{background:#124e55;color:white;border:0;padding:12px 20px;border-radius:8px;font:inherit;cursor:pointer}}</style>
+<main><small>OpenVietGIS · QGIS Desktop</small><h1>{title}</h1><p>{detail}</p>
+<p>{action}</p><button onclick="window.close()">Đóng tab này</button></main></html>""".encode()
+                self.send_response(status)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Content-Length", str(len(content)))
                 self.end_headers()
                 self.wfile.write(content)
@@ -76,6 +108,12 @@ class BrowserLogin:
         except queue.Empty:
             return None
 
+    def complete(self, success: bool) -> None:
+        self.success = success
+        self.confirmed.set()
+
     def close(self) -> None:
+        if not self.confirmed.is_set():
+            self.complete(False)
         self.server.shutdown()
         self.server.server_close()
