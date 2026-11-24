@@ -46,6 +46,11 @@ try{
    r.onsuccess=()=>{const db=r.result;if(!db.objectStoreNames.contains("layers")){db.close();resolve(false);return}const q=db.transaction("layers","readonly").objectStore("layers").count();q.onsuccess=()=>{db.close();resolve(q.result===2)};q.onerror=()=>{db.close();resolve(false)}}})},{},{timeout:10000});
  await page.reload({waitUntil:"domcontentloaded"});await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
  assert.equal(fullReads,cold,"F5 with matching revisions must not read features");
+ await page.getByRole("button",{name:"Xem hiệu năng GIS"}).click();
+ await page.getByText("Hiệu năng GIS · phiên hiện tại",{exact:true}).waitFor();
+ await page.getByText(/0 trang API · 2 cache hit/).waitFor();
+ await page.getByRole("button",{name:"Đóng",exact:true}).last().click();
+
  updated=true;
  await page.reload({waitUntil:"domcontentloaded"});await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
  assert.equal(fullReads,cold,"F5 with one changed feature should use delta");

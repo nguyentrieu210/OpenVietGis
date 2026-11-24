@@ -22,3 +22,9 @@ Goal: authenticated projects reopen without downloading every feature. PostGIS r
 - Tile eligibility currently limited to native EPSG:4326 and neutral Core. Specialist rendering, projected CRS and server-wide attribute filtering require additional product work.
 - SQLite snapshot cache is not an editable GeoPackage provider; migration to persistent native GeoPackage editing, offline authenticated policy, outbox replay and reconciliation require further design and tests.
 - No claims of 1M/10M capacity or subsecond internet latency before load tests. Measure peak RAM/CPU, FPS, input latency, cache hits, network bytes and event-to-render p95. Add continuous metrics and load-test gates. Redis/shared server tile cache only if benchmarks justify it, with ACL-safe invalidation.
+
+## Production and performance evidence, 2026-11-24
+- Release af02574 served matching Web/backend/QGIS ZIP; public asset, checksum and readiness checks passed. Remote exact tree: d2baff192fef0aada291bad6e9c1ddabcaeeefda.
+- Production read-only metadata: 42 counted sources, 40,195 features, largest source 9,000; aggregate metadata query 3.37 ms. Five public readiness requests: 315–471 ms total. Not an end-to-end sync measurement.
+- Isolated PostGIS benchmark with one CPU/640 MiB memory: 1,000,000 synthetic point rows, 142 MB total storage; GiST query returned 676 points in 1.314 ms execution; high zoom MVT query produced 49 points/1,414 bytes in 2.603 ms after initialization. No user project mutation. Not a full API/RLS/browser benchmark.
+- Client diagnostics: bounded anonymous open/sync/render timing samples, cache hits, API page counts, delta layer counts, p50/p95; accessible from GIS status footer. Chromium smoke confirms unchanged F5 shows zero full pages and two cache hits. No server-wide telemetry or end-to-end paint measurement claimed.
