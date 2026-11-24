@@ -4,6 +4,7 @@ import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
 import {openCadEditor,isCadHandle,type CadEditorHandle} from "@openvietgis/spatial-workspace/cad-editor";
 import {validLink,type CadLink} from "./TileFeaturePanel";
 import {CadDraftExport,supportsCadDraft} from "./CadDraftExport";
+import {CadDraftImport} from "./CadDraftImport";
 export type CadFileVersion={id:string;filename:string;format:"dwg"|"dxf";version:number;byte_size:number;sha256:string;created_at:string};
 async function digest(bytes:ArrayBuffer){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),v=>v.toString(16).padStart(2,"0")).join("")}
 export function CadEditorPanel({client,path,document,origin,writable,canEdit,close,expire,focusHandle,onNavigate,onBusy}:{client:ApiClient;path:string;document:CadFileVersion;origin:string;writable:boolean;canEdit:boolean;close:(savedId?:string)=>void;onBusy?:(busy:boolean)=>void;expire:()=>void;focusHandle?:string|null;onNavigate?:(link:CadLink,mode:"gis"|"3d")=>void}){
@@ -21,11 +22,18 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
   if(!value||!isCadHandle(value))return;
   if(!current.current.id)return;
   const revision=current.current.version,abort=new AbortController();lookup.current=abort;
-  void client.request<{items:CadLink[]}>(path+"/"+current.current.id+"/versions/"+revision+"/links?handle="+encodeURIComponent(value),{signal:abort.signal,cache:"no-store"}).then(reply=>{
+  const getLinks=async(linkVersion:number)=>{
+   const reply=await client.request<{items:CadLink[]}>(path+"/"+current.current.id+"/versions/"+linkVersion+"/links?handle="+encodeURIComponent(value),{signal:abort.signal,cache:"no-store"});
+   return reply.items.filter(l=>validLink(l)&&l.document_id===current.current.id&&l.version===linkVersion&&l.handle.toUpperCase()===value.toUpperCase());
+  };
+  void (async()=>{
+   let valid=await getLinks(revision);
+   if(!valid.length&&revision>1&&current.current.format==="dxf"&&permit.current&&!abort.signal.aborted){
+    valid=(await getLinks(revision-1)).filter(l=>l.original_revision&&supportsCadDraft(l));
+   }
    if(abort.signal.aborted||selectionSerial.current!==serial||revision!==current.current.version)return;
-   const valid=reply.items.filter(l=>validLink(l)&&l.document_id===current.current.id&&l.version===revision&&l.handle.toUpperCase()===value.toUpperCase());
    setLinks(valid);setLookupMessage(valid.length?"Đã tìm thấy "+valid.length+" liên kết GIS.":"Handle này chưa được định vị thành đối tượng GIS.");
-  }).catch(e=>{if(abort.signal.aborted||selectionSerial.current!==serial)return;if(e instanceof ApiError&&e.status===401)expire();else setLookupMessage("Không tra được liên kết của phiên bản này.")});
+  })().catch(e=>{if(abort.signal.aborted||selectionSerial.current!==serial)return;if(e instanceof ApiError&&e.status===401)expire();else setLookupMessage("Không tra được liên kết của phiên bản này.")});
  };
  useEffect(()=>{
   const abort=new AbortController();
@@ -71,8 +79,9 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  <small>{selectedHandle?"Handle đã chọn: "+selectedHandle:"Chọn một đối tượng trên bản vẽ CAD để tra liên kết GIS."}</small>}
  {lookupMessage&&<small role="status">{lookupMessage}</small>}
  {links.map(l=><div key={l.document_id+":"+l.version+":"+l.layer_id+":"+l.handle+":"+l.feature_id}><span>{l.layer_name} · {l.feature_id} · {l.handle}{!l.original_revision?" · dữ liệu GIS đã thay đổi":""}</span>
- <button disabled={dirty||saving||!ready||!l.original_revision} onClick={()=>onNavigate?.(l,"gis")}>Mở trên GIS</button>
- <button disabled={dirty||saving||!ready||!l.original_revision} onClick={()=>onNavigate?.(l,"3d")}>Mở trên 3D</button>{canEdit&&ready&&!dirty&&!saving&&version===l.version&&current.current.format==="dxf"&&supportsCadDraft(l)&&<CadDraftExport key={[l.conversion_id,l.content_revision,l.schema_revision].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}</div>)}
+ <button disabled={dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>onNavigate?.(l,"gis")}>Mở trên GIS</button>
+ <button disabled={dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>onNavigate?.(l,"3d")}>Mở trên 3D</button>{canEdit&&ready&&!dirty&&!saving&&version===l.version&&current.current.format==="dxf"&&supportsCadDraft(l)&&<CadDraftExport key={[l.conversion_id,l.content_revision,l.schema_revision].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}
+ {canEdit&&ready&&!dirty&&!saving&&version===l.version+1&&current.current.format==="dxf"&&l.original_revision&&supportsCadDraft(l)&&<CadDraftImport key={[l.conversion_id,current.current.sha256].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}</div>)}
  {(dirty||saving)&&!!links.length&&<small>Cần lưu hoặc hủy thay đổi CAD trước khi chuyển chế độ.</small>}
  </aside>}</section>
 }
