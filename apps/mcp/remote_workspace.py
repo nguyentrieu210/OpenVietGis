@@ -57,6 +57,7 @@ class OwnedSession:
     owner: Owner
     ai_key: str = field(repr=False)
     full_workspace: int = 0
+    last_receipt: tuple[str, dict] | None = field(default=None, repr=False)
 
 
 class OwnedBridge:
@@ -114,9 +115,15 @@ class OwnedBridge:
         sid,key=self.for_subject(subject)
         with self.store.lock:
             session=self.store._get(sid,key,"ai")
+            record=self.owned[sid]
+            if record.last_receipt and record.last_receipt[0]==ticket:
+                return record.last_receipt[1]
             if not session.command or session.command.id!=ticket or session.command.method not in LONG:
                 raise BridgeError(404,"Operation ticket unavailable in this workspace")
-            return self.store.result(sid,key,ticket)
+            result=self.store.result(sid,key,ticket)
+            if result["state"] in {"done","denied","expired"}:
+                record.last_receipt=(ticket,result)
+            return result
 
     async def execute(self,subject,method,params,token_expiry):
         sid,key=self.for_subject(subject)

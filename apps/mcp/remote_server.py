@@ -117,7 +117,7 @@ def create_remote(
             structured_output=True,
         )
         async def gis_operation_status(operation_ticket: str) -> dict[str, Any]:
-            """Read state/result of an advanced operation ticket. Terminal result consumed once. Never resubmit a timed-out write without inspecting GIS."""
+            """Read state/result of an advanced operation ticket. Most recent terminal receipt can be read again in the same live workspace. Never resubmit a timed-out write without inspecting GIS."""
             token = get_access_token()
             if (
                 token is None
