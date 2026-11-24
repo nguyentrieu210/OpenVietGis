@@ -72,7 +72,7 @@ def test_r029_migration_0041_chains_from_0040() -> None:
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    assert mod.revision == "0041_r029_managed_realtime_client"
+    assert mod.revision == "0041_r029_managed_realtime"
     assert mod.down_revision == "0040_r027_pairing_and_conflicts"
 
 
