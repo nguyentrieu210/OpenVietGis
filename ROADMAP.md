@@ -8,6 +8,12 @@
 
 **Cách lập**: [Spec Kit — spec of specs](https://github.com/github/spec-kit/blob/main/docs/how-to/spec-of-specs.md)
 
+## Mục tiêu phát hành duy nhất: v1.0
+
+**Quyết định 2026-11-24:** gộp toàn bộ phạm vi từng dự kiến cho v1.1 vào **v1.0 thống nhất**. Không duy trì một sản phẩm v1.0 rút gọn và một sản phẩm v1.1 song song. Desktop OAuth, đồng bộ QGIS/Web, offline, GIS nâng cao, CAD/3D, raster, AI/MCP, plugin, cộng tác, quản trị bản đồ nền và vận hành đều thuộc mục tiêu này.
+
+Xem [Spec 030](specs/030-v1-unified-release/spec.md) · [Plan](specs/030-v1-unified-release/plan.md) · [Tasks](specs/030-v1-unified-release/tasks.md). **Đây là phạm vi phải hoàn thiện, không phải tuyên bố đã nghiệm thu.** Các bản đang chạy chỉ được thay thế sau khi ứng viên thống nhất vượt cổng release; giữ dữ liệu và bản rollback. Các ID lịch sử dưới đây vẫn dùng để truy vết kỹ thuật.
+
 ## Cách đọc
 
 Đây là baseline phân rã sản phẩm thành các phần có đầu ra kiểm chứng được.
