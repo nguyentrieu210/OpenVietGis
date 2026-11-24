@@ -31,6 +31,7 @@ try{
  });
  await page.goto("http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Chế độ không gian"});await modes.waitFor({timeout:30000});
+ await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000});
  await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});await page.locator(".live-table-row").first().click({noWaitAfter:true});
  await page.getByRole("button",{name:"3D nâng cao",exact:true}).click({noWaitAfter:true});
  await page.getByLabel("Raster địa hình").selectOption(dem);
@@ -40,7 +41,7 @@ try{
  await page.getByText(/fixture.glb · 12 tam giác/).waitFor();
  await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
- await page.locator('[data-ovg-alternate-active="3d"] .maplibregl-canvas').waitFor({timeout:30000});
+ await page.locator('[data-ovg-alternate-active="3d"] .ovg-cesium-3d canvas').waitFor({timeout:30000});
  await page.getByText(/Synthetic DEM · -5.00 → 15.00 m/).waitFor();
  await page.getByText(/fixture.glb · mô hình phiên/).waitFor();
  assert.equal(requested,1);assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
