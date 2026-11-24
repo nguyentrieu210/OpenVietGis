@@ -224,3 +224,6 @@ Cross-cutting [Spec 035 — Unified API and SDK](specs/035-unified-api-sdk/spec.
 
 
 Cross-cutting [Spec 036 — Identity and access control](specs/036-identity-access-control/spec.md): managed-session ownership, management authority, epoch checks and scoped delta fail-closed behavior; [evidence and limitations](specs/036-identity-access-control/AUDIT.md). Full cross-client security acceptance remains open.
+
+
+Cross-cutting [Spec 037 — Unified GIS/CAD/3D workspace](specs/037-unified-spatial-workspace/spec.md): independent authorized mode entry, adapter lifecycle isolation and browser regression; [evidence](specs/037-unified-spatial-workspace/AUDIT.md). Real CAD/3D acceptance remains open.
