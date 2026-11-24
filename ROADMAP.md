@@ -207,3 +207,5 @@ Child [Spec 021 — AI Copilot / MCP](specs/021-ai-copilot/spec.md): isolated MC
 ### R015
 
 Production & Commercial Readiness.
+
+Cross-cutting [Spec 031 — Product inventory & audit](specs/031-product-inventory-audit/spec.md): static baseline and remediation backlog for Spec 030 unified v1.0; [audit evidence](specs/031-product-inventory-audit/AUDIT.md). Runtime acceptance remains open; prioritize repository/release consolidation before new features.
