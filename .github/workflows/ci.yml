@@ -160,6 +160,11 @@ jobs:
           "from openvietgis_api.adapters.persistence.db import get_engine;
           connection = get_engine().connect(); connection.close()"
 
+      - name: Test CAD and GIS draft review in Chromium
+        if: ${{ !inputs.browser_only }}
+        working-directory: packages/spatial-workspace
+        run: node tests/browser/cad-draft-smoke.mjs
+
       - name: Run the full Node 26 root validation workflow
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
