@@ -19,3 +19,8 @@
 - Full shared renderer styles/labels, raster visibility and basemap variants, incremental updates for pinned DEM/model/extrusion scenes without returning to 2D.
 - Ground-anchored custom left drag, measured globe-centering visual parity on real displays, compass ring, and hardware FPS performance benchmarks.
 - Consolidate divergent GitHub main and production histories (backend/QGIS conflicts must be independently resolved). Do not force push or deploy a stale base.
+
+## Earth-style desktop orbit update
+- Mouse left drag rotates the ECEF camera pose toward the grabbed ellipsoid point, preserving altitude; off-globe drag uses virtual trackball fallback. Middle/Ctrl/Shift drag orbits the center surface point with unrestricted heading and up to 85 degrees of interactive tilt, with altitude collision guard. Right drag and wheel retain anchored dolly. Touch and pinch retain the native Cesium adapter. Click selection is forwarded only for non-drag left clicks; pointer capture loss clears the gesture.
+- Saved scene API still accepts pitch up to 75 degrees; serialization retains this bound. Native hardware FPS and exact Google Earth parity are not claimed.
+- Browser orbit test passed: left pan preserved altitude (300.371322 m), middle drag changed tilt to 29.79 degrees, heading rotated by 41.25 degrees and reversed while center and tilt remained stable, right drag zoom passed. Shared tree/table, CAD separation, revocation, earth navigation, model picking and saved-scene regressions passed. Both TypeScript checks, production build and 38/38 unit tests passed.

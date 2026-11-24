@@ -34,11 +34,11 @@ const cameraPins=new WeakMap<Cesium.CesiumWidget,{view:GeographicCamera;position
 function setCamera(c:C,widget:Cesium.CesiumWidget,camera:GeographicCamera){
  validCamera(camera);
  const center=c.Cartesian3.fromDegrees(camera.longitude,camera.latitude);
- widget.camera.lookAt(center,new c.HeadingPitchRange(c.Math.toRadians(camera.bearing),c.Math.toRadians((camera.zoom<=2?0:camera.pitch??58)-90),rangeFor(camera.zoom,camera.latitude)));
+ widget.camera.lookAt(center,new c.HeadingPitchRange(c.Math.toRadians(camera.bearing),c.Math.toRadians((camera.pitch??58)-90),rangeFor(camera.zoom,camera.latitude)));
  widget.camera.lookAtTransform(c.Matrix4.IDENTITY);
  cameraPins.set(widget,{view:{...camera},position:c.Cartesian3.clone(widget.camera.positionWC),direction:c.Cartesian3.clone(widget.camera.directionWC),up:c.Cartesian3.clone(widget.camera.upWC)});
 }
-function getCamera(c:C,widget:Cesium.CesiumWidget):GeographicCamera{
+function getCamera(c:C,widget:Cesium.CesiumWidget,maxPitch=75):GeographicCamera{
  const camera=widget.camera,canvas=widget.canvas,center=new c.Cartesian2(canvas.clientWidth/2,canvas.clientHeight/2),pin=cameraPins.get(widget);
  if(pin&&c.Cartesian3.distance(pin.position,camera.positionWC)<.001&&c.Cartesian3.distance(pin.direction,camera.directionWC)<1e-8&&c.Cartesian3.distance(pin.up,camera.upWC)<1e-8)return {...pin.view};
  const target=camera.pickEllipsoid(center)??c.Cartesian3.fromRadians(camera.positionCartographic.longitude,camera.positionCartographic.latitude);
@@ -46,7 +46,7 @@ function getCamera(c:C,widget:Cesium.CesiumWidget):GeographicCamera{
  const offset=c.Matrix4.multiplyByPoint(c.Matrix4.inverseTransformation(c.Transforms.eastNorthUpToFixedFrame(target),new c.Matrix4()),camera.positionWC,new c.Cartesian3()),range=c.Cartesian3.magnitude(offset);
  const heading=Math.hypot(offset.x,offset.y)>.00001?Math.atan2(-offset.x,-offset.y):camera.heading;
  const pitch=range>0?Math.asin(clamp(-offset.z/range,-1,1)):camera.pitch;
- return {longitude:c.Math.toDegrees(ll.longitude),latitude,zoom:clamp(Math.log2(40075016.6856*Math.max(.08,Math.cos(ll.latitude))/Math.max(5,range)),0,22),bearing:c.Math.toDegrees(c.Math.negativePiToPi(heading)),pitch:clamp(90+c.Math.toDegrees(pitch),0,75)};
+ return {longitude:c.Math.toDegrees(ll.longitude),latitude,zoom:clamp(Math.log2(40075016.6856*Math.max(.08,Math.cos(ll.latitude))/Math.max(5,range)),0,22),bearing:c.Math.toDegrees(c.Math.negativePiToPi(heading)),pitch:clamp(90+c.Math.toDegrees(pitch),0,maxPitch)};
 }
 function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initial:GeographicCamera,imagery:readonly ProjectImagery[]=[],legacyImagery:readonly LegacyImagery[]=[],initialBasemap?:string,onBasemapChange?:(id:string)=>void){
  const scene=widget.scene,controller=scene.screenSpaceCameraController,E=c.CameraEventType,M=c.KeyboardEventModifier;
@@ -56,7 +56,7 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
  controller.zoomEventTypes=[E.PINCH];
  controller.tiltEventTypes=[E.MIDDLE_DRAG,E.PINCH,{eventType:E.LEFT_DRAG,modifier:M.CTRL},{eventType:E.LEFT_DRAG,modifier:M.SHIFT}];
  controller.lookEventTypes=undefined;controller.enableLook=false;
- controller.inertiaSpin=.68;controller.inertiaTranslate=.68;controller.inertiaZoom=.5;controller.zoomFactor=4;controller.minimumZoomDistance=3;controller.maximumTiltAngle=c.Math.toRadians(75);
+ controller.inertiaSpin=0;controller.inertiaTranslate=0;controller.inertiaZoom=.5;controller.zoomFactor=4;controller.minimumZoomDistance=3;controller.maximumTiltAngle=c.Math.toRadians(75);
  scene.globe.maximumScreenSpaceError=2;scene.globe.tileCacheSize=160;scene.globe.preloadAncestors=true;scene.globe.preloadSiblings=true;
  const tools=document.createElement("div");tools.className="ovg-cesium-navigation";
  const buttons=document.createElement("div");buttons.className="ovg-earth-buttons";tools.append(buttons);
@@ -107,12 +107,12 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
  };
  if(legacy.some(i=>i.id===initialBasemap)||initialBasemap==="sentinel"){imagerySelect.value=initialBasemap!;imagerySelect.dispatchEvent(new Event("change"))}
  settings.append(info);
- const help=document.createElement("small");help.textContent="Trái: kéo · Phải xuống/lên: zoom vào/ra · Cuộn: zoom tại con trỏ · Giữa/Ctrl: nghiêng · N/U/R: đặt lại";settings.append(help);
+ const help=document.createElement("small");help.textContent="Trái: nắm và kéo địa cầu · Phải xuống/lên: zoom · Cuộn: zoom tại con trỏ · Giữa/Ctrl: xoay 360° và nghiêng · N/U/R: đặt lại";settings.append(help);
  const details=document.createElement("details");details.className="ovg-earth-settings-menu";const summary=document.createElement("summary");summary.textContent="Hiển thị 3D";details.append(summary,settings);tools.append(details);
  const credits=document.createElement("details");credits.className="ovg-earth-credit";const creditButton=document.createElement("summary");creditButton.textContent="ⓘ";creditButton.setAttribute("aria-label","Thông tin nguồn bản đồ");const creditText=document.createElement("p");creditText.textContent="CesiumJS self-hosted · Apache-2.0. Nguồn ảnh và ghi công nhà cung cấp hiển thị trên bản đồ. Google legacy là nguồn không chính thức.";credits.append(creditButton,creditText);tools.append(credits);
  surface.append(tools);
  const hud=document.createElement("div");hud.className="ovg-earth-camera-hud";hud.setAttribute("aria-label","Thông số camera 3D");surface.append(hud);
- const updateHud=()=>{if(widget.isDestroyed())return;const v=getCamera(c,widget),alt=widget.camera.positionCartographic.height;hud.dataset.altitude=String(alt);const next=v.latitude.toFixed(5)+"°, "+v.longitude.toFixed(5)+"° · "+(alt>=1000?(alt/1000).toFixed(2)+" km":Math.round(alt)+" m")+" · N "+Math.round(v.bearing)+"° · Nghiêng "+Math.round(v.pitch??0)+"°";if(hud.textContent!==next)hud.textContent=next};
+ const updateHud=()=>{if(widget.isDestroyed())return;const v=getCamera(c,widget,85),alt=widget.camera.positionCartographic.height;hud.dataset.altitude=String(alt);hud.dataset.longitude=String(v.longitude);hud.dataset.latitude=String(v.latitude);hud.dataset.bearing=String(v.bearing);hud.dataset.pitch=String(v.pitch??0);const next=v.latitude.toFixed(5)+"°, "+v.longitude.toFixed(5)+"° · "+(alt>=1000?(alt/1000).toFixed(2)+" km":Math.round(alt)+" m")+" · N "+Math.round(v.bearing)+"° · Nghiêng "+Math.round(v.pitch??0)+"°";if(hud.textContent!==next)hud.textContent=next};
  const removeHud=scene.postRender.addEventListener(updateHud);
  widget.canvas.tabIndex=0;widget.canvas.setAttribute("aria-label","Bản đồ 3D · điều hướng kiểu Google Earth");
  const canvas=widget.canvas;
@@ -133,12 +133,79 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
   if(h===undefined||h<3||h>8e7)return;
   camera.move(unit,move);scene.requestRender();
  };
- let right:{id:number;y:number;anchor:Cesium.Cartesian2;moved:boolean}|undefined,lastRight=0;
- const down=(e:PointerEvent)=>{if(e.pointerType!=="mouse"||e.button!==2)return;e.preventDefault();e.stopImmediatePropagation();cameraPins.delete(widget);right={id:e.pointerId,y:e.clientY,anchor:cursor(e),moved:false};canvas.setPointerCapture(e.pointerId)};
- const move=(e:PointerEvent)=>{if(!right||e.pointerId!==right.id)return;e.preventDefault();e.stopImmediatePropagation();const dy=e.clientY-right.y;right.y=e.clientY;if(Math.abs(dy)>0){right.moved=true;dolly(right.anchor,-dy*.008)}};
- const up=(e:PointerEvent)=>{if(!right||e.pointerId!==right.id)return;e.preventDefault();e.stopImmediatePropagation();if(!right.moved&&e.type==="pointerup"){const now=performance.now();if(now-lastRight<350){dolly(right.anchor,.55);lastRight=0}else lastRight=now}if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);right=undefined};
+ // Mouse-only controller. Touch/pinch continue through Cesium's native adapter.
+ type Drag={id:number;mode:"pan"|"orbit"|"zoom";start:Cesium.Cartesian2;previous:Cesium.Cartesian2;anchor?:Cesium.Cartesian3;target?:Cesium.Cartesian3;moved:boolean};
+ let drag:Drag|undefined,lastRight=0;
+ const cam=widget.camera;
+ const setPose=(position:Cesium.Cartesian3,direction:Cesium.Cartesian3,up:Cesium.Cartesian3)=>{
+  const height=c.Cartographic.fromCartesian(position)?.height;
+  if(height===undefined||!Number.isFinite(height)||height<3||height>8e7)return;
+  cam.setView({destination:position,orientation:{direction,up}});
+  scene.requestRender();
+ };
+ const rotateWorld=(axis:Cesium.Cartesian3,angle:number,preserveHeight:boolean)=>{
+  if(!Number.isFinite(angle)||Math.abs(angle)<1e-9)return;
+  const matrix=c.Matrix3.fromQuaternion(c.Quaternion.fromAxisAngle(axis,angle));
+  const transform=(v:Cesium.Cartesian3)=>c.Matrix3.multiplyByVector(matrix,v,new c.Cartesian3());
+  let position=transform(cam.positionWC);
+  if(preserveHeight){const ll=c.Cartographic.fromCartesian(position);if(!ll)return;ll.height=cam.positionCartographic.height;position=c.Cartographic.toCartesian(ll)}
+  setPose(position,transform(cam.directionWC),transform(cam.upWC));
+ };
+ const pan=(d:Drag,point:Cesium.Cartesian2,dx:number,dy:number)=>{
+  const hit=cam.pickEllipsoid(point);
+  if(hit&&d.anchor){
+   const from=c.Cartesian3.normalize(hit,new c.Cartesian3()),to=c.Cartesian3.normalize(d.anchor,new c.Cartesian3());
+   const axis=c.Cartesian3.cross(from,to,new c.Cartesian3()),length=c.Cartesian3.magnitude(axis);
+   if(length>1e-10){rotateWorld(c.Cartesian3.divideByScalar(axis,length,axis),Math.atan2(length,c.Cartesian3.dot(from,to)),true);return}
+  }
+  // Off-globe drag behaves like a virtual trackball, not a locked geographic pan.
+  const scale=Math.min(.006,Math.max(.00000001,cam.positionCartographic.height/6378137/Math.max(1,canvas.clientHeight)*1.5));
+  rotateWorld(c.Cartesian3.normalize(cam.upWC,new c.Cartesian3()),-dx*scale,true);
+  rotateWorld(c.Cartesian3.normalize(cam.rightWC,new c.Cartesian3()),dy*scale,true);
+  d.anchor=cam.pickEllipsoid(point);
+ };
+ const orbit=(d:Drag,dx:number,dy:number)=>{
+  const pivot=d.target;if(!pivot)return;
+  const frame=c.Transforms.eastNorthUpToFixedFrame(pivot),offset=c.Matrix4.multiplyByPoint(c.Matrix4.inverseTransformation(frame,new c.Matrix4()),cam.positionWC,new c.Cartesian3());
+  const range=c.Cartesian3.magnitude(offset);if(range<3)return;
+  const heading=Math.hypot(offset.x,offset.y)<.001?cam.heading:Math.atan2(-offset.x,-offset.y);
+  const tilt=Math.acos(clamp(offset.z/range,-1,1));
+  const h=heading-dx*.008,t=clamp(tilt+dy*.008,0,c.Math.toRadians(85));
+  const local=new c.Cartesian3(-Math.sin(h)*Math.sin(t)*range,-Math.cos(h)*Math.sin(t)*range,Math.cos(t)*range);
+  const position=c.Matrix4.multiplyByPoint(frame,local,new c.Cartesian3());
+  const direction=c.Cartesian3.normalize(c.Cartesian3.subtract(pivot,position,new c.Cartesian3()),new c.Cartesian3());
+  const rightLocal=new c.Cartesian3(Math.cos(h),-Math.sin(h),0),rightWorld=c.Matrix4.multiplyByPointAsVector(frame,rightLocal,new c.Cartesian3());
+  const up=c.Cartesian3.normalize(c.Cartesian3.cross(rightWorld,direction,new c.Cartesian3()),new c.Cartesian3());
+  setPose(position,direction,up);
+ };
+ const down=(e:PointerEvent)=>{
+  if(e.pointerType!=="mouse"||![0,1,2].includes(e.button))return;
+  e.preventDefault();e.stopImmediatePropagation();cam.cancelFlight();cameraPins.delete(widget);
+  const point=cursor(e),mode=e.button===2?"zoom":e.button===1||e.ctrlKey||e.shiftKey?"orbit":"pan";
+  const center=new c.Cartesian2(canvas.clientWidth/2,canvas.clientHeight/2);
+  drag={id:e.pointerId,mode,start:point,previous:point,anchor:cam.pickEllipsoid(point),target:cam.pickEllipsoid(center)??cam.pickEllipsoid(point),moved:false};
+  canvas.focus({preventScroll:true});canvas.setPointerCapture(e.pointerId);
+ };
+ const move=(e:PointerEvent)=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  e.preventDefault();e.stopImmediatePropagation();const point=cursor(e);
+  if(!drag.moved&&c.Cartesian2.distance(point,drag.start)<3)return;
+  drag.moved=true;const dx=point.x-drag.previous.x,dy=point.y-drag.previous.y;drag.previous=point;
+  if(drag.mode==="pan")pan(drag,point,dx,dy);
+  else if(drag.mode==="orbit")orbit(drag,dx,dy);
+  else dolly(drag.start,-dy*.008);
+ };
+ const up=(e:PointerEvent)=>{
+  if(!drag||e.pointerId!==drag.id)return;
+  e.preventDefault();e.stopImmediatePropagation();const d=drag;drag=undefined;
+  if(!d.moved&&e.type==="pointerup"){
+   if(d.mode==="zoom"){const now=performance.now();if(now-lastRight<350){dolly(d.start,.55);lastRight=0}else lastRight=now}
+   else if(d.mode==="pan"){const action=widget.screenSpaceEventHandler.getInputAction(c.ScreenSpaceEventType.LEFT_CLICK);if(action)(action as (e:{position:Cesium.Cartesian2})=>void)({position:d.start})}
+  }
+  if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+ };
  const wheel=(e:WheelEvent)=>{if(e.ctrlKey||e.shiftKey)return;e.preventDefault();e.stopImmediatePropagation();cameraPins.delete(widget);dolly(cursor(e),e.deltaY*(e.deltaMode===1?.045:e.deltaMode===2?.5:.0018))};
- canvas.addEventListener("pointerdown",down,true);canvas.addEventListener("pointermove",move,true);canvas.addEventListener("pointerup",up,true);canvas.addEventListener("pointercancel",up,true);canvas.addEventListener("wheel",wheel,{capture:true,passive:false});
+ const lost=()=>{drag=undefined};canvas.addEventListener("lostpointercapture",lost);canvas.addEventListener("pointerdown",down,true);canvas.addEventListener("pointermove",move,true);canvas.addEventListener("pointerup",up,true);canvas.addEventListener("pointercancel",up,true);canvas.addEventListener("wheel",wheel,{capture:true,passive:false});
 
  const keyboard=(e:KeyboardEvent)=>{if(e.ctrlKey||e.altKey||e.metaKey)return;const key=e.key.toLowerCase();if(!["n","u","r"," ","+","=","-","_"].includes(key))return;e.preventDefault();e.stopPropagation();if(key==="n")north();else if(key==="r"||key==="u")top();else if(key===" "){widget.camera.cancelFlight();}else zoom(key==="+"||key==="="?1:-1);scene.requestRender()};
  widget.canvas.addEventListener("keydown",keyboard);
@@ -148,7 +215,7 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
   widget.camera.flyToBoundingSphere(new c.BoundingSphere(target,1),{offset:new c.HeadingPitchRange(c.Math.toRadians(v.bearing),c.Math.toRadians((v.pitch??0)-90),range),duration:.55,maximumHeight:Math.max(range*2,20)});scene.requestRender();
  },c.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
  resolution();
- return ()=>{removeHud();resize.disconnect();canvas.removeEventListener("pointerdown",down,true);canvas.removeEventListener("pointermove",move,true);canvas.removeEventListener("pointerup",up,true);canvas.removeEventListener("pointercancel",up,true);canvas.removeEventListener("wheel",wheel,true);widget.canvas.removeEventListener("keydown",keyboard);widget.canvas.removeEventListener("contextmenu",preventMenu)};
+ return ()=>{removeHud();resize.disconnect();canvas.removeEventListener("lostpointercapture",lost);canvas.removeEventListener("pointerdown",down,true);canvas.removeEventListener("pointermove",move,true);canvas.removeEventListener("pointerup",up,true);canvas.removeEventListener("pointercancel",up,true);canvas.removeEventListener("wheel",wheel,true);widget.canvas.removeEventListener("keydown",keyboard);widget.canvas.removeEventListener("contextmenu",preventMenu)};
 }
 function meshPrimitive(c:C,groups:MeshGroup[]):Cesium.Primitive{
  const instances=groups.filter(g=>g.positions.length>=9).map(g=>{
