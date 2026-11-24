@@ -152,6 +152,17 @@ jobs:
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
 
+      - name: Test canonical built workspace (synthetic API)
+        if: ${{ !inputs.browser_only }}
+        run: pnpm validate:canonical-smoke
+
+      - name: Test MCP contracts and ticket lifecycle
+        if: ${{ !inputs.browser_only }}
+        working-directory: apps/mcp
+        run: |
+          uv sync --frozen
+          uv run --frozen pytest -q
+
       - name: Run focused browser diagnosis
         if: ${{ inputs.browser_only }}
         run: |

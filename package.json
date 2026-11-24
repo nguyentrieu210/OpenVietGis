@@ -25,6 +25,7 @@
     "validate": "pnpm validate:runtime && pnpm validate:ts && pnpm validate:py && pnpm validate:contracts && pnpm validate:scope && pnpm validate:arch && pnpm validate:docs && pnpm validate:integration && pnpm validate:e2e && pnpm validate:e2e:bootstrap && pnpm validate:e2e:offline && uv run --project apps/api python tools/check_secret_surfaces.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json && uv run --project apps/api python tools/check_tenant_timing.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json",
     "contracts:generate": "pnpm --filter @openvietgis/client-sdk generate:contracts",
     "validate:contracts": "uv run --project apps/api python tools/check_contracts.py && pnpm contracts:generate && git diff --exit-code -- packages/client-sdk/src/generated",
+    "validate:canonical-smoke": "node apps/web-next/run-canonical-smoke.mjs",
     "validate:scope": "uv run --project apps/api python tools/check_scope.py",
     "dev:identity": "docker compose -f infra/dev/compose.yaml -f infra/dev/compose.identity.yaml up -d postgres keycloak"
   },

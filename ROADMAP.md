@@ -233,3 +233,27 @@ Cross-cutting [Spec 038 — Design system and workspace UX](specs/038-design-sys
 
 
 Cross-cutting [Spec 039 — Unified Plugin Framework](specs/039-unified-plugin-framework/spec.md): exact official manifest/runtime pinning, activation validation and Core fallback; [evidence and rollout limits](specs/039-unified-plugin-framework/AUDIT.md). Existing tenant manifest compatibility requires reviewed pre-deploy audit.
+
+
+Cross-cutting [Spec 040 — Connector & Realtime](specs/040-connector-realtime/spec.md): [scope, evidence and open gates](specs/040-connector-realtime/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 041 — AI & MCP](specs/041-ai-mcp/spec.md): [scope, evidence and open gates](specs/041-ai-mcp/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 042 — Quality Gate](specs/042-quality-gate/spec.md): [scope, evidence and open gates](specs/042-quality-gate/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 043 — Performance](specs/043-performance/spec.md): [scope, evidence and open gates](specs/043-performance/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 044 — Security](specs/044-security/spec.md): [scope, evidence and open gates](specs/044-security/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 045 — Release & Deployment](specs/045-release-deployment/spec.md): [scope, evidence and open gates](specs/045-release-deployment/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 046 — Documentation & Governance](specs/046-docs-governance/spec.md): [scope, evidence and open gates](specs/046-docs-governance/AUDIT.md). No automatic live promotion.
+
+
+Cross-cutting [Spec 047 — Stable Acceptance](specs/047-stable-acceptance/spec.md): [scope, evidence and open gates](specs/047-stable-acceptance/AUDIT.md). No automatic live promotion.
