@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 import type {SpatialLayer,SpatialSource,MapStyle} from "@openvietgis/client-sdk";
 import type {StudioLayerGroup,StudioRow} from "./studio-contract";
-import type {CoreCommand} from "./CoreCommandBar";
+import {commandDisabledReason,type CoreCommand} from "./CoreCommandBar";
 import {GisIcon,type IconName} from "./GisIcon";
 import type {WorkspacePrefs,LayerView} from "./LayerProperties";
 import {basemaps} from "./Basemaps";
@@ -15,8 +15,9 @@ const n=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/�
 const count=(x:number|undefined|null)=>typeof x==="number"?x.toLocaleString("vi-VN"):"?";
 function Symbol({layer,color}:{layer:SpatialLayer;color:string}){const t=layer.source.schema?.geometry_family;return <span className={"qgis-symbol "+(t==="Point"?"point":t==="LineString"?"line":t==="Polygon"?"polygon":"unknown")} style={{"--sym":color} as React.CSSProperties}/>}
 function Check({checked,mixed,onChange,label,group=false}:{checked:boolean;mixed?:boolean;onChange:()=>void;label:string;group?:boolean}){return <label className={"live-layer qgis-check "+(group?"studio-layer-group":"")}><input aria-label={label} type="checkbox" checked={checked} ref={el=>{if(el)el.indeterminate=!!mixed}} onChange={onChange} onClick={e=>e.stopPropagation()}/></label>}
-export function GisButton({icon,label,run,disabled,active,children}:{icon:IconName;label:string;run:()=>void;disabled?:boolean;active?:boolean;children?:React.ReactNode}){return <button type="button" className={"qgis-icon-button "+(active?"active":"")} title={label} aria-label={label} disabled={disabled} onClick={run}><GisIcon name={icon}/>{children}</button>}
+export function GisButton({icon,label,run,disabled,active,children,advanced=false,reason}:{icon:IconName;label:string;run:()=>void;disabled?:boolean;active?:boolean;children?:React.ReactNode;advanced?:boolean;reason?:string}){return <button type="button" className={"qgis-icon-button "+(active?"active":"")} title={disabled&&reason?label+" · "+reason:label} aria-label={label} aria-pressed={active} data-tool-detail={advanced?"advanced":undefined} disabled={disabled} onClick={run}><GisIcon name={icon}/>{children}</button>}
 
+const ESSENTIAL_COMMANDS=new Set(["SAVE","ZI","ZO","ZE","EDIT","UNDO","REDO","POINT","LINE","POLYGON","MOVE","SNAP","DIST","AREA","TOOLBOX","LAYOUT","IMPORT","EXPORT"]);
 const TOOL_IDS=["data","map","edit","analysis","output"];
 const TOOL_NAMES:Record<string,string>={data:"Dữ liệu",map:"Bản đồ",edit:"Biên tập",analysis:"Phân tích",output:"Xuất bản"};
 type ToolPalette={id:string;groups:string[];x:number;y:number;vertical:boolean;width?:number;height?:number};
@@ -40,8 +41,10 @@ function readTools(key:string):ToolLayout{
  }catch{return resetTools()}
 }
 export function QgisTools({storageKey,mapHost,commands,pan,select,mouseMode,mode,table,openLayer,refresh,openTable,editing,snap,ortho,performance}:{storageKey:string;mapHost:HTMLElement|null;commands:CoreCommand[];pan:()=>void;select:()=>void;mouseMode:string;mode:string|null;table:boolean;openLayer:()=>void;refresh:()=>void;openTable:()=>void;editing:boolean;snap:boolean;ortho?:boolean;performance?:boolean}){
- const c=(alias:string,icon:IconName,active=false)=>{const x=commands.find(c=>c.alias===alias);return <GisButton key={alias} icon={icon} label={x?x.label+" ("+alias+")":alias} disabled={!x||x.disabled} active={active} run={()=>void x?.run("")}/>};
+ const c=(alias:string,icon:IconName,active?:boolean)=>{const x=commands.find(c=>c.alias===alias);return <GisButton key={alias} icon={icon} label={x?x.label+" ("+alias+")":alias} disabled={!x||x.disabled} active={active} advanced={!ESSENTIAL_COMMANDS.has(alias)} reason={x&&x.disabled?commandDisabledReason(x):undefined} run={()=>void x?.run("")}/>};
  const [layout,setLayout]=useState<ToolLayout>(()=>readTools(storageKey));
+ const [full,setFull]=useState(()=>{try{return localStorage.getItem(storageKey+":detail")==="full"}catch{return false}});
+ useEffect(()=>{try{localStorage.setItem(storageKey+":detail",full?"full":"compact")}catch{}},[storageKey,full]);
  const [preview,setPreview]=useState<{x:number;y:number;label:string;target:ToolDrop|null}|null>(null);
  const drag=useRef<ToolDrag|null>(null),strip=useRef<HTMLDivElement>(null);
  const [sizeDraft,setSizeDraft]=useState<PaletteSize|null>(null),resizeDraft=useRef<PaletteSize|null>(null),resizing=useRef<PaletteResize|null>(null);
@@ -143,10 +146,10 @@ export function QgisTools({storageKey,mapHost,commands,pan,select,mouseMode,mode
  const hasDock=rows.some(r=>r.length);
  const dockHover=preview?.target?.kind==="dock",dockRect=dockHover?strip.current?.getBoundingClientRect():null;
  return <>
- <div className="qgis-toolstrip" ref={strip} aria-label="Thanh công cụ GIS">
+ <div className={"qgis-toolstrip "+(full?"qgis-tools-full":"qgis-tools-compact")} ref={strip} aria-label="Thanh công cụ GIS">
  {rows.map((row,ri)=>(ri===0||row.length>0)&&<div data-tool-slot={"dock:"+ri} className={"qgis-toolrow "+(dockHover?"dragging ":"")+(isTarget("dock",ri)?"dock-target":"")} key={ri}>
  {ri===0&&<button className="qgis-toolstrip-grip" type="button" aria-label="Di chuyển cả thanh công cụ" title="Kéo cả thanh công cụ xuống bản đồ · Enter để tách nổi" disabled={!hasDock||!mapHost} {...grip({kind:"dock"})} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();float({kind:"dock"})}}} onDoubleClick={()=>float({kind:"dock"})}>⠿</button>}
- {row.map(id=>renderGroup(id,ri))}
+ {ri===0&&<button type="button" className="qgis-tools-detail" aria-pressed={full} onClick={()=>setFull(v=>!v)} title="Hiện/ẩn các nút nâng cao; mọi lệnh vẫn có trong Tìm công cụ">{full?"Thu gọn":"Tất cả công cụ"}</button>}{row.map(id=>renderGroup(id,ri))}
  {!row.length&&!dockHover&&<span className="qgis-tool-empty">Công cụ đang nổi</span>}{dockHover&&isTarget("dock",ri)&&preview?.target?.kind==="dock"&&!preview.target.before&&<span className="qgis-tool-drop">Thả vào cuối hàng</span>}
  {ri===0&&<div className="qgis-tools-actions"><button type="button" disabled={!hasDock||!mapHost} title="Tách cả thanh công cụ nổi trên bản đồ" aria-label="Tách cả thanh công cụ" onClick={()=>float({kind:"dock"})}>↘</button><button type="button" className="qgis-tools-reset" title="Khôi phục bố cục thanh công cụ" aria-label="Khôi phục thanh công cụ" onClick={()=>setLayout(resetTools())}>↺</button></div>}
  </div>)}

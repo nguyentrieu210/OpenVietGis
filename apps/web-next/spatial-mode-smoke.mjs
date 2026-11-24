@@ -34,9 +34,42 @@ try{
  const modes=page.getByRole("group",{name:"Chế độ không gian"});
  await modes.waitFor({timeout:30000});
  await page.locator(".ovg-spatial-top select option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
+ // The compact dock retains all commands in the searchable ribbon.
+ const compact=page.locator(".qgis-toolstrip");
+ const advanced=compact.locator('[data-tool-detail="advanced"]').first();
+ assert.equal(await advanced.isVisible(),false);
+ await page.getByRole("button",{name:"Tất cả công cụ",exact:true}).click();
+ assert.equal(await advanced.isVisible(),true);
+ await page.getByRole("button",{name:"Thu gọn",exact:true}).click();
+ assert.equal(await advanced.isVisible(),false);
+ const find=page.getByRole("button",{name:"Tìm công cụ",exact:true});
+ await find.click();
+ const search=page.getByRole("textbox",{name:"Tìm công cụ",exact:true});
+ await search.waitFor();
+ assert.ok(await search.evaluate(e=>e===document.activeElement));
+ await search.fill("BUFFER");
+ assert.equal(await page.locator(".core-menu-items button").count(),1);
+ await search.press("Escape");
+ await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
+ assert.ok(await find.evaluate(e=>e===document.activeElement));
+ console.log("PASS compact/full toolbar, all-tool search and Escape focus restoration");
+ await page.setViewportSize({width:390,height:844});
+ await find.click();
+ await search.waitFor();
+ const menuBox=await page.locator(".core-ribbon-menu-fixed").boundingBox();
+ assert.ok(menuBox.x>=0&&menuBox.x+menuBox.width<=391);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ await search.press("Escape");
+ await page.setViewportSize({width:1280,height:850});
+ console.log("PASS mobile ribbon search within viewport");
  // A project with no configured 3D source must still open the workspace.
  await modes.getByRole("button",{name:"3D",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Không gian 3D"}).waitFor();
+ // Hidden GIS command listeners must not consume keyboard events in alternate modes.
+ const keyHandled=await page.evaluate(()=>!document.body.dispatchEvent(new KeyboardEvent("keydown",{key:"L",bubbles:true,cancelable:true})));
+ assert.equal(keyHandled,false);
+ assert.equal(await page.locator('.core-command input').inputValue(),"");
+ console.log("PASS alternate mode does not intercept GIS shortcuts");
  assert.equal(await modes.getByRole("button",{name:"3D",exact:true}).getAttribute("aria-pressed"),"true");
  await page.getByRole("button",{name:"Chiều cao polygon",exact:true}).click();
  await page.getByLabel("Chiều cao 3D (m)").waitFor();
