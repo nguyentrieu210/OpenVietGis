@@ -12,7 +12,7 @@ const browser=await chromium.launch({headless:true,args:["--no-sandbox","--disab
 try{
  const p=await browser.newPage({viewport:{width:1440,height:950}}),errors=[],outside=[],docs=new Map();
  const org="fixture-org",pid="fixture-project",id="drawing-id";
- docs.set(id,[{filename:"Drawing1.dwg",bytes:fixture}]);
+ if(process.env.OVG_CAD_TEST!=="create")docs.set(id,[{filename:"Drawing1.dwg",bytes:fixture}]);
  const meta=(id,v)=>{const x=docs.get(id)[v-1];return {id,filename:x.filename,format:x.filename.split(".").at(-1),version:v,byte_size:x.bytes.length,sha256:createHash("sha256").update(x.bytes).digest("hex"),created_at:"2026-01-01T00:00:00Z"}};
  p.on("pageerror",e=>{errors.push(e.message);console.log("pageerror",e.message)});
  await p.route("**/*",async r=>{
@@ -34,7 +34,7 @@ try{
     if(m==="POST"){
      const request=r.request(),data=request.postDataBuffer(),ct=request.headers()["content-type"];
      const form=await new Response(data,{headers:{"content-type":ct}}).formData(),file=form.get("file"),bytes=Buffer.from(await file.arrayBuffer());
-     const key=doc||"new-dxf";if(doc)assert.equal(form.get("expected_version"),String(docs.get(doc).length));else {assert.deepEqual(bytes,blankDxf);docs.set(key,[]);}
+     const key=doc||"new-dxf";if(doc)assert.equal(form.get("expected_version"),String(docs.get(doc).length));else {assert.equal(docs.has(key),false);assert.ok(bytes.toString("ascii",0,4096).includes("SECTION"));docs.set(key,[]);}
      docs.get(key).push({filename:file.name,bytes});body=meta(key,docs.get(key).length);
     }else if(parts.at(-1)==="download")return r.fulfill({contentType:"application/octet-stream",body:docs.get(doc)[Number(parts.at(-2))-1].bytes});
     else if(parts.at(-1)==="versions")body={items:docs.get(doc).map((_,i)=>meta(doc,i+1)).reverse()};
@@ -50,28 +50,31 @@ try{
  await p.goto(origin+"/app",{waitUntil:"domcontentloaded"});
  const modes=p.getByRole("group",{name:"Chế độ không gian"});await modes.getByRole("button",{name:"CAD",exact:true}).click();
  if(process.env.OVG_CAD_TEST!=="create"){
- await p.getByRole("button",{name:/Drawing1.dwg/}).click();
- await p.getByRole("button",{name:"Mở & sửa",exact:true}).click();
+
  const editor=p.locator(".ovg-cad-editor");
  await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000});
  await editor.frameLocator("iframe").frameLocator("iframe").locator("canvas").first().waitFor({timeout:20000});
  console.log("PASS full OpenCADStudio canvas in GIS, DWG opened");
- await p.getByRole("button",{name:"Lưu phiên bản",exact:true}).click();
+ await p.getByRole("button",{name:"Lưu",exact:true}).click();
  await p.getByText("Đã lưu phiên bản 2.",{exact:true}).waitFor({timeout:45000}).catch(async e=>{console.log("SAVE DEBUG",docs.get(id).length,(await editor.innerText()).slice(0,2000));throw e});
  assert.equal(docs.get(id).length,2);assert.ok(/^AC10\d{2}/.test(docs.get(id)[1].bytes.subarray(0,6).toString()));assert.deepEqual(docs.get(id)[0].bytes,fixture);
- await p.getByRole("button",{name:"Về kho CAD",exact:true}).click();
+ await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  await p.getByRole("button",{name:"Xem CAD",exact:true}).click();
  await p.getByText("Chế độ chỉ đọc.",{exact:true}).waitFor({timeout:120000});
- assert.equal(await p.getByRole("button",{name:"Lưu phiên bản",exact:true}).isDisabled(),true);
- await p.getByRole("button",{name:"Về kho CAD",exact:true}).click();
+ assert.equal(await p.getByRole("button",{name:"Lưu",exact:true}).isDisabled(),true);
+ await p.getByRole("button",{name:"Bản vẽ",exact:true}).click();
  console.log("PASS real DWG save receipt, immutable original and historical read-only");
  }
  if(process.env.OVG_CAD_TEST!=="dwg"){
- p.once("dialog",d=>d.accept("Test-new"));
- await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
+ if(process.env.OVG_CAD_TEST!=="create")await p.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
  await p.getByText("Có thể chỉnh sửa và lưu phiên bản mới.",{exact:true}).waitFor({timeout:120000}).catch(async e=>{console.log("CREATE DEBUG",docs.get("new-dxf")?.length,(await p.locator("body").innerText()).slice(0,1800));throw e});
- assert.equal(docs.get("new-dxf").length,1);
- console.log("PASS create DXF and launch full CAD editor directly");
+ assert.equal(docs.has("new-dxf"),false);
+ await p.getByLabel("Tên bản vẽ",{exact:true}).fill("Test-new.dxf");
+ await p.getByRole("button",{name:"Lưu",exact:true}).click();
+ await p.getByText("Đã lưu phiên bản 1.",{exact:true}).waitFor({timeout:45000});
+ assert.equal(docs.get("new-dxf").length,1);assert.equal(docs.get("new-dxf")[0].filename,"Test-new.dxf");
+ console.log("PASS empty project opens full CAD immediately; draft saved only on explicit Save");
  }
+ if(process.env.OVG_CAD_TEST!=="dwg"){await p.locator(".ovg-cad-about summary").click();await p.getByRole("link",{name:"Giấy phép GPL / mã nguồn"}).waitFor();}
  assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);
 }finally{await browser.close()}
