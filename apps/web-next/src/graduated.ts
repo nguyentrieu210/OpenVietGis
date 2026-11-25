@@ -10,4 +10,5 @@ export function gradClassIndex(x:unknown,breaks:readonly number[]){const n=numer
 export function gradColor(i:number,view:Ramp){const k=view.gradBreaks.length-1;return i<0||k<1?NO_VALUE_COLOR:mix(view.gradFrom,view.gradTo,k===1?1:i/(k-1))}
 const fmt=(x:number)=>x.toLocaleString("vi-VN",{maximumFractionDigits:2});
 export function gradLegend(rows:StudioRow[],view:Ramp){const b=view.gradBreaks,counts=new Array(Math.max(0,b.length-1)).fill(0);let none=0;for(const r of rows){const i=gradClassIndex(r.feature.attributes[view.gradField],b);if(i<0)none++;else counts[i]++}const out=counts.map((count,i)=>({key:fmt(b[i]!)+" – "+fmt(b[i+1]!),count,color:gradColor(i,view)}));return none?[...out,{key:"(Không phải số)",count:none,color:NO_VALUE_COLOR}]:out}
+export const gradKey=(x:unknown,view:Ramp)=>{const b=view.gradBreaks,i=gradClassIndex(x,b);return i<0?"(Không phải số)":fmt(b[i]!)+" – "+fmt(b[i+1]!)};
 export const zoomScale=(z:number)=>"1:"+Math.round(591657550/2**z).toLocaleString("vi-VN");

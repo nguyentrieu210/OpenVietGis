@@ -717,3 +717,20 @@
 .ovg-rail-tab{pointer-events:auto;position:fixed;right:0;top:50%;transform:translateY(-50%);width:30px;height:44px;border:1px solid #ffffff2b;border-right:0;border-radius:12px 0 0 12px;background:#0d1720d9;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:-4px 0 14px #0004;font-size:15px;cursor:pointer;padding:0}
 .ovg-rail-tab:hover{width:36px}
 .ovg-rail-tab .ovg-chat-badge{top:-6px;left:-6px;right:auto}
+
+/* Layer tree upgrade: out-of-scale dimming, class toggles, rename, opacity, themes */
+.qgis-studio .qgis-layer-row.out-scale .qgis-layer-name{opacity:.45;font-style:italic}
+.qgis-studio .qgis-category-row input[type=checkbox]{margin:0 4px 0 0;flex:none}
+.qgis-studio .qgis-category-row.off{opacity:.5}
+.qgis-studio .qgis-rename{flex:1;min-width:0;height:22px;padding:0 6px;border:1px solid #1565a9;border-radius:3px;font-size:12.5px}
+.qgis-studio .qgis-row-toggle.lock{font-size:10px!important}
+.qgis-opacity-pop{position:fixed;z-index:4600;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;width:230px;padding:10px 12px;background:#fff;border:1px solid #cdd5db;border-radius:8px;box-shadow:0 10px 26px #0f1b2433;font-size:12.5px}
+.qgis-opacity-pop b{grid-column:1/-1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qgis-opacity-pop button{grid-column:1/-1;justify-self:end;padding:3px 12px;border:1px solid #1565a9;border-radius:5px;background:#1565a9;color:#fff;cursor:pointer}
+.qgis-themes{position:relative;display:inline-flex}
+.qgis-themes-pop{position:absolute;left:0;top:calc(100% + 4px);z-index:60;display:grid;gap:4px;min-width:220px;padding:8px;background:#fff;border:1px solid #cdd5db;border-radius:8px;box-shadow:0 10px 26px #0f1b2433;font-size:12.5px}
+.qgis-themes-pop>b{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7a83}
+.qgis-themes-pop small{color:#7a8a93}
+.qgis-theme-row{display:flex;gap:2px}.qgis-theme-row button{border:0;background:none;padding:5px 8px;border-radius:5px;cursor:pointer;text-align:left}
+.qgis-theme-row button:first-child{flex:1}.qgis-theme-row button:hover{background:#eef3f7}
+.qgis-theme-add{border:1px dashed #b8c5ce;background:none;border-radius:6px;padding:6px;color:#1565a9;font-weight:600;cursor:pointer}
