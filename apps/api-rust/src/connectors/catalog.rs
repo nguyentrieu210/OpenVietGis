@@ -12,6 +12,14 @@ pub enum PermissionLevel {
 }
 
 impl PermissionLevel {
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::Read => "project.read",
+            Self::Edit => "project.edit",
+            Self::Manage => "project.manage",
+        }
+    }
+
     fn satisfies(self, required: Self) -> bool {
         matches!(
             (self, required),
@@ -62,6 +70,16 @@ pub enum Lifecycle {
     Planned,
 }
 
+impl Lifecycle {
+    pub fn wire(self) -> &'static str {
+        match self {
+            Self::ExistingReadOnly => "existing_read_only",
+            Self::Candidate => "candidate",
+            Self::Planned => "planned",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct AdapterManifest {
     pub key: &'static str,
@@ -70,7 +88,9 @@ pub struct AdapterManifest {
     pub mode: &'static str,
     pub lifecycle: Lifecycle,
     pub protocols: &'static [&'static str],
+    pub note: &'static str,
     pub proposed_actions: &'static [ConnectorAction],
+    pub existing_api: Option<&'static str>,
     pub executable_actions: &'static [ConnectorAction],
 }
 
@@ -109,7 +129,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "remote_service",
         lifecycle: Lifecycle::ExistingReadOnly,
         protocols: &["WMS", "WFS", "COG", "XYZ"],
+        note: "R010 provides allowlisted read-only external sources; no hub sync.",
         proposed_actions: OGC_PROPOSED,
+        existing_api: Some("external-sources"),
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -119,7 +141,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "open_protocols",
         lifecycle: Lifecycle::ExistingReadOnly,
         protocols: &["GeoPackage", "PostGIS", "WMS", "WFS"],
+        note: "Read-only GeoPackage/GeoJSON/PostGIS SQL export and two-step revision-pinned GeoPackage sync push via R006 changesets (deletions blocked by default).",
         proposed_actions: QGIS_PROPOSED,
+        existing_api: Some("integration-hub"),
         executable_actions: QGIS_EXECUTABLE,
     },
     AdapterManifest {
@@ -129,7 +153,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "remote_service",
         lifecycle: Lifecycle::Planned,
         protocols: &["ArcGIS Feature Service", "FileGDB", "SHP"],
+        note: "Vendor API authentication, feature ACL and versioning require tests.",
         proposed_actions: INSPECT_SYNC_PULL,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -139,7 +165,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "file_or_desktop_bridge",
         lifecycle: Lifecycle::ExistingReadOnly,
         protocols: &["DXF", "DWG"],
+        note: "Read-only 2D DXF export (R2010, projected metre CRS) verified in Hub; DWG native licensing and CAD writeback remain denied.",
         proposed_actions: AUTOCAD_PROPOSED,
+        existing_api: Some("integration-hub"),
         executable_actions: AUTOCAD_EXECUTABLE,
     },
     AdapterManifest {
@@ -149,7 +177,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "windows_bridge",
         lifecycle: Lifecycle::Candidate,
         protocols: &["DGN V8", "COM"],
+        note: "R025 separate branch: licensed Windows instance, read-only preview first.",
         proposed_actions: &[ConnectorAction::Inspect, ConnectorAction::Import],
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -159,7 +189,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "file_exchange",
         lifecycle: Lifecycle::Planned,
         protocols: &["TAB", "MIF", "MID"],
+        note: "Text, CRS and styling preservation not yet accepted.",
         proposed_actions: IMPORT_EXPORT,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -169,7 +201,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "format_adapter",
         lifecycle: Lifecycle::Planned,
         protocols: &["DGN", "cadastral_attributes"],
+        note: "Requires lawful schema access and tested parcel/attribute binding.",
         proposed_actions: IMPORT_EXPORT,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -179,7 +213,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "database_bridge",
         lifecycle: Lifecycle::ExistingReadOnly,
         protocols: &["PostGIS"],
+        note: "Read-only PostGIS SQL and GeoPackage export for external PostGIS import; internal DB credentials are never exposed and writeback remains denied.",
         proposed_actions: POSTGIS_PROPOSED,
+        existing_api: Some("integration-hub"),
         executable_actions: POSTGIS_EXECUTABLE,
     },
     AdapterManifest {
@@ -189,7 +225,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "remote_service",
         lifecycle: Lifecycle::Planned,
         protocols: &["WMS", "WFS", "OGC API"],
+        note: "Generic WMS/WFS may be registered in R010; no dedicated adapter.",
         proposed_actions: INSPECT_SYNC_PULL,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -199,7 +237,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "file_exchange",
         lifecycle: Lifecycle::Planned,
         protocols: &["KML", "KMZ"],
+        note: "Dedicated exchange adapter not verified.",
         proposed_actions: IMPORT_EXPORT,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -209,7 +249,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "file_exchange",
         lifecycle: Lifecycle::Planned,
         protocols: &["XLSX", "CSV"],
+        note: "Dedicated coordinate/field mapping profile not verified.",
         proposed_actions: IMPORT_EXPORT,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
     AdapterManifest {
@@ -219,7 +261,9 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         mode: "file_exchange",
         lifecycle: Lifecycle::Planned,
         protocols: &["LandXML", "GeoTIFF", "LAS", "3D Tiles"],
+        note: "Acquisition device and model adapters require separate acceptance.",
         proposed_actions: IMPORT_EXPORT,
+        existing_api: None,
         executable_actions: DISCOVER,
     },
 ];
@@ -263,6 +307,49 @@ pub fn evaluate_action(
     }
 }
 
+pub const ACTIONS: [ConnectorAction; 8] = [
+    ConnectorAction::Discover,
+    ConnectorAction::Inspect,
+    ConnectorAction::Configure,
+    ConnectorAction::Import,
+    ConnectorAction::Export,
+    ConnectorAction::SyncPull,
+    ConnectorAction::SyncPush,
+    ConnectorAction::Approve,
+];
+
+pub fn serialize_adapter(
+    adapter: &AdapterManifest,
+    permission: PermissionLevel,
+) -> serde_json::Value {
+    let actions = ACTIONS
+        .iter()
+        .copied()
+        .map(|action| {
+            let decision = evaluate_action(adapter, action, permission);
+            serde_json::json!({
+                "action": action.wire(),
+                "required_permission": action.required_permission().wire(),
+                "eligible_by_role": decision.eligible_by_role,
+                "executable_in_hub": decision.executable_in_hub,
+                "allowed": decision.allowed,
+                "reason": decision.reason,
+            })
+        })
+        .collect::<Vec<_>>();
+    serde_json::json!({
+        "key": adapter.key,
+        "name": adapter.name,
+        "category": adapter.category,
+        "mode": adapter.mode,
+        "lifecycle": adapter.lifecycle.wire(),
+        "protocols": adapter.protocols,
+        "note": adapter.note,
+        "existing_api": adapter.existing_api,
+        "actions": actions,
+    })
+}
+
 pub fn get_adapter(key: &str) -> Option<&'static AdapterManifest> {
     ADAPTERS.iter().find(|adapter| adapter.key == key)
 }
@@ -304,6 +391,24 @@ mod tests {
             assert_eq!(adapter.lifecycle, Lifecycle::Planned);
             assert_eq!(adapter.executable_actions, DISCOVER);
         }
+    }
+
+    #[test]
+    fn serialized_reader_qgis_matches_python_policy_shape() {
+        let value = serialize_adapter(get_adapter("qgis").unwrap(), PermissionLevel::Read);
+        assert_eq!(value["lifecycle"], "existing_read_only");
+        assert_eq!(value["existing_api"], "integration-hub");
+        let actions = value["actions"].as_array().unwrap();
+        assert_eq!(actions.len(), 8);
+        assert_eq!(actions[0]["action"], "catalog.discover");
+        assert_eq!(actions[0]["required_permission"], "project.read");
+        assert_eq!(actions[0]["allowed"], true);
+        assert_eq!(actions[4]["action"], "data.export");
+        assert_eq!(actions[4]["allowed"], true);
+        assert_eq!(actions[4]["reason"], "read_only_export");
+        assert_eq!(actions[6]["action"], "sync.push");
+        assert_eq!(actions[6]["allowed"], false);
+        assert_eq!(actions[6]["reason"], "permission_denied");
     }
 
     #[test]

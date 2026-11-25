@@ -24,6 +24,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .route("/modules", get(list_modules))
         .merge(crate::identity::router())
         .merge(crate::cad_bridge::router())
+        .merge(crate::connectors::router())
         .merge(crate::catalog::router())
         .merge(crate::cartography::router())
         .merge(crate::tenancy::router())
