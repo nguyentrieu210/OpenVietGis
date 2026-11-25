@@ -2,6 +2,14 @@
 
 All slices are specification candidates, not implemented. Scope = existing supported behavior on frozen baseline plus explicitly approved improvements; static presence is not evidence of operation. Optional desktop and custom GPU renderer are discovery-only.
 
+## Owner decision 2026-11-26: hybrid platform
+
+Rust serves the hot request paths; the Python service keeps the engines whose work happens inside existing open-source native libraries (GDAL/PROJ, the CAD engine, PyQGIS, raster/terrain tooling) or in stable domain modules, where a Rust rewrite would add FFI and build cost without speed. A reverse proxy routes each migrated path to Rust and everything else to FastAPI; both use the same PostgreSQL/PostGIS, roles and RLS.
+
+- **Migrate to Rust:** E01, E02, E03, E04, E05, E07 (GeoJSON/streamed transfer), E11, E18 (ops for the Rust service).
+- **Keep in Python / existing adapters (no migration):** E06, E08, E09, E10, E12, E13, E14, E15, E16. E17 (web client) is unchanged; it keeps calling the same public API.
+- Evidence: evidence/baseline-benchmark.md and the E05 hand-off show latency is dominated by PostGIS/RLS plan shape, not the Python runtime.
+
 | Engine | Scope | Parent references | Child spec |
 |---|---|---|---|
 | E01 | Nền tảng, identity, tenant, security | R001 R002 R015 | [spec](engines/e01-platform-security.md) |
