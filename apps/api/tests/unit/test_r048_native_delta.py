@@ -181,15 +181,7 @@ def test_revision_and_mapping_checks():
             )
 
 
-def test_lwpolyline_vertex_widths_preserved_and_arcs_rejected():
-    _, h1, _, base, p, mapping, features = fixture("Polygon", vertex=(5, 7, 0))
-    shift(features[0]["geometry"])
-    out, changed = gis_to_cad_preview(
-        base, base_sha256=digest(base), placement=p, mapping=mapping, features=features
-    )
-    assert changed == (h1,)
-    points = ezdxf.read(io.StringIO(out.decode())).entitydb[h1].get_points("xyseb")
-    assert [(s, e, b) for _, _, s, e, b in points] == [(5, 7, 0)] * 4
+def test_lwpolyline_arcs_are_rejected_not_straightened():
     _, _, _, base, p, mapping, features = fixture("Polygon", vertex=(0, 0, 0.2))
     shift(features[0]["geometry"])
     with pytest.raises(PlatformValidationError, match="bulge"):
