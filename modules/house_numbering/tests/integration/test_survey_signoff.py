@@ -107,7 +107,7 @@ def test_signoff_requires_full_reconciliation_and_locks_points(migrated_database
         # Adding a field rewrites attributes with a new null key; existing values are unchanged, so it passes.
         with get_admin_engine().begin() as connection:
             changed = connection.execute(
-                text("UPDATE spatial.reference_features SET attributes=attributes||'{\"ghi_chu\":null}'::jsonb WHERE source_id=:s"),
+                text("UPDATE spatial.reference_features SET attributes=attributes||jsonb_build_object('ghi_chu',NULL) WHERE source_id=:s"),
                 {"s": source_id},
             ).rowcount
             assert changed == 5
