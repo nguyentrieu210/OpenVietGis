@@ -101,7 +101,14 @@ try{
  const vertices=await sketch.innerText();await pan();assert.equal(await sketch.innerText(),vertices,"Space drag must not create vertices");
  await page.getByRole("button",{name:"Hủy vẽ",exact:true}).click();await sketch.waitFor({state:"detached"});
  console.log("PASS Space drag during distance measurement; vertex count unchanged");
- await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).fill("ABC");
+ await page.getByRole("button",{name:/Chọn đối tượng \(/}).first().click();
+ const cmd=page.getByRole("textbox",{name:"Dòng lệnh GIS"});
+ await cmd.fill("PAN");
+ await page.mouse.move(rect.x+rect.width*.42,rect.y+rect.height*.44);
+ await pan();
+ assert.equal(await cmd.inputValue(),"PAN");
+ console.log("PASS selection mode, command contains PAN and still focused: Space pans without executing command");
+ await cmd.fill("ABC");await cmd.hover();
  await page.keyboard.press("Space");assert.equal(await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).inputValue(),"ABC ");
  assert.equal(await page.evaluate(()=>document.body.dataset.ovgSpacePan),undefined);
  await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).fill("");
