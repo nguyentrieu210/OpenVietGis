@@ -233,3 +233,14 @@
 
 /* Keep map attribution clear of the 2D / 3D / globe switch */
 .qgis-studio .maplibregl-ctrl-bottom-right{bottom:50px}
+
+/* Review 25/11: status bar coordinate width, layer dock without the big gap, map mode switch clear of the edge, compact header */
+.qgis-status-controls input[aria-label^="Tọa độ"],.qgis-status-controls input[aria-label^="Phạm vi"]{width:168px}
+.qgis-studio .qgis-tree{flex:0 1 auto;min-height:48px}
+.qgis-studio .qgis-layers{justify-content:flex-start}
+.ovg-map-mode{right:14px;max-width:calc(100% - 28px)}
+.ovg-hotkey-switch{position:relative}
+.ovg-hotkey-switch>summary{list-style:none;cursor:pointer}.ovg-hotkey-switch>summary::-webkit-details-marker{display:none}
+.ovg-hotkey-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;display:grid;min-width:190px;padding:4px;background:#fff;border:1px solid #cdd5db;border-radius:4px;box-shadow:0 8px 20px #0f1b2433}
+.ovg-hotkey-menu button{text-align:left;padding:6px 10px;border:0;background:none;font-size:12.5px;color:#1f2a30;cursor:pointer;border-radius:3px}
+.ovg-hotkey-menu button:hover{background:#e9f1f8}
