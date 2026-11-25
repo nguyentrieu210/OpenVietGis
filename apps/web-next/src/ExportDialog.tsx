@@ -32,8 +32,8 @@ export function ExportDialog({client,org,pid,projectName,layers,rows,selection,i
  const run=async()=>{setBusy("Đang chuẩn bị…");setDone("");const files:{name:string;blob:Blob}[]=[],errs:string[]=[];
   for(const [i,id] of chosen.entries()){const l=layers.find(x=>x.id===id)!;setBusy("Đang xuất "+(i+1)+"/"+chosen.length+": "+l.name);
    try{if(f.server&&scope==="all"){const r=await downloadIntegrationLayerExport(client,org,pid,f.adapter!,id,f.server);files.push({name:safeName(l.name)+"."+f.ext.toLowerCase(),blob:r.blob})}
-    else{const feats:Feat[]=rows.filter(r=>r.layer.id===id&&(scope==="all"||(scope==="selected"?selection.has(r.key):inView(r)))).map(r=>({geometry:r.geometry as Feat["geometry"],properties:{...r.feature.attributes}}));if(!feats.length)continue;
-     const body=fmt==="kml"?toKml(l.name,feats,ft=>label(rows.find(r=>r.feature.attributes===ft.properties)??rows[0]!)):fmt==="csv"?toCsv(feats):toGeoJson(feats);
+    else{const src=rows.filter(r=>r.layer.id===id&&(scope==="all"||(scope==="selected"?selection.has(r.key):inView(r)))),feats:Feat[]=src.map(r=>({geometry:r.geometry as Feat["geometry"],properties:{...r.feature.attributes}}));if(!feats.length)continue;
+     const body=fmt==="kml"?toKml(l.name,feats,ft=>label(src[feats.indexOf(ft)]!)):fmt==="csv"?toCsv(feats):toGeoJson(feats);
      files.push({name:safeName(l.name)+"."+(fmt==="kml"?"kml":fmt==="csv"?"csv":"geojson"),blob:new Blob([body],{type:fmt==="kml"?"application/vnd.google-earth.kml+xml":fmt==="csv"?"text/csv;charset=utf-8":"application/geo+json"})})}}
    catch(e){errs.push(l.name+": "+(e instanceof Error?e.message:String(e)))}}
   if(files.length===1)down(files[0]!.blob,files[0]!.name);else if(files.length>1){setBusy("Đang nén ZIP…");down(await zipFiles(files),(safeName(name)||"xuat")+".zip")}
