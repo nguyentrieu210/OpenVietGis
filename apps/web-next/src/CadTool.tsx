@@ -1,9 +1,9 @@
 import React,{Suspense,useEffect,useState} from "react";
-import {ApiClient,ApiError,cogoTraverse,listCadConversions,loadCsrfToken} from "@openvietgis/client-sdk";
+import {ApiError,cogoTraverse,listCadConversions,loadCsrfToken} from "@openvietgis/client-sdk";
 import {CadImport} from "./workbench-registry";
 
 // Spec 058: CAD tool as three QGIS-style tabs instead of one long page.
-const client=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 type Tab="import"|"cogo"|"history";
 const DIRECTION:Record<string,string>={import:"Nhập",export:"Xuất"};
 const STATUS:Record<string,string>={completed:"Hoàn tất",succeeded:"Hoàn tất",failed:"Lỗi",pending:"Đang xử lý",running:"Đang xử lý"};

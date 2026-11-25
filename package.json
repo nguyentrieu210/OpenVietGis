@@ -10,7 +10,7 @@
     "bootstrap": "pnpm install && uv sync --project apps/api && docker compose -f infra/dev/compose.yaml up -d postgres postgres-test && pnpm exec playwright install chromium",
     "dev:db": "docker compose -f infra/dev/compose.yaml up -d postgres postgres-test",
     "dev:api": "uv run --project apps/api uvicorn openvietgis_api.main:app --reload --no-access-log --app-dir apps/api",
-    "dev:web": "pnpm --filter @openvietgis/web dev",
+    "dev:web": "pnpm --filter @openvietgis/web-next dev",
     "db:migrate": "uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head && uv run --project apps/api python tools/migrate_official_modules.py",
     "dev:reset": "uv run --project apps/api python tools/reset_dev.py",
     "validate:runtime": "node tools/check_node_runtime.mjs",
@@ -27,7 +27,8 @@
     "validate:contracts": "uv run --project apps/api python tools/check_contracts.py && pnpm contracts:generate && git diff --exit-code -- packages/client-sdk/src/generated",
     "validate:canonical-smoke": "node apps/web-next/run-canonical-smoke.mjs",
     "validate:scope": "uv run --project apps/api python tools/check_scope.py",
-    "dev:identity": "docker compose -f infra/dev/compose.yaml -f infra/dev/compose.identity.yaml up -d postgres keycloak"
+    "dev:identity": "docker compose -f infra/dev/compose.yaml -f infra/dev/compose.identity.yaml up -d postgres keycloak",
+    "build:web": "pnpm --filter @openvietgis/web-next build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

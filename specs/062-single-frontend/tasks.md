@@ -3,7 +3,7 @@
 - [x] T002 Write specification, plan, acceptance and tasks
 - [x] T003 Migrate reachable feature dependency closure to canonical frontend (26 source files; superseded catalog and transfer pages excluded)
 - [x] T004 Remove cross-app bridge; enforce Vite and architecture boundary; canonical build PASS
-- [ ] T005 Consolidate API client and protected account lifecycle without weakening security
+- [ ] T005 API client consolidated; protected-query unit tests PASS; authenticated lifecycle acceptance pending
 - [ ] T006 Native UI modernization for migrated workbenches: forms, tables, tool search, status and dialog behavior
 - [ ] T007 Preserve standalone offline routes, worker, existing drafts and sync; verify
 - [ ] T008 Map historical routes and replace legacy end-to-end tests with equivalent canonical tests
@@ -22,3 +22,13 @@
 - Processing: server algorithm catalog, parameter validation, Buffer segments, status filtering, duplicate submission guard, and job polling implemented. Browser fixture PASS.
 - Offline: standalone route and static-only service worker migrated. Loopback browser test with network disconnect, reload, retained draft, identical retry, receipt, and local lock PASS on rerun. First run timed out awaiting worker control. Actual account and DEV-scoped service worker remain unverified.
 - Legacy workspace package and old route-specific test suite remain until compatibility replacement and deletion gate. Production unchanged.
+
+## Second implementation checkpoint
+- One ApiClient instance shared by canonical entrypoints and migrated workbenches; existing protected-read checks retained.
+- Default pnpm dev:web and build:web select web-next. Loopback dev/preview API proxy configured.
+- Historical project URLs select an accessible organization/project and open the matching workbench. Processing deep-link verified with browser fixture; account deep-link opens account menu. Full route parity not yet established.
+- Migrated seven unit suites; 55 Vitest cases and 24 Node tests PASS. Typecheck and DEV build PASS.
+- Workspace picker uses shared modal keyboard/focus behavior.
+- Canonical processing deep-link and modal browser fixture PASS.
+- Historical logout-switch test uses a different host and failed on an old login selector; no authenticated DEV logout acceptance.
+- 23 legacy E2E spec files still require migration and acceptance. Old package/workspace retained; no claim of complete retirement or production readiness.

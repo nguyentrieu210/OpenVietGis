@@ -1,8 +1,8 @@
 import React,{useEffect,useState} from "react";
-import {ApiClient,listMarketplace,type MarketplaceRelease} from "@openvietgis/client-sdk";
+import {listMarketplace,type MarketplaceRelease} from "@openvietgis/client-sdk";
 import {Brand} from "./Brand";
 import "./marketplace-page.css";
-const api=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as api} from "./workbenches/app/api";
 const names:Record<string,string>={host_context:"Ngữ cảnh SDK",host_notice:"Thông báo",map_view:"Vùng bản đồ",map_selection:"Hình học đang chọn",map_navigate:"Điều hướng",map_overlay:"Lớp bản đồ",tool_register:"Công cụ"};
 export function MarketplacePage(){
  const [items,setItems]=useState<MarketplaceRelease[]>([]),[query,setQuery]=useState(""),[loading,setLoading]=useState(true),[error,setError]=useState(false);
