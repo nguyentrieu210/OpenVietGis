@@ -244,3 +244,11 @@
 .ovg-hotkey-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;display:grid;min-width:190px;padding:4px;background:#fff;border:1px solid #cdd5db;border-radius:4px;box-shadow:0 8px 20px #0f1b2433}
 .ovg-hotkey-menu button{text-align:left;padding:6px 10px;border:0;background:none;font-size:12.5px;color:#1f2a30;cursor:pointer;border-radius:3px}
 .ovg-hotkey-menu button:hover{background:#e9f1f8}
+
+/* Data Source Manager like QGIS: left-aligned source list, form on the right, actions at the bottom */
+.qgis-studio .dsm-nav button{justify-content:flex-start!important;text-align:left!important;gap:9px;padding-left:12px!important}
+.qgis-studio .dsm-nav button>span{width:18px;text-align:center;flex:none}
+.qgis-studio .dsm-form{display:grid;gap:9px}
+.qgis-studio .dsm-form label{display:grid;gap:4px;font-size:12px}
+.qgis-studio .dsm-actions{display:flex;justify-content:flex-end;gap:6px;padding-top:8px;border-top:1px solid var(--ovg-line)}
+.ovg-hotkey-menu button{text-align:left!important;justify-content:flex-start!important}
