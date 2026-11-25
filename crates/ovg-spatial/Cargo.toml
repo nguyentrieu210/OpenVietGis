@@ -1,0 +1,16 @@
+[package]
+name = "ovg-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+geo-types.workspace = true
+ovg-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true

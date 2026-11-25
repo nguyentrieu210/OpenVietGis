@@ -1,0 +1,880 @@
+{
+  "schema_version": "064-engine-contract-v1",
+  "engine_id": "E03",
+  "name": "Geometry, editing, topology",
+  "parent_references": [
+    "R006"
+  ],
+  "spec_path": "specs/064-rust-platform/engines/e03-geometry-editing.md",
+  "architecture_candidate": "GEOS plus Rust kernels; server-side transaction/revision/idempotency authority.",
+  "baseline_commit": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "worktree_head": "babcdf9f00578ab336fb4404c90186fa55be9b51",
+  "generated_at": "2026-11-25T17:00:35Z",
+  "ac1_status": "verified_runtime_inventory_complete",
+  "summary": {
+    "http_operations": 5,
+    "websocket_routes": 0,
+    "sse_routes": 0,
+    "streaming_routes": 0,
+    "classifications": {
+      "migrate": 5
+    },
+    "migrations_count": 1,
+    "source_files_count": 4,
+    "test_files_count": 11,
+    "test_case_ids_count": 33
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{changeset_id}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{changeset_id}",
+      "operation_id": "get_changeset_api_v1_organizations__organization_id__projects__project_id__changesets__changeset_id__get",
+      "summary": "Get Changeset",
+      "tags": [
+        "editing"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_changeset",
+      "module": "openvietgis_api.adapters.http.editing",
+      "source_file": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "source_line": 160,
+      "engine": "E03",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E03 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/changesets/{changeset_id}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_changeset",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "changeset_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "2D XY geometry in layer's explicit validated CRS; rejects unsupported dimensions/geometry/CRS with structured 422."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SpatialDomainError -> {code, detail}",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 7,
+        "test_files": [
+          "apps/api/tests/contract/test_spatial_changes.py",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+          "apps/api/tests/integration/spatial/test_change_evidence.py",
+          "apps/api/tests/integration/spatial/test_manual_editor.py",
+          "apps/api/tests/unit/test_editing_domain.py",
+          "apps/api/tests/unit/test_editing_replay_and_rebase.py"
+        ],
+        "test_id_count": 23,
+        "sample_test_ids": [
+          "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+          "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{changeset_id}/revert",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{changeset_id}/revert",
+      "operation_id": "revert_changeset_api_v1_organizations__organization_id__projects__project_id__changesets__changeset_id__revert_post",
+      "summary": "Revert Changeset",
+      "tags": [
+        "editing"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "revert_changeset",
+      "module": "openvietgis_api.adapters.http.editing",
+      "source_file": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "source_line": 173,
+      "engine": "E03",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E03 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/changesets/{changeset_id}/revert",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf",
+          "revert_changeset"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "RevertChangesetRequest"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "changeset_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": true,
+        "matched_fields": [
+          "operation_id"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "2D XY geometry in layer's explicit validated CRS; rejects unsupported dimensions/geometry/CRS with structured 422."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SpatialDomainError -> {code, detail}",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 7,
+        "test_files": [
+          "apps/api/tests/contract/test_spatial_changes.py",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+          "apps/api/tests/integration/spatial/test_change_evidence.py",
+          "apps/api/tests/integration/spatial/test_manual_editor.py",
+          "apps/api/tests/unit/test_editing_domain.py",
+          "apps/api/tests/unit/test_editing_replay_and_rebase.py"
+        ],
+        "test_id_count": 23,
+        "sample_test_ids": [
+          "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+          "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/editing/snap",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/editing/snap",
+      "operation_id": "compute_snap_api_v1_organizations__organization_id__projects__project_id__editing_snap_post",
+      "summary": "Compute Snap",
+      "tags": [
+        "editing"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "compute_snap",
+      "module": "openvietgis_api.adapters.http.editing",
+      "source_file": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "source_line": 194,
+      "engine": "E03",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E03 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/editing/snap",
+          "scoped_human_allowed": true,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "compute_snap",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_EDIT"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "SnapRequest"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "2D XY geometry in layer's explicit validated CRS; rejects unsupported dimensions/geometry/CRS with structured 422."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SpatialDomainError -> {code, detail}",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 7,
+        "test_files": [
+          "apps/api/tests/contract/test_spatial_changes.py",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+          "apps/api/tests/integration/spatial/test_change_evidence.py",
+          "apps/api/tests/integration/spatial/test_manual_editor.py",
+          "apps/api/tests/unit/test_editing_domain.py",
+          "apps/api/tests/unit/test_editing_replay_and_rebase.py"
+        ],
+        "test_id_count": 23,
+        "sample_test_ids": [
+          "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+          "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{source_id}/changesets",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{source_id}/changesets",
+      "operation_id": "list_changesets_api_v1_organizations__organization_id__projects__project_id__sources__source_id__changesets_get",
+      "summary": "List Changesets",
+      "tags": [
+        "editing"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "list_changesets",
+      "module": "openvietgis_api.adapters.http.editing",
+      "source_file": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "source_line": 145,
+      "engine": "E03",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E03 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/sources/{source_id}/changesets",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "list_changesets",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "source_id"
+        ],
+        "query": [
+          "limit"
+        ],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "2D XY geometry in layer's explicit validated CRS; rejects unsupported dimensions/geometry/CRS with structured 422."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SpatialDomainError -> {code, detail}",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 7,
+        "test_files": [
+          "apps/api/tests/contract/test_spatial_changes.py",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+          "apps/api/tests/integration/spatial/test_change_evidence.py",
+          "apps/api/tests/integration/spatial/test_manual_editor.py",
+          "apps/api/tests/unit/test_editing_domain.py",
+          "apps/api/tests/unit/test_editing_replay_and_rebase.py"
+        ],
+        "test_id_count": 23,
+        "sample_test_ids": [
+          "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+          "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{source_id}/changesets",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{source_id}/changesets",
+      "operation_id": "commit_changeset_api_v1_organizations__organization_id__projects__project_id__sources__source_id__changesets_post",
+      "summary": "Commit Changeset",
+      "tags": [
+        "editing"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "commit_changeset",
+      "module": "openvietgis_api.adapters.http.editing",
+      "source_file": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "source_line": 114,
+      "engine": "E03",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E03 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/sources/{source_id}/changesets",
+          "scoped_human_allowed": true,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "commit_changeset",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "CommitChangesetRequest"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "source_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": true,
+        "matched_fields": [
+          "base_content_revision",
+          "content_revision",
+          "operation_id"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "2D XY geometry in layer's explicit validated CRS; rejects unsupported dimensions/geometry/CRS with structured 422."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SpatialDomainError -> {code, detail}",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 7,
+        "test_files": [
+          "apps/api/tests/contract/test_spatial_changes.py",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+          "apps/api/tests/integration/spatial/test_change_evidence.py",
+          "apps/api/tests/integration/spatial/test_manual_editor.py",
+          "apps/api/tests/unit/test_editing_domain.py",
+          "apps/api/tests/unit/test_editing_replay_and_rebase.py"
+        ],
+        "test_id_count": 23,
+        "sample_test_ids": [
+          "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+          "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+          "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+          "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography",
+          "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+          "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence"
+        ]
+      }
+    }
+  ],
+  "algorithms_and_capabilities": {
+    "sources": [
+      "apps/api/openvietgis_api/domains/editing/domain.py",
+      "apps/api/openvietgis_api/adapters/http/spatial.py"
+    ],
+    "engine": "E03",
+    "changeset_op_types": [
+      "create",
+      "update",
+      "delete"
+    ],
+    "geometry_preview_actions": [
+      "split",
+      "merge"
+    ],
+    "snapping_endpoint": "/api/v1/organizations/{organization_id}/projects/{project_id}/editing/snap"
+  },
+  "migrations": [
+    {
+      "file": "apps/api/migrations/versions/0009_editing_changesets.py",
+      "filename": "0009_editing_changesets.py",
+      "scope": "core_api",
+      "revision": "0009_editing_changesets",
+      "down_revision": "0008_import_export",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "R006 Editing & Change History schema with RLS and immutable changesets.",
+      "schemas_created": [
+        "editing"
+      ],
+      "tables_touched": [
+        "editing.",
+        "editing.changeset_operations",
+        "editing.changesets",
+        "spatial.catalog_changes"
+      ],
+      "has_rls_policy": true,
+      "engine": "E03",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    }
+  ],
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/editing.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/editing_repository.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/editing/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/editing/domain.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    }
+  ],
+  "cross_engine_dependencies": [
+    {
+      "engine": "E01",
+      "relation": "All tenant/project routes depend on E01 authentication, CSRF, RBAC/ACL, RLS, and project_access_guard."
+    },
+    {
+      "engine": "E02",
+      "relation": "Validates edits against E02 layer schema, geometry family, explicit CRS, and catalog/content revisions."
+    },
+    {
+      "engine": "E05",
+      "relation": "Committed changesets must invalidate viewport/MVT tile caches."
+    },
+    {
+      "engine": "E11",
+      "relation": "Edits respect feature edit leases and publish realtime change events."
+    }
+  ],
+  "existing_test_suite": [
+    {
+      "path": "apps/api/tests/contract/test_spatial_changes.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/contract/test_spatial_changes.py::test_empty_history_default_bound_and_current_scope",
+        "apps/api/tests/contract/test_spatial_changes.py::test_history_preserves_actual_evidence_retirement_and_complete_keyset",
+        "apps/api/tests/contract/test_spatial_changes.py::test_history_requires_read_permission_before_repository_and_reauthorizes",
+        "apps/api/tests/contract/test_spatial_changes.py::test_invalid_history_queries_are_sanitized"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m2/test_processing_integrity.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_stale_job_fails_durably_without_repinning",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_clip_retains_family_and_empty_output",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_atomic_rollback_on_publication_failure_and_consumers",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_idempotency_and_null_dissolve_groups"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m2/test_r006_r009_real.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_editing_changesets_conflicts_validation_and_revert",
+        "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_noop_and_snap_require_current_edit_authority",
+        "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r006_concurrent_identical_save_returns_one_receipt",
+        "apps/api/tests/integration/m2/test_r006_r009_real.py::test_r007_r008_r009_query_processing_and_cartography"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m2/test_r006_schema_pins.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/integration/m2/test_r006_schema_pins.py::test_stale_schema_fails_without_publication_and_pinned_replay_is_exact"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_change_evidence.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_project_history_exact_wire_values_keyset_and_retired_records",
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_service_actor_snapshot_immutable_after_credential_and_principal_revoke",
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_noop_stale_denied_or_dependency_conflict_never_append_evidence",
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_failed_evidence_append_rolls_back_mutation_and_audit",
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_concurrent_compare_and_set_has_one_winner_and_one_change",
+        "apps/api/tests/integration/spatial/test_change_evidence.py::test_runtime_cannot_update_delete_or_truncate_real_change_evidence"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_manual_editor.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E03"
+      ],
+      "rationale": "Spatial catalog, layers, features, CRS controls, fixtures, or pinned reads test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_manual_editor.py::test_manual_editor"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_processing_models.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_processing_models.py::test_saved_processing_graph_and_real_chain"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_professional.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_professional.py::test_pro_tools",
+        "apps/api/tests/integration/spatial/test_professional.py::test_projected_native_tile_is_revision_pinned"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_editing_domain.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_editing_domain.py::test_editing_decimal_canonicalizes_before_publish",
+        "apps/api/tests/unit/test_editing_domain.py::test_editing_timestamp_is_a_canonical_utc_string",
+        "apps/api/tests/unit/test_editing_domain.py::test_invalid_logical_attribute_rejected_before_commit",
+        "apps/api/tests/unit/test_editing_domain.py::test_editing_required_null_and_unknown_fields_rejected"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_editing_replay_and_rebase.py",
+      "primary_engine": "E03",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Editing changesets, replay/rebase, schema pins, or change evidence test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_editing_replay_and_rebase.py::test_digest_is_exact_and_key_order_independent",
+        "apps/api/tests/unit/test_editing_replay_and_rebase.py::test_draft_is_bounded_and_typed",
+        "apps/api/tests/unit/test_editing_replay_and_rebase.py::test_rebase_is_advisory_and_detects_existence_conflicts"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_processing_domain.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_processing_domain.py::test_buffer_valid_distance",
+        "apps/api/tests/unit/test_processing_domain.py::test_invalid_buffer_parameter_is_domain_error",
+        "apps/api/tests/unit/test_processing_domain.py::test_unknown_parameter_rejected"
+      ]
+    }
+  ],
+  "edge_cases": [
+    "Stale base_content_revision or concurrent edits must return conflict without corrupting change history.",
+    "Duplicate operation_id retries must be idempotent; internal operation_id prefixes rejected on public endpoints.",
+    "Invalid geometry, non-2D Z/M coordinates, or geometry-family mismatch must be rejected (422 UNSUPPORTED_GEOMETRY / UNSUPPORTED_DIMENSIONS).",
+    "SQLSTATE OV409 database lock guard (e.g. module lock trigger) must surface 409 DATA_LOCKED.",
+    "Reverting a changeset must preserve audit attribution, before/after snapshots, and transactional atomicity."
+  ]
+}

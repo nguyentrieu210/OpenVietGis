@@ -22,3 +22,6 @@ test-results/
 
 # Generated from the pinned Cesium npm distribution by web-next Vite config
 /apps/web-next/public/cesium/
+
+# Rust workspace build output
+/target/

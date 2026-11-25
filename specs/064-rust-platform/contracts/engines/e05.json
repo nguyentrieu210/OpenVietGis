@@ -1,0 +1,1311 @@
+{
+  "schema_version": "064-engine-contract-v1",
+  "engine_id": "E05",
+  "name": "Map rendering, tile, cache",
+  "parent_references": [
+    "R004",
+    "R043"
+  ],
+  "spec_path": "specs/064-rust-platform/engines/e05-render-tiles.md",
+  "architecture_candidate": "MapLibre retained client-side; Martin/Rust tile gateway, MVT/3D Tiles/PMTiles; scoped cache & ACL revocation.",
+  "baseline_commit": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "worktree_head": "babcdf9f00578ab336fb4404c90186fa55be9b51",
+  "generated_at": "2026-11-25T17:00:35Z",
+  "ac1_status": "verified_runtime_inventory_complete",
+  "summary": {
+    "http_operations": 7,
+    "websocket_routes": 0,
+    "sse_routes": 0,
+    "streaming_routes": 0,
+    "classifications": {
+      "migrate": 4,
+      "replace": 3
+    },
+    "migrations_count": 6,
+    "source_files_count": 10,
+    "test_files_count": 18,
+    "test_case_ids_count": 72
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets",
+      "operation_id": "list_tilesets_api_v1_organizations__organization_id__projects__project_id__3d_tilesets_get",
+      "summary": "List Tilesets",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "list_tilesets",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 187,
+      "engine": "E05",
+      "classification": "migrate",
+      "classification_rationale": "Migrate tileset catalog/metadata/feature lookup route to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "list_tilesets",
+          "project_access_guard"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets",
+      "operation_id": "create_tileset_api_v1_organizations__organization_id__projects__project_id__3d_tilesets_post",
+      "summary": "Create Tileset",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "create_tileset",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 200,
+      "engine": "E05",
+      "classification": "migrate",
+      "classification_rationale": "Migrate tileset catalog/metadata/feature lookup route to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "create_tileset",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_EDIT"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "multipart/form-data"
+      ],
+      "request_body_schemas": [
+        "Body_create_tileset_api_v1_organizations__organization_id__projects__project_id__3d_tilesets_post"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/generate",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/generate",
+      "operation_id": "generate_tileset_api_v1_organizations__organization_id__projects__project_id__3d_tilesets_generate_post",
+      "summary": "Generate Tileset",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "generate_tileset",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 306,
+      "engine": "E05",
+      "classification": "replace",
+      "classification_rationale": "Replace Python 3D Tiles generation/archive serving with Rust/Martin tile gateway preserving exact HTTP, manifest, and ACL contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets/generate",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "generate_tileset",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_EDIT"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "GenerateTileset"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": [
+          "content_revision",
+          "expected_content_revision",
+          "layer_revision"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/feature",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/feature",
+      "operation_id": "get_tile_feature_api_v1_organizations__organization_id__projects__project_id__3d_tilesets__tileset_id__feature_get",
+      "summary": "Get Tile Feature",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_tile_feature",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 463,
+      "engine": "E05",
+      "classification": "migrate",
+      "classification_rationale": "Migrate tileset catalog/metadata/feature lookup route to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets/{tileset_id}/feature",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "get_tile_feature",
+          "project_access_guard"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "tileset_id"
+        ],
+        "query": [
+          "uri",
+          "triangle"
+        ],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": [
+          "content_revision",
+          "layer_revision"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/feature-by-id",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/feature-by-id",
+      "operation_id": "locate_tile_feature_api_v1_organizations__organization_id__projects__project_id__3d_tilesets__tileset_id__feature_by_id_get",
+      "summary": "Locate Tile Feature",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "locate_tile_feature",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 592,
+      "engine": "E05",
+      "classification": "migrate",
+      "classification_rationale": "Migrate tileset catalog/metadata/feature lookup route to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets/{tileset_id}/feature-by-id",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "locate_tile_feature",
+          "project_access_guard"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "tileset_id"
+        ],
+        "query": [
+          "source_id",
+          "layer_id",
+          "feature_id"
+        ],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/tileset.json",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/tileset.json",
+      "operation_id": "get_manifest_api_v1_organizations__organization_id__projects__project_id__3d_tilesets__tileset_id__tileset_json_get",
+      "summary": "Get Manifest",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "binary",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_manifest",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 648,
+      "engine": "E05",
+      "classification": "replace",
+      "classification_rationale": "Replace Python 3D Tiles generation/archive serving with Rust/Martin tile gateway preserving exact HTTP, manifest, and ACL contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets/{tileset_id}/tileset.json",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_manifest",
+          "get_settings",
+          "project_access_guard"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "tileset_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/{uri}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/tilesets/{tileset_id}/{uri:path}",
+      "operation_id": "get_tile_api_v1_organizations__organization_id__projects__project_id__3d_tilesets__tileset_id___uri__get",
+      "summary": "Get Tile",
+      "tags": [
+        "3d-tiles"
+      ],
+      "transport": "binary",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_tile",
+      "module": "openvietgis_api.adapters.http.tilesets",
+      "source_file": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "source_line": 669,
+      "engine": "E05",
+      "classification": "replace",
+      "classification_rationale": "Replace Python 3D Tiles generation/archive serving with Rust/Martin tile gateway preserving exact HTTP, manifest, and ACL contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/3d/tilesets/{tileset_id}/{uri}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "get_tile",
+          "project_access_guard"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "tileset_id",
+          "uri"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "3D Tiles ECEF/region bounding volumes (EPSG:4979/4326 radians) and MVT Web Mercator EPSG:3857 tiles."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 3,
+        "test_files": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py"
+        ],
+        "test_id_count": 8,
+        "sample_test_ids": [
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset",
+          "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+          "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale"
+        ]
+      }
+    }
+  ],
+  "algorithms_and_capabilities": {
+    "tileset_capabilities": [
+      "3D Tiles archive upload & manifest validation (tileset.json)",
+      "3D Tiles server-side generation from spatial sources",
+      "Tile feature metadata lookup & feature-by-id location index",
+      "Authorized tileset manifest & tile URI streaming"
+    ],
+    "cross_engine_render_and_tile_routes": [
+      {
+        "engine": "E02",
+        "module": "map_viewport",
+        "paths": [
+          "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/viewport",
+          "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/display-extent"
+        ]
+      },
+      {
+        "engine": "E08",
+        "module": "professional",
+        "paths": [
+          "/api/v1/organizations/{organization_id}/projects/{project_id}/pro/tiles/{layer_id}/{z}/{x}/{y}.mvt"
+        ]
+      },
+      {
+        "engine": "E09",
+        "module": "raster",
+        "paths": [
+          "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png"
+        ]
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "file": "apps/api/migrations/versions/0032_tilesets.py",
+      "filename": "0032_tilesets.py",
+      "scope": "core_api",
+      "revision": "0032_tilesets",
+      "down_revision": "0031_saved_scenes",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Immutable scoped 3D Tiles resources.",
+      "schemas_created": [],
+      "tables_touched": [
+        "spatial.",
+        "spatial.tileset_contents",
+        "spatial.tilesets"
+      ],
+      "has_rls_policy": true,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    },
+    {
+      "file": "apps/api/migrations/versions/0033_tileset_provenance.py",
+      "filename": "0033_tileset_provenance.py",
+      "scope": "core_api",
+      "revision": "0033_tileset_provenance",
+      "down_revision": "0032_tilesets",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Retain the immutable source pins for generated tilesets.",
+      "schemas_created": [],
+      "tables_touched": [
+        "spatial.tilesets"
+      ],
+      "has_rls_policy": false,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    },
+    {
+      "file": "apps/api/migrations/versions/0034_tile_feature_index.py",
+      "filename": "0034_tile_feature_index.py",
+      "scope": "core_api",
+      "revision": "0034_tile_feature_index",
+      "down_revision": "0033_tileset_provenance",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Immutable per-tile triangle-to-GIS feature index.",
+      "schemas_created": [],
+      "tables_touched": [
+        "spatial.tileset_contents"
+      ],
+      "has_rls_policy": false,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    },
+    {
+      "file": "apps/api/migrations/versions/0036_consolidated_tiles.py",
+      "filename": "0036_consolidated_tiles.py",
+      "scope": "core_api",
+      "revision": "0036_consolidated_tiles",
+      "down_revision": [
+        "0035_consolidated_scenes",
+        "0032_tilesets"
+      ],
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Converge scoped tiles and unified migrations.",
+      "schemas_created": [],
+      "tables_touched": [],
+      "has_rls_policy": false,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    },
+    {
+      "file": "apps/api/migrations/versions/0037_consolidated_generation.py",
+      "filename": "0037_consolidated_generation.py",
+      "scope": "core_api",
+      "revision": "0037_consolidated_generation",
+      "down_revision": [
+        "0036_consolidated_tiles",
+        "0033_tileset_provenance"
+      ],
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Converge generated tiles provenance with the consolidated schema.",
+      "schemas_created": [],
+      "tables_touched": [],
+      "has_rls_policy": false,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    },
+    {
+      "file": "apps/api/migrations/versions/0038_consolidated_feature_index.py",
+      "filename": "0038_consolidated_feature_index.py",
+      "scope": "core_api",
+      "revision": "0038_consolidated_feature_index",
+      "down_revision": [
+        "0037_consolidated_generation",
+        "0034_tile_feature_index"
+      ],
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Converge the 3D tile feature-index and generated-tiles migration branches.",
+      "schemas_created": [],
+      "tables_touched": [],
+      "has_rls_policy": false,
+      "engine": "E05",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    }
+  ],
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/tilesets.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/map_repository.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/map_viewport.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/rendering/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/rendering/map_renderer.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/maps/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/maps/domain.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/maps/ports.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/maps/service.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/maps/viewport.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    }
+  ],
+  "cross_engine_dependencies": [
+    {
+      "engine": "E01",
+      "relation": "All tenant/project routes depend on E01 authentication, CSRF, RBAC/ACL, RLS, and project_access_guard."
+    },
+    {
+      "engine": "E02",
+      "relation": "Depends on E02 spatial layers, CRS, maps state, and map_viewport endpoints."
+    },
+    {
+      "engine": "E03",
+      "relation": "Requires cache invalidation on E03 changeset commits and E01 ACL revocations."
+    },
+    {
+      "engine": "E08",
+      "relation": "Coordinates MVT tile serving (/pro/tiles/{layer_id}/{z}/{x}/{y}.mvt) with Martin/Rust tile gateway."
+    },
+    {
+      "engine": "E09",
+      "relation": "Coordinates raster tile serving (/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png)."
+    }
+  ],
+  "existing_test_suite": [
+    {
+      "path": "apps/api/tests/contract/test_map_viewport_http.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Tile generation math/pipeline or bounded viewport test.",
+      "test_ids": [
+        "apps/api/tests/contract/test_map_viewport_http.py::test_scoped_context_and_explicit_empty_no_store",
+        "apps/api/tests/contract/test_map_viewport_http.py::test_invalid_budget_or_bbox_never_reaches_read",
+        "apps/api/tests/contract/test_map_viewport_http.py::test_extent_empty_and_failure_cannot_claim_complete"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m2/test_processing_integrity.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_stale_job_fails_durably_without_repinning",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_clip_retains_family_and_empty_output",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_atomic_rollback_on_publication_failure_and_consumers",
+        "apps/api/tests/integration/m2/test_processing_integrity.py::test_idempotency_and_null_dissolve_groups"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_authorization_matrix.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_authorization_matrix.py::test_all_map_reads_follow_current_grant_and_same_session_revocation",
+        "apps/api/tests/integration/maps/test_authorization_matrix.py::test_edit_only_service_can_save_and_reconcile_without_read_disclosure",
+        "apps/api/tests/integration/maps/test_authorization_matrix.py::test_dual_authorized_sibling_layer_substitution_and_foreign_save_are_concealed",
+        "apps/api/tests/integration/maps/test_authorization_matrix.py::test_map_cookie_save_requires_csrf_but_bearer_uses_live_edit_ceiling",
+        "apps/api/tests/integration/maps/test_authorization_matrix.py::test_archived_project_remains_readable_but_denies_save_and_edit_receipts"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_map_migrations.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_map_runtime_nonowner_forced_rls_and_append_only_evidence_privileges",
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_map_rls_no_scope_foreign_scope_and_reused_connection_are_isolated",
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_runtime_cannot_mutate_or_delete_existing_receipt_and_history",
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_direct_configuration_write_without_matching_next_evidence_cannot_commit",
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_database_configuration_validator_rejects_closed_shape_and_type_violations",
+        "apps/api/tests/integration/maps/test_map_migrations.py::test_map_schema_downgrade_upgrade_preserves_identity_catalog_and_reopens_cleanly"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_map_viewport_real.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Map viewport rendering, tile/warm-revision security test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_exact_geographic_viewport_prefix_and_full_actual_extent",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_direct_5899_control_operation_is_geographic_and_never_native_numbers",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_display_domain_stale_and_foreign_layer_do_not_fabricate_empty",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_sql_failure_rolls_back_and_returns_safe_unavailable",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_runtime_has_no_unscoped_geometry_access",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_single_scan_rejects_invalid_offscreen_geometry_and_count_mismatch",
+        "apps/api/tests/integration/maps/test_map_viewport_real.py::test_empty_source_summary_remains_complete_without_phantom_feature"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_map_warm_revision_security.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Map viewport rendering, tile/warm-revision security test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_map_warm_revision_security.py::test_warmed_viewport_and_extent_recheck_live_pins_and_actor"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_saves.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_saves.py::test_open_is_read_only_and_first_empty_save_has_exact_minimal_receipt",
+        "apps/api/tests/integration/maps/test_saves.py::test_lost_ack_after_later_save_and_new_session_returns_original_receipt",
+        "apps/api/tests/integration/maps/test_saves.py::test_stale_changed_intent_noop_and_foreign_actor_reuse_are_atomic",
+        "apps/api/tests/integration/maps/test_saves.py::test_designated_viewpoint_preserve_clear_and_safe_history_pagination",
+        "apps/api/tests/integration/maps/test_saves.py::test_precommit_failure_rolls_back_state_operation_history_and_success_audit",
+        "apps/api/tests/integration/maps/test_saves.py::test_two_concurrent_first_saves_have_one_winner_and_one_stale_conflict"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/maps/test_wire_contract.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/integration/maps/test_wire_contract.py::test_real_map_receipts_history_and_pinned_render_payloads_conform"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_processing_models.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_processing_models.py::test_saved_processing_graph_and_real_chain"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_professional.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_professional.py::test_pro_tools",
+        "apps/api/tests/integration/spatial/test_professional.py::test_projected_native_tile_is_revision_pinned"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_tiles_generator.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Tile generation math/pipeline or bounded viewport test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_tileset",
+        "apps/api/tests/integration/spatial/test_tiles_generator.py::test_generate_projected_tileset"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/maps/test_map_domain.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/unit/maps/test_map_domain.py::test_map_identity_is_stable_and_project_specific",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_viewpoint_rejects_invalid_numbers_and_crs",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_style_is_bounded_and_cannot_carry_renderer_expressions",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_configuration_rejects_duplicate_or_too_many_layer_references",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_viewpoint_preserve_and_clear_are_explicit",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_save_fingerprint_binds_expected_revision_and_explicit_intent",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_viewpoint_intent_is_a_closed_union",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_layer_group_is_optional_bounded_and_omitted_when_unset",
+        "apps/api/tests/unit/maps/test_map_domain.py::test_layer_display_is_bounded_json_and_omitted_when_unset"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/maps/test_map_render_capabilities.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Map viewport rendering, tile/warm-revision security test.",
+      "test_ids": [
+        "apps/api/tests/unit/maps/test_map_render_capabilities.py::test_supported_finite_profiles_have_explicit_permission_and_no_edit",
+        "apps/api/tests/unit/maps/test_map_render_capabilities.py::test_latitude86_is_readable_but_never_advertised_as_renderable"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/maps/test_map_service.py",
+      "primary_engine": "E02",
+      "secondary_engines": [
+        "E05"
+      ],
+      "rationale": "Map workspace saves, wire contract, migrations, and authorization test.",
+      "test_ids": [
+        "apps/api/tests/unit/maps/test_map_service.py::test_unsaved_get_is_virtual_and_first_empty_save_commits_once",
+        "apps/api/tests/unit/maps/test_map_service.py::test_lost_ack_replays_original_receipt_even_after_newer_save",
+        "apps/api/tests/unit/maps/test_map_service.py::test_operation_reuse_changed_intent_or_foreign_actor_never_returns_receipt",
+        "apps/api/tests/unit/maps/test_map_service.py::test_replay_and_receipt_lookup_recheck_current_edit_authority",
+        "apps/api/tests/unit/maps/test_map_service.py::test_new_stale_and_noop_operations_preserve_prior_revision",
+        "apps/api/tests/unit/maps/test_map_service.py::test_immutable_history_has_attributable_before_after_and_safe_audit_link"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/maps/test_map_viewport.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Map viewport rendering, tile/warm-revision security test.",
+      "test_ids": [
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_reject_nonfinite_wrapped_or_degenerate_viewport",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_viewport_limits_are_not_source_completeness",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_position_budget_keeps_prefix_and_never_skips_offending_feature",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_entire_json_envelope_counts_towards_byte_budget",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_empty_viewport_is_complete_and_explicitly_empty",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_unordered_or_wrong_crs_output_cannot_look_usable",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_render_snapshot_summary_fails_closed_on_missing_or_overlimit_count",
+        "apps/api/tests/unit/maps/test_map_viewport.py::test_render_snapshot_summary_requires_all_source_rows_valid"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/spatial/test_tiles_generator.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Tile generation math/pipeline or bounded viewport test.",
+      "test_ids": [
+        "apps/api/tests/unit/spatial/test_tiles_generator.py::test_wgs84_and_scale",
+        "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_height",
+        "apps/api/tests/unit/spatial/test_tiles_generator.py::test_bad_extent"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/spatial/test_tiles_generator_math.py",
+      "primary_engine": "E05",
+      "secondary_engines": [
+        "E02"
+      ],
+      "rationale": "Tile generation math/pipeline or bounded viewport test.",
+      "test_ids": [
+        "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_wgs84_and_scale",
+        "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_height",
+        "apps/api/tests/unit/spatial/test_tiles_generator_math.py::test_bad_extent"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_processing_domain.py",
+      "primary_engine": "E08",
+      "secondary_engines": [
+        "E03",
+        "E05"
+      ],
+      "rationale": "Processing algorithms, DAG models, or professional geometry/topology/MVT test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_processing_domain.py::test_buffer_valid_distance",
+        "apps/api/tests/unit/test_processing_domain.py::test_invalid_buffer_parameter_is_domain_error",
+        "apps/api/tests/unit/test_processing_domain.py::test_unknown_parameter_rejected"
+      ]
+    }
+  ],
+  "edge_cases": [
+    "No shared private tile cache across tenants or revoked permissions; tile/manifest routes must verify project ACL.",
+    "Malformed 3D Tiles archives, path traversal in {uri:path}, or invalid boundingVolume/geometricError trees must be rejected.",
+    "Edit-to-tile invalidation and bounded zoom/geometry payloads on 30k/100k/1M feature layers.",
+    "Cross-engine convergence across 3D tilesets (E05), map_viewport (E02), MVT /pro/tiles (E08), and raster PNG tiles (E09)."
+  ]
+}

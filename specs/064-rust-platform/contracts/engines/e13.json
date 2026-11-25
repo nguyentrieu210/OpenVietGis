@@ -1,0 +1,607 @@
+{
+  "engine_id": "E13",
+  "slug": "e13",
+  "title": "Field, offline, mobile",
+  "parent_refs": [
+    "R013"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e13-field-offline.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Migrate field backend and offline snapshot codec to Rust; retain ServiceWorker/IndexedDB offline client shell and Playwright harness.",
+  "summary": {
+    "http_routes": 6,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 12,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 11,
+    "test_files": 9,
+    "test_ids": 18,
+    "classification_breakdown": {
+      "migrate": 5,
+      "retain": 6,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "organization+project": 6
+    },
+    "routes_with_project_access_guard": 6,
+    "routes_with_csrf_enforcement": 3,
+    "core_permissions_referenced": [],
+    "extension_permissions_referenced": []
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages",
+      "handler": "list_offline_packages",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 99,
+      "status_code": 200,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages",
+      "handler": "create_offline_package",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 78,
+      "status_code": 201,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateOfflinePackageRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{package_id}/download",
+      "handler": "download_offline_package",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 110,
+      "status_code": 200,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "package_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{package_id}/revoke",
+      "handler": "revoke_offline_package",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 151,
+      "status_code": 200,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "package_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{package_id}/snapshot",
+      "handler": "download_browser_snapshot",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 131,
+      "status_code": 200,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "package_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{package_id}/sync",
+      "handler": "sync_offline_outbox",
+      "module": "openvietgis_api.adapters.http.field",
+      "short_module": "field",
+      "source_file": "apps/api/openvietgis_api/adapters/http/field.py",
+      "line": 163,
+      "status_code": 201,
+      "tags": [
+        "field-offline"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "package_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:SyncOutboxRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+        "tests/e2e/r013-offline-real.spec.ts",
+        "tests/offline-client/r013-client.spec.ts"
+      ]
+    }
+  ],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "offline_snapshot_adapter": {
+      "file": "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+      "classes": [],
+      "functions": [
+        {
+          "name": "canonical_json",
+          "line": 27,
+          "async": false
+        },
+        {
+          "name": "embed_snapshot",
+          "line": 33,
+          "async": false
+        },
+        {
+          "name": "extract_snapshot",
+          "line": 58,
+          "async": false
+        },
+        {
+          "name": "validate_bbox",
+          "line": 85,
+          "async": false
+        },
+        {
+          "name": "validate_offline_ops",
+          "line": 93,
+          "async": false
+        }
+      ],
+      "classification": "migrate",
+      "contract_notes": "Embeds/extracts canonical SHA-256 verified JSON snapshot inside GeoPackage; validates bbox and offline operation payloads."
+    },
+    "domain_and_persistence": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/persistence/field_repository.py",
+        "classes": [
+          {
+            "name": "SqlFieldRepository",
+            "line": 89,
+            "bases": [],
+            "methods": [
+              "create_package",
+              "download_package",
+              "download_snapshot",
+              "revoke_package",
+              "list_packages",
+              "sync_outbox"
+            ]
+          }
+        ],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/field/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/field/domain.py",
+        "classes": [
+          {
+            "name": "OfflinePackageRecord",
+            "line": 15,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "SyncBatchRecord",
+            "line": 35,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "offline_core_feature_id",
+            "line": 50,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ],
+    "offline_client_shell": {
+      "classification": "retain",
+      "service_worker_path": "/offline-shell-sw.js",
+      "route_pattern": "/offline-field/:organizationId/:projectId",
+      "playwright_config": "playwright.offline-client.config.ts",
+      "playwright_base_url": "http://127.0.0.1:5184",
+      "files": [
+        {
+          "file": "apps/web-next/src/workbenches/features/offline/OfflineFieldPage.tsx",
+          "classification": "retain"
+        },
+        {
+          "file": "apps/web-next/src/workbenches/features/offline/OfflineMap.tsx",
+          "classification": "retain"
+        },
+        {
+          "file": "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+          "classification": "retain"
+        },
+        {
+          "file": "apps/web-next/src/workbenches/features/offline/offline-store.ts",
+          "classification": "retain"
+        },
+        {
+          "file": "apps/web-next/src/workbenches/features/offline/offline.css",
+          "classification": "retain"
+        },
+        {
+          "file": "apps/web/scripts/build-offline-shell.mjs",
+          "classification": "retain"
+        },
+        {
+          "file": "playwright.offline-client.config.ts",
+          "classification": "retain"
+        },
+        {
+          "file": "tests/offline-client/static-server.mjs",
+          "classification": "retain"
+        }
+      ]
+    }
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/field.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/field_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/field/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/field/domain.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/OfflineFieldPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/OfflineMap.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/offline-store.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/offline.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web/scripts/build-offline-shell.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "playwright.offline-client.config.ts",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r010_r013_real.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r013_operation_mapping.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r013_operation_mapping.py::test_identified_group_receipt_replay_and_scope"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py::test_package_snapshot_serializes_against_core_content_edit",
+        "apps/api/tests/integration/m3/test_r013_snapshot_pin_race.py::test_package_rejects_inconsistent_selected_row_pin"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_normal_operations_unchanged"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_snapshot_projection_preserves_exact_precision_and_integrity",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_intent_must_use_issued_scope_and_canonical_value",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_identified_operations_are_canonical_and_unique",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_core_feature_identity_has_all_scope_dimensions",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_invalid_bounds_rejected"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::requires complete, scope-matched projection and GeoPackage checksums",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::queues a stable group and prohibits intent mutation after attempted submission",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::normalizes decimal precision without floating point coercion",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::enforces type/nullability"
+      ]
+    },
+    {
+      "file": "tests/e2e/r013-offline-real.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/r013-offline-real.spec.ts::R013 real OIDC + PostGIS: disconnected durable group, lost server acknowledgment, conflict and revocation"
+      ]
+    },
+    {
+      "file": "tests/offline-client/r013-client.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/offline-client/r013-client.spec.ts::verified package remains readable and draft survives real browser disconnect/reload; sync receipt persists"
+      ]
+    }
+  ]
+}

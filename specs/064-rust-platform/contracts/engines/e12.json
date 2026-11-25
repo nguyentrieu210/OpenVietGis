@@ -1,0 +1,2964 @@
+{
+  "engine_id": "E12",
+  "slug": "e12",
+  "title": "QGIS, external sources, integration",
+  "parent_refs": [
+    "R010",
+    "R027"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e12-connectors-external.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Keep PyQGIS and desktop connector adapters; migrate backend routes and SSRF/provider transport to Rust.",
+  "summary": {
+    "http_routes": 26,
+    "sse_endpoints": 1,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 21,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 27,
+    "test_files": 18,
+    "test_ids": 96,
+    "classification_breakdown": {
+      "migrate": 16,
+      "retain": 11,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "organization": 2,
+      "organization+project": 24
+    },
+    "routes_with_project_access_guard": 26,
+    "routes_with_csrf_enforcement": 14,
+    "core_permissions_referenced": [
+      "PROJECT_EDIT",
+      "PROJECT_READ"
+    ],
+    "extension_permissions_referenced": [],
+    "provider_transport_guard": "Public IPv4 SSRF blocklist, bounded byte/range fetch, strong ETag check.",
+    "qgis_connector_auth": "Browser OIDC pairing or scoped Bearer token; secret redaction in logs/errors."
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/external-sources/allowlist",
+      "handler": "list_allowlisted_hosts",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 124,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/external-sources/allowlist",
+      "handler": "register_allowlisted_host",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 106,
+      "status_code": 201,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:AllowlistHostRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources",
+      "handler": "list_external_connections",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 158,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources",
+      "handler": "create_external_connection",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 135,
+      "status_code": 201,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateExternalConnectionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{connection_id}/invalidate-cache",
+      "handler": "invalidate_external_cache",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 233,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "connection_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{connection_id}/preview",
+      "handler": "preview_external_source",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 170,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "connection_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{connection_id}/revoke",
+      "handler": "revoke_external_connection",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 249,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "connection_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{connection_id}/viewport",
+      "handler": "preview_external_viewport",
+      "module": "openvietgis_api.adapters.http.external_sources",
+      "short_module": "external_sources",
+      "source_file": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "line": 198,
+      "status_code": 200,
+      "tags": [
+        "external-sources"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "connection_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ExternalViewportRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings",
+      "handler": "list_bindings",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 449,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings",
+      "handler": "create_binding",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 462,
+      "status_code": 201,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateBinding"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/candidates",
+      "handler": "list_binding_candidates",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 410,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/activate",
+      "handler": "activate_binding",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 527,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ActivateBinding"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/conflicts",
+      "handler": "list_binding_conflicts",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 781,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/conflicts",
+      "handler": "record_binding_conflicts",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 796,
+      "status_code": 201,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:RecordConflictsRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/conflicts/{conflict_id}/resolve",
+      "handler": "resolve_binding_conflict",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 851,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id",
+        "conflict_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ResolveConflictRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/lifecycle",
+      "handler": "change_binding_lifecycle",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 564,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ChangeLifecycle"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/pairing-tokens",
+      "handler": "list_pairing_tokens",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 616,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/pairing-tokens",
+      "handler": "issue_pairing_token",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 633,
+      "status_code": 201,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:IssuePairingToken"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT",
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/bindings/{binding_id}/pairing-tokens/{token_id}/revoke",
+      "handler": "revoke_pairing_token",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 739,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "binding_id",
+        "token_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/events",
+      "handler": "stream_integration_spatial_events",
+      "module": "openvietgis_api.adapters.http.integration_bindings",
+      "short_module": "integration_bindings",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 973,
+      "status_code": 200,
+      "tags": [
+        "integration-bindings"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "SSE",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "sse_contract": {
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "ready",
+          "spatial_change",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}",
+      "handler": "read_integration_adapter_profile",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 598,
+      "status_code": 200,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "adapter_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export",
+      "handler": "export_integration_layer",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1140,
+      "status_code": 200,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "adapter_key",
+        "layer_id"
+      ],
+      "query_params": [
+        "format",
+        "scope_area",
+        "scope_route",
+        "route_distance_m"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-preview",
+      "handler": "preview_integration_layer_sync",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1428,
+      "status_code": 200,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "adapter_key",
+        "layer_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "base_content_revision:str",
+        "base_schema_revision:str",
+        "allow_deletes:bool"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-push",
+      "handler": "push_integration_layer_sync",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1496,
+      "status_code": 201,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "adapter_key",
+        "layer_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "base_content_revision:str",
+        "base_schema_revision:str",
+        "operation_id:str",
+        "expected_diff_sha256:str",
+        "summary:str",
+        "allow_deletes:bool"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/catalog",
+      "handler": "read_integration_catalog",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 571,
+      "status_code": 200,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/export-scopes",
+      "handler": "get_export_scopes",
+      "module": "openvietgis_api.adapters.http.integration_hub",
+      "short_module": "integration_hub",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "line": 1072,
+      "status_code": 200,
+      "tags": [
+        "integration-hub"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_export_scopes",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+        "apps/api/tests/integration/m3/test_r010_live_provider.py",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py",
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+        "apps/api/tests/unit/test_external_cog_provider.py",
+        "apps/api/tests/unit/test_external_provider.py",
+        "apps/api/tests/unit/test_external_raster_provider.py",
+        "tools/smoke_qgis_native.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    }
+  ],
+  "realtime_contracts": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/events",
+      "handler": "openvietgis_api.adapters.http.integration_bindings.stream_integration_spatial_events",
+      "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "line": 973,
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "protocol": "SSE",
+      "media_type": "text/event-stream",
+      "events": [
+        "ready",
+        "spatial_change",
+        "unavailable"
+      ],
+      "pg_notify_channels": [
+        "ovg_team_collaboration"
+      ],
+      "cursor_or_replay_params": [],
+      "headers": {
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+      },
+      "revalidates_access_on_stream": true
+    }
+  ],
+  "components_and_operations": {
+    "external_provider_transport": {
+      "file": "apps/api/openvietgis_api/adapters/http/external_provider_transport.py",
+      "classes": [],
+      "functions": [
+        {
+          "name": "fetch_provider_bytes",
+          "line": 256,
+          "async": false
+        },
+        {
+          "name": "fetch_provider_range",
+          "line": 262,
+          "async": false
+        }
+      ],
+      "classification": "migrate",
+      "security_boundary": "Public IPv4 SSRF guard, bounded deadline/size, strong ETag verification for range/byte fetches."
+    },
+    "sse_contracts": [
+      {
+        "method": "GET",
+        "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/events",
+        "handler": "openvietgis_api.adapters.http.integration_bindings.stream_integration_spatial_events",
+        "source_file": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+        "line": 973,
+        "classification": "migrate",
+        "auth_boundary": {
+          "tenant_scope": "organization+project",
+          "project_access_guard": true,
+          "csrf_enforced": false,
+          "public_or_unauthenticated": false,
+          "auth_dependencies": [
+            "authenticate_request",
+            "get_db_session",
+            "prepare_project_scope",
+            "project_access_guard",
+            "project_scope"
+          ],
+          "permissions": [
+            "PROJECT_READ"
+          ],
+          "extension_permissions": []
+        },
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "ready",
+          "spatial_change",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      }
+    ],
+    "qgis_plugin_connector": {
+      "classification": "retain",
+      "metadata": {
+        "name": "OpenVietGIS Connector",
+        "qgisMinimumVersion": "3.34",
+        "version": "1.0.0",
+        "description": "Connect QGIS to OpenVietGIS maps, edit layers and save safely to Web; GeoPackage recovery under Advanced.",
+        "about": "OpenVietGIS QGIS Connector 1.0. Project-scoped HTTPS service credentials, explicit project.read for session and export, project.edit plus GIS ACL for writes. Local baseline comparison and server-managed realtime with durable changesets. Denied sync never deletes local edits. No internal PostGIS credentials.",
+        "author": "OpenVietGIS",
+        "email": "security@openvietgis.org",
+        "category": "Web",
+        "tags": "gis,openvietgis,geopackage,vn2000,manual-sync",
+        "homepage": "https://openvietgis.cloud",
+        "repository": "https://github.com/nguyentrieu210/OpenVietGis",
+        "tracker": "https://github.com/nguyentrieu210/OpenVietGis/issues",
+        "hasProcessingProvider": "no",
+        "experimental": "True",
+        "deprecated": "False"
+      },
+      "modules": [
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/__init__.py",
+          "classes": [],
+          "functions": [
+            {
+              "name": "classFactory",
+              "line": 8,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/browser_login.py",
+          "classes": [
+            {
+              "name": "BrowserLogin",
+              "line": 14,
+              "bases": [],
+              "methods": [
+                "url",
+                "take",
+                "complete",
+                "close"
+              ]
+            }
+          ],
+          "functions": [],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/client.py",
+          "classes": [
+            {
+              "name": "OpenVietGisError",
+              "line": 52,
+              "bases": [
+                "Exception"
+              ],
+              "methods": []
+            },
+            {
+              "name": "ConfigurationError",
+              "line": 85,
+              "bases": [
+                "OpenVietGisError"
+              ],
+              "methods": []
+            },
+            {
+              "name": "ApiError",
+              "line": 89,
+              "bases": [
+                "OpenVietGisError"
+              ],
+              "methods": []
+            },
+            {
+              "name": "IntegrityError",
+              "line": 97,
+              "bases": [
+                "OpenVietGisError"
+              ],
+              "methods": []
+            },
+            {
+              "name": "OpenVietGisConfig",
+              "line": 232,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "QgisLayerInfo",
+              "line": 258,
+              "bases": [],
+              "methods": [
+                "crs_display"
+              ]
+            },
+            {
+              "name": "QgisProfile",
+              "line": 286,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "DownloadedLayer",
+              "line": 302,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "SyncPreviewResult",
+              "line": 314,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "SyncPushResult",
+              "line": 333,
+              "bases": [],
+              "methods": []
+            }
+          ],
+          "functions": [
+            {
+              "name": "decode_pairing_code",
+              "line": 56,
+              "async": false
+            },
+            {
+              "name": "build_integration_events_url",
+              "line": 348,
+              "async": false
+            },
+            {
+              "name": "sanitize_gpkg_filename",
+              "line": 438,
+              "async": false
+            },
+            {
+              "name": "fetch_qgis_profile",
+              "line": 482,
+              "async": false
+            },
+            {
+              "name": "download_layer_geopackage",
+              "line": 570,
+              "async": false
+            },
+            {
+              "name": "preview_layer_geopackage_sync",
+              "line": 801,
+              "async": false
+            },
+            {
+              "name": "push_layer_geopackage_sync",
+              "line": 873,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/drafts.py",
+          "classes": [],
+          "functions": [
+            {
+              "name": "draft_path",
+              "line": 12,
+              "async": false
+            },
+            {
+              "name": "write_draft",
+              "line": 17,
+              "async": false
+            },
+            {
+              "name": "read_draft",
+              "line": 31,
+              "async": false
+            },
+            {
+              "name": "merge_snapshots",
+              "line": 40,
+              "async": false
+            },
+            {
+              "name": "rebind_pending",
+              "line": 63,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/managed_client.py",
+          "classes": [
+            {
+              "name": "ManagedSessionInfo",
+              "line": 30,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "ManagedBootstrapPage",
+              "line": 44,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "ManagedDeltaPage",
+              "line": 64,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "ManagedCommitReceipt",
+              "line": 74,
+              "bases": [],
+              "methods": []
+            }
+          ],
+          "functions": [
+            {
+              "name": "build_managed_events_url",
+              "line": 131,
+              "async": false
+            },
+            {
+              "name": "create_managed_session",
+              "line": 136,
+              "async": false
+            },
+            {
+              "name": "revoke_managed_session",
+              "line": 166,
+              "async": false
+            },
+            {
+              "name": "bootstrap_managed_layer",
+              "line": 170,
+              "async": false
+            },
+            {
+              "name": "load_managed_snapshot",
+              "line": 202,
+              "async": false
+            },
+            {
+              "name": "fetch_managed_delta",
+              "line": 262,
+              "async": false
+            },
+            {
+              "name": "validate_managed_delta",
+              "line": 274,
+              "async": false
+            },
+            {
+              "name": "commit_managed_changes",
+              "line": 313,
+              "async": false
+            },
+            {
+              "name": "get_managed_commit_receipt",
+              "line": 349,
+              "async": false
+            },
+            {
+              "name": "list_desktop_commands",
+              "line": 368,
+              "async": false
+            },
+            {
+              "name": "respond_desktop_command",
+              "line": 381,
+              "async": false
+            },
+            {
+              "name": "diff_managed_snapshots",
+              "line": 400,
+              "async": false
+            },
+            {
+              "name": "native_geometry_wkt",
+              "line": 422,
+              "async": false
+            },
+            {
+              "name": "catch_up_cached_layer",
+              "line": 444,
+              "async": false
+            },
+            {
+              "name": "load_managed_layers",
+              "line": 489,
+              "async": false
+            },
+            {
+              "name": "send_pending_commit",
+              "line": 540,
+              "async": false
+            },
+            {
+              "name": "validate_managed_operations",
+              "line": 553,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/plugin.py",
+          "classes": [
+            {
+              "name": "_RealtimeEventWorker",
+              "line": 177,
+              "bases": [
+                "QThread"
+              ],
+              "methods": [
+                "stop",
+                "run"
+              ]
+            },
+            {
+              "name": "_ManagedRealtimeWorker",
+              "line": 248,
+              "bases": [
+                "QThread"
+              ],
+              "methods": [
+                "stop",
+                "run"
+              ]
+            },
+            {
+              "name": "OpenVietGisConnectorDialog",
+              "line": 333,
+              "bases": [
+                "QDialog"
+              ],
+              "methods": [
+                "closeEvent"
+              ]
+            },
+            {
+              "name": "OpenVietGisConnectorPlugin",
+              "line": 2905,
+              "bases": [],
+              "methods": [
+                "initGui",
+                "unload",
+                "run"
+              ]
+            }
+          ],
+          "functions": [],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/snapshot_cache.py",
+          "classes": [],
+          "functions": [
+            {
+              "name": "cache_path",
+              "line": 21,
+              "async": false
+            },
+            {
+              "name": "signature",
+              "line": 29,
+              "async": false
+            },
+            {
+              "name": "read_cached_record",
+              "line": 36,
+              "async": false
+            },
+            {
+              "name": "read_snapshot",
+              "line": 62,
+              "async": false
+            },
+            {
+              "name": "write_snapshot",
+              "line": 67,
+              "async": false
+            },
+            {
+              "name": "clear_snapshots",
+              "line": 99,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/qgis_plugin/openvietgis_connector/workspace.py",
+          "classes": [
+            {
+              "name": "WorkspaceConflict",
+              "line": 38,
+              "bases": [
+                "Exception"
+              ],
+              "methods": []
+            },
+            {
+              "name": "Row",
+              "line": 43,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "Dataset",
+              "line": 51,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "LocalAction",
+              "line": 60,
+              "bases": [],
+              "methods": []
+            },
+            {
+              "name": "SyncPreview",
+              "line": 68,
+              "bases": [],
+              "methods": []
+            }
+          ],
+          "functions": [
+            {
+              "name": "read_dataset",
+              "line": 162,
+              "async": false
+            },
+            {
+              "name": "initialize_workspace",
+              "line": 337,
+              "async": false
+            },
+            {
+              "name": "preview_workspace",
+              "line": 377,
+              "async": false
+            },
+            {
+              "name": "commit_workspace",
+              "line": 507,
+              "async": false
+            },
+            {
+              "name": "recover_workspace",
+              "line": 638,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        }
+      ],
+      "consumed_api_paths": [
+        "/api/v1/organizations/{config.organization_id}"
+      ]
+    },
+    "domain_and_persistence": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/persistence/external_sources_repository.py",
+        "classes": [
+          {
+            "name": "SqlExternalSourcesRepository",
+            "line": 79,
+            "bases": [],
+            "methods": [
+              "register_allowlisted_host",
+              "list_allowlisted_hosts",
+              "create_connection",
+              "list_connections",
+              "connection_for_provider_request",
+              "invalidate_cache",
+              "revoke_connection"
+            ]
+          }
+        ],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/cog_provider.py",
+        "classes": [
+          {
+            "name": "_Reader",
+            "line": 45,
+            "bases": [],
+            "methods": [
+              "tile"
+            ]
+          },
+          {
+            "name": "_Level",
+            "line": 102,
+            "bases": [],
+            "methods": [
+              "cols"
+            ]
+          }
+        ],
+        "functions": [
+          {
+            "name": "cog_preview",
+            "line": 426,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/domain.py",
+        "classes": [
+          {
+            "name": "ExternalProtocol",
+            "line": 19,
+            "bases": [
+              "StrEnum"
+            ],
+            "methods": []
+          },
+          {
+            "name": "AllowlistedHostRecord",
+            "line": 27,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ExternalConnectionRecord",
+            "line": 40,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "validate_safe_hostname",
+            "line": 71,
+            "async": false
+          },
+          {
+            "name": "validate_endpoint_against_allowlist",
+            "line": 106,
+            "async": false
+          },
+          {
+            "name": "default_external_capabilities",
+            "line": 164,
+            "async": false
+          },
+          {
+            "name": "sanitize_allowlist_wire",
+            "line": 179,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "geotiff_preview",
+            "line": 225,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/provider.py",
+        "classes": [
+          {
+            "name": "RangeResponse",
+            "line": 49,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ProviderUnavailable",
+            "line": 58,
+            "bases": [
+              "PlatformDomainError"
+            ],
+            "methods": []
+          },
+          {
+            "name": "TileProfile",
+            "line": 73,
+            "bases": [],
+            "methods": [
+              "bbox"
+            ]
+          },
+          {
+            "name": "CogProfile",
+            "line": 92,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ProviderProfile",
+            "line": 101,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "endpoint_is_public_profile",
+            "line": 125,
+            "async": false
+          },
+          {
+            "name": "load_profiles",
+            "line": 230,
+            "async": false
+          },
+          {
+            "name": "approved_profile",
+            "line": 299,
+            "async": false
+          },
+          {
+            "name": "provider_preview",
+            "line": 724,
+            "async": false
+          },
+          {
+            "name": "provider_viewport",
+            "line": 768,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/external_sources/tile_provider.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "tile_preview",
+            "line": 201,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/integration_hub/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/integration_hub/bidirectional.py",
+        "classes": [
+          {
+            "name": "FeatureSnapshot",
+            "line": 28,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ReconcileAction",
+            "line": 35,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ReconcileConflict",
+            "line": 48,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ReconcilePlan",
+            "line": 56,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "reconcile_three_way",
+            "line": 94,
+            "async": false
+          },
+          {
+            "name": "is_echo_event",
+            "line": 231,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/integration_hub/catalog.py",
+        "classes": [
+          {
+            "name": "ConnectorAction",
+            "line": 16,
+            "bases": [
+              "StrEnum"
+            ],
+            "methods": []
+          },
+          {
+            "name": "AdapterLifecycle",
+            "line": 27,
+            "bases": [
+              "StrEnum"
+            ],
+            "methods": []
+          },
+          {
+            "name": "AdapterManifest",
+            "line": 48,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "get_adapter",
+            "line": 156,
+            "async": false
+          },
+          {
+            "name": "evaluate_action",
+            "line": 160,
+            "async": false
+          },
+          {
+            "name": "serialize_adapter",
+            "line": 193,
+            "async": false
+          },
+          {
+            "name": "list_adapters",
+            "line": 213,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/integration_hub/profiles.py",
+        "classes": [
+          {
+            "name": "LayerAccessSnapshot",
+            "line": 28,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "execution_status_for",
+            "line": 43,
+            "async": false
+          },
+          {
+            "name": "is_explicit_readable_crs",
+            "line": 230,
+            "async": false
+          },
+          {
+            "name": "build_adapter_profile",
+            "line": 257,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/integration_hub/sync_diff.py",
+        "classes": [
+          {
+            "name": "ServerFeatureSnapshot",
+            "line": 24,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "UploadedFeatureSnapshot",
+            "line": 31,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "SyncOperationPreview",
+            "line": 38,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "SyncDiffPlan",
+            "line": 48,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "compute_sync_diff",
+            "line": 131,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/external_provider_transport.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/external_sources.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/integration_bindings.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/integration_hub.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/external_sources_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/cog_provider.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/domain.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/provider.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/tile_provider.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/bidirectional.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/catalog.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/profiles.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/sync_diff.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/R027-MANUAL-SYNC.md",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/README.md",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/__init__.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/browser_login.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/client.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/drafts.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/managed_client.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/metadata.txt",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/plugin.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/snapshot_cache.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/qgis_plugin/openvietgis_connector/workspace.py",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py",
+      "category": "integration",
+      "test_count": 5,
+      "test_ids": [
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py::test_integration_hub_rejects_anonymous_and_cross_tenant_rls",
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py::test_integration_hub_service_principal_ceiling_and_revocation",
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py::test_integration_hub_gis_scoped_layer_acl_and_crs_preservation",
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py::test_integration_hub_autocad_dxf_export_and_crs_guard",
+        "apps/api/tests/integration/integration_hub/test_integration_hub_rls_acl.py::test_integration_hub_qgis_sync_preview_push_and_gis_acl"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/integration_hub/test_r027_bindings.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/integration_hub/test_r027_bindings.py::test_r027_draft_binding_is_scoped_and_non_executable"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/integration_hub/test_r027_manual_workspace.py::test_qgis_workspace_manual_roundtrip_real_http_postgis"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r010_live_provider.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r010_r013_real.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py",
+      "category": "unit",
+      "test_count": 16,
+      "test_ids": [
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_config_rejects_plain_http_for_non_localhost",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_config_allows_insecure_localhost_only_when_explicitly_enabled",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_config_rejects_embedded_credentials_and_unsafe_urls",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_config_rejects_invalid_uuid",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_config_redacts_bearer_token_in_repr",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_fetch_qgis_profile_parses_layers_and_sends_bearer_get",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_fetch_qgis_profile_redacts_token_on_http_error",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_download_layer_geopackage_verifies_sha256_and_writes_atomically",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_download_layer_geopackage_rejects_missing_or_mismatched_sha256_without_writing",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_download_layer_geopackage_sanitizes_path_traversal_content_disposition",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_preview_layer_geopackage_sync_formats_multipart_and_parses_response",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_push_layer_geopackage_sync_formats_multipart_and_parses_response",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_sync_rejects_oversized_geopackage_before_network",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_sync_rejects_invalid_64_hex_revisions_and_diff_sha256",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_push_sync_rejects_reserved_field_sync_operation_id",
+        "apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py::test_sync_preview_and_push_redact_bearer_token_on_http_error"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/integration_hub/test_qgis_workspace.py",
+      "category": "unit",
+      "test_count": 15,
+      "test_ids": [
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_initialize_creates_separate_durable_baseline_and_editable_workfile",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_non_conflicting_both_directions_merged_then_committed",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_concurrent_edit_blocks_both_directions_before_writes",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_deleted_feature_quarantined_not_recreated",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_changed_local_file_and_wrong_confirmation_are_denied",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_remote_only_pull_does_not_require_server_write",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_network_ack_loss_stops_new_sync_and_recovers_after_remote_convergence",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_gpkg_integrity_checks_blank_and_duplicate_ids_and_crs",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_two_sided_geometry_conflict_and_no_push",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_remote_revision_moved_after_preview_fails_closed",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_unknown_response_does_not_silently_recover_wrong_remote",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_recovery_rejects_another_tenant_even_with_valid_local_files",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_revision_extraction_rejects_invalid_geopackage_srid",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_http_403_sync_never_retries_and_verified_recovery_preserves_local",
+        "apps/api/tests/unit/integration_hub/test_qgis_workspace.py::test_denied_pending_recovery_fails_closed_on_remote_change"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py::test_pairing_code_roundtrip",
+        "apps/api/tests/unit/integration_hub/test_r027_pairing_code.py::test_pairing_code_rejects_malformed"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_external_cog_provider.py",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/api/tests/unit/test_external_cog_provider.py::test_actual_cog_overview_and_native_window_pixels",
+        "apps/api/tests/unit/test_external_cog_provider.py::test_profile_and_viewport_default_deny_no_egress",
+        "apps/api/tests/unit/test_external_cog_provider.py::test_bad_range_or_version_denied",
+        "apps/api/tests/unit/test_external_cog_provider.py::test_invalid_cog_directory_georeference_and_decompression_denied",
+        "apps/api/tests/unit/test_external_cog_provider.py::test_bounds_valid_but_excessive_tile_budget_denied",
+        "apps/api/tests/unit/test_external_cog_provider.py::test_real_gdal_cog_generator_and_independent_pixel_oracle"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_external_provider.py",
+      "category": "unit",
+      "test_count": 16,
+      "test_ids": [
+        "apps/api/tests/unit/test_external_provider.py::test_wms_real_preview_bytes_and_request_parameters",
+        "apps/api/tests/unit/test_external_provider.py::test_wfs_real_bounded_read_and_query",
+        "apps/api/tests/unit/test_external_provider.py::test_wfs_count_semantics",
+        "apps/api/tests/unit/test_external_provider.py::test_wfs_invalid_count_metadata_denied",
+        "apps/api/tests/unit/test_external_provider.py::test_wfs_limit_does_not_imply_complete",
+        "apps/api/tests/unit/test_external_provider.py::test_profile_default_denial_exact_match_rights_and_revocation",
+        "apps/api/tests/unit/test_external_provider.py::test_dns_rebinding_mixed_public_private_reject",
+        "apps/api/tests/unit/test_external_provider.py::test_actual_peer_mismatch_rejects_before_tls",
+        "apps/api/tests/unit/test_external_provider.py::test_tls_host_certificate_failure_no_http_request",
+        "apps/api/tests/unit/test_external_provider.py::test_invalid_operator_policy_fails_closed",
+        "apps/api/tests/unit/test_external_provider.py::test_redirects_never_followed",
+        "apps/api/tests/unit/test_external_provider.py::test_media_types_encoding_and_response_size_fail_closed",
+        "apps/api/tests/unit/test_external_provider.py::test_xml_injection_wrong_layer_bbox_crs_and_image_rejected",
+        "apps/api/tests/unit/test_external_provider.py::test_geojson_wrong_axis_nonfinite_properties_count_and_crs_rejected",
+        "apps/api/tests/unit/test_external_provider.py::test_no_raw_query_credentials_displayed",
+        "apps/api/tests/unit/test_external_provider.py::test_dns_resolution_has_absolute_wait_bound"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_external_raster_provider.py",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/api/tests/unit/test_external_raster_provider.py::test_fixed_approved_tile_real_pixel_proof",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tile_policy_valid_and_invalid_coordinates_bounds_origin",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_xyz_metadata_mismatch_never_requests_tile",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_wmts_metadata_wrong_matrix_crs_scale_or_limits_denied",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiled_geotiff_real_range_pixels_and_georeference",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiff_wrong_range_response_and_large_source_denied",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiff_bad_crs_georeference_offsets_compression_or_payload_denied"
+      ]
+    },
+    {
+      "file": "tools/smoke_qgis_native.py",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "tools/smoke_qgis_native.py::script_main"
+      ]
+    },
+    {
+      "file": "tools/tests/test_package_qgis_plugin.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_package_qgis_plugin.py::test_plugin_zip_installable_deterministic_and_no_secrets",
+        "tools/tests/test_package_qgis_plugin.py::test_plugin_zip_refuses_missing_source_and_unreviewed_metadata"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_connector_simple_ui.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_qgis_connector_simple_ui.py::test_simple_plugin_has_one_primary_open_save_flow",
+        "tools/tests/test_qgis_connector_simple_ui.py::test_simple_plugin_preserves_edit_recovery_guards",
+        "tools/tests/test_qgis_connector_simple_ui.py::test_download_and_version_are_consistent"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_desktop_recovery.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "tools/tests/test_qgis_desktop_recovery.py::test_atomic_draft_and_project_isolation",
+        "tools/tests/test_qgis_desktop_recovery.py::test_three_way_merge_and_conflict",
+        "tools/tests/test_qgis_desktop_recovery.py::test_browser_handoff_state_origin_and_one_time",
+        "tools/tests/test_qgis_desktop_recovery.py::test_callback_does_not_report_success_when_profile_fails",
+        "tools/tests/test_qgis_desktop_recovery.py::test_pending_rebind_only_when_server_revision_and_exact_base_match"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_managed_snapshots.py",
+      "category": "unit",
+      "test_count": 11,
+      "test_ids": [
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_save_does_not_lose_diff",
+        "tools/tests/test_qgis_managed_snapshots.py::test_deletes_are_denied_by_default",
+        "tools/tests/test_qgis_managed_snapshots.py::test_global_cursor_is_not_advanced_by_write_receipt",
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_geometry_wkt_preserves_projected_coordinates",
+        "tools/tests/test_qgis_managed_snapshots.py::test_initial_load_uses_large_pages_and_rejects_revision_change",
+        "tools/tests/test_qgis_managed_snapshots.py::test_platform_error_message_is_not_discarded",
+        "tools/tests/test_qgis_managed_snapshots.py::test_pending_retry_checks_receipt_before_replaying",
+        "tools/tests/test_qgis_managed_snapshots.py::test_required_fields_preflight_preserves_draft_and_allows_valid_point",
+        "tools/tests/test_qgis_managed_snapshots.py::test_sqlite_snapshot_requires_fresh_scope_and_revisions",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_uses_one_authorized_probe_not_full_download",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_changed_cache_uses_delta_and_revalidates"
+      ]
+    }
+  ]
+}

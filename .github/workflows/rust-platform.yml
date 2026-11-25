@@ -1,0 +1,110 @@
+name: Rust Platform CI
+
+on:
+  push:
+    branches: ["main", "dev", "064-rust-platform"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "modules/*/rust/**"
+      - ".github/workflows/rust-platform.yml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "modules/*/rust/**"
+      - ".github/workflows/rust-platform.yml"
+
+concurrency:
+  group: rust-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-C debuginfo=0"
+
+jobs:
+  check-and-test:
+    name: Format, Clippy, Tests & Architecture Isolation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Verify architecture isolation (core crates must never depend on modules)
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          meta = json.loads(
+              subprocess.check_output(["cargo", "metadata", "--format-version", "1", "--no-deps", "--locked"])
+          )
+          core_crates = {
+              "ovg-core",
+              "ovg-storage",
+              "ovg-spatial",
+              "ovg-sync",
+              "ovg-processing",
+              "ovg-module-sdk",
+          }
+          violations = []
+          for pkg in meta["packages"]:
+              if pkg["name"] in core_crates:
+                  for dep in pkg["dependencies"]:
+                      dep_name = dep["name"]
+                      dep_path = dep.get("path") or ""
+                      if dep_name.startswith("ovg-module-") and dep_name != "ovg-module-sdk":
+                          violations.append(f"{pkg['name']} depends on vertical module {dep_name}")
+                      if "/modules/" in dep_path.replace("\\", "/"):
+                          violations.append(f"{pkg['name']} depends on path inside modules/: {dep_path}")
+          if violations:
+              print("ARCHITECTURE ISOLATION VIOLATIONS:", file=sys.stderr)
+              for v in violations:
+                  print(f"  - {v}", file=sys.stderr)
+              sys.exit(1)
+          print("Architecture isolation check passed: core crates have zero dependencies on modules/.")
+          PY
+
+      - name: Run Clippy (deny all warnings)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --locked --workspace
+
+      - name: Verify the core API with no official modules
+        run: cargo test --locked -p openvietgis-api-rust --no-default-features
+
+  security-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cargo-audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

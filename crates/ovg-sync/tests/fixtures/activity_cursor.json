@@ -1,0 +1,25 @@
+{
+  "reference": "OpenVietGIS 3e78ac1 activity_cursor.py",
+  "organization_id": "01000000-0000-0000-0000-000000000002",
+  "project_id": "02000000-0000-0000-0000-000000000003",
+  "actor_id": "03000000-0000-0000-0000-000000000004",
+  "cutoff": "2026-01-02T10:11:12.123456+07:00",
+  "created_at": "2026-01-02T03:11:11.000002+00:00",
+  "row_id": "99000000-0000-0000-0000-000000000001",
+  "cases": [
+    {
+      "actor_type": "human",
+      "credential_id": null,
+      "stream": "review",
+      "scope": "ed79150948b5f40a9ef1407630b64ed1db5f778eb04e693c8fb1b5c1078510eb",
+      "token": "WzEsImVkNzkxNTA5NDhiNWY0MGE5ZWYxNDA3NjMwYjY0ZWQxZGI1Zjc3OGViMDRlNjkzYzhmYjFiNWMxMDc4NTEwZWIiLCIyMDI2LTAxLTAyVDAzOjExOjEyLjEyMzQ1NiswMDowMCIsIjIwMjYtMDEtMDJUMDM6MTE6MTEuMDAwMDAyKzAwOjAwIiwwLCI5OTAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiXQ"
+    },
+    {
+      "actor_type": "service_principal",
+      "credential_id": "04000000-0000-0000-0000-000000000005",
+      "stream": "edit",
+      "scope": "9325bd6d927fbddcb8a0bbe0a9b2176934c66a5f6bed9edcd306a93259e8c7a0",
+      "token": "WzEsIjkzMjViZDZkOTI3ZmJkZGNiOGEwYmJlMGE5YjIxNzY5MzRjNjZhNWY2YmVkOWVkY2QzMDZhOTMyNTllOGM3YTAiLCIyMDI2LTAxLTAyVDAzOjExOjEyLjEyMzQ1NiswMDowMCIsIjIwMjYtMDEtMDJUMDM6MTE6MTEuMDAwMDAyKzAwOjAwIiwxLCI5OTAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiXQ"
+    }
+  ]
+}
