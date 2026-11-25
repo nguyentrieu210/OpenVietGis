@@ -6,9 +6,9 @@ and service principal bearer credentials, and real gis_access scoped layer/featu
 
 from __future__ import annotations
 
-import re
 import hashlib
 import io
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -453,7 +453,7 @@ def test_integration_hub_autocad_dxf_export_and_crs_guard(
         )
         assert r_bad_fmt.status_code == 422, r_bad_fmt.text
 
-        # EPSG:4326 is converted exactly to its WGS 84 UTM zone for DXF; other CRS still fail closed.
+        # EPSG:4326 goes exactly to its WGS 84 UTM zone for DXF; other CRS still fail closed.
         r_geo_dxf = owner.get(
             f"{root}/integration-hub/adapters/autocad/layers/{layer_4326}/export?format=dxf"
         )

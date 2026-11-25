@@ -280,7 +280,7 @@ def _utm_code_for(
         {"org": organization_id, "proj": project_id, "sid": source_id},
     ).mappings().first()
     if centre is None or centre["x"] is None:
-        return 32648  # empty layer: Vietnam west of 108°E; the feature-count check rejects it anyway
+        return 32648  # empty layer (rejected later by the feature-count check)
     return utm_code(float(centre["x"]), float(centre["y"]))
 
 
