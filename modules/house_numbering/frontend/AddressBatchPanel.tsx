@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useEffect,useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 export type BatchGroup={key:string;kind:string;road:string;alley:string;code:string;verified_road:string;verified_prefix:string;count:number;distance_min:number;distance_max:number;members:{building_id:string;source_id:string;feature_id:string;road:string;alley:string;distance_m:number;evidence_token:string;revision:number}[]};
@@ -10,7 +11,7 @@ export function AddressBatchPanel({path,groups,busy,onBusy,onSaved,onGoto}:{path
  async function save(){
   if(!group||selected.length<2||evidence.trim().length<10||!confirmed||busy)return;
   const members=group.members.filter(m=>selected.includes(m.building_id)).map(m=>({building_id:m.building_id,evidence_token:m.evidence_token,expected_revision:m.revision}));
-  if(!window.confirm("Xác nhận căn cứ chung đã được kiểm tra cho "+members.length+" nhà đã chọn? Hồ sơ gốc và tuyến chính vẫn không thay đổi."))return;
+  if(!(await uiConfirm("Xác nhận căn cứ chung đã được kiểm tra cho "+members.length+" nhà đã chọn? Hồ sơ gốc và tuyến chính vẫn không thay đổi.")))return;
   onBusy(true);setError("");
   try{const result=await withCsrf(()=>hnClient.request<{verified:number}>(path+"/batch",{method:"POST",body:JSON.stringify({key:group.key,members,evidence:evidence.trim(),confirmed:true})}));
    setKey("");setSelected([]);setEvidence("");setConfirmed(false);await onSaved(result.verified);

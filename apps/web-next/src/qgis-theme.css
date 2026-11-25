@@ -212,3 +212,15 @@
 .qgis-studio .core-command button{min-height:22px!important;height:22px;padding:0 6px!important;font-size:11px!important}
 .qgis-studio .core-command-status[hidden]{display:none!important}
 .qgis-studio .core-command-status small{font-size:10.5px}
+
+/* In-app dialogs (replace browser prompt/confirm/alert) */
+.ovg-dialog-shade{position:fixed;inset:0;z-index:5000;background:#0f1b2440;display:grid;place-items:center;padding:16px}
+.ovg-dialog{width:min(420px,100%);background:var(--ovg-panel,#f3f5f7);border:1px solid var(--ovg-line,#cdd5db);border-radius:4px;box-shadow:0 12px 32px #0f1b2440;font-size:12.5px;color:var(--ovg-ink,#1f2a30)}
+.ovg-dialog>header{padding:7px 12px;background:var(--ovg-header,#e9edf0);border-bottom:1px solid var(--ovg-line,#cdd5db);font-weight:600;font-size:13px}
+.ovg-dialog p,.ovg-dialog form>label{display:grid;gap:6px;margin:12px;line-height:1.45}
+.ovg-dialog input{min-height:28px;padding:3px 8px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;font-size:13px;background:#fff}
+.ovg-dialog input:focus{outline:2px solid #8fb3d4;border-color:#1565a9}
+.ovg-dialog-buttons{display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--ovg-line,#cdd5db);background:#fff}
+.ovg-dialog-buttons button{min-height:28px;min-width:72px;padding:3px 12px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;background:#fff;font-size:12.5px;cursor:pointer}
+.ovg-dialog-buttons .primary{background:#1565a9;border-color:#1565a9;color:#fff}
+.ovg-dialog-buttons .danger-solid{background:#b42318;border-color:#b42318;color:#fff}

@@ -1,3 +1,4 @@
+import {uiConfirm,uiPrompt} from "./ui-dialog";
 import React,{useEffect,useMemo,useState} from "react";
 import {ApiClient,ApiError,listSpatialSources,listSpatialLayers,createSpatialLayer,renameSpatialLayer,retireSpatialLayer,loadCsrfToken,type SpatialSource,type SpatialLayer} from "@openvietgis/client-sdk";
 
@@ -16,9 +17,9 @@ export function CatalogManager({org,pid}:{org:string;pid:string}){
  const sourceName=(id:string)=>sources.find(s=>s.id===id)?.name??"—";
  const match=(text:string)=>!q||n(text).includes(n(q));
  const run=async(fn:()=>Promise<unknown>,ok:string)=>{if(busy)return;setBusy(true);setErr("");setMsg("");try{await loadCsrfToken(client);await fn();setMsg(ok);setRev(x=>x+1);reloadMap()}catch(e){setErr(e instanceof ApiError?(e.status===409?"Dữ liệu vừa thay đổi, đã tải lại danh sách.":"Không thực hiện được ("+e.status+")."):"Không thực hiện được.");setRev(x=>x+1)}finally{setBusy(false)}};
- const addLayer=(s:SpatialSource)=>{const name=window.prompt("Tên lớp mới từ nguồn \""+s.name+"\"",s.name)?.trim();if(name)void run(()=>createSpatialLayer(client,org,pid,{source_id:s.id,name}),"Đã thêm lớp \""+name+"\" vào bản đồ.")};
- const rename=(l:SpatialLayer)=>{const name=window.prompt("Tên mới cho lớp",l.name)?.trim();if(name&&name!==l.name)void run(()=>renameSpatialLayer(client,org,pid,l.id,{expected_revision:l.layer_revision,name}),"Đã đổi tên lớp.")};
- const remove=(l:SpatialLayer)=>{if(window.confirm("Gỡ lớp \""+l.name+"\" khỏi dự án? Nguồn dữ liệu và đối tượng vẫn được giữ, có thể tạo lại lớp từ nguồn."))void run(()=>retireSpatialLayer(client,org,pid,l.id,{expected_revision:l.layer_revision}),"Đã gỡ lớp.")};
+ const addLayer=async (s:SpatialSource)=>{const name=(await uiPrompt("Tên lớp mới từ nguồn \""+s.name+"\"",s.name))?.trim();if(name)void run(()=>createSpatialLayer(client,org,pid,{source_id:s.id,name}),"Đã thêm lớp \""+name+"\" vào bản đồ.")};
+ const rename=async (l:SpatialLayer)=>{const name=(await uiPrompt("Tên mới cho lớp",l.name))?.trim();if(name&&name!==l.name)void run(()=>renameSpatialLayer(client,org,pid,l.id,{expected_revision:l.layer_revision,name}),"Đã đổi tên lớp.")};
+ const remove=async (l:SpatialLayer)=>{if((await uiConfirm("Gỡ lớp \""+l.name+"\" khỏi dự án? Nguồn dữ liệu và đối tượng vẫn được giữ, có thể tạo lại lớp từ nguồn.")))void run(()=>retireSpatialLayer(client,org,pid,l.id,{expected_revision:l.layer_revision}),"Đã gỡ lớp.")};
  const shownSources=sources.filter(s=>match(s.name)),shownLayers=layers.filter(l=>match(l.name+" "+sourceName(l.source_id)));
  return <div className="cat-mgr">
   <div className="cat-bar"><input type="search" aria-label="Lọc nguồn và lớp" placeholder="Lọc theo tên…" value={q} onChange={e=>setQ(e.target.value)}/><button type="button" onClick={()=>setRev(x=>x+1)} disabled={loading}>{loading?"Đang tải…":"↻ Tải lại"}</button></div>

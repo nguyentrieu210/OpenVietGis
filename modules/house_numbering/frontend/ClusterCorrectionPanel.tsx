@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 type Input={building_id:string;cluster:string};
@@ -15,7 +16,7 @@ export function ClusterCorrectionPanel({endpoint,cluster,items,mapping,onDone,on
    const res=await withCsrf(()=>hnClient.request<Plan>(endpoint+"/correction/preview",{method:"POST",body:JSON.stringify(body)}));setPlan(res);
    if(res.recommended_route_id)selectTarget(res,res.recommended_route_id);
  }catch(e){setError(await uiError(e));}finally{setBusy(false);onBusy(false)}}
- async function apply(){if(!plan||!target||!checked||!chosen.length||reason.trim().length<10||!window.confirm(`Xác nhận sửa liên kết tuyến của ${chosen.length} công trình? Mã khảo sát gốc giữ nguyên.`))return;setBusy(true);onBusy(true);setError("");try{
+ async function apply(){if(!plan||!target||!checked||!chosen.length||reason.trim().length<10||!(await uiConfirm(`Xác nhận sửa liên kết tuyến của ${chosen.length} công trình? Mã khảo sát gốc giữ nguyên.`)))return;setBusy(true);onBusy(true);setError("");try{
    const res=await withCsrf(()=>hnClient.request<{assigned:number}>(endpoint+"/correction/apply",{method:"POST",body:JSON.stringify({...body,route_id:target,selected_ids:chosen,reason:reason.trim(),preview_token:plan.preview_token})}));
    onDone(res.assigned);setPlan(null);
  }catch(e){setError(await uiError(e));}finally{setBusy(false);onBusy(false)}}

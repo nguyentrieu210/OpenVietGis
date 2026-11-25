@@ -1,3 +1,4 @@
+import {uiConfirm} from "./ui-dialog";
 import React,{useEffect,useRef,useState,useMemo} from "react";
 import * as ml from "./map-surface";
 import type {Feature,Geometry,Position} from "geojson";
@@ -80,13 +81,13 @@ export function useProfessionalTools(h:Host){
  // One source and at most MAX_DELETE per action so the delete is a single atomic changeset.
  const MAX_DELETE=2000,deletePlan=useRef<{key:string;layer:SpatialLayer;ids:string[];operationId:string}|null>(null);
  const selectedRows=()=>{const seen=new Map<string,typeof h.data.rows[number]>();for(const r of h.data.rows)if(h.selection.has(r.key)&&!seen.has(r.key))seen.set(r.key,r);return [...seen.values()]};
- function deleteSelection(){if(disabled)return;const rows=selectedRows();if(!rows.length){h.notify("Các đối tượng đang chọn chưa được tải; phóng to vùng chứa chúng rồi thử lại.");return}
+ async function deleteSelection(){if(disabled)return;const rows=selectedRows();if(!rows.length){h.notify("Các đối tượng đang chọn chưa được tải; phóng to vùng chứa chúng rồi thử lại.");return}
   const sources=new Set(rows.map(r=>r.layer.source_id));if(sources.size>1){h.notify("Đang chọn đối tượng ở "+sources.size+" lớp; mỗi lần chỉ xóa hàng loạt trong một lớp.");return}
   if(rows.length>MAX_DELETE){h.notify("Mỗi lần xóa tối đa "+MAX_DELETE.toLocaleString("vi-VN")+" đối tượng; đang chọn "+rows.length.toLocaleString("vi-VN")+".");return}
   const layer=rows[0]!.layer;if(!deletable(layer)){h.notify("Không có quyền xóa đối tượng trong lớp "+layer.name);return}
   const ids=rows.map(r=>r.feature.feature_id).sort(),key=layer.source_id+":"+ids.join(",");
   const missing=h.selection.size-rows.length;
-  if(!window.confirm("Xóa "+rows.length.toLocaleString("vi-VN")+" đối tượng của lớp "+layer.name+"?"+(missing>0?" ("+missing+" đối tượng đang chọn chưa tải sẽ không bị xóa.)":"")+" Có thể khôi phục trong Lịch sử thay đổi của lớp."))return;
+  if(!(await uiConfirm("Xóa "+rows.length.toLocaleString("vi-VN")+" đối tượng của lớp "+layer.name+"?"+(missing>0?" ("+missing+" đối tượng đang chọn chưa tải sẽ không bị xóa.)":"")+" Có thể khôi phục trong Lịch sử thay đổi của lớp.")))return;
   // Same selection retried after a failure reuses the operation id, so a delete the server already applied is not sent twice.
   if(deletePlan.current?.key!==key)deletePlan.current={key,layer,ids,operationId:crypto.randomUUID()};const p=deletePlan.current;
   void h.action(async()=>{try{await commit({layer:p.layer,operations:p.ids.map(id=>({op_type:"delete" as const,feature_id:id})),operationId:p.operationId,summary:"Xóa "+p.ids.length+" đối tượng đã chọn"});deletePlan.current=null}catch(e){if(e instanceof ApiError&&e.status<500)deletePlan.current=null;fail(e);throw e}})}
