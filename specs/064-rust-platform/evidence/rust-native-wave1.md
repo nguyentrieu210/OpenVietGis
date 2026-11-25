@@ -238,3 +238,37 @@ Differential parity on isolated real PostGIS passed:
 - exact 12-adapter body/wire contract
 - successful no-store header
 - foreign-tenant denial
+
+### E14 extension activation control plane
+
+Integrated commits:
+
+- `a2fc0b15`: full native module manifest contract parity
+- `c53eeb51`: activation list + official runtime compatibility
+- latest E14 history checkpoint: immutable activation history
+
+Rust now owns:
+
+- `GET /extensions/activations`
+- `GET /extensions/activations/{activation_id}/history`
+
+Differential parity on isolated real PostGIS passed activation-list compatibility,
+runtime-mismatch detection, foreign-tenant denial, history event ordering,
+missing activation, the 1,000-event portable-history limit, and GIS access-guard
+behavior. The global guard intentionally allows scoped users to list activations
+but denies the history route; Rust preserves that distinction.
+
+### E16 MCP session lifecycle
+
+Commit: `fa1b0922`.
+
+The isolated Rust MCP policy now includes a stateful session/command machine for
+heartbeat expiry, one-command-at-a-time admission, the two-second submit guard,
+claim/check/ack/cancel, terminal-result single consumption, command expiry and
+session close. The transport still owns capability-token authentication and
+payload/result sanitization.
+
+Validation:
+
+- Rust policy: 6/6 tests PASS under `rustc -D warnings --test`.
+- Retained Python `BridgeStore`: 6/6 tests PASS.
