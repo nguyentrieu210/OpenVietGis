@@ -491,12 +491,14 @@ def _coerce_gpkg_value(ftype: FieldType, val: Any) -> AttributeValue:
     if ftype == FieldType.DECIMAL:
         if isinstance(val, bool):
             raise ValueError("expected decimal")
+        # format(..., "f"): normalize() alone gives "2E+1" for 20.0, which the canonical
+        # base-10 decimal check rejects, so any GeoPackage with round decimals failed to import.
         if isinstance(val, (int, float)):
             if not math.isfinite(float(val)):
                 raise ValueError("non-finite decimal")
-            return str(Decimal(str(val)).normalize())
+            return format(Decimal(str(val)).normalize(), "f")
         if isinstance(val, str):
-            return str(Decimal(val).normalize())
+            return format(Decimal(val).normalize(), "f")
         raise ValueError("expected decimal")
     if ftype == FieldType.TIMESTAMP:
         if not isinstance(val, str) or not _ISO_TS_RE.match(val):
