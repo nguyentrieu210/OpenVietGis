@@ -86,6 +86,29 @@ try{
  await page.waitForFunction(()=>!document.body.dataset.ovgSpacePan);
  await page.waitForFunction(before=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|")!==before,before,{timeout:10000});
  console.log("PASS Space drag with empty GIS command field focused; camera changed");
+ const pan=async()=>{
+   const initial=await camera();
+   await page.keyboard.down("Space");await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==="1");
+   const r=await canvas.boundingBox();
+   await page.mouse.move(r.x+r.width*.40,r.y+r.height*.55);
+   await page.mouse.down();await page.waitForFunction(()=>document.body.dataset.ovgSpaceDragging==="1");
+   await page.mouse.move(r.x+r.width*.40-92,r.y+r.height*.55+48,{steps:10});await page.mouse.up();await page.keyboard.up("Space");
+   await page.waitForFunction(()=>!document.body.dataset.ovgSpacePan&&!document.body.dataset.ovgSpaceDragging);
+   await page.waitForFunction(initial=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|")!==initial,initial,{timeout:10000});
+ };
+ await command("DIST 106.7,10.8");
+ const sketch=page.locator(".core-sketch-measure dd").first();await sketch.waitFor();
+ const vertices=await sketch.innerText();await pan();assert.equal(await sketch.innerText(),vertices,"Space drag must not create vertices");
+ await page.getByRole("button",{name:"Hủy vẽ",exact:true}).click();await sketch.waitFor({state:"detached"});
+ console.log("PASS Space drag during distance measurement; vertex count unchanged");
+ await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).fill("ABC");
+ await page.keyboard.press("Space");assert.equal(await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).inputValue(),"ABC ");
+ assert.equal(await page.evaluate(()=>document.body.dataset.ovgSpacePan),undefined);
+ await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).fill("");
+ await page.keyboard.down("Space");await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==="1");
+ await page.evaluate(()=>window.dispatchEvent(new Event("blur")));await page.waitForFunction(()=>!document.body.dataset.ovgSpacePan);await page.keyboard.up("Space");
+ console.log("PASS typing is preserved; blur releases temporary pan");
+
  await command("PLOT");
  const layout=page.getByRole("dialog",{name:"Layout Designer",exact:true});await layout.waitFor({timeout:10000});
  try{await page.waitForFunction(()=>document.querySelector(".layout-print-sheet image")?.getAttribute("href")?.startsWith("data:image/png"),{},{timeout:40000})}catch(e){console.error(await layout.locator("footer").innerText());throw e}

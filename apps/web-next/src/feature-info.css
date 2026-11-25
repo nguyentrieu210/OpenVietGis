@@ -7,3 +7,5 @@
 body[data-ovg-space-pan] .maplibregl-canvas{cursor:grab!important}
 body[data-ovg-space-pan] .maplibregl-canvas:active{cursor:grabbing!important}
 body[data-ovg-space-pan] .maplibregl-marker{pointer-events:none!important}
+
+body[data-ovg-space-dragging] .maplibregl-canvas{cursor:grabbing!important}
