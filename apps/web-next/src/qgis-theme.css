@@ -338,3 +338,76 @@
 .qgis-studio .core-ribbon-search-trigger{order:99;margin-left:auto!important}
 .qgis-studio .core-ribbon-search-trigger>button{width:200px;justify-content:flex-start;gap:6px;border:1px solid #c9d3da!important;background:#fff!important;color:#7a8a93!important;font-size:12px!important}
 .qgis-studio .core-ribbon-search-trigger>button:hover{border-color:#8fb3d4!important;background:#fff!important}
+
+/* Live-stream style project chat floating over the map */
+.ovg-live-chat{position:absolute;left:12px;bottom:64px;z-index:30;width:320px;max-width:calc(100% - 24px);display:flex;flex-direction:column;border-radius:12px;background:#0f1b24b8;backdrop-filter:blur(12px) saturate(140%);-webkit-backdrop-filter:blur(12px) saturate(140%);border:1px solid #ffffff26;box-shadow:0 10px 30px #0006;color:#eef4f8;font-size:13px;overflow:hidden}
+.ovg-live-chat.closed{width:auto}
+.ovg-live-chat>header{display:flex;align-items:center;border-bottom:1px solid #ffffff1a}
+.ovg-live-chat.closed>header{border:0}
+.ovg-live-chat-title{flex:1;display:flex;align-items:center;gap:6px;padding:8px 12px;border:0;background:none;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;text-align:left}
+.ovg-live-chat-title small{font-weight:400;color:#aab8c2}
+.ovg-live-chat-title .dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px #ef444433;animation:ovg-live 1.6s ease-in-out infinite}
+@keyframes ovg-live{50%{box-shadow:0 0 0 6px #ef444400}}
+.ovg-live-chat-min{width:30px;height:30px;border:0;background:none;color:#cbd5e1;font-size:15px;cursor:pointer}
+.ovg-live-chat-list{max-height:min(320px,40vh);overflow-y:auto;padding:8px 10px 4px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin;scrollbar-color:#ffffff40 transparent;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px)}
+.ovg-live-msg{display:flex;gap:8px;align-items:flex-start;animation:ovg-bubble .2s ease-out}
+.ovg-live-msg .av{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff}
+.ovg-live-msg p{margin:0;line-height:1.4;word-break:break-word;white-space:pre-wrap;color:#e8eef3}
+.ovg-live-msg b{font-weight:700;margin-right:6px;filter:brightness(1.35)}
+.ovg-live-msg time{font-size:10.5px;color:#8fa1ad}
+.ovg-live-msg.mine p{color:#fff}
+.ovg-live-empty{margin:6px 12px 10px;color:#aab8c2;font-size:12px}
+.ovg-live-empty kbd{background:#ffffff1f;border-radius:3px;padding:0 4px}
+.ovg-live-jump{align-self:center;margin:-6px 0 4px;padding:2px 10px;border:0;border-radius:10px;background:#1f6fb8;color:#fff;font-size:11.5px;cursor:pointer}
+.ovg-live-input{display:grid;grid-template-columns:1fr auto;gap:6px;padding:6px 8px 8px;border-top:1px solid #ffffff1a}
+.ovg-live-quick{grid-column:1/-1;display:flex;gap:2px}
+.ovg-live-quick button{border:0;background:#ffffff12;border-radius:12px;padding:1px 7px;font-size:14px;cursor:pointer}
+.ovg-live-quick button:hover{background:#ffffff2b}
+.ovg-live-input input{min-height:32px;padding:4px 12px;border-radius:16px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;font-size:13px;outline:none}
+.ovg-live-input input::placeholder{color:#9fb0bc}
+.ovg-live-input input:focus{border-color:#5b9bd5;background:#ffffff1f}
+.ovg-live-input .send{width:32px;height:32px;border-radius:50%;border:0;background:#1f6fb8;color:#fff;cursor:pointer}
+.ovg-live-input .send:disabled{background:#ffffff1f;color:#8fa1ad;cursor:default}
+.ovg-chat-badge.static{position:static;margin-left:4px}
+@media (prefers-reduced-motion:reduce){.ovg-live-chat-title .dot,.ovg-live-msg{animation:none}}
+@media (max-width:640px){.ovg-live-chat{width:calc(100% - 24px)}}
+
+/* Organisation / project dialog */
+.ovg-ws-trigger{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #ffffff2b;border-radius:6px;background:linear-gradient(180deg,#ffffff1f,#ffffff0d);color:#eef4f8;cursor:pointer;font-size:13px;max-width:44vw}
+.ovg-ws-trigger .org{color:#b9c7d1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:14vw}
+.ovg-ws-trigger b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22vw}
+.ovg-ws-shade{position:fixed;inset:0;z-index:4500;background:#0f1b2459;display:grid;place-items:center;padding:16px}
+.ovg-ws{width:min(860px,100%);height:min(560px,calc(100vh - 32px));display:flex;flex-direction:column;background:#fff;border-radius:10px;box-shadow:0 24px 60px #0f1b2466;overflow:hidden;color:#1f2a30;font-size:13px}
+.ovg-ws>header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e3e8ec}
+.ovg-ws>header b{font-size:15px}
+.ovg-ws>header button{width:30px;height:30px;border:0;border-radius:6px;background:none;font-size:20px;color:#5b6b75;cursor:pointer}
+.ovg-ws>header button:hover{background:#eef2f5}
+.ovg-ws-body{flex:1;display:grid;grid-template-columns:250px 1fr;min-height:0}
+.ovg-ws-orgs{display:flex;flex-direction:column;gap:8px;padding:12px;background:#f5f7f9;border-right:1px solid #e3e8ec;min-height:0}
+.ovg-ws-search{display:flex;align-items:center;gap:6px;padding:0 8px;height:32px;border:1px solid #d3dbe1;border-radius:6px;background:#fff;color:#7a8a93}
+.ovg-ws-search input{flex:1;border:0;outline:0;font-size:13px;background:none;min-width:0}
+.ovg-ws-search:focus-within{border-color:#1565a9;box-shadow:0 0 0 3px #1565a926}
+.ovg-ws-list{flex:1;overflow:auto;display:grid;align-content:start;gap:2px}
+.ovg-ws-list button{display:flex;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:6px;background:none;text-align:left;font-size:13px;color:#1f2a30;cursor:pointer}
+.ovg-ws-list button:hover{background:#e8eef3}
+.ovg-ws-list button.active{background:#dfeaf5;font-weight:600;color:#0f4c81}
+.ovg-ws-av{flex:none;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700}
+.ovg-ws-new{padding:8px;border:1px dashed #b8c5ce;border-radius:6px;background:none;color:#1565a9;font-weight:600;cursor:pointer}
+.ovg-ws-new:hover{background:#fff}
+.ovg-ws-projects{display:flex;flex-direction:column;gap:12px;padding:14px 16px;min-height:0}
+.ovg-ws-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ovg-ws-head small{display:block;color:#7a8a93;font-size:11px}.ovg-ws-head b{font-size:15px}
+.ovg-ws-head .ovg-ws-search{width:220px}
+.ovg-ws-grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;align-content:start}
+.ovg-ws-card{display:grid;gap:4px;padding:10px;border:1px solid #dde4e9;border-radius:8px;background:#fff;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.ovg-ws-card:hover{border-color:#8fb3d4;box-shadow:0 4px 12px #0f1b241a}
+.ovg-ws-card.active{border-color:#1565a9;box-shadow:0 0 0 2px #1565a933}
+.ovg-ws-card b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovg-ws-card small{color:#7a8a93;font-size:11.5px}
+.ovg-ws-thumb{height:64px;border-radius:6px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,hsl(var(--h) 45% 45%),hsl(calc(var(--h) + 40) 50% 35%))}
+.ovg-ws-thumb.plus{background:#f0f4f7;color:#1565a9;font-size:22px}
+.ovg-ws-add{border-style:dashed}
+.ovg-ws-empty{margin:0;color:#7a8a93}
+.ovg-ws-projects footer{display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid #e3e8ec}
+.ovg-ws-projects footer button{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cdd5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12.5px}
+@media (max-width:640px){.ovg-ws-body{grid-template-columns:1fr}.ovg-ws-orgs{max-height:40%;border-right:0;border-bottom:1px solid #e3e8ec}.ovg-ws-head{flex-wrap:wrap}.ovg-ws-head .ovg-ws-search{width:100%}}
