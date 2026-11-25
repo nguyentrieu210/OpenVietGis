@@ -419,3 +419,16 @@
 .ovg-danmaku-line b{color:var(--peer-color);filter:brightness(1.5);font-weight:700}
 @keyframes ovg-run{from{transform:translateX(0)}to{transform:translateX(calc(-100vw - 100%))}}
 @media (prefers-reduced-motion:reduce){.ovg-danmaku-line{animation:none;left:auto;right:12px}}
+
+/* Chat: top-right by default, draggable header, readable collapsed pill, reaction bursts */
+.ovg-live-chat{left:auto;right:56px;top:10px;bottom:auto}
+.ovg-live-chat>header{cursor:grab;user-select:none;touch-action:none}
+.ovg-live-chat>header:active{cursor:grabbing}
+.ovg-live-chat .ovg-live-chat-title,.ovg-live-chat .ovg-live-chat-min{background:transparent!important;border:0!important;box-shadow:none!important;color:#fff!important;min-height:0!important}
+.ovg-live-chat .ovg-live-chat-min{color:#cbd5e1!important}
+.ovg-live-chat.closed{border-radius:18px}
+.ovg-danmaku-line .av{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff;text-shadow:none;border:1.5px solid #ffffffb3}
+.ovg-burst{position:absolute;right:90px;bottom:70px;width:0;height:0;pointer-events:none;z-index:31}
+.ovg-burst span{position:absolute;left:0;bottom:0;font-size:26px;opacity:0;animation-name:ovg-rise;animation-timing-function:cubic-bezier(.2,.6,.3,1);animation-fill-mode:forwards;will-change:transform,opacity}
+@keyframes ovg-rise{0%{opacity:0;transform:translate(0,0) scale(.4)}12%{opacity:1;transform:translate(calc(var(--x)*.3),-40px) scale(1.15)}60%{opacity:1}100%{opacity:0;transform:translate(var(--x),-320px) rotate(var(--r)) scale(.9)}}
+@media (prefers-reduced-motion:reduce){.ovg-burst{display:none}}
