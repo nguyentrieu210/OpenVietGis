@@ -296,7 +296,7 @@ function batchBlockReason(layer: AdapterLayerDescriptor, format: IntegrationExpo
   return null;
 }
 
-function BatchExport({ client, org, projectId, adapterKey, layers }: IntegrationCatalogProps & { adapterKey: IntegrationExportAdapterKey; layers: AdapterLayerDescriptor[] }) {
+export function BatchExport({ client, org, projectId, adapterKey, layers }: IntegrationCatalogProps & { adapterKey: IntegrationExportAdapterKey; layers: AdapterLayerDescriptor[] }) {
   const [format, setFormat] = useState<IntegrationExportFormat>(BATCH_DEFAULT[adapterKey]);
   // Track what the user unticked, so every exportable layer starts selected and survives format changes.
   const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
