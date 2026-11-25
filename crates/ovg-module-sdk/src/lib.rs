@@ -14,6 +14,7 @@ use serde_json::Value;
 pub struct ModuleCapability(pub String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModuleCommandSpec {
     pub id: String,
     pub label: String,
@@ -21,6 +22,7 @@ pub struct ModuleCommandSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModuleManifest {
     pub extension_key: String,
     pub version: String,
@@ -30,6 +32,8 @@ pub struct ModuleManifest {
     pub permissions: Vec<String>,
     pub commands: Vec<ModuleCommandSpec>,
     pub capabilities: Vec<ModuleCapability>,
+    pub entity_schemas: Value,
+    pub ui_contributions: Vec<Value>,
 }
 
 // The internal native SDK supports only trusted, compiled-in official modules.
@@ -112,6 +116,104 @@ impl ModuleManifest {
             || self.capabilities.iter().any(|c| !identifier(&c.0))
         {
             return Err(invalid("invalid or duplicate capability"));
+        }
+
+        let schemas = self.entity_schemas.as_object().ok_or_else(|| {
+            AppError::validation(
+                "EMPTY_SCHEMAS",
+                "manifest must declare one to 100 entity schemas",
+            )
+        })?;
+        if schemas.is_empty() || schemas.len() > 100 {
+            return Err(AppError::validation(
+                "EMPTY_SCHEMAS",
+                "manifest must declare one to 100 entity schemas",
+            ));
+        }
+        for (entity, schema) in schemas {
+            if !identifier(entity) {
+                return Err(invalid("invalid entity schema"));
+            }
+            let schema = schema
+                .as_object()
+                .filter(|schema| schema.len() == 1 && schema.contains_key("fields"))
+                .ok_or_else(|| invalid("invalid entity schema"))?;
+            let fields = schema["fields"]
+                .as_object()
+                .filter(|fields| !fields.is_empty() && fields.len() <= 100)
+                .ok_or_else(|| invalid("entity fields must be a bounded mapping"))?;
+            for (name, spec) in fields {
+                if !identifier(name) {
+                    return Err(invalid("invalid or unsupported field declaration"));
+                }
+                let spec = spec
+                    .as_object()
+                    .ok_or_else(|| invalid("invalid or unsupported field declaration"))?;
+                if spec.keys().any(|key| key != "type" && key != "required")
+                    || !spec
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .is_some_and(|kind| {
+                            matches!(kind, "text" | "integer" | "number" | "boolean")
+                        })
+                    || spec
+                        .get("required")
+                        .is_some_and(|required| !required.is_boolean())
+                {
+                    return Err(invalid("invalid or unsupported field declaration"));
+                }
+            }
+        }
+
+        if self.ui_contributions.len() > 64 {
+            return Err(invalid("too many UI contributions"));
+        }
+        let mut contribution_ids = HashSet::new();
+        for contribution in &self.ui_contributions {
+            let contribution = contribution
+                .as_object()
+                .ok_or_else(|| invalid("UI contribution must be an object"))?;
+            if contribution.contains_key("runtime") {
+                return Err(invalid("external runtime requires partner_ namespace"));
+            }
+            let id = contribution
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|id| identifier(id) && contribution_ids.insert(*id))
+                .ok_or_else(|| invalid("invalid UI contribution"))?;
+            let _ = id;
+            if !contribution
+                .get("slot")
+                .and_then(Value::as_str)
+                .is_some_and(|slot| {
+                    matches!(slot, "project_tool" | "project_panel" | "project_route")
+                })
+                || contribution
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .is_none_or(|label| label.trim().is_empty())
+                || !contribution
+                    .get("route_suffix")
+                    .and_then(Value::as_str)
+                    .is_some_and(|route| route.starts_with('/') && !route.contains(".."))
+            {
+                return Err(invalid("invalid UI contribution"));
+            }
+            if let Some(required) = contribution.get("required_permission") {
+                if !required.as_str().is_some_and(|required| {
+                    self.permissions
+                        .iter()
+                        .any(|permission| permission == required)
+                }) {
+                    return Err(invalid("UI contribution references undeclared permission"));
+                }
+            }
+        }
+
+        let encoded =
+            serde_json::to_vec(self).map_err(|_| invalid("manifest is not serializable"))?;
+        if encoded.len() > 128 * 1024 {
+            return Err(invalid("manifest exceeds bounded contract size"));
         }
         Ok(())
     }
@@ -348,6 +450,14 @@ mod tests {
                     required_permission: "ext.dummy_mod.read".to_string(),
                 }],
                 capabilities: vec![ModuleCapability("ping".to_string())],
+                entity_schemas: json!({
+                    "thing": {
+                        "fields": {
+                            "name": {"type": "text", "required": true}
+                        }
+                    }
+                }),
+                ui_contributions: vec![],
             }
         }
 
@@ -410,6 +520,58 @@ mod tests {
         let mut m = good;
         m.capabilities.push(m.capabilities[0].clone());
         assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn manifest_deserialization_rejects_unknown_contract_fields() {
+        let mut value = serde_json::to_value(DummyModule.manifest()).unwrap();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("unexpected".to_string(), json!(true));
+        assert!(serde_json::from_value::<ModuleManifest>(value).is_err());
+
+        let mut value = serde_json::to_value(DummyModule.manifest()).unwrap();
+        value["commands"][0]["unexpected"] = json!(true);
+        assert!(serde_json::from_value::<ModuleManifest>(value).is_err());
+    }
+
+    #[test]
+    fn validates_entity_schemas_and_ui_contributions_instead_of_ignoring_them() {
+        let good = DummyModule.manifest();
+
+        let mut empty_schemas = good.clone();
+        empty_schemas.entity_schemas = json!({});
+        assert_eq!(
+            empty_schemas.validate().unwrap_err().code(),
+            "EMPTY_SCHEMAS"
+        );
+
+        let mut bad_field = good.clone();
+        bad_field.entity_schemas = json!({
+            "thing": {"fields": {"name": {"type": "timestamp"}}}
+        });
+        assert!(bad_field.validate().is_err());
+
+        let mut bad_ui_permission = good.clone();
+        bad_ui_permission.ui_contributions = vec![json!({
+            "id": "panel",
+            "slot": "project_panel",
+            "label": "Panel",
+            "route_suffix": "/extensions/dummy",
+            "required_permission": "ext.dummy_mod.manage"
+        })];
+        assert!(bad_ui_permission.validate().is_err());
+
+        let mut runtime_ui = good;
+        runtime_ui.ui_contributions = vec![json!({
+            "id": "panel",
+            "slot": "project_panel",
+            "label": "Panel",
+            "route_suffix": "/extensions/dummy",
+            "runtime": {"url": "https://example.invalid"}
+        })];
+        assert!(runtime_ui.validate().is_err());
     }
 
     #[test]
