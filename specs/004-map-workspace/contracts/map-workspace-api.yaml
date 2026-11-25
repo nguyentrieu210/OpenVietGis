@@ -1213,6 +1213,11 @@
             "minLength": 1,
             "maxLength": 200,
             "description": "Spec 056: project-shared layer group path, segments separated by '/', at most 4 levels. Omitted when the layer is not grouped."
+          },
+          "display": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Spec 056: project-shared display settings (renderer, classes, labels, filter, scale range) read by the web client; JSON object up to 16 000 bytes. Omitted when unset."
           }
         }
       },

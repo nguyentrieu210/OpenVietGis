@@ -14,3 +14,8 @@
 
 ## Đợt 3
 - [ ] Nhãn, chú giải lồng trong cây, lưu kiểu QML/SLD
+
+## Đợt 3 (một phần)
+- [x] T008 Kiểu ký hiệu, nhãn, bộ lọc, phạm vi tỷ lệ lưu chung theo dự án (trường `display` trong cấu hình bản đồ, ≤ 16 000 byte) + unit test
+- [x] T009 Xuất SLD 1.0 / QML (một màu, phân loại, theo khoảng) + node test; nhập SLD/QML giữ đúng mốc chia
+- [ ] T010 Test tự động phần nhập SLD/QML (cần DOM trong trình duyệt/Playwright)

@@ -140,3 +140,4 @@
 .dock-menu-pop{position:fixed;z-index:1000;min-width:230px;display:grid;gap:6px;padding:10px 12px;background:#fff;border:1px solid #b3c4b6;border-radius:6px;box-shadow:0 8px 24px #0002;font-size:12px;color:#223731}
 .dock-menu-pop label{display:flex;align-items:center;gap:6px}
 .dock-menu-row{display:flex;gap:10px;align-items:center;border:0;padding:0;margin:0}.dock-menu-row legend{float:left;min-width:100px;padding:0;color:#4b5e57}
+.lp-style-io{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.lp-style-import{display:inline-flex;align-items:center;padding:4px 10px;border:1px solid #b5c2bc;border-radius:4px;cursor:pointer;font-size:12px}.lp-style-import input{display:none}
