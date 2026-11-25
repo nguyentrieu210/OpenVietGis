@@ -10,10 +10,11 @@ use axum::{Json, Router};
 use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use ovg_storage::tenancy::{
-    organization_role_permissions, GrantInput, Membership, Project, TenantTx, Workspace,
-    AUDIT_READ, ORGANIZATION_DELETE, ORGANIZATION_LIFECYCLE, ORGANIZATION_MANAGE_MEMBERS,
-    ORGANIZATION_MANAGE_SETTINGS, ORGANIZATION_OWNER_TRANSFER, PROJECT_ARCHIVE, PROJECT_DELETE,
-    PROJECT_MANAGE, PROJECT_MOVE_WORKSPACE, PROJECT_READ, WORKSPACE_MANAGE, WORKSPACE_READ,
+    organization_role_permissions, GrantInput, InvitationInput, InvitationProof, InvitationResult,
+    Membership, Project, TenantTx, Workspace, AUDIT_READ, ORGANIZATION_DELETE,
+    ORGANIZATION_LIFECYCLE, ORGANIZATION_MANAGE_MEMBERS, ORGANIZATION_MANAGE_SETTINGS,
+    ORGANIZATION_OWNER_TRANSFER, PROJECT_ARCHIVE, PROJECT_DELETE, PROJECT_MANAGE,
+    PROJECT_MOVE_WORKSPACE, PROJECT_READ, WORKSPACE_MANAGE, WORKSPACE_READ,
 };
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -84,6 +85,16 @@ pub(crate) fn router() -> Router<AppState> {
             ),
             post(revoke_service_credential),
         )
+        .route(
+            &format!("{ORG}/invitations"),
+            get(list_invitations).post(create_invitation),
+        )
+        .route(
+            &format!("{ORG}/invitations/{{invitation_id}}/revoke"),
+            post(revoke_invitation),
+        )
+        .route("/invitations/check", post(check_invitation))
+        .route("/invitations/accept", post(accept_invitation))
         .route(&format!("{ORG}/audit-events"), get(list_audit_events))
 }
 
@@ -1188,6 +1199,76 @@ async fn revoke_service_credential(
     .await?;
     tx.commit().await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_invitations(
+    State(state): State<AppState>,
+    session: HumanSession,
+    Path(org): Path<String>,
+) -> Result<Json<Vec<Value>>> {
+    let mut tx = begin(&state, &session).await?;
+    let items = tx.list_invitations(uuid(&org)?).await?;
+    tx.commit().await?;
+    Ok(Json(items))
+}
+
+async fn create_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path(org): Path<String>,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let input = InvitationInput::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let value = tx.issue_invitation(uuid(&org)?, input).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(value)).into_response())
+}
+
+async fn revoke_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((org, id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.revoke_invitation(uuid(&org)?, uuid(&id)?).await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn check_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>> {
+    require_csrf(&state, &session, &headers)?;
+    let proof = InvitationProof::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let status = tx.check_invitation(&proof, session.session_id()).await?;
+    tx.commit().await?;
+    Ok(Json(json!({"status":status})))
+}
+
+async fn accept_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let proof = InvitationProof::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let result = tx.accept_invitation(&proof, session.session_id()).await?;
+    tx.commit().await?;
+    match result {
+        InvitationResult::Accepted(value) => Ok(Json(value).into_response()),
+        InvitationResult::VerifiedExpired => Ok(bad_request("invalid invitation").into_response()),
+    }
 }
 
 async fn list_resource_grants(

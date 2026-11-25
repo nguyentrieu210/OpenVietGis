@@ -14,6 +14,9 @@ use uuid::Uuid;
 
 use crate::DbPool;
 
+mod invitations;
+pub use invitations::{InvitationInput, InvitationProof, InvitationResult};
+
 pub const ORGANIZATION_READ: &str = "organization.read";
 pub const ORGANIZATION_MANAGE_MEMBERS: &str = "organization.manage_members";
 pub const ORGANIZATION_MANAGE_SETTINGS: &str = "organization.manage_settings";
@@ -23,6 +26,7 @@ pub const ORGANIZATION_DELETE: &str = "organization.delete";
 pub const AUDIT_READ: &str = "audit.read";
 pub const AUTHORIZATION_MANAGE_GRANTS: &str = "authorization.manage_grants";
 pub const SERVICE_PRINCIPAL_MANAGE: &str = "service_principal.manage";
+pub const INVITATION_MANAGE: &str = "invitation.manage";
 pub const WORKSPACE_READ: &str = "workspace.read";
 pub const WORKSPACE_MANAGE: &str = "workspace.manage";
 pub const PROJECT_READ: &str = "project.read";
@@ -41,7 +45,7 @@ const ALL_PERMISSIONS: [&str; 19] = [
     ORGANIZATION_OWNER_TRANSFER,
     ORGANIZATION_DELETE,
     AUTHORIZATION_MANAGE_GRANTS,
-    "invitation.manage",
+    INVITATION_MANAGE,
     SERVICE_PRINCIPAL_MANAGE,
     AUDIT_READ,
     WORKSPACE_READ,
@@ -1363,6 +1367,33 @@ impl TenantTx {
             })
             .collect::<Result<_, _>>()
             .map_err(db_error)
+    }
+
+    /// The database security-definer function serializes identity removal and
+    /// prevents deleting the last usable identity. It also invalidates sessions.
+    pub async fn unlink_identity(&mut self, link_id: Uuid) -> Result<String, AppError> {
+        let result: String = sqlx::query_scalar("SELECT identity.unlink_identity($1,$2)")
+            .bind(self.actor_id)
+            .bind(link_id)
+            .fetch_one(&mut *self.tx)
+            .await
+            .map_err(db_error)?;
+        if result == "unlinked" {
+            sqlx::query("INSERT INTO audit.audit_events(id,organization_id,actor_type,actor_id,actor_display_snapshot,action,resource_type,resource_id,outcome,metadata,created_at)
+                         VALUES($1,NULL,'human',$2,$3,'identity.unlink','identity_link',$4,'success','{}'::jsonb,now())")
+                .bind(Uuid::new_v4()).bind(self.actor_id).bind(&self.display_name).bind(link_id)
+                .execute(&mut *self.tx).await.map_err(db_error)?;
+        }
+        Ok(result)
+    }
+
+    pub async fn delete_avatar(&mut self) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM identity.user_avatars WHERE user_id=$1")
+            .bind(self.actor_id)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(db_error)?;
+        Ok(())
     }
 
     /// Logout: revoke the caller's current browser session.

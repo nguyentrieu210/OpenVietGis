@@ -63,6 +63,48 @@ fn invalid_map() -> AppError {
     AppError::validation("INVALID_MAP_REQUEST", "Invalid map request.")
 }
 
+// serde_json otherwise converts out-of-range integer literals to f64, silently
+// changing opaque display data and the cross-runtime operation fingerprint.
+fn reject_large_integers(bytes: &[u8]) -> Result<(), AppError> {
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                i += 1;
+                while i < bytes.len() {
+                    match bytes[i] {
+                        b'\\' => i += 2,
+                        b'"' => {
+                            i += 1;
+                            break;
+                        }
+                        _ => i += 1,
+                    }
+                }
+            }
+            b'-' | b'0'..=b'9' => {
+                let start = i;
+                i += 1;
+                while i < bytes.len()
+                    && matches!(bytes[i], b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')
+                {
+                    i += 1;
+                }
+                let literal =
+                    std::str::from_utf8(&bytes[start..i]).map_err(|_| invalid_payload())?;
+                if !literal.contains(['.', 'e', 'E'])
+                    && literal.parse::<i64>().is_err()
+                    && literal.parse::<u64>().is_err()
+                {
+                    return Err(invalid_map());
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    Ok(())
+}
+
 fn normalize_number(n: &mut f64, min: f64, max: f64) -> Result<(), AppError> {
     if !n.is_finite() || !(min..=max).contains(n) {
         return Err(invalid_payload());
@@ -76,6 +118,7 @@ fn normalize_number(n: &mut f64, min: f64, max: f64) -> Result<(), AppError> {
 impl MapSaveIntent {
     pub fn parse(bytes: &[u8]) -> Result<Self, AppError> {
         let mut value: Self = serde_json::from_slice(bytes).map_err(|_| invalid_payload())?;
+        reject_large_integers(bytes)?;
         if !(0..=MAX_REVISION).contains(&value.expected_revision)
             || value.layers.len() > 32
             || value.basemap != "grid"
@@ -364,14 +407,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn opaque_integer_overflow_fails_closed() {
+        assert!(reject_large_integers(br#"{"value":18446744073709551616}"#).is_err());
+        assert!(reject_large_integers(br#"{"value":-9223372036854775809}"#).is_err());
+        assert!(reject_large_integers(
+            br#"{"value":"18446744073709551616", "max":18446744073709551615}"#
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn python_json_formats_unicode_and_exponents() {
         let value: Value = serde_json::from_str(
-            r#"{"b":1e-5,"a":"Việt 😀","c":1e16,"d":1.0,"e":184467440737095516160}"#,
+            r#"{"b":1e-5,"a":"Việt 😀","c":1e16,"d":1.0,"e":18446744073709551615}"#,
         )
         .unwrap();
         assert_eq!(
             python_json(&value, true, true).unwrap(),
-            r#"{"a":"Vi\u1ec7t \ud83d\ude00","b":1e-05,"c":1e+16,"d":1.0,"e":184467440737095516160}"#
+            r#"{"a":"Vi\u1ec7t \ud83d\ude00","b":1e-05,"c":1e+16,"d":1.0,"e":18446744073709551615}"#
         );
     }
 }

@@ -551,6 +551,88 @@ def compare_grant_and_machine_lifecycle(suite, org, foreign_org, owner, member, 
         print(f"PASS {label}", flush=True)
 
 
+def compare_invitation_and_self_lifecycle(suite, owner_url, fixture, owner, outsider, member, member_id):
+    """Real DB tests for exact recipient proof, grant reuse and safe identity unlink."""
+    label = "E01 invitation issue/check/accept/revoke and self identity"
+    org = fixture["org_a_id"]
+    root = f"{API}/organizations/{org}"
+    owner_headers = session_headers(owner, **{"x-openvietgis-csrf": fixture["csrf_a_token"]})
+    member_csrf = suite.oracle.get(f"{API}/auth/csrf", headers=session_headers(member)).json()["token"]
+    member_headers = session_headers(member, **{"x-openvietgis-csrf": member_csrf})
+    outsider_headers = session_headers(outsider, **{"x-openvietgis-csrf": fixture["csrf_b_token"]})
+    try:
+        def round_trip(client):
+            payload = {"target":{"kind":"email","email":"surveyor@example.test"},
+                       "organization_role":"member",
+                       "resource_grant":{"scope_kind":"project","project_id":fixture["project_a_id"],"role":"viewer"},
+                       "expires_at":"2099-01-01T00:00:00Z"}
+            require(client.post(f"{root}/invitations", headers=member_headers, json=payload).status_code == 403,
+                    "Member created invitation")
+            require(client.post(f"{root}/invitations", headers=session_headers(owner), json=payload).status_code == 403,
+                    "Invitation without CSRF accepted")
+            created=client.post(f"{root}/invitations",headers=owner_headers,json=payload)
+            require(created.status_code==201,"Invitation creation failed")
+            invitation=created.json()
+            proof={"organization_id":org,"invitation_id":invitation["id"],"secret":invitation["secret"]}
+            require(client.post(f"{API}/invitations/check",headers=outsider_headers,json=proof).json()=={"status":"mismatch"},
+                    "Wrong recipient not distinguished after proof")
+            wrong=proof | {"secret":"x"*40}
+            require(client.post(f"{API}/invitations/check",headers=member_headers,json=wrong).json()=={"status":"invalid"},
+                    "Wrong invitation secret accepted")
+            require(client.post(f"{API}/invitations/accept",headers=outsider_headers,json=proof).status_code==400,
+                    "Wrong recipient accepted invitation")
+            require(client.post(f"{API}/invitations/check",headers=member_headers,json=proof).json()=={"status":"eligible"},
+                    "Verified recipient not eligible")
+            accepted=client.post(f"{API}/invitations/accept",headers=member_headers,json=proof)
+            require(accepted.status_code==200,"Verified recipient acceptance failed")
+            require(accepted.json()["membership"]["id"]==str(member_id),"Existing membership not reused")
+            require(accepted.json()["grant"]["role"]=="viewer","Existing resource grant not reused")
+            require(client.post(f"{API}/invitations/accept",headers=member_headers,json=proof).status_code==400,
+                    "Invitation could be replayed")
+            revoked=client.post(f"{root}/invitations",headers=owner_headers,json=payload).json()
+            require(client.post(f"{root}/invitations/{revoked['id']}/revoke",headers=owner_headers).status_code==204,
+                    "Invitation revocation failed")
+            require(client.post(f"{root}/invitations/{revoked['id']}/revoke",headers=owner_headers).status_code==400,
+                    "Revoked invitation treated as pending")
+            items=client.get(f"{root}/invitations",headers=owner_headers)
+            require(items.status_code==200,"Invitation list failed")
+            require(invitation["secret"] not in items.text and revoked["secret"] not in items.text,
+                    "Invitation secret disclosed in list")
+
+        round_trip(suite.oracle)
+        round_trip(suite.rust)
+        suite.get("E01 invitation list parity",f"{root}/invitations",token=owner)
+        links=suite.oracle.get(f"{API}/me/identity-links",headers=member_headers).json()
+        last_id=links[0]["id"]
+        for client in (suite.oracle,suite.rust):
+            path=f"{API}/me/identity-links"
+            require(client.request("DELETE",path,headers=member_headers,json={"identity_link_id":last_id}).status_code==400,
+                    "Last identity could be unlinked")
+            require(client.request("DELETE",path,headers=member_headers,json={"identity_link_id":str(uuid4())}).status_code==404,
+                    "Unknown identity removal accepted")
+            require(client.delete(f"{API}/me/avatar",headers=member_headers).status_code==204,
+                    "Avatar delete failed")
+        # Add one extra identity per implementation; unlink must use the guarded DB function.
+        with psycopg.connect(owner_url) as conn:
+            user_id=conn.execute("SELECT user_id FROM identity.web_sessions WHERE id=%s",(session_id(member),)).fetchone()[0]
+            secondary=[uuid4(),uuid4()]
+            for link_id in secondary:
+                conn.execute("""INSERT INTO identity.identity_links
+                    (id,user_id,issuer,subject,email_verified,display_name_snapshot,created_at)
+                    VALUES (%s,%s,'https://parity-unlink.example',%s,false,'Parity Surveyor',now())""",
+                    (link_id,user_id,str(link_id)))
+        for client,link_id in zip((suite.oracle,suite.rust),secondary):
+            removed=client.request("DELETE",f"{API}/me/identity-links",headers=member_headers,json={"identity_link_id":str(link_id)})
+            require(removed.status_code==204,"Secondary identity unlink failed")
+        suite.get("E01 identity links after unlink",f"{API}/me/identity-links",token=member)
+    except (AssertionError,ValueError,KeyError,IndexError,httpx.HTTPError) as exc:
+        suite.failures.append(label)
+        print(f"FAIL {label}: {exc}",flush=True)
+    else:
+        suite.passed+=1
+        print(f"PASS {label}",flush=True)
+
+
 def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_features):
 
     a, b = fixture["session_a_token"], fixture["session_b_token"]
@@ -768,6 +850,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E01 owner audit events", f"{org_a}/audit-events", token=a)
     compare_owner_transfer(suite, org_a, a, surveyor, mid, fixture["csrf_a_token"])
     compare_grant_and_machine_lifecycle(suite, org_a, org_b, a, surveyor, fixture["csrf_a_token"])
+    compare_invitation_and_self_lifecycle(suite, owner_url, fixture, a, b, surveyor, mid)
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "UPDATE org.organization_memberships SET status='revoked', revoked_at=now() WHERE id=%s",
