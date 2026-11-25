@@ -9,6 +9,8 @@ severity_threshold = "low"
 
 [output]
 deny = []
+format = "terminal"
+quiet = false
 show_tree = true
 
 [yanked]
