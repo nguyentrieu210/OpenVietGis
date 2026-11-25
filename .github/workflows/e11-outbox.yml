@@ -1,15 +1,17 @@
 name: E11 Outbox Candidate
 on:
   push:
-    branches: ["064-e11", "064-rust-platform", "064-integration"]
+    branches: ["064-**"]
     paths:
       - "infra/rust-platform/e11/**"
+      - "apps/api-rust/**"
       - "crates/ovg-storage/**"
       - "tests/rust-parity/e11/**"
       - ".github/workflows/e11-outbox.yml"
   pull_request:
     paths:
       - "infra/rust-platform/e11/**"
+      - "apps/api-rust/**"
       - "crates/ovg-storage/**"
       - "tests/rust-parity/e11/**"
       - ".github/workflows/e11-outbox.yml"
@@ -34,4 +36,8 @@ jobs:
           python-version: "3.13"
       - run: uv sync --project apps/api --frozen
       - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
-      - run: uv run --project apps/api python tests/rust-parity/e11/check_outbox.py
+      - run: cargo test --locked -p openvietgis-api-rust --features e11-candidate stage_replay_route
+      - run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust --features e11-candidate
+      - run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_outbox.py \
+            --candidate target/debug/openvietgis-api-rust

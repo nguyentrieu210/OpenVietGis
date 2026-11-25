@@ -66,7 +66,17 @@ pub(crate) async fn replay(
     .bind((limit + 1) as i64)
     .fetch_all(&mut **tx)
     .await
-    .map_err(|e| AppError::internal(format!("E11 outbox replay failed: {e}")))?;
+    .map_err(|error| {
+        let missing_schema = error
+            .as_database_error()
+            .and_then(sqlx::error::DatabaseError::code)
+            .is_some_and(|code| matches!(code.as_ref(), "3F000" | "42P01"));
+        if missing_schema {
+            AppError::service_unavailable("OUTBOX_UNAVAILABLE", "spatial invalidations unavailable")
+        } else {
+            AppError::internal(format!("E11 outbox replay failed: {error}"))
+        }
+    })?;
 
     let Some((epoch, latest, _, _)) = rows.first() else {
         return Ok(if cursor.is_some() {

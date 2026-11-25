@@ -18,6 +18,14 @@ Frozen E06/E08 operation inventories capture the initial proposal. Current routi
 
 Both services use the same seeded loopback PostGIS and viewport input. The readiness probe and three first requests do not clear shared database or OS caches. The report contains statuses, individual measurements, p50/p95/p99 and app RSS per service. The 70% concurrent p95 target is evaluated only for successful comparable responses, with response parity. The known FastAPI 30k HTTP 503 ceiling is reported without a latency ratio and the Rust candidate must still succeed. A green job is scoped to the measured scenarios.
 
+## Large-source MVT qualification
+
+The native MVT route uses the same authorization, source checks and revision pins as JSON viewport. MVT applies its own per-tile budget without counting the actor's entire visible source. JSON viewport and display extent keep their 50k source ceiling. The SQL includes an explicit native bbox predicate for the GiST path on the approved database profile. The exact geometry check remains in place. Statement timeout stays at 2 seconds, including when the plan still scans a broad tile.
+
+The E05 workflow runs the JSON comparison and the MVT scale benchmark as independent steps against one commit-pinned build. `mvt-scale.json` compares successful local z17 MVT requests at 1/10/20 clients on real 30k, 100k and 1M point sources. It records latency, response size, tile fingerprints and per-process RSS. Single world-tile probes require the exact first 10,000 generated feature IDs, the truncation header and the 4 MiB response bound. Separate JSON probes require rejection above 50k. The report checks FastAPI's local feature IDs against the Rust selection and records a latency ratio. Native MVT and the legacy professional route differ in buffer selection and encoding metadata, so the ratio is separate from the JSON viewport performance gate.
+
+This benchmark covers bounded tile delivery. SC-004 still requires a replayable 20-client edit-to-visible measurement and reconnect verification. Fresh GitHub Actions artifacts are needed for all performance claims.
+
 ## Verification at handoff
 
 Python syntax and Git whitespace checks passed. The handoff requires Rust builds, PostGIS differential tests and comparative benchmarks to run in GitHub Actions. Publish and qualify the combined ref before widening staging traffic. Earlier engine-specific artifacts do not establish combined coverage.

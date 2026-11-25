@@ -1,13 +1,22 @@
-name: E05 Viewport Benchmark
+name: E05 Viewport and MVT Benchmark
 
 on:
   workflow_dispatch:
   push:
-    branches: ["064-e05", "064-data-engines-completion", "064-integration", "064-rust-platform"]
+    branches:
+      - "064-e05"
+      - "064-e05-scale-qualification"
+      - "064-data-engines-completion"
+      - "064-integration"
+      - "064-convergence"
+      - "064-rust-platform"
     paths:
       - "apps/api-rust/src/map_render.rs"
+      - "apps/api/openvietgis_api/adapters/http/professional.py"
+      - "apps/api/openvietgis_api/adapters/persistence/map_viewport.py"
+      - "apps/api/migrations/versions/004?_*.py"
       - "crates/ovg-storage/src/viewport.rs"
-      - "tests/rust-parity/e05_benchmark.py"
+      - "tests/rust-parity/e05*benchmark.py"
       - "tests/rust-parity/e04_benchmark.py"
       - "tools/benchmark/rust-platform/**"
       - ".github/workflows/rust-e05-benchmark.yml"
@@ -18,7 +27,7 @@ permissions:
 jobs:
   viewport-benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       COMPOSE_PROJECT_NAME: openvietgis-e05-benchmark
       CARGO_INCREMENTAL: "0"
@@ -37,12 +46,20 @@ jobs:
           enable-cache: true
       - run: uv sync --project apps/api --frozen
       - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
-      - run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
+      - name: Build the pinned Rust candidate
+        id: rust_build
+        run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
       - name: Measure E05 viewport over HTTP and PostGIS
         run: |
           uv run --project apps/api python tests/rust-parity/e05_benchmark.py \
             --candidate target/debug/openvietgis-api-rust \
-            --output dist/e05-benchmark/report.json
+            --output dist/e05-benchmark/viewport.json
+      - name: Measure bounded MVT on 30k, 100k and 1M pinned points
+        if: ${{ !cancelled() && steps.rust_build.outcome == 'success' }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e05_tile_benchmark.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/e05-benchmark/mvt-scale.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

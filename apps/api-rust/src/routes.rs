@@ -29,6 +29,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .merge(crate::queries::router())
         .merge(crate::map_render::router())
         .merge(crate::transfers::router())
+        .merge(crate::spatial_replay::router())
 }
 
 async fn health_summary(State(state): State<AppState>) -> Json<Value> {

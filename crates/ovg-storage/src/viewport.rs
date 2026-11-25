@@ -78,12 +78,18 @@ impl ViewportBounds {
     }
 }
 
+#[derive(Clone, Copy)]
+enum RenderRead {
+    WholeSource,
+    Tile,
+}
+
 struct Snapshot {
     context: Value,
     source_id: Uuid,
     native_srid: i32,
     geometry_type: String,
-    expected_count: i64,
+    expected_count: Option<i64>,
     transformation: Option<&'static TransformationProfile>,
 }
 
@@ -98,7 +104,10 @@ impl ProjectRead<'_> {
         if !(1..=MAX_VIEWPORT_FEATURES).contains(&limit) {
             return Err(AppError::internal("viewport feature limit outside bounds"));
         }
-        let snapshot = self.render_snapshot(layer_id, pins).await?;
+        let snapshot = self
+            .render_snapshot(layer_id, pins, RenderRead::WholeSource)
+            .await?;
+        let expected_count = snapshot.expected_count.ok_or_else(read_unavailable)?;
         // One statement snapshot: the summary validates every source row
         // (count and display domain) and gates the bounded candidate prefix.
         let sql = format!(
@@ -128,7 +137,7 @@ impl ProjectRead<'_> {
         );
         let rows = self
             .bind_snapshot(sqlx::query(&sql), &snapshot, pins)
-            .bind(snapshot.expected_count)
+            .bind(expected_count)
             .bind(bounds.west)
             .bind(bounds.south)
             .bind(bounds.east)
@@ -140,7 +149,7 @@ impl ProjectRead<'_> {
             .map_err(unavailable)?;
         let first = rows.first().ok_or_else(read_unavailable)?;
         validate_summary(
-            snapshot.expected_count,
+            expected_count,
             first.try_get("snapshot_count").map_err(unavailable)?,
             first.try_get("snapshot_valid").map_err(unavailable)?,
         )?;
@@ -164,7 +173,10 @@ impl ProjectRead<'_> {
         layer_id: Uuid,
         pins: &ReadPins<'_>,
     ) -> Result<Value, AppError> {
-        let snapshot = self.render_snapshot(layer_id, pins).await?;
+        let snapshot = self
+            .render_snapshot(layer_id, pins, RenderRead::WholeSource)
+            .await?;
+        let expected_count = snapshot.expected_count.ok_or_else(read_unavailable)?;
         let sql = format!(
             "{}
             SELECT snapshot_count, snapshot_valid,
@@ -184,7 +196,7 @@ impl ProjectRead<'_> {
             .await
             .map_err(unavailable)?;
         validate_summary(
-            snapshot.expected_count,
+            expected_count,
             row.try_get("snapshot_count").map_err(unavailable)?,
             row.try_get("snapshot_valid").map_err(unavailable)?,
         )?;
@@ -217,7 +229,9 @@ impl ProjectRead<'_> {
         if z > MAX_TILE_ZOOM || x >= 1 << z || y >= 1 << z {
             return Err(AppError::internal("tile address outside bounds"));
         }
-        let snapshot = self.render_snapshot(layer_id, pins).await?;
+        let snapshot = self
+            .render_snapshot(layer_id, pins, RenderRead::Tile)
+            .await?;
         if snapshot.transformation.is_some() {
             // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
             return Err(unsupported_transformation());
@@ -236,6 +250,7 @@ impl ProjectRead<'_> {
                     AND f.geometry_state = 'present'
                     AND f.content_revision = $10 AND f.schema_revision = $11
                     AND ST_SRID(f.geometry) = 4326
+                    AND f.geometry && bounds.area
                     AND ST_Intersects(f.geometry, bounds.area)
                 ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
             ), ranked AS (
@@ -296,6 +311,7 @@ impl ProjectRead<'_> {
         &mut self,
         layer_id: Uuid,
         pins: &ReadPins<'_>,
+        read: RenderRead,
     ) -> Result<Snapshot, AppError> {
         sqlx::query("SELECT set_config('statement_timeout', $1, true)")
             .bind(MAP_STATEMENT_TIMEOUT)
@@ -343,22 +359,6 @@ impl ProjectRead<'_> {
             ),
         };
 
-        let expected_count = if self.gis_scoped {
-            // Object RLS hides features; count exactly what this actor may read.
-            let count: i64 = sqlx::query_scalar(
-                "SELECT count(*) FROM spatial.reference_features
-                 WHERE organization_id = $1 AND project_id = $2 AND source_id = $3",
-            )
-            .bind(self.tx.organization_id())
-            .bind(self.project_id)
-            .bind(source_id)
-            .fetch_one(&mut **self.tx.tx_mut())
-            .await
-            .map_err(unavailable)?;
-            Some(count)
-        } else {
-            source["feature_count"].as_i64()
-        };
         let geometry_family = source["schema"]["geometry_family"]
             .as_str()
             .unwrap_or_default();
@@ -369,9 +369,15 @@ impl ProjectRead<'_> {
         let supported = renderable_kind
             && source["schema"]["dimensions"] == "XY"
             && matches!(geometry_family, "Point" | "LineString" | "Polygon");
-        let expected_count = expected_count
-            .filter(|count| supported && *count <= MAX_RENDER_SOURCE_FEATURES)
-            .ok_or_else(unsupported_transformation)?;
+        if !supported {
+            return Err(unsupported_transformation());
+        }
+        let expected_count = match read {
+            // The tile candidate query already applies the actor's RLS scope.
+            // A whole-source count or size cap here would defeat bounded tile reads.
+            RenderRead::Tile => None,
+            RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
+        };
         if transformation.is_some_and(requires_fixture) {
             // shortcut: trusted Quang Ninh fixture provenance (manifest re-materialization) is not
             // ported; fail closed like an unverified fixture until the fixture registry is native.
@@ -396,6 +402,32 @@ impl ProjectRead<'_> {
             expected_count,
             transformation,
         })
+    }
+
+    async fn whole_source_count(
+        &mut self,
+        source_id: Uuid,
+        source: &Value,
+    ) -> Result<i64, AppError> {
+        let expected_count = if self.gis_scoped {
+            // Object RLS hides features; count exactly what this actor may read.
+            let count: i64 = sqlx::query_scalar(
+                "SELECT count(*) FROM spatial.reference_features
+                 WHERE organization_id = $1 AND project_id = $2 AND source_id = $3",
+            )
+            .bind(self.tx.organization_id())
+            .bind(self.project_id)
+            .bind(source_id)
+            .fetch_one(&mut **self.tx.tx_mut())
+            .await
+            .map_err(unavailable)?;
+            Some(count)
+        } else {
+            source["feature_count"].as_i64()
+        };
+        expected_count
+            .filter(|count| *count <= MAX_RENDER_SOURCE_FEATURES)
+            .ok_or_else(unsupported_transformation)
     }
 
     /// Binds $1 organization, $2 project, $3 source, $4 content pin,

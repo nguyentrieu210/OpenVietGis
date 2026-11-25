@@ -3,7 +3,7 @@ name: E04 Query Benchmark
 on:
   workflow_dispatch:
   push:
-    branches: ["064-e04", "064-data-engines-completion", "064-integration", "064-rust-platform"]
+    branches: ["064-e04", "064-data-engines-completion", "064-integration", "064-rust-platform", "064-convergence"]
     paths:
       - "apps/api-rust/src/queries.rs"
       - "crates/ovg-storage/src/queries/**"

@@ -39,20 +39,12 @@ def require(condition, detail):
 
 @contextlib.contextmanager
 def database(admin_url):
+    baseline.assert_safe_admin_url(admin_url)
     parsed = urlsplit(admin_url)
-    allowed = (
-        parsed.scheme == "postgresql"
-        and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
-        and parsed.username == "openvietgis"
-        and parsed.path == "/postgres"
-        and not (parsed.query or parsed.fragment)
-    )
-    if not allowed:
-        raise ValueError(
-            "Parity requires the loopback development PostGIS admin endpoint."
-        )
+    if parsed.username != "openvietgis":
+        raise ValueError("Parity requires the development PostGIS admin role.")
 
-    name = f"openvietgis_parity_test_{uuid4().hex}"
+    name = f"openvietgis_bench_parity_test_{uuid4().hex}"
     owner_url = parsed._replace(path=f"/{name}").geturl()
     host = parsed.netloc.rsplit("@", 1)[-1]
     runtime_url = parsed._replace(

@@ -3,14 +3,41 @@
 import contextlib
 import io
 import unittest
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import httpx
-from run import Differential, difference, require
+from run import Differential, baseline, database, difference, require
 
 
 def response(body, status=200, cache="no-store"):
     return httpx.Response(status, json=body, headers={"cache-control": cache})
+
+
+class ParityDatabaseTests(unittest.TestCase):
+    @patch("run.psycopg.connect")
+    def test_generated_databases_satisfy_benchmark_seed_guard(self, connect):
+        admin = MagicMock()
+        connect.return_value.__enter__.return_value = admin
+        admin_url = baseline.DEFAULT_ADMIN_PG_URL
+
+        with database(admin_url) as (owner_url, runtime_url):
+            name = baseline.assert_safe_bench_db(owner_url)
+            self.assertRegex(name, r"^openvietgis_bench_parity_test_[0-9a-f]{32}$")
+            self.assertEqual(baseline.assert_safe_bench_db(runtime_url), name)
+            self.assertEqual(admin.execute.call_count, 1)
+
+        connect.assert_called_once_with(admin_url, autocommit=True)
+        self.assertEqual(admin.execute.call_count, 2)
+
+    @patch("run.psycopg.connect")
+    def test_invalid_admin_port_is_rejected_before_connecting(self, connect):
+        admin_url = baseline.DEFAULT_ADMIN_PG_URL.replace(":54330/", ":5432/")
+
+        with self.assertRaisesRegex(RuntimeError, "dedicated loopback PostGIS"):
+            with database(admin_url):
+                self.fail("connected to a non-test database")
+
+        connect.assert_not_called()
 
 
 class DifferentialTests(unittest.TestCase):

@@ -399,7 +399,7 @@ async fn map_operation(
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
 }
 
-async fn project_read<'a>(
+pub(crate) async fn project_read<'a>(
     state: &'a AppState,
     auth: &HumanSession,
     organization_id: Uuid,
@@ -421,7 +421,7 @@ async fn project_read<'a>(
     .map_err(CatalogError::spatial)
 }
 
-enum CatalogError {
+pub(crate) enum CatalogError {
     InvalidRequest,
     Identity(IdentityError),
     /// Fixed spatial descriptions rendered as `{"code", "detail"}`.
@@ -447,7 +447,7 @@ const SPATIAL_CODES: [&str; 13] = [
 ];
 
 impl CatalogError {
-    fn spatial(error: AppError) -> Self {
+    pub(crate) fn spatial(error: AppError) -> Self {
         match error {
             AppError::Conflict { code, message, .. } if SPATIAL_CODES.contains(&code) => {
                 Self::Spatial(StatusCode::CONFLICT, code, message)
