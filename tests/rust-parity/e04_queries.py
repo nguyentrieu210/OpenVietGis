@@ -304,6 +304,11 @@ def compare_queries(suite, difference, fixture, surveyor, csrf_secret):
         ("E04 page size above limit", {"limit": 501}, 422),
         ("E04 non-strict page size", {"limit": "5"}, 422),
         ("E04 unknown request key", {"filter": {}}, 422),
+        ("E04 array body rejected", [], 422),
+        ("E04 array positional body rejected", [None, None, None, None, None, None, "asc", 5, 0], 422),
+        ("E04 offset beyond HTTP bound", {"offset": 25001}, 422),
+        ("E04 unknown injection-shaped field", {"attribute_filter": {"field": "code) OR TRUE --", "op": "eq", "value": "x"}}, 422),
+        ("E04 injection-shaped literal remains data", {"attribute_filter": {"field": "code", "op": "eq", "value": "' OR TRUE --"}}, 200),
         (
             "E04 unsupported predicate",
             {"spatial_filter": {"predicate": "touches", "geometry": {}, "crs_code": 4326}},

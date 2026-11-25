@@ -28,7 +28,7 @@
 
 | Method | Path | Operation ID | Handler (`module`) | Classification | Auth / Guard | Revision / Idempotency | Tests |
 |---|---|---|---|---|---|---|---:|
-| `POST` | `/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/query` | `execute_layer_query_api_v1_organizations__organization_id__projects__project_id__layers__layer_id__query_post` | `execute_layer_query` (`queries`) | `migrate` | session_cookie_with_csrf_or_service_token + CSRF + proj_guard(scoped:deny, FOR UPDATE) | rev-pin | 2 files (7 IDs) |
+| `POST` | `/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/query` | `execute_layer_query_api_v1_organizations__organization_id__projects__project_id__layers__layer_id__query_post` | `execute_layer_query` (`queries`) | `migrate` | session_cookie_with_csrf_or_service_token + CSRF + proj_guard(scoped:deny, FOR SHARE) | rev-pin | 2 files (7 IDs) |
 | `GET` | `/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries` | `list_saved_queries_api_v1_organizations__organization_id__projects__project_id__saved_queries_get` | `list_saved_queries` (`queries`) | `migrate` | session_cookie_or_service_token + proj_guard(scoped:deny, FOR SHARE) | — | 2 files (7 IDs) |
 | `POST` | `/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries` | `create_saved_query_api_v1_organizations__organization_id__projects__project_id__saved_queries_post` | `create_saved_query` (`queries`) | `migrate` | session_cookie_with_csrf_or_service_token + CSRF + proj_guard(scoped:deny, FOR UPDATE) | — | 2 files (7 IDs) |
 | `DELETE` | `/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries/{query_id}` | `delete_saved_query_api_v1_organizations__organization_id__projects__project_id__saved_queries__query_id__delete` | `delete_saved_query` (`queries`) | `migrate` | session_cookie_with_csrf_or_service_token + CSRF + proj_guard(scoped:deny, FOR UPDATE) | — | 2 files (7 IDs) |
@@ -92,7 +92,7 @@ Mapped **2 pytest files** containing **7 test case IDs** (primary + cross-engine
 
 - Zero arbitrary SQL injection: typed AST compiler only, enforcing field types and C-collation text comparisons.
 - NULL comparisons must use is_null operator rather than raw null equality.
-- AST bounds (depth <= 6, nodes <= 100, params <= 1000), page limit <= 500, offset <= 50,000, and 5s statement timeout must fail safely.
+- AST bounds (depth <= 6, nodes <= 100, params <= 1000), page limit <= 500, HTTP offset <= 25,000 (domain cap 50,000), and 5s statement timeout must fail safely.
 - Drawn spatial filter geometries must declare an explicit readable CRS and stay within MAX_DRAWN_POSITIONS (2048).
 
 ## 9. E04-AC1 Verification
