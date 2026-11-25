@@ -705,7 +705,7 @@ pub fn redact_audit_value(value: &str) -> &str {
             && rest.get(33..).is_some_and(|t| token(t, 16))
     });
     let parts: Vec<_> = trimmed.split('.').collect();
-    let jwt = parts.len() == 3 && parts.iter().all(|p| token(*p, 1));
+    let jwt = parts.len() == 3 && parts.iter().all(|p| token(p, 1));
     if session || invitation || service || jwt {
         "[REDACTED]"
     } else {
