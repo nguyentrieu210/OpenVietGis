@@ -14,14 +14,12 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const seen=useRef(new Set<string>()),first=useRef(true),mouse=useRef({x:0,y:0}),peersRef=useRef(peers);peersRef.current=peers;const openRef=useRef(false);
  const load=async()=>{try{const r=await client.request<Msg[]|{items:Msg[]}>(base+"/messages?limit=30",{cache:"no-store"});const items=(Array.isArray(r)?r:r.items).slice().reverse();
   const fresh=items.filter(m=>!seen.current.has(m.id));items.forEach(m=>seen.current.add(m.id));setLog(items);
-  if(!first.current&&fresh.length){setBubbles(b=>[...b,...fresh.filter(m=>m.author_id!==accountId&&peersRef.current.some(p=>p.actor===m.author_id&&p.cursor))].slice(-6));if(!openRef.current)setUnread(n=>n+fresh.filter(m=>m.author_id!==accountId).length);for(const m of fresh)setTimeout(()=>setBubbles(b=>b.filter(x=>x.id!==m.id)),9000)}first.current=false}catch{/* chat unavailable: keep map usable */}};
+  if(!first.current&&fresh.length){setBubbles(b=>[...b,...fresh].slice(-8));if(!openRef.current)setUnread(n=>n+fresh.filter(m=>m.author_id!==accountId).length);for(const m of fresh)setTimeout(()=>setBubbles(b=>b.filter(x=>x.id!==m.id)),9000)}first.current=false}catch{/* chat unavailable: keep map usable */}};
  useEffect(()=>{first.current=true;seen.current.clear();void load();const es=new EventSource("/api/v1"+base+"/events",{withCredentials:true});const on=()=>void load();es.addEventListener("change",on);es.addEventListener("ready",on);
   const poll=setInterval(()=>void load(),30000);return()=>{es.close();clearInterval(poll)}},[org,pid]);
  useEffect(()=>{const mv=(e:MouseEvent)=>{mouse.current={x:e.clientX,y:e.clientY}};const start=()=>{if(!canWrite)return;const {x,y}=mouse.current;setTyping({x:x||innerWidth/2,y:y||innerHeight/2});setText("")};
   window.addEventListener("mousemove",mv);window.addEventListener("ovg:chat",start);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("ovg:chat",start)}},[canWrite]);
  const send=async(body:string)=>{const t=body.trim().slice(0,4000);if(!t)return;await loadCsrfToken(client);await client.request(base+"/messages",{method:"POST",body:JSON.stringify({body:t})});void load()};
- // bubble position: next to the author's live cursor if visible, else stacked at the bottom-left
- const where=(m:Msg,i:number):React.CSSProperties=>{const p=peersRef.current.find(x=>x.actor===m.author_id&&x.cursor);const mp=map.current;if(p?.cursor&&mp&&m.author_id!==accountId){const pt=mp.project(p.cursor as [number,number]);const r=mp.getContainer().getBoundingClientRect();return {left:r.left+pt.x+18,top:r.top+pt.y+30}}return {left:16+(document.querySelector(".qgis-dock")?.getBoundingClientRect().right??0),bottom:96+i*40}};
  const color=(actor:string)=>peers.find(p=>p.actor===actor)?.color??"#1565a9";
  const time=(s:string)=>new Date(s).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
  openRef.current=open;
@@ -43,6 +41,6 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
   <button type="button" className="plugin-tool ovg-chat" aria-pressed={open} title="Chat trực tiếp · phím / để nhắn cạnh con trỏ" onClick={()=>toggle(!open)}>💬{unread&&!open?<b className="ovg-chat-badge">{unread}</b>:null}</button>
   {host&&createPortal(panel,host)}
   {typing&&<form className="ovg-cursor-chat" style={{left:typing.x+14,top:typing.y+14}} onSubmit={e=>{e.preventDefault();const t=text;setTyping(null);setText("");void send(t)}}><input autoFocus value={text} maxLength={300} placeholder="Nhắn… (Enter gửi, Esc hủy)" onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();setTyping(null)}}} onBlur={()=>setTyping(null)}/></form>}
-  {bubbles.map((m,i)=><div key={m.id} className="ovg-chat-bubble" style={{...where(m,i),"--peer-color":color(m.author_id)} as React.CSSProperties}><b>{m.author_id===accountId?"Bạn":m.author_name}</b>{m.body.length>140?m.body.slice(0,140)+"…":m.body}</div>)}
+  {host&&createPortal(<div className="ovg-danmaku" aria-hidden="true">{bubbles.map((m,i)=><div key={m.id} className="ovg-danmaku-line" style={{top:8+(i%3)*30,"--peer-color":color(m.author_id)} as React.CSSProperties}><b>{m.author_id===accountId?"Bạn":m.author_name}</b>{m.body.length>140?m.body.slice(0,140)+"…":m.body}</div>)}</div>,host)}
  </>;
 }
