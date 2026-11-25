@@ -7,6 +7,31 @@ use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageLifecycle {
+    Ready,
+    Revoked,
+    Expired,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageUseError {
+    Revoked,
+    Expired,
+}
+
+impl PackageLifecycle {
+    /// Package authorization is checked again at every download/sync boundary.
+    /// A revoked/expired package can never become active again by client replay.
+    pub fn require_active(self) -> Result<(), PackageUseError> {
+        match self {
+            Self::Ready => Ok(()),
+            Self::Revoked => Err(PackageUseError::Revoked),
+            Self::Expired => Err(PackageUseError::Expired),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FieldError {
     Validation,
     InvalidPackage,
@@ -211,6 +236,19 @@ mod tests {
         assert!(timestamp("2026-11-21T00:00:00.123000Z"));
         assert!(!timestamp("2026-11-21T00:00:00.123Z"));
     }
+    #[test]
+    fn package_lifecycle_never_reactivates_revoked_or_expired_packages() {
+        assert_eq!(PackageLifecycle::Ready.require_active(), Ok(()));
+        assert_eq!(
+            PackageLifecycle::Revoked.require_active(),
+            Err(PackageUseError::Revoked)
+        );
+        assert_eq!(
+            PackageLifecycle::Expired.require_active(),
+            Err(PackageUseError::Expired)
+        );
+    }
+
     #[test]
     fn fixture_parity() {
         let fixture: Value = serde_json::from_str(include_str!(
