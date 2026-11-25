@@ -727,6 +727,7 @@ describe("Integration Hub client SDK", () => {
       "changeQgisBindingDraftLifecycle",
       "createQgisBindingDraft",
       "downloadIntegrationLayerExport",
+      "getIntegrationExportScopes",
       "getIntegrationHubAdapterProfile",
       "getIntegrationHubCatalog",
       "issueBindingPairingToken",
