@@ -87,7 +87,7 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E12-T05 Review, integration test, document remaining gaps and convergence (E12-AC4).
 
 ## E13 — Field, offline, mobile
-- [ ] E13-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E13-AC1).
+- [x] E13-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E13-AC1).
 - [ ] E13-T02 Create golden, failure, permission and interoperability fixtures (E13-AC2).
 - [ ] E13-T03 Implement/retain approved engine and integrate behind public contract (E13-AC2).
 - [ ] E13-T04 Run comparative performance and resource tests, record raw evidence (E13-AC3).

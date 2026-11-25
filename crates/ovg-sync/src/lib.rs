@@ -2,6 +2,7 @@
 
 pub mod activity_cursor;
 pub mod fanout;
+pub mod field;
 pub mod outbox;
 
 pub use fanout::{SubscriptionEvent, SyncBroadcaster, SyncSubscription};
