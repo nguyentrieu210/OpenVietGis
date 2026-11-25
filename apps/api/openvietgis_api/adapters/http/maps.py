@@ -53,6 +53,7 @@ class MapLayerRequest(StrictRequest):
     layer_id: LogicalUUID
     visible: bool
     style: BasicStyleRequest
+    group: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
     @field_validator("layer_id", mode="before")
     @classmethod
@@ -125,7 +126,7 @@ class SaveMapRequest(StrictRequest):
             self.operation_id,
             self.expected_revision,
             tuple(
-                LayerReference(item.layer_id, item.visible, item.style.domain())
+                LayerReference(item.layer_id, item.visible, item.style.domain(), item.group)
                 for item in self.layers
             ),
             self.basemap,

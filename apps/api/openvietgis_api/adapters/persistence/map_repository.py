@@ -38,7 +38,9 @@ def _configuration(value: dict[str, Any]) -> Configuration:
     viewpoint = value["default_viewpoint"]
     return Configuration(
         tuple(
-            LayerReference(UUID(item["layer_id"]), item["visible"], Style(**item["style"]))
+            LayerReference(
+                UUID(item["layer_id"]), item["visible"], Style(**item["style"]), item.get("group")
+            )
             for item in value["layers"]
         ),
         value["basemap"],

@@ -93,3 +93,14 @@ def test_save_fingerprint_binds_expected_revision_and_explicit_intent():
 def test_viewpoint_intent_is_a_closed_union(mode, value):
     with pytest.raises(MapValidationError):
         ViewpointIntent(mode, value)
+
+
+def test_layer_group_is_optional_bounded_and_omitted_when_unset():
+    """Spec 056: project-shared QGIS-style layer group path."""
+    plain = LayerReference(uuid4(), True, Style())
+    assert "group" not in plain.to_wire()
+    grouped = LayerReference(uuid4(), True, Style(), "Hiện trạng/Giao thông")
+    assert grouped.to_wire()["group"] == "Hiện trạng/Giao thông"
+    for bad in ("", "/", "A//B", " A", "A/B/C/D/E", "x" * 201):
+        with pytest.raises(MapValidationError):
+            LayerReference(uuid4(), True, Style(), bad)

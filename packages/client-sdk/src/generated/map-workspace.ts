@@ -108,6 +108,8 @@ export interface components {
             layer_id: string;
             visible: boolean;
             style: components["schemas"]["MapStyle"];
+            /** @description Spec 056: project-shared layer group path, segments separated by '/', at most 4 levels. Omitted when the layer is not grouped. */
+            group?: string;
         };
         MapConfiguration: {
             /** @description Layer IDs must be unique; order is render order. */
