@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError
 
 from openvietgis_api.domains.authorization.service import (
     AuthorizationDeniedError,
@@ -138,6 +139,9 @@ _SPATIAL_ERRORS: dict[type[Exception], tuple[int, str, str]] = {
 }
 
 
+DATABASE_GUARD_SQLSTATE = "OV409"
+
+
 async def _spatial_error_handler(_: Request, exc: Exception) -> JSONResponse:
     status, code, detail = _SPATIAL_ERRORS[type(exc)]
     return JSONResponse(status_code=status, content={"code": code, "detail": detail})
@@ -176,6 +180,16 @@ def install_error_handlers(app: FastAPI) -> None:
         if exc.details:
             payload["details"] = exc.details
         return JSONResponse(status_code=exc.status_code, content=payload)
+
+    @app.exception_handler(DBAPIError)
+    async def database_guard_handler(_: Request, exc: Exception) -> JSONResponse:
+        # SQLSTATE OV409: a database guard (e.g. a module lock trigger) refused the change.
+        orig = getattr(exc, "orig", None)
+        if getattr(orig, "sqlstate", None) != DATABASE_GUARD_SQLSTATE:
+            raise exc
+        diag = getattr(orig, "diag", None)
+        message = getattr(diag, "message_primary", None) or "Dữ liệu đang bị khóa"
+        return JSONResponse(status_code=409, content={"code": "DATA_LOCKED", "message": message})
 
     @app.exception_handler(TransferError)
     async def transfer_error_handler(_: Request, exc: Exception) -> JSONResponse:

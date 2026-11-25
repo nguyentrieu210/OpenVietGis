@@ -989,3 +989,36 @@ export function houseNumberingProposalPacketUrl(
   const suffix = params.size ? `?${params.toString()}` : "";
   return `/api/v1${base(orgId, projectId)}/proposals/${encodeURIComponent(proposalId)}/packets/${kind}${suffix}`;
 }
+
+// Spec 051: reviewer sign-off (and lock) of a reconciled hamlet or road.
+export type SurveySignoff = {
+  id: string;
+  source_id: string;
+  ap: string;
+  ten_duong: string | null;
+  point_count: number;
+  signed_by_actor_id: string;
+  signed_at: string;
+  note: string | null;
+};
+export function listSurveySignoffs(client: ApiClient, orgId: string, projectId: string, sourceId: string) {
+  return client.request<{ items: SurveySignoff[] }>(
+    `${base(orgId, projectId)}/survey-signoffs?source_id=${encodeURIComponent(sourceId)}`
+  );
+}
+export function signSurveyScope(
+  client: ApiClient,
+  orgId: string,
+  projectId: string,
+  body: { source_ids: string[]; ap: string; ten_duong?: string | null; note?: string | null }
+) {
+  return jsonMutation<{ items: SurveySignoff[] }>(client, `${base(orgId, projectId)}/survey-signoffs`, "POST", body);
+}
+export function revokeSurveySignoff(client: ApiClient, orgId: string, projectId: string, signoffId: string, reason: string) {
+  return jsonMutation<SurveySignoff>(
+    client,
+    `${base(orgId, projectId)}/survey-signoffs/${encodeURIComponent(signoffId)}/revoke`,
+    "POST",
+    { reason }
+  );
+}
