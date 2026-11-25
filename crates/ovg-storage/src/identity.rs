@@ -31,6 +31,10 @@ impl VerifiedSession {
         self.user.id
     }
 
+    pub fn display_name(&self) -> &str {
+        &self.user.display_name
+    }
+
     pub fn into_user(self) -> UserProfile {
         self.user
     }

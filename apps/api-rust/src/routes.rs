@@ -24,6 +24,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .route("/modules", get(list_modules))
         .merge(crate::identity::router())
         .merge(crate::catalog::router())
+        .merge(crate::tenancy::router())
 }
 
 async fn health_summary(State(state): State<AppState>) -> Json<Value> {
