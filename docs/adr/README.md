@@ -30,3 +30,7 @@ rewrite historical rationale as though the original decision was never made.
 - [ADR-012 — Deployment](ADR-012-deployment.md)
 - [ADR-013 — OIDC-backed application session](ADR-013-oidc-application-session.md)
 - [ADR-014 — Explicit tenant context + RLS](ADR-014-explicit-tenant-context-rls.md)
+
+## Proposed ADRs
+
+- [ADR-015 — Rust-native platform migration](ADR-015-rust-platform.md) (proposed; ADR-004 remains accepted)
