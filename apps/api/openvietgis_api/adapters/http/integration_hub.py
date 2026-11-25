@@ -277,8 +277,13 @@ def _scope_layers(
         boundary = "ranh" in words
         if polygon and words & {"xa", "phuong"} and (boundary or first in {"xa", "phuong"}):
             found["commune"].append(row["source_id"])
-        elif polygon and "ap" in words and (boundary or first == "ap") and not words & {"cu", "lich"}:
+        elif (
+            polygon
+            and "ap" in words
+            and (boundary or first == "ap")
             # "Ấp cũ" / "lịch sử" are historic boundaries, not today's hamlets.
+            and not words & {"cu", "lich"}
+        ):
             found["hamlet"].append(row["source_id"])
         elif family in ("LineString", "MultiLineString") and (
             "tuyen" in words or {"duong", "hem"} <= words
