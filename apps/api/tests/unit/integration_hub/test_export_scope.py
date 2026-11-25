@@ -18,7 +18,8 @@ def test_area_and_route_filters_use_bound_values_only() -> None:
     assert "ST_Intersects" in spatial and ":area_fids" in spatial and ":native_srid" in spatial
     by_name = str(_export_features_sql(scoped=False, area_mode="attribute", route_mode=None))
     assert "attributes->>'ap' = ANY(:area_names)" in by_name
-    assert ":route_ids" in str(_export_features_sql(scoped=False, area_mode=None, route_mode="self"))
+    own = str(_export_features_sql(scoped=False, area_mode="own_name", route_mode="self"))
+    assert "attributes->>'name' = ANY(:area_names)" in own and ":route_ids" in own
     assert "attributes->>'tuyen_id' = ANY(:route_ids)" in str(
         _export_features_sql(scoped=False, area_mode=None, route_mode="attribute")
     )

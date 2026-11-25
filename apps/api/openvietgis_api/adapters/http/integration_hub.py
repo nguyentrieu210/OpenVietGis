@@ -192,6 +192,8 @@ _SCOPE_GEOMETRIES = """
 # did; drawn hamlet boundaries and recorded hamlets disagree for ~13% of survey points.
 _AREA_FILTERS = {
     "attribute": "\n      AND attributes->>'ap' = ANY(:area_names)",
+    # Exporting the hamlet boundary layer itself: the chosen hamlets, not their neighbours.
+    "own_name": "\n      AND attributes->>'name' = ANY(:area_names)",
     "spatial": (
         "\n      AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry),"
         " :native_srid) FROM ("
@@ -223,6 +225,7 @@ def _export_features_sql(*, scoped: bool, area_mode: str | None, route_mode: str
 @dataclass(frozen=True)
 class _ExportScope:
     area_sids: list[Any]
+    hamlet_sids: list[Any]
     area_fids: list[str]
     area_names: list[str]
     route_sids: list[Any]
@@ -263,6 +266,7 @@ def _scope_layers(
         elif family in ("LineString", "MultiLineString") and words & {"tuyen", "duong", "hem"}:
             found["route"].append(row["source_id"])
     return found
+
 
 _SYNC_FEATURES_SQL = text(
     """
@@ -1017,7 +1021,7 @@ def get_export_scopes(
     sources = _scope_layers(session, organization_id, project_id)
     params = {"org": organization_id, "proj": project_id}
 
-    def areas(kind: str) -> list[Mapping[str, Any]]:
+    def areas(kind: str) -> list[Any]:
         if not sources[kind]:
             return []
         rows = session.execute(_SCOPE_AREAS_SQL, params | {"sids": sources[kind]})
@@ -1095,6 +1099,7 @@ def export_integration_layer(
         scope_sources = _scope_layers(session, organization_id, project_id)
         scope = _ExportScope(
             area_sids=scope_sources["commune"] + scope_sources["hamlet"],
+            hamlet_sids=scope_sources["hamlet"],
             area_fids=list(scope_area or []),
             area_names=_scope_hamlet_names(
                 session, organization_id, project_id, scope_sources, list(scope_area or [])
@@ -1211,10 +1216,14 @@ def export_integration_layer(
 
     area_mode: str | None = None
     if scope is not None and scope.area_fids:
-        # Boundary layers themselves and layers without a recorded hamlet use the drawn boundary.
-        own_area = source_id in scope.area_sids
-        by_name = has_field("ap") and bool(scope.area_names) and not own_area
-        area_mode = "attribute" if by_name else "spatial"
+        # Hamlet layer: the chosen hamlets by name; layers recording "ap": by that name;
+        # the commune layer and everything else: the drawn boundary.
+        if source_id in scope.hamlet_sids and scope.area_names:
+            area_mode = "own_name"
+        elif source_id not in scope.area_sids and has_field("ap") and scope.area_names:
+            area_mode = "attribute"
+        else:
+            area_mode = "spatial"
     route_mode: str | None = None
     if scope is not None and scope.route_ids:
         # Route layers match their own ids, layers carrying tuyen_id match it, others use distance.
