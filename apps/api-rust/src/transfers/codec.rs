@@ -1681,6 +1681,7 @@ impl Mapping {
 
 /// `(field_id, name, type)` of the pinned source schema in ordinal order.
 pub type SchemaField<'a> = (&'a str, &'a str, &'a str);
+pub type ExportMappingPlan = (Vec<Mapping>, Vec<Conversion>, Option<&'static str>);
 
 /// `plan_export_mapping`; `Err` is the `ValueError` text.
 pub fn plan_export_mapping(
@@ -1689,7 +1690,7 @@ pub fn plan_export_mapping(
     source_crs: i32,
     output_crs: i32,
     has_long_text: bool,
-) -> std::result::Result<(Vec<Mapping>, Vec<Conversion>, Option<&'static str>), String> {
+) -> std::result::Result<ExportMappingPlan, String> {
     if !SUPPORTED_CRS.contains(&source_crs) || !SUPPORTED_CRS.contains(&output_crs) {
         return Err("Unsupported CRS code".into());
     }
