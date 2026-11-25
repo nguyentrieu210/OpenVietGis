@@ -273,7 +273,10 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
  // The selected plugin is fixed for this keyed workspace mount. Its hook cannot
  // change until ProjectStudio remounts the workspace with a different plugin key.
  const useContribution=extension?.useStudio??useEmptyStudio;
- const contribution=useContribution({client,org,pid,data,row,selected,loading,busy,editing:!!draft||toolkit.editingTool||!!advanced.mode||!!pro.panel,revision:reload,action,refresh,fail,select:setSelected,goto,fit:()=>{fit.current="none"},resetLayers:()=>setHidden(new Set()),notify:setNotice});
+ const sourceRevision = useMemo(() => JSON.stringify([...new Set(data.layers.map(layer =>
+   JSON.stringify([layer.source_id, layer.source.content_revision, layer.source.schema_revision])
+ ))].sort()), [data.layers]);
+ const contribution=useContribution({client,org,pid,data,row,selected,loading,busy,editing:!!draft||toolkit.editingTool||!!advanced.mode||!!pro.panel,revision:reload,sourceRevision,action,refresh,fail,select:setSelected,goto,fit:()=>{fit.current="none"},resetLayers:()=>setHidden(new Set()),notify:setNotice});
  const label=(r:Row)=>contribution.label?.(r)??(typeof r.feature.attributes.name==="string"?r.feature.attributes.name:r.feature.feature_id);
  const visible=useMemo(()=>data.rows.filter(r=>!hidden.has(r.layer.id)&&matchesLayerView(r,workspace.layerViews[r.layer.id])&&(!contribution.filter||contribution.filter(r))),[data,hidden,contribution.mapRevision,workspace.layerViews]);
  useEffect(()=>{

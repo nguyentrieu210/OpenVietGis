@@ -1,3 +1,5 @@
 # Evidence register
 Initial baseline observation 2026-11-25 18:44 ICT: main/frontend/backend 5cdb16c, public app HTTP 200, readiness status/database ready. This is a read-only availability check, not acceptance. Previous main 9f31293: backend, secrets and QGIS pass; 42 browser tests pass and seven visual baselines fail. New main CI must be rechecked, no prior result transferred.
 For each task capture SHA, environment, fixture hash, permissions, commands, counts, outcome, limitations, reviewer, and artifact reference. Status PASS/FAIL/BLOCKED/NOT_RUN. No secrets or household data. See [baseline and contract audit](baseline-and-contracts.md) and [candidate verification](implementation.md) for observed results and active gates.
+
+See the [acceptance ledger](acceptance-ledger.md) for the candidate SHAs, run scope, artifact checksums and remaining release gates.

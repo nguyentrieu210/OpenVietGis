@@ -8,6 +8,7 @@ export type StudioData={layers:SpatialLayer[];rows:StudioRow[];warnings:string[]
 export type StudioHost={
  client:ApiClient;org:string;pid:string;data:StudioData;row:StudioRow|undefined;selected:string;
  loading:boolean;busy:boolean;editing:boolean;revision:number;
+ sourceRevision:string;
  action:(task:()=>Promise<void>)=>Promise<void>;refresh:()=>void;fail:(e:unknown)=>void;
  select:(key:string)=>void;goto:(key:string)=>void;fit:()=>void;resetLayers:()=>void;notify:(message:string)=>void;
 };

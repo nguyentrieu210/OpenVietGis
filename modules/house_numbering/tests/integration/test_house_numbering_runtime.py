@@ -5,6 +5,11 @@ from __future__ import annotations
 import json
 from uuid import uuid4
 
+from openvietgis_api.domains.spatial.domain import (
+    GeometryDimensions,
+    GeometryFamily,
+    schema_revision_digest,
+)
 from sqlalchemy import text
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
@@ -25,7 +30,7 @@ def _seed_source(
 ):
     source_id = uuid4()
     content = "a" * 64
-    schema = "b" * 64
+    schema = schema_revision_digest((), GeometryFamily(family), GeometryDimensions.XY)
     manifest = "c" * 64
     with get_admin_engine().begin() as connection:
         connection.execute(
@@ -104,11 +109,62 @@ def test_house_numbering_us1_us3_real_postgis(migrated_database: None) -> None:
         extent={"min_x": 20, "min_y": -10, "max_x": 20, "max_y": -10, "crs_code": 3857},
     )
 
+    # Run the reference workflow on a real, deterministic survey-size layer.
+    # The synthetic background points remain unassigned to a business route.
+    with get_admin_engine().begin() as connection:
+        seeded = connection.execute(
+            text("""
+                INSERT INTO spatial.reference_features (
+                    organization_id,project_id,source_id,feature_id,attributes,geometry,
+                    geometry_state,content_revision,schema_revision
+                )
+                SELECT s.organization_id,s.project_id,s.id,
+                    'survey-' || lpad(i::text,5,'0'),'{}'::jsonb,
+                    ST_SetSRID(ST_MakePoint(20 + i % 1000 / 1000.0, -10 - i / 1000000.0),3857),
+                    'present',s.content_revision,s.schema_revision
+                FROM spatial.data_sources s CROSS JOIN generate_series(1,30000) AS points(i)
+                WHERE s.id=:source
+            """),
+            {"source": point_source},
+        )
+        assert seeded.rowcount == 30_000
+        connection.execute(
+            text("""
+                UPDATE spatial.data_sources
+                SET feature_count=30001,
+                    extent=jsonb_build_object(
+                        'min_x',20,'min_y',-10.03,'max_x',20.999,'max_y',-10,'crs_code',3857
+                    )
+                WHERE id=:source
+            """),
+            {"source": point_source},
+        )
+
     org_base = f"/api/v1/organizations/{world.organization_id}"
     proj_base = f"{org_base}/projects/{world.project_id}"
     module_base = f"{proj_base}/modules/house-numbering"
 
     with _client(world.owner_user_id) as client:
+        survey_layer = client.post(
+            f"{proj_base}/layers",
+            json={"source_id": str(point_source), "name": "Synthetic survey inventory"},
+        )
+        assert survey_layer.status_code == 201, survey_layer.text
+        survey_layer_url = f"{proj_base}/layers/{survey_layer.json()['resource_id']}"
+        survey_source = client.get(survey_layer_url).json()["source"]
+        assert survey_source["feature_count"] == 30_001
+        tail = client.get(
+            survey_layer_url + "/features",
+            params={
+                "content_revision": survey_source["content_revision"],
+                "schema_revision": survey_source["schema_revision"],
+                "after_feature_id": "survey-29999",
+                "limit": 10,
+            },
+        )
+        assert tail.status_code == 200, tail.text
+        assert [item["feature_id"] for item in tail.json()["items"]] == ["survey-30000"]
+        assert tail.json()["next_after_feature_id"] is None
         registered = client.post(
             f"{org_base}/extensions/official/house_numbering/register"
         )
@@ -281,6 +337,38 @@ def test_house_numbering_us1_us3_real_postgis(migrated_database: None) -> None:
             ).status_code
             == 422
         )
+
+        building_url = f"{module_base}/buildings/{building_id}"
+        current_building = next(
+            row for row in client.get(f"{module_base}/buildings").json()["items"]
+            if row["id"] == building_id
+        )
+        relink = client.put(
+            building_url,
+            json={
+                "expected_revision": current_building["revision"],
+                "source_id": str(point_source),
+                "feature_id": "survey-30000",
+                "route_id": None,
+            },
+        )
+        assert relink.status_code == 409 and relink.json()["code"] == "BUILDING_ROUTE_LOCKED"
+        stale_relink = client.put(
+            building_url,
+            json={
+                "expected_revision": current_building["revision"] + 1,
+                "source_id": str(point_source),
+                "feature_id": "survey-30000",
+                "route_id": route_id,
+            },
+        )
+        assert stale_relink.status_code == 409 and stale_relink.json()["code"] == "STALE_BUILDING"
+        retire = client.delete(building_url, params={"expected_revision": current_building["revision"]})
+        assert retire.status_code == 409 and retire.json()["code"] == "BUILDING_OFFICIAL_NUMBER_LOCKED"
+        assert next(
+            row for row in client.get(f"{module_base}/buildings").json()["items"]
+            if row["id"] == building_id
+        ) == current_building
 
         recheck = client.post(
             f"{module_base}/inspect",
@@ -473,3 +561,88 @@ def test_house_numbering_us1_us3_real_postgis(migrated_database: None) -> None:
         routes = client.get(f"{module_base}/routes")
         assert routes.status_code == 200, routes.text
         assert routes.json()["items"][0]["id"] == route_id
+
+
+def test_linked_feature_delete_guard_across_clients(migrated_database: None) -> None:
+    migrate_house_numbering()
+    world = seed_access_world()
+    org = f"/api/v1/organizations/{world.organization_id}"
+    project = f"{org}/projects/{world.project_id}"
+    module = f"{project}/modules/house-numbering"
+    managed = f"{project}/integration-hub/managed"
+
+    with _client(world.owner_user_id) as web, _client(world.owner_user_id) as desktop:
+        manifest = web.post(f"{org}/extensions/official/house_numbering/register")
+        assert manifest.status_code == 201, manifest.text
+        enabled = web.post(f"{project}/extensions/activations", json={"manifest_id": manifest.json()["id"]})
+        assert enabled.status_code == 201, enabled.text
+        layer = web.post(
+            f"{project}/layers/manual",
+            json={
+                "operation_id": str(uuid4()),
+                "name": "Active building link fixture",
+                "geometry_family": "Point",
+                "fields": [],
+            },
+        )
+        assert layer.status_code == 201, layer.text
+        layer_id = layer.json()["layer_id"]
+        source_id = layer.json()["source_id"]
+        public_commit = f"{project}/sources/{source_id}/changesets"
+
+        def change(operations: list[dict]) -> dict:
+            source = web.get(f"{project}/layers/{layer_id}").json()["source"]
+            return {
+                "operation_id": str(uuid4()),
+                "base_content_revision": source["content_revision"],
+                "base_schema_revision": source["schema_revision"],
+                "operations": operations,
+            }
+
+        points = [
+            {"op_type": "create", "feature_id": key,
+             "geometry": {"type": "Point", "coordinates": [106.6, y]}}
+            for key, y in [("linked", 10.7), ("free", 10.71)]
+        ]
+        created = web.post(public_commit, json=change(points))
+        assert created.status_code == 201, created.text
+        house = web.post(
+            f"{module}/buildings",
+            json={"source_id": source_id, "feature_id": "linked", "eligibility": "eligible"},
+        )
+        assert house.status_code == 201, house.text
+        body = change([{"op_type": "delete", "feature_id": "linked"}])
+        blocked = web.post(public_commit, json=body)
+        assert blocked.status_code == 409 and blocked.json()["code"] == "DATA_LOCKED"
+
+        session = desktop.post(f"{managed}/sessions", json={"device_label": "QGIS link guard"})
+        assert session.status_code == 201, session.text
+        qgis = desktop.post(
+            f"{managed}/commits",
+            json={
+                **body,
+                "session_id": session.json()["id"],
+                "source_id": source_id,
+                "allow_deletes": True,
+            },
+        )
+        assert qgis.status_code == 409 and qgis.json()["code"] == "DATA_LOCKED"
+
+        disabled = web.post(f"{project}/extensions/house_numbering/disable")
+        assert disabled.status_code == 200, disabled.text
+        still_linked = web.post(public_commit, json=body)
+        assert still_linked.status_code == 409
+        deleted_free = web.post(public_commit, json=change([{"op_type": "delete", "feature_id": "free"}]))
+        assert deleted_free.status_code == 201, deleted_free.text
+
+        reenabled = web.post(f"{project}/extensions/activations", json={"manifest_id": manifest.json()["id"]})
+        assert reenabled.status_code == 201, reenabled.text
+        current = house.json()
+        retired = web.delete(
+            f"{module}/buildings/{current['id']}", params={"expected_revision": current["revision"]},
+        )
+        assert retired.status_code == 204, retired.text
+        deleted_unlinked = web.post(
+            public_commit, json=change([{"op_type": "delete", "feature_id": "linked"}]),
+        )
+        assert deleted_unlinked.status_code == 201, deleted_unlinked.text

@@ -37,6 +37,17 @@ def test_official_runtime_contract_is_pinned(migrated_database: None) -> None:
         assert listed[0]["runtime_compatible"] is True
         runtime = f"{project}/modules/house-numbering/routes"
         assert owner.get(runtime).status_code == 200
+
+        layers = owner.get(f"{project}/layers")
+        assert layers.status_code == 200, layers.text
+        disabled = owner.post(f"{project}/extensions/house_numbering/disable")
+        assert disabled.status_code == 200, disabled.text
+        assert owner.get(runtime).status_code == 404
+        assert owner.get(f"{project}/layers").json() == layers.json()
+        reenabled = owner.post(f"{project}/extensions/activations", json={"manifest_id": mid})
+        assert reenabled.status_code == 201, reenabled.text
+        assert reenabled.json()["id"] == activated.json()["id"]
+        assert owner.get(runtime).status_code == 200
         # Simulate a legacy, same-version metadata collision in the isolated test database.
         with get_admin_engine().begin() as conn:
             conn.execute(

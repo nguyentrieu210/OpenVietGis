@@ -95,6 +95,30 @@ def test_signoff_requires_full_reconciliation_and_locks_points(migrated_database
         locked = update("a3", so_nha="14A")
         assert locked.status_code == 409, locked.text
         assert locked.json()["code"] == "DATA_LOCKED" and "Đường A" in locked.json()["message"]
+
+        # The separate desktop session uses the same authoritative sign-off guard.
+        with _client(world.owner_user_id) as desktop:
+            managed = f"{root}/integration-hub/managed"
+            session = desktop.post(f"{managed}/sessions", json={"device_label": "QGIS sign-off test"})
+            assert session.status_code == 201, session.text
+            source = desktop.get(f"{root}/layers/{layer_id}").json()["source"]
+            desktop_write = desktop.post(
+                f"{managed}/commits",
+                json={
+                    "session_id": session.json()["id"],
+                    "source_id": source_id,
+                    "operation_id": str(uuid4()),
+                    "base_content_revision": source["content_revision"],
+                    "base_schema_revision": source["schema_revision"],
+                    "operations": [{
+                        "op_type": "update",
+                        "feature_id": "a3",
+                        "geometry": {"type": "Point", "coordinates": [106.7, 10.7]},
+                    }],
+                },
+            )
+            assert desktop_write.status_code == 409, desktop_write.text
+            assert desktop_write.json()["code"] == "DATA_LOCKED"
         assert update("a2", so_nha="12B").status_code == 409  # matched although stored as "Ấp 1 "
         assert commit([{"op_type": "delete", "feature_id": "a1"}]).status_code == 409
         # Nothing can be moved or created into the signed road either.
