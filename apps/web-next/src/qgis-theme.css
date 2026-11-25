@@ -633,3 +633,9 @@
 /* the old floating panel is replaced by the rail */
 .ovg-live-chat{display:none!important}
 @media (max-width:640px){.ovg-chat-pane{width:calc(100vw - 64px)}}
+
+/* Chat pane: never scroll sideways; hover bars stay inside */
+.ovg-chat-msgs{overflow-x:hidden!important;padding-top:36px!important}
+.ovg-chat-pane .ovg-live-reactbar{max-width:100%}
+.ovg-chat-pane .ovg-live-msg{min-width:0;max-width:100%}
+.ovg-chat-pane .ovg-live-msg.only-emoji .ovg-live-bubble p{background:none!important;box-shadow:none!important}
