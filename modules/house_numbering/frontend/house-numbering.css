@@ -43,9 +43,9 @@
   transition: all 0.14s ease;
 }
 .hn-head a:hover {
-  border-color: var(--ovg-primary, #0f766e);
+  border-color: var(--ovg-primary, #1565a9);
   background: var(--ovg-primary-soft, #ecfdf5);
-  color: var(--ovg-primary, #0f766e);
+  color: var(--ovg-primary, #1565a9);
 }
 
 .hn-main {
@@ -120,14 +120,14 @@
 .hn-tab:hover { background: var(--ovg-surface-muted, #f8fafc); color: var(--ovg-text, #0f172a); }
 .hn-tab.active,
 .hn-tab[aria-selected="true"] {
-  color: var(--ovg-primary, #0f766e);
+  color: var(--ovg-primary, #1565a9);
 }
 .hn-tab.active::after,
 .hn-tab[aria-selected="true"]::after {
   content: "";
   position: absolute;
   inset: auto 10px 0 10px;
-  border-block-end: 3px solid var(--ovg-primary, #0f766e);
+  border-block-end: 3px solid var(--ovg-primary, #1565a9);
   border-radius: 3px 3px 0 0;
 }
 
@@ -190,8 +190,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--ovg-primary, #0f766e);
-  background: var(--ovg-primary, #0f766e);
+  border: 1px solid var(--ovg-primary, #1565a9);
+  background: var(--ovg-primary, #1565a9);
   color: var(--ovg-primary-fg, #ffffff);
   border-radius: 8px;
   padding: 8px 14px;
@@ -203,7 +203,7 @@
 }
 .hn-btn:hover:enabled { background: var(--ovg-primary-strong, #0d5e58); border-color: var(--ovg-primary-strong, #0d5e58); }
 .hn-btn.secondary { background: var(--ovg-surface, #ffffff); color: var(--ovg-text-secondary, #334155); border-color: var(--ovg-border-strong, #cbd5e1); }
-.hn-btn.secondary:hover:enabled { background: var(--ovg-surface-muted, #f8fafc); border-color: var(--ovg-primary, #0f766e); color: var(--ovg-primary, #0f766e); }
+.hn-btn.secondary:hover:enabled { background: var(--ovg-surface-muted, #f8fafc); border-color: var(--ovg-primary, #1565a9); color: var(--ovg-primary, #1565a9); }
 .hn-btn.danger { background: var(--ovg-surface, #ffffff); color: var(--ovg-danger, #dc2626); border-color: var(--ovg-danger, #dc2626); }
 .hn-btn.danger:hover:enabled { background: var(--ovg-danger-soft, #fef2f2); }
 .hn-btn:disabled { opacity: 0.48; cursor: not-allowed; }

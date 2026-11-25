@@ -6,7 +6,7 @@
 .ovg-context-icon{color:#8bd6cb;font-size:14px;line-height:1}.ovg-breadcrumb-slash{color:#8ba8ab}
 .qgis-studio .top-right{overflow:visible;flex-shrink:0;align-items:center}.ovg-account{position:relative;display:flex;align-items:center}
 .qgis-studio .ovg-account-trigger{display:flex;align-items:center;gap:7px;background:transparent;border:1px solid #ffffff25;color:white;border-radius:6px;padding:3px 7px;height:33px;font-size:12px}
-.ovg-avatar{width:25px;height:25px;border-radius:50%;background:linear-gradient(140deg,#2d9b98,#227495);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700;flex-shrink:0}
+.ovg-avatar{width:25px;height:25px;border-radius:50%;background:#2d9b98;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700;flex-shrink:0}
 .ovg-avatar.large{width:39px;height:39px;font-size:14px}.ovg-chevron{font-size:14px;color:#9fb5bd}.ovg-account-name{max-width:115px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ovg-account-popover{position:absolute;right:0;top:calc(100% + 7px);z-index:150;width:min(290px,calc(100vw - 22px));background:#fff;border:1px solid #d8e2e5;border-radius:10px;box-shadow:0 12px 35px #0e273e35;color:#1d3540;padding:7px;box-sizing:border-box}
 .ovg-account-summary{display:flex;align-items:center;gap:10px;padding:7px 8px}.ovg-account-summary>div{display:grid;gap:4px;min-width:0}.ovg-account-summary b{font-size:13px;overflow-wrap:anywhere}.ovg-account-summary small,.ovg-account-context small{font-size:11px;color:#667f8a;overflow-wrap:anywhere}
