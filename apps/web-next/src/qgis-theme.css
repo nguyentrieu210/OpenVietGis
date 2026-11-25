@@ -315,3 +315,9 @@
 .ovg-chat-bubble b{display:block;font-size:10.5px;opacity:.85}
 @keyframes ovg-bubble{from{opacity:0;transform:translateY(4px)}}
 @media (prefers-reduced-motion:reduce){.ovg-chat-bubble{animation:none}}
+
+/* GIS | CAD switch as a glass segmented control on the dark header */
+.qgis-studio header.top .ovg-workspace-switch{gap:2px!important;padding:2px!important;height:30px;box-sizing:border-box;align-items:center;background:#ffffff12!important;border:1px solid #ffffff2b!important;border-radius:7px!important;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 1px 0 #ffffff1f!important}
+.qgis-studio header.top .ovg-workspace-switch button{height:24px;min-height:0!important;padding:0 12px!important;border:0!important;border-radius:5px!important;background:transparent!important;color:#c9d6df!important;font-size:12px!important;font-weight:600;box-shadow:none!important}
+.qgis-studio header.top .ovg-workspace-switch button:hover{color:#fff!important;background:#ffffff14!important}
+.qgis-studio header.top .ovg-workspace-switch button[aria-pressed=true],.qgis-studio header.top .ovg-workspace-switch button.active,.qgis-studio header.top .ovg-workspace-switch button[aria-selected=true]{background:#1f6fb8!important;color:#fff!important;box-shadow:0 1px 3px #0005!important}
