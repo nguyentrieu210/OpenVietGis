@@ -1571,15 +1571,15 @@ def read_private_households(
 
 
 class SurveySignoffCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    source_id: UUID
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    source_ids: list[UUID] = Field(min_length=1, max_length=20)
     ap: str = Field(min_length=1, max_length=200)
     ten_duong: str | None = Field(default=None, min_length=1, max_length=300)
     note: str | None = Field(default=None, max_length=1000)
 
 
 class SurveySignoffRevoke(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     reason: str = Field(min_length=3, max_length=1000)
 
 
@@ -1606,10 +1606,10 @@ def sign_survey_scope(
     auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
-    return survey_signoff.sign(
-        _repo(organization_id, project_id, auth, session),
-        body.source_id, body.ap.strip(), body.ten_duong.strip() if body.ten_duong else None, body.note,
+    items = survey_signoff.sign(
+        _repo(organization_id, project_id, auth, session), body.source_ids, body.ap, body.ten_duong, body.note
     )
+    return {"items": items}
 
 
 @router.post(f"{_PROJ}/survey-signoffs/{{signoff_id}}/revoke")
@@ -1621,4 +1621,4 @@ def revoke_survey_signoff(
     auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
 ) -> dict[str, object]:
-    return survey_signoff.revoke(_repo(organization_id, project_id, auth, session), signoff_id, body.reason.strip())
+    return survey_signoff.revoke(_repo(organization_id, project_id, auth, session), signoff_id, body.reason)

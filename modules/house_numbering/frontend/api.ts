@@ -1010,9 +1010,9 @@ export function signSurveyScope(
   client: ApiClient,
   orgId: string,
   projectId: string,
-  body: { source_id: string; ap: string; ten_duong?: string | null; note?: string | null }
+  body: { source_ids: string[]; ap: string; ten_duong?: string | null; note?: string | null }
 ) {
-  return jsonMutation<SurveySignoff>(client, `${base(orgId, projectId)}/survey-signoffs`, "POST", body);
+  return jsonMutation<{ items: SurveySignoff[] }>(client, `${base(orgId, projectId)}/survey-signoffs`, "POST", body);
 }
 export function revokeSurveySignoff(client: ApiClient, orgId: string, projectId: string, signoffId: string, reason: string) {
   return jsonMutation<SurveySignoff>(

@@ -1,8 +1,8 @@
 """Spec 051: reviewer sign-off of a fully reconciled hamlet or road (Bình Hưng rule).
 
-A survey point still needs work while it is not "khop" and its xu_ly is "chua_xu_ly"
-(same rule as the Bình Hưng app). A scope can be signed only when no point needs work;
-the database trigger from migration hn_0011 then refuses edits until a reviewer revokes.
+A survey point still needs work while it is not "khop" and its xu_ly is empty or "chua_xu_ly"
+(same rule as the Bình Hưng app and the plugin UI). A scope can be signed only when no point
+needs work; the database trigger from migration hn_0011 then refuses edits until a reviewer revokes.
 """
 
 from __future__ import annotations
@@ -22,7 +22,11 @@ from modules.house_numbering.persistence import HouseNumberingRepository
 _COLUMNS = """id,source_id,ap,ten_duong,point_count,signed_by_actor_id,signed_at,note,
   revoked_by_actor_id,revoked_at,revoke_reason"""
 
-PENDING = "attributes->>'trang_thai' IS DISTINCT FROM 'khop' AND coalesce(attributes->>'xu_ly','chua_xu_ly')='chua_xu_ly'"
+# Values are trimmed like the UI's surveyText(); keep in sync with needsWork() in SurveyNavigator.tsx.
+PENDING = (
+    "btrim(coalesce(attributes->>'trang_thai','')) <> 'khop' "
+    "AND coalesce(nullif(btrim(attributes->>'xu_ly'),''),'chua_xu_ly')='chua_xu_ly'"
+)
 
 
 def _wire(row: Any) -> dict[str, Any]:
@@ -36,14 +40,16 @@ def _wire(row: Any) -> dict[str, Any]:
     return out
 
 
-def scope_counts(repo: HouseNumberingRepository, source_id: UUID, ap: str, ten_duong: str | None) -> tuple[int, int]:
+def scope_counts(
+    repo: HouseNumberingRepository, source_id: UUID, ap: str, ten_duong: str | None
+) -> tuple[int, int]:
     row = repo.session.execute(
         text(f"""
           SELECT count(*)::int AS total, count(*) FILTER (WHERE {PENDING})::int AS pending
           FROM spatial.reference_features
           WHERE organization_id=:org AND project_id=:project AND source_id=:source
-            AND attributes ? 'xu_ly' AND attributes->>'ap'=:ap
-            AND (CAST(:road AS text) IS NULL OR attributes->>'ten_duong'=:road)
+            AND attributes ? 'xu_ly' AND btrim(attributes->>'ap')=:ap
+            AND (CAST(:road AS text) IS NULL OR btrim(attributes->>'ten_duong')=:road)
         """),
         {"org": repo.org_id, "project": repo.project_id, "source": source_id, "ap": ap, "road": ten_duong},
     ).mappings().one()
@@ -61,15 +67,29 @@ def list_signoffs(repo: HouseNumberingRepository, source_id: UUID) -> list[dict[
     return [_wire(r) for r in rows]
 
 
-def sign(repo: HouseNumberingRepository, source_id: UUID, ap: str, ten_duong: str | None, note: str | None) -> dict[str, Any]:
+def sign(
+    repo: HouseNumberingRepository,
+    source_ids: list[UUID],
+    ap: str,
+    ten_duong: str | None,
+    note: str | None,
+) -> list[dict[str, Any]]:
+    """Sign the scope in every given survey source that holds points of it, all or nothing."""
     repo.prepare("manage")
-    # Serialise sign-offs per source so two reviewers cannot race past the pending check.
-    repo.session.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended('hn_signoff:'||CAST(:source AS text),0))"),
-        {"source": source_id},
-    )
-    total, pending = scope_counts(repo, source_id, ap, ten_duong)
     label = ap + (f" · {ten_duong}" if ten_duong else "")
+    counted: list[tuple[UUID, int]] = []
+    pending = total = 0
+    for source_id in sorted(set(source_ids)):
+        # Exclusive per source; point edits take it shared in the guard trigger, so a
+        # concurrent "mở lại" either commits before this count or waits and is refused.
+        repo.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended('hn_signoff:'||CAST(:source AS text),0))"),
+            {"source": source_id},
+        )
+        n, p = scope_counts(repo, source_id, ap, ten_duong)
+        if n:
+            counted.append((source_id, n))
+            total, pending = total + n, pending + p
     if total == 0:
         raise PlatformNotFoundError(f"{label} không có điểm khảo sát nào")
     if pending:
@@ -78,28 +98,31 @@ def sign(repo: HouseNumberingRepository, source_id: UUID, ap: str, ten_duong: st
             code="SURVEY_SCOPE_INCOMPLETE",
             details={"pending": pending, "total": total},
         )
-    exists = repo.session.execute(
-        text("""SELECT 1 FROM house_numbering.survey_signoffs
-          WHERE organization_id=:org AND project_id=:project AND source_id=:source AND revoked_at IS NULL
-            AND ap=:ap AND (ten_duong IS NULL OR ten_duong=CAST(:road AS text)) LIMIT 1"""),
-        {"org": repo.org_id, "project": repo.project_id, "source": source_id, "ap": ap, "road": ten_duong},
-    ).first()
-    if exists:
-        raise PlatformConflictError(f"{label} đã được ký duyệt", code="SURVEY_SCOPE_SIGNED")
-    signoff_id = uuid4()
-    row = repo.session.execute(
-        text(f"""INSERT INTO house_numbering.survey_signoffs
-          (id,organization_id,project_id,source_id,ap,ten_duong,point_count,signed_by_actor_id,signed_at,note)
-          VALUES (:id,:org,:project,:source,:ap,:road,:total,:actor,:now,:note) RETURNING {_COLUMNS}"""),
-        {
-            "id": signoff_id, "org": repo.org_id, "project": repo.project_id, "source": source_id,
-            "ap": ap, "road": ten_duong, "total": total, "actor": repo.actor_id,
-            "now": datetime.now(UTC), "note": note,
-        },
-    ).mappings().one()
-    repo.audit("house_numbering.survey_signoff.sign", "survey_signoff", signoff_id,
-               {"source_id": str(source_id), "ap": ap, "ten_duong": ten_duong, "point_count": total})
-    return _wire(row)
+    out = []
+    for source_id, n in counted:
+        exists = repo.session.execute(
+            text("""SELECT 1 FROM house_numbering.survey_signoffs
+              WHERE organization_id=:org AND project_id=:project AND source_id=:source AND revoked_at IS NULL
+                AND ap=:ap AND (ten_duong IS NULL OR ten_duong=CAST(:road AS text)) LIMIT 1"""),
+            {"org": repo.org_id, "project": repo.project_id, "source": source_id, "ap": ap, "road": ten_duong},
+        ).first()
+        if exists:
+            raise PlatformConflictError(f"{label} đã được ký duyệt", code="SURVEY_SCOPE_SIGNED")
+        signoff_id = uuid4()
+        row = repo.session.execute(
+            text(f"""INSERT INTO house_numbering.survey_signoffs
+              (id,organization_id,project_id,source_id,ap,ten_duong,point_count,signed_by_actor_id,signed_at,note)
+              VALUES (:id,:org,:project,:source,:ap,:road,:total,:actor,:now,:note) RETURNING {_COLUMNS}"""),
+            {
+                "id": signoff_id, "org": repo.org_id, "project": repo.project_id, "source": source_id,
+                "ap": ap, "road": ten_duong, "total": n, "actor": repo.actor_id,
+                "now": datetime.now(UTC), "note": note,
+            },
+        ).mappings().one()
+        repo.audit("house_numbering.survey_signoff.sign", "survey_signoff", signoff_id,
+                   {"source_id": str(source_id), "ap": ap, "ten_duong": ten_duong, "point_count": n})
+        out.append(_wire(row))
+    return out
 
 
 def revoke(repo: HouseNumberingRepository, signoff_id: UUID, reason: str) -> dict[str, Any]:

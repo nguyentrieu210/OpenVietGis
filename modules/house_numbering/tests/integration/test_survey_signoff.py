@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from sqlalchemy import text
+from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_sources import _client
 
@@ -36,10 +38,13 @@ def test_signoff_requires_full_reconciliation_and_locks_points(migrated_database
         layer_id, source_id = layer.json()["layer_id"], layer.json()["source_id"]
         points = {
             "a1": {"ap": "Ấp 1", "ten_duong": "Đường A", "trang_thai": "thieu_so", "xu_ly": "chua_xu_ly", "so_nha": "10"},
-            "a2": {"ap": "Ấp 1", "ten_duong": "Đường A", "trang_thai": "khop", "xu_ly": "chua_xu_ly", "so_nha": "12"},
+            # Stray spaces and an empty xu_ly: grouped and counted like the UI does (trimmed, pending).
+            "a2": {"ap": "Ấp 1 ", "ten_duong": "Đường A", "trang_thai": "sai_so", "xu_ly": "", "so_nha": "12"},
+            "a3": {"ap": "Ấp 1", "ten_duong": "Đường A", "trang_thai": "khop", "xu_ly": "chua_xu_ly", "so_nha": "14"},
             "b1": {"ap": "Ấp 1", "ten_duong": "Đường B", "trang_thai": "sai_so", "xu_ly": "chua_xu_ly", "so_nha": "3"},
             "c1": {"ap": "Ấp 2", "ten_duong": "Đường C", "trang_thai": "thieu_so", "xu_ly": "chua_xu_ly", "so_nha": "5"},
         }
+        road_a = {"source_ids": [source_id], "ap": "Ấp 1", "ten_duong": "Đường A"}
 
         def commit(ops: list[dict]):
             source = owner.get(f"{root}/layers/{layer_id}").json()["source"]
@@ -55,8 +60,14 @@ def test_signoff_requires_full_reconciliation_and_locks_points(migrated_database
             )
 
         def update(fid: str, **patch: str):
-            points[fid] = {**points[fid], **patch}
-            return commit([{"op_type": "update", "feature_id": fid, "properties": points[fid]}])
+            response = commit([{"op_type": "update", "feature_id": fid, "properties": {**points[fid], **patch}}])
+            if response.status_code == 201:
+                points[fid] = {**points[fid], **patch}
+            return response
+
+        def create(fid: str, attrs: dict):
+            return commit([{"op_type": "create", "feature_id": fid,
+                            "geometry": {"type": "Point", "coordinates": [106.61, 10.71]}, "properties": attrs}])
 
         seeded = commit([
             {"op_type": "create", "feature_id": fid, "geometry": {"type": "Point", "coordinates": [106.6 + i * 0.001, 10.7]}, "properties": p}
@@ -64,44 +75,61 @@ def test_signoff_requires_full_reconciliation_and_locks_points(migrated_database
         ])
         assert seeded.status_code == 201, seeded.text
 
-        # Road A still has one pending point (a2 is "khop" and needs no work).
-        early = owner.post(f"{module}/survey-signoffs", json={"source_id": source_id, "ap": "Ấp 1", "ten_duong": "Đường A"})
+        early = owner.post(f"{module}/survey-signoffs", json=road_a)
         assert early.status_code == 409 and early.json()["code"] == "SURVEY_SCOPE_INCOMPLETE", early.text
-        assert early.json()["details"] == {"pending": 1, "total": 2}
+        assert early.json()["details"] == {"pending": 2, "total": 3}
+        blank = owner.post(f"{module}/survey-signoffs", json={**road_a, "ten_duong": "   "})
+        assert blank.status_code == 422
 
         assert update("a1", xu_ly="giu").status_code == 201
-        signed = owner.post(f"{module}/survey-signoffs", json={"source_id": source_id, "ap": "Ấp 1", "ten_duong": "Đường A"})
+        assert update("a2", xu_ly="bo").status_code == 201
+        signed = owner.post(f"{module}/survey-signoffs", json=road_a)
         assert signed.status_code == 201, signed.text
-        assert signed.json()["point_count"] == 2
-        again = owner.post(f"{module}/survey-signoffs", json={"source_id": source_id, "ap": "Ấp 1", "ten_duong": "Đường A"})
+        [signoff] = signed.json()["items"]
+        assert signoff["point_count"] == 3
+        again = owner.post(f"{module}/survey-signoffs", json=road_a)
         assert again.status_code == 409 and again.json()["code"] == "SURVEY_SCOPE_SIGNED"
-        # The whole hamlet cannot be signed while road B is pending.
-        hamlet = owner.post(f"{module}/survey-signoffs", json={"source_id": source_id, "ap": "Ấp 1"})
+        hamlet = owner.post(f"{module}/survey-signoffs", json={"source_ids": [source_id], "ap": "Ấp 1"})
         assert hamlet.status_code == 409 and hamlet.json()["details"]["pending"] == 1
 
-        locked = update("a2", so_nha="12A")
+        locked = update("a3", so_nha="14A")
         assert locked.status_code == 409, locked.text
         assert locked.json()["code"] == "DATA_LOCKED" and "Đường A" in locked.json()["message"]
-        points["a2"]["so_nha"] = "12"
-        deleted = commit([{"op_type": "delete", "feature_id": "a1"}])
-        assert deleted.status_code == 409 and deleted.json()["code"] == "DATA_LOCKED"
+        assert update("a2", so_nha="12B").status_code == 409  # matched although stored as "Ấp 1 "
+        assert commit([{"op_type": "delete", "feature_id": "a1"}]).status_code == 409
+        # Nothing can be moved or created into the signed road either.
+        assert update("c1", ap="Ấp 1", ten_duong="Đường A").status_code == 409
+        new_point = {"ap": "Ấp 1", "ten_duong": "Đường A", "trang_thai": "thieu_so", "xu_ly": "chua_xu_ly", "so_nha": "16"}
+        assert create("a4", new_point).status_code == 409
         # Editing outside the signed road still works although Core bumps every row's revision.
         assert update("b1", xu_ly="da_sua", so_nha="5").status_code == 201
         assert update("c1", xu_ly="bo").status_code == 201
+        # Adding a field rewrites attributes with a new null key; existing values are unchanged, so it passes.
+        with get_admin_engine().begin() as connection:
+            changed = connection.execute(
+                text("UPDATE spatial.reference_features SET attributes=attributes||'{\"ghi_chu\":null}'::jsonb WHERE source_id=:s"),
+                {"s": source_id},
+            ).rowcount
+            assert changed == 5
 
         listed = owner.get(f"{module}/survey-signoffs", params={"source_id": source_id})
         assert listed.status_code == 200 and [s["ten_duong"] for s in listed.json()["items"]] == ["Đường A"]
 
-        short = owner.post(f"{module}/survey-signoffs/{signed.json()['id']}/revoke", json={"reason": "x"})
+        short = owner.post(f"{module}/survey-signoffs/{signoff['id']}/revoke", json={"reason": " x "})
         assert short.status_code == 422
-        revoked = owner.post(f"{module}/survey-signoffs/{signed.json()['id']}/revoke", json={"reason": "Sửa lại số 12"})
+        revoked = owner.post(f"{module}/survey-signoffs/{signoff['id']}/revoke", json={"reason": "Sửa lại số 14"})
         assert revoked.status_code == 200 and revoked.json()["revoked_at"]
-        assert update("a2", so_nha="12A", xu_ly="da_sua").status_code == 201
+        assert update("a3", so_nha="14A", xu_ly="da_sua").status_code == 201
         assert owner.get(f"{module}/survey-signoffs", params={"source_id": source_id}).json()["items"] == []
 
-        whole = owner.post(f"{module}/survey-signoffs", json={"source_id": source_id, "ap": "Ấp 1"})
-        assert whole.status_code == 201 and whole.json()["point_count"] == 3
+        whole = owner.post(f"{module}/survey-signoffs", json={"source_ids": [source_id], "ap": "Ấp 1"})
+        assert whole.status_code == 201 and whole.json()["items"][0]["point_count"] == 4
         assert update("b1", so_nha="7").status_code == 409
+
+        # Deactivating the plugin lifts the lock, so Core data is never frozen.
+        off = owner.post(f"{root}/extensions/activations/{activated.json()['id']}/deactivate")
+        assert off.status_code == 200, off.text
+        assert update("b1", so_nha="7").status_code == 201
 
     with _client(world.wrong_user_id) as outsider:
         denied = outsider.get(f"{module}/survey-signoffs", params={"source_id": source_id})
