@@ -166,3 +166,21 @@
 .qgis-studio .qgis-context button:hover{background:var(--ovg-primary-soft)!important}
 .qgis-studio .qgis-context button.danger{color:var(--ovg-danger)!important;border-top:1px solid var(--ovg-line-soft)!important;margin-top:2px}
 .qgis-studio .qgis-context button svg{color:var(--ovg-muted);flex:none}
+
+/* Digitizing panel (Google Earth Pro style) */
+.qgis-studio .core-sketch{width:300px;padding:0;border-radius:4px;border:1px solid var(--ovg-line);box-shadow:0 8px 24px #0f1b2433;background:var(--ovg-panel)}
+.qgis-studio .core-sketch>header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--ovg-header);border-bottom:1px solid var(--ovg-line);font-size:13px}
+.qgis-studio .core-sketch>header button{border:0;background:transparent;min-height:22px;padding:0 6px}
+.qgis-studio .core-sketch-measure{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 10px;font-size:12.5px}.qgis-studio .core-sketch-measure dt{color:var(--ovg-muted)}.qgis-studio .core-sketch-measure dd{margin:0;font-weight:600;text-align:right}
+.qgis-studio .core-sketch-hint{display:block;margin:0 10px 6px;font-size:11px;color:var(--ovg-muted);line-height:1.4}
+.qgis-studio .core-sketch-coords{margin:0 10px 6px;font-size:12px}.qgis-studio .core-sketch-coords>div{display:flex;gap:4px;margin-top:4px}.qgis-studio .core-sketch-coords input{flex:1;min-height:26px;font-size:12px}
+.qgis-studio .core-sketch-actions{display:flex;gap:4px;padding:6px 10px;border-top:1px solid var(--ovg-line);background:var(--ovg-surface)}.qgis-studio .core-sketch-actions span{flex:1}
+.qgis-studio .core-sketch-actions button{min-height:26px;padding:2px 10px;border:1px solid var(--ovg-line);border-radius:3px;background:#fff;font-size:12px}
+.qgis-studio .core-sketch-actions button.primary{background:var(--ovg-primary);border-color:var(--ovg-primary);color:#fff;min-width:64px}
+
+.ovg-split-ghost{position:fixed;z-index:3000;background:#1565a9aa;pointer-events:none}.ovg-split-ghost-x{top:0;bottom:0;width:2px}.ovg-split-ghost-y{left:0;right:0;height:2px}
+/* layer tree rows: left aligned like QGIS */
+.qgis-studio .qgis-layer-row .qgis-layer-name{justify-content:flex-start!important;text-align:left!important;flex:1;min-width:0}
+.qgis-studio .qgis-layer-row .qgis-layer-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovg-select-box{position:absolute;z-index:5;border:1.5px dashed #1565a9;background:#1565a91f;pointer-events:none}
+.qgis-studio .ovg-map-menu{position:fixed;z-index:1200}
