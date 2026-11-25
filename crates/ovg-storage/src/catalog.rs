@@ -331,8 +331,14 @@ impl<'a> ProjectRead<'a> {
     ) -> Result<crate::e11_outbox::SpatialReplay, AppError> {
         self.require_unrestricted()?;
         let organization = self.tx.organization_id();
-        crate::e11_outbox::replay(self.tx.tx_mut(), organization, self.project_id, cursor, limit)
-            .await
+        crate::e11_outbox::replay(
+            self.tx.tx_mut(),
+            organization,
+            self.project_id,
+            cursor,
+            limit,
+        )
+        .await
     }
 
     pub async fn commit(self) -> Result<(), AppError> {
