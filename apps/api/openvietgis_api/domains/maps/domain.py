@@ -112,18 +112,33 @@ class LayerReference:
     layer_id: UUID
     visible: bool
     style: Style
+    # Spec 056: project-shared layer group path (QGIS-style tree), e.g. "Hiện trạng/Giao thông".
+    group: str | None = None
 
     def __post_init__(self) -> None:
         _id(self.layer_id)
         if type(self.visible) is not bool or not isinstance(self.style, Style):
             raise MapValidationError("invalid map Layer reference")
+        if self.group is not None:
+            parts = self.group.split("/") if isinstance(self.group, str) else []
+            if (
+                not parts
+                or len(self.group) > 200
+                or len(parts) > 4
+                or any(not p.strip() or p != p.strip() for p in parts)
+            ):
+                raise MapValidationError("invalid map Layer group")
 
     def to_wire(self) -> dict[str, object]:
-        return {
+        wire: dict[str, object] = {
             "layer_id": str(self.layer_id),
             "visible": self.visible,
             "style": self.style.to_wire(),
         }
+        # Omitted when ungrouped so existing revisions keep their digest.
+        if self.group is not None:
+            wire["group"] = self.group
+        return wire
 
 
 @dataclass(frozen=True, slots=True)

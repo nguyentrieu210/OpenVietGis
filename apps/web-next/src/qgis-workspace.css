@@ -111,3 +111,4 @@
  .qgis-tools-detail{min-height:36px}
  .core-ribbon-menu-fixed .core-menu-items button{min-height:48px}
 }
+.qgis-layer-row.picked{background:#e3eefb;border-color:#9cbbe0}.qgis-layer-row.group.drop-before,.qgis-layer-row.group.drop-after{outline:1px dashed #427849}

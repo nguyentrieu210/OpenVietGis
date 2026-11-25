@@ -1207,6 +1207,12 @@
           },
           "style": {
             "$ref": "#/components/schemas/MapStyle"
+          },
+          "group": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Spec 056: project-shared layer group path, segments separated by '/', at most 4 levels. Omitted when the layer is not grouped."
           }
         }
       },
