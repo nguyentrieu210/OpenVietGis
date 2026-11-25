@@ -52,6 +52,11 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{ORG}/projects/{{project_id}}"),
             get(get_project).patch(update_project),
         )
+        .route(
+            &format!("{ORG}/ownership-transfer"),
+            post(transfer_ownership),
+        )
+        .route(&format!("{ORG}/grants"), get(list_resource_grants))
         .route(&format!("{ORG}/audit-events"), get(list_audit_events))
 }
 
@@ -530,6 +535,69 @@ async fn update_membership(
     }))
 }
 
+/// Transfer ownership atomically; promote first, then demote the old owner.
+async fn transfer_ownership(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path(organization_id): Path<String>,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let organization_id = uuid(&organization_id)?;
+    let body = Body::parse(&body, &["target_membership_id"])?;
+    let target_id = body
+        .uuid("target_membership_id")?
+        .ok_or(TenancyError::InvalidRequest)?;
+    let mut tx = begin(&state, &session).await?;
+    let (_, acting) = tx.member(organization_id, true, false).await?;
+    tx.membership(organization_id, target_id, false)
+        .await?
+        .ok_or_else(|| not_found("membership not found"))?;
+    if !organization_role_permissions(&acting.role).contains(ORGANIZATION_OWNER_TRANSFER) {
+        tx.audit(
+            organization_id,
+            "organization.owner.transfer",
+            "organization",
+            None,
+            "denied",
+            json!({ "reason": "insufficient_owner_authority" }),
+        )
+        .await?;
+        tx.commit().await?;
+        return Ok(forbidden("Owner authority required").into_response());
+    }
+    let mut previous = tx
+        .own_membership_for_update(organization_id)
+        .await?
+        .filter(|member| member.status == "active" && member.role == "owner")
+        .ok_or_else(|| forbidden("active Owner required"))?;
+    let mut promoted = tx
+        .membership(organization_id, target_id, true)
+        .await?
+        .filter(|member| member.status == "active")
+        .ok_or_else(|| not_found("active target membership required"))?;
+    tx.set_membership(organization_id, promoted.id, "owner", "active")
+        .await?;
+    promoted.role = "owner".to_owned();
+    if previous.id != promoted.id {
+        tx.set_membership(organization_id, previous.id, "admin", "active")
+            .await?;
+        previous.role = "admin".to_owned();
+    }
+    tx.audit(
+        organization_id,
+        "organization.owner.transfer",
+        "organization_membership",
+        Some(promoted.id),
+        "success",
+        json!({ "previous_owner_membership_id": previous.id.to_string() }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "previous_owner": previous, "new_owner": promoted })).into_response())
+}
+
 #[derive(Deserialize)]
 struct ScopeQuery {
     workspace_id: Option<String>,
@@ -902,6 +970,19 @@ async fn update_project(
 #[derive(Deserialize)]
 struct AuditQuery {
     limit: Option<String>,
+}
+
+async fn list_resource_grants(
+    State(state): State<AppState>,
+    session: HumanSession,
+    Path(organization_id): Path<String>,
+) -> Result<Json<Vec<Value>>> {
+    let organization_id = uuid(&organization_id)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.member(organization_id, false, false).await?;
+    let grants = tx.list_grants(organization_id).await?;
+    tx.commit().await?;
+    Ok(Json(grants))
 }
 
 async fn list_audit_events(

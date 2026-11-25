@@ -19,6 +19,7 @@ pub const ORGANIZATION_LIFECYCLE: &str = "organization.lifecycle";
 pub const ORGANIZATION_OWNER_TRANSFER: &str = "organization.owner.transfer";
 pub const ORGANIZATION_DELETE: &str = "organization.delete";
 pub const AUDIT_READ: &str = "audit.read";
+pub const AUTHORIZATION_MANAGE_GRANTS: &str = "authorization.manage_grants";
 pub const WORKSPACE_READ: &str = "workspace.read";
 pub const WORKSPACE_MANAGE: &str = "workspace.manage";
 pub const PROJECT_READ: &str = "project.read";
@@ -36,7 +37,7 @@ const ALL_PERMISSIONS: [&str; 19] = [
     ORGANIZATION_LIFECYCLE,
     ORGANIZATION_OWNER_TRANSFER,
     ORGANIZATION_DELETE,
-    "authorization.manage_grants",
+    AUTHORIZATION_MANAGE_GRANTS,
     "invitation.manage",
     "service_principal.manage",
     AUDIT_READ,
@@ -894,6 +895,48 @@ impl TenantTx {
         .await
         .map_err(db_error)?;
         Ok(())
+    }
+
+    /// List all grants, including revoked ones, for the authorized tenant.
+    pub async fn list_grants(&mut self, organization_id: Uuid) -> Result<Vec<Value>, AppError> {
+        self.require(organization_id, None, None, AUTHORIZATION_MANAGE_GRANTS)
+            .await?;
+        let rows = sqlx::query(
+            "SELECT id, organization_id, subject_kind, membership_id, service_principal_id,
+                    scope_kind, workspace_id, project_id, role, created_at, revoked_at
+             FROM org.resource_grants
+             WHERE organization_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(organization_id)
+        .fetch_all(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        rows.iter()
+            .map(|row| -> Result<Value, sqlx::Error> {
+                let subject_kind: String = row.try_get("subject_kind")?;
+                let subject_id: Option<Uuid> = if subject_kind == "membership" {
+                    row.try_get("membership_id")?
+                } else {
+                    row.try_get("service_principal_id")?
+                };
+                let created_at: DateTime<Utc> = row.try_get("created_at")?;
+                let revoked_at: Option<DateTime<Utc>> = row.try_get("revoked_at")?;
+                Ok(json!({
+                    "id": row.try_get::<Uuid, _>("id")?,
+                    "organization_id": row.try_get::<Uuid, _>("organization_id")?,
+                    "subject_kind": subject_kind,
+                    "subject_id": subject_id,
+                    "scope_kind": row.try_get::<String, _>("scope_kind")?,
+                    "workspace_id": row.try_get::<Option<Uuid>, _>("workspace_id")?,
+                    "project_id": row.try_get::<Option<Uuid>, _>("project_id")?,
+                    "role": row.try_get::<String, _>("role")?,
+                    "created_at": python_timestamp(created_at),
+                    "revoked_at": revoked_at.map(python_timestamp),
+                }))
+            })
+            .collect::<Result<_, _>>()
+            .map_err(db_error)
     }
 
     pub async fn list_audit(
