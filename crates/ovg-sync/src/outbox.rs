@@ -73,6 +73,10 @@ impl StreamCursor {
     }
 
     pub fn decode(token: &str) -> Result<Self, AppError> {
+        // Two u64 decimal values, one separator, and unpadded base64.
+        if token.is_empty() || token.len() > 55 {
+            return Err(AppError::invalid_cursor());
+        }
         let bytes = URL_SAFE_NO_PAD
             .decode(token)
             .map_err(|_| AppError::invalid_cursor())?;
@@ -84,7 +88,11 @@ impl StreamCursor {
         let sequence = seq_s
             .parse::<u64>()
             .map_err(|_| AppError::invalid_cursor())?;
-        Ok(Self { epoch, sequence })
+        let cursor = Self { epoch, sequence };
+        if cursor.encode() != token {
+            return Err(AppError::invalid_cursor());
+        }
+        Ok(cursor)
     }
 }
 
@@ -120,7 +128,7 @@ pub struct InMemoryOutboxLog {
     next_sequence: u64,
     oldest_retained_sequence: Option<u64>,
     events: VecDeque<OutboxEvent>,
-    idempotency_index: HashMap<(Uuid, String), u64>,
+    idempotency_index: HashMap<(Uuid, Uuid, String), u64>,
 }
 
 impl InMemoryOutboxLog {
@@ -141,7 +149,7 @@ impl InMemoryOutboxLog {
         StreamCursor::new(self.epoch, self.next_sequence.saturating_sub(1))
     }
 
-    /// Append an event (deduplicating by `(project_id, idempotency_key)` when provided).
+    /// Append an event (deduplicating by tenant, project, and key within the retained window).
     #[allow(clippy::too_many_arguments)]
     pub fn append(
         &mut self,
@@ -157,7 +165,7 @@ impl InMemoryOutboxLog {
         if let Some(ref key) = idempotency_key {
             if let Some(&existing_seq) = self
                 .idempotency_index
-                .get(&(project_id, key.as_str().to_string()))
+                .get(&(organization_id, project_id, key.as_str().to_string()))
             {
                 if let Some(existing) = self.events.iter().find(|e| e.sequence == existing_seq) {
                     return existing.clone();
@@ -182,13 +190,23 @@ impl InMemoryOutboxLog {
         };
 
         if let Some(key) = idempotency_key {
-            self.idempotency_index
-                .insert((project_id, key.as_str().to_string()), seq);
+            self.idempotency_index.insert(
+                (organization_id, project_id, key.as_str().to_string()),
+                seq,
+            );
         }
 
         self.events.push_back(event.clone());
         while self.events.len() > self.max_retained {
-            self.events.pop_front();
+            if let Some(evicted) = self.events.pop_front() {
+                if let Some(key) = evicted.idempotency_key {
+                    self.idempotency_index.remove(&(
+                        evicted.organization_id,
+                        evicted.project_id,
+                        key.as_str().to_string(),
+                    ));
+                }
+            }
         }
         self.oldest_retained_sequence = self.events.front().map(|e| e.sequence);
         event
@@ -232,6 +250,7 @@ impl InMemoryOutboxLog {
                     && e.organization_id == request.organization_id
                     && e.project_id == request.project_id
             })
+            .take(limit + 1)
             .cloned()
             .collect();
 
@@ -261,6 +280,47 @@ mod tests {
             StreamCursor::decode("!!!not-valid").unwrap_err().code(),
             "INVALID_CURSOR"
         );
+    }
+
+    #[test]
+    fn cursor_rejects_oversized_and_noncanonical_tokens() {
+        for raw in ["01:2", "1:+2", "1:02"] {
+            assert!(StreamCursor::decode(&URL_SAFE_NO_PAD.encode(raw)).is_err());
+        }
+        assert!(StreamCursor::decode(&"A".repeat(56)).is_err());
+        let max = StreamCursor::new(u64::MAX, u64::MAX);
+        assert_eq!(StreamCursor::decode(&max.encode()).unwrap(), max);
+    }
+
+    #[test]
+    fn idempotency_is_tenant_scoped_and_index_is_bounded() {
+        let org_a = Uuid::new_v4();
+        let org_b = Uuid::new_v4();
+        let project = Uuid::new_v4();
+        let mut log = InMemoryOutboxLog::new(1, 2);
+        let key = IdempotencyKey::parse("shared-key").unwrap();
+        let mut append = |org, key| {
+            log.append(
+                org,
+                project,
+                "feature",
+                "f1",
+                RevisionId(1),
+                "feature.updated",
+                json!({}),
+                Some(key),
+            )
+        };
+        let a = append(org_a, key.clone());
+        let b = append(org_b, key.clone());
+        assert_ne!(a.event_id, b.event_id);
+        assert_eq!(b.organization_id, org_b);
+        assert_eq!(append(org_a, key).event_id, a.event_id);
+        for i in 0..10 {
+            append(org_a, IdempotencyKey::parse(&format!("op-{i}")).unwrap());
+        }
+        assert_eq!(log.events.len(), 2);
+        assert_eq!(log.idempotency_index.len(), 2);
     }
 
     #[test]
