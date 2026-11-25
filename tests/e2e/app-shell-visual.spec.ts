@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { visualLaunchOptions } from "./fixtures/visual-launch-options";
+import { visualLaunchOptions, visualScreenshotOptions } from "./fixtures/visual-launch-options";
 
 import { signInOwner } from "./frontend-auth-helpers";
 
@@ -14,7 +14,7 @@ test("landing visual baseline", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveScreenshot("landing.png", {
     fullPage: true,
-    animations: "disabled"
+    ...visualScreenshotOptions
   });
 });
 
@@ -29,7 +29,7 @@ test("login visual baseline", async ({ page }) => {
   await expect(signIn).toHaveCSS("background-color", "rgb(21, 101, 169)");
   await expect(page).toHaveScreenshot("login.png", {
     fullPage: true,
-    animations: "disabled"
+    ...visualScreenshotOptions
   });
 });
 
@@ -90,12 +90,12 @@ test("authenticated dashboard and account menu visual baselines", async ({
 
   await expect(page).toHaveScreenshot("dashboard.png", {
     fullPage: true,
-    animations: "disabled"
+    ...visualScreenshotOptions
   });
 
   await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
   await expect(page).toHaveScreenshot("account-menu.png", {
     fullPage: true,
-    animations: "disabled"
+    ...visualScreenshotOptions
   });
 });

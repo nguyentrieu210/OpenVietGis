@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { visualLaunchOptions } from "./fixtures/visual-launch-options";
+import { visualLaunchOptions, visualScreenshotOptions } from "./fixtures/visual-launch-options";
 
 import {
   createMapProject,
@@ -38,7 +38,7 @@ test("empty GIS workspace visual baseline", async ({ page }) => {
   await expect(page.getByTestId("map-workspace")).toHaveScreenshot(
     "map-workspace-empty.png",
     {
-      animations: "disabled",
+      ...visualScreenshotOptions,
       mask: [
         page.getByTestId("map-canvas"),
         page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
@@ -70,7 +70,7 @@ test("populated GIS workspace visual baseline", async ({ page }) => {
   await expect(page.getByTestId("map-workspace")).toHaveScreenshot(
     "map-workspace-populated.png",
     {
-      animations: "disabled",
+      ...visualScreenshotOptions,
       mask: [
         page.getByTestId("map-canvas"),
         page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
@@ -99,7 +99,7 @@ test("technical drawer closed and open visual baselines", async ({ page }) => {
   await expect(workspace).toHaveScreenshot(
     "map-workspace-technical-closed.png",
     {
-      animations: "disabled",
+      ...visualScreenshotOptions,
       mask: commonMask
     }
   );
@@ -113,7 +113,7 @@ test("technical drawer closed and open visual baselines", async ({ page }) => {
   await expect(workspace).toHaveScreenshot(
     "map-workspace-technical-open.png",
     {
-      animations: "disabled",
+      ...visualScreenshotOptions,
       mask: [
         ...commonMask,
         ...await drawer.locator("code").all()
@@ -136,7 +136,7 @@ test("dirty saved and conflict save-state visual baselines", async ({ page }) =>
   const workspace = page.getByTestId("map-workspace");
   const indicator = page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ });
   const screenshotOptions = {
-    animations: "disabled" as const,
+    ...visualScreenshotOptions,
     mask: [
       page.getByTestId("map-canvas"),
       page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })

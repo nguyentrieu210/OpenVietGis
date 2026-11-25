@@ -4,7 +4,7 @@ Check off each task with reproducible evidence. See the [baseline and contract a
 ## G0 — Baseline and CI (P0)
 - [x] T001 Pin exact main/live SHA, artifact checksums, API/QGIS versions and test profile; record evidence.
 - [x] T002 Trace R031–R047 open requirements to existing implementation/evidence; identify duplicates, gaps and deferred scope.
-- [ ] T003 Inspect latest exact-main CI and seven historical visual failures; review actual diffs; fix regressions or approve intentional baselines.
+- [x] T003 Inspect latest exact-main CI and seven historical visual failures; review actual diffs; fix regressions or approve intentional baselines.
 - [x] T004 Establish reproducible synthetic fixtures and isolated PostGIS/OIDC profile, hardware/network budgets and latency harness.
 - [x] T005 Record existing API/cache/cursor/module contract matrix, permissions and CRS boundaries; G0 review.
 

@@ -1,7 +1,7 @@
 # Spec 059 — Core, Realtime & Reference Plugin Acceptance
 
 **Branch:** `spec/059-core-realtime-acceptance` | **Created:** 2026-11-25
-**Status:** Implementation in progress. 26 of 34 tasks have supporting evidence. Release acceptance remains open.
+**Status:** Implementation in progress. 27 of 34 tasks have supporting evidence. Release acceptance remains open.
 **Initial baseline:** `5cdb16ccb567121095acd691c5de6481e4963ded` (main and live at 18:44 ICT).
 **Synchronized main:** `4e721a9f04ea933324da1d5ff4f433e40f75dbb9` (verified on main and live during the implementation run).
 **Parent:** R031 engine-first, R032–R047 convergence; roadmap R003/R004/R005/R006/R007/R011/R013/R014/R015. Integrates acceptance of R027/R029 and R039/R040; respects R051/053 house-numbering scope.
