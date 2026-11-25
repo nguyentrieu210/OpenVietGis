@@ -392,8 +392,7 @@ def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: Write
         r[0]
         for r in session.execute(
             text(
-                f"SELECT user_id FROM {T}chat_room_members WHERE organization_id=:o "
-                "AND room_id=:r"
+                f"SELECT user_id FROM {T}chat_room_members WHERE organization_id=:o AND room_id=:r"
             ),
             args,
         )
@@ -493,8 +492,7 @@ def post_message(
     if body.reply_to_id is not None and (
         session.execute(
             text(
-                f"SELECT 1 FROM {T}chat_messages WHERE organization_id=:o AND room_id=:r "
-                "AND id=:q"
+                f"SELECT 1 FROM {T}chat_messages WHERE organization_id=:o AND room_id=:r AND id=:q"
             ),
             args | {"q": body.reply_to_id},
         ).first()
@@ -552,9 +550,7 @@ def post_message(
         text(f"UPDATE {T}chat_rooms SET last_activity_at=now() WHERE organization_id=:o AND id=:r"),
         args,
     )
-    row = (
-        session.execute(text(f"{MESSAGE_SQL} AND m.id=:id"), args | {"id": mid}).mappings().one()
-    )
+    row = session.execute(text(f"{MESSAGE_SQL} AND m.id=:id"), args | {"id": mid}).mappings().one()
     return shape(session, organization_id, me, [row])[0]
 
 
@@ -843,8 +839,7 @@ def answer(session: Session, ctx, request_id: UUID, accept: bool) -> dict:
     me = ctx.actor.actor_id
     sender = session.execute(
         text(
-            f"DELETE FROM {T}chat_contact_requests WHERE id=:id AND to_user=:me "
-            "RETURNING from_user"
+            f"DELETE FROM {T}chat_contact_requests WHERE id=:id AND to_user=:me RETURNING from_user"
         ),
         {"id": request_id, "me": me},
     ).scalar_one_or_none()

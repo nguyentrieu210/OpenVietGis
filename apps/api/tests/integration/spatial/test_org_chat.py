@@ -151,9 +151,12 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         assert gid not in {r["id"] for r in check(dao.get(base + "/rooms"))["items"]}
         mention_outsider = {"body": "x", "mention_ids": [str(third)]}
         assert member.post(f"{base}/rooms/{gid}/messages", json=mention_outsider).status_code == 422
-        assert member.post(
-            f"{base}/rooms/{gid}/messages", json={"body": "x", "reply_to_id": first["id"]}
-        ).status_code == 422
+        assert (
+            member.post(
+                f"{base}/rooms/{gid}/messages", json={"body": "x", "reply_to_id": first["id"]}
+            ).status_code
+            == 422
+        )
         check(member.post(f"{base}/rooms/{gid}/members", json={"user_ids": [str(third)]}))
         assert check(dao.get(f"{base}/rooms/{gid}/messages"))["items"] == []
         assert member.patch(f"{base}/rooms/{gid}", json={"name": "Đổi"}).status_code == 403
@@ -172,12 +175,18 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         assert d1["id"] == d2["id"] and d1["kind"] == "direct"
         assert d1["name"] == "Nguyễn Thị Đào" and d1["peer"]["id"] == str(third)
         assert d2["peer"]["display_name"] == "Owner" and d2["peer"]["has_avatar"] is False
-        assert owner.post(
-            base + "/rooms/direct", json={"user_id": str(world.owner_user_id)}
-        ).status_code == 404
-        assert owner.post(
-            base + "/rooms/direct", json={"user_id": str(other.owner_user_id)}
-        ).status_code == 404
+        assert (
+            owner.post(
+                base + "/rooms/direct", json={"user_id": str(world.owner_user_id)}
+            ).status_code
+            == 404
+        )
+        assert (
+            owner.post(
+                base + "/rooms/direct", json={"user_id": str(other.owner_user_id)}
+            ).status_code
+            == 404
+        )
         assert member.get(f"{base}/rooms/{d1['id']}/messages").status_code == 404
 
         # People search: accent and case insensitive, excludes self and other orgs.
@@ -192,9 +201,12 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         assert stranger.get(f"{base}/people/{third}/avatar").status_code in (403, 404)
 
         # Contacts: request, decline, request again, accept, auto-accept, remove.
-        assert owner.post(
-            base + "/contacts/requests", json={"user_id": str(other.owner_user_id)}
-        ).status_code == 404
+        assert (
+            owner.post(
+                base + "/contacts/requests", json={"user_id": str(other.owner_user_id)}
+            ).status_code
+            == 404
+        )
         req = check(owner.post(base + "/contacts/requests", json={"user_id": str(third)}), 201)
         again = check(owner.post(base + "/contacts/requests", json={"user_id": str(third)}), 201)
         assert req["id"] == again["id"] and req["status"] == "pending"
