@@ -8,7 +8,7 @@ use futures_util::stream::Stream;
 use ovg_storage::transfers::TransferError;
 use sha2::{Digest, Sha256};
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use super::codec::hex;
@@ -117,7 +117,8 @@ impl Store {
                 "Stored immutable object failed integrity check.",
             ));
         }
-        let file = File::open(&path).await.map_err(|_| missing())?;
+        // Stream the verified file descriptor, not a second path lookup.
+        file.seek(std::io::SeekFrom::Start(0)).await.map_err(io)?;
         Ok((file, length))
     }
 
@@ -284,6 +285,26 @@ mod tests {
         assert!(!valid_key("/abs"));
         assert!(!valid_key("Upper"));
         assert!(!valid_key(""));
+    }
+
+    #[tokio::test]
+    async fn verified_object_is_rewound_and_rejects_wrong_digest() {
+        let root = std::env::temp_dir().join(format!("ovg-transfer-{}", Uuid::new_v4()));
+        let store = Store { root: root.clone() };
+        let payload = b"verified transfer content";
+        let (digest, _) = store.put("object.bin", payload).await.unwrap();
+        let (mut file, length) = store.open_verified("object.bin", &digest).await.unwrap();
+        let mut actual = Vec::new();
+        file.read_to_end(&mut actual).await.unwrap();
+        assert_eq!(length, payload.len() as u64);
+        assert_eq!(actual.as_slice(), payload);
+        let wrong_digest = "0".repeat(64);
+        assert!(matches!(
+            store.open_verified("object.bin", &wrong_digest).await,
+            Err(TransferError::Coded { status: 410, .. })
+        ));
+        drop(file);
+        tokio::fs::remove_dir_all(root).await.unwrap();
     }
 
     #[test]
