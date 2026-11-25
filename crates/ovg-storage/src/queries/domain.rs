@@ -239,7 +239,11 @@ fn compare_decimal(a: &str, b: &str) -> Ordering {
     let (an, ai, af) = split(a);
     let (bn, bi, bf) = split(b);
     if an != bn {
-        return if an { Ordering::Less } else { Ordering::Greater };
+        return if an {
+            Ordering::Less
+        } else {
+            Ordering::Greater
+        };
     }
     let width = af.len().max(bf.len());
     let magnitude = ai
@@ -284,7 +288,9 @@ fn parse_timestamp(value: &str) -> Result<DateTime<Utc>, ()> {
         if !(1..=6).contains(&len) {
             return Err(());
         }
-        micro = format!("{:0<6}", &fraction[..len]).parse().map_err(|_| ())?;
+        micro = format!("{:0<6}", &fraction[..len])
+            .parse()
+            .map_err(|_| ())?;
         rest = &fraction[len..];
     }
     let offset = if rest == "Z" {
@@ -539,7 +545,10 @@ pub fn compile_sort(
 }
 
 pub(crate) fn valid_revision_token(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 pub type Position = (f64, f64);
@@ -720,8 +729,8 @@ pub(crate) fn validate_ready(
     if parts.iter().map(|p| p.len()).sum::<usize>() > MAX_POSITIONS {
         return Err(());
     }
-    let mercator = ovg_core::crs::WEB_MERCATOR_MAX_COORDINATE_METRE
-        + if output_roundoff { 1e-6 } else { 0.0 };
+    let mercator =
+        ovg_core::crs::WEB_MERCATOR_MAX_COORDINATE_METRE + if output_roundoff { 1e-6 } else { 0.0 };
     let geographic = matches!(srid, 4326 | 4756);
     for part in parts.iter().copied() {
         for &(x, y) in part {
@@ -957,11 +966,26 @@ mod tests {
 
     #[test]
     fn rejects_invalid_typed_values_and_bad_ast() {
-        assert_eq!(code(json!({"field": "rank", "op": "eq", "value": 1.5})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "rank", "op": "eq", "value": true})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "rank", "op": "eq", "value": null})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "rank", "op": "eq", "value": 2_147_483_648_i64})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "measure", "op": "eq", "value": 1.1})), "INVALID_FILTER");
+        assert_eq!(
+            code(json!({"field": "rank", "op": "eq", "value": 1.5})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "eq", "value": true})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "eq", "value": null})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "eq", "value": 2_147_483_648_i64})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "measure", "op": "eq", "value": 1.1})),
+            "INVALID_FILTER"
+        );
         assert_eq!(
             code(json!({"field": "measure", "op": "eq", "value": "1.0000000000000000001"})),
             "INVALID_FILTER"
@@ -970,14 +994,38 @@ mod tests {
             code(json!({"field": "observed", "op": "eq", "value": "2026-11-21T00:00:00-00:00"})),
             "INVALID_FILTER"
         );
-        assert_eq!(code(json!({"field": "nope", "op": "eq", "value": 1})), "UNKNOWN_QUERY_FIELD");
-        assert_eq!(code(json!({"field": "rank", "op": "contains", "value": "1"})), "INVALID_OPERATOR");
-        assert_eq!(code(json!({"field": "active", "op": "gt", "value": true})), "INVALID_OPERATOR");
-        assert_eq!(code(json!({"field": "rank", "op": "like", "value": 1})), "INVALID_OPERATOR");
-        assert_eq!(code(json!({"field": "rank", "op": "between", "value": [3, 1]})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "rank", "op": "eq", "value": 1, "x": 1})), "INVALID_FILTER");
-        assert_eq!(code(json!({"op": "and", "conditions": []})), "INVALID_FILTER");
-        assert_eq!(code(json!({"field": "name", "op": "is_null", "value": "yes"})), "INVALID_FILTER");
+        assert_eq!(
+            code(json!({"field": "nope", "op": "eq", "value": 1})),
+            "UNKNOWN_QUERY_FIELD"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "contains", "value": "1"})),
+            "INVALID_OPERATOR"
+        );
+        assert_eq!(
+            code(json!({"field": "active", "op": "gt", "value": true})),
+            "INVALID_OPERATOR"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "like", "value": 1})),
+            "INVALID_OPERATOR"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "between", "value": [3, 1]})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "rank", "op": "eq", "value": 1, "x": 1})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"op": "and", "conditions": []})),
+            "INVALID_FILTER"
+        );
+        assert_eq!(
+            code(json!({"field": "name", "op": "is_null", "value": "yes"})),
+            "INVALID_FILTER"
+        );
         let mut deep = json!({"field": "rank", "op": "eq", "value": 1});
         for _ in 0..7 {
             deep = json!({"op": "not", "condition": deep});
@@ -986,12 +1034,18 @@ mod tests {
         let wide: Vec<_> = (0..101)
             .map(|_| json!({"field": "rank", "op": "eq", "value": 1}))
             .collect();
-        assert_eq!(code(json!({"op": "or", "conditions": wide})), "INVALID_FILTER");
+        assert_eq!(
+            code(json!({"op": "or", "conditions": wide})),
+            "INVALID_FILTER"
+        );
         let values: Vec<_> = (0..100).collect();
         let many: Vec<_> = (0..11)
             .map(|_| json!({"field": "rank", "op": "in", "value": values}))
             .collect();
-        assert_eq!(code(json!({"op": "or", "conditions": many})), "QUERY_TOO_COMPLEX");
+        assert_eq!(
+            code(json!({"op": "or", "conditions": many})),
+            "QUERY_TOO_COMPLEX"
+        );
     }
 
     #[test]
@@ -1000,7 +1054,10 @@ mod tests {
         assert_eq!(canonical_decimal("-0.000").unwrap(), "0");
         assert!(canonical_decimal("1.").is_err() && canonical_decimal(".5").is_err());
         assert_eq!(compare_decimal("-2", "-10"), Ordering::Greater);
-        assert_eq!(compare_decimal("1.000000000000000002", "1.000000000000000001"), Ordering::Greater);
+        assert_eq!(
+            compare_decimal("1.000000000000000002", "1.000000000000000001"),
+            Ordering::Greater
+        );
         let t = parse_timestamp("2026-11-21T07:00:00+07:00").unwrap();
         assert_eq!(timestamp_string(t), "2026-11-21T00:00:00Z");
         let t = parse_timestamp("2026-11-21T00:00:00.12Z").unwrap();
@@ -1042,10 +1099,16 @@ mod tests {
         assert_eq!(code(outside, json!(4326)), "INVALID_SPATIAL_FILTER");
         let big: Vec<_> = (0..2049).map(|i| json!([f64::from(i) * 1e-6, 0])).collect();
         assert_eq!(
-            code(json!({"type": "Polygon", "coordinates": [big]}), json!(4326)),
+            code(
+                json!({"type": "Polygon", "coordinates": [big]}),
+                json!(4326)
+            ),
             "QUERY_TOO_COMPLEX"
         );
-        assert_eq!(code(json!({"type": "Point", "coordinates": [1, 2]}), json!(4326)), "INVALID_SPATIAL_FILTER");
+        assert_eq!(
+            code(json!({"type": "Point", "coordinates": [1, 2]}), json!(4326)),
+            "INVALID_SPATIAL_FILTER"
+        );
     }
 
     #[test]
@@ -1063,7 +1126,10 @@ mod tests {
             assert_eq!(python_float_repr(value), expected);
         }
         let mut out = String::new();
-        write_canonical(&json!({"b": [1, 2.5, null], "a": "Đất \"x\"\n😀\u{7f}"}), &mut out);
+        write_canonical(
+            &json!({"b": [1, 2.5, null], "a": "Đất \"x\"\n😀\u{7f}"}),
+            &mut out,
+        );
         assert_eq!(out, r#"{"a":"Đất \"x\"\n😀\u007f","b":[1,2.5,null]}"#);
     }
 }

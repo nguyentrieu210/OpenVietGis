@@ -15,7 +15,9 @@ pub mod domain;
 use std::fmt::Write;
 
 use chrono::{DateTime, Utc};
-use ovg_core::crs::{reference_transformation, FixtureRequirement, WEB_MERCATOR_MAX_COORDINATE_METRE};
+use ovg_core::crs::{
+    reference_transformation, FixtureRequirement, WEB_MERCATOR_MAX_COORDINATE_METRE,
+};
 use ovg_core::AppError;
 use serde_json::{json, Value};
 use sqlx::postgres::{PgArguments, PgRow};
@@ -83,7 +85,8 @@ fn bound(sql: &str, params: Vec<Param>) -> Query<'_, Postgres, PgArguments> {
 
 /// Database failures during a query never leak SQL; a timeout is distinguishable.
 fn unavailable(error: sqlx::Error) -> AppError {
-    let timeout = matches!(&error, sqlx::Error::Database(db) if db.code().as_deref() == Some("57014"));
+    let timeout =
+        matches!(&error, sqlx::Error::Database(db) if db.code().as_deref() == Some("57014"));
     tracing::warn!(%error, "query statement failed");
     AppError::service_unavailable(
         if timeout {
@@ -404,7 +407,8 @@ async fn checked_geometry(
             .filter(|edge| edge.fixture_requirement == FixtureRequirement::None)
             .ok_or_else(|| unsupported("no accepted query CRS transformation"))?;
         if matches!(srid, 4326 | 4756) {
-            let positions = validate_ready(geometry, None, srid, false).map_err(|()| invalid_source())?;
+            let positions =
+                validate_ready(geometry, None, srid, false).map_err(|()| invalid_source())?;
             if positions
                 .iter()
                 .any(|&(x, y)| !edge.geographic_bounds.contains(x, y, 0.0))
@@ -524,7 +528,11 @@ async fn spatial_clause(
         Some(_) => return Err(invalid_spatial("invalid reference feature identifier")),
     };
     scan(read, &reference, None).await?;
-    if feature_id.is_none() && reference.feature_count.is_none_or(|c| c > MAX_REFERENCE_FEATURES) {
+    if feature_id.is_none()
+        && reference
+            .feature_count
+            .is_none_or(|c| c > MAX_REFERENCE_FEATURES)
+    {
         return Err(too_complex("reference set exceeds feature limit"));
     }
     let rows = sqlx::query(
@@ -588,10 +596,16 @@ pub async fn execute_query(
     request: &QueryRequest,
 ) -> Result<Value, AppError> {
     if !(1..=MAX_QUERY_LIMIT).contains(&request.limit) {
-        return Err(AppError::validation("INVALID_LIMIT", "invalid query page size"));
+        return Err(AppError::validation(
+            "INVALID_LIMIT",
+            "invalid query page size",
+        ));
     }
     if !(0..=MAX_QUERY_OFFSET).contains(&request.offset) {
-        return Err(AppError::validation("INVALID_OFFSET", "invalid query offset"));
+        return Err(AppError::validation(
+            "INVALID_OFFSET",
+            "invalid query offset",
+        ));
     }
     if request.offset != 0 && request.expected_query_fingerprint.is_none() {
         return Err(AppError::conflict(
@@ -604,7 +618,11 @@ pub async fn execute_query(
         &request.expected_schema_revision,
         &request.expected_query_fingerprint,
     ];
-    if pins.into_iter().flatten().any(|token| !valid_revision_token(token)) {
+    if pins
+        .into_iter()
+        .flatten()
+        .any(|token| !valid_revision_token(token))
+    {
         return Err(AppError::validation(
             "INVALID_QUERY_PIN",
             "invalid query revision token",
@@ -635,7 +653,12 @@ pub async fn execute_query(
     let filter = request.attribute_filter.as_ref();
     let sort_field = request.sort_field.as_deref();
     compile_filter(filter, &source.fields, &mut Sql::default())?;
-    compile_sort(&source.fields, sort_field, &request.sort_direction, &mut Sql::default())?;
+    compile_sort(
+        &source.fields,
+        sort_field,
+        &request.sort_direction,
+        &mut Sql::default(),
+    )?;
     source.check_feature_limit()?;
     let spatial = spatial_clause(read, &source, request.spatial_filter.as_ref()).await?;
     let total = scan(read, &source, Some((filter, &spatial))).await?;
@@ -676,7 +699,12 @@ pub async fn execute_query(
     let crev = sql.bind(Param::Text(source.content_revision.clone()));
     let srev = sql.bind(Param::Text(source.schema_revision.clone()));
     let compiled = compile_filter(filter, &source.fields, &mut sql)?;
-    let sort = compile_sort(&source.fields, sort_field, &request.sort_direction, &mut sql)?;
+    let sort = compile_sort(
+        &source.fields,
+        sort_field,
+        &request.sort_direction,
+        &mut sql,
+    )?;
     let (cte, clause) = spatial.render(&mut sql);
     let limit = sql.bind(Param::Int(request.limit));
     let offset = sql.bind(Param::Int(request.offset));
@@ -791,7 +819,11 @@ async fn validate_definition(
 ) -> Result<(), AppError> {
     set_timeout(write).await?;
     let source = resolve(write, input.layer_id).await?;
-    compile_filter(input.attribute_filter.as_ref(), &source.fields, &mut Sql::default())?;
+    compile_filter(
+        input.attribute_filter.as_ref(),
+        &source.fields,
+        &mut Sql::default(),
+    )?;
     compile_sort(
         &source.fields,
         input.sort_field.as_deref(),
@@ -887,7 +919,10 @@ pub async fn list_saved_queries(
 }
 
 /// `DELETE .../saved-queries/{query_id}` (project.edit).
-pub async fn delete_saved_query(write: &mut ProjectRead<'_>, query_id: Uuid) -> Result<(), AppError> {
+pub async fn delete_saved_query(
+    write: &mut ProjectRead<'_>,
+    query_id: Uuid,
+) -> Result<(), AppError> {
     let deleted: Option<Uuid> = sqlx::query_scalar(
         "DELETE FROM queries.saved_queries
          WHERE organization_id = $1 AND project_id = $2 AND id = $3

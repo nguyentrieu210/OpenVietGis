@@ -211,7 +211,10 @@ impl<'a> ProjectRead<'a> {
         let (roles, permission) = if edit {
             ("'manager', 'editor', 'contributor'", "project.edit")
         } else {
-            ("'manager', 'editor', 'contributor', 'viewer'", "project.read")
+            (
+                "'manager', 'editor', 'contributor', 'viewer'",
+                "project.read",
+            )
         };
         let permission_sql = format!(
             "SELECT m.role IN ('owner', 'admin') OR EXISTS (
@@ -239,10 +242,15 @@ impl<'a> ProjectRead<'a> {
             .map_err(db_error)?
             .ok_or_else(|| AppError::not_found("organization not found"))?;
         if !allowed {
-            return Err(AppError::forbidden(format!("missing permission: {permission}")));
+            return Err(AppError::forbidden(format!(
+                "missing permission: {permission}"
+            )));
         }
         if edit && project_status != "active" {
-            return Err(AppError::conflict("PROJECT_NOT_WRITABLE", "The project is read-only."));
+            return Err(AppError::conflict(
+                "PROJECT_NOT_WRITABLE",
+                "The project is read-only.",
+            ));
         }
 
         sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")

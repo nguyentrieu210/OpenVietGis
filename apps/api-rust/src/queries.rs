@@ -297,7 +297,10 @@ mod tests {
     #[test]
     fn request_body_matches_pydantic_strictness() {
         let ok: ExecuteBody = parse(br#"{"attribute_filter": null, "limit": 5}"#).unwrap();
-        assert_eq!((ok.limit, ok.offset, ok.sort_direction.as_str()), (5, 0, "asc"));
+        assert_eq!(
+            (ok.limit, ok.offset, ok.sort_direction.as_str()),
+            (5, 0, "asc")
+        );
         for bad in [
             &br#"{"limit": 5.0}"#[..],
             br#"{"limit": true}"#,
@@ -315,10 +318,14 @@ mod tests {
 
     #[test]
     fn errors_use_fastapi_envelopes() {
-        let response = QueryError::Domain(AppError::validation("INVALID_FILTER", "bad")).into_response();
+        let response =
+            QueryError::Domain(AppError::validation("INVALID_FILTER", "bad")).into_response();
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let response = QueryError::Access(AppError::not_found("project not found")).into_response();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
-        assert_eq!(QueryError::Csrf.into_response().status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            QueryError::Csrf.into_response().status(),
+            StatusCode::FORBIDDEN
+        );
     }
 }

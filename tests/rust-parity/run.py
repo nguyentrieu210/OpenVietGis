@@ -549,6 +549,9 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 scoped layer hidden", layer_a_other, 404, token=surveyor)
     if include_features:
         compare_feature_reads(suite, f"{layer_a}/features", selected, a, b, surveyor)
+    from e04_queries import compare_queries
+
+    compare_queries(suite, difference, fixture, surveyor, baseline.DEFAULT_CSRF_SECRET)
     response = suite.oracle.delete(
         f"{root_a}/access/rules/{rule}", headers=admin_headers
     )
