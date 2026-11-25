@@ -482,7 +482,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
    {item("Phóng tới đối tượng",()=>{setSelected(mapMenu.key);setTimeout(()=>void cmd("ZS")?.run(""))})}
    {item("Mở bảng thuộc tính",()=>{setSelected(mapMenu.key);if(r)toolkit.setLayerId(r.layer.id);setTableScope("");setTable(true)})}
    {r?.geometry?.type==="Point"&&item("Di chuyển điểm",()=>{setSelected(mapMenu.key);setDraft({row:r,point:(r.geometry as {type:"Point";coordinates:Position}).coordinates.slice(0,2) as [number,number],operationId:"studio-"+crypto.randomUUID(),locked:false})},!r.layer.capabilities.some(c=>c.name==="edit"&&c.available&&c.actor_authorized))}
-   {...(canTask?[item(r?"Giao việc cho đối tượng này…":"Giao việc tại đây…",()=>newTask(r?{feature:{source_id:r.layer.source_id,feature_id:r.feature.feature_id,label:label(r)}}:{position:{longitude:mapMenu.lng,latitude:mapMenu.lat}}))]:[]),item("Sao chép tọa độ",()=>{void navigator.clipboard?.writeText(mapMenu.lng.toFixed(6)+", "+mapMenu.lat.toFixed(6));setNotice("Đã sao chép "+mapMenu.lng.toFixed(6)+", "+mapMenu.lat.toFixed(6))})}
+   {canTask&&item(r?"Giao việc cho đối tượng này…":"Giao việc tại đây…",()=>newTask(r?{feature:{source_id:r.layer.source_id,feature_id:r.feature.feature_id,label:label(r)}}:{position:{longitude:mapMenu.lng,latitude:mapMenu.lat}}))}{item("Sao chép tọa độ",()=>{void navigator.clipboard?.writeText(mapMenu.lng.toFixed(6)+", "+mapMenu.lat.toFixed(6));setNotice("Đã sao chép "+mapMenu.lng.toFixed(6)+", "+mapMenu.lat.toFixed(6))})}
    {item("Xóa đối tượng…",()=>{setSelected(mapMenu.key);setTimeout(()=>void cmd("ERASE")?.run(""))},!r||!r.layer.capabilities.some(c=>c.name==="edit"&&c.available&&c.actor_authorized),true)}
   </div>})()}</SpatialWorkspace>;
 }
