@@ -32,6 +32,18 @@ impl HumanSession {
     pub(crate) fn session_id(&self) -> Uuid {
         self.verified.id()
     }
+
+    /// Python `verify_request_csrf` for a browser session (constant-time compare).
+    pub(crate) fn csrf_matches(&self, candidate: &str, secret: &str) -> bool {
+        make_csrf_token(&self.token, secret).is_ok_and(|expected| {
+            expected.len() == candidate.len()
+                && expected
+                    .bytes()
+                    .zip(candidate.bytes())
+                    .fold(0, |acc, (a, b)| acc | (a ^ b))
+                    == 0
+        })
+    }
 }
 
 pub(crate) enum IdentityError {

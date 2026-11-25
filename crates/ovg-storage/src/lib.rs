@@ -1,6 +1,7 @@
 //! PostgreSQL/PostGIS pool and fail-closed tenant RLS transaction primitives.
 
 pub mod catalog;
+pub mod editing;
 pub mod identity;
 pub mod pool;
 pub mod rls;

@@ -2,6 +2,7 @@
 
 pub(crate) mod catalog;
 pub mod config;
+pub(crate) mod editing;
 pub mod error;
 pub(crate) mod identity;
 pub mod metrics;
