@@ -189,3 +189,16 @@ creator-only visibility, and online layer/source active-ready revalidation.
 Revoke is idempotent via `COALESCE(revoked_at, now)`. Differential parity on
 isolated real PostGIS passed list/foreign-tenant/revoke/idempotency/missing/CSRF
 cases.
+
+### E09 raster catalog read side
+
+Commit: latest E09 checkpoint on `064-rust-native-wave1`.
+
+Rust now owns `GET /raster/layers` using the canonical RLS-protected raster
+catalog. The Python wire merge order is preserved exactly: metadata may override
+`id` and `name`, while canonical `byte_size` and `created_at` win after
+metadata unpacking. Differential parity on isolated real PostGIS passed:
+
+- raster list order and wire shape
+- metadata key-collision precedence
+- foreign-tenant denial
