@@ -82,3 +82,54 @@
 .qgis-studio .team-inherit{color:var(--ovg-muted);font-style:italic}
 .qgis-studio .team-scope-note{font-size:11.5px;color:var(--ovg-muted);background:transparent!important;border:0!important;padding:0!important}
 .qgis-studio .lp-saved-styles{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--ovg-line-soft)}.qgis-studio .lp-saved-styles label{flex:1;min-width:160px;display:grid;gap:3px}
+
+/* Catalog manager */
+.qgis-studio .cat-mgr{display:grid;gap:8px}.qgis-studio .cat-bar{display:flex;gap:6px}.qgis-studio .cat-bar input{flex:1}
+.qgis-studio .cat-mgr h3{display:flex;align-items:center;gap:6px;margin:6px 0 0}.qgis-studio .cat-mgr h3 small{font-weight:400;color:var(--ovg-muted)}
+.qgis-studio .cat-scroll{max-height:34vh;overflow:auto;border:1px solid var(--ovg-line);background:var(--ovg-surface)}
+.qgis-studio .cat-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.qgis-studio .cat-table th{position:sticky;top:0;background:var(--ovg-header);text-align:left;font-weight:600;padding:5px 8px;border-bottom:1px solid var(--ovg-line);white-space:nowrap}
+.qgis-studio .cat-table td{padding:4px 8px;border-bottom:1px solid var(--ovg-line-soft);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .cat-table tr:hover td{background:#f4f8fc}.qgis-studio .cat-table .num{text-align:right}.qgis-studio .cat-table .act{text-align:right;white-space:nowrap}
+.qgis-studio .cat-table .act button{min-height:24px!important;padding:1px 8px!important;margin-left:4px;display:inline-block!important}
+.qgis-studio .cat-table .empty{color:var(--ovg-muted);text-align:center;padding:14px}
+.qgis-studio .cat-state{font-size:11px;padding:1px 6px;border-radius:8px}.qgis-studio .cat-state.ok{background:#e3f3ea;color:var(--ovg-ok)}.qgis-studio .cat-state.warn{background:#fdf0de;color:var(--ovg-warn)}
+.qgis-studio .cat-ok{color:var(--ovg-ok);margin:0}.qgis-studio .cat-note{font-size:11.5px;color:var(--ovg-muted);margin:0}
+
+/* Header tools (Bố cục · Plugin · AI Copilot) on the dark page header */
+#ovg-workspace-topbar{display:flex;align-items:center}
+.ovg-header-tools{display:flex;align-items:center;gap:6px;margin-left:8px}
+.ovg-header-tools .plugin-tool,.ovg-header-tools .dock-menu>button{min-height:30px;padding:4px 10px;border-radius:4px;border:1px solid #ffffff33;background:#ffffff14;color:#eef4f8;font-size:12px;font-weight:600}
+.ovg-header-tools .plugin-tool:hover,.ovg-header-tools .dock-menu>button:hover{background:#ffffff26}
+.ovg-header-tools .ovg-ai-copilot [data-ai=toggle]{min-height:30px;padding:4px 12px;border-radius:4px;font-size:12px}
+.qgis-studio .qgis-plugin-toolbar:empty{display:none}
+/* Tabs used by rebuilt tools */
+.qgis-studio .tool-tabs{display:flex;border-bottom:1px solid var(--ovg-line);margin:-12px -12px 10px;background:var(--ovg-surface)}
+.qgis-studio .tool-tabs button{flex:0 0 auto!important;min-height:32px;margin:0!important;padding:4px 14px!important;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;color:var(--ovg-muted)}
+.qgis-studio .tool-tabs button.active{color:var(--ovg-primary);border-bottom-color:var(--ovg-primary)!important;font-weight:600}
+.qgis-studio .tool-form{display:grid;gap:6px;max-width:560px}
+.qgis-studio .form-row{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:8px}.qgis-studio .form-row small{color:var(--ovg-muted);font-size:11px}
+.qgis-studio .tool-result{display:block;padding:6px 10px;background:var(--ovg-primary-soft);border:1px solid #b9cfe4;border-radius:3px;font-family:ui-monospace,monospace;font-size:12.5px}
+.qgis-studio .tool-buttons{display:flex;justify-content:flex-end;gap:6px}
+/* Empty map state: flat note, not a card */
+.qgis-studio .live-map-empty{border-radius:4px;box-shadow:0 4px 16px #0f1b2426;border:1px solid var(--ovg-line);padding:16px 20px;max-width:320px}
+.qgis-studio .live-map-empty>span{color:var(--ovg-primary);font-size:20px}
+.qgis-studio .live-map-empty h3{font-size:13.5px;margin:6px 0 2px}.qgis-studio .live-map-empty p{font-size:12px;color:var(--ovg-muted);margin:0 0 10px}
+.qgis-studio .live-map-empty button{min-height:30px;padding:4px 14px;border-radius:3px;background:var(--ovg-primary);border:1px solid var(--ovg-primary);color:#fff;font-size:12.5px;font-weight:600}
+
+/* Legacy tool pages shown inside the tool window: same shell, palette and density */
+.qgis-studio .core-workbench-body .ovg-toolbar-compact,.qgis-studio .core-workbench-body .ovg-eyebrow,.qgis-studio .core-workbench-body .ovg-skip-link{display:none}
+.qgis-studio .core-workbench-body :is(.ovg-suite,.ovg-suite-body){padding:0;margin:0;background:transparent;max-width:none}
+.qgis-studio .core-workbench-body .ovg-card{background:var(--ovg-surface);border:1px solid var(--ovg-line);border-radius:3px;box-shadow:none;padding:10px 12px;margin:0 0 10px}
+.qgis-studio .core-workbench-body .ovg-card>h2:first-child{font-size:13.5px;margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid var(--ovg-line-soft)}
+.qgis-studio .core-workbench-body .ovg-form-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 10px;align-items:end;margin:6px 0}
+.qgis-studio .core-workbench-body .ovg-form-row label{display:grid;gap:3px}
+.qgis-studio .core-workbench-body .ovg-btn{background:var(--ovg-primary)!important;border:1px solid var(--ovg-primary)!important;color:#fff!important;border-radius:3px!important;min-height:28px;padding:3px 12px;font-weight:600;justify-self:end}
+.qgis-studio .core-workbench-body .ovg-btn:disabled{opacity:.5}
+.qgis-studio .core-workbench-body .ovg-table{width:100%;border-collapse:collapse;background:var(--ovg-surface);border:1px solid var(--ovg-line);font-size:12.5px}
+.qgis-studio .core-workbench-body .ovg-table th{background:var(--ovg-header);text-align:left;padding:5px 8px;font-weight:600;border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .core-workbench-body .ovg-table td{padding:4px 8px;border-bottom:1px solid var(--ovg-line-soft)}
+.qgis-studio .core-workbench-body .ovg-notice{background:var(--ovg-primary-soft);border:1px solid #b9cfe4;color:var(--ovg-ink);border-radius:3px;padding:6px 10px}
+.qgis-studio .core-workbench-body .ovg-error{background:#fdecea;border:1px solid #f3b9b3;color:var(--ovg-danger);border-radius:3px;padding:6px 10px}
+.qgis-studio .core-workbench-body .ovg-badge{background:var(--ovg-header);color:var(--ovg-ink);border-radius:8px;padding:1px 7px;font-size:11px}
+.qgis-studio .core-workbench-body a{color:var(--ovg-primary)}

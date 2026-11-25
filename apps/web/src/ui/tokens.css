@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
-  --ovg-primary: light-dark(#0f766e, #2dd4bf);
-  --ovg-primary-strong: light-dark(#0d5e58, #14b8a6);
+  --ovg-primary: light-dark(#1565a9, #2dd4bf);
+  --ovg-primary-strong: light-dark(#0d5e58, #1565a9);
   --ovg-primary-fg: light-dark(#ffffff, #042f2e);
   --ovg-primary-soft: light-dark(#ecfdf5, rgba(45, 212, 191, 0.14));
   --ovg-primary-border: light-dark(#99f6e4, rgba(45, 212, 191, 0.32));

@@ -1,7 +1,7 @@
 .studio-module-tag{font-size:12px;font-weight:750;white-space:nowrap;color:#12685f;background:#e4f6f0;border:1px solid #bfe7dc;border-radius:999px;padding:7px 10px}
 .studio-module-card{display:flex;gap:10px;align-items:center;border:1px solid #e2e8f0;border-radius:10px;padding:14px;margin:12px 0;background:#f8fafc}
 .studio-module-card>div{flex:1;min-width:0;display:grid;gap:4px}.studio-module-card small{color:#64748b}.studio-module-card button{white-space:nowrap}
-.studio-plugin-panel{position:absolute;top:75px;left:310px;bottom:16px;width:min(320px,calc(100vw - 345px));overflow:auto;z-index:2;padding-bottom:10px;border-top:3px solid #129986;box-shadow:0 12px 32px #183e461a}
+.studio-plugin-panel{position:absolute;top:75px;left:310px;bottom:16px;width:min(320px,calc(100vw - 345px));overflow:auto;z-index:2;padding-bottom:10px;border-top:3px solid #1565a9;box-shadow:0 12px 32px #183e461a}
 .studio-plugin-header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;border-bottom:1px solid #e2e8f0;color:#12685f;font-size:12px;letter-spacing:.03em}
 .studio-plugin-header button{border:0;background:#e9f6f2;color:#12685f;border-radius:6px;padding:6px 10px}
 @media(max-width:760px){.studio-plugin-panel{left:12px;right:12px;width:auto;top:105px;bottom:16px;max-height:calc(100% - 115px)}.studio-module-card{flex-wrap:wrap}.studio-module-card>div{flex-basis:100%}.studio-module-tag{max-width:180px;overflow:hidden;text-overflow:ellipsis}}

@@ -7,7 +7,7 @@
 .landing-page .landing-hero h1{font-size:clamp(40px,4.15vw,66px);letter-spacing:-2.8px}
 .landing-page .landing-hero p{font-size:15px}
 .qgis-inline-donate{box-sizing:border-box;min-width:0;padding:18px 15px 15px;border:1px solid #caddbc;border-radius:16px;background:#ffffffee;box-shadow:0 12px 32px #294c211a;display:flex;flex-direction:column;align-items:center;text-align:center;color:#284b29}
-.qgis-inline-tag{color:#589632;font-size:9px;font-weight:850;letter-spacing:.6px;white-space:nowrap}
+.qgis-inline-tag{color:#1565a9;font-size:9px;font-weight:850;letter-spacing:.6px;white-space:nowrap}
 .landing-page .qgis-inline-donate h2{color:#27482c;font-size:16px;font-weight:820;letter-spacing:-.5px;line-height:1.24;margin:9px 0 13px}
 .qgis-inline-donate img{display:block;width:min(156px,100%);height:auto;aspect-ratio:1;object-fit:contain;border-radius:7px;border:1px solid #e4ebdf;padding:5px;background:#fff;box-sizing:border-box}
 .qgis-inline-bank{margin:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:4px}

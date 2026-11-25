@@ -11,3 +11,5 @@ export const Process=lazy(()=>import("../../web/src/features/platform/Processing
 export const Cartography=lazy(()=>import("../../web/src/features/platform/CartographyWorkbenchPage").then(m=>({default:m.CartographyWorkbenchPage})));
 export const Hub=lazy(()=>import("../../web/src/features/platform/PlatformHubPage").then(m=>({default:m.PlatformHubPage})));
 export const Field=lazy(()=>import("../../web/src/features/offline/OfflineFieldPage").then(m=>({default:m.OfflineFieldPage})));
+
+export const CadImport=lazy(()=>import("../../web/src/features/platform/CadImportPanel").then(m=>({default:m.CadImportPanel})));

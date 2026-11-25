@@ -14,7 +14,7 @@
 .landing-page .landing-nav nav a:hover{color:#478426}
 .landing-page .qgis-nav-donate{background:#eaf5dd;border:1px solid #d4eac1;color:#3b7223;font-size:13px;font-weight:780;padding:9px 14px;border-radius:7px;cursor:pointer}
 .landing-page .qgis-nav-donate:hover{background:#d8edc4}
-.landing-page .landing-primary{background:#589632;border-color:#589632;color:#fff;border-radius:8px;box-shadow:none;font-weight:750}
+.landing-page .landing-primary{background:#1565a9;border-color:#1565a9;color:#fff;border-radius:8px;box-shadow:none;font-weight:750}
 .landing-page .landing-primary:hover{background:#437d26;border-color:#437d26;box-shadow:0 8px 18px #49782d23}
 .landing-page .landing-link-button{color:#405843;cursor:pointer}
 .landing-page .landing-link-button:hover{background:#eef7e7}
@@ -26,10 +26,10 @@
 .landing-page .landing-kicker i{background:#78b53c;box-shadow:0 0 0 4px #8cbb6228}
 .landing-page .kicker-separator{background:#a7c89a}
 .landing-page .landing-hero h1{font-size:clamp(43px,4.5vw,74px);font-weight:820;letter-spacing:-3.6px;line-height:1.07;color:#18351e}
-.landing-page .landing-hero h1 span{color:#589632}
+.landing-page .landing-hero h1 span{color:#1565a9}
 .landing-page .landing-hero p{color:#536d50;max-width:515px;font-size:16px;line-height:1.78}
 .landing-page .landing-secondary{font-weight:730;color:#345e2d;text-decoration:none;border-bottom:1px solid #8fb879;padding:12px 0}
-.landing-page .landing-secondary:hover{color:#589632}
+.landing-page .landing-secondary:hover{color:#1565a9}
 .landing-page .hero-proof{gap:18px;color:#5e785a;font-size:11px}
 .landing-page .hero-proof i{background:#dff0d1;color:#4c832b}
 .landing-page .hero-bottom{color:#6b855f;letter-spacing:.6px}
@@ -42,7 +42,7 @@
 .landing-page .landing-features{padding:100px 0 94px}
 .landing-page .landing-section-kicker{color:#599334;font-size:11px;font-weight:850;letter-spacing:2px}
 .landing-page h2{color:#1d3923;font-weight:790}
-.landing-page .qgis-heading-accent{color:#589632}
+.landing-page .qgis-heading-accent{color:#1565a9}
 .landing-page .section-copy p,.landing-page .landing-workflow p{color:#617461}
 .landing-page .landing-feature{border-color:#e4ecdf;background:#fff;box-shadow:0 9px 24px #2e582315;transition:transform .18s,border-color .18s,box-shadow .18s}
 .landing-page .landing-feature:hover{transform:translateY(-4px);border-color:#a6c993;box-shadow:0 13px 30px #2e58231c}
@@ -69,13 +69,13 @@
 .qgis-donate-strip-inner>div>span{font-size:11px;letter-spacing:1.5px;font-weight:830;color:#579136}
 .landing-page .qgis-donate-strip h2{margin:10px 0 8px;font-size:clamp(22px,2.6vw,32px);letter-spacing:-1px}
 .qgis-donate-strip p{font-size:13px;color:#66815e;margin:0}
-.qgis-donate-strip button{border:1px solid #579232;background:#589632;color:#fff;padding:16px 23px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap}
+.qgis-donate-strip button{border:1px solid #579232;background:#1565a9;color:#fff;padding:16px 23px;border-radius:8px;font-weight:800;font-size:14px;cursor:pointer;white-space:nowrap}
 .qgis-donate-strip button:hover{background:#477b2e}
 .qgis-donate-strip button span{margin-left:6px}
 .qgis-footer-links{display:flex;gap:20px;align-items:center}
 .qgis-footer-links a,.qgis-footer-links button{font-size:12px;color:#557355;text-decoration:none}
 .qgis-footer-links button{border:0;background:none;cursor:pointer;padding:5px;font-weight:690}
-.qgis-footer-links a:hover,.qgis-footer-links button:hover{color:#589632;text-decoration:underline}
+.qgis-footer-links a:hover,.qgis-footer-links button:hover{color:#1565a9;text-decoration:underline}
 .qgis-donate-modal{max-width:min(440px,calc(100vw - 26px));width:100%;box-sizing:border-box;max-height:min(90dvh,880px);overflow:auto;padding:0;border:none;border-radius:18px;background:#fff;color:#254026;box-shadow:0 25px 95px #071a0b60}
 .qgis-donate-modal::backdrop{background:#12281bcc;backdrop-filter:blur(5px)}
 .qgis-donate-modal-content{position:relative;padding:30px 31px 27px;text-align:center}
@@ -91,7 +91,7 @@
 .qgis-donate-holder{font-size:14px;font-weight:850;letter-spacing:.9px;margin:9px 0}
 .qgis-account-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px}
 .qgis-account-row strong{display:block;font-size:19px;letter-spacing:.5px;color:#233d26;padding:9px 12px;background:#f5f9f2;border-radius:7px}
-.qgis-account-row button{border:1px solid #589632;background:#589632;color:white;font-weight:740;border-radius:7px;padding:12px 12px;cursor:pointer;font-size:11px}
+.qgis-account-row button{border:1px solid #1565a9;background:#1565a9;color:white;font-weight:740;border-radius:7px;padding:12px 12px;cursor:pointer;font-size:11px}
 .qgis-account-row button:hover{background:#477c2b}
 .landing-page .qgis-donate-status{font-size:11px;margin:12px auto 4px;min-height:18px}
 .qgis-donate-save{display:inline-block;margin-top:5px;color:#4c832f;font-size:12px;font-weight:730;text-underline-offset:3px}
