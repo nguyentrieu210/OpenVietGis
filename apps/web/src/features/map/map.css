@@ -1063,6 +1063,19 @@
   gap: 8px !important;
   min-width: 0;
 }
+.gis-top-menubar .gis-header-left h1 {
+  min-width: 0;
+}
+.gis-top-menubar .gis-header-left h1 > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gis-top-menubar .gis-header-left h1 > small,
+.gis-top-menubar .gis-header-left > a,
+.gis-top-menubar .gis-header-left > button {
+  flex-shrink: 0;
+}
+
 .gis-top-menubar .gis-top-primary {
   background: var(--ovg-primary) !important;
   border-color: var(--ovg-primary) !important;

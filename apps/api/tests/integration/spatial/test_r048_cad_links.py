@@ -5,6 +5,7 @@ import io
 from uuid import uuid4
 
 import ezdxf
+import pytest
 
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.spatial.test_cad_georef import _drawing
@@ -248,7 +249,8 @@ def test_cad_link_cardinality_and_revision_pinning(migrated_database):
         assert outsider.get(path + "/links", params={"handle": handle}).status_code in (403, 404)
 
 
-def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database):
+@pytest.mark.parametrize("invalid_geometry", [False, True])
+def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database, invalid_geometry):
     world = seed_access_world()
     root = f"/api/v1/organizations/{world.organization_id}/projects/{world.project_id}"
     base = root + "/cad/documents"
@@ -292,9 +294,10 @@ def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database)
         mapping = inspected["entity_summary"]["entity_mapping"]
         native = ezdxf.read(io.StringIO(original.decode()))
         handle = mapping[0]["handle"]
-        native.entitydb[handle].set_points(
-            [(0, 0), (12000, 0), (12000, 5000), (0, 5000)], format="xy"
-        )
+        vertices = [(0, 0), (12000, 0), (12000, 5000), (0, 5000)]
+        if invalid_geometry:
+            vertices = [(0, 0), (12000, 5000), (2000, 5000), (10000, 0)]
+        native.entitydb[handle].set_points(vertices, format="xy")
         buffer = io.StringIO()
         native.write(buffer)
         candidate = buffer.getvalue().encode()
@@ -320,7 +323,13 @@ def test_native_cad_delta_uses_existing_changeset_transaction(migrated_database)
         )
         with _client(world.wrong_user_id) as outsider:
             assert outsider.post(preview_path, json=preview_body).status_code in (403, 404)
-        draft = check(owner.post(preview_path, json=preview_body))
+        response = owner.post(preview_path, json=preview_body)
+        if invalid_geometry:
+            assert response.status_code == 422, response.text
+            assert response.json()["detail"].startswith("Invalid or oversized CAD geometry")
+            assert check(owner.get(root + "/layers/" + source["layer_id"]))["source"] == layer
+            return
+        draft = check(response)
         assert draft["published"] is False
         assert draft["source_id"] == source["source_id"]
         assert draft["candidate_version"] == 2

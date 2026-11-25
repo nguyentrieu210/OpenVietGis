@@ -65,7 +65,7 @@ export function MapRibbon({
           ← Dự án
         </Link>
         <h1>
-          {projectName}
+          <span title={projectName}>{projectName}</span>
           <small>v{revision}</small>
         </h1>
         <button

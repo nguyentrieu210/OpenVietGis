@@ -39,7 +39,7 @@ test("empty GIS workspace visual baseline", async ({ page }) => {
       animations: "disabled",
       mask: [
         page.getByTestId("map-canvas"),
-        page.locator(".gis-header h1")
+        page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
       ]
     }
   );
@@ -71,7 +71,7 @@ test("populated GIS workspace visual baseline", async ({ page }) => {
       animations: "disabled",
       mask: [
         page.getByTestId("map-canvas"),
-        page.locator(".gis-header h1")
+        page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
       ]
     }
   );
@@ -91,7 +91,7 @@ test("technical drawer closed and open visual baselines", async ({ page }) => {
   const workspace = page.getByTestId("map-workspace");
   const commonMask = [
     page.getByTestId("map-canvas"),
-    page.locator(".gis-header h1")
+    page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
   ];
 
   await expect(workspace).toHaveScreenshot(
@@ -132,12 +132,12 @@ test("dirty saved and conflict save-state visual baselines", async ({ page }) =>
   await openFixtureMap(page, fixture);
 
   const workspace = page.getByTestId("map-workspace");
-  const indicator = page.getByTestId("map-save-indicator");
+  const indicator = page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ });
   const screenshotOptions = {
     animations: "disabled" as const,
     mask: [
       page.getByTestId("map-canvas"),
-      page.locator(".gis-header h1")
+      page.getByTestId("gis-ribbon").getByRole("heading", { level: 1 })
     ]
   };
 
@@ -150,11 +150,13 @@ test("dirty saved and conflict save-state visual baselines", async ({ page }) =>
     screenshotOptions
   );
 
+  await indicator.click();
   await page
     .getByRole("region", { name: "Cấu hình bản đồ dùng chung" })
     .getByRole("button", { name: "Lưu bản đồ", exact: true })
     .click();
   await expect(indicator).toHaveAttribute("data-save-state", "saved");
+  await indicator.click();
   await expect(workspace).toHaveScreenshot(
     "map-workspace-saved.png",
     screenshotOptions
@@ -181,6 +183,7 @@ test("dirty saved and conflict save-state visual baselines", async ({ page }) =>
   });
 
   try {
+    await indicator.click();
     await page
       .getByRole("region", { name: "Cấu hình bản đồ dùng chung" })
       .getByRole("button", { name: "Lưu bản đồ", exact: true })

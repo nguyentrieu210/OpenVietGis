@@ -140,7 +140,7 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-feature-id", "point-000002");
   await expect(page.getByRole("region", { name: "Bảng thuộc tính bản đồ" })).toContainText("2 đang chọn");
 
-  await page.getByRole("button", { name: "Bỏ chọn", exact: true }).click();
+  await page.keyboard.press("Escape");
   await page.getByRole("checkbox", { name: "Hiển thị Points", exact: true }).uncheck();
   await canvas.click();
   await expect(page.getByTestId("map-inspector")).not.toHaveAttribute("data-feature-id", "point-000001");

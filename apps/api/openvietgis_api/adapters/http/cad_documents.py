@@ -842,6 +842,27 @@ def preview_native_import(
         imported_schema_revision=imported_schema,
         current_schema_revision=row["schema_revision"],
     )
+    if ops:
+        invalid = session.execute(
+            text("""
+                SELECT item->>'feature_id'
+                FROM jsonb_array_elements(CAST(:operations AS jsonb)) AS item
+                CROSS JOIN LATERAL (
+                    SELECT ST_GeomFromGeoJSON(item->'geometry') AS geom
+                ) AS shape
+                WHERE ST_IsEmpty(shape.geom) OR NOT ST_IsValid(shape.geom)
+                   OR ST_NPoints(shape.geom) > 4096
+                LIMIT 1
+            """),
+            {
+                "operations": json.dumps(
+                    [{"feature_id": op.feature_id, "geometry": op.geometry} for op in ops],
+                    allow_nan=False,
+                )
+            },
+        ).scalar_one_or_none()
+        if invalid is not None:
+            raise HTTPException(422, f"Invalid or oversized CAD geometry for {invalid}")
     return JSONResponse(
         {
             "conversion_id": str(body.conversion_id),
