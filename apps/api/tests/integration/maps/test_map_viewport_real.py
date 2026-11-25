@@ -261,3 +261,36 @@ def test_empty_source_summary_remains_complete_without_phantom_feature(migrated_
         extent = client.get(path + "/display-extent", params=pins)
         assert extent.status_code == 200, extent.text
         assert extent.json()["state"] == "empty" and extent.json()["bounds"] is None
+
+
+def test_source_above_former_native_row_cap_renders(migrated_database, monkeypatch):
+    """Regression: a hardcoded 10001-row native scan made every larger source 503."""
+    from types import MappingProxyType
+
+    from openvietgis_api.adapters.persistence import spatial_fixtures
+    from openvietgis_api.domains.spatial.domain import GeometryFamily
+
+    key = "reference_points_4326"
+    larger = spatial_fixtures._primary(
+        key, GeometryFamily.POINT, "point", "Point", 10002, (106.6, 10.7, 106.699, 10.8)
+    )
+    monkeypatch.setattr(
+        spatial_fixtures,
+        "REFERENCE_FIXTURES",
+        MappingProxyType({**spatial_fixtures.REFERENCE_FIXTURES, key: larger}),
+    )
+    world = seed_access_world()
+    with _client(world.owner_user_id) as client:
+        _, source, layer, pins = _setup(client, world, key)
+        assert source["feature_count"] == 10002
+        path = root(world, layer)
+        viewport = client.get(path + "/viewport", params={**pins, **BBOX})
+        assert viewport.status_code == 200, viewport.text
+        assert viewport.json()["complete"] is True
+        assert [item["feature_id"] for item in viewport.json()["items"]] == [
+            "point-000001",
+            "point-000002",
+        ]
+        extent = client.get(path + "/display-extent", params=pins)
+        assert extent.status_code == 200, extent.text
+        assert extent.json()["bounds"] == pytest.approx([106.6, 10.7, 106.699, 10.8], abs=1e-10)

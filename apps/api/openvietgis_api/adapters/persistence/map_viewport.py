@@ -58,20 +58,19 @@ def _display_ctes(source: DataSource) -> tuple[str, dict[str, object]]:
     )
     if source.stored_crs != 4326 and profile is None:
         raise SpatialUnsupportedTransformationError("no approved geographic presentation edge")
-    params: dict[str, object] = {}
+    params: dict[str, object] = {"native_limit": MAX_RENDER_SOURCE_FEATURES + 1}
+    # ck_feature_geometry_state guarantees every 'present' row is a valid, nonempty XY
+    # Point/LineString/Polygon with <=4096 positions; only cheap pin checks stay per row.
     ctes = [
         """
         native AS NOT MATERIALIZED (
             SELECT feature_id,geometry,
                 content_revision=:content AND schema_revision=:schema
-                AND geometry_state='present'
-                AND ST_SRID(geometry)=:native_srid AND ST_Zmflag(geometry)=0
-                AND ST_GeometryType(geometry)=:geometry_type
-                AND ST_NPoints(geometry) BETWEEN 1 AND 4096
-                AND NOT ST_IsEmpty(geometry) AND ST_IsValid(geometry) AS valid
+                AND geometry_state='present' AND ST_SRID(geometry)=:native_srid
+                AND ST_GeometryType(geometry)=:geometry_type AS valid
             FROM spatial.reference_features
             WHERE organization_id=:organization AND project_id=:project AND source_id=:source
-            ORDER BY feature_id COLLATE "C" LIMIT 10001
+            ORDER BY feature_id COLLATE "C" LIMIT :native_limit
         )
     """
     ]
@@ -105,9 +104,9 @@ def _display_ctes(source: DataSource) -> tuple[str, dict[str, object]]:
         """)
         previous = name
         current_code = step.target_code
-    # For a native 4326 source the geometry hasn't changed. The native check
-    # already enforces the exact SRID, XY, cardinality, nonempty and validity
-    # predicates; repeat them only after a transformation.
+    # For a native 4326 source the geometry hasn't changed. The native check and
+    # the table constraint already enforce the exact SRID, XY, cardinality,
+    # nonempty and validity predicates; repeat them only after a transformation.
     display_check = "valid"
     if profile is not None:
         display_check += (
