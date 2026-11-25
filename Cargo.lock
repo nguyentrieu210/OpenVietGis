@@ -971,7 +971,9 @@ name = "openvietgis-api-rust"
 version = "0.2.0"
 dependencies = [
  "axum",
+ "base64",
  "chrono",
+ "hmac",
  "http",
  "ovg-core",
  "ovg-module-house-numbering",
@@ -982,6 +984,7 @@ dependencies = [
  "ovg-sync",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tower",
  "tower-http",
@@ -1050,9 +1053,13 @@ dependencies = [
 name = "ovg-storage"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "ovg-core",
  "serde",
+ "serde_json",
+ "sha2",
  "sqlx",
+ "subtle",
  "tokio",
  "tracing",
  "uuid",
@@ -1067,6 +1074,7 @@ dependencies = [
  "ovg-core",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "uuid",
 ]

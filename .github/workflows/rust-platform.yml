@@ -134,9 +134,8 @@ jobs:
       - name: Start dedicated PostGIS test database
         run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
 
-      # No --locked: check-and-test already gates lockfile drift; parity should still report behaviour.
       - name: Build Rust API candidate
-        run: cargo build -p openvietgis-api-rust --bin openvietgis-api-rust
+        run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
 
       - name: Run differential parity
         run: |
@@ -145,17 +144,6 @@ jobs:
           uv run --project apps/api python tests/rust-parity/run.py \
             --candidate target/debug/openvietgis-api-rust --include-features \
             2>&1 | tee dist/parity/parity.log
-
-      - name: TEMP diagnose owner readiness
-        if: always()
-        run: |
-          OPENVIETGIS_BIND_ADDR=127.0.0.1:18999 OPENVIETGIS_DB_MAX_CONNECTIONS=1 RUST_LOG=debug \
-            OPENVIETGIS_DATABASE_URL=postgresql://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test \
-            target/debug/openvietgis-api-rust > owner.log 2>&1 &
-          sleep 3
-          for i in 1 2 3; do curl -s -o /dev/null -w "status=%{http_code} time=%{time_total}\n" --max-time 30 http://127.0.0.1:18999/api/v1/health/ready || true; done
-          kill %1 || true
-          tail -40 owner.log
 
       - name: Record PostGIS version
         if: always()
@@ -180,7 +168,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # cargo-audit needs a newer rustc than the pinned 1.85.1 toolchain.
+      - name: Install stable toolchain for cargo-audit
+        run: rustup toolchain install stable --profile minimal
+
       - name: Run cargo-audit
         uses: rustsec/audit-check@v2
+        env:
+          RUSTUP_TOOLCHAIN: stable
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
