@@ -541,3 +541,10 @@
 .ovg-map-mode button{min-height:0!important;height:26px;padding:0 11px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#d5e0e8!important;font-size:12px!important;font-weight:600;box-shadow:none!important}
 .ovg-map-mode button:hover{background:#ffffff17!important;color:#fff!important}
 .ovg-map-mode button[aria-pressed=true]{background:#2b7bd0!important;color:#fff!important;box-shadow:0 2px 6px #0005!important}
+
+/* Map zoom / compass controls: glass like the other map controls */
+.qgis-studio .maplibregl-ctrl-group{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:10px!important;overflow:hidden;backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%);box-shadow:0 8px 22px #0006,inset 0 1px 0 #ffffff1f!important}
+.qgis-studio .maplibregl-ctrl-group button{width:32px;height:32px;background-color:transparent!important}
+.qgis-studio .maplibregl-ctrl-group button+button{border-top:1px solid #ffffff1f!important}
+.qgis-studio .maplibregl-ctrl-group button:hover{background-color:#ffffff1a!important}
+.qgis-studio .maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(1) brightness(1.6)}
