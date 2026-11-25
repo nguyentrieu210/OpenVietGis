@@ -184,3 +184,14 @@
 .qgis-studio .qgis-layer-row .qgis-layer-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ovg-select-box{position:absolute;z-index:5;border:1.5px dashed #1565a9;background:#1565a91f;pointer-events:none}
 .qgis-studio .ovg-map-menu{position:fixed;z-index:1200}
+
+/* Identify Results */
+.qgis-studio .insp-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:6px;border-bottom:1px solid var(--ovg-line-soft)}
+.qgis-studio .insp-toolbar button{font-size:11.5px!important;padding:2px 8px!important}
+.qgis-studio .insp-attrs summary small{font-weight:400;color:var(--ovg-muted)}
+.qgis-studio .insp-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;margin-top:4px;border:1px solid var(--ovg-line)}
+.qgis-studio .insp-table th{background:var(--ovg-header);text-align:left;font-weight:600;padding:3px 6px;border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .insp-table td{padding:3px 6px;border-bottom:1px solid var(--ovg-line-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .insp-table td:first-child{width:42%;color:var(--ovg-muted);border-right:1px solid var(--ovg-line-soft)}
+.qgis-studio .insp-table i{color:#9aa6a0}
+.qgis-studio .insp-note{display:block;margin-top:3px;font-size:10.5px;color:var(--ovg-muted)}
