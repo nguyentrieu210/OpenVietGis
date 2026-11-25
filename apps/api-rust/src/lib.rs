@@ -1,5 +1,6 @@
 //! OpenVietGIS Rust modular monolith HTTP server library.
 
+pub(crate) mod cad_bridge;
 pub(crate) mod catalog;
 pub mod config;
 pub mod connectors;
@@ -11,6 +12,7 @@ pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
 pub(crate) mod queries;
+pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;
 pub mod state;
