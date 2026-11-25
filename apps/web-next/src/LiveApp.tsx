@@ -177,6 +177,8 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
   m.on("mousedown",down);m.on("mousemove",move);m.on("mouseup",up);m.on("contextmenu",context);m.on("movestart",close);
   return()=>{m.off("mousedown",down);m.off("mousemove",move);m.off("mouseup",up);m.off("contextmenu",context);m.off("movestart",close);m.dragPan.enable()}},[ready]);
  const suppressClick=useRef(false);
+ // Shortcut A toggles pan (hand) and select (arrow), like the MapInfo/QGIS tool hotkeys.
+ useEffect(()=>{const key=(e:KeyboardEvent)=>{if(e.key!=="a"&&e.key!=="A"||e.ctrlKey||e.metaKey||e.altKey)return;const t=e.target as HTMLElement|null;if(t?.closest?.("input,textarea,select,[contenteditable=true]"))return;e.preventDefault();setMouseMode(m=>{const next=m==="pan"?"select":"pan";setNotice(next==="pan"?"Bàn tay · kéo để di chuyển bản đồ (A để trở lại con trỏ)":"Con trỏ chọn · kéo để quét chọn (A để dùng bàn tay)");return next})};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key)},[]);
  useEffect(()=>{if(!mapMenu)return;const shut=(e:Event)=>{if(!(e.target as HTMLElement)?.closest?.(".ovg-map-menu"))setMapMenu(null)};const key=(e:KeyboardEvent)=>{if(e.key==="Escape")setMapMenu(null)};document.addEventListener("pointerdown",shut);document.addEventListener("keydown",key);return()=>{document.removeEventListener("pointerdown",shut);document.removeEventListener("keydown",key)}},[mapMenu]);
  const row=data.rows.find(r=>r.key===selected);
   const hasAction=(l:SpatialLayer|undefined,a:string)=>!data.restricted||!!(l as (SpatialLayer&{access_actions?:string[]})|undefined)?.access_actions?.includes(a);
