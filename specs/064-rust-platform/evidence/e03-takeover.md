@@ -62,3 +62,20 @@ pass or independent review.
 - Local Windows worktree was inaccessible; VPS1 worktree and GitHub tree
   were checked against each other. No changes were made to other agent
   branches.
+
+## Service-auth verification at 0eb1a5a
+
+CI [45674243065](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/45674243065):
+format, strict Clippy, architecture isolation, workspace tests, no-default-
+features tests passed. PostGIS parity: 128 pass, 11 E02 failures; all 69
+E03 cases pass, including 12 new bearer tests. Credential revocation, live
+grant revocation, permission ceiling, cross-tenant denial, actor
+attribution, invalid bearer precedence, Unicode digest and revert replay
+were tested with synthetic service credentials.
+
+Repeat benchmark (same methodology, candidate 0eb1a5a; raw artifact in
+that run): editing p95 c20 265.441 ms Python / 96.668 ms Rust;
+snap p95 c20 203.667 / 164.813 ms; peak RSS 188.59 / 17.50 MiB;
+zero unexpected errors. Editing p95 c10 147.041 / 195.969 ms
+(regression). Do not claim uniform speedup. The new topology fixtures
+require another CI run; independent release/security gate remains open.

@@ -514,6 +514,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     e03_editing.compare_editing(suite, owner_url, fixture, surveyor, difference)
     e03_editing.compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, mid, user_id)
     e03_editing.compare_service_editing(suite, owner_url, fixture, difference)
+    e03_editing.compare_topology_and_concurrency(suite, owner_url, fixture, difference)
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
         fixture,
