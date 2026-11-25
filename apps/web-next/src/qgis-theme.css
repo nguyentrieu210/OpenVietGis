@@ -737,3 +737,6 @@
 
 /* Coordinates box wide enough for VN-2000 metres (e.g. 1 184 555.17, 584 555.17) */
 .qgis-status-controls input[aria-label^="Tọa độ"],.qgis-status-controls input[aria-label^="Phạm vi"]{width:210px!important}
+
+.qgis-studio .qgis-row-toggle.sel{font-size:12px!important}
+.qgis-studio .qgis-row-toggle.sel:not(.on){color:#c9d1d7!important;text-decoration:line-through}
