@@ -2,7 +2,7 @@ import React,{Suspense,useEffect,useState} from "react";
 import {ApiClient,ApiError,getIntegrationHubAdapterProfile,listAllowlistedHosts,registerAllowlistedHost,listExternalConnections,createExternalConnection,loadCsrfToken,type IntegrationAdapterProfileResponse,type ExternalConnection} from "@openvietgis/client-sdk";
 import {BatchExport} from "./IntegrationCatalog";
 import {ImportPanel} from "./LiveApp";
-import {ExternalPreview} from "./legacy-workbench-bridge";
+import {ExternalPreview} from "./workbench-registry";
 
 // Spec 058: QGIS-style tools replacing the legacy Import/Export and External sources pages.
 const client=new ApiClient({baseUrl:"/api/v1"});

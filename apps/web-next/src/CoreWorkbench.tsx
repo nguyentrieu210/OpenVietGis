@@ -4,7 +4,7 @@ import {QueryClient,QueryClientProvider} from "@tanstack/react-query";
 import {CatalogManager} from "./CatalogManager";
 import {CadTool} from "./CadTool";
 import {TransferTool,ExternalTool} from "./TransferTool";
-import {Edit,Query,Process,Cartography,Hub,Field} from "./legacy-workbench-bridge";
+import {Edit,Query,Process,Cartography,Hub,Field} from "./workbench-registry";
 import "./desktop-dialog.css";
 import {workbenchTitles,type WorkbenchId} from "./workbench-contract";
 class WorkbenchBoundary extends React.Component<{children:React.ReactNode},{failed:boolean}>{

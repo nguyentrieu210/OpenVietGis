@@ -1,0 +1,15 @@
+.offline-page { max-width: 980px; margin: auto; padding: 16px; font: 15px/1.5 system-ui,sans-serif; color: #17242f; }
+.offline-page section { border: 1px solid #d5dfe3; border-radius: 10px; padding: 12px; margin: 14px 0; }
+.offline-page button, .offline-page select, .offline-page input { font: inherit; min-height: 38px; border: 1px solid #abc0ca; border-radius: 6px; padding: 6px 10px; }
+.offline-page button { margin: 4px; background: #e6f1eb; cursor: pointer; }
+.offline-page button[disabled] { opacity: .55; cursor: default; }
+.offline-page label { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; }
+.offline-page label:has(input[type=checkbox]) { display: flex; flex-direction: row; align-items: center; }
+.offline-page input[type=checkbox] { min-height: unset; margin: 0 6px 0 0; }
+.offline-page pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f2f5f7; padding: 8px; }
+.offline-page code { overflow-wrap: anywhere; }
+.offline-page [role=alert] { background: #fef3e8; color: #912b0a; padding: 10px; }
+.offline-page [role=status] { background: #e7f8eb; padding: 10px; }
+.offline-form { display: grid; gap: 4px; }
+.offline-controls { display: flex; flex-wrap: wrap; gap: 4px; }
+.offline-map { width: 100%; height: min(45vh,450px); min-height: 180px; display: block; border: 1px solid #a9c4b6; background: #f0f7f4; }

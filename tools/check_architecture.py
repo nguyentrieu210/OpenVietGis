@@ -49,8 +49,7 @@ def references_vertical_module_code(content: str) -> bool:
 
 
 # Runtime packages must not import app internals. Browser fixtures may exercise apps.
-# A single explicit transitional bridge owns all web-next -> legacy source imports.
-LEGACY_BRIDGE = "apps/web-next/src/legacy-workbench-bridge.ts"
+# Canonical frontend must not import retired application source.
 JS_IMPORT = re.compile(
     r"""(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*)["']([^"']+)["']"""
 )
@@ -96,10 +95,9 @@ def frontend_boundary_violations(root: Path, path: Path, content: str) -> list[s
             errors.append(f"{relative} imports canonical app internals: {imported}")
         if (
             relative.startswith("apps/web-next/src/")
-            and relative != LEGACY_BRIDGE
             and target.startswith("apps/web/")
         ):
-            errors.append(f"{relative} bypasses legacy workbench bridge: {imported}")
+            errors.append(f"{relative} imports retired frontend source: {imported}")
     return errors
 
 

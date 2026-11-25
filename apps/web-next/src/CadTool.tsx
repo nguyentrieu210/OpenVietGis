@@ -1,6 +1,6 @@
 import React,{Suspense,useEffect,useState} from "react";
 import {ApiClient,ApiError,cogoTraverse,listCadConversions,loadCsrfToken} from "@openvietgis/client-sdk";
-import {CadImport} from "./legacy-workbench-bridge";
+import {CadImport} from "./workbench-registry";
 
 // Spec 058: CAD tool as three QGIS-style tabs instead of one long page.
 const client=new ApiClient({baseUrl:"/api/v1"});

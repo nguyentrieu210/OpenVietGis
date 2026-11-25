@@ -13,4 +13,9 @@ mkdirSync(target,{recursive:true});
 for(const name of ["index.js","Assets","Workers","Widgets","ThirdParty"])cpSync(join(source,name),join(target,name),{recursive:true});
 for(const name of ["LICENSE.md","CONTRIBUTORS.md"])cpSync(join(pkg,name),join(target,name));
 
-export default defineConfig({});
+const retired=fileURLToPath(new URL("../web/",import.meta.url));
+export default defineConfig({
+ plugins:[{name:"canonical-frontend-boundary",load(id){
+  if(id.split("?")[0].startsWith(retired))throw new Error("Retired frontend dependency: "+id);
+ }}]
+});

@@ -28,3 +28,13 @@
 .ovg-tool-loading progress{width:100%;height:6px}
 @container(max-width:500px){.qgis-studio .core-workbench-body .ovg-grid-2{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.qgis-studio .live-shade:not(.partner-docked){padding:6px}.qgis-studio .live-shade:not(.partner-docked)>.live-modal{max-height:calc(100dvh - 12px)}.qgis-studio .core-workbench,.qgis-studio .core-workbench.wide{width:calc(100% - 12px);right:6px}}
+
+.ovg-algorithm-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(116px,1fr));gap:6px;margin-bottom:10px}
+.qgis-studio .core-workbench .ovg-algorithm-choice{display:grid;gap:4px;text-align:left;padding:10px;min-width:0}
+.qgis-studio .core-workbench .ovg-algorithm-choice[aria-pressed=true]{border-color:#2159a1;background:#e8f0fb;color:#17497f}
+.ovg-algorithm-choice small{font-size:11px;color:#506778}
+.ovg-processing-description{font-size:12px;line-height:1.5}
+.ovg-processing-history-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ovg-processing-history-head h2{flex:1}
+.ovg-processing-table-scroll{overflow:auto;max-height:300px}
+.ovg-processing-table-scroll th{position:sticky;top:0;background:#eef3f6}
