@@ -21,6 +21,7 @@ Gốc API: `/api/v1/organizations/{org_id}/chat`. Mọi lệnh cần thành viê
 - **FR-011**: `GET /people` tìm thành viên (không gồm mình) không phân biệt hoa thường, dấu; tối đa 50; có `has_avatar`, `contact`, `request`.
 - **FR-012**: `GET /people/{user_id}/avatar` chỉ cho người cùng tổ chức, `Cache-Control: private, max-age=300`.
 - **FR-013**: `GET /events` (SSE) phát `event: chat` `{room_id}` khi có tin, cảm xúc, ghim trong phòng người gọi thuộc về; `event: contacts` khi lời mời/liên hệ của người gọi đổi. Cùng giới hạn kết nối, nhịp tim và kiểm tra lại quyền như `team_realtime`.
+- **FR-015**: Ảnh dán vào tin: tối đa 4 ảnh JPEG/PNG/WebP mỗi tin, mỗi ảnh ≤ 400 KB sau giải mã, 1–4096 px; kiểm base64 và byte đầu khớp loại; SVG hay loại khác → 422. Lưu bảng riêng; danh sách tin chỉ trả `{id,kind,width,height}`; `GET /attachments/{id}` trả ảnh (nosniff, inline, private 1 ngày) chỉ cho thành viên phòng. Có ảnh thì `body` được rỗng.
 - **FR-014**: Ghi nhật ký kiểm toán khi tạo/đổi tên phòng, thêm/gỡ người, lời mời và liên hệ.
 
 ## Success Criteria

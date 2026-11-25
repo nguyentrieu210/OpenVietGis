@@ -3,19 +3,21 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import re
 import time
 import unicodedata
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 import anyio
 import psycopg
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -40,6 +42,8 @@ BASE = "/organizations/{organization_id}/chat"
 CHANNEL = "ovg_chat"
 MAX_ROOM_MEMBERS = 50
 MAX_PINS = 20
+MAX_ATTACHMENT_BYTES = 400 * 1024
+IMAGE_URL = re.compile(r"data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)")
 # Limit dedicated PostgreSQL listener connections in each process.
 MAX_LISTENERS = 40
 _slots = asyncio.Semaphore(MAX_LISTENERS)
@@ -52,7 +56,10 @@ MESSAGE_SQL = """SELECT m.id,m.author_id,m.author_name,m.body,m.created_at,m.men
   CASE WHEN q.id IS NULL THEN NULL ELSE json_build_object('id',q.id,'author_name',q.author_name,
     'body',left(q.body,140)) END AS reply_to,
   EXISTS(SELECT 1 FROM collaboration.chat_pins p WHERE p.organization_id=m.organization_id
-    AND p.message_id=m.id) AS pinned
+    AND p.message_id=m.id) AS pinned,
+  COALESCE((SELECT json_agg(json_build_object('id',a.id,'kind','image','width',a.width,
+    'height',a.height) ORDER BY a.position) FROM collaboration.chat_attachments a
+    WHERE a.organization_id=m.organization_id AND a.message_id=m.id),'[]') AS attachments
   FROM collaboration.chat_messages m LEFT JOIN collaboration.chat_messages q
     ON q.organization_id=m.organization_id AND q.id=m.reply_to_id
   WHERE m.organization_id=:o"""
@@ -79,11 +86,46 @@ class UserRequest(BaseModel):
     user_id: UUID
 
 
+class AttachmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["image"]
+    # 400 KB decoded is about 546 KB of base64 plus the prefix.
+    data_url: str = Field(min_length=1, max_length=560_000)
+    width: int = Field(ge=1, le=4096)
+    height: int = Field(ge=1, le=4096)
+
+
 class ChatMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    body: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+    body: Annotated[str, StringConstraints(strip_whitespace=True, max_length=4000)] = ""
     reply_to_id: UUID | None = None
     mention_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    attachments: list[AttachmentRequest] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="after")
+    def not_empty(self):
+        if not self.body and not self.attachments:
+            raise ValueError("body or an attachment is required")
+        return self
+
+
+def decode_image(data_url: str) -> tuple[str, bytes]:
+    match = IMAGE_URL.fullmatch(data_url)
+    if match is None:
+        raise HTTPException(422, "Attachments must be JPEG, PNG or WebP data URLs")
+    try:
+        raw = base64.b64decode(match[2], validate=True)
+    except ValueError:
+        raise HTTPException(422, "Attachment is not valid base64") from None
+    kind = match[1]
+    magic = {
+        "jpeg": raw[:3] == b"\xff\xd8\xff",
+        "png": raw[:8] == b"\x89PNG\r\n\x1a\n",
+        "webp": raw[:4] == b"RIFF" and raw[8:12] == b"WEBP",
+    }[kind]
+    if not raw or len(raw) > MAX_ATTACHMENT_BYTES or not magic:
+        raise HTTPException(422, "Attachment content does not match its image type or is too big")
+    return "image/" + kind, raw
 
 
 class ReactionRequest(BaseModel):
@@ -468,6 +510,7 @@ def post_message(
     ids = list(dict.fromkeys(body.mention_ids))
     if any(i not in known for i in ids):
         raise HTTPException(422, "Mentions must target members of this room")
+    images = [(decode_image(a.data_url), a) for a in body.attachments]
     mid = uuid4()
     session.execute(
         text(f"""INSERT INTO {T}chat_messages(organization_id,room_id,id,author_id,author_name,
@@ -482,6 +525,21 @@ def post_message(
             "mentions": json.dumps([{"id": str(i), "display_name": known[i]} for i in ids]),
         },
     )
+    for position, ((content_type, raw), a) in enumerate(images):
+        session.execute(
+            text(f"""INSERT INTO {T}chat_attachments(organization_id,id,message_id,position,
+              content_type,width,height,data) VALUES(:o,:id,:m,:pos,:ct,:w,:h,:data)"""),
+            {
+                "o": organization_id,
+                "id": uuid4(),
+                "m": mid,
+                "pos": position,
+                "ct": content_type,
+                "w": a.width,
+                "h": a.height,
+                "data": raw,
+            },
+        )
     session.execute(
         text(f"UPDATE {T}chat_rooms SET last_activity_at=now() WHERE organization_id=:o AND id=:r"),
         args,
@@ -490,6 +548,28 @@ def post_message(
         session.execute(text(f"{MESSAGE_SQL} AND m.id=:id"), args | {"id": mid}).mappings().one()
     )
     return shape(session, organization_id, me, [row])[0]
+
+
+@router.get(BASE + "/attachments/{attachment_id}")
+def attachment(organization_id: UUID, attachment_id: UUID, auth: ReadAuth, session: DB):
+    ctx = org_scope(session, auth, organization_id)
+    row = session.execute(
+        text(f"""SELECT a.message_id,a.content_type,a.data FROM {T}chat_attachments a
+          WHERE a.organization_id=:o AND a.id=:id"""),
+        {"o": organization_id, "id": attachment_id},
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "Attachment not found")
+    message_room(session, organization_id, row[0], ctx.actor.actor_id)
+    return Response(
+        bytes(row[2]),
+        media_type=row[1],
+        headers={
+            "Cache-Control": "private, max-age=86400",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": "inline",
+        },
+    )
 
 
 @router.post(BASE + "/rooms/{room_id}/read")

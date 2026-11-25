@@ -1,3 +1,4 @@
+import base64
 from uuid import UUID, uuid4
 
 from sqlalchemy import text
@@ -81,6 +82,37 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         mine = check(dao.get(base + "/rooms"))["items"][0]
         assert mine["unread"] == 0 and mine["mentioned"] is False
         assert owner.post(f"{base}/rooms/{org_room}/messages", json={"body": "  "}).status_code == 422
+
+        # Image attachments: stored apart, served only to room members.
+        png = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
+        good = {
+            "kind": "image",
+            "data_url": "data:image/png;base64," + base64.b64encode(png).decode(),
+            "width": 2,
+            "height": 2,
+        }
+        pic = check(
+            owner.post(f"{base}/rooms/{org_room}/messages", json={"attachments": [good]}), 201
+        )
+        assert pic["body"] == "" and pic["attachments"][0]["width"] == 2
+        assert "data_url" not in pic["attachments"][0]
+        served = dao.get(f"{base}/attachments/{pic['attachments'][0]['id']}")
+        assert served.status_code == 200 and served.content == png
+        assert served.headers["content-type"] == "image/png"
+        assert served.headers["x-content-type-options"] == "nosniff"
+        assert stranger.get(f"{base}/attachments/{pic['attachments'][0]['id']}").status_code in (
+            403,
+            404,
+        )
+        svg = "data:image/svg+xml;base64," + base64.b64encode(b"<svg/>").decode()
+        lying = "data:image/jpeg;base64," + base64.b64encode(png).decode()
+        for data_url in (svg, lying, "data:image/png;base64,***"):
+            bad_pic = {"attachments": [good | {"data_url": data_url}]}
+            r = owner.post(f"{base}/rooms/{org_room}/messages", json=bad_pic)
+            assert r.status_code == 422, data_url
+        too_many = {"body": "x", "attachments": [good] * 5}
+        assert owner.post(f"{base}/rooms/{org_room}/messages", json=too_many).status_code == 422
+        check(dao.post(f"{base}/rooms/{org_room}/read"))
 
         # Reactions toggle.
         url = f"{base}/messages/{first['id']}/reactions"

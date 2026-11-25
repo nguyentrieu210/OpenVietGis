@@ -15,6 +15,7 @@ TENANT_TABLES = (
     "chat_messages",
     "chat_reactions",
     "chat_pins",
+    "chat_attachments",
 )
 
 
@@ -53,7 +54,7 @@ def upgrade():
       organization_id uuid NOT NULL, room_id uuid NOT NULL, id uuid NOT NULL,
       author_id uuid NOT NULL REFERENCES identity.users(id),
       author_name varchar(200) NOT NULL,
-      body text NOT NULL CHECK (length(btrim(body)) BETWEEN 1 AND 4000),
+      body text NOT NULL CHECK (length(body)<=4000),
       created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
       reply_to_id uuid,
       mentions jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(mentions)='array'
@@ -66,6 +67,17 @@ def upgrade():
     );
     CREATE INDEX chat_messages_recent ON collaboration.chat_messages(organization_id,room_id,
       created_at DESC,id DESC);
+    CREATE TABLE collaboration.chat_attachments (
+      organization_id uuid NOT NULL, id uuid NOT NULL, message_id uuid NOT NULL,
+      position smallint NOT NULL CHECK (position BETWEEN 0 AND 3),
+      content_type text NOT NULL CHECK (content_type IN ('image/jpeg','image/png','image/webp')),
+      width integer NOT NULL CHECK (width BETWEEN 1 AND 4096),
+      height integer NOT NULL CHECK (height BETWEEN 1 AND 4096),
+      data bytea NOT NULL CHECK (octet_length(data) BETWEEN 1 AND 409600),
+      PRIMARY KEY (organization_id,id), UNIQUE (organization_id,message_id,position),
+      FOREIGN KEY (organization_id,message_id) REFERENCES
+        collaboration.chat_messages(organization_id,id) ON DELETE CASCADE
+    );
     CREATE TABLE collaboration.chat_pins (
       organization_id uuid NOT NULL, room_id uuid NOT NULL, message_id uuid NOT NULL,
       pinned_by uuid NOT NULL REFERENCES identity.users(id),
@@ -122,7 +134,7 @@ def upgrade():
     op.execute(
         "GRANT SELECT,INSERT,UPDATE,DELETE ON collaboration.chat_rooms,"
         "collaboration.chat_room_members,collaboration.chat_messages,collaboration.chat_reactions,"
-        "collaboration.chat_pins,"
+        "collaboration.chat_pins,collaboration.chat_attachments,"
         "collaboration.chat_contacts,collaboration.chat_contact_requests TO openvietgis_runtime"
     )
     # Members of the verified tenant may read each other's avatar (self policy stays).
@@ -187,9 +199,8 @@ def upgrade():
 def downgrade():
     op.execute("DROP POLICY org_peer_avatar ON identity.user_avatars")
     op.execute("""DROP TABLE collaboration.chat_contact_requests, collaboration.chat_contacts,
-      collaboration.chat_pins, collaboration.chat_reactions, collaboration.chat_messages,
-      collaboration.chat_room_members,
-      collaboration.chat_rooms""")
+      collaboration.chat_attachments, collaboration.chat_pins, collaboration.chat_reactions,
+      collaboration.chat_messages, collaboration.chat_room_members, collaboration.chat_rooms""")
     op.execute("DROP FUNCTION collaboration.publish_chat_room()")
     op.execute("DROP FUNCTION collaboration.publish_chat_request()")
     op.execute("DROP FUNCTION collaboration.publish_chat_contact()")
