@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import platform
 import random
 import shutil
@@ -57,19 +58,47 @@ DEFAULT_CSRF_SECRET = "openvietgis-bench-csrf-secret-064"
 DEFAULT_BOOTSTRAP_SECRET = "openvietgis-bench-bootstrap-secret-064"
 
 
+def assert_safe_admin_url(db_url: str) -> None:
+    parsed = urlparse(db_url)
+    if (
+        parsed.scheme != "postgresql"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port != 54330
+        or parsed.path != "/postgres"
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError("Benchmark admin must use dedicated loopback PostGIS port 54330")
+
+
 def assert_safe_bench_db(db_url: str) -> str:
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/")
-    host = (parsed.hostname or "").lower()
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        raise RuntimeError(f"Refusing benchmark database on non-loopback host: {host!r}")
-    if db_name in ("openvietgis_live", "openvietgis", "postgres", "template0", "template1"):
-        raise RuntimeError(f"Refusing unsafe benchmark target database: {db_name!r}")
-    if "bench" not in db_name and "test" not in db_name:
-        raise RuntimeError(
-            f"Benchmark database name must contain 'bench' or 'test', got: {db_name!r}"
-        )
+    if (
+        parsed.scheme != "postgresql"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port != 54330
+        or parsed.query
+        or parsed.fragment
+        or not re.fullmatch(r"openvietgis_bench_[a-z0-9_]{1,44}", db_name)
+    ):
+        raise RuntimeError("Refusing non-isolated benchmark database")
     return db_name
+
+
+def assert_safe_http_target(url: str) -> None:
+    parsed = urlparse(url)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port not in range(18890, 19000)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError("Benchmark target must be an isolated loopback HTTP port 18890–18999")
 
 
 def det_uuid(seed: int, key: str) -> UUID:
@@ -1615,10 +1644,11 @@ def render_markdown_report(report: dict[str, Any]) -> str:
 
 
 def create_temp_bench_db(admin_pg_url: str, db_name: str) -> str:
+    assert_safe_admin_url(admin_pg_url)
     assert_safe_bench_db(f"postgresql://127.0.0.1:54330/{db_name}")
     with psycopg.connect(admin_pg_url, autocommit=True) as conn:
         with conn.cursor() as cur:
-            cur.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
+            # CREATE fails on collision; never drop a pre-existing database.
             cur.execute(
                 f'CREATE DATABASE "{db_name}" TEMPLATE template_postgis OWNER openvietgis'
             )
@@ -1627,6 +1657,7 @@ def create_temp_bench_db(admin_pg_url: str, db_name: str) -> str:
 
 
 def drop_temp_bench_db(admin_pg_url: str, db_name: str) -> None:
+    assert_safe_admin_url(admin_pg_url)
     assert_safe_bench_db(f"postgresql://127.0.0.1:54330/{db_name}")
     with psycopg.connect(admin_pg_url, autocommit=True) as conn:
         with conn.cursor() as cur:
@@ -1676,7 +1707,7 @@ def main() -> int:
     parser.add_argument("--spawn-python-isolated", action="store_true")
     parser.add_argument("--port", type=int, default=18899)
     parser.add_argument("--admin-pg-url", default=DEFAULT_ADMIN_PG_URL)
-    parser.add_argument("--db-name", default=DEFAULT_BENCH_DB_NAME)
+    parser.add_argument("--db-name", default=f"{DEFAULT_BENCH_DB_NAME}_{uuid4().hex[:12]}")
     parser.add_argument("--db-url", default=None)
     parser.add_argument("--server-pid", type=int, default=None)
     parser.add_argument("--seed", type=int, default=20261125)
@@ -1699,6 +1730,19 @@ def main() -> int:
 
     if not args.spawn_python_isolated and not args.target_url:
         raise SystemExit("Provide either --spawn-python-isolated or --target-url")
+
+    if args.spawn_python_isolated:
+        assert_safe_admin_url(args.admin_pg_url)
+        assert_safe_http_target(f"http://127.0.0.1:{args.port}")
+    else:
+        assert_safe_http_target(args.target_url)
+        if not args.db_url:
+            raise SystemExit("--db-url is required to verify isolated benchmark database")
+        assert_safe_bench_db(args.db_url)
+    if not concurrencies or min(concurrencies) < 1 or max(concurrencies) > 64:
+        raise SystemExit("Concurrency must be between 1 and 64")
+    if args.requests_per_level < 1 or args.cold_requests < 1:
+        raise SystemExit("Request counts must be positive")
 
     uvicorn_proc: subprocess.Popen[Any] | None = None
     uvicorn_log_fh: Any = None

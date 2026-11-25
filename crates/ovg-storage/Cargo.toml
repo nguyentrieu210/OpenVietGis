@@ -9,11 +9,14 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+base64.workspace = true
+getrandom = "0.2"
 chrono.workspace = true
 ovg-core.workspace = true
 ovg-spatial.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["float_roundtrip"] }
+sha1 = "0.10"
 sha2.workspace = true
 sqlx.workspace = true
 subtle = "2.6"

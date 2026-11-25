@@ -23,6 +23,8 @@ pub const MAX_VIEWPORT_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_RENDER_SOURCE_FEATURES: i64 = 50_000;
 pub const MAX_TILE_ZOOM: u32 = 22;
 pub const MAX_TILE_FEATURES: i64 = 10_000;
+const MAX_TILE_POSITIONS: i64 = 200_000;
+const MAX_TILE_BYTES: usize = 4 * 1024 * 1024;
 const TILE_EXTENT: i32 = 4096;
 const TILE_BUFFER: i32 = 64;
 const MAP_STATEMENT_TIMEOUT: &str = "2000ms";
@@ -202,8 +204,8 @@ impl ProjectRead<'_> {
     }
 
     /// One Mapbox vector tile (`features` layer, `feature_id` property) for a
-    /// native EPSG:4326 source, capped at `MAX_TILE_FEATURES` in stable order.
-    /// Returns the tile bytes and whether every candidate feature was encoded.
+    /// native EPSG:4326 source, bounded by feature, position and byte budgets.
+    /// Returns tile bytes and whether the candidate prefix was truncated.
     pub async fn vector_tile(
         &mut self,
         layer_id: Uuid,
@@ -220,6 +222,7 @@ impl ProjectRead<'_> {
             // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
             return Err(unsupported_transformation());
         }
+        // Bound vertex work before projection and encoding, not only after serialization.
         let sql = format!(
             "WITH bounds AS (
                 SELECT ST_TileEnvelope($4, $5, $6) AS tile,
@@ -227,13 +230,7 @@ impl ProjectRead<'_> {
                         ST_TileEnvelope($4, $5, $6, margin => $7), '{WEB_MERCATOR_PIPELINE}', 4326
                     ) AS area
             ), candidate AS MATERIALIZED (
-                SELECT f.feature_id, ST_AsMVTGeom(
-                        ST_TransformPipeline(
-                            ST_ClipByBox2D(f.geometry, bounds.area::box2d),
-                            '{WEB_MERCATOR_PIPELINE}', 3857
-                        ),
-                        bounds.tile, $8, $9, true
-                    ) AS geom
+                SELECT f.feature_id, f.geometry, ST_NPoints(f.geometry) AS positions
                 FROM spatial.reference_features AS f CROSS JOIN bounds
                 WHERE f.organization_id = $1 AND f.project_id = $2 AND f.source_id = $3
                     AND f.geometry_state = 'present'
@@ -241,13 +238,30 @@ impl ProjectRead<'_> {
                     AND ST_SRID(f.geometry) = 4326
                     AND ST_Intersects(f.geometry, bounds.area)
                 ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
+            ), ranked AS (
+                SELECT feature_id, geometry,
+                    row_number() OVER (ORDER BY feature_id COLLATE \"C\") AS ordinal,
+                    sum(positions) OVER (ORDER BY feature_id COLLATE \"C\"
+                        ROWS UNBOUNDED PRECEDING) AS cumulative_positions
+                FROM candidate
+            ), prefix AS MATERIALIZED (
+                SELECT feature_id, geometry FROM ranked
+                WHERE ordinal <= $13 AND cumulative_positions <= $14
+            ), encoded AS (
+                SELECT feature_id, ST_AsMVTGeom(
+                        ST_TransformPipeline(
+                            ST_ClipByBox2D(prefix.geometry, bounds.area::box2d),
+                            '{WEB_MERCATOR_PIPELINE}', 3857
+                        ),
+                        bounds.tile, $8, $9, true
+                    ) AS geom
+                FROM prefix CROSS JOIN bounds
             )
             SELECT (
-                SELECT ST_AsMVT(t, 'features', $8, 'geom') FROM (
-                    SELECT feature_id, geom FROM candidate WHERE geom IS NOT NULL
-                    ORDER BY feature_id COLLATE \"C\" LIMIT $13
-                ) AS t
-            ) AS tile, (SELECT count(*) FROM candidate) AS candidates"
+                SELECT ST_AsMVT(t, 'features', $8, 'geom' ORDER BY t.feature_id COLLATE \"C\")
+                FROM (SELECT feature_id, geom FROM encoded WHERE geom IS NOT NULL) AS t
+            ) AS tile, (SELECT count(*) FROM candidate) AS candidates,
+                (SELECT count(*) FROM prefix) AS included"
         );
         let row = sqlx::query(&sql)
             .bind(self.tx.organization_id())
@@ -263,12 +277,18 @@ impl ProjectRead<'_> {
             .bind(pins.schema_revision.to_owned())
             .bind(MAX_TILE_FEATURES + 1)
             .bind(MAX_TILE_FEATURES)
+            .bind(MAX_TILE_POSITIONS)
             .fetch_one(&mut **self.tx.tx_mut())
             .await
             .map_err(unavailable)?;
         let tile: Option<Vec<u8>> = row.try_get("tile").map_err(unavailable)?;
         let candidates: i64 = row.try_get("candidates").map_err(unavailable)?;
-        Ok((tile.unwrap_or_default(), candidates <= MAX_TILE_FEATURES))
+        let included: i64 = row.try_get("included").map_err(unavailable)?;
+        let tile = tile.unwrap_or_default();
+        if tile.len() > MAX_TILE_BYTES {
+            return Err(read_unavailable());
+        }
+        Ok((tile, candidates == included))
     }
 
     /// Layer -> source -> pins -> CRS -> render profile, in the Python order.

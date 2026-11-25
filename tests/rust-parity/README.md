@@ -33,3 +33,14 @@ value of the UTC readiness timestamp may differ between implementations.
 
 This runner is a correctness check. Run the benchmark harness separately for
 performance.
+
+CI always enables `--include-features`; missing E02 routes must fail rather than
+silently skip parity. The DB-free harness regression tests can be run separately:
+
+~~~sh
+apps/api/.venv/bin/python -m unittest discover -s tests/rust-parity -p 'test_*.py'
+~~~
+
+GitHub Actions uploads parity logs and Cargo Audit JSON even on failure. See
+`specs/064-rust-platform/evidence/ci-parity-agent18.md` for the observed baseline
+and remaining cross-engine gates.

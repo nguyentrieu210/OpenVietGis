@@ -101,10 +101,12 @@ pub(crate) async fn replay(
         }
     }
     // Fail closed on unexpected holes, not just the expected retention boundary.
-    if events.iter().enumerate().any(|(index, event)| {
-        after.checked_add(index as i64 + 1) != Some(event.sequence)
-    }) || (events.len() <= limit
-        && events.last().map_or(after, |event| event.sequence) != watermark.sequence)
+    if events
+        .iter()
+        .enumerate()
+        .any(|(index, event)| after.checked_add(index as i64 + 1) != Some(event.sequence))
+        || (events.len() <= limit
+            && events.last().map_or(after, |event| event.sequence) != watermark.sequence)
     {
         return Ok(SpatialReplay::SnapshotRequired {
             latest_cursor: Some(watermark),

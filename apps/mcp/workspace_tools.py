@@ -130,7 +130,7 @@ def validate(method, params):
         if len(json.dumps(data,ensure_ascii=False,allow_nan=False).encode())>85000:
             raise ValueError("Command exceeds size limit")
         return data
-    except (ValidationError,ValueError,TypeError,KeyError,BridgeError):
+    except (ValidationError,ValueError,TypeError,KeyError,BridgeError,RecursionError):
         raise BridgeError(422,"Invalid or oversized GIS workspace command") from None
 
 def result(value):
@@ -140,7 +140,7 @@ def result(value):
     try:
         if len(json.dumps(value,ensure_ascii=False,allow_nan=False).encode())>85000:
             raise ValueError()
-    except (ValueError,TypeError):
+    except (ValueError,TypeError,RecursionError):
         raise BridgeError(422,"GIS result exceeds 85 KB; use a smaller page") from None
     return value
 

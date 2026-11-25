@@ -1,0 +1,653 @@
+{
+  "snapshot": {
+    "organization_id": "00000000-0000-0000-0000-000000000002",
+    "project_id": "00000000-0000-0000-0000-000000000003",
+    "source_id": "00000000-0000-0000-0000-000000000005",
+    "schema_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "geometry_family": "Point",
+    "aoi_bbox": {
+      "min_x": 105,
+      "min_y": 20,
+      "max_x": 106,
+      "max_y": 21
+    },
+    "fields": [
+      {
+        "field_id": "v",
+        "name": "v",
+        "type": "decimal",
+        "nullable": false
+      },
+      {
+        "field_id": "i",
+        "name": "i",
+        "type": "integer",
+        "nullable": false
+      },
+      {
+        "field_id": "b",
+        "name": "b",
+        "type": "boolean",
+        "nullable": false
+      },
+      {
+        "field_id": "t",
+        "name": "t",
+        "type": "timestamp",
+        "nullable": false
+      },
+      {
+        "field_id": "s",
+        "name": "s",
+        "type": "text",
+        "nullable": true
+      }
+    ],
+    "features": [
+      {
+        "feature_id": "p1"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "valid-update-create",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        },
+        {
+          "op_type": "create",
+          "feature_id": "p2",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000009",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              105.5,
+              20.5
+            ]
+          }
+        }
+      ],
+      "expected": "OK"
+    },
+    {
+      "id": "legacy",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          }
+        }
+      ],
+      "expected": "OK"
+    },
+    {
+      "id": "edge-point",
+      "ops": [
+        {
+          "op_type": "create",
+          "feature_id": "p2",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000009",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              105,
+              21
+            ]
+          }
+        }
+      ],
+      "expected": "OK"
+    },
+    {
+      "id": "missing-scope",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "other",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "OUTSIDE_PACKAGE_SCOPE"
+    },
+    {
+      "id": "geometry-update",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              105.5,
+              20.5
+            ]
+          }
+        }
+      ],
+      "expected": "OUTSIDE_PACKAGE_SCOPE"
+    },
+    {
+      "id": "outside-aoi",
+      "ops": [
+        {
+          "op_type": "create",
+          "feature_id": "p2",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000009",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              107,
+              20
+            ]
+          }
+        }
+      ],
+      "expected": "OUTSIDE_PACKAGE_SCOPE"
+    },
+    {
+      "id": "boolean-coordinate",
+      "ops": [
+        {
+          "op_type": "create",
+          "feature_id": "p2",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000009",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              true,
+              20
+            ]
+          }
+        }
+      ],
+      "expected": "OUTSIDE_PACKAGE_SCOPE"
+    },
+    {
+      "id": "unsupported-delete",
+      "ops": [
+        {
+          "op_type": "delete",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "OUTSIDE_PACKAGE_SCOPE"
+    },
+    {
+      "id": "duplicate-feature",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        },
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "VALIDATION_ERROR"
+    },
+    {
+      "id": "duplicate-op-id",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        },
+        {
+          "op_type": "create",
+          "feature_id": "p2",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              105.5,
+              20.5
+            ]
+          }
+        }
+      ],
+      "expected": "INVALID_OFFLINE_OPERATION_ID"
+    },
+    {
+      "id": "nil-id",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000000"
+        }
+      ],
+      "expected": "INVALID_OFFLINE_OPERATION_ID"
+    },
+    {
+      "id": "invalid-feature-id",
+      "ops": [
+        {
+          "op_type": "create",
+          "feature_id": "bad/id",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000009",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              105.5,
+              20.5
+            ]
+          }
+        }
+      ],
+      "expected": "INVALID_FEATURE_ID"
+    },
+    {
+      "id": "unknown-key",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008",
+          "injected": true
+        }
+      ],
+      "expected": "VALIDATION_ERROR"
+    },
+    {
+      "id": "empty",
+      "ops": [],
+      "expected": "VALIDATION_ERROR"
+    },
+    {
+      "id": "missing-field",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "1"
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "VALIDATION_ERROR"
+    },
+    {
+      "id": "invalid-v-0",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "12.50",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-v-1",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": 12.5,
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-v-2",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "-0",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-v-3",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "0.1234567890123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-v-4",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": null,
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-i-0",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": true,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-i-1",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 2147483648,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-i-2",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 1.0,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-b-0",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": 1,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-b-1",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": "true",
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-t-0",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-t-1",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:60Z",
+            "s": null
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-s-0",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": "bad\u0000text"
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    },
+    {
+      "id": "invalid-s-1",
+      "ops": [
+        {
+          "op_type": "update",
+          "feature_id": "p1",
+          "properties": {
+            "v": "123456789.123456789",
+            "i": 42,
+            "b": true,
+            "t": "2026-11-21T00:00:00.123000Z",
+            "s": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          },
+          "client_operation_id": "00000000-0000-0000-0000-000000000008"
+        }
+      ],
+      "expected": "SCHEMA_MISMATCH"
+    }
+  ],
+  "scope": [
+    "00000000-0000-0000-0000-000000000001",
+    "00000000-0000-0000-0000-000000000002",
+    "00000000-0000-0000-0000-000000000003",
+    "00000000-0000-0000-0000-000000000004",
+    "00000000-0000-0000-0000-000000000005",
+    "00000000-0000-0000-0000-000000000006"
+  ],
+  "core_id": "field-core-d45506e7b1d4196f21e87a02f15dbba232c7d4e09dc11548"
+}

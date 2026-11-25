@@ -1,6 +1,7 @@
 """Local candidate HTTP relay / partner UI. Do not expose without release review."""
 from __future__ import annotations
 import json
+import math
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -18,6 +19,38 @@ HERE = Path(__file__).parent
 MAX_BODY = 128_000
 
 
+def _json_object(pairs):
+    obj = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError("Duplicate JSON member")
+        obj[key] = value
+    return obj
+
+
+def _reject_constant(value):
+    raise ValueError("Non-finite JSON number")
+
+
+def _finite_float(value):
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise ValueError("Non-finite JSON number")
+    return parsed
+
+
+def _bounded_depth(obj):
+    pending = [(obj, 0)]
+    while pending:
+        value, depth = pending.pop()
+        if depth > 64:
+            raise ValueError("JSON nesting exceeds limit")
+        if isinstance(value, dict):
+            pending.extend((item, depth + 1) for item in value.values())
+        elif isinstance(value, list):
+            pending.extend((item, depth + 1) for item in value)
+
+
 async def body(request):
     if request.headers.get("content-type", "").split(";")[0] != "application/json":
         raise BridgeError(415, "JSON required")
@@ -27,8 +60,9 @@ async def body(request):
         if len(data) > MAX_BODY:
             raise BridgeError(413, "Request too large")
     try:
-        result = json.loads(data)
-    except (ValueError, UnicodeError):
+        result = json.loads(data, object_pairs_hook=_json_object, parse_constant=_reject_constant, parse_float=_finite_float)
+        _bounded_depth(result)
+    except (ValueError, UnicodeError, RecursionError):
         raise BridgeError(422, "Invalid JSON") from None
     if not isinstance(result, dict):
         raise BridgeError(422, "JSON object required")

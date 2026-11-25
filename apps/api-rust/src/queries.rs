@@ -184,6 +184,11 @@ async fn delete_saved_query(
 }
 
 fn parse<T: DeserializeOwned>(body: &[u8]) -> Result<T, QueryError> {
+    // Serde structs may also deserialize from JSON arrays. The public contract
+    // accepts only an object, including when every field has a default.
+    if body.iter().copied().find(|byte| !byte.is_ascii_whitespace()) != Some(b'{') {
+        return Err(QueryError::InvalidRequest);
+    }
     serde_json::from_slice(body).map_err(|_| QueryError::InvalidRequest)
 }
 
@@ -241,6 +246,7 @@ async fn scope<'a>(
     read.map_err(QueryError::Access)
 }
 
+#[derive(Debug)]
 enum QueryError {
     InvalidRequest,
     Csrf,
@@ -309,6 +315,8 @@ mod tests {
             br#"{"attribute_filter": [1]}"#,
             br#"{"sort_direction": null}"#,
             br#"[]"#,
+            br#"[null, null, null, null, null, null, "asc", 5, 0]"#,
+            br#"null"#,
         ] {
             assert!(parse::<ExecuteBody>(bad).is_err());
         }

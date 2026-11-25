@@ -515,3 +515,198 @@ def compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, memb
 
 def _assert_revision(actual, expected):
     assert actual == expected, "Rejected ACL operation changed content revision"
+
+
+def compare_service_editing(suite, owner_url, fixture, difference):
+    """Machine credentials have no human fallback, obey ceiling and live grants."""
+    parity = EditingParity(suite, difference)
+    admin = _headers(fixture["session_a_token"], fixture["csrf_a_token"])
+    org = f"{API}/organizations/{fixture['org_a_id']}"
+    root = f"{org}/projects/{fixture['project_a_id']}"
+    source_id = fixture["layers"]["edit_4326"]["source_id"]
+    path = f"{root}/sources/{source_id}/changesets"
+    snap = f"{root}/editing/snap"
+    principal = suite.oracle.post(
+        f"{org}/service-principals", headers=admin, json={"name": "E03 parity service"},
+    )
+    assert principal.status_code == 201, principal.text
+    pid = principal.json()["id"]
+    credential_path = f"{org}/service-principals/{pid}/credentials"
+    grant = suite.oracle.post(
+        f"{org}/grants", headers=admin,
+        json={"subject_kind": "service_principal", "subject_id": pid,
+              "scope_kind": "project", "project_id": fixture["project_a_id"], "role": "editor"},
+    )
+    assert grant.status_code == 201, grant.text
+
+    def credential(name, ceiling=None):
+        response = suite.oracle.post(
+            credential_path, headers=admin, json={"name": name, "permission_ceiling": ceiling},
+        )
+        assert response.status_code == 201, f"Issue credential: {response.status_code}"
+        data = response.json()
+        return data["id"], {"authorization": f"Bearer {data['secret']}"}
+
+    full_id, full = credential("full")
+    _, read_only = credential("read only", ["project.read"])
+    with psycopg.connect(owner_url) as conn:
+        revision = conn.execute(
+            "SELECT content_revision FROM spatial.data_sources WHERE id=%s", (source_id,)
+        ).fetchone()[0]
+    body = {
+        "operation_id": "e03-service-create", "base_content_revision": revision,
+        "summary": "Tạo đối tượng 🗺",
+        "operations": [{"op_type": "create", "feature_id": "e03-service",
+                        "geometry": {"type": "Point", "coordinates": [105.84, 21.02]},
+                        "properties": {"code": "Mã địa chính", "ward": "W1",
+                                       "metric_val": 7, "active": True}}],
+    }
+    parity.same("E03 bearer read-only ceiling denies writes", "POST", path, 403,
+                headers=read_only, body=body)
+    parity.same("E03 bearer read-only ceiling permits list", "GET", path, 200, headers=read_only)
+    parity.same("E03 invalid bearer does not fall back to owner cookie", "POST", path, 401,
+                headers=admin | {"authorization": "Bearer invalid"}, body=body)
+    foreign = f"{API}/organizations/{fixture['org_b_id']}/projects/{fixture['project_b_id']}/editing/snap"
+    parity.same("E03 bearer cross-tenant denied", "POST", foreign, 401, headers=full,
+                body={"target": [0, 0], "tolerance": 1})
+    parity.same("E03 bearer snap without CSRF", "POST", snap, 200, headers=full,
+                body={"target": [0, 0], "vertices": [[1, 0]], "tolerance": 1})
+    receipt = parity.cross("E03 bearer Rust edit replayed by FastAPI with Unicode digest",
+                           "rust", path, body, full)
+    if receipt:
+        def actor_matches():
+            assert receipt["actor_type"] == "service_principal"
+            assert receipt["actor_id"] == pid
+            with psycopg.connect(owner_url) as conn:
+                assert conn.execute(
+                    "SELECT actor_type, actor_id FROM audit.audit_events WHERE id=%s",
+                    (receipt["audit_event_id"],),
+                ).fetchone() == ("service_principal", UUID(pid))
+                assert conn.execute(
+                    "SELECT last_used_at IS NOT NULL FROM org.service_credentials WHERE id=%s",
+                    (full_id,),
+                ).fetchone()[0]
+        parity.record("E03 bearer audit actor and credential use", actor_matches)
+        detail = f"{root}/changesets/{receipt['id']}"
+        parity.same("E03 bearer detail", "GET", detail, 200, headers=full)
+        parity.same("E03 bearer replay cannot impersonate service as human", "POST", path, 409,
+                    headers=admin, body=body)
+        parity.cross("E03 bearer Rust revert replayed by FastAPI",
+                     "rust", f"{detail}/revert", {"operation_id": "e03-service-revert"}, full)
+    response = suite.oracle.post(f"{credential_path}/{full_id}/revoke", headers=admin)
+    assert response.status_code == 204, response.status_code
+    parity.same("E03 revoked bearer denied before replay", "POST", path, 401, headers=full, body=body)
+    response = suite.oracle.post(f"{org}/grants/{grant.json()['id']}/revoke", headers=admin)
+    assert response.status_code == 204, response.status_code
+    parity.same("E03 bearer live grant revocation denies history", "GET", path, 403, headers=read_only)
+
+
+def compare_topology_and_concurrency(suite, owner_url, fixture, difference):
+    """Exercise real GEOS topology, feature leases and concurrent cross-engine replay."""
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    parity = EditingParity(suite, difference)
+    admin = _headers(fixture["session_a_token"], fixture["csrf_a_token"])
+    root = f"{API}/organizations/{fixture['org_a_id']}/projects/{fixture['project_a_id']}"
+
+    def manual(family):
+        response = suite.oracle.post(
+            f"{root}/layers/manual", headers=admin,
+            json={"operation_id": str(uuid4()), "name": f"E03 {family} topology fixture",
+                  "geometry_family": family, "fields": [
+                      {"field_id": "code", "name": "Code", "type": "text", "nullable": False}
+                  ]},
+        )
+        assert response.status_code == 201, response.text
+        sid = response.json()["source_id"]
+        with psycopg.connect(owner_url) as conn:
+            rev = conn.execute("SELECT content_revision FROM spatial.data_sources WHERE id=%s",
+                               (sid,)).fetchone()[0]
+        return sid, rev
+
+    def payload(op_id, rev, ops):
+        return {"operation_id": op_id, "base_content_revision": rev, "operations": ops}
+
+    def create(fid, geometry):
+        return {"op_type": "create", "feature_id": fid, "geometry": geometry,
+                "properties": {"code": fid}}
+
+    sid, rev = manual("Polygon")
+    path = f"{root}/sources/{sid}/changesets"
+    outer = [[105.8, 21.0], [105.84, 21.0], [105.84, 21.04],
+             [105.8, 21.04], [105.8, 21.0]]
+    hole = [[105.81, 21.01], [105.81, 21.02], [105.82, 21.02],
+            [105.82, 21.01], [105.81, 21.01]]
+    bowtie = [[105.8, 21.0], [105.84, 21.04], [105.8, 21.04],
+              [105.84, 21.0], [105.8, 21.0]]
+    valid = create("valid", {"type": "Polygon", "coordinates": [outer, hole]})
+    invalid = create("bad", {"type": "Polygon", "coordinates": [bowtie]})
+    parity.same("E03 GEOS rejects self-intersecting polygon", "POST", path, 422,
+                headers=admin, body=payload("e03-bowtie", rev, [invalid]))
+    parity.same("E03 invalid topology rolls back whole batch", "POST", path, 422,
+                headers=admin, body=payload("e03-bowtie-batch", rev, [valid, invalid]))
+    parity.same("E03 unclosed ring rejected", "POST", path, 422, headers=admin,
+                body=payload("e03-open-ring", rev, [
+                    create("open", {"type": "Polygon", "coordinates": [outer[:-1]]})
+                ]))
+    body = payload("e03-concurrent-polygon", rev, [valid])
+    receipts = []
+
+    def concurrent_replay():
+        gate = Barrier(2)
+        def submit(client):
+            gate.wait(timeout=10)
+            return client.post(path, headers=admin, json=body)
+
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            a = workers.submit(submit, suite.oracle)
+            b = workers.submit(submit, suite.rust)
+            first, second = a.result(timeout=30), b.result(timeout=30)
+        assert first.status_code == second.status_code == 201, (
+            first.status_code, second.status_code, first.text[:250], second.text[:250]
+        )
+        assert difference(first.json(), second.json()) is None
+        with psycopg.connect(owner_url) as conn:
+            assert conn.execute("SELECT count(*) FROM editing.changesets WHERE source_id=%s",
+                                (sid,)).fetchone()[0] == 1
+            assert conn.execute(
+                "SELECT feature_id, ST_IsValid(geometry), ST_NumInteriorRings(geometry) "
+                "FROM spatial.reference_features WHERE source_id=%s", (sid,),
+            ).fetchall() == [("valid", True, 1)]
+        receipts.append(first.json())
+
+    parity.record("E03 concurrent Python/Rust replay one valid polygon with hole", concurrent_replay)
+    if receipts:
+        current = receipts[0]["resulting_content_revision"]
+        with psycopg.connect(owner_url) as conn:
+            conn.execute(
+                """INSERT INTO collaboration.feature_edit_leases
+                   (organization_id, project_id, source_id, feature_id, actor_id,
+                    actor_name, token, expires_at)
+                   VALUES (%s,%s,%s,'valid',%s,'Other actor',%s,now()+interval '5 minutes')""",
+                (fixture["org_a_id"], fixture["project_a_id"], sid, fixture["user_b_id"], uuid4()),
+            )
+        delete = payload("e03-lease-delete", current, [{"op_type": "delete", "feature_id": "valid"}])
+        try:
+            parity.same("E03 active foreign lease denies delete", "POST", path, 409,
+                        headers=admin, body=delete)
+            with psycopg.connect(owner_url) as conn:
+                conn.execute("UPDATE collaboration.feature_edit_leases "
+                             "SET expires_at=now()-interval '1 second' WHERE source_id=%s", (sid,))
+            parity.cross("E03 expired foreign lease permits delete", "rust", path, delete, admin)
+        finally:
+            with psycopg.connect(owner_url) as conn:
+                conn.execute("DELETE FROM collaboration.feature_edit_leases WHERE source_id=%s", (sid,))
+
+    sid, rev = manual("LineString")
+    path = f"{root}/sources/{sid}/changesets"
+    parity.same("E03 line requires two positions", "POST", path, 422, headers=admin,
+                body=payload("e03-line-short", rev, [
+                    create("short", {"type": "LineString", "coordinates": [[105.8, 21.0]]})
+                ]))
+    parity.cross("E03 valid line Rust edit replayed by FastAPI", "rust", path,
+                 payload("e03-line-valid", rev, [
+                     create("line", {"type": "LineString",
+                                     "coordinates": [[105.8, 21.0], [105.9, 21.1]]})
+                 ]), admin)

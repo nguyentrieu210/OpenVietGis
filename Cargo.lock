@@ -1054,11 +1054,14 @@ dependencies = [
 name = "ovg-storage"
 version = "0.2.0"
 dependencies = [
+ "base64",
  "chrono",
+ "getrandom 0.2.17",
  "ovg-core",
  "ovg-spatial",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "sqlx",
  "subtle",

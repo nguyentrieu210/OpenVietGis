@@ -3,6 +3,7 @@
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Seek, Write};
 use std::path::Path;
+use std::time::Duration;
 
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -15,7 +16,9 @@ use crate::AppState;
 
 pub async fn readiness(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     let (postgres, postgis) = if let Some(pool) = state.db_pool.as_ref() {
-        pool.dependency_versions().await
+        tokio::time::timeout(Duration::from_secs(2), pool.dependency_versions())
+            .await
+            .unwrap_or((None, None))
     } else {
         (None, None)
     };
@@ -23,6 +26,7 @@ pub async fn readiness(State(state): State<AppState>) -> (StatusCode, Json<Value
     let artifacts_ok = tokio::task::spawn_blocking(move || probe_artifacts(&artifact_dir))
         .await
         .unwrap_or(false);
+    state.metrics.set_db_ready(postgres.is_some());
     let ready = postgres.is_some() && postgis.is_some() && artifacts_ok;
 
     (

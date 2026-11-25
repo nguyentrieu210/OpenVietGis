@@ -10,8 +10,9 @@
 # - Never stops, restarts, or modifies live services.
 
 set -euo pipefail
+umask 077
 
-SOURCE_CONTAINER="hn019-preview-postgres"
+SOURCE_CONTAINER="dev-postgres-test-1"
 SOURCE_DB="openvietgis_test"
 SOURCE_USER="openvietgis"
 TARGET_CONTAINER="dev-postgres-test-1"
@@ -29,7 +30,7 @@ usage() {
 Usage: staging-backup-restore.sh [options]
 
 Options:
-  --source-container NAME     Docker PostGIS container to dump from (default: hn019-preview-postgres)
+  --source-container NAME     Docker PostGIS container to dump from (default: dev-postgres-test-1)
   --source-db NAME            Source database name (default: openvietgis_test)
   --source-user NAME          Source PostgreSQL superuser/dump role (default: openvietgis)
   --target-container NAME     Docker PostGIS container for isolated restore (default: dev-postgres-test-1)
@@ -76,9 +77,21 @@ case "$TARGET_DB" in
     exit 10
     ;;
 esac
-if [[ ! "$TARGET_DB" =~ ^ovg_(staging|rehearsal)_[a-z0-9_]+$ ]]; then
+if [[ ! "$TARGET_DB" =~ ^ovg_(staging|rehearsal)_[a-z0-9_]+$ || ${#TARGET_DB} -gt 63 ]]; then
   echo "FATAL: --target-db '$TARGET_DB' must match ^ovg_(staging|rehearsal)_[a-z0-9_]+$" >&2
   exit 10
+fi
+
+# Only designated disposable PostGIS containers may receive writes.
+case "$TARGET_CONTAINER" in
+  dev-postgres-test-1|ovg-064-staging-postgres-staging-1) ;;
+  *) echo "FATAL: target container is not an approved isolated test container" >&2; exit 10 ;;
+esac
+if [[ "$SOURCE_CONTAINER" != dev-postgres-test-1 && "$SOURCE_CONTAINER" != ovg-064-staging-postgres-staging-1 ]]; then
+  echo "FATAL: source must be an isolated test container" >&2; exit 10
+fi
+if [[ ! "$SOURCE_DB" =~ ^[a-zA-Z0-9_]{1,63}$ || "$SOURCE_DB" == "$TARGET_DB" ]]; then
+  echo "FATAL: invalid source name or source/target collision" >&2; exit 10
 fi
 
 log() {
@@ -107,15 +120,18 @@ fingerprint_db() {
 SELECT 'pg_version=' || current_setting('server_version');
 SELECT 'postgis_version=' || COALESCE((SELECT extversion FROM pg_extension WHERE extname='postgis'), 'none');
 SELECT 'core_alembic=' || COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version), 'none');
-SELECT 'hn_alembic=' || CASE WHEN to_regclass('public.alembic_version_house_numbering') IS NOT NULL
-  THEN COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version_house_numbering), 'none')
-  ELSE 'none' END;
+SELECT to_regclass('public.alembic_version_house_numbering') IS NOT NULL AS has_hn \gset
+\if :has_hn
+SELECT 'hn_alembic=' || COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version_house_numbering), 'none');
+\else
+SELECT 'hn_alembic=none';
+\endif
 SELECT 'base_table_count=' || count(*)
   FROM information_schema.tables
-  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_type = 'BASE TABLE';
+  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%' AND table_type = 'BASE TABLE';
 SELECT 'view_count=' || count(*)
   FROM information_schema.views
-  WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
+  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%';
 SELECT 'rls_table_count=' || count(*)
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND c.relrowsecurity = true;
@@ -131,13 +147,27 @@ SQL
   docker exec -i "$ctr" psql -U "$user" -d "$db" -X -At -v ON_ERROR_STOP=1 <<'SQL' | LC_ALL=C sort > "${out_prefix}.schema"
 SELECT 'COL|' || table_schema || '.' || table_name || '.' || column_name || '|' || data_type || '|' || is_nullable
 FROM information_schema.columns
-WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%'
 UNION ALL
-SELECT 'RLS|' || n.nspname || '.' || c.relname || '|' || p.polname || '|' || p.polcmd::text || '|' || COALESCE(pg_get_expr(p.polqual, p.polrelid), '') || '|' || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
+SELECT 'RLS_FLAGS|' || n.nspname || '.' || c.relname || '|' || c.relrowsecurity || '|' || c.relforcerowsecurity
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+UNION ALL
+SELECT 'RLS|' || jsonb_build_array(
+  n.nspname, c.relname, p.polname, p.polcmd, p.polpermissive,
+  (SELECT jsonb_agg(roles.name ORDER BY roles.name COLLATE "C")
+   FROM (SELECT CASE WHEN role_id = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(role_id) END AS name
+         FROM unnest(p.polroles) AS policy_role(role_id)) AS roles),
+  pg_get_expr(p.polqual, p.polrelid), pg_get_expr(p.polwithcheck, p.polrelid))::text
 FROM pg_policy p
 JOIN pg_class c ON c.oid = p.polrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname NOT IN ('pg_catalog', 'information_schema');
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+UNION ALL
+SELECT 'ACL|' || n.nspname || '.' || c.relname || '|' || pg_get_userbyid(c.relowner)
+       || '|' || COALESCE(c.relacl::text, '')
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE c.relkind IN ('r','p','v','m','S') AND n.nspname NOT IN ('pg_catalog','information_schema');
 SQL
 
   # 3. Deterministic exact row counts across every user base table
@@ -152,7 +182,7 @@ BEGIN
   FOR r IN
     SELECT table_schema, table_name
     FROM information_schema.tables
-    WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+    WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%'
       AND table_type = 'BASE TABLE'
     ORDER BY table_schema, table_name
   LOOP
@@ -162,6 +192,21 @@ BEGIN
 END$$;
 SELECT fqn || '=' || row_count FROM _ovg_row_counts ORDER BY fqn;
 SQL
+
+  # Content hashes, including duplicates; only digests leave the database.
+  docker exec -i "$ctr" psql -U "$user" -d "$db" -X -qAt -v ON_ERROR_STOP=1 <<'SQL' > "${out_prefix}.content"
+SET TIME ZONE 'UTC';
+SET DateStyle = 'ISO, YMD';
+SELECT format(
+  'SELECT %L || ''|'' || encode(sha256(convert_to(to_jsonb(t)::text, ''UTF8'')), ''hex'') AS digest FROM %I.%I AS t ORDER BY 1',
+  table_schema || '.' || table_name, table_schema, table_name)
+FROM information_schema.tables
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema NOT LIKE 'pg_temp_%' AND table_type = 'BASE TABLE'
+ORDER BY table_schema, table_name
+\gexec
+SQL
+  sha256sum "${out_prefix}.content" | awk '{print $1}' > "${out_prefix}.content.sha256"
 
   sha256sum "${out_prefix}.schema" | awk '{print $1}' > "${out_prefix}.schema.sha256"
   sha256sum "${out_prefix}.rows"   | awk '{print $1}' > "${out_prefix}.rows.sha256"
@@ -219,11 +264,18 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 mkdir -p "$BACKUP_DIR"
+FREE_BYTES="$(df -PB1 "$BACKUP_DIR" | awk 'NR==2 {print $4}')"
+# Allow room for a dump and restore; this is a lower bound, not a capacity guarantee.
+if [[ ! "$FREE_BYTES" =~ ^[0-9]+$ || "$FREE_BYTES" -lt $(( SRC_SIZE_BYTES * 2 + 1073741824 )) ]]; then
+  echo "FATAL: insufficient free backup filesystem capacity" >&2; exit 12
+fi
 WORK_DIR="$(mktemp -d "${BACKUP_DIR}/run-${TS_UTC}-XXXXXX")"
+TARGET_CREATED=0
+VERIFIED=0
 DUMP_FILE="${WORK_DIR}/${SOURCE_DB}_${TS_UTC}.dump"
 
 cleanup() {
-  if [[ "$KEEP_TARGET_DB" -eq 0 ]]; then
+  if [[ "$TARGET_CREATED" -eq 1 && ( "$KEEP_TARGET_DB" -eq 0 || "$VERIFIED" -eq 0 ) ]]; then
     docker exec "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 \
       -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${TARGET_DB}' AND pid <> pg_backend_pid();" >/dev/null 2>&1 || true
     docker exec "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 \
@@ -232,7 +284,7 @@ cleanup() {
   if [[ "$KEEP_DUMP" -eq 0 ]]; then
     rm -rf "$WORK_DIR"
   else
-    rm -f "${WORK_DIR}"/*.meta "${WORK_DIR}"/*.schema "${WORK_DIR}"/*.rows "${WORK_DIR}"/*.sha256
+    rm -f "${WORK_DIR}"/*.meta "${WORK_DIR}"/*.schema "${WORK_DIR}"/*.rows "${WORK_DIR}"/*.content "${WORK_DIR}"/*.sha256
   fi
 }
 trap cleanup EXIT
@@ -240,16 +292,18 @@ trap cleanup EXIT
 T_START="$(date +%s)"
 
 # Step 1: Fingerprint source DB before dump
+check_additive_migrations "$CANDIDATE_MIGRATION_DIR" >/dev/null
 log "Step 1/5: Computing deterministic source DB fingerprint (read-only)..."
 fingerprint_db "$SOURCE_CONTAINER" "$SOURCE_USER" "$SOURCE_DB" "${WORK_DIR}/src"
 SRC_SCHEMA_SHA="$(cat "${WORK_DIR}/src.schema.sha256")"
 SRC_ROWS_SHA="$(cat "${WORK_DIR}/src.rows.sha256")"
+SRC_CONTENT_SHA="$(cat "${WORK_DIR}/src.content.sha256")"
 
 # Step 2: Custom-format pg_dump (-Fc -Z 6)
 log "Step 2/5: Creating custom-format pg_dump backup -> ${DUMP_FILE}..."
 T_DUMP_START="$(date +%s)"
 docker exec "$SOURCE_CONTAINER" pg_dump -U "$SOURCE_USER" -d "$SOURCE_DB" \
-  -Fc -Z 6 --no-owner --no-acl > "$DUMP_FILE"
+  -Fc -Z 6 > "$DUMP_FILE"
 T_DUMP_END="$(date +%s)"
 DUMP_SECONDS=$((T_DUMP_END - T_DUMP_START))
 DUMP_BYTES="$(stat -c %s "$DUMP_FILE")"
@@ -260,22 +314,26 @@ log "Backup complete: bytes=${DUMP_BYTES}, sha256=${DUMP_SHA256}, duration=${DUM
 log "Step 3/5: Creating isolated target DB '${TARGET_DB}' in '${TARGET_CONTAINER}' and restoring..."
 T_RESTORE_START="$(date +%s)"
 docker exec -i "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 <<SQL >/dev/null
-DROP DATABASE IF EXISTS "${TARGET_DB}";
 CREATE DATABASE "${TARGET_DB}" WITH TEMPLATE template0 ENCODING 'UTF8';
 SQL
+TARGET_CREATED=1
 
 # Ensure non-superuser runtime role exists (NOBYPASSRLS) so RLS policies reference valid role
 docker exec -i "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d "$TARGET_DB" -X -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime') THEN
-    CREATE ROLE openvietgis_runtime LOGIN PASSWORD 'staging_rehearsal_only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    RAISE EXCEPTION 'restricted runtime role must already exist in the isolated cluster';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime'
+             AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)) THEN
+    RAISE EXCEPTION 'unsafe runtime role';
   END IF;
 END$$;
 SQL
 
 docker exec -i "$TARGET_CONTAINER" pg_restore -U "$TARGET_USER" -d "$TARGET_DB" \
-  --exit-on-error --no-owner --no-privileges < "$DUMP_FILE"
+  --exit-on-error < "$DUMP_FILE"
 T_RESTORE_END="$(date +%s)"
 RESTORE_SECONDS=$((T_RESTORE_END - T_RESTORE_START))
 log "Restore complete: duration=${RESTORE_SECONDS}s"
@@ -286,6 +344,7 @@ T_VERIFY_START="$(date +%s)"
 fingerprint_db "$TARGET_CONTAINER" "$TARGET_USER" "$TARGET_DB" "${WORK_DIR}/dst"
 DST_SCHEMA_SHA="$(cat "${WORK_DIR}/dst.schema.sha256")"
 DST_ROWS_SHA="$(cat "${WORK_DIR}/dst.rows.sha256")"
+DST_CONTENT_SHA="$(cat "${WORK_DIR}/dst.content.sha256")"
 T_VERIFY_END="$(date +%s)"
 VERIFY_SECONDS=$((T_VERIFY_END - T_VERIFY_START))
 
@@ -301,6 +360,10 @@ fi
 if [[ "$SRC_ROWS_SHA" != "$DST_ROWS_SHA" ]]; then
   PARITY_STATUS="FAIL(rows_sha256 mismatch)"
   diff -u "${WORK_DIR}/src.rows" "${WORK_DIR}/dst.rows" | head -n 40 >&2 || true
+fi
+
+if [[ "$SRC_CONTENT_SHA" != "$DST_CONTENT_SHA" ]]; then
+  PARITY_STATUS="FAIL(content_sha256 mismatch)"
 fi
 
 # Step 5: Additive-only migration check (if candidate dir provided) & schema preservation assertion
@@ -322,6 +385,8 @@ src_schema_sha256=${SRC_SCHEMA_SHA}
 dst_schema_sha256=${DST_SCHEMA_SHA}
 src_rows_sha256=${SRC_ROWS_SHA}
 dst_rows_sha256=${DST_ROWS_SHA}
+src_content_sha256=${SRC_CONTENT_SHA}
+dst_content_sha256=${DST_CONTENT_SHA}
 parity_status=${PARITY_STATUS}
 ${ADDITIVE_RESULT}
 dump_duration_s=${DUMP_SECONDS}
@@ -345,5 +410,6 @@ if [[ "$PARITY_STATUS" != "PASS" ]]; then
   echo "FATAL: Staging restore verification failed: ${PARITY_STATUS}" >&2
   exit 20
 fi
+VERIFIED=1
 log "SUCCESS: Staging backup/restore parity verified in ${TOTAL_SECONDS}s."
 

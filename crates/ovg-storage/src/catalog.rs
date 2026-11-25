@@ -16,12 +16,15 @@ use uuid::Uuid;
 use crate::{DbPool, TenantTransaction};
 
 mod features;
+mod map_write;
 pub use features::FeatureRequest;
+pub use map_write::MapSaveIntent;
 
 #[derive(Clone, Copy)]
 pub enum ProjectReadPolicy {
     LayerAcl,
     Unrestricted,
+    UnrestrictedEdit,
 }
 
 /// Proof of project.read on exactly one organization and project. The
@@ -30,6 +33,7 @@ pub struct ProjectRead<'a> {
     pub(crate) tx: TenantTransaction<'a>,
     pub(crate) project_id: Uuid,
     pub(crate) gis_scoped: bool,
+    edit_authorized: bool,
 }
 
 impl<'a> ProjectRead<'a> {
@@ -48,7 +52,6 @@ impl<'a> ProjectRead<'a> {
             actor_id,
             session_id,
             policy,
-            false,
         )
         .await
     }
@@ -62,14 +65,13 @@ impl<'a> ProjectRead<'a> {
         actor_id: Uuid,
         session_id: Uuid,
     ) -> Result<Self, AppError> {
-        Self::open(
+        Self::begin(
             pool,
             organization_id,
             project_id,
             actor_id,
             session_id,
-            ProjectReadPolicy::Unrestricted,
-            true,
+            ProjectReadPolicy::UnrestrictedEdit,
         )
         .await
     }
@@ -96,8 +98,8 @@ impl<'a> ProjectRead<'a> {
         actor_id: Uuid,
         session_id: Uuid,
         policy: ProjectReadPolicy,
-        edit: bool,
     ) -> Result<Self, AppError> {
+        let edit = matches!(policy, ProjectReadPolicy::UnrestrictedEdit);
         let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
         if organization_id.is_nil() {
             return Err(AppError::not_found("organization not found"));
@@ -199,7 +201,7 @@ impl<'a> ProjectRead<'a> {
             .fetch_one(&mut **tx.tx_mut())
             .await
             .map_err(db_error)?;
-        if gis_scoped && matches!(policy, ProjectReadPolicy::Unrestricted) {
+        if gis_scoped && !matches!(policy, ProjectReadPolicy::LayerAcl) {
             return Err(AppError::forbidden(
                 "Thao tác chưa được cấp quyền trong phạm vi GIS",
             ));
@@ -265,6 +267,7 @@ impl<'a> ProjectRead<'a> {
             tx,
             project_id,
             gis_scoped,
+            edit_authorized: edit,
         })
     }
 
@@ -322,6 +325,56 @@ impl<'a> ProjectRead<'a> {
         Ok(self.get_source_record(source_id).await?.wire)
     }
 
+    pub async fn list_changes(
+        &mut self,
+        after_id: Option<Uuid>,
+        limit: usize,
+    ) -> Result<Value, AppError> {
+        self.require_unrestricted()?;
+        let mut rows = sqlx::query(
+            "SELECT id, resource_type, resource_id, actor_type, actor_id,
+                    actor_display_snapshot, operation, created_at, audit_event_id,
+                    prior_revision, new_revision, changes
+             FROM spatial.catalog_changes
+             WHERE organization_id = $1 AND project_id = $2
+               AND ($3::uuid IS NULL OR id > $3)
+             ORDER BY id LIMIT $4",
+        )
+        .bind(self.tx.organization_id())
+        .bind(self.project_id)
+        .bind(after_id)
+        .bind(page_size(limit)?)
+        .fetch_all(&mut **self.tx.tx_mut())
+        .await
+        .map_err(db_error)?;
+        let next = next_page(&mut rows, limit)?;
+        let organization_id = self.tx.organization_id();
+        let mut items = Vec::with_capacity(rows.len());
+        for row in &rows {
+            // The canonical catalog CHECK constraints restrict revisions and
+            // changed values to safe, bounded public metadata.
+            items.push(json!({
+                "id": row.try_get::<Uuid, _>("id").map_err(db_error)?,
+                "organization_id": organization_id,
+                "project_id": self.project_id,
+                "resource_type": row.try_get::<String, _>("resource_type").map_err(db_error)?,
+                "resource_id": row.try_get::<Uuid, _>("resource_id").map_err(db_error)?,
+                "actor_type": row.try_get::<String, _>("actor_type").map_err(db_error)?,
+                "actor_id": row.try_get::<Uuid, _>("actor_id").map_err(db_error)?,
+                "actor_display_snapshot": row
+                    .try_get::<String, _>("actor_display_snapshot")
+                    .map_err(db_error)?,
+                "operation": row.try_get::<String, _>("operation").map_err(db_error)?,
+                "created_at": timestamp(row, "created_at")?,
+                "audit_event_id": row.try_get::<Uuid, _>("audit_event_id").map_err(db_error)?,
+                "prior_revision": row.try_get::<Option<Value>, _>("prior_revision").map_err(db_error)?,
+                "new_revision": row.try_get::<Value, _>("new_revision").map_err(db_error)?,
+                "changes": row.try_get::<Value, _>("changes").map_err(db_error)?,
+            }));
+        }
+        Ok(self.page(items, next))
+    }
+
     /// Candidate replay of project-wide spatial invalidations. The caller must
     /// obtain a fresh ProjectRead for every page (including reconnect).
     pub async fn replay_spatial_invalidations(
@@ -331,8 +384,118 @@ impl<'a> ProjectRead<'a> {
     ) -> Result<crate::e11_outbox::SpatialReplay, AppError> {
         self.require_unrestricted()?;
         let organization = self.tx.organization_id();
-        crate::e11_outbox::replay(self.tx.tx_mut(), organization, self.project_id, cursor, limit)
+        crate::e11_outbox::replay(
+            self.tx.tx_mut(),
+            organization,
+            self.project_id,
+            cursor,
+            limit,
+        )
+        .await
+    }
+
+    /// Map configuration is filtered through the same layer RLS as catalog reads.
+    pub async fn get_map(&mut self) -> Result<Value, AppError> {
+        let org = self.tx.organization_id();
+        let row: Option<(Uuid,i64,Value)>=sqlx::query_as(
+            "SELECT id, configuration_revision, configuration FROM maps.project_maps WHERE organization_id=$1 AND project_id=$2"
+        ).bind(org).bind(self.project_id).fetch_optional(&mut **self.tx.tx_mut()).await.map_err(db_error)?;
+        let (id, revision, mut config) = row.unwrap_or_else(|| {
+            (
+                map_identity(self.project_id),
+                0,
+                json!({"layers":[],"basemap":"grid","default_viewpoint":null}),
+            )
+        });
+        if id != map_identity(self.project_id) {
+            return Err(AppError::internal("invalid persisted map identity"));
+        }
+        normalize_map_configuration(&mut config)?;
+        if self.gis_scoped {
+            let allowed: HashSet<Uuid> = sqlx::query_scalar::<_, Uuid>(
+                "SELECT id FROM spatial.layers WHERE organization_id=$1 AND project_id=$2",
+            )
+            .bind(org)
+            .bind(self.project_id)
+            .fetch_all(&mut **self.tx.tx_mut())
             .await
+            .map_err(db_error)?
+            .into_iter()
+            .collect();
+            let layers = config["layers"]
+                .as_array_mut()
+                .ok_or_else(|| AppError::internal("invalid map layers"))?;
+            layers.retain(|layer| {
+                layer["layer_id"]
+                    .as_str()
+                    .and_then(|v| Uuid::parse_str(v).ok())
+                    .is_some_and(|id| allowed.contains(&id))
+            });
+            config["default_viewpoint"] = Value::Null;
+        }
+        Ok(
+            json!({"map_id":id,"organization_id":org,"project_id":self.project_id,"configuration_revision":revision,"configuration":config}),
+        )
+    }
+
+    pub async fn map_history(
+        &mut self,
+        after: Option<i64>,
+        limit: usize,
+    ) -> Result<Value, AppError> {
+        self.require_unrestricted()?;
+        if !(1..=100).contains(&limit)
+            || after.is_some_and(|value| !(1..=9_007_199_254_740_991).contains(&value))
+        {
+            return Err(AppError::validation(
+                "INVALID_MAP_HISTORY",
+                "invalid map history",
+            ));
+        }
+        let rows=sqlx::query(
+            "SELECT map_id,operation_id,configuration_revision,prior_revision,actor_type,actor_id,actor_display_snapshot,created_at,before_configuration,after_configuration
+             FROM maps.map_revisions WHERE organization_id=$1 AND project_id=$2
+             AND ($3::bigint IS NULL OR configuration_revision<$3) ORDER BY configuration_revision DESC LIMIT $4"
+        ).bind(self.tx.organization_id()).bind(self.project_id).bind(after).bind((limit+1) as i64)
+        .fetch_all(&mut **self.tx.tx_mut()).await.map_err(db_error)?;
+        let mut items = Vec::with_capacity(limit);
+        for row in rows.iter().take(limit) {
+            let mut before: Option<Value> =
+                row.try_get("before_configuration").map_err(db_error)?;
+            let mut after: Value = row.try_get("after_configuration").map_err(db_error)?;
+            if let Some(value) = &mut before {
+                normalize_map_configuration(value)?;
+            }
+            normalize_map_configuration(&mut after)?;
+            items.push(json!({"map_id":row.try_get::<Uuid,_>("map_id").map_err(db_error)?,
+                "operation_id":row.try_get::<Uuid,_>("operation_id").map_err(db_error)?,
+                "configuration_revision":row.try_get::<i64,_>("configuration_revision").map_err(db_error)?,
+                "prior_revision":row.try_get::<i64,_>("prior_revision").map_err(db_error)?,
+                "actor_type":row.try_get::<String,_>("actor_type").map_err(db_error)?,
+                "actor_id":row.try_get::<Uuid,_>("actor_id").map_err(db_error)?,
+                "actor_display_snapshot":row.try_get::<String,_>("actor_display_snapshot").map_err(db_error)?,
+                "created_at":timestamp(row,"created_at")?,"before_configuration":before,"after_configuration":after}));
+        }
+        let next = if rows.len() > limit {
+            items
+                .last()
+                .and_then(|item| item["configuration_revision"].as_i64())
+        } else {
+            None
+        };
+        Ok(json!({"items":items,"next_after_revision":next}))
+    }
+
+    pub async fn map_operation(&mut self, operation_id: Uuid) -> Result<Value, AppError> {
+        self.require_unrestricted()?;
+        if !self.edit_authorized {
+            return Err(AppError::forbidden("missing permission: project.edit"));
+        }
+        let (map_id, revision): (Uuid,i64)=sqlx::query_as(
+            "SELECT map_id,committed_revision FROM maps.map_operations WHERE organization_id=$1 AND project_id=$2 AND operation_id=$3 AND actor_type='human' AND actor_id=$4"
+        ).bind(self.tx.organization_id()).bind(self.project_id).bind(operation_id).bind(self.tx.actor_id())
+        .fetch_optional(&mut **self.tx.tx_mut()).await.map_err(db_error)?.ok_or_else(resource_not_found)?;
+        Ok(json!({"map_id":map_id,"operation_id":operation_id,"configuration_revision":revision}))
     }
 
     pub async fn commit(self) -> Result<(), AppError> {
@@ -758,6 +921,58 @@ fn extent_wire(extent: Option<Value>) -> Result<Option<Value>, AppError> {
             }))
         })
         .transpose()
+}
+
+/// RFC 4122 UUIDv5, using the Project UUID as namespace, as in Python.
+fn map_identity(project_id: Uuid) -> Uuid {
+    let mut hasher = sha1::Sha1::new();
+    hasher.update(project_id.as_bytes());
+    hasher.update(b"openvietgis:map");
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&hasher.finalize()[..16]);
+    bytes[6] = (bytes[6] & 0x0f) | 0x50;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    Uuid::from_bytes(bytes)
+}
+
+fn normalize_map_configuration(config: &mut Value) -> Result<(), AppError> {
+    let invalid = || AppError::internal("invalid persisted map configuration");
+    let layers = config
+        .get_mut("layers")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(invalid)?;
+    for layer in layers {
+        let style = layer
+            .get_mut("style")
+            .and_then(Value::as_object_mut)
+            .ok_or_else(invalid)?;
+        for field in ["opacity", "width", "radius"] {
+            let n = style
+                .get(field)
+                .and_then(Value::as_f64)
+                .ok_or_else(invalid)?;
+            style.insert(field.to_owned(), json!(n));
+        }
+        if layer.get("group").is_some_and(Value::is_null) {
+            layer.as_object_mut().ok_or_else(invalid)?.remove("group");
+        }
+        if layer.get("display").is_some_and(Value::is_null) {
+            layer.as_object_mut().ok_or_else(invalid)?.remove("display");
+        }
+    }
+    if let Some(viewpoint) = config
+        .get_mut("default_viewpoint")
+        .and_then(Value::as_object_mut)
+    {
+        for field in ["longitude", "latitude", "zoom", "bearing", "pitch"] {
+            let n = viewpoint
+                .get(field)
+                .and_then(Value::as_f64)
+                .ok_or_else(invalid)?;
+            viewpoint.insert(field.to_owned(), json!(n));
+        }
+    }
+    Ok(())
 }
 
 fn timestamp(row: &PgRow, key: &str) -> Result<Option<String>, AppError> {

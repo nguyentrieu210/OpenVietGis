@@ -1,6 +1,7 @@
 name: Rust Platform CI
 
 on:
+  workflow_dispatch:
   push:
     branches: ["main", "dev", "064-rust-platform", "064-**"]
     paths:
@@ -9,6 +10,9 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - "apps/api-rust/**"
+      - "apps/api/**"
+      - "infra/dev/compose.yaml"
+      - "infra/dev/postgres/**"
       - "crates/**"
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
@@ -21,6 +25,9 @@ on:
       - "rust-toolchain.toml"
       - ".cargo/**"
       - "apps/api-rust/**"
+      - "apps/api/**"
+      - "infra/dev/compose.yaml"
+      - "infra/dev/postgres/**"
       - "crates/**"
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
@@ -40,6 +47,7 @@ jobs:
   check-and-test:
     name: Format, Clippy, Tests & Architecture Isolation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -104,6 +112,7 @@ jobs:
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     env:
@@ -137,6 +146,9 @@ jobs:
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
 
+      - name: Test parity harness
+        run: uv run --project apps/api python -m unittest discover -s tests/rust-parity -p "test_*.py"
+
       - name: Run differential parity
         run: |
           set -o pipefail
@@ -144,6 +156,25 @@ jobs:
           uv run --project apps/api python tests/rust-parity/run.py \
             --candidate target/debug/openvietgis-api-rust --include-features \
             2>&1 | tee dist/parity/parity.log
+
+      - name: Run isolated E03 comparative benchmark
+        if: ${{ !cancelled() && github.ref_name == '064-e03' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e03_benchmark.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/parity/e03-benchmark.json \
+            2>&1 | tee dist/parity/e03-benchmark.log
+      # E07 has its own strict gate even if another engine's parity fails.
+      - name: Run E07 transfer parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e07_transfers.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e07-transfers.log
 
       - name: Record PostGIS version
         if: always()
@@ -164,9 +195,9 @@ jobs:
   security-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
-      checks: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -175,9 +206,20 @@ jobs:
       - name: Install stable toolchain for cargo-audit
         run: rustup toolchain install stable --profile minimal
 
+      # The CLI exits nonzero on vulnerabilities without requiring checks:write.
+      - name: Install pinned cargo-audit
+        run: cargo +stable install cargo-audit --version 0.23.0 --locked
+
       - name: Run cargo-audit
-        uses: rustsec/audit-check@v2
-        env:
-          RUSTUP_TOOLCHAIN: stable
+        run: |
+          set -o pipefail
+          mkdir -p dist/audit
+          cargo +stable audit --json | tee dist/audit/cargo-audit.json
+
+      - name: Upload audit output
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: cargo-audit
+          path: dist/audit/
+          if-no-files-found: warn

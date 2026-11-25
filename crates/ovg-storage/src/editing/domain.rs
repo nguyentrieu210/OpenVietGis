@@ -705,7 +705,7 @@ pub fn redact_audit_value(value: &str) -> &str {
             && rest.get(33..).is_some_and(|t| token(t, 16))
     });
     let parts: Vec<_> = trimmed.split('.').collect();
-    let jwt = parts.len() == 3 && parts.iter().all(|p| token(*p, 1));
+    let jwt = parts.len() == 3 && parts.iter().all(|p| token(p, 1));
     if session || invitation || service || jwt {
         "[REDACTED]"
     } else {
@@ -790,7 +790,7 @@ mod tests {
         );
         assert_eq!(
             out,
-            r#"{"a":"Mã\n\"x\"😀\u007f","b":[1,1.0,1e-05],"c":null}"#
+            r#"{"a":"M\u00e3\n\"x\"\ud83d\ude00\u007f","b":[1,1.0,1e-05],"c":null}"#
         );
     }
 

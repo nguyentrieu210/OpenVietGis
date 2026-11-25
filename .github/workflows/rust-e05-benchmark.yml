@@ -1,0 +1,51 @@
+name: E05 Viewport Benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["064-e05", "064-data-engines-completion", "064-integration", "064-rust-platform"]
+    paths:
+      - "apps/api-rust/src/map_render.rs"
+      - "crates/ovg-storage/src/viewport.rs"
+      - "tests/rust-parity/e05_benchmark.py"
+      - "tests/rust-parity/e04_benchmark.py"
+      - "tools/benchmark/rust-platform/**"
+      - ".github/workflows/rust-e05-benchmark.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  viewport-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-e05-benchmark
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C debuginfo=0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: parity
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --project apps/api --frozen
+      - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+      - run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
+      - name: Measure E05 viewport over HTTP and PostGIS
+        run: |
+          uv run --project apps/api python tests/rust-parity/e05_benchmark.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/e05-benchmark/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e05-benchmark
+          path: dist/e05-benchmark/
+          if-no-files-found: warn

@@ -105,13 +105,16 @@ def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor):
         token=owner,
         params=pins,
     )
-    manual = layers["edit_4326"]
+    manual_path = layer_path(layers["edit_4326"]["layer_id"])
+    # E03 runs before E05 and advances the editable layer's content pin.
+    manual = suite.get("E05 current manual layer pins", manual_path, token=owner)
+    manual_pins = _pins(manual) if manual else _pins(layers["edit_4326"])
     suite.get(
         "E05 manual source has no render profile",
-        f"{layer_path(manual['layer_id'])}/viewport",
+        f"{manual_path}/viewport",
         422,
         token=owner,
-        params=_pins(manual) | HANOI,
+        params=manual_pins | HANOI,
     )
     regional = layers["vn2000_5899_1k"]
     suite.get(
@@ -136,10 +139,10 @@ def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor):
     suite.get("E05 GIS-scoped display extent", extent, token=surveyor, params=pins)
     suite.get(
         "E05 GIS-scoped hidden layer",
-        f"{layer_path(manual['layer_id'])}/viewport",
+        f"{manual_path}/viewport",
         404,
         token=surveyor,
-        params=_pins(manual) | HANOI,
+        params=manual_pins | HANOI,
     )
     compare_tiles(suite, layer_path, polygons, owner, outsider, surveyor)
 
@@ -170,6 +173,20 @@ def compare_tiles(suite, layer_path, polygons, owner, outsider, surveyor):
         _require(len(response.content) > 1000, f"tile has {len(response.content)} bytes")
         _require(b"poly-000002" in response.content, "owner tile misses features")
 
+    def stable():
+        first = get(owner)
+        second = get(owner)
+        _require(first.status_code == second.status_code == 200, "tile status")
+        _require(first.content == second.content, "same pinned tile must be deterministic")
+
+    def world():
+        response = get(owner, path=tile.replace(f"/{z}/{x}/{y}.mvt", "/0/0/0.mvt"))
+        _require(response.status_code == 200, f"world tile status {response.status_code}")
+        _require(
+            response.headers.get("content-type") == "application/vnd.mapbox-vector-tile",
+            "world tile type",
+        )
+
     def scoped():
         response = get(surveyor)
         _require(response.status_code == 200, f"status {response.status_code}")
@@ -189,6 +206,8 @@ def compare_tiles(suite, layer_path, polygons, owner, outsider, surveyor):
         return check
 
     _outcome(suite, "E05 tile populated", populated)
+    _outcome(suite, "E05 tile deterministic", stable)
+    _outcome(suite, "E05 world tile", world)
     _outcome(suite, "E05 tile GIS-scoped", scoped)
     _outcome(suite, "E05 tile empty area", empty)
     _outcome(suite, "E05 tile tenant B denied", status(404, outsider))

@@ -17,10 +17,10 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E02-T05 Review, integration test, document remaining gaps and convergence (E02-AC4).
 
 ## E03 — Geometry, editing, topology
-- [ ] E03-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E03-AC1).
-- [ ] E03-T02 Create golden, failure, permission and interoperability fixtures (E03-AC2).
-- [ ] E03-T03 Implement/retain approved engine and integrate behind public contract (E03-AC2).
-- [ ] E03-T04 Run comparative performance and resource tests, record raw evidence (E03-AC3).
+- [x] E03-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E03-AC1).
+- [x] E03-T02 Create golden, failure, permission and interoperability fixtures (E03-AC2).
+- [x] E03-T03 Implement/retain approved engine and integrate behind public contract (E03-AC2).
+- [x] E03-T04 Run comparative performance and resource tests, record raw evidence (E03-AC3).
 - [ ] E03-T05 Review, integration test, document remaining gaps and convergence (E03-AC4).
 
 ## E04 — Queries, expression, attribute table
@@ -108,15 +108,15 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E15-T05 Review, integration test, document remaining gaps and convergence (E15-AC4).
 
 ## E16 — AI and MCP
-- [ ] E16-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E16-AC1).
+- [x] E16-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E16-AC1).
 - [ ] E16-T02 Create golden, failure, permission and interoperability fixtures (E16-AC2).
 - [ ] E16-T03 Implement/retain approved engine and integrate behind public contract (E16-AC2).
 - [ ] E16-T04 Run comparative performance and resource tests, record raw evidence (E16-AC3).
 - [ ] E16-T05 Review, integration test, document remaining gaps and convergence (E16-AC4).
 
 ## E17 — Canonical web, desktop-ready shell
-- [ ] E17-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E17-AC1).
-- [ ] E17-T02 Create golden, failure, permission and interoperability fixtures (E17-AC2).
+- [x] E17-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E17-AC1).
+- [x] E17-T02 Create golden, failure, permission and interoperability fixtures (E17-AC2).
 - [ ] E17-T03 Implement/retain approved engine and integrate behind public contract (E17-AC2).
 - [ ] E17-T04 Run comparative performance and resource tests, record raw evidence (E17-AC3).
 - [ ] E17-T05 Review, integration test, document remaining gaps and convergence (E17-AC4).

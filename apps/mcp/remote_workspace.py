@@ -112,8 +112,8 @@ class OwnedBridge:
 
     def operation_status(self,subject,ticket):
         from advanced_tools import LONG
-        sid,key=self.for_subject(subject)
         with self.store.lock:
+            sid,key=self.for_subject(subject)
             session=self.store._get(sid,key,"ai")
             record=self.owned[sid]
             if record.last_receipt and record.last_receipt[0]==ticket:
@@ -126,10 +126,10 @@ class OwnedBridge:
             return result
 
     async def execute(self,subject,method,params,token_expiry):
-        sid,key=self.for_subject(subject)
-        if token_expiry<=time.time():
-            raise BridgeError(401,"OAuth token expired")
         with self.store.lock:
+            sid,key=self.for_subject(subject)
+            if token_expiry<=time.time():
+                raise BridgeError(401,"OAuth token expired")
             from workspace_tools import METHODS as WORKSPACE_METHODS
             if method in WORKSPACE_METHODS and (sid not in self.owned or not self.owned[sid].full_workspace):
                 raise BridgeError(409,"Update the GIS tab to connect full workspace tools")

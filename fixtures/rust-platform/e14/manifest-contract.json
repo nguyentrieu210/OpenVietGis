@@ -1,0 +1,324 @@
+[
+  {
+    "id": "valid",
+    "valid": true,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "invalid_key",
+    "valid": false,
+    "manifest": {
+      "extension_key": "A_bad",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "invalid_version",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "01.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "invalid_api",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "2.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "foreign_permission",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.other.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "duplicate_permission",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read",
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "undeclared_command",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.write"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "duplicate_command",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        },
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  },
+  {
+    "id": "duplicate_capability",
+    "valid": false,
+    "manifest": {
+      "extension_key": "example_extension",
+      "version": "1.0.0",
+      "api_compatibility": "1.x",
+      "display_name": "Example",
+      "description": "Generic extension fixture",
+      "permissions": [
+        "ext.example_extension.read"
+      ],
+      "commands": [
+        {
+          "id": "read",
+          "label": "Đọc",
+          "required_permission": "ext.example_extension.read"
+        }
+      ],
+      "capabilities": [
+        "record_list",
+        "record_list"
+      ],
+      "entity_schemas": {
+        "thing": {
+          "fields": {
+            "name": {
+              "type": "text",
+              "required": true
+            }
+          }
+        }
+      },
+      "ui_contributions": []
+    }
+  }
+]

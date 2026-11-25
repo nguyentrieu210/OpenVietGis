@@ -223,17 +223,29 @@ pub(super) fn multipart_file<'a>(
     }
     let delimiter = format!("--{boundary}");
     let separator = format!("\r\n--{boundary}");
-    let mut position = find(body, delimiter.as_bytes(), 0)? + delimiter.len();
+    // A delimiter is a complete boundary line, not merely a prefix in a payload.
+    // Require the opening boundary and validate each following boundary suffix.
+    let mut position = body
+        .strip_prefix(delimiter.as_bytes())
+        .map(|_| delimiter.len())?;
     loop {
         let rest = body.get(position..)?;
-        if rest.starts_with(b"--") {
+        if !rest.starts_with(b"\r\n") {
             return None;
         }
-        position += 2; // CRLF after the boundary line
+        position += 2;
         let header_end = find(body, b"\r\n\r\n", position)?;
         let headers = std::str::from_utf8(&body[position..header_end]).ok()?;
         let content_start = header_end + 4;
-        let content_end = find(body, separator.as_bytes(), content_start)?;
+        let mut search = content_start;
+        let content_end = loop {
+            let at = find(body, separator.as_bytes(), search)?;
+            let suffix = body.get(at + separator.len()..)?;
+            if suffix.starts_with(b"\r\n") || suffix == b"--" || suffix.starts_with(b"--\r\n") {
+                break at;
+            }
+            search = at + 1;
+        };
         if let Some(filename) = file_part(headers) {
             return Some((filename, &body[content_start..content_end]));
         }
@@ -305,6 +317,15 @@ mod tests {
         ));
         drop(file);
         tokio::fs::remove_dir_all(root).await.unwrap();
+    }
+
+    #[test]
+    fn multipart_ignores_boundary_prefix_inside_payload() {
+        let body = b"--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"data.geojson\"\r\n\r\nfirst\r\n--Bprefix\r\nlast\r\n--B--\r\n";
+        let (_, content) = multipart_file("multipart/form-data; boundary=B", body).unwrap();
+        assert_eq!(content, b"first\r\n--Bprefix\r\nlast");
+        let malformed = b"--BxxContent-Disposition: form-data; name=\"file\"; filename=\"x\"\r\n\r\nabc\r\n--B--\r\n";
+        assert!(multipart_file("multipart/form-data; boundary=B", malformed).is_none());
     }
 
     #[test]

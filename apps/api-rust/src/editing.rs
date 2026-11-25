@@ -11,13 +11,15 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use ovg_storage::editing::domain::{py_strip, Segment, Xy};
-use ovg_storage::editing::{snap, CommitRequest, EditError, EditScope, Guard, Permission};
+use ovg_storage::editing::{
+    authenticate_service, snap, CommitRequest, EditError, EditScope, Guard, Permission, ServiceAuth,
+};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::identity::{HumanSession, IdentityError};
+use crate::identity::{self, HumanSession, IdentityError};
 use crate::AppState;
 
 // shortcut: FastAPI has no body cap; 64 MiB covers 2000 ops x 4096 vertices of JSON.
@@ -48,7 +50,7 @@ async fn commit_changeset(
     Path((organization, project, source)): Ids,
     request: Request,
 ) -> Result<(StatusCode, Json<Value>), Failure> {
-    let (session, headers, body) = authenticate_json(&state, request).await?;
+    let (session, headers, body) = authenticate_json(&state, request, &organization).await?;
     let scope = open(
         &state,
         &session,
@@ -75,11 +77,13 @@ async fn commit_changeset(
 }
 
 async fn list_changesets(
-    session: HumanSession,
     State(state): State<AppState>,
     Path((organization, project, source)): Ids,
     uri: Uri,
+    request: Request,
 ) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let session = authenticate_actor(&state, &mut parts, &organization).await?;
     let scope = open(&state, &session, &organization, &project, Guard::Read).await?;
     let limit = query_limit(&uri)?;
     let (Some(mut scope), Ok(source_id)) = (scope, Uuid::parse_str(&source)) else {
@@ -91,10 +95,12 @@ async fn list_changesets(
 }
 
 async fn get_changeset(
-    session: HumanSession,
     State(state): State<AppState>,
     Path((organization, project, changeset)): Ids,
+    request: Request,
 ) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let session = authenticate_actor(&state, &mut parts, &organization).await?;
     let scope = open(&state, &session, &organization, &project, Guard::Read).await?;
     let (Some(mut scope), Ok(changeset_id)) = (scope, Uuid::parse_str(&changeset)) else {
         return Err(EditError::InvalidRequest.into());
@@ -117,7 +123,7 @@ async fn revert_changeset(
     Path((organization, project, changeset)): Ids,
     request: Request,
 ) -> Result<(StatusCode, Json<Value>), Failure> {
-    let (session, headers, body) = authenticate_json(&state, request).await?;
+    let (session, headers, body) = authenticate_json(&state, request, &organization).await?;
     let scope = open(
         &state,
         &session,
@@ -157,7 +163,7 @@ async fn compute_snap(
     Path((organization, project)): Path<(String, String)>,
     request: Request,
 ) -> Result<Json<Value>, Failure> {
-    let (session, headers, body) = authenticate_json(&state, request).await?;
+    let (session, headers, body) = authenticate_json(&state, request, &organization).await?;
     let scope = open(
         &state,
         &session,
@@ -178,10 +184,49 @@ async fn compute_snap(
     Ok(Json(result))
 }
 
-type Authenticated = (HumanSession, HeaderMap, Option<Value>);
+enum Actor {
+    Human(HumanSession),
+    Service(ServiceAuth),
+}
+
+async fn authenticate_actor(
+    state: &AppState,
+    parts: &mut axum::http::request::Parts,
+    organization: &str,
+) -> Result<Actor, Failure> {
+    let bearer = parts
+        .headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| {
+            value
+                .get(..7)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bearer "))
+        })
+        .map(|value| py_strip(&value[7..]));
+    if let Some(raw) = bearer {
+        let org = Uuid::parse_str(organization)
+            .map_err(|_| EditError::detail(401, "invalid service credential"))?;
+        let pool = state
+            .db_pool
+            .as_ref()
+            .ok_or_else(|| EditError::detail(503, "database unavailable"))?;
+        return Ok(Actor::Service(authenticate_service(pool, org, raw).await?));
+    }
+    HumanSession::from_request_parts(parts, state)
+        .await
+        .map(Actor::Human)
+        .map_err(|error| Failure::Identity(Box::new(error)))
+}
+
+type Authenticated = (Actor, HeaderMap, Option<Value>);
 
 /// FastAPI decodes a JSON body before dependencies run, then authenticates.
-async fn authenticate_json(state: &AppState, request: Request) -> Result<Authenticated, Failure> {
+async fn authenticate_json(
+    state: &AppState,
+    request: Request,
+    organization: &str,
+) -> Result<Authenticated, Failure> {
     let (mut parts, body) = request.into_parts();
     let bytes = to_bytes(body, MAX_BODY_BYTES)
         .await
@@ -191,9 +236,7 @@ async fn authenticate_json(state: &AppState, request: Request) -> Result<Authent
     } else {
         Some(serde_json::from_slice(&bytes).map_err(|_| EditError::InvalidRequest)?)
     };
-    let session = HumanSession::from_request_parts(&mut parts, state)
-        .await
-        .map_err(|error| Failure::Identity(Box::new(error)))?;
+    let session = authenticate_actor(state, &mut parts, organization).await?;
     Ok((session, parts.headers, json))
 }
 
@@ -219,7 +262,7 @@ fn json_content_type(headers: &HeaderMap) -> bool {
 /// Project guard; skipped (like the oracle) when the path IDs are not UUIDs.
 async fn open<'a>(
     state: &'a AppState,
-    session: &HumanSession,
+    session: &Actor,
     organization: &str,
     project: &str,
     guard: Guard,
@@ -233,38 +276,31 @@ async fn open<'a>(
         .db_pool
         .as_ref()
         .ok_or_else(|| EditError::detail(503, "database unavailable"))?;
-    let scope = EditScope::begin(
-        pool,
-        organization_id,
-        project_id,
-        session.actor_id(),
-        session.session_id(),
-        guard,
-    )
-    .await?;
+    let scope = match session {
+        Actor::Human(session) => {
+            EditScope::begin(
+                pool,
+                organization_id,
+                project_id,
+                session.actor_id(),
+                session.session_id(),
+                guard,
+            )
+            .await?
+        }
+        Actor::Service(auth) => {
+            EditScope::begin_service(pool, organization_id, project_id, auth, guard).await?
+        }
+    };
     Ok(Some(scope))
 }
 
-fn require_csrf(
-    state: &AppState,
-    session: &HumanSession,
-    headers: &HeaderMap,
-) -> Result<(), Failure> {
-    let candidate = headers
-        .get("x-openvietgis-csrf")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
-    let valid = !candidate.is_empty()
-        && state
-            .config
-            .csrf_secret
-            .as_deref()
-            .is_some_and(|secret| session.csrf_matches(candidate, secret));
-    if valid {
-        Ok(())
-    } else {
-        Err(EditError::detail(403, "CSRF validation failed").into())
-    }
+fn require_csrf(state: &AppState, session: &Actor, headers: &HeaderMap) -> Result<(), Failure> {
+    let Actor::Human(session) = session else {
+        return Ok(());
+    };
+    identity::require_csrf(state, session, headers)
+        .map_err(|error| Failure::Identity(Box::new(error)))
 }
 
 fn decode<T: DeserializeOwned>(body: Option<Value>) -> Result<T, Failure> {

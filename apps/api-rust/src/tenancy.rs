@@ -7,15 +7,18 @@ use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
+use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use ovg_storage::tenancy::{
-    organization_role_permissions, Membership, Project, TenantTx, Workspace, AUDIT_READ,
-    ORGANIZATION_DELETE, ORGANIZATION_LIFECYCLE, ORGANIZATION_MANAGE_MEMBERS,
-    ORGANIZATION_MANAGE_SETTINGS, ORGANIZATION_OWNER_TRANSFER, PROJECT_ARCHIVE, PROJECT_DELETE,
-    PROJECT_MANAGE, PROJECT_MOVE_WORKSPACE, PROJECT_READ, WORKSPACE_MANAGE, WORKSPACE_READ,
+    organization_role_permissions, GrantInput, InvitationInput, InvitationProof, InvitationResult,
+    Membership, Project, TenantTx, Workspace, AUDIT_READ, ORGANIZATION_DELETE,
+    ORGANIZATION_LIFECYCLE, ORGANIZATION_MANAGE_MEMBERS, ORGANIZATION_MANAGE_SETTINGS,
+    ORGANIZATION_OWNER_TRANSFER, PROJECT_ARCHIVE, PROJECT_DELETE, PROJECT_MANAGE,
+    PROJECT_MOVE_WORKSPACE, PROJECT_READ, WORKSPACE_MANAGE, WORKSPACE_READ,
 };
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use std::collections::BTreeSet;
 use uuid::Uuid;
 
 use crate::identity::{require_csrf, HumanSession, IdentityError};
@@ -56,7 +59,42 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{ORG}/ownership-transfer"),
             post(transfer_ownership),
         )
-        .route(&format!("{ORG}/grants"), get(list_resource_grants))
+        .route(
+            &format!("{ORG}/grants"),
+            get(list_resource_grants).post(create_resource_grant),
+        )
+        .route(
+            &format!("{ORG}/grants/{{grant_id}}/revoke"),
+            post(revoke_resource_grant),
+        )
+        .route(
+            &format!("{ORG}/service-principals"),
+            get(list_service_principals).post(create_service_principal),
+        )
+        .route(
+            &format!("{ORG}/service-principals/{{principal_id}}/revoke"),
+            post(revoke_service_principal),
+        )
+        .route(
+            &format!("{ORG}/service-principals/{{principal_id}}/credentials"),
+            get(list_service_credentials).post(issue_service_credential),
+        )
+        .route(
+            &format!(
+                "{ORG}/service-principals/{{principal_id}}/credentials/{{credential_id}}/revoke"
+            ),
+            post(revoke_service_credential),
+        )
+        .route(
+            &format!("{ORG}/invitations"),
+            get(list_invitations).post(create_invitation),
+        )
+        .route(
+            &format!("{ORG}/invitations/{{invitation_id}}/revoke"),
+            post(revoke_invitation),
+        )
+        .route("/invitations/check", post(check_invitation))
+        .route("/invitations/accept", post(accept_invitation))
         .route(&format!("{ORG}/audit-events"), get(list_audit_events))
 }
 
@@ -970,6 +1008,267 @@ async fn update_project(
 #[derive(Deserialize)]
 struct AuditQuery {
     limit: Option<String>,
+}
+
+async fn create_resource_grant(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path(organization_id): Path<String>,
+    body: Bytes,
+) -> Result<(StatusCode, Json<Value>)> {
+    require_csrf(&state, &session, &headers)?;
+    let organization_id = uuid(&organization_id)?;
+    let body = Body::parse(
+        &body,
+        &[
+            "subject_kind",
+            "subject_id",
+            "scope_kind",
+            "workspace_id",
+            "project_id",
+            "role",
+        ],
+    )?;
+    let input = GrantInput {
+        subject_kind: body
+            .choice("subject_kind", &["membership", "service_principal"])?
+            .ok_or(TenancyError::InvalidRequest)?,
+        subject_id: body
+            .uuid("subject_id")?
+            .ok_or(TenancyError::InvalidRequest)?,
+        scope_kind: body
+            .choice("scope_kind", &["organization", "workspace", "project"])?
+            .ok_or(TenancyError::InvalidRequest)?,
+        workspace_id: body.uuid("workspace_id")?,
+        project_id: body.uuid("project_id")?,
+        role: body
+            .choice("role", &["manager", "editor", "contributor", "viewer"])?
+            .ok_or(TenancyError::InvalidRequest)?,
+    };
+    let mut tx = begin(&state, &session).await?;
+    let grant = tx.create_grant(organization_id, input).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(grant)))
+}
+
+async fn revoke_resource_grant(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, grant_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.revoke_grant(uuid(&organization_id)?, uuid(&grant_id)?)
+        .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_service_principals(
+    State(state): State<AppState>,
+    session: HumanSession,
+    Path(organization_id): Path<String>,
+) -> Result<Json<Vec<Value>>> {
+    let organization_id = uuid(&organization_id)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.member(organization_id, false, false).await?;
+    let items = tx.list_principals(organization_id).await?;
+    tx.commit().await?;
+    Ok(Json(items))
+}
+
+async fn create_service_principal(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path(organization_id): Path<String>,
+    body: Bytes,
+) -> Result<(StatusCode, Json<Value>)> {
+    require_csrf(&state, &session, &headers)?;
+    let body = Body::parse(&body, &["name", "description"])?;
+    let name = body.required_text("name", 200, false)?;
+    let description = match body.0.get("description") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(value.as_str()),
+        _ => return Err(TenancyError::InvalidRequest),
+    };
+    let mut tx = begin(&state, &session).await?;
+    let value = tx
+        .create_principal(uuid(&organization_id)?, &name, description)
+        .await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(value)))
+}
+
+async fn revoke_service_principal(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, principal_id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.revoke_principal(uuid(&organization_id)?, uuid(&principal_id)?)
+        .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_service_credentials(
+    State(state): State<AppState>,
+    session: HumanSession,
+    Path((organization_id, principal_id)): Path<(String, String)>,
+) -> Result<Response> {
+    let organization_id = uuid(&organization_id)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.member(organization_id, false, false).await?;
+    let items = tx
+        .list_credentials(organization_id, uuid(&principal_id)?)
+        .await?;
+    tx.commit().await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(items)).into_response())
+}
+
+async fn issue_service_credential(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, principal_id)): Path<(String, String)>,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let body = Body::parse(&body, &["name", "permission_ceiling", "expires_at"])?;
+    let name = body.required_text("name", 200, false)?;
+    let ceiling = match body.0.get("permission_ceiling") {
+        None | Some(Value::Null) => None,
+        Some(Value::Array(items)) => Some(
+            items
+                .iter()
+                .map(|item| {
+                    item.as_str()
+                        .map(str::to_owned)
+                        .ok_or(TenancyError::InvalidRequest)
+                })
+                .collect::<Result<BTreeSet<_>>>()?,
+        ),
+        _ => return Err(TenancyError::InvalidRequest),
+    };
+    let expires_at = match body.0.get("expires_at") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => Some(
+            DateTime::parse_from_rfc3339(value)
+                .map_err(|_| TenancyError::InvalidRequest)?
+                .with_timezone(&Utc),
+        ),
+        _ => return Err(TenancyError::InvalidRequest),
+    };
+    let mut tx = begin(&state, &session).await?;
+    let value = tx
+        .issue_credential(
+            uuid(&organization_id)?,
+            uuid(&principal_id)?,
+            &name,
+            ceiling,
+            expires_at,
+        )
+        .await?;
+    tx.commit().await?;
+    Ok((
+        StatusCode::CREATED,
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(value),
+    )
+        .into_response())
+}
+
+async fn revoke_service_credential(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, principal_id, credential_id)): Path<(String, String, String)>,
+) -> Result<StatusCode> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.revoke_credential(
+        uuid(&organization_id)?,
+        uuid(&principal_id)?,
+        uuid(&credential_id)?,
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_invitations(
+    State(state): State<AppState>,
+    session: HumanSession,
+    Path(org): Path<String>,
+) -> Result<Json<Vec<Value>>> {
+    let mut tx = begin(&state, &session).await?;
+    let items = tx.list_invitations(uuid(&org)?).await?;
+    tx.commit().await?;
+    Ok(Json(items))
+}
+
+async fn create_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path(org): Path<String>,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let input = InvitationInput::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let value = tx.issue_invitation(uuid(&org)?, input).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(value)).into_response())
+}
+
+async fn revoke_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    Path((org, id)): Path<(String, String)>,
+) -> Result<StatusCode> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = begin(&state, &session).await?;
+    tx.revoke_invitation(uuid(&org)?, uuid(&id)?).await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn check_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>> {
+    require_csrf(&state, &session, &headers)?;
+    let proof = InvitationProof::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let status = tx.check_invitation(&proof, session.session_id()).await?;
+    tx.commit().await?;
+    Ok(Json(json!({"status":status})))
+}
+
+async fn accept_invitation(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response> {
+    require_csrf(&state, &session, &headers)?;
+    let proof = InvitationProof::parse(&body)?;
+    let mut tx = begin(&state, &session).await?;
+    let result = tx.accept_invitation(&proof, session.session_id()).await?;
+    tx.commit().await?;
+    match result {
+        InvitationResult::Accepted(value) => Ok(Json(value).into_response()),
+        InvitationResult::VerifiedExpired => Ok(bad_request("invalid invitation").into_response()),
+    }
 }
 
 async fn list_resource_grants(

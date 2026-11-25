@@ -304,6 +304,11 @@ def compare_queries(suite, difference, fixture, surveyor, csrf_secret):
         ("E04 page size above limit", {"limit": 501}, 422),
         ("E04 non-strict page size", {"limit": "5"}, 422),
         ("E04 unknown request key", {"filter": {}}, 422),
+        ("E04 array body rejected", [], 422),
+        ("E04 array positional body rejected", [None, None, None, None, None, None, "asc", 5, 0], 422),
+        ("E04 offset beyond HTTP bound", {"offset": 25001}, 422),
+        ("E04 unknown injection-shaped field", {"attribute_filter": {"field": "code) OR TRUE --", "op": "eq", "value": "x"}}, 422),
+        ("E04 injection-shaped literal remains data", {"attribute_filter": {"field": "code", "op": "eq", "value": "' OR TRUE --"}}, 200),
         (
             "E04 unsupported predicate",
             {"spatial_filter": {"predicate": "touches", "geometry": {}, "crs_code": 4326}},
@@ -327,6 +332,35 @@ def compare_queries(suite, difference, fixture, surveyor, csrf_secret):
         ),
     ):
         post(label, body, status)
+
+    # Exercise the compiler budgets through the public HTTP contract, not just unit tests.
+    leaf = {"field": "metric_val", "op": "eq", "value": 17}
+    deep = leaf
+    for _ in range(7):
+        deep = {"op": "not", "condition": deep}
+    for label, expression, status in (
+        ("E04 AST depth rejected", deep, 422),
+        ("E04 AST node budget rejected", {"op": "or", "conditions": [leaf] * 100}, 422),
+        ("E04 AST value budget rejected", {"op": "or", "conditions": [
+            {"field": "metric_val", "op": "in", "value": list(range(100))}
+        ] * 11}, 422),
+        ("E04 maximum AST value budget accepted", {"op": "or", "conditions": [
+            {"field": "metric_val", "op": "in", "value": list(range(100))}
+        ] * 10}, 200),
+        ("E04 null equality rejected", {"field": "code", "op": "eq", "value": None}, 422),
+        ("E04 null predicate default", {"field": "code", "op": "is_null"}, 200),
+        ("E04 null predicate explicit false", {"field": "code", "op": "is_null", "value": False}, 200),
+        ("E04 empty IN rejected", {"field": "metric_val", "op": "in", "value": []}, 422),
+        ("E04 reversed range rejected", {"field": "metric_val", "op": "between", "value": [2, 1]}, 422),
+    ):
+        post(label, {"attribute_filter": expression}, status)
+
+    post(
+        "E04 reference layer from foreign tenant denied",
+        {"spatial_filter": {"predicate": "intersects",
+                            "reference_layer_id": layers["tenant_b_1k"]["layer_id"]}},
+        404,
+    )
 
     # Authorization and tenant boundaries.
     post("E04 missing layer", {}, 404, path=f"{root}/layers/{uuid4()}/query")
@@ -409,7 +443,22 @@ def compare_queries(suite, difference, fixture, surveyor, csrf_secret):
         403,
         token=surveyor,
     )
+    req.run(
+        "E04 saved query scoped member mutation denied",
+        "POST", saved, 403, token=surveyor,
+        csrf=make_csrf_token(surveyor, csrf_secret), body=definition,
+    )
     if oracle_created and rust_created:
+        replay = {key: oracle_created[key] for key in (
+            "attribute_filter", "spatial_filter", "sort_field", "sort_direction"
+        )}
+        post("E04 replay saved query definition", replay)
+        req.run(
+            "E04 saved query scoped member delete denied",
+            "DELETE", f"{saved}/{oracle_created['id']}", 403,
+            token=surveyor, csrf=make_csrf_token(surveyor, csrf_secret),
+            rust_path=f"{saved}/{rust_created['id']}",
+        )
         req.run(
             "E04 delete saved query",
             "DELETE",

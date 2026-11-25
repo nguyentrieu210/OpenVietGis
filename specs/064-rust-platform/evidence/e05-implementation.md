@@ -62,3 +62,33 @@ Not run: the comparative run needs the Rust binary against a seeded 1k/10k/30k P
 4. GIST usage under RLS (index finding) — DBA/schema decision.
 5. Tiles for projected sources, tile caching with revision-keyed invalidation and ACL revocation, PMTiles/Martin, offline packages.
 6. Symbology, labels and layout belong to E06.
+
+
+## Agent 04 follow-up — MVT resource bounds (2026-11-26)
+
+The tile query now ranks by C-collated feature ID before projection/encoding and
+limits the prefix to 10,000 features and 200,000 input positions. The response
+fails closed with MAP_READ_UNAVAILABLE if the encoded MVT exceeds 4 MiB. The
+completeness header reports prefix truncation; normal MVT clipping/quantization
+may still discard geometry at a coarse zoom. Ordered aggregation makes repeated
+pinned tile encoding deterministic. No changes to ACL, RLS, revision pins,
+cache policy, database schema or production deployment.
+
+Direct read-only PostGIS SQL probe using the revised query, replacing the
+reference table with 101 synthetic segmentized WGS84 lines (2,237 positions
+each), same CRS pipeline and tile encoder, default 200k position budget:
+
+| Tile | Candidate limit | Candidates | Included | Bytes |
+|---|---:|---:|---:|---:|
+| 8/203/112 | 10,000 | 101 | 89 | 113684 |
+| 8/203/112 | 10 (test limit) | 11 | 10 | 12800 |
+| 8/0/0 | 10,000 | 0 | 0 | 0 |
+| 0/0/0 | 10,000 | 101 | 89 | 2878 |
+
+SQL ran in a READ ONLY transaction with rollback on the existing isolated
+PostGIS test container. Python parity test syntax and git diff checks pass.
+Two additional HTTP parity cases cover repeated pinned tiles and world zoom;
+they are not yet executed. The direct SQL probe does not validate HTTP, RLS,
+Rust compilation or comparative performance. VPS disk availability was
+approximately 2 GiB and swap pressure high, so no local Rust build was started.
+E05-T02 through T05 remain open. No new CI run or full benchmark claimed.

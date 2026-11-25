@@ -1,5 +1,6 @@
 //! E01 read-only identity routes using the canonical browser session.
 
+use axum::body::Bytes;
 use axum::extract::{rejection::PathRejection, FromRequestParts, Path, State};
 use axum::http::{header, request::Parts, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -12,7 +13,8 @@ use ovg_storage::identity::{
     self, IdentityLink, OrganizationMembership, OrganizationProfile, SessionAuthenticationError,
     UserProfile, VerifiedSession,
 };
-use ovg_storage::DbPool;
+use ovg_storage::{tenancy::TenantTx, DbPool};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::Sha256;
 use uuid::Uuid;
@@ -171,8 +173,11 @@ pub(crate) fn router() -> Router<AppState> {
             "/organizations/{organization_id}",
             get(get_organization).patch(crate::tenancy::update_organization),
         )
-        .route("/me/identity-links", get(list_my_identity_links))
-        .route("/me/avatar", get(get_my_avatar))
+        .route(
+            "/me/identity-links",
+            get(list_my_identity_links).delete(unlink_identity),
+        )
+        .route("/me/avatar", get(get_my_avatar).delete(delete_avatar))
         .route("/auth/csrf", get(get_csrf))
 }
 
@@ -235,6 +240,62 @@ async fn list_my_identity_links(
 ) -> Result<Json<Vec<IdentityLink>>, IdentityError> {
     let links = identity::list_identity_links(database(&state)?, &session.verified).await?;
     Ok(Json(links))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UnlinkIdentityRequest {
+    identity_link_id: Uuid,
+}
+
+async fn unlink_identity(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<StatusCode, IdentityError> {
+    require_csrf(&state, &session, &headers)?;
+    let input: UnlinkIdentityRequest =
+        serde_json::from_slice(&body).map_err(|_| IdentityError::InvalidPayload)?;
+    let mut tx = TenantTx::begin(
+        database(&state)?,
+        session.actor_id(),
+        session.session_id(),
+        session.display_name(),
+    )
+    .await?;
+    match tx.unlink_identity(input.identity_link_id).await?.as_str() {
+        "unlinked" => {
+            tx.commit().await?;
+            Ok(StatusCode::NO_CONTENT)
+        }
+        "last_identity" => Err(IdentityError::Http(
+            StatusCode::BAD_REQUEST,
+            "cannot unlink the last usable identity",
+        )),
+        _ => Err(IdentityError::Http(
+            StatusCode::NOT_FOUND,
+            "identity link not found",
+        )),
+    }
+}
+
+async fn delete_avatar(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+) -> Result<StatusCode, IdentityError> {
+    require_csrf(&state, &session, &headers)?;
+    let mut tx = TenantTx::begin(
+        database(&state)?,
+        session.actor_id(),
+        session.session_id(),
+        session.display_name(),
+    )
+    .await?;
+    tx.delete_avatar().await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn get_my_avatar(

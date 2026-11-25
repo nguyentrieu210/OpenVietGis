@@ -81,5 +81,6 @@ python3 tools/benchmark/rust-platform/benchmark_runner.py \
 
 ### Safety Guarantees
 
-- **NEVER** targets `openvietgis_live` or any production database (explicitly refuses database names not containing `test` or `bench`).
-- In `--spawn-python-isolated` mode, creates an isolated temporary database (`openvietgis_bench_064`) on `dev-postgres-test-1` (`127.0.0.1:54330`), runs the server under `openvietgis_runtime` (`NOBYPASSRLS`), and **always** stops the temporary server, removes temporary artifacts, and drops the temporary database in `finally`.
+- **NEVER** targets `openvietgis_live` or any production database (requires a dedicated loopback PostGIS port 54330 and database names matching `openvietgis_bench_*`).
+- In `--spawn-python-isolated` mode, creates an isolated uniquely named temporary database (`openvietgis_bench_064_<random>`) on `dev-postgres-test-1` (`127.0.0.1:54330`), runs the server under `openvietgis_runtime` (`NOBYPASSRLS`), and **always** stops the temporary server, removes temporary artifacts, and drops the temporary database in `finally`.
+External HTTP targets must use a dedicated loopback port 18890–18999 and an explicit isolated database URL, even when reusing a manifest. Never point the runner at live services. A collision is an error, not authorization to overwrite a database.
