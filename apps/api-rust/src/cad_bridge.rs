@@ -4,8 +4,11 @@
 //! owns the authenticated capability contract and project boundary in Rust.
 
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use ovg_storage::cad_documents;
 use ovg_storage::catalog::ProjectReadPolicy;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -14,10 +17,20 @@ use crate::catalog::{project_read, CatalogError};
 use crate::identity::HumanSession;
 use crate::AppState;
 
-const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/integrations/v8i";
+const V8I_BASE: &str = "/organizations/{organization_id}/projects/{project_id}/integrations/v8i";
+const CAD_BASE: &str = "/organizations/{organization_id}/projects/{project_id}/cad/documents";
 
 pub(crate) fn router() -> Router<AppState> {
-    Router::new().route(&format!("{BASE}/capabilities"), get(read_v8i_capabilities))
+    Router::new()
+        .route(
+            &format!("{V8I_BASE}/capabilities"),
+            get(read_v8i_capabilities),
+        )
+        .route(CAD_BASE, get(list_documents))
+        .route(
+            &format!("{CAD_BASE}/{{document_id}}/versions"),
+            get(list_document_versions),
+        )
 }
 
 fn capability_status() -> Value {
@@ -49,6 +62,75 @@ fn capability_status() -> Value {
         "read_only": true,
         "live_connection": false
     })
+}
+
+async fn list_documents(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Value>, CatalogError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await?;
+    let result = cad_documents::list_documents(&mut read)
+        .await
+        .map_err(CatalogError::Application)?;
+    read.commit().await.map_err(CatalogError::Application)?;
+    Ok(Json(result))
+}
+
+async fn list_document_versions(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id, document_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Json<Value>, CadReadError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(CadReadError::Access)?;
+    let result = cad_documents::list_versions(&mut read, document_id)
+        .await
+        .map_err(CadReadError::Domain)?;
+    read.commit().await.map_err(CadReadError::Domain)?;
+    result.map(Json).ok_or(CadReadError::DocumentNotFound)
+}
+
+enum CadReadError {
+    Access(CatalogError),
+    Domain(ovg_core::AppError),
+    DocumentNotFound,
+}
+
+impl IntoResponse for CadReadError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Access(error) => error.into_response(),
+            Self::Domain(ovg_core::AppError::Internal { internal_detail }) => {
+                tracing::error!(detail = %internal_detail, "CAD read request failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+            Self::Domain(error) => {
+                let status = StatusCode::from_u16(error.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                (status, Json(error.to_envelope(None))).into_response()
+            }
+            Self::DocumentNotFound => (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "detail": "CAD document not found" })),
+            )
+                .into_response(),
+        }
+    }
 }
 
 async fn read_v8i_capabilities(
