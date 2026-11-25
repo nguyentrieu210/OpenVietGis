@@ -37,7 +37,9 @@ try{
  const sourceEndpoint="**/fixture/project/sources/source/changesets";
  const operation={op_type:"update",feature_id:"feature",geometry:{type:"Point",coordinates:[1,2]}};
  const receipts=[];
+ let importPreviews=0;
  await page.route(importEndpoint, async route=>{
+  importPreviews++;
   assert.equal(route.request().headers()["x-openvietgis-csrf"],"fixture-token");
   assert.deepEqual(route.request().postDataJSON(),{conversion_id:conversion,expected_candidate_sha256:"a".repeat(64)});
   await route.fulfill({json:{conversion_id:conversion,source_id:"source",candidate_sha256:"a".repeat(64),candidate_version:3,base_content_revision:"b".repeat(64),base_schema_revision:"c".repeat(64),operations:[operation],published:false}});
@@ -64,5 +66,6 @@ try{
  await applyImport.click();
  await page.getByText("Đã áp dụng ChangeSet test-changeset.",{exact:true}).waitFor();
  assert.equal(receipts.length,2);
+ assert.equal(importPreviews,2);
  assert.deepEqual(errors,[]);assert.deepEqual(outside,[]);console.log("PASS R048 browser review, consent, checksum, stale revision, abort on revoke;",requests,"requests")
 }finally{await browser?.close();await server.close()}
