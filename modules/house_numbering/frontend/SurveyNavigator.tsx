@@ -3,6 +3,26 @@ export type SurveyFilter={area:string;road:string;alley:string;status:string;con
 export const emptySurveyFilter=():SurveyFilter=>({area:"",road:"",alley:"",status:"",condition:""});
 export type SurveyRow={key:string;feature:{attributes:Record<string,unknown>}};
 export function surveyText(row:SurveyRow,field:string){return String(row.feature.attributes[field]??"").trim()}
+const fold=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").replace(/[đĐ]/g,"d").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const NUMBER_FIELDS=["so_nha","so_sua","so_de_xuat","so_luoi"],SEARCH_FIELDS=[...NUMBER_FIELDS,"ten_duong","hem","ap","ma_phieu"];
+const searchIndex=new WeakMap<object,{numbers:string[];tokens:string[]}>();
+function indexed(row:SurveyRow){
+ let entry=searchIndex.get(row.feature.attributes);
+ if(!entry){entry={numbers:NUMBER_FIELDS.map(k=>fold(surveyText(row,k))).filter(Boolean),tokens:SEARCH_FIELDS.flatMap(k=>fold(surveyText(row,k)).split(" ")).filter(Boolean)};searchIndex.set(row.feature.attributes,entry)}
+ return entry;
+}
+// Ignores accents, case and "/"/"-"; every typed word must start a word of the point. Exact house number first, then fewer prefix-only words.
+export function searchSurvey<T extends SurveyRow>(rows:readonly T[],query:string,limit=100):T[]{
+ const q=fold(query),words=q.split(" ").filter(Boolean);
+ if(!words.length)return [];
+ const hits:[number,T][]=[];
+ for(const row of rows){
+  const {numbers,tokens}=indexed(row);let score=numbers.includes(q)?0:1;
+  for(const w of words){if(tokens.includes(w))continue;if(!tokens.some(t=>t.startsWith(w))){score=-1;break}score++}
+  if(score>=0)hits.push([score,row]);
+ }
+ return hits.sort((a,b)=>a[0]-b[0]).slice(0,limit).map(h=>h[1]);
+}
 const NO_ALLEY="__no_alley__";
 export function matchesSurvey(row:SurveyRow,filter:SurveyFilter){
  return (!filter.area||surveyText(row,"ap")===filter.area)&&(!filter.road||surveyText(row,"ten_duong")===filter.road)
