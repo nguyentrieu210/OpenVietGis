@@ -104,7 +104,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # cargo-audit needs a newer rustc than the pinned 1.85.1 toolchain.
+      - name: Install stable toolchain for cargo-audit
+        run: rustup toolchain install stable --profile minimal
+
       - name: Run cargo-audit
         uses: rustsec/audit-check@v2
+        env:
+          RUSTUP_TOOLCHAIN: stable
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
