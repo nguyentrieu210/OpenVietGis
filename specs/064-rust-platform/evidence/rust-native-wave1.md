@@ -140,3 +140,52 @@ Real isolated PostGIS differential harness tests/rust-parity/e08_jobs.py passed:
 The harness found and corrected one real Rust HTTP envelope mismatch during
 development (JOB_TERMINAL initially used the catalog detail envelope).
 The final run is green against FastAPI on the same migrated database.
+
+## Wave 2 incremental DB-backed parity
+
+### E06 cartography read side
+
+Commit: `d0a2da69` (integrated checkpoint with E13).
+
+Rust now owns:
+
+- `GET /cartography/layers/{layer_id}/style`
+- `GET /cartography/layouts`
+
+Both read canonical RLS-protected cartography tables inside the same authorized
+project transaction. Differential parity on isolated real PostGIS passed:
+
+- get existing layer style
+- missing style -> `{"style": null}`
+- list layouts
+- foreign-tenant denial
+
+### E08 durable processing jobs
+
+Code commit: `84ae8c96`; evidence follow-up: `42cffe31`.
+
+Rust now owns:
+
+- `GET /processing/jobs`
+- `GET /processing/jobs/{job_id}`
+- `POST /processing/jobs/{job_id}/cancel`
+
+The create/retry paths remain on FastAPI until the complete geometry publication
+transaction is ported atomically. Differential parity on isolated real PostGIS
+passed list/get/missing/foreign-tenant/limit validation/cancel/terminal conflict
+and CSRF fail-closed cases.
+
+### E13 offline package online control
+
+Commit: `d0a2da69`.
+
+Rust now owns:
+
+- `GET /field/packages`
+- `POST /field/packages/{package_id}/revoke`
+
+The list path preserves the Python writable-package policy: `project.edit`,
+creator-only visibility, and online layer/source active-ready revalidation.
+Revoke is idempotent via `COALESCE(revoked_at, now)`. Differential parity on
+isolated real PostGIS passed list/foreign-tenant/revoke/idempotency/missing/CSRF
+cases.
