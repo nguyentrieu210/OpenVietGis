@@ -55,7 +55,7 @@ export function SurveyNavigator({rows,filter,change,total,buildingCount,loading,
  <div className="survey-filter-result" role="status"><b>{stats.count.toLocaleString("vi-VN")}</b> điểm phù hợp{loading?" · đang tải thêm":""}</div>
  <p className="survey-hint">{areaNames.length?`Đã có ranh giới ${areaNames.length} ấp từ dữ liệu gốc. Chọn ấp để định vị trên bản đồ; số điểm lọc theo thuộc tính khảo sát.`:"Phân nhóm theo thuộc tính gốc. Chưa có ranh giới ấp."}</p></div>
 }
-function ScopeProgress({ap,road,progress,signoff,canSign,sign,revoke}:{ap:string;road:string;progress:ReturnType<typeof surveyProgress>;signoff:ScopeSignoff|undefined;canSign:boolean;sign?:(ap:string,road:string|null)=>void;revoke?:(signoff:ScopeSignoff)=>void}){
+function ScopeProgress({ap,road,progress,signoff,canSign,sign,revoke}:{ap:string;road:string;progress:ReturnType<typeof surveyProgress>;signoff:ScopeSignoff|undefined;canSign:boolean;sign?:((ap:string,road:string|null)=>void)|undefined;revoke?:((signoff:ScopeSignoff)=>void)|undefined}){
  const label=road?ap+" · "+road:ap,complete=progress.total>0&&progress.pending===0;
  return <section className="survey-progress" aria-label={"Tiến độ đối chiếu "+label}>
   <div className="survey-nav-heading"><b>Đối chiếu {road?"tuyến":"ấp"}</b><span>{progress.percent}%</span></div>
