@@ -113,8 +113,13 @@ def main():
             cases = [
                 ("GET", "/api/v1/me", "rust", 200),
                 ("GET", f"{L}/features?cursor=a%2Fb", "rust", 200),
+                ("GET", f"{L}/features/feature_7-A?include_geometry=false", "rust", 200),
+                ("GET", f"{L}/features/{'g' * 128}", "rust", 200),
+                ("GET", f"{L}/features/{'g' * 129}", "python", 200),
+                ("GET", f"{L}/features/bad.id", "python", 200),
                 ("GET", f"{L}/viewport?status=418", "rust", 418),
-                ("HEAD", f"{L}/display-extent", "rust", 200),
+                ("HEAD", f"{L}/display-extent", "python", 200),
+                ("HEAD", f"{L}/tiles/9/42/10.mvt", "rust", 200),
                 ("GET", f"{L}/tiles/9/42/10.mvt", "rust", 200),
                 ("POST", f"{L}/query", "rust", 200),
                 ("DELETE", f"{P}/saved-queries/{LAYER}", "rust", 200),
@@ -147,7 +152,11 @@ def main():
                         "body": sent or "",
                     }, (method, target, raw)
 
-            for target, expected in ((f"{L}/viewport", "python"), (f"{L}/tiles/9/42/10.mvt", "rust")):
+            for target, expected in (
+                (f"{L}/viewport", "python"),
+                (f"{L}/features/feature_7-A", "python"),
+                (f"{L}/tiles/9/42/10.mvt", "rust"),
+            ):
                 status, backend, raw = request(port, "GET", target, authorization="Bearer fixture")
                 assert (status, backend) == (200, expected)
                 assert json.loads(raw)["authorization"] == "Bearer fixture"
@@ -158,7 +167,7 @@ def main():
         finally:
             nginx.terminate()
             nginx.wait(timeout=5)
-    print(f"{len(cases) + 2} routing and forwarding checks and two outage checks passed")
+    print(f"{len(cases) + 3} routing and forwarding checks and two outage checks passed")
 
 
 if __name__ == "__main__":

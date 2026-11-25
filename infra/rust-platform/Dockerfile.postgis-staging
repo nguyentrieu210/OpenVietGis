@@ -1,0 +1,2 @@
+FROM postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262
+COPY --chmod=755 infra/rust-platform/001-staging-runtime-role.sh /docker-entrypoint-initdb.d/001-staging-runtime-role.sh
