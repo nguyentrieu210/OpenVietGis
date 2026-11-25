@@ -76,31 +76,31 @@ try{
  await canvas.waitFor();
  const rect=await canvas.boundingBox();assert.ok(rect);
  const camera=()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|"));
- await page.waitForTimeout(800);const before=await camera();
- await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).focus();
- await page.keyboard.down("Space");
- await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==="1");
- await page.mouse.move(rect.x+rect.width*.45,rect.y+rect.height*.46);
- await page.mouse.down();await page.mouse.move(rect.x+rect.width*.45+105,rect.y+rect.height*.46+60,{steps:12});await page.mouse.up();
- await page.keyboard.up("Space");
- await page.waitForFunction(()=>!document.body.dataset.ovgSpacePan);
- await page.waitForFunction(before=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|")!==before,before,{timeout:10000});
- console.log("PASS Space drag with empty GIS command field focused; camera changed");
+ await page.waitForTimeout(800);
+ const waitCameraChange=initial=>page.waitForFunction(initial=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|")!==initial,initial,{timeout:10000});
  const pan=async()=>{
+   const r=await canvas.boundingBox();assert.ok(r);
+   await page.mouse.move(r.x+r.width*.44,r.y+r.height*.48);
    const initial=await camera();
    await page.keyboard.down("Space");await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==="1");
-   const r=await canvas.boundingBox();
-   await page.mouse.move(r.x+r.width*.40,r.y+r.height*.55);
-   await page.mouse.down();await page.waitForFunction(()=>document.body.dataset.ovgSpaceDragging==="1");
-   await page.mouse.move(r.x+r.width*.40-92,r.y+r.height*.55+48,{steps:10});await page.mouse.up();await page.keyboard.up("Space");
+   // No mouse down/up: the camera must move while Space is still held.
+   await page.mouse.move(r.x+r.width*.44+95,r.y+r.height*.48+55,{steps:12});
+   await page.waitForFunction(()=>document.body.dataset.ovgSpaceDragging==="1");
+   await waitCameraChange(initial);
+   await page.keyboard.up("Space");
    await page.waitForFunction(()=>!document.body.dataset.ovgSpacePan&&!document.body.dataset.ovgSpaceDragging);
-   await page.waitForFunction(initial=>Object.keys(localStorage).filter(k=>k.endsWith(":camera")).map(k=>localStorage.getItem(k)).join("|")!==initial,initial,{timeout:10000});
+   const after=await camera();
+   await page.mouse.move(r.x+r.width*.44+20,r.y+r.height*.48+10,{steps:6});
+   await page.waitForTimeout(180);assert.equal(await camera(),after,"Pointer without Space must not pan");
  };
+ await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).focus();
+ await pan();
+ console.log("PASS QGIS Space + pointer movement without mouse button; stops on release");
  await command("DIST 106.7,10.8");
  const sketch=page.locator(".core-sketch-measure dd").first();await sketch.waitFor();
  const vertices=await sketch.innerText();await pan();assert.equal(await sketch.innerText(),vertices,"Space drag must not create vertices");
  await page.getByRole("button",{name:"Hủy vẽ",exact:true}).click();await sketch.waitFor({state:"detached"});
- console.log("PASS Space drag during distance measurement; vertex count unchanged");
+ console.log("PASS Space-only pan during distance measurement; vertex count unchanged");
  await page.getByRole("button",{name:/Chọn đối tượng \(/}).first().click();
  const cmd=page.getByRole("textbox",{name:"Dòng lệnh GIS"});
  await cmd.fill("PAN");
@@ -113,7 +113,7 @@ try{
  await page.mouse.move(rect.x+rect.width*.42,rect.y+rect.height*.44);
  await pan();
  await page.evaluate(()=>document.getElementById("pan-test-map-decoration")?.remove());
- console.log("PASS Space drag beginning on map decoration above canvas");
+ console.log("PASS Space-only pan over map decoration");
 
  await cmd.fill("ABC");await cmd.hover();
  await page.keyboard.press("Space");assert.equal(await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).inputValue(),"ABC ");
