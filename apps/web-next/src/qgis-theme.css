@@ -734,3 +734,6 @@
 .qgis-theme-row{display:flex;gap:2px}.qgis-theme-row button{border:0;background:none;padding:5px 8px;border-radius:5px;cursor:pointer;text-align:left}
 .qgis-theme-row button:first-child{flex:1}.qgis-theme-row button:hover{background:#eef3f7}
 .qgis-theme-add{border:1px dashed #b8c5ce;background:none;border-radius:6px;padding:6px;color:#1565a9;font-weight:600;cursor:pointer}
+
+/* Coordinates box wide enough for VN-2000 metres (e.g. 1 184 555.17, 584 555.17) */
+.qgis-status-controls input[aria-label^="Tọa độ"],.qgis-status-controls input[aria-label^="Phạm vi"]{width:210px!important}
