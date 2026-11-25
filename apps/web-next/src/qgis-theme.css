@@ -535,3 +535,9 @@
 .insp-task{display:grid;width:100%;gap:1px;padding:5px 8px;border:0;border-top:1px solid #eef2f5;background:none;text-align:left;cursor:pointer;font-size:12.5px}
 .insp-task:hover{background:#f2f7fb}.insp-task small{color:#6b7a83}.insp-task.late span{color:#b42318}.insp-task.done span{color:#6b7a83;text-decoration:line-through}
 .insp-task-new{width:100%;padding:6px 8px;border:0;border-top:1px solid #eef2f5;background:none;color:#1565a9;text-align:left;cursor:pointer;font-size:12.5px;font-weight:600}
+
+/* 2D / 3D / globe switch: glass on the map */
+.ovg-map-mode{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:10px!important;padding:3px!important;backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%);box-shadow:0 8px 22px #0006,inset 0 1px 0 #ffffff1f!important}
+.ovg-map-mode button{min-height:0!important;height:26px;padding:0 11px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#d5e0e8!important;font-size:12px!important;font-weight:600;box-shadow:none!important}
+.ovg-map-mode button:hover{background:#ffffff17!important;color:#fff!important}
+.ovg-map-mode button[aria-pressed=true]{background:#2b7bd0!important;color:#fff!important;box-shadow:0 2px 6px #0005!important}
