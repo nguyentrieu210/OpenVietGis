@@ -700,3 +700,13 @@
 .ovg-chat-pane.size-0{width:280px;top:auto!important;height:min(360px,50vh)}
 .ovg-chat-pane.size-1{width:340px}
 .ovg-chat-pane.size-2{width:min(520px,calc(100vw - 80px))}
+
+/* Command / search bar on the map: glass */
+.qgis-studio .core-command{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:12px!important;backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);box-shadow:0 10px 26px #0006,inset 0 1px 0 #ffffff1f!important;color:#eef4f8}
+.qgis-studio .core-command input{background:#ffffff12!important;border:1px solid #ffffff24!important;border-radius:8px!important;color:#fff!important}
+.qgis-studio .core-command input::placeholder{color:#a9b8c3!important}
+.qgis-studio .core-command input:focus{border-color:#5b9bd5!important;background:#ffffff1c!important;outline:0}
+.qgis-studio .core-command button{background:transparent!important;border:0!important;color:#d5e0e8!important;border-radius:7px!important}
+.qgis-studio .core-command button:hover{background:#ffffff1a!important;color:#fff!important}
+.qgis-studio .core-command-prompt,.qgis-studio .core-command>span:first-child{color:#cfe3f5!important}
+.qgis-studio .core-command-status{color:#cbd5e1!important}
