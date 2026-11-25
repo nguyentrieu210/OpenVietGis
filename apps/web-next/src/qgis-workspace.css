@@ -141,3 +141,16 @@
 .dock-menu-pop label{display:flex;align-items:center;gap:6px}
 .dock-menu-row{display:flex;gap:10px;align-items:center;border:0;padding:0;margin:0}.dock-menu-row legend{float:left;min-width:100px;padding:0;color:#4b5e57}
 .lp-style-io{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.lp-style-import{display:inline-flex;align-items:center;padding:4px 10px;border:1px solid #b5c2bc;border-radius:4px;cursor:pointer;font-size:12px}.lp-style-import input{display:none}
+
+/* Spec 057: floating panels and tabbed layer dock */
+.qgis-main-row[data-inspector=float]>.live-inspector,.qgis-canvas[data-table=float]>.qgis-table{position:fixed;left:var(--ovg-fx,calc(100vw - 420px));top:var(--ovg-fy,120px);width:400px;height:420px;min-width:220px;min-height:140px;max-width:100vw;max-height:100vh;resize:both;overflow:hidden;z-index:900;border:1px solid #8fa596;border-radius:6px;box-shadow:0 10px 30px #0004;background:#fff}
+.qgis-canvas[data-table=float]>.qgis-table{left:var(--ovg-fx,320px);top:var(--ovg-fy,calc(100vh - 380px));width:720px;height:320px}
+.ovg-float-bar{display:flex;align-items:center;gap:6px;height:24px;padding:0 6px;background:linear-gradient(#eef3f0,#dde6e0);border-bottom:1px solid #b3c4b6;cursor:move;user-select:none;touch-action:none;font-size:11px;flex-shrink:0}
+.ovg-float-bar b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ovg-float-bar button{border:0;background:transparent;cursor:pointer;font-size:13px}
+.qgis-main-row[data-inspector=float]>.live-inspector .ovg-splitter,.qgis-canvas[data-table=float]>.qgis-table .ovg-splitter{display:none}
+.qgis-dock-tabs{display:flex;border-bottom:1px solid #b3c4b6;background:#e6eae8;flex-shrink:0}.qgis-dock-tabs button{flex:1;border:0;background:transparent;padding:6px 4px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent}.qgis-dock-tabs button.active{background:#fff;border-bottom-color:#427849;font-weight:700}
+.qgis-dock[data-tabs=layers] .qgis-browser,.qgis-dock[data-tabs=layers] .qgis-legend{display:none}
+.qgis-dock[data-tabs=browser] .qgis-layers,.qgis-dock[data-tabs=browser] .qgis-legend{display:none}
+.qgis-dock[data-tabs=browser] .qgis-browser{flex:1;border-bottom:0}.qgis-dock[data-tabs=browser] .qgis-browser .qgis-browser-list{height:auto;max-height:none}
+.qgis-dock[data-tabs=legend] .qgis-browser,.qgis-dock[data-tabs=legend] .qgis-layers>*:not(.qgis-legend){display:none}
+.qgis-dock[data-tabs=legend] .qgis-legend{flex:1;height:auto;max-height:none}
