@@ -7,6 +7,7 @@ import pytest
 
 from openvietgis_api.adapters.persistence.map_viewport import SqlMapViewportRepository
 from openvietgis_api.domains.maps.viewport import (
+    MAX_RENDER_SOURCE_FEATURES,
     MapReadUnavailableError,
     RenderFeature,
     ViewportBounds,
@@ -118,7 +119,10 @@ def test_unordered_or_wrong_crs_output_cannot_look_usable():
     assert issubclass(MapReadUnavailableError, RuntimeError)
 
 
-@pytest.mark.parametrize("expected,count", [(4, 3), (4, 5), (10001, 10001)])
+@pytest.mark.parametrize(
+    "expected,count",
+    [(4, 3), (4, 5), (MAX_RENDER_SOURCE_FEATURES + 1, MAX_RENDER_SOURCE_FEATURES + 1)],
+)
 def test_render_snapshot_summary_fails_closed_on_missing_or_overlimit_count(expected, count):
     with pytest.raises(MapReadUnavailableError):
         SqlMapViewportRepository._validate_summary(expected, count, True)
