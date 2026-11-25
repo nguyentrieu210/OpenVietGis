@@ -160,16 +160,28 @@ def main():
                                        and difference(oracle_body, rust_body) is None,
                     "p95_ratio_rust_to_python": candidate["p95_ms"] / ref["p95_ms"]
                                                 if ref["p95_ms"] else None,
-                    "error_rate_nonincrease": candidate["error_rate_pct"] <= ref["error_rate_pct"],
-                    "all_warm20_success": not (ref["errors"] or candidate["errors"]),
-                    "p95_target_met": candidate["p95_ms"] <= 0.7 * ref["p95_ms"]
-                                      if name == "spatial_bbox_query_30k" else None,
+                    "error_rate_nonincrease": all(
+                        report["backends"]["rust"]["scenarios"][name]["warm"][str(c)]["error_rate_pct"]
+                        <= report["backends"]["python"]["scenarios"][name]["warm"][str(c)]["error_rate_pct"]
+                        for c in (1, 10, 20)
+                    ),
+                    "all_phases_success": all(
+                        not scenario["cold"]["errors"]
+                        and all(not phase["errors"] for phase in scenario["warm"].values())
+                        for scenario in (report["backends"][kind]["scenarios"][name]
+                                         for kind in ("python", "rust"))
+                    ),
+                    "p95_feature_api_nonregression": candidate["p95_ms"] <= ref["p95_ms"],
+                    # The parent viewport 0.7 target is not an E04 query endpoint gate.
+                    "p95_stretch_70pct": candidate["p95_ms"] <= 0.7 * ref["p95_ms"],
                 }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report["comparison"], indent=2), flush=True)
     # A fast error response does not qualify as a performance improvement.
-    return int(not all(item["response_parity"] and item["all_warm20_success"]
+    return int(not all(item["response_parity"] and item["all_phases_success"]
+                       and item["error_rate_nonincrease"]
+                       and item["p95_feature_api_nonregression"]
                        for item in report["comparison"].values()))
 
 

@@ -18,3 +18,9 @@ Status: PARTIAL; do not use as cutover approval.
 - AC4: E01/E02 merge, workspace dependency review, independent consumer/rollback review and integrated CI pending. E04 reuses canonical migration 0010; no new DDL or data migration in this repair. Keep FastAPI reference active until parent gate passes.
 
 Do not mark E04-T03/T04/T05 complete on the basis of implementation alone. No merge to main or production deployment.
+
+## Follow-up qualification hardening
+
+- Added 13 differential HTTP cases for AST depth/node/value budget (including exactly 1,000 values), null operators, empty membership/reversed ranges, foreign-tenant reference, scoped mutation denial and saved-definition replay.
+- Benchmark now fails the job if either backend returns errors in any measured phase, warm error rates regress, response parity fails, or 20-client query p95 is slower than Python. The 70% ratio is a stretch metric for E04; Spec 064 SC-003 assigns that threshold to viewport, not query endpoints.
+- Local validation: Python syntax compilation and git diff whitespace check only. No Rust build or fresh PostGIS parity claimed: VPS has constrained disk/RAM and this candidate requires CI requalification. E01 service-principal integration, typed decimal/timestamp HTTP fixtures, mutation/timeout and independent review remain open.
