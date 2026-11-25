@@ -263,9 +263,9 @@ def test_authorized_reader_receives_read_only_inventory(
             assert allowed_actions == {"catalog.discover"}
 
 
-def test_router_exposes_exact_five_routes_and_no_put_patch_delete() -> None:
+def test_router_exposes_exact_six_routes_and_no_put_patch_delete() -> None:
     api_routes = [route for route in integration_hub.router.routes if isinstance(route, APIRoute)]
-    assert len(api_routes) == len(integration_hub.router.routes) == 5
+    assert len(api_routes) == len(integration_hub.router.routes) == 6
 
     route_map = {
         route.path.split("/projects/{project_id}", 1)[1]: (
@@ -276,6 +276,7 @@ def test_router_exposes_exact_five_routes_and_no_put_patch_delete() -> None:
     }
     expected = {
         "/integration-hub/catalog": {"GET"},
+        "/integration-hub/export-scopes": {"GET"},
         "/integration-hub/adapters/{adapter_key}": {"GET"},
         "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export": {"GET"},
         "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/sync-preview": {"POST"},
