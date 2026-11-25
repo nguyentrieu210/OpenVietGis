@@ -205,3 +205,10 @@
 .qgis-studio .qgis-row-toggle:hover{border-color:var(--ovg-line)!important;color:var(--ovg-ink)!important}
 .qgis-studio .qgis-row-toggle.on{color:var(--ovg-primary)!important;background:var(--ovg-primary-soft)!important;border-color:#b9cfe4!important}
 .qgis-studio .qgis-row-toggle.pen.on{color:#fff!important;background:var(--ovg-warn)!important;border-color:var(--ovg-warn)!important}
+
+/* Compact command line (QGIS locator size); the idle status is hidden */
+.qgis-studio .core-command{padding:3px 5px!important;gap:2px!important;border-radius:4px}
+.qgis-studio .core-command input{padding:3px 7px!important;font-size:12px!important;min-height:0;height:24px}
+.qgis-studio .core-command button{min-height:22px!important;height:22px;padding:0 6px!important;font-size:11px!important}
+.qgis-studio .core-command-status[hidden]{display:none!important}
+.qgis-studio .core-command-status small{font-size:10.5px}

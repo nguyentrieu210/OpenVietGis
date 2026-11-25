@@ -71,6 +71,10 @@ export class ApiClient {
     this.csrfToken = token;
   }
 
+  getCsrfToken(): string | undefined {
+    return this.csrfToken;
+  }
+
   /** Paths are relative to the configured API base, including a leading slash. */
   url(path: string): string {
     const pathname = path.split("?")[0] ?? "";
@@ -88,7 +92,7 @@ export class ApiClient {
     return this.baseUrl + path;
   }
 
-  private async send(path: string, init?: RequestInit): Promise<Response> {
+  private async send(path: string, init?: RequestInit, retried = false): Promise<Response> {
     const method = (init?.method ?? "GET").toUpperCase();
     const headers = new Headers(init?.headers);
     if (init?.body !== undefined && !(init.body instanceof FormData) && !headers.has("content-type")) {
@@ -104,6 +108,20 @@ export class ApiClient {
       credentials: init?.credentials ?? this.credentials,
       headers
     });
+
+    // A cached CSRF token can expire with the session: refresh it once and replay the same request.
+    if (response.status === 403 && UNSAFE_METHODS.has(method) && path !== "/auth/csrf" && !retried) {
+      const fresh = await this.fetchImpl(this.url("/auth/csrf"), { credentials: this.credentials, cache: "no-store" });
+      if (fresh.ok) {
+        const { token } = (await fresh.json()) as { token?: string };
+        if (token && token !== this.csrfToken) {
+          this.csrfToken = token;
+          const again = new Headers(headers);
+          again.set("x-openvietgis-csrf", token);
+          return this.send(path, { ...init, headers: again }, true);
+        }
+      }
+    }
 
     if (!response.ok) {
       throw new ApiError(response.status, response);

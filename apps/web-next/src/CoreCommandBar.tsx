@@ -57,7 +57,7 @@ export function CoreCommandBar(host:Host){
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
  const open=focused&&(help||!!prefix&&!value.includes(" ")&&!pending)&&matches.length>0;
- const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Gõ lệnh · L, M, Z, DI…":status);
+ const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Enter để gõ lệnh…":status);
  return <div className="core-command" ref={root}>
  <form onSubmit={e=>{e.preventDefault();void execute(value)}}><span className="core-command-prompt" aria-hidden="true">⌘</span>
  <input ref={ref} aria-label="Dòng lệnh GIS" autoComplete="off" spellCheck={false} placeholder={placeholder} value={value} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setValue(e.target.value);setFocused(true);setCursor(-1);setHighlight(-1);setHelp(false)}} onKeyDown={e=>{
@@ -69,7 +69,7 @@ export function CoreCommandBar(host:Host){
  <button type="submit" aria-label="Thực thi lệnh" title="Thực thi · Enter">↵</button><button type="button" aria-label="Lịch sử lệnh (F2)" title="Lịch sử lệnh · F2" aria-expanded={showHistory} onClick={()=>{setShowHistory(v=>!v);setHelp(false)}}>≡</button>
  <button type="button" aria-label="Danh sách lệnh" title="Danh sách lệnh · HELP" onClick={()=>{setValue("");setHelp(v=>!v);setFocused(true);setShowHistory(false);focus()}}>?</button>
  </form>
- <div className="core-command-status" ><small role="status">{status}</small></div>
+ <div className="core-command-status" hidden={status==="Sẵn sàng"&&!host.activePrompt}><small role="status">{status}</small></div>
  {showHistory&&<div className="core-command-history" aria-label="Lịch sử lệnh"><header><b>Lịch sử lệnh</b><button onClick={()=>setShowHistory(false)} aria-label="Đóng lịch sử lệnh">×</button></header>{log.length?log.map((l,i)=><div key={i}>{l}</div>):<p>Chưa có lệnh.</p>}</div>}
  {open&&!showHistory&&<div className="core-command-list" role="listbox" aria-label="Lệnh khả dụng">{matches.map((c,i)=><button type="button" key={c.alias} data-highlight={i===highlight} disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onMouseDown={e=>e.preventDefault()} onClick={()=>void execute(c.alias)}><code>{c.alias}</code><span>{c.label}<small>{c.group}{c.disabled?" · "+commandDisabledReason(c):c.hint?" · "+c.hint:""}</small></span></button>)}</div>}
  </div>

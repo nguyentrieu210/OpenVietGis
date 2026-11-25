@@ -24,7 +24,10 @@ export function listIdentityProviders(client: ApiClient): Promise<IdentityProvid
   return client.request<IdentityProviderSummary[]>("/auth/providers");
 }
 
+/** Cached per client for the session; ApiClient refreshes it once on a 403. */
 export async function loadCsrfToken(client: ApiClient): Promise<string> {
+  const cached = client.getCsrfToken();
+  if (cached) return cached;
   const response = await client.request<{ token: string }>("/auth/csrf");
   client.setCsrfToken(response.token);
   return response.token;
