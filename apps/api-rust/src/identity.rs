@@ -32,6 +32,17 @@ impl HumanSession {
     pub(crate) fn session_id(&self) -> Uuid {
         self.verified.id()
     }
+
+    /// Constant-time check of the `x-openvietgis-csrf` token for this session.
+    pub(crate) fn csrf_matches(&self, secret: &str, candidate: &str) -> bool {
+        let Ok(tag) = URL_SAFE_NO_PAD.decode(candidate) else {
+            return false;
+        };
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).is_ok_and(|mut mac| {
+            mac.update(self.token.as_bytes());
+            mac.verify_slice(&tag).is_ok()
+        })
+    }
 }
 
 pub(crate) enum IdentityError {

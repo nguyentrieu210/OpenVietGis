@@ -3,6 +3,7 @@
 pub mod catalog;
 pub mod identity;
 pub mod pool;
+pub mod queries;
 pub mod rls;
 
 pub use pool::{DbHealth, DbPool, DbPoolConfig};

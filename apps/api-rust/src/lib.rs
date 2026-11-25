@@ -7,6 +7,7 @@ pub(crate) mod identity;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
+pub(crate) mod queries;
 pub mod routes;
 pub mod state;
 
