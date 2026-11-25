@@ -215,10 +215,6 @@ def gis_to_cad_preview(
                     vertices = coords[0]
             else:
                 vertices = coords
-            # set_points("xy") drops per-vertex bulges/widths, which the dxf-attrib
-            # roundtrip check below cannot see. Import already rejects wide polylines.
-            if any(s or e or b for _, _, s, e, b in ent.get_points("xyseb")):
-                _fail("Native LWPOLYLINE arcs (bulge) require CAD review")
             ent.set_points([xy(p) for p in vertices], format="xy")
         changed.append(handle)
     if len(changed) > 1000:

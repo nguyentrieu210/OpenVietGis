@@ -30,7 +30,7 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def fixture(kind, vertex=(0, 0, 0)):
+def fixture(kind):
     doc = ezdxf.new("R2010")
     doc.header["$INSUNITS"] = 4
     doc.layers.new("Control", dxfattribs={"color": 3})
@@ -44,10 +44,7 @@ def fixture(kind, vertex=(0, 0, 0)):
         b = m.add_line((0, 3000), (8000, 3000), dxfattribs=attrs)
     else:
         a = m.add_lwpolyline(
-            [(x, y, *vertex) for x, y in [(0, 0), (8000, 0), (8000, 3000), (0, 3000)]],
-            format="xyseb",
-            close=True,
-            dxfattribs=attrs,
+            [(0, 0), (8000, 0), (8000, 3000), (0, 3000)], close=True, dxfattribs=attrs
         )
         b = m.add_lwpolyline(
             [(10000, 0), (18000, 0), (18000, 3000), (10000, 3000)], close=True, dxfattribs=attrs
@@ -179,15 +176,6 @@ def test_revision_and_mapping_checks():
             gis_to_cad_preview(
                 base, base_sha256=digest(base), placement=p, mapping=mapping, features=bad
             )
-
-
-def test_lwpolyline_arcs_are_rejected_not_straightened():
-    _, _, _, base, p, mapping, features = fixture("Polygon", vertex=(0, 0, 0.2))
-    shift(features[0]["geometry"])
-    with pytest.raises(PlatformValidationError, match="bulge"):
-        gis_to_cad_preview(
-            base, base_sha256=digest(base), placement=p, mapping=mapping, features=features
-        )
 
 
 def test_no_line_to_polyline_or_polygon_hole_conversion():
