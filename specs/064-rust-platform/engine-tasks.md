@@ -115,8 +115,8 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E16-T05 Review, integration test, document remaining gaps and convergence (E16-AC4).
 
 ## E17 — Canonical web, desktop-ready shell
-- [ ] E17-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E17-AC1).
-- [ ] E17-T02 Create golden, failure, permission and interoperability fixtures (E17-AC2).
+- [x] E17-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E17-AC1).
+- [x] E17-T02 Create golden, failure, permission and interoperability fixtures (E17-AC2).
 - [ ] E17-T03 Implement/retain approved engine and integrate behind public contract (E17-AC2).
 - [ ] E17-T04 Run comparative performance and resource tests, record raw evidence (E17-AC3).
 - [ ] E17-T05 Review, integration test, document remaining gaps and convergence (E17-AC4).
