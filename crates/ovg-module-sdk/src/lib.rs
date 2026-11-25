@@ -53,6 +53,19 @@ fn unique_bounded<'a>(values: impl Iterator<Item = &'a str>) -> bool {
 }
 
 impl ModuleManifest {
+    #[must_use]
+    pub fn runtime_contract_matches(&self, stored: &Self, stored_enabled: bool) -> bool {
+        stored_enabled
+            && self.extension_key == stored.extension_key
+            && self.version == stored.version
+            && self.api_compatibility == stored.api_compatibility
+            && self.permissions == stored.permissions
+            && self.commands == stored.commands
+            && self.capabilities == stored.capabilities
+            && self.entity_schemas == stored.entity_schemas
+            && self.ui_contributions == stored.ui_contributions
+    }
+
     pub fn validate(&self) -> Result<(), AppError> {
         let invalid = |message| AppError::validation("INVALID_MODULE_MANIFEST", message);
         let key = &self.extension_key;
@@ -520,6 +533,19 @@ mod tests {
         let mut m = good;
         m.capabilities.push(m.capabilities[0].clone());
         assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn runtime_compatibility_ignores_display_metadata_but_not_declared_contract() {
+        let shipped = DummyModule.manifest();
+        let mut stored = shipped.clone();
+        stored.display_name = "Tenant label".into();
+        stored.description = "Tenant description".into();
+        assert!(shipped.runtime_contract_matches(&stored, true));
+        assert!(!shipped.runtime_contract_matches(&stored, false));
+
+        stored.capabilities.push(ModuleCapability("extra".into()));
+        assert!(!shipped.runtime_contract_matches(&stored, true));
     }
 
     #[test]
