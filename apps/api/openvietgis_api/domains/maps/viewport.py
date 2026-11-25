@@ -25,7 +25,7 @@ from openvietgis_api.domains.spatial.service import (
 MAX_VIEWPORT_FEATURES = 1000
 MAX_VIEWPORT_POSITIONS = 20_000
 MAX_VIEWPORT_BYTES = 2 * 1024 * 1024
-MAX_RENDER_SOURCE_FEATURES = 10_000
+MAX_RENDER_SOURCE_FEATURES = 50_000
 MAP_STATEMENT_TIMEOUT_MS = 2000
 
 type Limitation = Literal["feature_limit", "position_limit", "byte_limit"]

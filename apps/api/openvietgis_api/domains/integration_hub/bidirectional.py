@@ -20,7 +20,7 @@ from openvietgis_api.domains.integration_hub.sync_diff import (
 )
 
 Side = Literal["openvietgis", "external"]
-MAX_RECONCILE_FEATURES: Final[int] = 25_000
+MAX_RECONCILE_FEATURES: Final[int] = 50_000
 MAX_RECONCILE_ACTIONS: Final[int] = 1_000
 
 

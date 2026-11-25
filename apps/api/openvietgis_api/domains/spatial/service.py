@@ -615,7 +615,7 @@ def source_render_supported(source: DataSource) -> bool:
         and source.geometry_family in SUPPORTED_FAMILIES
         and source.dimensions == GeometryDimensions.XY
         and source.feature_count is not None
-        and source.feature_count <= 10_000
+        and source.feature_count <= 50_000  # same as MAX_RENDER_SOURCE_FEATURES (Spec 053)
         and (
             native == 4326
             or (native is not None and get_transformation_profile(native, 4326) is not None)

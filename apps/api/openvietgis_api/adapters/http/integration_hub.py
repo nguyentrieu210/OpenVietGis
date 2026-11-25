@@ -87,8 +87,8 @@ router = APIRouter(tags=["integration-hub"])
 
 EXPORT_ENABLED_ADAPTER_KEYS: Final[frozenset[str]] = frozenset({"qgis", "postgis", "autocad"})
 SYNC_PUSH_ENABLED_ADAPTER_KEYS: Final[frozenset[str]] = frozenset({"qgis"})
-MAX_HUB_EXPORT_FEATURES: Final[int] = 25_000
-MAX_DXF_EXPORT_FEATURES: Final[int] = 10_000
+MAX_HUB_EXPORT_FEATURES: Final[int] = 50_000  # Spec 053: one 33.5k-point survey layer
+MAX_DXF_EXPORT_FEATURES: Final[int] = 50_000
 MAX_SYNC_UPLOAD_BYTES: Final[int] = 16 * 1024 * 1024
 MAX_SYNC_PREVIEW_ITEMS: Final[int] = 100
 _SUPPORTED_EXPORT_GEOMETRIES: Final[frozenset[str]] = frozenset(
@@ -449,7 +449,7 @@ def _load_export_features(
     if len(rows) > MAX_HUB_EXPORT_FEATURES:
         raise HTTPException(
             status_code=422,
-            detail="Export limit of 25,000 features exceeded.",
+            detail=f"Export limit of {MAX_HUB_EXPORT_FEATURES:,} features exceeded.",
         )
 
     features: list[tuple[str, dict[str, Any], NativeGeometry]] = []
@@ -622,7 +622,7 @@ def _load_sync_server_features(
     if len(rows) > MAX_HUB_EXPORT_FEATURES:
         raise HTTPException(
             status_code=422,
-            detail="Sync feature limit of 25,000 server features exceeded.",
+            detail=f"Sync feature limit of {MAX_HUB_EXPORT_FEATURES:,} server features exceeded.",
         )
 
     snapshots: list[ServerFeatureSnapshot] = []
@@ -1258,7 +1258,7 @@ def export_integration_layer(
     if format == "dxf" and not (1 <= len(features) <= MAX_DXF_EXPORT_FEATURES):
         raise HTTPException(
             status_code=422,
-            detail="DXF export requires between 1 and 10,000 features.",
+            detail=f"DXF export requires between 1 and {MAX_DXF_EXPORT_FEATURES:,} features.",
         )
 
     layer_name = str(layer_row["name"])

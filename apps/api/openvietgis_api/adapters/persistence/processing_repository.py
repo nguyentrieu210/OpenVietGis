@@ -60,7 +60,7 @@ from openvietgis_api.domains.spatial.domain import (
 
 # Bounds for the first synchronous processing slice. Output is also constrained
 # by the Core reader's per-feature geometry limits and transfer feature cap.
-MAX_PROCESSING_FEATURES = 25_000
+MAX_PROCESSING_FEATURES = 50_000
 MAX_PROCESSING_POSITIONS = 1_000_000
 PROCESSING_STATEMENT_TIMEOUT = "30s"
 
