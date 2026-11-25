@@ -35,7 +35,7 @@ export function CoreCommandBar(host:Host){
   const seq=++epoch.current;clear();setFocused(false);running.current=true;
   try{await command.run(rest.join(" "));if(seq===epoch.current)report(command.alias+" · "+command.label)}catch(e){if(seq===epoch.current)report(command.alias+" · "+(e instanceof Error?e.message:"Không thể thực hiện"))}finally{running.current=false}
  }
- const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut});latest.current={execute,escape,focus,clear,shortcut:host.shortcut};
+ const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt});latest.current={execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt};
  useEffect(()=>{const key=(e:KeyboardEvent)=>{
   if(!root.current||root.current.closest("[inert]")||document.querySelector(".core-ribbon-menu-fixed"))return;
   if(e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
