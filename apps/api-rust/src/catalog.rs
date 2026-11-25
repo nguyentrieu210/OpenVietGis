@@ -1,25 +1,26 @@
 //! Scoped spatial catalog routes matching the existing FastAPI wire.
 
+use axum::body::Bytes;
 use axum::extract::rejection::{PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
-use axum::http::{header, StatusCode};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use ovg_core::crs::reference_registry_wire;
 use ovg_core::AppError;
-use ovg_storage::catalog::{FeatureRequest, ProjectRead, ProjectReadPolicy};
+use ovg_storage::catalog::{FeatureRequest, MapSaveIntent, ProjectRead, ProjectReadPolicy};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::identity::HumanSession;
+use crate::identity::{require_csrf, HumanSession, IdentityError};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
     const PROJECT: &str = "/organizations/{organization_id}/projects/{project_id}";
     Router::new()
-        .route(&format!("{PROJECT}/map"), get(get_map))
+        .route(&format!("{PROJECT}/map"), get(get_map).put(save_map))
         .route(&format!("{PROJECT}/map/history"), get(map_history))
         .route(
             &format!("{PROJECT}/map/operations/{{operation_id}}"),
@@ -308,6 +309,32 @@ async fn get_map(
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
 }
 
+async fn save_map(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    body: Bytes,
+) -> Result<Response, CatalogError> {
+    require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
+    let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let mut read = project_read(
+        &state,
+        &auth,
+        org,
+        project,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
+    let intent = MapSaveIntent::parse(&body).map_err(CatalogError::spatial)?;
+    let value = read
+        .save_map(&intent, auth.display_name())
+        .await
+        .map_err(CatalogError::spatial)?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
+}
+
 #[derive(Deserialize)]
 struct MapHistoryQuery {
     after_revision: Option<i64>,
@@ -374,13 +401,19 @@ async fn project_read<'a>(
 
 enum CatalogError {
     InvalidRequest,
+    Identity(IdentityError),
     /// Fixed spatial descriptions rendered as `{"code", "detail"}`.
     Spatial(StatusCode, &'static str, String),
     Application(AppError),
 }
 
 /// Spatial error codes with a fixed public description in the reference API.
-const SPATIAL_CODES: [&str; 8] = [
+const SPATIAL_CODES: [&str; 13] = [
+    "STALE_MAP_REVISION",
+    "OPERATION_INTENT_CONFLICT",
+    "NO_CHANGES",
+    "MAP_REFERENCE_UNAVAILABLE",
+    "INVALID_MAP_REQUEST",
     "PROJECT_NOT_WRITABLE",
     "SOURCE_NOT_READY",
     "STALE_READ_PIN",
@@ -417,6 +450,7 @@ impl From<AppError> for CatalogError {
 impl IntoResponse for CatalogError {
     fn into_response(self) -> Response {
         match self {
+            Self::Identity(error) => error.into_response(),
             Self::InvalidRequest => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({

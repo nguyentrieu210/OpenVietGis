@@ -23,3 +23,7 @@ Added tenant-locked grant create/revoke, service principal list/create/revoke, c
 ## Map read and receipt parity
 
 The grant/service-principal/credential administration commit `843e732` passed Format, Clippy, Workspace Tests, Architecture Isolation and PostGIS Parity (GitHub Actions run 45673816153). Added project map state, bounded immutable history and actor-owned operation receipt reads. Map identity is UUIDv5 using the project namespace. GIS-scoped accounts receive only RLS-visible layers and no default viewpoint; history and receipt access fail closed. Receipt access rechecks project.edit, active lifecycle and organization/project lock order. Added empty, persisted, foreign-tenant, scoped-map and receipt differential fixtures; these require fresh CI. Map PUT, catalog writes and the other previously listed gaps remain open. No production changes.
+
+## Atomic map save
+
+Implemented project.edit-scoped PUT map with strict validation, stable map ID, locked revision check, operation intent fingerprint, idempotent replay, active/renderable layer reference checks, and a single transaction for map state, audit, operation and revision. Included a Python-compatible JSON canonicalization test for Unicode, float exponent spelling and large opaque JSON integers. Differential cases cover replay across runtimes, stale revisions, conflicting operation IDs, no changes, CSRF and tenant boundaries. This candidate still requires its own compilation and PostGIS CI verification; no claim of full map parity until that run passes. E01/E02 acceptance tasks remain open.

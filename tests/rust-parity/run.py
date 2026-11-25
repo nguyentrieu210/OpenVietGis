@@ -655,18 +655,54 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 foreign map denied", f"{root_b}/map", 404, token=a)
     suite.get("E02 member map denied before grant", f"{root_a}/map", 403, token=surveyor)
     map_operation = str(uuid4())
-    map_save = suite.oracle.put(
-        f"{root_a}/map",
-        headers=session_headers(a, **{"x-openvietgis-csrf": fixture["csrf_a_token"]}),
-        json={"operation_id":map_operation,"expected_revision":0,"basemap":"grid",
+    map_headers = session_headers(a, **{"x-openvietgis-csrf": fixture["csrf_a_token"]})
+    map_payload = {"operation_id":map_operation,"expected_revision":0,"basemap":"grid",
               "layers":[{"layer_id":selected["layer_id"],"visible":True,
                          "style":{"color":"#2563EB","opacity":0.8,"width":2,"radius":5}},
                         {"layer_id":fixture["layers"]["edit_4326"]["layer_id"],"visible":True,
                          "style":{"color":"#2563EB","opacity":0.8,"width":2,"radius":5}}],
               "default_viewpoint":{"mode":"set","value":{"longitude":106,"latitude":10,
-                "zoom":8,"bearing":0,"pitch":0,"crs":4326}}},
-    )
+                "zoom":8,"bearing":0,"pitch":0,"crs":4326}}}
+    map_save = suite.oracle.put(f"{root_a}/map", headers=map_headers, json=map_payload)
     require(map_save.status_code == 200, "FastAPI map fixture save failed")
+    def compare_map_put(label, payload, status, headers=map_headers, path=f"{root_a}/map"):
+        try:
+            expected = suite.oracle.put(path, headers=headers, json=payload)
+            actual = suite.rust.put(path, headers=headers, json=payload)
+            require(expected.status_code == status, f"FastAPI status {expected.status_code}, expected {status}")
+            require(actual.status_code == status, f"Rust status {actual.status_code}, expected {status}")
+            mismatch = difference(expected.json(), actual.json())
+            require(mismatch is None, mismatch)
+        except (AssertionError, ValueError, httpx.HTTPError) as exc:
+            suite.failures.append(label)
+            print(f"FAIL {label}: {exc}", flush=True)
+        else:
+            suite.passed += 1
+            print(f"PASS {label}", flush=True)
+
+    compare_map_put("E02 Rust replays FastAPI map intent", map_payload, 200)
+    compare_map_put("E02 reused operation with different payload", map_payload | {"expected_revision":1}, 409)
+    compare_map_put("E02 stale revision rejected", map_payload | {"operation_id":str(uuid4())}, 409)
+    compare_map_put("E02 map missing CSRF denied", map_payload, 403, headers=session_headers(a))
+    compare_map_put("E02 foreign map mutation denied", map_payload, 404, path=f"{root_b}/map")
+
+    second = map_payload | {"operation_id":str(uuid4()),"expected_revision":1,
+                            "default_viewpoint":{"mode":"preserve"},
+                            "layers":[map_payload["layers"][0] | {"group":"Hiện trạng/Giao thông",
+                                      "display":{"label":"Đường 😀","scale":1e-5}},
+                                      map_payload["layers"][1]]}
+    rust_saved = suite.rust.put(f"{root_a}/map", headers=map_headers, json=second)
+    if rust_saved.status_code != 200:
+        suite.failures.append("E02 Rust map save")
+        print(f"FAIL E02 Rust map save: HTTP {rust_saved.status_code}", flush=True)
+    else:
+        suite.passed += 1
+        print("PASS E02 Rust map save", flush=True)
+        compare_map_put("E02 FastAPI replays Rust map intent", second, 200)
+        compare_map_put("E02 unchanged map rejected", second | {"operation_id":str(uuid4()),"expected_revision":2}, 409)
+        compare_map_put("E02 foreign layer rejected", second | {"operation_id":str(uuid4()),"expected_revision":2,
+                        "layers":[second["layers"][0] | {"layer_id":layer_b_id}]}, 404)
+
     suite.get("E02 committed map state", f"{root_a}/map", token=a)
     suite.get("E02 committed map history", f"{root_a}/map/history", token=a)
     suite.get("E02 map operation receipt", f"{root_a}/map/operations/{map_operation}", token=a)

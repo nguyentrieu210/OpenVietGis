@@ -16,7 +16,9 @@ use uuid::Uuid;
 use crate::{DbPool, TenantTransaction};
 
 mod features;
+mod map_write;
 pub use features::FeatureRequest;
+pub use map_write::MapSaveIntent;
 
 #[derive(Clone, Copy)]
 pub enum ProjectReadPolicy {
