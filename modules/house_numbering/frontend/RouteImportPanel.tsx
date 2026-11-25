@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useEffect,useMemo,useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 import type {HouseNumberingRoute} from "./api";
@@ -34,7 +35,7 @@ export function RouteImportPanel({organizationId,projectId,routes,onDone,onGoto,
  const choose=(i:number,id:string)=>{const src=sources.find(s=>s.id===id);const mapping:Layer["mapping"]={};if(src)for(const [key] of fields){const f=src.schema.fields.find(f=>aliases[key].includes(norm(f.name)));if(f)mapping[key]=f.field_id;}change(i,{source_id:id,mapping})};
  const body=()=>({layers:layers.map(l=>({...l,mapping:Object.fromEntries(Object.entries(l.mapping).filter(([,v])=>v))})),overrides,merge_groups:mergeGroups,parent_features:parentFeatures.map(({task_id,source_id,feature_id})=>({task_id,source_id,feature_id}))});
  async function run(apply=false){
-  if(apply&&(!preview||stale||selected.size===0||!window.confirm(`Tạo ${selected.size} tuyến dự thảo đã chọn? Không sửa tuyến hiện có, hình học GIS hoặc liên kết nhà.`)))return;
+  if(apply&&(!preview||stale||selected.size===0||!(await uiConfirm(`Tạo ${selected.size} tuyến dự thảo đã chọn? Không sửa tuyến hiện có, hình học GIS hoặc liên kết nhà.`))))return;
   setBusy(true);setError("");setNotice("");
   try{
    if(apply&&preview){

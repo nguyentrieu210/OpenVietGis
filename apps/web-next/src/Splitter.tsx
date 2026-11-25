@@ -14,9 +14,13 @@ export function Splitter({storageKey,cssVar,axis,edge,min,max,label,defaultSize}
  useEffect(()=>{apply(read(storageKey))},[storageKey]);
  const size=()=>{const r=ref.current?.parentElement?.getBoundingClientRect();return r?(axis==="x"?r.width:r.height):defaultSize??min};
  const start=(e:React.PointerEvent<HTMLDivElement>)=>{e.preventDefault();const el=e.currentTarget,from=axis==="x"?e.clientX:e.clientY,base=size(),sign=edge==="start"?-1:1;el.setPointerCapture(e.pointerId);let last=base,moved=false;
-  const move=(ev:PointerEvent)=>{moved=true;last=clampSize(base+sign*((axis==="x"?ev.clientX:ev.clientY)-from),min,limit());apply(last)};
-  const end=()=>{if(moved)write(storageKey,last);el.removeEventListener("pointermove",move);el.removeEventListener("pointerup",end);el.removeEventListener("pointercancel",end);window.dispatchEvent(new Event("resize"))};
-  el.addEventListener("pointermove",move);el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)};
+  // QGIS-style: a ghost line follows the pointer and the panel resizes once on release (no live re-layout flicker).
+  const ghost=document.createElement("div");ghost.className="ovg-split-ghost ovg-split-ghost-"+axis;document.body.appendChild(ghost);
+  const place=(ev:PointerEvent)=>{if(axis==="x"){ghost.style.left=ev.clientX-1+"px"}else{ghost.style.top=ev.clientY-1+"px"}};place(e.nativeEvent);
+  const move=(ev:PointerEvent)=>{moved=true;last=clampSize(base+sign*((axis==="x"?ev.clientX:ev.clientY)-from),min,limit());place(ev)};
+  // Listen on window and end once: a lost capture or a re-render must never leave the ghost line on screen.
+  let done=false;const end=()=>{if(done)return;done=true;ghost.remove();if(moved){apply(last);write(storageKey,last)}removeEventListener("pointermove",move);removeEventListener("pointerup",end);removeEventListener("pointercancel",end);el.removeEventListener("lostpointercapture",end);removeEventListener("blur",end);window.dispatchEvent(new Event("resize"))};
+  addEventListener("pointermove",move);addEventListener("pointerup",end);addEventListener("pointercancel",end);el.addEventListener("lostpointercapture",end);addEventListener("blur",end)};
  const key=(e:React.KeyboardEvent)=>{const grow=axis==="x"?(edge==="start"?"ArrowLeft":"ArrowRight"):(edge==="start"?"ArrowUp":"ArrowDown"),shrink=axis==="x"?(edge==="start"?"ArrowRight":"ArrowLeft"):(edge==="start"?"ArrowDown":"ArrowUp");if(e.key!==grow&&e.key!==shrink)return;e.preventDefault();const v=clampSize(size()+(e.key===grow?20:-20),min,limit());apply(v);write(storageKey,v);window.dispatchEvent(new Event("resize"))};
  const reset=()=>{apply(null);write(storageKey,null);window.dispatchEvent(new Event("resize"))};
  return <div ref={ref} className={"ovg-splitter ovg-splitter-"+axis+" ovg-splitter-"+edge} role="separator" aria-orientation={axis==="x"?"vertical":"horizontal"} aria-label={label+" · kéo để đổi kích thước, nhấp đúp để về mặc định"} title={label+" · kéo để đổi kích thước, nhấp đúp để về mặc định"} tabIndex={0} onPointerDown={start} onDoubleClick={reset} onKeyDown={key}/>;

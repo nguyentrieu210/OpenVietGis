@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {
   createHouseNumberingRule,
   inspectHouseNumberingLocation,
@@ -130,8 +131,8 @@ export function NumberingPanel({ organizationId, projectId }: Props) {
           const result=await previewHouseNumbering(hnClient,organizationId,projectId,{building_ids:selected,rule_id:ruleId,operation_id:crypto.randomUUID()});
           setPreview(result);setNotice(`Phương án gồm ${result.candidate_changes.length} số đề xuất và ${result.warnings?.length ?? 0} nhà cần rà soát. Chưa ghi dữ liệu.`);
         })}>Lập phương án đánh số</button>
-        <button className="hn-btn" type="button" disabled={!preview || !preview.candidate_changes.length || !!preview.applied_at || busy} onClick={()=>{
-          if(!preview || !window.confirm(`Lưu ${preview.candidate_changes.length} số đề xuất? Đây chưa phải cấp số chính thức.`)) return;
+        <button className="hn-btn" type="button" disabled={!preview || !preview.candidate_changes.length || !!preview.applied_at || busy} onClick={async ()=>{
+          if(!preview || !(await uiConfirm(`Lưu ${preview.candidate_changes.length} số đề xuất? Đây chưa phải cấp số chính thức.`))) return;
           void mutate(async()=>{
             await applyHouseNumberingPreview(hnClient,organizationId,projectId,preview.id);
             setPreview({...preview,applied_at:new Date().toISOString()});

@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useEffect,useState} from "react";
 import {AddressVerificationPanel} from "./AddressVerificationPanel";
 import {VerifiedLinkPanel} from "./VerifiedLinkPanel";
@@ -17,7 +18,7 @@ export function GeometryReviewPanel({endpoint,previewToken,candidates,request,di
   catch(e){setError(await uiError(e));}finally{setBusy(false);onBusy(false)}
  }
  async function stage(){
-  if(!previewToken||disabled||!selected.length||reason.trim().length<10||!window.confirm("Chỉ lưu hình học chờ xác minh, không đưa vào danh mục cấp số. Tiếp tục?"))return;
+  if(!previewToken||disabled||!selected.length||reason.trim().length<10||!(await uiConfirm("Chỉ lưu hình học chờ xác minh, không đưa vào danh mục cấp số. Tiếp tục?")))return;
   setBusy(true);onBusy(true);setError("");setNotice("");
   try{const r=await withCsrf(()=>hnClient.request<{staged:number;routes_created:number;buildings_assigned:number}>(endpoint+"/route-import/stage-geometry",{method:"POST",body:JSON.stringify({...request(),preview_token:previewToken,selected_keys:selected,reason:reason.trim()})}));setNotice("Đã lưu "+r.staged+" tuyến hình học chờ xác minh. Không tạo tuyến đánh số hoặc gán nhà.");setSelected([]);setReason("");setListing(await hnClient.request<Listing>(endpoint+"/geometry-reviews?offset=0&limit=100"));setOffset(0)}
   catch(e){setError(await uiError(e));}finally{setBusy(false);onBusy(false)}

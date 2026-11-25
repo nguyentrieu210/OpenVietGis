@@ -1,4 +1,3 @@
-import {isStudioMapCanvas} from "./map-surface";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 export type CoreCommand={alias:string;label:string;group:string;hint?:string;disabled?:boolean;disabledReason?:string;run:(args:string)=>void|Promise<void>};
@@ -30,13 +29,14 @@ export function CoreCommandBar(host:Host){
   if(alias==="ZOOM"&&rest.length&&["E","I","O","L","S"].includes(normalize(rest[0]))){void execute("Z"+normalize(rest[0]));return}
   if((alias==="ZOOM"||alias==="PAN")&&!rest.length){setPending(alias);setValue("");setHelp(false);report(alias==="ZOOM"?"Zoom [E toàn bộ / I / O / L / S / mức zoom]":"Nhập kinh độ,vĩ độ");focus();return}
   const command=host.commands.find(c=>normalize(c.alias)===alias)??(!rest.length&&matches.length===1?matches[0]:undefined);
-  if(!command){report("Không có lệnh "+token.toUpperCase()+" · HELP");setPending(null);return}
+  // Not a command: one box like the QGIS locator, so search features instead.
+  if(!command){setPending(null);clear();report("Tìm: "+text);window.dispatchEvent(new CustomEvent("ovg:search",{detail:text}));return}
   if(command.disabled){report(command.alias+" · "+commandDisabledReason(command));setPending(null);return}
   const full=[command.alias,...rest].join(" ");if(!host.activePrompt||!["ZE","ZI","ZO","ZL","ZS","ZOOM","PAN","ORTHO","OSNAP","SNAP"].includes(command.alias))last.current=full;setHistory(h=>[full,...h.filter(x=>x!==full)].slice(0,50));setLog(l=>[...l,"Command: "+full].slice(-80));
   const seq=++epoch.current;clear();setFocused(false);running.current=true;
   try{await command.run(rest.join(" "));if(seq===epoch.current)report(command.alias+" · "+command.label)}catch(e){if(seq===epoch.current)report(command.alias+" · "+(e instanceof Error?e.message:"Không thể thực hiện"))}finally{running.current=false}
  }
- const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut});latest.current={execute,escape,focus,clear,shortcut:host.shortcut};
+ const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt});latest.current={execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt};
  useEffect(()=>{const key=(e:KeyboardEvent)=>{
   if(!root.current||root.current.closest("[inert]")||document.querySelector(".core-ribbon-menu-fixed"))return;
   if(e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
@@ -49,15 +49,16 @@ export function CoreCommandBar(host:Host){
   if(e.key==="F3"||e.key==="F8"){e.preventDefault();e.stopPropagation();const result=latest.current.shortcut(e.key);if(result)report(result);return}
   if(own)return;
   if(e.key==="/"&&!button){e.preventDefault();latest.current.focus();return}
-  if((e.key==="Enter"||e.key===" ")&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
-  if(!button&&/^[a-zA-Z0-9?@.,+-]$/.test(e.key)){e.preventDefault();e.stopPropagation();setValue(e.key.toUpperCase());setCursor(-1);setHighlight(-1);setHelp(false);latest.current.focus()}
+  // Enter: finish what is in progress, otherwise open the command line (plain keys are shortcuts).
+  if(e.key==="Enter"&&!button&&!latest.current.activePrompt){e.preventDefault();e.stopPropagation();latest.current.focus();return}
+  if(e.key==="Enter"&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
  };window.addEventListener("keydown",key,true);return()=>window.removeEventListener("keydown",key,true)},[]);
  useEffect(()=>{const run=(e:Event)=>{const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
- useEffect(()=>{const menu=(e:MouseEvent)=>{const target=e.target as HTMLElement;if(!isStudioMapCanvas(target)||document.querySelector('[aria-modal="true"]'))return;e.preventDefault();void latest.current.execute("");};document.addEventListener("contextmenu",menu);return()=>document.removeEventListener("contextmenu",menu)},[]);
+ // Right-click no longer repeats the last command (AutoCAD habit): in QGIS it opens context menus / finishes digitizing.
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
  const open=focused&&(help||!!prefix&&!value.includes(" ")&&!pending)&&matches.length>0;
- const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Gõ lệnh · L, M, Z, DI…":status);
+ const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Enter · gõ lệnh hoặc tên đối tượng…":status);
  return <div className="core-command" ref={root}>
  <form onSubmit={e=>{e.preventDefault();void execute(value)}}><span className="core-command-prompt" aria-hidden="true">⌘</span>
  <input ref={ref} aria-label="Dòng lệnh GIS" autoComplete="off" spellCheck={false} placeholder={placeholder} value={value} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setValue(e.target.value);setFocused(true);setCursor(-1);setHighlight(-1);setHelp(false)}} onKeyDown={e=>{
@@ -69,7 +70,7 @@ export function CoreCommandBar(host:Host){
  <button type="submit" aria-label="Thực thi lệnh" title="Thực thi · Enter">↵</button><button type="button" aria-label="Lịch sử lệnh (F2)" title="Lịch sử lệnh · F2" aria-expanded={showHistory} onClick={()=>{setShowHistory(v=>!v);setHelp(false)}}>≡</button>
  <button type="button" aria-label="Danh sách lệnh" title="Danh sách lệnh · HELP" onClick={()=>{setValue("");setHelp(v=>!v);setFocused(true);setShowHistory(false);focus()}}>?</button>
  </form>
- <div className="core-command-status" ><small role="status">{status}</small></div>
+ <div className="core-command-status" hidden={status==="Sẵn sàng"&&!host.activePrompt}><small role="status">{status}</small></div>
  {showHistory&&<div className="core-command-history" aria-label="Lịch sử lệnh"><header><b>Lịch sử lệnh</b><button onClick={()=>setShowHistory(false)} aria-label="Đóng lịch sử lệnh">×</button></header>{log.length?log.map((l,i)=><div key={i}>{l}</div>):<p>Chưa có lệnh.</p>}</div>}
  {open&&!showHistory&&<div className="core-command-list" role="listbox" aria-label="Lệnh khả dụng">{matches.map((c,i)=><button type="button" key={c.alias} data-highlight={i===highlight} disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onMouseDown={e=>e.preventDefault()} onClick={()=>void execute(c.alias)}><code>{c.alias}</code><span>{c.label}<small>{c.group}{c.disabled?" · "+commandDisabledReason(c):c.hint?" · "+c.hint:""}</small></span></button>)}</div>}
  </div>
@@ -93,5 +94,5 @@ export function CoreRibbon({commands,enabled=true}:{commands:CoreCommand[];enabl
  useEffect(()=>{const outside=(e:PointerEvent)=>{if(!root.current?.contains(e.target as Node)&&!menu.current?.contains(e.target as Node))close()};const key=(e:KeyboardEvent)=>{if(e.key==="Escape"&&menu.current){e.stopImmediatePropagation();e.preventDefault();close(true)}};const resize=()=>close();document.addEventListener("pointerdown",outside);window.addEventListener("keydown",key,true);window.addEventListener("resize",resize);return()=>{document.removeEventListener("pointerdown",outside);window.removeEventListener("keydown",key,true);window.removeEventListener("resize",resize)}},[]);
  const items=commands.filter(c=>(group==="Tìm lệnh"||c.group===group)&&(!query||normalize(c.alias+" "+c.label+" "+(c.hint??"")).includes(normalize(query))));
  const open=(e:React.MouseEvent<HTMLButtonElement>,g:string)=>{if(!enabled)return;if(group===g){close(true);return}trigger.current=e.currentTarget;const r=e.currentTarget.getBoundingClientRect();setPos({x:Math.max(8,Math.min(r.left,innerWidth-Math.min(370,innerWidth-16)-8)),y:r.bottom+5});setQuery("");setGroup(g)};
- return <div className="core-ribbon" ref={root}><span className="core-ribbon-brand">GIS</span><div className="core-ribbon-group core-ribbon-search-trigger"><button type="button" aria-expanded={group==="Tìm lệnh"} onClick={e=>open(e,"Tìm lệnh")}><span aria-hidden="true">⌕ </span>Tìm công cụ</button></div>{groups.map(g=><div key={g} className="core-ribbon-group"><button type="button" className={group===g?"active":""} aria-expanded={group===g} onClick={e=>open(e,g)}>{g} <span>▾</span></button></div>)}{enabled&&group&&createPortal(<div ref={menu} className={"core-ribbon-menu core-ribbon-menu-fixed"+(group==="Tìm lệnh"?"":" is-dropdown")} style={{left:pos.x,top:pos.y,maxHeight:Math.max(160,innerHeight-pos.y-12)}} role="region" aria-label={"Menu "+group}><header><div><strong>{group}</strong><small>{menuTopics[group]??"Tìm nhanh mọi công cụ GIS Core"}</small></div><button aria-label="Đóng menu" onClick={()=>close(true)}>×</button></header><div className="core-menu-search"><input ref={search} aria-label="Tìm công cụ" placeholder="Tìm chức năng hoặc mã lệnh…" value={query} onChange={e=>setQuery(e.target.value)} /><small>{items.length} lệnh · {items.filter(c=>!c.disabled).length} khả dụng</small></div><div className="core-menu-items">{items.map(c=><button key={c.group+c.alias} type="button" disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onClick={()=>{close();window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:c.alias}))}}><span className="core-menu-command"><b>{c.label}</b>{(c.hint||group==="Tìm lệnh")&&<small>{c.hint??c.group}</small>}</span><code>{c.alias}</code></button>)}{!items.length&&<p>Không tìm thấy công cụ.</p>}</div></div>,document.body)}</div>
+ return <div className="core-ribbon" ref={root}><div className="core-ribbon-group core-ribbon-search-trigger"><button type="button" aria-expanded={group==="Tìm lệnh"} onClick={e=>open(e,"Tìm lệnh")}><span aria-hidden="true">⌕ </span>Tìm công cụ</button></div>{groups.map(g=><div key={g} className="core-ribbon-group"><button type="button" className={group===g?"active":""} aria-expanded={group===g} onClick={e=>open(e,g)}>{g}</button></div>)}{enabled&&group&&createPortal(<div ref={menu} className={"core-ribbon-menu core-ribbon-menu-fixed"+(group==="Tìm lệnh"?"":" is-dropdown")} style={{left:pos.x,top:pos.y,maxHeight:Math.max(160,innerHeight-pos.y-12)}} role="region" aria-label={"Menu "+group}><header><div><strong>{group}</strong><small>{menuTopics[group]??"Tìm nhanh mọi công cụ GIS Core"}</small></div><button aria-label="Đóng menu" onClick={()=>close(true)}>×</button></header><div className="core-menu-search"><input ref={search} aria-label="Tìm công cụ" placeholder="Tìm chức năng hoặc mã lệnh…" value={query} onChange={e=>setQuery(e.target.value)} /><small>{items.length} lệnh · {items.filter(c=>!c.disabled).length} khả dụng</small></div><div className="core-menu-items">{items.map(c=><button key={c.group+c.alias} type="button" disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onClick={()=>{close();window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:c.alias}))}}><span className="core-menu-command"><b>{c.label}</b>{(c.hint||group==="Tìm lệnh")&&<small>{c.hint??c.group}</small>}</span><code>{c.alias}</code></button>)}{!items.length&&<p>Không tìm thấy công cụ.</p>}</div></div>,document.body)}</div>
 }

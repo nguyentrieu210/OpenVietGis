@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 type Status="ready"|"linked"|"other_address"|"blocked"|"stale";
@@ -11,7 +12,7 @@ export function VerifiedLinkPanel({endpoint,id,onGoto,onLinked}:{endpoint:string
  function toggle(id:string,checked:boolean){setSelected(old=>checked?[...old,id]:old.filter(x=>x!==id));setConfirmed(false)}
  async function apply(){
   if(!plan?.preview_token||!selected.length||!confirmed||busy)return;
-  if(!window.confirm("Liên kết "+selected.length+" nhà đã xác minh vào "+plan.route?.name+"? Không tạo số nhà."))return;
+  if(!(await uiConfirm("Liên kết "+selected.length+" nhà đã xác minh vào "+plan.route?.name+"? Không tạo số nhà.")))return;
   setBusy(true);setError("");setNotice("");
   try{const result=await withCsrf(()=>hnClient.request<{linked:number;numbers_created:number}>(path,{method:"POST",body:JSON.stringify({preview_token:plan.preview_token,building_ids:selected,confirmed:true})}));setNotice("Đã liên kết "+result.linked+" nhà. Chưa cấp số; có thể chọn tuyến tại tab Đánh số.");onLinked?.();await preview(offset)}
   catch(e){setError(await uiError(e));setConfirmed(false)}finally{setBusy(false)}

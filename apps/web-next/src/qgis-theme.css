@@ -142,3 +142,668 @@
 .qgis-studio .crs-picker .crs-row.active{background:var(--ovg-primary-soft)!important;color:var(--ovg-primary)}
 .qgis-studio .crs-picker .crs-row small{color:var(--ovg-muted)}
 .qgis-studio .crs-detail{display:grid;gap:2px;padding:8px 10px;border:1px solid var(--ovg-line);background:var(--ovg-surface)}
+
+/* Identify panel (selected feature): compact like QGIS, nothing stretches */
+.qgis-studio .live-inspector-body{display:flex!important;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;padding:8px 10px!important}
+.qgis-studio .live-inspector-body>*{flex:0 0 auto}
+.qgis-studio .live-inspector>header{padding:6px 8px 6px 10px;background:var(--ovg-header);border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .live-inspector>header small{display:block;font-size:11px;color:var(--ovg-muted);letter-spacing:0;text-transform:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .live-inspector>header h3{font-size:13px;margin:1px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .live-inspector-body button{align-self:flex-start;min-height:26px!important;height:auto!important;padding:2px 10px!important;font-size:12px!important;border:1px solid var(--ovg-line)!important;border-radius:3px!important;background:var(--ovg-surface)!important;color:var(--ovg-ink)!important;box-shadow:none!important;width:auto!important}
+.qgis-studio .live-inspector-body button.primary{background:var(--ovg-primary)!important;border-color:var(--ovg-primary)!important;color:#fff!important}
+.qgis-studio .live-inspector-body button.danger{color:var(--ovg-danger)!important}
+.qgis-studio .live-inspector-body>p{margin:0;font-size:11.5px;color:var(--ovg-muted)}
+.qgis-studio .live-inspector-body label{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:12px}
+.qgis-studio .insp-attrs{border-top:1px solid var(--ovg-line-soft);padding-top:4px}
+.qgis-studio .insp-attrs summary{font-weight:600;font-size:12px;cursor:pointer;padding:2px 0}
+.qgis-studio .insp-attrs .live-list-row{display:grid;grid-template-columns:minmax(80px,40%) 1fr;gap:6px;padding:3px 0;border-bottom:1px solid var(--ovg-line-soft);font-size:12px}
+.qgis-studio .insp-attrs .live-list-row>:first-child{color:var(--ovg-muted);overflow:hidden;text-overflow:ellipsis}
+
+/* Context menus: left-aligned like QGIS */
+.qgis-studio .qgis-context{border-radius:3px;border-color:var(--ovg-line);padding:3px 0;width:240px}
+.qgis-studio .qgis-context>strong{display:block;padding:5px 12px;font-size:11.5px;color:var(--ovg-muted);border-bottom:1px solid var(--ovg-line-soft);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .qgis-context button{justify-content:flex-start!important;text-align:left!important;min-height:26px!important;padding:3px 12px!important;font-size:12.5px!important;color:var(--ovg-ink)!important;background:transparent!important;border:0!important}
+.qgis-studio .qgis-context button:hover{background:var(--ovg-primary-soft)!important}
+.qgis-studio .qgis-context button.danger{color:var(--ovg-danger)!important;border-top:1px solid var(--ovg-line-soft)!important;margin-top:2px}
+.qgis-studio .qgis-context button svg{color:var(--ovg-muted);flex:none}
+
+/* Digitizing panel (Google Earth Pro style) */
+.qgis-studio .core-sketch{width:300px;padding:0;border-radius:4px;border:1px solid var(--ovg-line);box-shadow:0 8px 24px #0f1b2433;background:var(--ovg-panel)}
+.qgis-studio .core-sketch>header{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--ovg-header);border-bottom:1px solid var(--ovg-line);font-size:13px}
+.qgis-studio .core-sketch>header button{border:0;background:transparent;min-height:22px;padding:0 6px}
+.qgis-studio .core-sketch-measure{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin:8px 10px;font-size:12.5px}.qgis-studio .core-sketch-measure dt{color:var(--ovg-muted)}.qgis-studio .core-sketch-measure dd{margin:0;font-weight:600;text-align:right}
+.qgis-studio .core-sketch-hint{display:block;margin:0 10px 6px;font-size:11px;color:var(--ovg-muted);line-height:1.4}
+.qgis-studio .core-sketch-coords{margin:0 10px 6px;font-size:12px}.qgis-studio .core-sketch-coords>div{display:flex;gap:4px;margin-top:4px}.qgis-studio .core-sketch-coords input{flex:1;min-height:26px;font-size:12px}
+.qgis-studio .core-sketch-actions{display:flex;gap:4px;padding:6px 10px;border-top:1px solid var(--ovg-line);background:var(--ovg-surface)}.qgis-studio .core-sketch-actions span{flex:1}
+.qgis-studio .core-sketch-actions button{min-height:26px;padding:2px 10px;border:1px solid var(--ovg-line);border-radius:3px;background:#fff;font-size:12px}
+.qgis-studio .core-sketch-actions button.primary{background:var(--ovg-primary);border-color:var(--ovg-primary);color:#fff;min-width:64px}
+
+.ovg-split-ghost{position:fixed;z-index:3000;background:#1565a9aa;pointer-events:none}.ovg-split-ghost-x{top:0;bottom:0;width:2px}.ovg-split-ghost-y{left:0;right:0;height:2px}
+/* layer tree rows: left aligned like QGIS */
+.qgis-studio .qgis-layer-row .qgis-layer-name{justify-content:flex-start!important;text-align:left!important;flex:1;min-width:0}
+.qgis-studio .qgis-layer-row .qgis-layer-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovg-select-box{position:absolute;z-index:5;border:1.5px dashed #1565a9;background:#1565a91f;pointer-events:none}
+.qgis-studio .ovg-map-menu{position:fixed;z-index:1200}
+
+/* Identify Results */
+.qgis-studio .insp-toolbar{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:6px;border-bottom:1px solid var(--ovg-line-soft)}
+.qgis-studio .insp-toolbar button{font-size:11.5px!important;padding:2px 8px!important}
+.qgis-studio .insp-attrs summary small{font-weight:400;color:var(--ovg-muted)}
+.qgis-studio .insp-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px;margin-top:4px;border:1px solid var(--ovg-line)}
+.qgis-studio .insp-table th{background:var(--ovg-header);text-align:left;font-weight:600;padding:3px 6px;border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .insp-table td{padding:3px 6px;border-bottom:1px solid var(--ovg-line-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .insp-table td:first-child{width:42%;color:var(--ovg-muted);border-right:1px solid var(--ovg-line-soft)}
+.qgis-studio .insp-table i{color:#9aa6a0}
+.qgis-studio .insp-note{display:block;margin-top:3px;font-size:10.5px;color:var(--ovg-muted)}
+.qgis-studio .insp-id td{font-size:10.5px;color:#9aa6a0}.qgis-studio .insp-id button{min-height:0!important;padding:0 4px!important;font-size:10px!important}
+
+.ovg-hotkey-switch{display:inline-flex;gap:2px}.ovg-hotkey-switch button[aria-pressed=false]{opacity:.65}
+.qgis-studio .hotkey-table td:first-child{width:38%}.qgis-studio .hotkey-table kbd{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--ovg-header);border:1px solid var(--ovg-line);border-radius:3px;padding:1px 5px;color:var(--ovg-ink)}
+
+/* MapInfo Layer Control style toggles on each layer row */
+.qgis-studio .qgis-row-toggle{flex:none;width:22px;height:20px;min-height:0!important;padding:0!important;margin:0 1px!important;border:1px solid transparent!important;border-radius:3px!important;background:transparent!important;color:#a3afb7!important;font-size:11px!important;font-weight:700;line-height:1;cursor:pointer}
+.qgis-studio .qgis-row-toggle:hover{border-color:var(--ovg-line)!important;color:var(--ovg-ink)!important}
+.qgis-studio .qgis-row-toggle.on{color:var(--ovg-primary)!important;background:var(--ovg-primary-soft)!important;border-color:#b9cfe4!important}
+.qgis-studio .qgis-row-toggle.pen.on{color:#fff!important;background:var(--ovg-warn)!important;border-color:var(--ovg-warn)!important}
+
+/* Compact command line (QGIS locator size); the idle status is hidden */
+.qgis-studio .core-command{padding:3px 5px!important;gap:2px!important;border-radius:4px}
+.qgis-studio .core-command input{padding:3px 7px!important;font-size:12px!important;min-height:0;height:24px}
+.qgis-studio .core-command button{min-height:22px!important;height:22px;padding:0 6px!important;font-size:11px!important}
+.qgis-studio .core-command-status[hidden]{display:none!important}
+.qgis-studio .core-command-status small{font-size:10.5px}
+
+/* In-app dialogs (replace browser prompt/confirm/alert) */
+.ovg-dialog-shade{position:fixed;inset:0;z-index:5000;background:#0f1b2440;display:grid;place-items:center;padding:16px}
+.ovg-dialog{width:min(420px,100%);background:var(--ovg-panel,#f3f5f7);border:1px solid var(--ovg-line,#cdd5db);border-radius:4px;box-shadow:0 12px 32px #0f1b2440;font-size:12.5px;color:var(--ovg-ink,#1f2a30)}
+.ovg-dialog>header{padding:7px 12px;background:var(--ovg-header,#e9edf0);border-bottom:1px solid var(--ovg-line,#cdd5db);font-weight:600;font-size:13px}
+.ovg-dialog p,.ovg-dialog form>label{display:grid;gap:6px;margin:12px;line-height:1.45}
+.ovg-dialog input{min-height:28px;padding:3px 8px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;font-size:13px;background:#fff}
+.ovg-dialog input:focus{outline:2px solid #8fb3d4;border-color:#1565a9}
+.ovg-dialog-buttons{display:flex;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--ovg-line,#cdd5db);background:#fff}
+.ovg-dialog-buttons button{min-height:28px;min-width:72px;padding:3px 12px;border:1px solid var(--ovg-line,#cdd5db);border-radius:3px;background:#fff;font-size:12.5px;cursor:pointer}
+.ovg-dialog-buttons .primary{background:#1565a9;border-color:#1565a9;color:#fff}
+.ovg-dialog-buttons .danger-solid{background:#b42318;border-color:#b42318;color:#fff}
+
+/* First-load screen */
+.ovg-boot{display:grid;place-items:center;align-content:center;gap:14px;min-height:100vh}
+.ovg-spinner{width:28px;height:28px;border:3px solid #cfdbe5;border-top-color:#1565a9;border-radius:50%;animation:ovg-spin .8s linear infinite}
+@keyframes ovg-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.ovg-spinner{animation-duration:2.4s}}
+
+/* Keep map attribution clear of the 2D / 3D / globe switch */
+.qgis-studio .maplibregl-ctrl-bottom-right{bottom:50px}
+
+/* Review 25/11: status bar coordinate width, layer dock without the big gap, map mode switch clear of the edge, compact header */
+.qgis-status-controls input[aria-label^="Tọa độ"],.qgis-status-controls input[aria-label^="Phạm vi"]{width:168px}
+.qgis-studio .qgis-tree{flex:0 1 auto;min-height:48px}
+.qgis-studio .qgis-layers{justify-content:flex-start}
+.ovg-map-mode{right:14px;max-width:calc(100% - 28px)}
+.ovg-hotkey-switch{position:relative}
+.ovg-hotkey-switch>summary{list-style:none;cursor:pointer}.ovg-hotkey-switch>summary::-webkit-details-marker{display:none}
+.ovg-hotkey-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:60;display:grid;min-width:190px;padding:4px;background:#fff;border:1px solid #cdd5db;border-radius:4px;box-shadow:0 8px 20px #0f1b2433}
+.ovg-hotkey-menu button{text-align:left;padding:6px 10px;border:0;background:none;font-size:12.5px;color:#1f2a30;cursor:pointer;border-radius:3px}
+.ovg-hotkey-menu button:hover{background:#e9f1f8}
+
+/* Data Source Manager like QGIS: left-aligned source list, form on the right, actions at the bottom */
+.qgis-studio .dsm-nav button{justify-content:flex-start!important;text-align:left!important;gap:9px;padding-left:12px!important}
+.qgis-studio .dsm-nav button>span{width:18px;text-align:center;flex:none}
+.qgis-studio .dsm-form{display:grid;gap:9px}
+.qgis-studio .dsm-form label{display:grid;gap:4px;font-size:12px}
+.qgis-studio .dsm-actions{display:flex;justify-content:flex-end;gap:6px;padding-top:8px;border-top:1px solid var(--ovg-line)}
+.ovg-hotkey-menu button{text-align:left!important;justify-content:flex-start!important}
+
+/* "Tìm công cụ" like the QGIS locator: compact one-line results, no big header, limited height */
+.core-ribbon-menu-fixed:not(.is-dropdown){width:420px!important;max-height:min(440px,calc(100vh - 120px))!important;padding:0!important;border-radius:4px!important;display:flex;flex-direction:column}
+.core-ribbon-menu-fixed:not(.is-dropdown)>header{display:none!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search{padding:6px!important;border-bottom:1px solid #d5dde2;display:flex;align-items:center;gap:8px}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search input{flex:1;min-height:26px!important;padding:2px 8px!important;font-size:12.5px!important;border-radius:3px!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search small{white-space:nowrap;font-size:11px;color:#6b7a83}
+.core-ribbon-menu-fixed:not(.is-dropdown) button{padding:3px 8px!important;min-height:0!important;border-radius:0!important;font-size:12.5px!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command{display:flex!important;flex-direction:row!important;align-items:baseline;gap:8px;min-width:0;flex:1}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command small{margin-left:auto;color:#7a8a93;font-size:11px;white-space:nowrap}
+.core-ribbon-menu-fixed:not(.is-dropdown) code{font-size:10.5px!important;padding:0 4px!important;min-width:0!important;background:none!important;border:0!important;color:#8a99a2!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) button:hover:not(:disabled),.core-ribbon-menu-fixed:not(.is-dropdown) button:focus-visible{background:#e3eef8!important}
+
+/* Collaboration: avatars in the header, editor dots on layer rows, "đang sửa" tags on the map */
+.ovg-avatars{display:inline-flex;align-items:center;gap:0;margin-right:6px}
+.ovg-avatar{width:28px;height:28px;margin-left:-6px;border-radius:50%;border:2px solid #fff!important;background:var(--peer-color,#64748b)!important;color:#fff!important;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0!important;cursor:pointer;box-shadow:0 1px 3px #0003}
+.ovg-avatar:first-child{margin-left:0}.ovg-avatar[aria-pressed=true]{outline:2px solid #fff;outline-offset:1px}
+.ovg-avatar.more{background:#475569!important;cursor:default}
+.ovg-presence-toggle{margin-left:4px;width:22px;height:22px;padding:0!important;border-radius:50%;border:1px solid #ffffff55!important;background:transparent!important;color:#4ade80!important;font-size:12px;cursor:pointer}
+.ovg-presence-toggle[aria-pressed=false]{color:#cbd5e1!important}
+.qgis-studio .ovg-editor-dot{flex:none;width:9px;height:9px;margin:0 2px;border-radius:50%;background:var(--peer-color);box-shadow:0 0 0 2px #fff}
+.ovg-lease-tag{pointer-events:none;white-space:nowrap;font-size:11.5px;font-weight:600;color:#fff;background:var(--peer-color);padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px #0004}
+
+/* Header order (25/11): [logo · tổ chức / dự án · GIS|CAD] ……… [người đang xem · công cụ nhỏ · AI Copilot · tài khoản] */
+.qgis-studio header.top{display:flex;align-items:center;gap:8px}
+.qgis-studio header.top #ovg-workspace-topbar{display:contents}
+.qgis-studio header.top .ovg-workspace-switch{order:2}
+.qgis-studio header.top .top-integration-hub-btn{order:4;margin-left:auto}
+.qgis-studio header.top .ovg-header-tools{order:5;display:flex;align-items:center;gap:4px}
+.qgis-studio header.top .top-right{order:6}
+.qgis-studio header.top .ovg-header-tools .ovg-avatars{order:0;margin-right:8px}
+.qgis-studio header.top .ovg-header-tools>.ai-copilot,.qgis-studio header.top .ovg-header-tools>[class*=copilot]{order:9;margin-left:6px}
+/* small utility buttons look the same: quiet, same height */
+.qgis-studio header.top .top-integration-hub-btn,.qgis-studio header.top .ovg-header-tools .plugin-tool,.qgis-studio header.top .ovg-header-tools summary.plugin-tool{height:30px;padding:0 10px;border:1px solid #ffffff2e!important;background:#ffffff14!important;color:#e6edf3!important;border-radius:4px;font-size:12.5px;font-weight:500;box-shadow:none!important}
+.qgis-studio header.top .top-integration-hub-btn:hover,.qgis-studio header.top .ovg-header-tools .plugin-tool:hover{background:#ffffff26!important}
+
+/* Header: glass buttons, order enforced */
+.qgis-studio header.top{display:flex!important;align-items:center;gap:8px}
+.qgis-studio header.top>*{flex:none}
+.qgis-studio header.top .ovg-workspace-switch{order:2!important}
+.qgis-studio header.top .top-integration-hub-btn{order:4!important;margin-left:auto!important}
+.qgis-studio header.top .ovg-header-tools{order:5!important}
+.qgis-studio header.top .top-right{order:6!important}
+.qgis-studio header.top .top-integration-hub-btn,.qgis-studio header.top .ovg-header-tools .plugin-tool,.qgis-studio header.top .ovg-header-tools summary.plugin-tool,.qgis-studio header.top .ovg-header-tools .dock-menu>button{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;background:linear-gradient(180deg,#ffffff1f,#ffffff0d)!important;border:1px solid #ffffff2b!important;color:#eef4f8!important;border-radius:6px!important;backdrop-filter:blur(8px) saturate(140%);-webkit-backdrop-filter:blur(8px) saturate(140%);box-shadow:inset 0 1px 0 #ffffff26,0 1px 2px #0003!important;font-size:12.5px;font-weight:500}
+.qgis-studio header.top .top-integration-hub-btn:hover,.qgis-studio header.top .ovg-header-tools .plugin-tool:hover{background:linear-gradient(180deg,#ffffff33,#ffffff17)!important}
+.qgis-studio header.top .ovg-header-tools [aria-pressed=true].plugin-tool{background:#1565a9cc!important;border-color:#5b9bd5!important}
+
+/* Project chat */
+.ovg-chat summary{position:relative}
+.ovg-chat-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#e5484d;color:#fff;font-size:10px;line-height:16px;text-align:center}
+.ovg-chat-log{width:300px}
+.ovg-chat-list{max-height:320px;overflow:auto;display:grid;gap:8px;padding:4px 6px}
+.ovg-chat-list p{margin:0;font-size:12.5px;line-height:1.4;color:#1f2a30;white-space:pre-wrap;word-break:break-word}
+.ovg-chat-list small{color:#7a8a93;font-size:10.5px}
+.ovg-chat-log form{border-top:1px solid #e2e8ec;padding:6px 4px 2px}
+.ovg-chat-log input,.ovg-cursor-chat input{width:100%;box-sizing:border-box;min-height:28px;padding:3px 8px;border:1px solid #cdd5db;border-radius:14px;font-size:12.5px}
+.ovg-cursor-chat{position:fixed;z-index:4000;width:260px}
+.ovg-cursor-chat input{border:2px solid #1565a9;box-shadow:0 6px 18px #0f1b2440}
+.ovg-chat-bubble{position:fixed;z-index:3500;max-width:260px;pointer-events:none;background:var(--peer-color);color:#fff;padding:5px 10px;border-radius:12px 12px 12px 2px;font-size:12.5px;line-height:1.35;box-shadow:0 4px 14px #0004;animation:ovg-bubble .18s ease-out}
+.ovg-chat-bubble b{display:block;font-size:10.5px;opacity:.85}
+@keyframes ovg-bubble{from{opacity:0;transform:translateY(4px)}}
+@media (prefers-reduced-motion:reduce){.ovg-chat-bubble{animation:none}}
+
+/* GIS | CAD switch as a glass segmented control on the dark header */
+.qgis-studio header.top .ovg-workspace-switch{gap:2px!important;padding:2px!important;height:30px;box-sizing:border-box;align-items:center;background:#ffffff12!important;border:1px solid #ffffff2b!important;border-radius:7px!important;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:inset 0 1px 0 #ffffff1f!important}
+.qgis-studio header.top .ovg-workspace-switch button{height:24px;min-height:0!important;padding:0 12px!important;border:0!important;border-radius:5px!important;background:transparent!important;color:#c9d6df!important;font-size:12px!important;font-weight:600;box-shadow:none!important}
+.qgis-studio header.top .ovg-workspace-switch button:hover{color:#fff!important;background:#ffffff14!important}
+.qgis-studio header.top .ovg-workspace-switch button[aria-pressed=true],.qgis-studio header.top .ovg-workspace-switch button.active,.qgis-studio header.top .ovg-workspace-switch button[aria-selected=true]{background:#1f6fb8!important;color:#fff!important;box-shadow:0 1px 3px #0005!important}
+
+/* CAD drawing bar lives in the header next to GIS | CAD */
+.qgis-studio header.top .ovg-cad-inline-toolbar{order:3;display:flex;align-items:center;gap:6px;min-width:0;max-width:46vw;padding:0;background:none!important;border:0!important;color:#dfe8ee}
+.qgis-studio header.top .ovg-cad-inline-toolbar input{height:26px;min-width:140px;max-width:220px;padding:2px 8px;border:1px solid #ffffff33!important;border-radius:5px;background:#ffffff14!important;color:#fff!important;font-size:12.5px}
+.qgis-studio header.top .ovg-cad-inline-toolbar button{height:28px;min-height:0!important;padding:0 10px!important;background:linear-gradient(180deg,#ffffff1f,#ffffff0d)!important;border:1px solid #ffffff2b!important;color:#eef4f8!important;border-radius:6px!important;font-size:12px}
+.qgis-studio header.top .ovg-cad-inline-toolbar button:disabled{opacity:.45}
+.qgis-studio header.top .ovg-cad-inline-toolbar span,.qgis-studio header.top .ovg-cad-inline-toolbar small{color:#b9c7d1;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ovg-cad-toolbar-slot:empty{display:none}
+
+/* QGIS menu bar: flat text menus, tool search as a small box on the right */
+.qgis-studio .core-ribbon{display:flex!important;align-items:center;gap:0!important;height:26px;padding:0 6px!important;background:#f3f5f7!important;border-bottom:1px solid #d5dde2!important}
+.qgis-studio .core-ribbon-group{border:0!important;background:none!important;padding:0!important;margin:0!important}
+.qgis-studio .core-ribbon-group>button{height:22px;min-height:0!important;padding:0 9px!important;border:0!important;border-radius:3px!important;background:none!important;color:#1f2a30!important;font-size:12.5px!important;font-weight:400!important;box-shadow:none!important}
+.qgis-studio .core-ribbon-group>button:hover,.qgis-studio .core-ribbon-group>button.active,.qgis-studio .core-ribbon-group>button[aria-expanded=true]{background:#dde8f2!important}
+.qgis-studio .core-ribbon-search-trigger{order:99;margin-left:auto!important}
+.qgis-studio .core-ribbon-search-trigger>button{width:200px;justify-content:flex-start;gap:6px;border:1px solid #c9d3da!important;background:#fff!important;color:#7a8a93!important;font-size:12px!important}
+.qgis-studio .core-ribbon-search-trigger>button:hover{border-color:#8fb3d4!important;background:#fff!important}
+
+/* Live-stream style project chat floating over the map */
+.ovg-live-chat{position:absolute;left:12px;bottom:64px;z-index:30;width:320px;max-width:calc(100% - 24px);display:flex;flex-direction:column;border-radius:12px;background:#0f1b24b8;backdrop-filter:blur(12px) saturate(140%);-webkit-backdrop-filter:blur(12px) saturate(140%);border:1px solid #ffffff26;box-shadow:0 10px 30px #0006;color:#eef4f8;font-size:13px;overflow:hidden}
+.ovg-live-chat.closed{width:auto}
+.ovg-live-chat>header{display:flex;align-items:center;border-bottom:1px solid #ffffff1a}
+.ovg-live-chat.closed>header{border:0}
+.ovg-live-chat-title{flex:1;display:flex;align-items:center;gap:6px;padding:8px 12px;border:0;background:none;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;text-align:left}
+.ovg-live-chat-title small{font-weight:400;color:#aab8c2}
+.ovg-live-chat-title .dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 3px #ef444433;animation:ovg-live 1.6s ease-in-out infinite}
+@keyframes ovg-live{50%{box-shadow:0 0 0 6px #ef444400}}
+.ovg-live-chat-min{width:30px;height:30px;border:0;background:none;color:#cbd5e1;font-size:15px;cursor:pointer}
+.ovg-live-chat-list{max-height:min(320px,40vh);overflow-y:auto;padding:8px 10px 4px;display:flex;flex-direction:column;gap:7px;scrollbar-width:thin;scrollbar-color:#ffffff40 transparent;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 28px);mask-image:linear-gradient(to bottom,transparent 0,#000 28px)}
+.ovg-live-msg{display:flex;gap:8px;align-items:flex-start;animation:ovg-bubble .2s ease-out}
+.ovg-live-msg .av{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff}
+.ovg-live-msg p{margin:0;line-height:1.4;word-break:break-word;white-space:pre-wrap;color:#e8eef3}
+.ovg-live-msg b{font-weight:700;margin-right:6px;filter:brightness(1.35)}
+.ovg-live-msg time{font-size:10.5px;color:#8fa1ad}
+.ovg-live-msg.mine p{color:#fff}
+.ovg-live-empty{margin:6px 12px 10px;color:#aab8c2;font-size:12px}
+.ovg-live-empty kbd{background:#ffffff1f;border-radius:3px;padding:0 4px}
+.ovg-live-jump{align-self:center;margin:-6px 0 4px;padding:2px 10px;border:0;border-radius:10px;background:#1f6fb8;color:#fff;font-size:11.5px;cursor:pointer}
+.ovg-live-input{display:grid;grid-template-columns:1fr auto;gap:6px;padding:6px 8px 8px;border-top:1px solid #ffffff1a}
+.ovg-live-quick{grid-column:1/-1;display:flex;gap:2px}
+.ovg-live-quick button{border:0;background:#ffffff12;border-radius:12px;padding:1px 7px;font-size:14px;cursor:pointer}
+.ovg-live-quick button:hover{background:#ffffff2b}
+.ovg-live-input input{min-height:32px;padding:4px 12px;border-radius:16px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;font-size:13px;outline:none}
+.ovg-live-input input::placeholder{color:#9fb0bc}
+.ovg-live-input input:focus{border-color:#5b9bd5;background:#ffffff1f}
+.ovg-live-input .send{width:32px;height:32px;border-radius:50%;border:0;background:#1f6fb8;color:#fff;cursor:pointer}
+.ovg-live-input .send:disabled{background:#ffffff1f;color:#8fa1ad;cursor:default}
+.ovg-chat-badge.static{position:static;margin-left:4px}
+@media (prefers-reduced-motion:reduce){.ovg-live-chat-title .dot,.ovg-live-msg{animation:none}}
+@media (max-width:640px){.ovg-live-chat{width:calc(100% - 24px)}}
+
+/* Organisation / project dialog */
+.ovg-ws-trigger{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #ffffff2b;border-radius:6px;background:linear-gradient(180deg,#ffffff1f,#ffffff0d);color:#eef4f8;cursor:pointer;font-size:13px;max-width:44vw}
+.ovg-ws-trigger .org{color:#b9c7d1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:14vw}
+.ovg-ws-trigger b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22vw}
+.ovg-ws-shade{position:fixed;inset:0;z-index:4500;background:#0f1b2459;display:grid;place-items:center;padding:16px}
+.ovg-ws{width:min(860px,100%);height:min(560px,calc(100vh - 32px));display:flex;flex-direction:column;background:#fff;border-radius:10px;box-shadow:0 24px 60px #0f1b2466;overflow:hidden;color:#1f2a30;font-size:13px}
+.ovg-ws>header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e3e8ec}
+.ovg-ws>header b{font-size:15px}
+.ovg-ws>header button{width:30px;height:30px;border:0;border-radius:6px;background:none;font-size:20px;color:#5b6b75;cursor:pointer}
+.ovg-ws>header button:hover{background:#eef2f5}
+.ovg-ws-body{flex:1;display:grid;grid-template-columns:250px 1fr;min-height:0}
+.ovg-ws-orgs{display:flex;flex-direction:column;gap:8px;padding:12px;background:#f5f7f9;border-right:1px solid #e3e8ec;min-height:0}
+.ovg-ws-search{display:flex;align-items:center;gap:6px;padding:0 8px;height:32px;border:1px solid #d3dbe1;border-radius:6px;background:#fff;color:#7a8a93}
+.ovg-ws-search input{flex:1;border:0;outline:0;font-size:13px;background:none;min-width:0}
+.ovg-ws-search:focus-within{border-color:#1565a9;box-shadow:0 0 0 3px #1565a926}
+.ovg-ws-list{flex:1;overflow:auto;display:grid;align-content:start;gap:2px}
+.ovg-ws-list button{display:flex;align-items:center;gap:9px;padding:7px 8px;border:0;border-radius:6px;background:none;text-align:left;font-size:13px;color:#1f2a30;cursor:pointer}
+.ovg-ws-list button:hover{background:#e8eef3}
+.ovg-ws-list button.active{background:#dfeaf5;font-weight:600;color:#0f4c81}
+.ovg-ws-av{flex:none;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700}
+.ovg-ws-new{padding:8px;border:1px dashed #b8c5ce;border-radius:6px;background:none;color:#1565a9;font-weight:600;cursor:pointer}
+.ovg-ws-new:hover{background:#fff}
+.ovg-ws-projects{display:flex;flex-direction:column;gap:12px;padding:14px 16px;min-height:0}
+.ovg-ws-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ovg-ws-head small{display:block;color:#7a8a93;font-size:11px}.ovg-ws-head b{font-size:15px}
+.ovg-ws-head .ovg-ws-search{width:220px}
+.ovg-ws-grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;align-content:start}
+.ovg-ws-card{display:grid;gap:4px;padding:10px;border:1px solid #dde4e9;border-radius:8px;background:#fff;text-align:left;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.ovg-ws-card:hover{border-color:#8fb3d4;box-shadow:0 4px 12px #0f1b241a}
+.ovg-ws-card.active{border-color:#1565a9;box-shadow:0 0 0 2px #1565a933}
+.ovg-ws-card b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ovg-ws-card small{color:#7a8a93;font-size:11.5px}
+.ovg-ws-thumb{height:64px;border-radius:6px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,hsl(var(--h) 45% 45%),hsl(calc(var(--h) + 40) 50% 35%))}
+.ovg-ws-thumb.plus{background:#f0f4f7;color:#1565a9;font-size:22px}
+.ovg-ws-add{border-style:dashed}
+.ovg-ws-empty{margin:0;color:#7a8a93}
+.ovg-ws-projects footer{display:flex;justify-content:flex-end;padding-top:10px;border-top:1px solid #e3e8ec}
+.ovg-ws-projects footer button{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:1px solid #cdd5db;border-radius:6px;background:#fff;cursor:pointer;font-size:12.5px}
+@media (max-width:640px){.ovg-ws-body{grid-template-columns:1fr}.ovg-ws-orgs{max-height:40%;border-right:0;border-bottom:1px solid #e3e8ec}.ovg-ws-head{flex-wrap:wrap}.ovg-ws-head .ovg-ws-search{width:100%}}
+
+/* Chat panel at the top-left of the map; new messages run across the top like a live stream */
+.ovg-live-chat{top:10px;bottom:auto;left:12px}
+.ovg-danmaku{position:absolute;left:0;right:0;top:0;height:100px;overflow:hidden;pointer-events:none;z-index:29}
+.ovg-danmaku-line{position:absolute;left:100%;white-space:nowrap;display:flex;align-items:center;gap:6px;padding:3px 12px;border-radius:14px;background:#0f1b24a6;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:#fff;font-size:13.5px;font-weight:500;text-shadow:0 1px 2px #0008;animation:ovg-run 9s linear forwards}
+.ovg-danmaku-line b{color:var(--peer-color);filter:brightness(1.5);font-weight:700}
+@keyframes ovg-run{from{transform:translateX(0)}to{transform:translateX(calc(-100vw - 100%))}}
+@media (prefers-reduced-motion:reduce){.ovg-danmaku-line{animation:none;left:auto;right:12px}}
+
+/* Chat: top-right by default, draggable header, readable collapsed pill, reaction bursts */
+.ovg-live-chat{left:auto;right:56px;top:10px;bottom:auto}
+.ovg-live-chat>header{cursor:grab;user-select:none;touch-action:none}
+.ovg-live-chat>header:active{cursor:grabbing}
+.ovg-live-chat .ovg-live-chat-title,.ovg-live-chat .ovg-live-chat-min{background:transparent!important;border:0!important;box-shadow:none!important;color:#fff!important;min-height:0!important}
+.ovg-live-chat .ovg-live-chat-min{color:#cbd5e1!important}
+.ovg-live-chat.closed{border-radius:18px}
+.ovg-danmaku-line .av{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff;text-shadow:none;border:1.5px solid #ffffffb3}
+.ovg-burst{position:absolute;right:90px;bottom:70px;width:0;height:0;pointer-events:none;z-index:31}
+.ovg-burst span{position:absolute;left:0;bottom:0;font-size:26px;opacity:0;animation-name:ovg-rise;animation-timing-function:cubic-bezier(.2,.6,.3,1);animation-fill-mode:forwards;will-change:transform,opacity}
+@keyframes ovg-rise{0%{opacity:0;transform:translate(0,0) scale(.4)}12%{opacity:1;transform:translate(calc(var(--x)*.3),-40px) scale(1.15)}60%{opacity:1}100%{opacity:0;transform:translate(var(--x),-320px) rotate(var(--r)) scale(.9)}}
+@media (prefers-reduced-motion:reduce){.ovg-burst{display:none}}
+
+/* Zalo-like message list: mine right in blue, others left with avatar, hover reaction bar, counts under bubble */
+.ovg-live-msg{position:relative}
+.ovg-live-msg.mine{justify-content:flex-end}
+.ovg-live-bubble{position:relative;max-width:82%}
+.ovg-live-bubble p{padding:6px 10px 5px;border-radius:12px 12px 12px 4px;background:#ffffff1a}
+.ovg-live-msg.mine .ovg-live-bubble p{background:#1f6fb8;border-radius:12px 12px 4px 12px}
+.ovg-live-bubble b{display:block;font-size:11.5px;margin:0 0 1px}
+.ovg-live-bubble time{display:block;margin-top:2px;font-size:10px;color:#9fb0bc;text-align:right}
+.ovg-live-msg.mine time{color:#cfe3f5}
+.ovg-live-reacts{position:absolute;right:6px;bottom:-9px;display:inline-flex;gap:2px;padding:1px 5px;border-radius:10px;background:#fff;color:#1f2a30;font-size:11.5px;box-shadow:0 1px 4px #0005}
+.ovg-live-msg.mine .ovg-live-reacts{right:auto;left:6px}
+.ovg-live-msg:has(.ovg-live-reacts){margin-bottom:8px}
+.ovg-live-reactbar{position:absolute;top:-30px;right:0;display:none;gap:1px;padding:2px 4px;border-radius:16px;background:#fff;box-shadow:0 4px 14px #0006;z-index:2}
+.ovg-live-msg.mine .ovg-live-reactbar{right:auto;left:0}
+.ovg-live-msg:hover .ovg-live-reactbar,.ovg-live-reactbar:focus-within{display:inline-flex}
+.ovg-live-reactbar button{border:0;background:none;font-size:17px;padding:1px 3px;cursor:pointer;border-radius:50%;transition:transform .12s}
+.ovg-live-reactbar button:hover{transform:scale(1.35)}
+.ovg-live-chat-list{padding-top:34px}
+
+/* Chat without a frame: transparent over the map, only avatars, bubbles, icons and effects; resizable */
+.ovg-live-chat{background:transparent!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;overflow:hidden}
+.ovg-live-chat.open{resize:both;min-width:220px;min-height:160px;max-width:min(640px,calc(100% - 24px));max-height:calc(100% - 20px)}
+.ovg-live-chat.open .ovg-live-chat-list{flex:1;max-height:none;min-height:0}
+.ovg-live-chat>header{border:0!important;align-self:flex-start;border-radius:16px;background:#0f1b2480;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.ovg-live-chat-list{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 40px);mask-image:linear-gradient(to bottom,transparent 0,#000 40px)}
+.ovg-live-bubble p{background:#0f1b24a6;box-shadow:0 2px 8px #0005;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.ovg-live-msg.mine .ovg-live-bubble p{background:#1f6fb8e6}
+.ovg-live-msg .av{box-shadow:0 1px 4px #0006;border:1.5px solid #ffffffb3}
+.ovg-live-input{border:0!important;padding:4px 0 0!important}
+.ovg-live-input input{background:#0f1b2499!important;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 8px #0005}
+.ovg-live-quick button{background:#0f1b2480!important;box-shadow:0 1px 4px #0004}
+.ovg-live-empty{text-shadow:0 1px 3px #000}
+.ovg-live-chat.open::after{content:"";position:absolute;right:2px;bottom:2px;width:10px;height:10px;border-right:2px solid #ffffffa0;border-bottom:2px solid #ffffffa0;border-radius:0 0 3px 0;pointer-events:none}
+
+/* No scrolling in the chat: newest messages sit at the bottom, older ones fade out at the top */
+.ovg-live-chat .ovg-live-chat-list{overflow:hidden!important;justify-content:flex-end;scrollbar-width:none}
+.ovg-live-chat .ovg-live-chat-list::-webkit-scrollbar{display:none}
+.ovg-live-chat .ovg-live-msg{flex:none}
+.ovg-live-jump{display:none!important}
+
+/* Premium live overlay: frosted dark glass, one line per message, details on hover */
+.ovg-live-chat{background:linear-gradient(180deg,#0d1720a6,#0d1720c7)!important;backdrop-filter:blur(16px) saturate(160%)!important;-webkit-backdrop-filter:blur(16px) saturate(160%)!important;border:1px solid #ffffff24!important;border-radius:14px!important;box-shadow:0 18px 40px #0007,inset 0 1px 0 #ffffff1f!important;overflow:hidden!important}
+.ovg-live-chat.closed{border-radius:20px!important}
+.ovg-live-chat>header{align-self:stretch;background:none!important;backdrop-filter:none!important;border-bottom:1px solid #ffffff14!important;border-radius:0}
+.ovg-live-chat.closed>header{border:0!important}
+.ovg-live-chat .ovg-live-chat-list{padding:10px 12px 6px;gap:6px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 30px);mask-image:linear-gradient(to bottom,transparent 0,#000 30px)}
+.ovg-live-chat .ovg-live-msg,.ovg-live-chat .ovg-live-msg.mine{justify-content:flex-start;align-items:flex-start;gap:8px;margin:0}
+.ovg-live-chat .ovg-live-msg.mine{padding-left:6px;border-left:2px solid #4c9be8}
+.ovg-live-chat .ovg-live-msg .av{width:22px;height:22px;font-size:9.5px;border:0;box-shadow:none}
+.ovg-live-chat .ovg-live-bubble{max-width:none;flex:1;min-width:0}
+.ovg-live-chat .ovg-live-bubble p,.ovg-live-chat .ovg-live-msg.mine .ovg-live-bubble p{padding:1px 0 0;background:none!important;box-shadow:none!important;backdrop-filter:none!important;border-radius:0;color:#e9f0f5;font-size:13px;line-height:1.45}
+.ovg-live-chat .ovg-live-bubble b{display:inline;margin-right:6px;font-size:12.5px;filter:brightness(1.45)}
+.ovg-live-chat .ovg-live-bubble time{display:inline;margin-left:6px;font-size:10px;color:#8fa1ad;opacity:0;transition:opacity .15s}
+.ovg-live-chat .ovg-live-msg:hover time{opacity:1}
+.ovg-live-chat .ovg-live-msg:hover{background:#ffffff0d;border-radius:6px}
+.ovg-live-chat .ovg-live-reacts,.ovg-live-chat .ovg-live-msg.mine .ovg-live-reacts{position:static;display:inline-flex;margin-top:3px;background:#ffffff1a;color:#fff;box-shadow:none}
+.ovg-live-chat .ovg-live-msg:has(.ovg-live-reacts){margin-bottom:0}
+.ovg-live-chat .ovg-live-reactbar,.ovg-live-chat .ovg-live-msg.mine .ovg-live-reactbar{top:-4px;right:4px;left:auto;background:#1b2833;border:1px solid #ffffff26}
+.ovg-live-chat .ovg-live-input{padding:8px 10px 10px!important;border-top:1px solid #ffffff14!important}
+.ovg-live-chat .ovg-live-input input{background:#ffffff12!important;backdrop-filter:none;box-shadow:none;border:1px solid #ffffff24}
+.ovg-live-chat .ovg-live-quick button{background:#ffffff12!important;box-shadow:none}
+.ovg-live-chat .ovg-live-quick button:hover{background:#ffffff29!important}
+.ovg-live-chat.open::after{border-color:#ffffff59}
+
+/* Zalo layout inside the glass panel: mine on the right (blue), others on the left with avatar */
+.ovg-live-chat .ovg-live-msg{justify-content:flex-start;padding:0!important;border:0!important}
+.ovg-live-chat .ovg-live-msg.mine{justify-content:flex-end;padding:0!important;border-left:0!important}
+.ovg-live-chat .ovg-live-msg:hover{background:none}
+.ovg-live-chat .ovg-live-bubble{flex:0 1 auto;max-width:78%}
+.ovg-live-chat .ovg-live-bubble p{display:inline-block;padding:6px 10px 5px!important;border-radius:14px 14px 14px 4px!important;background:#ffffff1f!important;color:#eef4f8}
+.ovg-live-chat .ovg-live-msg.mine .ovg-live-bubble p{border-radius:14px 14px 4px 14px!important;background:#2b7bd0!important;color:#fff}
+.ovg-live-chat .ovg-live-bubble b{display:block;margin:0 0 1px;font-size:11.5px}
+.ovg-live-chat .ovg-live-bubble time{display:block;opacity:.75;margin:2px 0 0;text-align:right}
+.ovg-live-chat .ovg-live-msg.mine .ovg-live-bubble{text-align:right}
+.ovg-live-chat .ovg-live-msg.only-emoji .ovg-live-bubble p{background:none!important;padding:0!important;font-size:28px;line-height:1.1}
+.ovg-live-chat .ovg-live-msg.only-emoji .ovg-live-bubble time{font-size:10px}
+.ovg-live-chat .ovg-live-reactbar{top:-30px}
+.ovg-live-chat .ovg-live-msg.mine .ovg-live-reactbar{right:0;left:auto}
+.ovg-live-chat .ovg-live-msg:not(.mine) .ovg-live-reactbar{left:0;right:auto}
+
+/* Task reminders */
+.ovg-reminder{position:relative}
+.ovg-reminder-toast{position:fixed;right:16px;top:64px;z-index:4200;width:300px;padding:12px 14px;border-radius:12px;background:#0d1720eb;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #ffffff24;box-shadow:0 16px 36px #0007;color:#eef4f8;font-size:13px;animation:ovg-bubble .2s ease-out}
+.ovg-reminder-toast>b{display:block;margin-bottom:6px}
+.ovg-reminder-toast p{display:flex;justify-content:space-between;gap:8px;margin:4px 0}
+.ovg-reminder-toast p span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovg-reminder-toast small{flex:none;color:#fbbf24}.ovg-reminder-toast small.late{color:#f87171}
+.ovg-reminder-toast div{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+.ovg-reminder-toast button{padding:4px 10px;border-radius:6px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;cursor:pointer}
+.ovg-reminder-toast button:first-child{background:#2b7bd0;border-color:#2b7bd0}
+
+/* Tasks on the map, on layers and in the inspector */
+.ovg-task-pin{width:24px;height:24px;padding:0;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#f59e0b;color:#fff;font-size:11px;line-height:1;cursor:pointer;box-shadow:0 2px 6px #0006;display:grid;place-items:center}
+.ovg-task-pin.todo{background:#2b7bd0}.ovg-task-pin.in_progress{background:#f59e0b}.ovg-task-pin.late{background:#dc2626}
+.ovg-task-pin:hover{filter:brightness(1.15)}
+.qgis-studio .ovg-layer-tasks{flex:none;margin:0 2px;padding:0 4px;border-radius:8px;background:#fde7c7;color:#9a3412;font-size:10.5px;font-weight:700;line-height:16px}
+.insp-tasks{margin:6px 0;border:1px solid var(--ovg-line,#d5dde2);border-radius:4px}
+.insp-tasks>summary{padding:5px 8px;font-weight:600;cursor:pointer;font-size:12.5px}
+.insp-tasks>summary b{margin-left:4px;padding:0 5px;border-radius:8px;background:#e3eef8;color:#0f4c81;font-size:11px}
+.insp-task{display:grid;width:100%;gap:1px;padding:5px 8px;border:0;border-top:1px solid #eef2f5;background:none;text-align:left;cursor:pointer;font-size:12.5px}
+.insp-task:hover{background:#f2f7fb}.insp-task small{color:#6b7a83}.insp-task.late span{color:#b42318}.insp-task.done span{color:#6b7a83;text-decoration:line-through}
+.insp-task-new{width:100%;padding:6px 8px;border:0;border-top:1px solid #eef2f5;background:none;color:#1565a9;text-align:left;cursor:pointer;font-size:12.5px;font-weight:600}
+
+/* 2D / 3D / globe switch: glass on the map */
+.ovg-map-mode{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:10px!important;padding:3px!important;backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%);box-shadow:0 8px 22px #0006,inset 0 1px 0 #ffffff1f!important}
+.ovg-map-mode button{min-height:0!important;height:26px;padding:0 11px!important;border:0!important;border-radius:7px!important;background:transparent!important;color:#d5e0e8!important;font-size:12px!important;font-weight:600;box-shadow:none!important}
+.ovg-map-mode button:hover{background:#ffffff17!important;color:#fff!important}
+.ovg-map-mode button[aria-pressed=true]{background:#2b7bd0!important;color:#fff!important;box-shadow:0 2px 6px #0005!important}
+
+/* Map zoom / compass controls: glass like the other map controls */
+.qgis-studio .maplibregl-ctrl-group{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:10px!important;overflow:hidden;backdrop-filter:blur(12px) saturate(150%);-webkit-backdrop-filter:blur(12px) saturate(150%);box-shadow:0 8px 22px #0006,inset 0 1px 0 #ffffff1f!important}
+.qgis-studio .maplibregl-ctrl-group button{width:32px;height:32px;background-color:transparent!important}
+.qgis-studio .maplibregl-ctrl-group button+button{border-top:1px solid #ffffff1f!important}
+.qgis-studio .maplibregl-ctrl-group button:hover{background-color:#ffffff1a!important}
+.qgis-studio .maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(1) brightness(1.6)}
+
+/* App market */
+.ovg-market{display:grid;gap:14px;min-width:min(820px,86vw)}
+.ovg-market-top{display:grid;gap:10px}
+.ovg-market-top input{height:36px;padding:0 12px;border:1px solid #d3dbe1;border-radius:8px;font-size:13.5px}
+.ovg-market-top input:focus{outline:0;border-color:#1565a9;box-shadow:0 0 0 3px #1565a926}
+.ovg-market-cats{display:flex;flex-wrap:wrap;gap:6px}
+.ovg-market-cats button{padding:4px 12px;border:1px solid #d3dbe1;border-radius:16px;background:#fff;font-size:12.5px;cursor:pointer}
+.ovg-market-cats button[aria-selected=true]{background:#0f4c81;border-color:#0f4c81;color:#fff}
+.ovg-market h4{margin:4px 0 0;font-size:13px;color:#4b5b66;text-transform:uppercase;letter-spacing:.04em}
+.ovg-market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.ovg-app{display:grid;grid-template-columns:48px 1fr;grid-template-rows:1fr auto;gap:10px 12px;padding:14px;border:1px solid #dde4e9;border-radius:12px;background:#fff;transition:box-shadow .15s,border-color .15s}
+.ovg-app:hover{border-color:#a9c4dd;box-shadow:0 8px 20px #0f1b2414}
+.ovg-app-icon{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:24px;color:#fff;box-shadow:inset 0 -2px 0 #0002}
+.ovg-app b{display:block;font-size:14px}
+.ovg-app small{display:block;color:#7a8a93;font-size:11.5px;margin-top:1px}
+.ovg-app p{margin:6px 0 0;font-size:12.5px;line-height:1.45;color:#3a4a54}
+.ovg-app footer{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.ovg-app footer button{padding:5px 12px;border:1px solid #cdd5db;border-radius:7px;background:#fff;font-size:12.5px;cursor:pointer}
+.ovg-app footer button.primary{background:#1565a9;border-color:#1565a9;color:#fff}
+.ovg-app-badge{margin-right:auto;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.ovg-app-badge.on{background:#dcfce7;color:#166534}.ovg-app-badge.bad{background:#fee2e2;color:#991b1b}
+.ovg-market-empty,.ovg-market-note{margin:0;color:#7a8a93;font-size:12.5px}
+
+/* Collapsed chat shrinks to its title pill (ignore the remembered open size) */
+.ovg-live-chat.closed{width:auto!important;height:auto!important;min-width:0!important;min-height:0!important;resize:none!important}
+.ovg-live-chat.closed::after{display:none}
+
+/* Account menu: clean list like Google / Microsoft account menus */
+.ovg-account-popover{width:300px!important;padding:6px!important;border-radius:14px!important;border:1px solid #e2e8ec!important;box-shadow:0 18px 44px #0f1b2433!important;background:#fff!important}
+.ovg-account-summary{display:flex!important;align-items:center;gap:12px;padding:12px 10px 8px!important}
+.ovg-account-summary .ovg-avatar.large{width:52px!important;height:52px!important;border-radius:50%!important;overflow:hidden;flex:none;box-shadow:0 0 0 2px #fff,0 0 0 3px #d7e3ee}
+.ovg-account-summary b{display:block;font-size:15px}
+.ovg-account-summary small{display:block;color:#6b7a83;font-size:12px;margin:1px 0 4px}
+.ovg-account-badge{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:10px;background:#dcfce7;color:#166534;font-size:11px;font-weight:600}
+.ovg-account-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:#16a34a}
+.ovg-avatar-controls{display:flex!important;flex-wrap:wrap;gap:2px 10px;padding:0 10px 8px 74px!important}
+.ovg-avatar-controls button{padding:0!important;border:0!important;background:none!important;color:#1565a9!important;font-size:12px!important;cursor:pointer;min-height:0!important}
+.ovg-avatar-controls button:hover{text-decoration:underline}
+.ovg-avatar-controls p{display:none}
+.ovg-account-context{margin:4px 4px 6px!important;padding:8px 10px!important;border-radius:10px!important;background:#f3f6f9!important;border:0!important}
+.ovg-account-context small:first-child{font-size:10.5px;letter-spacing:.06em;color:#7a8a93}
+.ovg-account-context b{display:block;font-size:13.5px;margin:1px 0}
+.ovg-account-popover>button{display:grid!important;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;width:100%;padding:8px 10px!important;border:0!important;border-radius:8px!important;background:none!important;text-align:left!important;justify-content:start!important;font-size:13px!important;font-weight:500;color:#1f2a30!important;cursor:pointer}
+.ovg-account-popover>button>span:first-child{width:22px;text-align:center;color:#5b6b75;font-size:14px}
+.ovg-account-popover>button:hover:not(:disabled){background:#eef3f7!important}
+.ovg-account-popover>button:disabled{opacity:.45}
+.ovg-account-popover>button[title="Tạo tổ chức"]{margin-top:4px;border-top:1px solid #eef2f5!important;border-radius:0 0 8px 8px!important;padding-top:10px!important}
+.ovg-account-popover .ovg-menu-arrow{color:#9aa8b1}
+.ovg-account-popover .ovg-menu-danger,.ovg-account-popover .ovg-menu-danger *{color:#b42318!important}
+.ovg-account-popover .ovg-menu-danger:hover{background:#fef2f2!important}
+.ovg-account-popover .ovg-logout{margin-top:4px;border-top:1px solid #eef2f5!important;border-radius:0 0 10px 10px!important;color:#b42318!important;font-weight:600}
+.ovg-account-detail{margin:0 10px 6px 40px;display:grid;gap:4px;font-size:12px}
+.ovg-account-detail code{font-size:10.5px;color:#7a8a93;word-break:break-all}
+
+/* Chat rail on the right edge (Zalo PC style): rooms column + conversation pane */
+.ovg-chat-root{position:fixed;top:0;right:0;width:0;height:0;z-index:3800}
+.ovg-chat-rail{position:fixed;right:0;top:calc(var(--ovg-header-h,52px) + 62px);bottom:26px;display:flex;flex-direction:row-reverse;pointer-events:none}
+.ovg-rail{pointer-events:auto;width:52px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 0;background:#0d1720d9;backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);border-left:1px solid #ffffff1f;border-radius:12px 0 0 12px;box-shadow:-6px 0 20px #0004;overflow-y:auto;scrollbar-width:none}
+.ovg-rail-room{position:relative;flex:none;width:36px;height:36px;border-radius:50%;border:2px solid transparent;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:border-radius .15s,transform .15s}
+.ovg-rail-room.project{background:#2b7bd0;font-size:17px}
+.ovg-rail-room:hover{border-radius:12px;transform:scale(1.05)}
+.ovg-rail-room.active{border-color:#fff;border-radius:12px}
+.ovg-rail-room .online{position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:#22c55e;border:2px solid #0d1720}
+.ovg-rail-room .ovg-chat-badge{top:-4px;right:-6px}
+.ovg-rail-sep{width:24px;height:1px;background:#ffffff2b;flex:none}
+.ovg-chat-pane{pointer-events:auto;width:340px;display:flex;flex-direction:column;margin-right:6px;background:#0d1720d9;backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);border:1px solid #ffffff24;border-radius:14px;box-shadow:0 18px 40px #0007;color:#eef4f8;overflow:hidden;animation:ovg-bubble .18s ease-out}
+.ovg-chat-pane>header{display:grid;grid-template-columns:1fr auto;padding:10px 12px;border-bottom:1px solid #ffffff14}
+.ovg-chat-pane>header b{font-size:14px}.ovg-chat-pane>header small{grid-column:1;color:#9fb0bc;font-size:11.5px}
+.ovg-chat-pane>header button{grid-row:1/3;grid-column:2;width:28px;height:28px;border:0;border-radius:8px;background:none;color:#cbd5e1;font-size:18px;cursor:pointer}
+.ovg-chat-pane>header button:hover{background:#ffffff17}
+.ovg-chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:#ffffff33 transparent}
+.ovg-chat-pane .ovg-live-msg{justify-content:flex-start}.ovg-chat-pane .ovg-live-msg.mine{justify-content:flex-end}
+.ovg-chat-pane .ovg-live-bubble{max-width:80%}
+.ovg-chat-pane .ovg-live-bubble p{display:inline-block;padding:6px 10px 5px;border-radius:14px 14px 14px 4px;background:#ffffff1f;color:#eef4f8;margin:0;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+.ovg-chat-pane .ovg-live-msg.mine .ovg-live-bubble{text-align:right}
+.ovg-chat-pane .ovg-live-msg.mine .ovg-live-bubble p{border-radius:14px 14px 4px 14px;background:#2b7bd0;color:#fff}
+.ovg-chat-pane .ovg-live-bubble b{display:block;font-size:11.5px;filter:brightness(1.45)}
+.ovg-chat-pane .ovg-live-bubble time{display:block;font-size:10px;opacity:.7;text-align:right;margin-top:2px}
+.ovg-chat-pane .ovg-live-msg.only-emoji .ovg-live-bubble p{background:none;padding:0;font-size:28px}
+.ovg-chat-pane .ovg-live-msg .av{width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff}
+.ovg-chat-pane .ovg-live-input{padding:8px 10px 10px;border-top:1px solid #ffffff14}
+/* the old floating panel is replaced by the rail */
+.ovg-live-chat{display:none!important}
+@media (max-width:640px){.ovg-chat-pane{width:calc(100vw - 64px)}}
+
+/* Chat pane: never scroll sideways; hover bars stay inside */
+.ovg-chat-msgs{overflow-x:hidden!important;padding-top:36px!important}
+.ovg-chat-pane .ovg-live-reactbar{max-width:100%}
+.ovg-chat-pane .ovg-live-msg{min-width:0;max-width:100%}
+.ovg-chat-pane .ovg-live-msg.only-emoji .ovg-live-bubble p{background:none!important;box-shadow:none!important}
+
+/* Rail is only as tall as its rooms, centred on the right edge, so it never hides the map controls */
+.ovg-chat-rail{top:0;bottom:0;right:0;display:block}
+.ovg-rail{position:fixed;right:0;top:50%;transform:translateY(-50%);max-height:60vh;height:auto;padding:8px 0;border-radius:14px 0 0 14px}
+.ovg-chat-pane{position:fixed;right:58px;top:calc(var(--ovg-header-h,52px) + 62px);bottom:30px;margin:0}
+
+/* Running chat lines always run across the map (also when the OS asks for reduced motion), readable names */
+@media (prefers-reduced-motion:reduce){.ovg-danmaku-line{animation:ovg-run 12s linear forwards!important;left:100%!important;right:auto!important}}
+.ovg-danmaku{z-index:3900;top:4px}
+.ovg-danmaku-line{background:#0d1720cc;border:1px solid #ffffff2b;padding:3px 12px 3px 4px;font-size:14px}
+.ovg-danmaku-line b{color:#fff!important;filter:none!important;opacity:.85;font-weight:700}
+.ovg-danmaku-line .av{width:24px;height:24px;font-size:10px}
+
+/* New conversation: people search */
+.ovg-rail-room.add{background:#ffffff1a;font-size:18px;font-weight:400}
+.ovg-people-search{padding:8px 10px;border-bottom:1px solid #ffffff14}
+.ovg-people-search input{width:100%;box-sizing:border-box;height:32px;padding:0 12px;border-radius:16px;border:1px solid #ffffff2b;background:#ffffff12;color:#fff;font-size:13px;outline:none}
+.ovg-person{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border:0;border-radius:10px;background:none;color:#eef4f8;text-align:left;cursor:pointer}
+.ovg-person:hover{background:#ffffff14}
+.ovg-person .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;flex:none}
+.ovg-person b{display:block;font-size:13.5px}.ovg-person small{color:#9fb0bc;font-size:11.5px}
+.ovg-people-soon{margin-top:auto;display:grid;gap:4px;padding:10px;border:1px dashed #ffffff33;border-radius:10px;color:#9fb0bc}
+.ovg-people-soon b{font-size:12.5px;color:#cbd5e1;font-weight:600}.ovg-people-soon small{font-size:11.5px;line-height:1.4}
+
+/* Live-stream text: topmost, floating white text with outline, no box */
+.ovg-danmaku{position:fixed!important;right:auto!important;height:120px;z-index:6000!important;pointer-events:none;overflow:hidden}
+.ovg-burst{position:fixed!important;right:auto!important;bottom:auto!important;z-index:6000!important}
+.ovg-danmaku-line{background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:0!important;font-size:17px!important;font-weight:700!important;color:#fff!important;letter-spacing:.01em;text-shadow:0 0 3px #000,0 0 3px #000,0 1px 2px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000!important}
+.ovg-danmaku-line b{color:#ffe08a!important;opacity:1!important;margin-right:2px}
+.ovg-danmaku-line .av{box-shadow:0 0 0 2px #fff,0 2px 6px #0008;text-shadow:none}
+
+/* Running line: avatar · NAME: message — clearly separated */
+.ovg-danmaku-line{gap:7px!important}
+.ovg-danmaku-line b{font-size:13.5px!important;text-transform:none}
+.ovg-danmaku-line b::after{content:":";margin-left:1px;color:#ffe08a}
+
+/* Real profile photos in chat and running lines */
+.av.photo{overflow:hidden;padding:0}.av.photo img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+/* Reaction bar inside the pane: mine anchors right, others left; counts don't overlap the next message */
+.ovg-chat-pane .ovg-live-msg.mine .ovg-live-reactbar{right:0!important;left:auto!important}
+.ovg-chat-pane .ovg-live-msg:not(.mine) .ovg-live-reactbar{left:0!important;right:auto!important}
+.ovg-chat-pane .ovg-live-msg:has(.ovg-live-reacts){margin-bottom:12px}
+/* Emoji picker */
+.ovg-live-quick{flex-wrap:wrap}
+.ovg-live-quick .more{font-size:12px!important;padding:1px 8px!important}
+.ovg-emoji{grid-column:1/-1;display:grid;gap:4px;padding:6px;border-radius:12px;background:#0d1720;border:1px solid #ffffff24}
+.ovg-emoji nav{display:flex;gap:2px;border-bottom:1px solid #ffffff1a;padding-bottom:4px}
+.ovg-emoji nav button{flex:1;border:0;background:none;font-size:17px;padding:3px;border-radius:8px;cursor:pointer;opacity:.6}
+.ovg-emoji nav button[aria-pressed=true]{opacity:1;background:#ffffff1f}
+.ovg-emoji small{color:#9fb0bc;font-size:11px;padding:0 4px}
+.ovg-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);max-height:190px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#ffffff33 transparent}
+.ovg-emoji-grid button{border:0;background:none;font-size:21px;padding:3px;border-radius:8px;cursor:pointer;line-height:1.2}
+.ovg-emoji-grid button:hover{background:#ffffff1f;transform:scale(1.15)}
+
+/* Chat pane sizes */
+.ovg-pane-tools{grid-row:1/3;grid-column:2;display:flex;gap:2px}
+.ovg-chat-pane>header .ovg-pane-tools button{grid-row:auto;grid-column:auto;width:28px;height:28px;border:0;border-radius:8px;background:none;color:#cbd5e1;font-size:16px;cursor:pointer}
+.ovg-chat-pane>header .ovg-pane-tools button:hover{background:#ffffff17}
+.ovg-chat-pane.size-0{width:280px;top:auto!important;height:min(360px,50vh)}
+.ovg-chat-pane.size-1{width:340px}
+.ovg-chat-pane.size-2{width:min(520px,calc(100vw - 80px))}
+
+/* Command / search bar on the map: glass */
+.qgis-studio .core-command{background:#0d1720a6!important;border:1px solid #ffffff2b!important;border-radius:12px!important;backdrop-filter:blur(14px) saturate(150%);-webkit-backdrop-filter:blur(14px) saturate(150%);box-shadow:0 10px 26px #0006,inset 0 1px 0 #ffffff1f!important;color:#eef4f8}
+.qgis-studio .core-command input{background:#ffffff12!important;border:1px solid #ffffff24!important;border-radius:8px!important;color:#fff!important}
+.qgis-studio .core-command input::placeholder{color:#a9b8c3!important}
+.qgis-studio .core-command input:focus{border-color:#5b9bd5!important;background:#ffffff1c!important;outline:0}
+.qgis-studio .core-command button{background:transparent!important;border:0!important;color:#d5e0e8!important;border-radius:7px!important}
+.qgis-studio .core-command button:hover{background:#ffffff1a!important;color:#fff!important}
+.qgis-studio .core-command-prompt,.qgis-studio .core-command>span:first-child{color:#cfe3f5!important}
+.qgis-studio .core-command-status{color:#cbd5e1!important}
+
+/* Folded chat rail: a small tab on the right edge */
+.ovg-rail-fold{flex:none;width:28px;height:20px;border:0;border-radius:6px;background:none;color:#9fb0bc;font-size:16px;line-height:1;cursor:pointer}
+.ovg-rail-fold:hover{background:#ffffff17;color:#fff}
+.ovg-rail-tab{pointer-events:auto;position:fixed;right:0;top:50%;transform:translateY(-50%);width:30px;height:44px;border:1px solid #ffffff2b;border-right:0;border-radius:12px 0 0 12px;background:#0d1720d9;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:-4px 0 14px #0004;font-size:15px;cursor:pointer;padding:0}
+.ovg-rail-tab:hover{width:36px}
+.ovg-rail-tab .ovg-chat-badge{top:-6px;left:-6px;right:auto}
+
+/* Layer tree upgrade: out-of-scale dimming, class toggles, rename, opacity, themes */
+.qgis-studio .qgis-layer-row.out-scale .qgis-layer-name{opacity:.45;font-style:italic}
+.qgis-studio .qgis-category-row input[type=checkbox]{margin:0 4px 0 0;flex:none}
+.qgis-studio .qgis-category-row.off{opacity:.5}
+.qgis-studio .qgis-rename{flex:1;min-width:0;height:22px;padding:0 6px;border:1px solid #1565a9;border-radius:3px;font-size:12.5px}
+.qgis-studio .qgis-row-toggle.lock{font-size:10px!important}
+.qgis-opacity-pop{position:fixed;z-index:4600;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;width:230px;padding:10px 12px;background:#fff;border:1px solid #cdd5db;border-radius:8px;box-shadow:0 10px 26px #0f1b2433;font-size:12.5px}
+.qgis-opacity-pop b{grid-column:1/-1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qgis-opacity-pop button{grid-column:1/-1;justify-self:end;padding:3px 12px;border:1px solid #1565a9;border-radius:5px;background:#1565a9;color:#fff;cursor:pointer}
+.qgis-themes{position:relative;display:inline-flex}
+.qgis-themes-pop{position:absolute;left:0;top:calc(100% + 4px);z-index:60;display:grid;gap:4px;min-width:220px;padding:8px;background:#fff;border:1px solid #cdd5db;border-radius:8px;box-shadow:0 10px 26px #0f1b2433;font-size:12.5px}
+.qgis-themes-pop>b{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7a83}
+.qgis-themes-pop small{color:#7a8a93}
+.qgis-theme-row{display:flex;gap:2px}.qgis-theme-row button{border:0;background:none;padding:5px 8px;border-radius:5px;cursor:pointer;text-align:left}
+.qgis-theme-row button:first-child{flex:1}.qgis-theme-row button:hover{background:#eef3f7}
+.qgis-theme-add{border:1px dashed #b8c5ce;background:none;border-radius:6px;padding:6px;color:#1565a9;font-weight:600;cursor:pointer}
+
+/* Coordinates box wide enough for VN-2000 metres (e.g. 1 184 555.17, 584 555.17) */
+.qgis-status-controls input[aria-label^="Tọa độ"],.qgis-status-controls input[aria-label^="Phạm vi"]{width:210px!important}
+
+.qgis-studio .qgis-row-toggle.sel{font-size:12px!important}
+.qgis-studio .qgis-row-toggle.sel:not(.on){color:#c9d1d7!important;text-decoration:line-through}
+
+/* MapInfo-like layer row toggles: lit and coloured when on */
+.qgis-studio .qgis-row-toggle.sel.on{color:#fff!important;background:#2f80d1!important;border-color:#2f80d1!important;text-decoration:none}
+.qgis-studio .qgis-row-toggle.sel:not(.on){color:#b8c2c9!important;text-decoration:none;opacity:.7}
+.qgis-studio .qgis-row-toggle.on:not(.pen):not(.sel):not(.lock){color:#fff!important;background:#16a34a!important;border-color:#16a34a!important}
+.qgis-studio .qgis-row-toggle.pen.on{background:#f59e0b!important;border-color:#f59e0b!important}
+.qgis-studio .qgis-row-toggle svg{display:block;margin:auto}
+/* vertex editor measurements */
+.ae-measure{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:2px 0 6px;font-size:12.5px}
+.ae-measure dt{color:#6b7a83}.ae-measure dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.ae-hint{margin:0 0 6px;color:#6b7a83;font-size:11.5px}
+
+/* Export: format cards, layer cards, sticky footer */
+.integration-batch-export{display:grid;gap:12px}
+.xp-step{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#1f2a30}
+.xp-step b{width:22px;height:22px;border-radius:50%;background:#1565a9;color:#fff;display:grid;place-items:center;font-size:12px}
+.xp-formats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.xp-format{display:grid;gap:4px;justify-items:start;padding:10px 12px;border:1px solid #d3dbe1;border-radius:10px;background:#fff;text-align:left;font-size:12px;color:#3a4a54;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.xp-format:hover{border-color:#8fb3d4}
+.xp-format.on{border-color:#1565a9;box-shadow:0 0 0 2px #1565a933;background:#f3f8fd}
+.xp-ext{padding:2px 8px;border-radius:6px;background:#0f4c81;color:#fff;font-weight:700;font-size:11.5px;letter-spacing:.03em;text-transform:uppercase}
+.xp-format.on .xp-ext{background:#1565a9}
+.integration-batch-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.integration-batch-head h3{display:none}
+.integration-batch-scope{display:flex;flex-wrap:wrap;gap:10px 14px;padding:10px 12px;border:1px solid #e2e8ec;border-radius:10px;background:#f8fafb}
+.integration-batch-scope legend{font-weight:600;font-size:12px;padding:0 4px}
+.integration-batch-scope small{flex-basis:100%;color:#6b7a83}
+.integration-batch-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:46vh;overflow:auto}
+.integration-batch-list label{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid #dde4e9;border-radius:9px;background:#fff;cursor:pointer}
+.integration-batch-list label:has(input:checked){border-color:#1565a9;background:#f3f8fd}
+.integration-batch-list label.is-blocked{opacity:.55;cursor:not-allowed}
+.integration-batch-list span{display:grid;min-width:0}.integration-batch-list strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.integration-batch-list small{color:#6b7a83;font-size:11.5px}
+.xp-footer{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;margin:4px -4px 0;border-top:1px solid #e2e8ec;background:#ffffffee;backdrop-filter:blur(6px)}
+.xp-footer span{color:#4b5b66;font-size:12.5px}
+.integration-batch-download{padding:8px 18px!important;border:0!important;border-radius:8px!important;background:#1565a9!important;color:#fff!important;font-weight:700;cursor:pointer}
+.integration-batch-download:disabled{background:#c5d0d8!important}
+
+/* New export dialog */
+.xp{width:min(920px,100%);height:min(620px,calc(100vh - 32px));display:flex;flex-direction:column;background:#fff;border-radius:12px;box-shadow:0 24px 60px #0f1b2466;overflow:hidden;color:#1f2a30;font-size:13px}
+.xp>header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #e3e8ec}
+.xp>header b{display:block;font-size:15px}.xp>header small{color:#7a8a93}
+.xp>header button{width:30px;height:30px;border:0;border-radius:6px;background:none;font-size:20px;color:#5b6b75;cursor:pointer}
+.xp-body{flex:1;display:grid;grid-template-columns:300px 1fr;min-height:0}
+.xp-layers{display:flex;flex-direction:column;gap:8px;padding:12px;background:#f5f7f9;border-right:1px solid #e3e8ec;min-height:0}
+.xp-col-head{display:flex;justify-content:space-between;align-items:center}.xp-col-head button{border:0;background:none;color:#1565a9;font-size:12px;cursor:pointer}
+.xp-search{height:32px;padding:0 10px;border:1px solid #d3dbe1;border-radius:7px}
+.xp-layer-list{flex:1;overflow:auto;display:grid;align-content:start;gap:4px}
+.xp-layer-list label{display:flex;align-items:center;gap:8px;padding:7px 8px;border:1px solid transparent;border-radius:8px;cursor:pointer;background:#fff}
+.xp-layer-list label.on{border-color:#1565a9;background:#eef5fc}
+.xp-gi{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:#e3eef8;color:#1565a9;font-size:12px;flex:none}
+.xp-ln{display:grid;min-width:0}.xp-ln b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xp-ln small{color:#7a8a93;font-size:11.5px}
+.xp-opts{padding:14px 16px;overflow:auto;display:grid;align-content:start;gap:8px}
+.xp-opts h4{margin:6px 0 0;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:#6b7a83}
+.xp-fmt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.xp-fmt{display:grid;gap:3px;justify-items:start;padding:10px;border:1px solid #d3dbe1;border-radius:10px;background:#fff;text-align:left;cursor:pointer}
+.xp-fmt b{font-size:13px}.xp-fmt small{color:#7a8a93;font-size:11.5px}
+.xp-fmt.on{border-color:#1565a9;box-shadow:0 0 0 2px #1565a933;background:#f3f8fd}
+.xp-scope{display:flex;flex-wrap:wrap;gap:6px}
+.xp-scope button{padding:6px 12px;border:1px solid #d3dbe1;border-radius:16px;background:#fff;cursor:pointer;font-size:12.5px}
+.xp-scope button.on{background:#0f4c81;border-color:#0f4c81;color:#fff}.xp-scope button:disabled{opacity:.45;cursor:default}
+.xp-name{display:flex;align-items:center;border:1px solid #d3dbe1;border-radius:7px;overflow:hidden}.xp-name input{flex:1;height:32px;border:0;padding:0 10px;outline:0}.xp-name span{padding:0 10px;color:#7a8a93;background:#f5f7f9;height:32px;display:grid;place-items:center}
+.xp-note{margin:0;color:#6b7a83;font-size:12px}
+.xp>footer{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid #e3e8ec;background:#fafbfc}
+.xp>footer span{flex:1;color:#4b5b66;font-size:12.5px}
+.xp>footer button{padding:7px 14px;border:1px solid #cdd5db;border-radius:7px;background:#fff;cursor:pointer}
+.xp>footer button.primary{background:#1565a9;border-color:#1565a9;color:#fff;font-weight:700}.xp>footer button:disabled{opacity:.5;cursor:default}
+@media (max-width:720px){.xp-body{grid-template-columns:1fr}.xp-layers{max-height:40%}.xp-fmt-grid{grid-template-columns:repeat(2,1fr)}}

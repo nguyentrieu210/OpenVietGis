@@ -1,3 +1,4 @@
+import {uiConfirm} from "./ui-dialog";
 import { useEffect, useState } from "react";
 import {
   ApiError,
@@ -303,7 +304,7 @@ export function QgisBindingManager({ client, org, projectId }: Props) {
 
   async function handleUndoVersion(layer: QgisBindingCandidate, cs: Changeset) {
     if (saving || !layer.source_id) return;
-    if (!confirm(`Hoàn tác "${cs.summary}" (${cs.operation_count} thay đổi)?`)) return;
+    if (!(await uiConfirm(`Hoàn tác "${cs.summary}" (${cs.operation_count} thay đổi)?`))) return;
     setSaving(true);
     setError("");
     try {

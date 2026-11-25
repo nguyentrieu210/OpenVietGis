@@ -125,7 +125,7 @@
 .studio-plugin-panel{overflow:hidden;display:flex;flex-direction:column}.studio-plugin-panel>.studio-plugin-scroll{flex:1;min-height:0;overflow:auto}
 /* A dragged size is a real height (the browser list is short, so a max-height alone did nothing). */
 .qgis-dock .qgis-browser .qgis-browser-list{height:calc(var(--ovg-browser-h) - 30px);max-height:calc(var(--ovg-browser-h,125px) - 30px)}
-.qgis-dock .qgis-basemaps{position:relative;flex-shrink:0;overflow:auto;height:var(--ovg-basemap-h,auto);max-height:var(--ovg-basemap-h,230px);border-top:4px solid #d9e1dc}
+.qgis-dock .qgis-basemaps{position:relative;flex-shrink:0;overflow:auto;height:var(--ovg-basemap-h,auto);max-height:var(--ovg-basemap-h,150px);border-top:4px solid #d9e1dc}
 .qgis-dock .qgis-basemaps .qgis-basemap-group{margin-top:0;border-top:0}
 .qgis-dock .qgis-legend{position:relative;height:var(--ovg-legend-h,auto);max-height:var(--ovg-legend-h,195px)}
 

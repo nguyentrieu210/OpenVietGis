@@ -1,3 +1,4 @@
+import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
 import {useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 type Alias={id:string;token:string;route_id:string;route_name:string;root_name:string;prefix:string|null;road:string;alley:string;code:string;count:number;near:number;observations:number;matching_observations:number;reviewable:boolean;source_name:string|null;planned_name:string|null;source_id:string;feature_id:string};
@@ -13,7 +14,7 @@ export function CatalogRecoveryPanel({endpoint,mapping,source,onGoto,onBusy,onDo
   catch(e){setError(await uiError(e));}finally{setBusy(false);onBusy(false)}
  }
  async function apply(){
-  if(!report||!count||!verified||reason.trim().length<10||!window.confirm(`Duyệt ${count} tên đối chiếu theo mã nguồn? Không đổi tên chính thức hoặc tự gán nhà.`))return;
+  if(!report||!count||!verified||reason.trim().length<10||!(await uiConfirm(`Duyệt ${count} tên đối chiếu theo mã nguồn? Không đổi tên chính thức hoặc tự gán nhà.`)))return;
   setBusy(true);onBusy(true);setError("");
   try{const result=await withCsrf(()=>hnClient.request<{aliases:number;routes:number;potential_houses:number}>(endpoint+"/catalog-recovery/apply",{method:"POST",body:JSON.stringify({...body,selections:selected,reason:reason.trim()})}));
     setReport(null);setSelected({});setVerified(false);onDone(`Đã duyệt ${result.aliases} tên đối chiếu cho ${result.routes} tuyến. ${result.potential_houses} nhà có thể xem trước gán tuyến. Chưa ghi số nhà.`);

@@ -79,4 +79,27 @@ describe("identity and organization client", () => {
     expect(headers.get("x-openvietgis-csrf")).toBe("csrf-123");
     expect(calls[1]?.init?.credentials).toBe("include");
   });
+
+  it("reuses the cached CSRF token and refreshes it once after a 403", async () => {
+    const calls: string[] = [];
+    let token = "t1", created = 0;
+    const client = new ApiClient({
+      baseUrl: "http://example.test/api/v1",
+      fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        calls.push(path);
+        if (path.endsWith("/auth/csrf")) return json({ token });
+        if (new Headers(init?.headers).get("x-openvietgis-csrf") !== token) return json({ detail: "csrf" }, 403);
+        created++;
+        return json({ organization: { id: "o" + created }, owner_membership: { role: "owner" } }, 201);
+      }) as typeof fetch
+    });
+    await loadCsrfToken(client);
+    await loadCsrfToken(client);
+    expect(calls.filter(p => p.endsWith("/auth/csrf"))).toHaveLength(1);
+    token = "t2"; // session rotated
+    await createOrganization(client, { name: "Org", slug: "org" });
+    expect(created).toBe(1);
+    expect(calls.filter(p => p.endsWith("/auth/csrf"))).toHaveLength(2);
+  });
 });

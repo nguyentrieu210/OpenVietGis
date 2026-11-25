@@ -13,3 +13,4 @@ export const Hub=lazy(()=>import("../../web/src/features/platform/PlatformHubPag
 export const Field=lazy(()=>import("../../web/src/features/offline/OfflineFieldPage").then(m=>({default:m.OfflineFieldPage})));
 
 export const CadImport=lazy(()=>import("../../web/src/features/platform/CadImportPanel").then(m=>({default:m.CadImportPanel})));
+export const ExternalPreview=lazy(()=>import("../../web/src/features/platform/ExternalSourcePreview").then(m=>({default:m.ExternalSourcePreview})));
