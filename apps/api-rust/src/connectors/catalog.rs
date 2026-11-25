@@ -97,6 +97,9 @@ const POSTGIS_PROPOSED: &[ConnectorAction] = &[
 const POSTGIS_EXECUTABLE: &[ConnectorAction] =
     &[ConnectorAction::Discover, ConnectorAction::Export];
 const OGC_PROPOSED: &[ConnectorAction] = &[ConnectorAction::Inspect];
+const INSPECT_SYNC_PULL: &[ConnectorAction] =
+    &[ConnectorAction::Inspect, ConnectorAction::SyncPull];
+const IMPORT_EXPORT: &[ConnectorAction] = &[ConnectorAction::Import, ConnectorAction::Export];
 
 pub const ADAPTERS: &[AdapterManifest] = &[
     AdapterManifest {
@@ -120,6 +123,16 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         executable_actions: QGIS_EXECUTABLE,
     },
     AdapterManifest {
+        key: "arcgis",
+        name: "ArcGIS Pro / Online",
+        category: "gis",
+        mode: "remote_service",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["ArcGIS Feature Service", "FileGDB", "SHP"],
+        proposed_actions: INSPECT_SYNC_PULL,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
         key: "autocad",
         name: "AutoCAD / Map 3D",
         category: "cad",
@@ -140,6 +153,26 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         executable_actions: DISCOVER,
     },
     AdapterManifest {
+        key: "mapinfo",
+        name: "MapInfo Pro",
+        category: "gis",
+        mode: "file_exchange",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["TAB", "MIF", "MID"],
+        proposed_actions: IMPORT_EXPORT,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
+        key: "cadastral_vn",
+        name: "gCadas / FAMIS / TMV.Map",
+        category: "cadastral",
+        mode: "format_adapter",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["DGN", "cadastral_attributes"],
+        proposed_actions: IMPORT_EXPORT,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
         key: "postgis",
         name: "PostgreSQL / PostGIS",
         category: "database",
@@ -148,6 +181,46 @@ pub const ADAPTERS: &[AdapterManifest] = &[
         protocols: &["PostGIS"],
         proposed_actions: POSTGIS_PROPOSED,
         executable_actions: POSTGIS_EXECUTABLE,
+    },
+    AdapterManifest {
+        key: "ogc_publisher",
+        name: "OGC publishing servers",
+        category: "gis",
+        mode: "remote_service",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["WMS", "WFS", "OGC API"],
+        proposed_actions: INSPECT_SYNC_PULL,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
+        key: "google_earth",
+        name: "Google Earth Pro",
+        category: "gis",
+        mode: "file_exchange",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["KML", "KMZ"],
+        proposed_actions: IMPORT_EXPORT,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
+        key: "excel",
+        name: "Excel / CSV",
+        category: "tabular",
+        mode: "file_exchange",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["XLSX", "CSV"],
+        proposed_actions: IMPORT_EXPORT,
+        executable_actions: DISCOVER,
+    },
+    AdapterManifest {
+        key: "survey_3d",
+        name: "RTK / UAV / BIM",
+        category: "survey_3d",
+        mode: "file_exchange",
+        lifecycle: Lifecycle::Planned,
+        protocols: &["LandXML", "GeoTIFF", "LAS", "3D Tiles"],
+        proposed_actions: IMPORT_EXPORT,
+        executable_actions: DISCOVER,
     },
 ];
 
@@ -197,6 +270,41 @@ pub fn get_adapter(key: &str) -> Option<&'static AdapterManifest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adapter_inventory_matches_the_python_catalog_order() {
+        let keys: Vec<_> = ADAPTERS.iter().map(|adapter| adapter.key).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "ogc_services",
+                "qgis",
+                "arcgis",
+                "autocad",
+                "microstation_v8i",
+                "mapinfo",
+                "cadastral_vn",
+                "postgis",
+                "ogc_publisher",
+                "google_earth",
+                "excel",
+                "survey_3d",
+            ]
+        );
+        for key in [
+            "arcgis",
+            "mapinfo",
+            "cadastral_vn",
+            "ogc_publisher",
+            "google_earth",
+            "excel",
+            "survey_3d",
+        ] {
+            let adapter = get_adapter(key).unwrap();
+            assert_eq!(adapter.lifecycle, Lifecycle::Planned);
+            assert_eq!(adapter.executable_actions, DISCOVER);
+        }
+    }
 
     #[test]
     fn qgis_writeback_is_only_the_controlled_sync_path() {
