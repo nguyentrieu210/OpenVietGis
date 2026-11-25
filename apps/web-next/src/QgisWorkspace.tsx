@@ -180,7 +180,7 @@ export function QgisLayerDock(p:DockProps){
  const targets=(id:string)=>picked.has(id)&&picked.size>1?[...picked]:[id];
  const askGroup=(ids:string[],current?:string)=>{const name=window.prompt("Tên nhóm (dùng / để tạo nhóm con, ví dụ: Hiện trạng/Giao thông)",current??"")?.trim();if(name)p.groupLayers(ids,name)};
  // Rename / ungroup rewrite each member's own path so sub-groups keep their place.
- const regroup=(ids:string[],next:(g:string)=>string|null)=>{const byPath=new Map<string,string[]>();for(const id of ids){const g=groupOf(id);if(!g)continue;const k=next(g)??"";byPath.set(k,[...(byPath.get(k)??[]),id])}for(const [g,list] of byPath)p.groupLayers(list,g||null)};
+ const regroup=(ids:string[],next:(g:string)=>string|null)=>{const byPath=new Map<string,string[]>();for(const id of ids){const g=groupOf(id);if(!g)continue;const k=next(g)??"";byPath.set(k,[...(byPath.get(k)??[]),id])}if([...byPath.keys()].some(k=>k.split("/").length>4||k.length>200)){window.alert("Không đổi được: nhóm con sẽ vượt 4 cấp hoặc 200 ký tự.");return}for(const [g,list] of byPath)p.groupLayers(list,g||null)};
  const renameGroupPath=(path:string,ids:string[])=>{const to=window.prompt("Đổi tên nhóm",path)?.split("/").map(x=>x.trim()).filter(Boolean).join("/");if(!to||to===path)return;regroup(ids,g=>g===path?to:g.startsWith(path+"/")?to+g.slice(path.length):g)};
  const ungroup=(path:string,ids:string[])=>{const up=parentPath(path);regroup(ids,g=>g===path?up:g.startsWith(path+"/")?(up?up+"/":"")+g.slice(path.length+1):g)};
  const allGroupKeys=()=>flatten(tree).flatMap(x=>x.kind==="group"?["group:"+x.path]:[]);
