@@ -1,0 +1,84 @@
+/* Spec 058: one palette and one QGIS-like dialog shell for every tool window.
+   Loaded last; scoped to the GIS studio so the landing page keeps its own brand styles. */
+.qgis-studio{
+  --ovg-primary:#1565a9;--ovg-primary-hover:#0f528b;--ovg-primary-soft:#e7f0f8;
+  --ovg-ink:#1f2a30;--ovg-muted:#5d6a72;--ovg-line:#cdd5db;--ovg-line-soft:#e3e8ec;
+  --ovg-surface:#ffffff;--ovg-panel:#f3f5f7;--ovg-header:#e9edf0;
+  --ovg-danger:#b42318;--ovg-warn:#a15c07;--ovg-ok:#1d7a4c;
+  /* old accent tokens now resolve to the shared palette */
+  --q-green:var(--ovg-primary);--q-select:var(--ovg-primary-soft);--q-select-border:#8fb3d4;--q-line:var(--ovg-line);--q-ink:var(--ovg-ink);
+  --blue:var(--ovg-primary);--navy:var(--ovg-ink);--line:var(--ovg-line);
+}
+
+/* ---- Dialog shell (Modal + tool workbench): slim title bar, flat body, buttons bottom-right ---- */
+.qgis-studio .live-modal,.qgis-studio .core-workbench{border-radius:4px;border:1px solid var(--ovg-line);box-shadow:0 10px 28px #0f1b2433;background:var(--ovg-panel);color:var(--ovg-ink)}
+.qgis-studio .live-modal>header,.qgis-studio .core-workbench>header{display:flex;align-items:center;gap:8px;min-height:34px;padding:4px 6px 4px 12px;background:var(--ovg-header);border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .live-modal>header small,.qgis-studio .core-workbench>header small{display:none}
+.qgis-studio .live-modal>header h2,.qgis-studio .core-workbench>header b{margin:0;font-size:13px;font-weight:600;color:var(--ovg-ink)}
+.qgis-studio .live-modal>header button,.qgis-studio .core-workbench>header button{min-height:24px;padding:2px 8px;border:1px solid transparent;background:transparent;border-radius:3px;font-size:12px;color:var(--ovg-muted)}
+.qgis-studio .live-modal>header button:hover,.qgis-studio .core-workbench>header button:hover{background:#d8dfe4;color:var(--ovg-ink)}
+.qgis-studio .live-modal-body,.qgis-studio .core-workbench-body{padding:12px;background:var(--ovg-panel);font-size:12.5px}
+
+/* headings inside tools: QGIS uses small group titles, not page headlines */
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(h1,h2){font-size:14px;margin:4px 0 8px;font-weight:600;color:var(--ovg-ink)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(h3,h4){font-size:12.5px;margin:10px 0 6px;font-weight:600;color:var(--ovg-ink)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) p{margin:4px 0 8px;color:var(--ovg-muted)}
+/* nested white cards become plain group boxes */
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(.panel,.card,section[class*=card],article){border-radius:3px;box-shadow:none}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) fieldset{border:1px solid var(--ovg-line);border-radius:3px;padding:8px 10px 10px;margin:8px 0;background:var(--ovg-surface)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) legend{padding:0 4px;font-size:12px;font-weight:600;color:var(--ovg-ink)}
+
+/* form controls */
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]),select,textarea){min-height:28px;padding:3px 7px;border:1px solid var(--ovg-line);border-radius:3px;background:var(--ovg-surface);font-size:12.5px;color:var(--ovg-ink);box-shadow:none}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(input,select,textarea):focus{outline:2px solid #8fb3d4;outline-offset:0;border-color:var(--ovg-primary)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) label{font-size:12px;color:var(--ovg-ink)}
+
+/* buttons: neutral by default, one primary colour, primary actions sit at the right like QGIS OK */
+.qgis-studio :is(.live-modal-body,.core-workbench-body) button{min-height:28px;padding:3px 12px;border:1px solid var(--ovg-line);border-radius:3px;background:var(--ovg-surface);color:var(--ovg-ink);font-size:12.5px;font-weight:500;box-shadow:none;background-image:none}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) button:not(:disabled):hover{background:#eef2f5;border-color:#b4c0c8}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(button.primary,button[type=submit]){background:var(--ovg-primary);border-color:var(--ovg-primary);color:#fff;width:auto;min-width:110px;display:block;margin-left:auto}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(button.primary,button[type=submit]):not(:disabled):hover{background:var(--ovg-primary-hover)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) button:disabled{opacity:.5;cursor:not-allowed}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(button.danger,.danger>button){color:var(--ovg-danger)}
+.qgis-studio .live-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+
+/* status colours */
+.qgis-studio :is(.live-modal-body,.core-workbench-body) .error{color:var(--ovg-danger)}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(.live-note,.lp-hint,small){color:var(--ovg-muted)}
+
+/* permissions banner: flat header instead of a gradient hero */
+.qgis-studio .team-access-head{background:var(--ovg-surface)!important;color:var(--ovg-ink)!important;border:1px solid var(--ovg-line);border-radius:3px;padding:10px 12px!important;min-height:0!important}
+.qgis-studio .team-access-head *{color:inherit!important}
+.qgis-studio .team-access-head small{color:var(--ovg-muted)!important;letter-spacing:0}
+
+/* toolbar accents that used green/teal/brown now use the palette */
+.qgis-studio .qgis-icon-button{color:#3d5566!important}
+.qgis-studio .plugin-tool.studio-module-main,.qgis-studio .primary{background:var(--ovg-primary);border-color:var(--ovg-primary);color:#fff}
+
+/* Data Source Manager */
+.qgis-studio .dsm{display:grid;grid-template-columns:180px 1fr;min-height:360px;margin:-12px;border-top:0}
+.qgis-studio .dsm-nav{display:flex;flex-direction:column;background:var(--ovg-surface);border-right:1px solid var(--ovg-line);padding:4px 0}
+.qgis-studio .dsm-nav button{display:flex!important;align-items:center;gap:8px;width:100%;min-height:30px;margin:0!important;padding:4px 12px!important;border:0!important;border-radius:0!important;background:transparent!important;text-align:left;font-size:12.5px}
+.qgis-studio .dsm-nav button span{width:18px;text-align:center;color:var(--ovg-muted)}
+.qgis-studio .dsm-nav button.active{background:var(--ovg-primary-soft)!important;color:var(--ovg-primary);font-weight:600;box-shadow:inset 3px 0 0 var(--ovg-primary)}
+.qgis-studio .dsm-pane{padding:12px 14px;min-width:0;overflow:auto}
+.qgis-studio .dsm-pane>h3{margin-top:0}
+@media(max-width:640px){.qgis-studio .dsm{grid-template-columns:1fr}.qgis-studio .dsm-nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--ovg-line)}.qgis-studio .dsm-nav button{width:auto;white-space:nowrap}}
+
+/* Permissions table */
+.qgis-studio .team-access{display:grid;gap:10px}
+.qgis-studio .team-access-head{display:flex;align-items:center;justify-content:space-between}
+.qgis-studio .team-access-head h3{margin:2px 0;font-size:14px}.qgis-studio .team-access-head p{margin:0;font-size:12px}
+.qgis-studio .team-tabs{display:flex;gap:0;border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .team-tabs button{flex:0 0 auto!important;min-height:30px;border:0!important;border-bottom:2px solid transparent!important;border-radius:0!important;background:transparent!important;margin:0!important;padding:4px 14px!important;color:var(--ovg-muted)}
+.qgis-studio .team-tabs button[aria-selected=true]{color:var(--ovg-primary);border-bottom-color:var(--ovg-primary)!important;font-weight:600}
+.qgis-studio .team-scope-bar{display:flex;align-items:center;gap:12px;justify-content:space-between}.qgis-studio .team-scope-bar label{display:flex;align-items:center;gap:8px}
+.qgis-studio .team-table{width:100%;border-collapse:collapse;background:var(--ovg-surface);border:1px solid var(--ovg-line);font-size:12.5px}
+.qgis-studio .team-table th{text-align:left;font-weight:600;background:var(--ovg-header);padding:6px 8px;border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .team-table td{padding:5px 8px;border-bottom:1px solid var(--ovg-line-soft);vertical-align:middle}
+.qgis-studio .team-table td b{display:block;font-weight:600}.qgis-studio .team-table td small{color:var(--ovg-muted)}
+.qgis-studio .team-table td select{width:100%}
+.qgis-studio .team-table tr.inactive{opacity:.6}
+.qgis-studio .team-inherit{color:var(--ovg-muted);font-style:italic}
+.qgis-studio .team-scope-note{font-size:11.5px;color:var(--ovg-muted);background:transparent!important;border:0!important;padding:0!important}
+.qgis-studio .lp-saved-styles{display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap;padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--ovg-line-soft)}.qgis-studio .lp-saved-styles label{flex:1;min-width:160px;display:grid;gap:3px}

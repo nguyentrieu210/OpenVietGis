@@ -258,6 +258,34 @@ _SCOPE_LAYERS_SQL = text(
 )
 
 
+def _is_wgs84_utm(code: int) -> bool:
+    return 32601 <= code <= 32660 or 32701 <= code <= 32760
+
+
+def utm_code(longitude: float, latitude: float) -> int:
+    """EPSG code of the WGS 84 UTM zone containing a point (northern 326xx, southern 327xx)."""
+    zone = min(60, max(1, int((longitude + 180) // 6) + 1))
+    return (32600 if latitude >= 0 else 32700) + zone
+
+
+# shortcut: one zone from the layer centroid; a layer straddling 108°E (zones 48/49) is
+# distorted slightly more on its far side. Upgrade to VN-2000 TM-3 when the province is known.
+def _utm_code_for(
+    session: Session, organization_id: UUID, project_id: UUID, source_id: UUID
+) -> int:
+    centre = session.execute(
+        text(
+            "SELECT ST_X(c) AS x, ST_Y(c) AS y FROM (SELECT ST_Centroid(ST_Extent(geometry)) AS c"
+            " FROM spatial.reference_features WHERE organization_id=:org AND project_id=:proj"
+            " AND source_id=:sid AND geometry IS NOT NULL) e"
+        ),
+        {"org": organization_id, "proj": project_id, "sid": source_id},
+    ).mappings().first()
+    if centre is None or centre["x"] is None:
+        return 32648  # empty layer (rejected later by the feature-count check)
+    return utm_code(float(centre["x"]), float(centre["y"]))
+
+
 def _scope_layers(
     session: Session, organization_id: UUID, project_id: UUID
 ) -> dict[str, list[Any]]:
@@ -1204,13 +1232,14 @@ def export_integration_layer(
             ),
         )
 
-    # Only the exact, datum-free EPSG:3857 <-> EPSG:4326 conversion is applied; every other CRS
-    # still has to match the format natively.
+    # Only exact same-datum WGS 84 conversions are applied; every other CRS still has to match
+    # the format natively. DXF from 4326 goes to the WGS 84 UTM zone of the layer (true metres;
+    # Pseudo-Mercator stretched lengths by 2-4 % at Vietnamese latitudes).
     output_crs_code = stored_crs_code
     if format == "geojson" and stored_crs_code == 3857:
         output_crs_code = 4326
     if format == "dxf" and stored_crs_code == 4326:
-        output_crs_code = 3857
+        output_crs_code = _utm_code_for(session, organization_id, project_id, source_id)
 
     if format == "geojson" and output_crs_code != 4326:
         raise HTTPException(
@@ -1221,7 +1250,7 @@ def export_integration_layer(
             ),
         )
 
-    if format == "dxf":
+    if format == "dxf" and not _is_wgs84_utm(output_crs_code):
         crs_profile = get_readable_crs_profile(output_crs_code)
         if crs_profile is None or crs_profile.unit != "metre":
             raise HTTPException(

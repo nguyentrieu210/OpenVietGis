@@ -90,3 +90,12 @@ def test_commune_boundary_scope_selects_the_commune_not_its_neighbours() -> None
     sql = str(_export_features_sql(scoped=False, area_mode="commune", route_mode=None))
     assert "feature_id = ANY(:area_fids)" in sql and ":area_codes" in sql
     assert "ST_Intersects" not in sql
+
+
+def test_dxf_from_wgs84_uses_the_utm_zone_of_the_layer():
+    from openvietgis_api.adapters.http.integration_hub import _is_wgs84_utm, utm_code
+
+    assert utm_code(106.66, 10.76) == 32648  # Ho Chi Minh City
+    assert utm_code(108.2, 16.05) == 32649  # Da Nang (east of 108°E)
+    assert utm_code(-70.0, -33.4) == 32719
+    assert _is_wgs84_utm(32648) and not _is_wgs84_utm(3857)

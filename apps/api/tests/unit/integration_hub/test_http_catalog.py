@@ -649,7 +649,7 @@ def test_export_integration_layer_autocad_rejects_geopackage_format_422(
     assert "dxf" in str(exc_info.value.detail).lower()
 
 
-# EPSG:4326 is now converted exactly to EPSG:3857 for DXF; other degree CRS still fail closed.
+# EPSG:4326 is converted exactly to its WGS 84 UTM zone for DXF; other degree CRS still fail closed.
 @pytest.mark.parametrize("geographic_crs", [4756])
 def test_export_integration_layer_dxf_rejects_geographic_degree_crs_422(
     monkeypatch: pytest.MonkeyPatch,

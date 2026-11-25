@@ -32,6 +32,7 @@ export function CadDraftImport({ client, path, document, link, expire }: {
   const [message, setMessage] = useState("");
   const [applied, setApplied] = useState(false);
   const pending = useRef(false);
+  const attemptedOperation = useRef<string | null>(null);
   const abort = useRef(new AbortController());
   useEffect(() => {
     const controller = new AbortController();
@@ -69,30 +70,35 @@ export function CadDraftImport({ client, path, document, link, expire }: {
     }
   }
 
+  async function fetchPreview(signal: AbortSignal): Promise<Preview> {
+    const endpoint = path + "/" + encodeURIComponent(document.id)
+      + "/versions/" + link.version + "/preview-native-import";
+    const preview = await client.request<Preview>(endpoint, {
+      method: "POST",
+      body: JSON.stringify({
+        conversion_id: link.conversion_id,
+        expected_candidate_sha256: document.sha256,
+      }),
+      cache: "no-store",
+      signal,
+    });
+    if (preview.conversion_id !== link.conversion_id || preview.source_id !== link.source_id
+      || preview.candidate_sha256 !== document.sha256 || preview.candidate_version !== document.version
+      || preview.base_content_revision !== link.content_revision
+      || preview.base_schema_revision !== link.schema_revision || preview.published !== false
+      || !Array.isArray(preview.operations) || preview.operations.length > 1000
+      || !preview.operations.every(op => op?.op_type === "update" && typeof op.feature_id === "string"
+        && ["Point", "LineString", "Polygon"].includes(op.geometry?.type)
+        && Array.isArray(op.geometry.coordinates))) {
+      throw new Error("Invalid CAD preview");
+    }
+    return preview;
+  }
+
   function inspect() {
     setDraft(null);
     void request(async signal => {
-      const endpoint = path + "/" + encodeURIComponent(document.id)
-        + "/versions/" + link.version + "/preview-native-import";
-      const preview = await client.request<Preview>(endpoint, {
-        method: "POST",
-        body: JSON.stringify({
-          conversion_id: link.conversion_id,
-          expected_candidate_sha256: document.sha256,
-        }),
-        cache: "no-store",
-        signal,
-      });
-      if (preview.conversion_id !== link.conversion_id || preview.source_id !== link.source_id
-        || preview.candidate_sha256 !== document.sha256 || preview.candidate_version !== document.version
-        || preview.base_content_revision !== link.content_revision
-        || preview.base_schema_revision !== link.schema_revision || preview.published !== false
-        || !Array.isArray(preview.operations) || preview.operations.length > 1000
-        || !preview.operations.every(op => op?.op_type === "update" && typeof op.feature_id === "string"
-          && ["Point", "LineString", "Polygon"].includes(op.geometry?.type)
-          && Array.isArray(op.geometry.coordinates))) {
-        throw new Error("Invalid CAD preview");
-      }
+      const preview = await fetchPreview(signal);
       if (signal.aborted) return;
       if (!preview.operations.length) {
         setMessage("Không có thay đổi hình học cần áp dụng.");
@@ -106,6 +112,18 @@ export function CadDraftImport({ client, path, document, link, expire }: {
     if (!draft || !path.endsWith("/cad/documents")) return;
     const { preview, operationId } = draft;
     void request(async signal => {
+      // Re-check the saved CAD head before the first write. After an ambiguous
+      // response, replay the original operation so R006 can return its receipt.
+      if (attemptedOperation.current !== operationId) {
+        const latest = await fetchPreview(signal);
+        if (signal.aborted) return;
+        if (JSON.stringify(latest.operations) !== JSON.stringify(preview.operations)) {
+          setDraft(null);
+          setMessage("Đề xuất CAD đã thay đổi. Hãy xem trước lại trước khi áp dụng.");
+          return;
+        }
+        attemptedOperation.current = operationId;
+      }
       const projectPath = path.slice(0, -"/cad/documents".length);
       const receipt = await client.request<Changeset>(
         projectPath + "/sources/" + encodeURIComponent(link.source_id) + "/changesets",
