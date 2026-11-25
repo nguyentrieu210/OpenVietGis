@@ -28,3 +28,56 @@ jobs:
         run: python3 -m unittest discover -s infra/rust-platform/tests -v
       - name: Python syntax
         run: python3 -m py_compile tools/benchmark/rust-platform/benchmark_runner.py
+
+  postgis-rehearsal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start disposable PostGIS
+        run: docker compose -p dev -f infra/dev/compose.yaml up -d --wait --wait-timeout 180 postgres-test
+      - name: Seed synthetic fixture
+        run: |
+          docker exec -i dev-postgres-test-1 psql -X -v ON_ERROR_STOP=1 -U openvietgis -d openvietgis_test <<'SQL'
+          CREATE TABLE public.alembic_version (version_num text PRIMARY KEY);
+          INSERT INTO public.alembic_version VALUES ('e18-ci-fixture');
+          CREATE TABLE public.e18_fixture (
+            id integer PRIMARY KEY, tenant text NOT NULL, payload text NOT NULL,
+            geom geometry(Point,4326) NOT NULL
+          );
+          INSERT INTO public.e18_fixture VALUES
+            (1,'a','first',ST_SetSRID(ST_MakePoint(106,10),4326)),
+            (2,'b','second',ST_SetSRID(ST_MakePoint(107,11),4326));
+          ALTER TABLE public.e18_fixture ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.e18_fixture FORCE ROW LEVEL SECURITY;
+          CREATE POLICY tenant_fixture ON public.e18_fixture
+            USING (tenant = current_setting('app.e18_tenant',true));
+          GRANT SELECT ON public.e18_fixture TO openvietgis_runtime;
+          SQL
+      - name: Backup and restore disposable fixture
+        run: |
+          mkdir -p dist/e18
+          bash infra/rust-platform/staging-backup-restore.sh \
+            --target-db ovg_rehearsal_ci_fixture --keep-target-db \
+            --evidence-out dist/e18/rehearsal.txt
+          grep -Fx 'parity_status=PASS' dist/e18/rehearsal.txt
+      - name: Verify restored tenant isolation and row content
+        run: |
+          actual="$(docker exec -i dev-postgres-test-1 psql -X -qAt -v ON_ERROR_STOP=1 -U openvietgis -d ovg_rehearsal_ci_fixture <<'SQL'
+          SET ROLE openvietgis_runtime;
+          SET app.e18_tenant = 'a';
+          SELECT id || ':' || payload FROM public.e18_fixture ORDER BY id;
+          SET app.e18_tenant = 'unknown';
+          SELECT count(*) FROM public.e18_fixture;
+          SQL
+          )"
+          test "$actual" = "$(printf '1:first\n0')"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e18-rehearsal
+          path: dist/e18/
+          if-no-files-found: warn
+      - name: Remove disposable CI cluster
+        if: always()
+        run: docker compose -p dev -f infra/dev/compose.yaml down -v

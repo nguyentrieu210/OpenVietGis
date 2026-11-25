@@ -153,7 +153,12 @@ SELECT 'RLS|' || n.nspname || '.' || c.relname || '|' || p.polname || '|' || p.p
 FROM pg_policy p
 JOIN pg_class c ON c.oid = p.polrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace
-WHERE n.nspname NOT IN ('pg_catalog', 'information_schema');
+WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+UNION ALL
+SELECT 'ACL|' || n.nspname || '.' || c.relname || '|' || pg_get_userbyid(c.relowner)
+       || '|' || COALESCE(c.relacl::text, '')
+FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+WHERE c.relkind IN ('r','p','v','m','S') AND n.nspname NOT IN ('pg_catalog','information_schema');
 SQL
 
   # 3. Deterministic exact row counts across every user base table
@@ -178,6 +183,21 @@ BEGIN
 END$$;
 SELECT fqn || '=' || row_count FROM _ovg_row_counts ORDER BY fqn;
 SQL
+
+  # Content hashes, including duplicates; only digests leave the database.
+  docker exec -i "$ctr" psql -U "$user" -d "$db" -X -qAt -v ON_ERROR_STOP=1 <<'SQL' > "${out_prefix}.content"
+SET TIME ZONE 'UTC';
+SET DateStyle = 'ISO, YMD';
+SELECT format(
+  'SELECT %L || ''|'' || encode(sha256(convert_to(to_jsonb(t)::text, ''UTF8'')), ''hex'') AS digest FROM %I.%I AS t ORDER BY 1',
+  table_schema || '.' || table_name, table_schema, table_name)
+FROM information_schema.tables
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+  AND table_schema NOT LIKE 'pg_temp_%' AND table_type = 'BASE TABLE'
+ORDER BY table_schema, table_name
+\gexec
+SQL
+  sha256sum "${out_prefix}.content" | awk '{print $1}' > "${out_prefix}.content.sha256"
 
   sha256sum "${out_prefix}.schema" | awk '{print $1}' > "${out_prefix}.schema.sha256"
   sha256sum "${out_prefix}.rows"   | awk '{print $1}' > "${out_prefix}.rows.sha256"
@@ -255,7 +275,7 @@ cleanup() {
   if [[ "$KEEP_DUMP" -eq 0 ]]; then
     rm -rf "$WORK_DIR"
   else
-    rm -f "${WORK_DIR}"/*.meta "${WORK_DIR}"/*.schema "${WORK_DIR}"/*.rows "${WORK_DIR}"/*.sha256
+    rm -f "${WORK_DIR}"/*.meta "${WORK_DIR}"/*.schema "${WORK_DIR}"/*.rows "${WORK_DIR}"/*.content "${WORK_DIR}"/*.sha256
   fi
 }
 trap cleanup EXIT
@@ -268,12 +288,13 @@ log "Step 1/5: Computing deterministic source DB fingerprint (read-only)..."
 fingerprint_db "$SOURCE_CONTAINER" "$SOURCE_USER" "$SOURCE_DB" "${WORK_DIR}/src"
 SRC_SCHEMA_SHA="$(cat "${WORK_DIR}/src.schema.sha256")"
 SRC_ROWS_SHA="$(cat "${WORK_DIR}/src.rows.sha256")"
+SRC_CONTENT_SHA="$(cat "${WORK_DIR}/src.content.sha256")"
 
 # Step 2: Custom-format pg_dump (-Fc -Z 6)
 log "Step 2/5: Creating custom-format pg_dump backup -> ${DUMP_FILE}..."
 T_DUMP_START="$(date +%s)"
 docker exec "$SOURCE_CONTAINER" pg_dump -U "$SOURCE_USER" -d "$SOURCE_DB" \
-  -Fc -Z 6 --no-owner --no-acl > "$DUMP_FILE"
+  -Fc -Z 6 > "$DUMP_FILE"
 T_DUMP_END="$(date +%s)"
 DUMP_SECONDS=$((T_DUMP_END - T_DUMP_START))
 DUMP_BYTES="$(stat -c %s "$DUMP_FILE")"
@@ -303,7 +324,7 @@ END$$;
 SQL
 
 docker exec -i "$TARGET_CONTAINER" pg_restore -U "$TARGET_USER" -d "$TARGET_DB" \
-  --exit-on-error --no-owner --no-privileges < "$DUMP_FILE"
+  --exit-on-error < "$DUMP_FILE"
 T_RESTORE_END="$(date +%s)"
 RESTORE_SECONDS=$((T_RESTORE_END - T_RESTORE_START))
 log "Restore complete: duration=${RESTORE_SECONDS}s"
@@ -314,6 +335,7 @@ T_VERIFY_START="$(date +%s)"
 fingerprint_db "$TARGET_CONTAINER" "$TARGET_USER" "$TARGET_DB" "${WORK_DIR}/dst"
 DST_SCHEMA_SHA="$(cat "${WORK_DIR}/dst.schema.sha256")"
 DST_ROWS_SHA="$(cat "${WORK_DIR}/dst.rows.sha256")"
+DST_CONTENT_SHA="$(cat "${WORK_DIR}/dst.content.sha256")"
 T_VERIFY_END="$(date +%s)"
 VERIFY_SECONDS=$((T_VERIFY_END - T_VERIFY_START))
 
@@ -329,6 +351,10 @@ fi
 if [[ "$SRC_ROWS_SHA" != "$DST_ROWS_SHA" ]]; then
   PARITY_STATUS="FAIL(rows_sha256 mismatch)"
   diff -u "${WORK_DIR}/src.rows" "${WORK_DIR}/dst.rows" | head -n 40 >&2 || true
+fi
+
+if [[ "$SRC_CONTENT_SHA" != "$DST_CONTENT_SHA" ]]; then
+  PARITY_STATUS="FAIL(content_sha256 mismatch)"
 fi
 
 # Step 5: Additive-only migration check (if candidate dir provided) & schema preservation assertion
@@ -350,6 +376,8 @@ src_schema_sha256=${SRC_SCHEMA_SHA}
 dst_schema_sha256=${DST_SCHEMA_SHA}
 src_rows_sha256=${SRC_ROWS_SHA}
 dst_rows_sha256=${DST_ROWS_SHA}
+src_content_sha256=${SRC_CONTENT_SHA}
+dst_content_sha256=${DST_CONTENT_SHA}
 parity_status=${PARITY_STATUS}
 ${ADDITIVE_RESULT}
 dump_duration_s=${DUMP_SECONDS}

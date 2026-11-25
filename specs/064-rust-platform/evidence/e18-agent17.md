@@ -11,10 +11,10 @@ Rust operational readiness/metrics are service-local; do not replace legacy metr
   149 mapped test IDs); hybrid routing split requires integration owner review.
 - T02: three local safety tests passed (mocked Docker, no DB mutation): unsafe target/source and
   long identifiers denied, existing DB collision never dropped, benchmark target guards.
-  CI workflow e18-ops-safety.yml runs these independently; real PostGIS golden and failure fixtures remain open.
+  CI workflow e18-ops-safety.yml runs these independently and defines a disposable PostGIS golden fixture with geometry, row content, ACL and tenant-denial probes; execution results remain pending.
 - T03: hardening implemented: isolated containers, fresh target only, ownership-aware cleanup,
   private backup artifacts, no creation of privileged/shared cluster roles, optional migration-table
-  probe fixed, free-space lower bound; benchmark uses unique DB, strict loopback ports and
+  probe fixed, free-space lower bound, per-row SHA-256 fingerprints and table ACL/ownership comparison; benchmark uses unique DB, strict loopback ports and
   name allowlist, no overwrite. Rust ops readiness DB probe capped at 2 s, updates readiness gauge.
   Existing public release/entitlement/metrics contracts stay on Python, pending explicit hybrid ingress verification.
 - T04: no comparative Rust performance claim. VPS1 observed 96% root disk usage, approximately
@@ -27,8 +27,8 @@ Rust operational readiness/metrics are service-local; do not replace legacy metr
 
 1. Run backup/restore on a quiescent synthetic fixture on a disposable PostGIS cluster;
    compare actual content, privileges/ownership, artifact manifest and tenant-negative probes.
-   Current helper checks schema and row counts, not row contents or grants; its dump deliberately
-   omits ownership and ACL. It is not a production backup replacement.
+   Current helper checks row counts, per-row content hashes and table ACL/ownership, but does not certify
+   every database-level privilege, artifact, cluster-level role or recovery point. It is not a production backup replacement.
 2. Execute actual baseline application after candidate acknowledged write and verify API read
    through old code. Current rehearsal is a synthetic schema/RLS check only (reported as such).
 3. Pin exact image digests and configure hybrid ingress with a deny-by-default migrated-path registry.
