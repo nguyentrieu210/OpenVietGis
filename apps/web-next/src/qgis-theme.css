@@ -523,3 +523,15 @@
 .ovg-reminder-toast div{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
 .ovg-reminder-toast button{padding:4px 10px;border-radius:6px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;cursor:pointer}
 .ovg-reminder-toast button:first-child{background:#2b7bd0;border-color:#2b7bd0}
+
+/* Tasks on the map, on layers and in the inspector */
+.ovg-task-pin{width:24px;height:24px;padding:0;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#f59e0b;color:#fff;font-size:11px;line-height:1;cursor:pointer;box-shadow:0 2px 6px #0006;display:grid;place-items:center}
+.ovg-task-pin.todo{background:#2b7bd0}.ovg-task-pin.in_progress{background:#f59e0b}.ovg-task-pin.late{background:#dc2626}
+.ovg-task-pin:hover{filter:brightness(1.15)}
+.qgis-studio .ovg-layer-tasks{flex:none;margin:0 2px;padding:0 4px;border-radius:8px;background:#fde7c7;color:#9a3412;font-size:10.5px;font-weight:700;line-height:16px}
+.insp-tasks{margin:6px 0;border:1px solid var(--ovg-line,#d5dde2);border-radius:4px}
+.insp-tasks>summary{padding:5px 8px;font-weight:600;cursor:pointer;font-size:12.5px}
+.insp-tasks>summary b{margin-left:4px;padding:0 5px;border-radius:8px;background:#e3eef8;color:#0f4c81;font-size:11px}
+.insp-task{display:grid;width:100%;gap:1px;padding:5px 8px;border:0;border-top:1px solid #eef2f5;background:none;text-align:left;cursor:pointer;font-size:12.5px}
+.insp-task:hover{background:#f2f7fb}.insp-task small{color:#6b7a83}.insp-task.late span{color:#b42318}.insp-task.done span{color:#6b7a83;text-decoration:line-through}
+.insp-task-new{width:100%;padding:6px 8px;border:0;border-top:1px solid #eef2f5;background:none;color:#1565a9;text-align:left;cursor:pointer;font-size:12.5px;font-weight:600}
