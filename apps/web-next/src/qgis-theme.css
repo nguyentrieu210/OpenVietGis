@@ -230,3 +230,6 @@
 .ovg-spinner{width:28px;height:28px;border:3px solid #cfdbe5;border-top-color:#1565a9;border-radius:50%;animation:ovg-spin .8s linear infinite}
 @keyframes ovg-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ovg-spinner{animation-duration:2.4s}}
+
+/* Keep map attribution clear of the 2D / 3D / globe switch */
+.qgis-studio .maplibregl-ctrl-bottom-right{bottom:50px}
