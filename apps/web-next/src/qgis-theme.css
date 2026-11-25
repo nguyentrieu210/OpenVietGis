@@ -472,3 +472,27 @@
 .ovg-live-chat .ovg-live-chat-list::-webkit-scrollbar{display:none}
 .ovg-live-chat .ovg-live-msg{flex:none}
 .ovg-live-jump{display:none!important}
+
+/* Premium live overlay: frosted dark glass, one line per message, details on hover */
+.ovg-live-chat{background:linear-gradient(180deg,#0d1720a6,#0d1720c7)!important;backdrop-filter:blur(16px) saturate(160%)!important;-webkit-backdrop-filter:blur(16px) saturate(160%)!important;border:1px solid #ffffff24!important;border-radius:14px!important;box-shadow:0 18px 40px #0007,inset 0 1px 0 #ffffff1f!important;overflow:hidden!important}
+.ovg-live-chat.closed{border-radius:20px!important}
+.ovg-live-chat>header{align-self:stretch;background:none!important;backdrop-filter:none!important;border-bottom:1px solid #ffffff14!important;border-radius:0}
+.ovg-live-chat.closed>header{border:0!important}
+.ovg-live-chat .ovg-live-chat-list{padding:10px 12px 6px;gap:6px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 30px);mask-image:linear-gradient(to bottom,transparent 0,#000 30px)}
+.ovg-live-chat .ovg-live-msg,.ovg-live-chat .ovg-live-msg.mine{justify-content:flex-start;align-items:flex-start;gap:8px;margin:0}
+.ovg-live-chat .ovg-live-msg.mine{padding-left:6px;border-left:2px solid #4c9be8}
+.ovg-live-chat .ovg-live-msg .av{width:22px;height:22px;font-size:9.5px;border:0;box-shadow:none}
+.ovg-live-chat .ovg-live-bubble{max-width:none;flex:1;min-width:0}
+.ovg-live-chat .ovg-live-bubble p,.ovg-live-chat .ovg-live-msg.mine .ovg-live-bubble p{padding:1px 0 0;background:none!important;box-shadow:none!important;backdrop-filter:none!important;border-radius:0;color:#e9f0f5;font-size:13px;line-height:1.45}
+.ovg-live-chat .ovg-live-bubble b{display:inline;margin-right:6px;font-size:12.5px;filter:brightness(1.45)}
+.ovg-live-chat .ovg-live-bubble time{display:inline;margin-left:6px;font-size:10px;color:#8fa1ad;opacity:0;transition:opacity .15s}
+.ovg-live-chat .ovg-live-msg:hover time{opacity:1}
+.ovg-live-chat .ovg-live-msg:hover{background:#ffffff0d;border-radius:6px}
+.ovg-live-chat .ovg-live-reacts,.ovg-live-chat .ovg-live-msg.mine .ovg-live-reacts{position:static;display:inline-flex;margin-top:3px;background:#ffffff1a;color:#fff;box-shadow:none}
+.ovg-live-chat .ovg-live-msg:has(.ovg-live-reacts){margin-bottom:0}
+.ovg-live-chat .ovg-live-reactbar,.ovg-live-chat .ovg-live-msg.mine .ovg-live-reactbar{top:-4px;right:4px;left:auto;background:#1b2833;border:1px solid #ffffff26}
+.ovg-live-chat .ovg-live-input{padding:8px 10px 10px!important;border-top:1px solid #ffffff14!important}
+.ovg-live-chat .ovg-live-input input{background:#ffffff12!important;backdrop-filter:none;box-shadow:none;border:1px solid #ffffff24}
+.ovg-live-chat .ovg-live-quick button{background:#ffffff12!important;box-shadow:none}
+.ovg-live-chat .ovg-live-quick button:hover{background:#ffffff29!important}
+.ovg-live-chat.open::after{border-color:#ffffff59}
