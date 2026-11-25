@@ -108,7 +108,7 @@ def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor):
     manual_path = layer_path(layers["edit_4326"]["layer_id"])
     # E03 runs before E05 and advances the editable layer's content pin.
     manual = suite.get("E05 current manual layer pins", manual_path, token=owner)
-    manual_pins = _pins(manual) if manual else _pins(layers["edit_4326"])
+    manual_pins = _pins(manual["source"]) if manual else _pins(layers["edit_4326"])
     suite.get(
         "E05 manual source has no render profile",
         f"{manual_path}/viewport",
