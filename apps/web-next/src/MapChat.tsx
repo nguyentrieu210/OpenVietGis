@@ -39,7 +39,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  useEffect(()=>{const mv=(e:MouseEvent)=>{mouse.current={x:e.clientX,y:e.clientY}};const start=()=>{if(!canWrite)return;const {x,y}=mouse.current;setTyping({x:x||innerWidth/2,y:y||innerHeight/2});setText("")};
   window.addEventListener("mousemove",mv);window.addEventListener("ovg:chat",start);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("ovg:chat",start)}},[canWrite]);
  const send=async(body:string,to=room)=>{const t=body.trim().slice(0,4000);if(!t)return;
-  const temp:Msg={id:"local-"+crypto.randomUUID(),author_id:accountId,author_name:"Bạn",body:t,created_at:new Date().toISOString(),recipient_id:to||null};
+  const temp:Msg={id:"local-"+crypto.randomUUID(),author_id:accountId,author_name:peers.find(p=>p.actor===accountId)?.name??"Bạn",body:t,created_at:new Date().toISOString(),recipient_id:to||null};
   setLogs(l=>({...l,[to]:[...(l[to]??[]),temp]}));if(!to)announce([temp]);
   try{await loadCsrfToken(client);const saved=await client.request<Msg>(base+"/messages",{method:"POST",body:JSON.stringify(to?{body:t,recipient_id:to}:{body:t})});if(saved?.id)seen.current.add(saved.id)}
   catch{setLogs(l=>({...l,[to]:(l[to]??[]).filter(m=>m.id!==temp.id)}));return}

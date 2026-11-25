@@ -669,3 +669,8 @@
 .ovg-danmaku-line{background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:0!important;font-size:17px!important;font-weight:700!important;color:#fff!important;letter-spacing:.01em;text-shadow:0 0 3px #000,0 0 3px #000,0 1px 2px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000!important}
 .ovg-danmaku-line b{color:#ffe08a!important;opacity:1!important;margin-right:2px}
 .ovg-danmaku-line .av{box-shadow:0 0 0 2px #fff,0 2px 6px #0008;text-shadow:none}
+
+/* Running line: avatar · NAME: message — clearly separated */
+.ovg-danmaku-line{gap:7px!important}
+.ovg-danmaku-line b{font-size:13.5px!important;text-transform:none}
+.ovg-danmaku-line b::after{content:":";margin-left:1px;color:#ffe08a}
