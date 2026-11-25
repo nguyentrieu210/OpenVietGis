@@ -27,6 +27,11 @@ test('one selection / edit among 35000 points produces one render update',async(
   const start=performance.now();const diff=renderDiff(rows,updated);
   assert.equal(diff.update.length,1);assert.equal(diff.update[0].id,'100');
   assert.equal(diff.add.length+diff.remove.length,0);
+  // Selecting must keep the feature's other properties in the tile worker (point vanished on click).
+  assert.equal(diff.update[0].removeAllProperties,undefined);assert.deepEqual(diff.update[0].removeProperties,[]);
+  assert.deepEqual(diff.update[0].addOrUpdateProperties,[{key:'selected',value:true},{key:'color',value:'#aaa'}]);
+  const dropped=renderDiff(rows.slice(0,1),[{...rows[0],properties:{selected:true}}]);
+  assert.deepEqual(dropped.update[0].removeProperties,['color']);
   console.log('35k render diff ms:',(performance.now()-start).toFixed(1));
   assert.equal(renderDiff(rows,[...rows,rows[0]]),null);
 });
