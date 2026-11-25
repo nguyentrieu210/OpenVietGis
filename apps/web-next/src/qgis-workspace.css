@@ -124,3 +124,15 @@
 .qgis-main-row .live-inspector{overflow:hidden;display:flex;flex-direction:column}.qgis-main-row .live-inspector>.live-inspector-body{flex:1;min-height:0;overflow:auto}
 .studio-plugin-panel{overflow:hidden;display:flex;flex-direction:column}.studio-plugin-panel>.studio-plugin-scroll{flex:1;min-height:0;overflow:auto}
 .qgis-browser .qgis-browser-list{max-height:calc(var(--ovg-browser-h,125px) - 30px)}
+
+/* Spec 057 bước B: dock placement */
+.qgis-work[data-layers=right]>.qgis-dock{order:2;border-right:0;border-left:1px solid #b3c4b6}
+.qgis-work[data-layers=right]>.qgis-dock .qgis-resizer{right:auto;left:-6px}
+.qgis-work[data-browser=off] .qgis-browser,.qgis-work[data-legend=off] .qgis-legend{display:none}
+.qgis-main-row[data-inspector=left]>.live-inspector{order:-1;border-left:0;border-right:1px solid #b3c4b6}
+.qgis-canvas[data-table=right]{flex-direction:row}
+.qgis-canvas[data-table=right]>.qgis-table{height:auto;min-height:0;width:var(--ovg-table-w,420px);border-top:0;border-left:4px solid #a6b9aa}
+.dock-menu{position:relative;display:inline-block}
+.dock-menu-pop{position:absolute;z-index:60;top:calc(100% + 4px);left:0;min-width:230px;display:grid;gap:6px;padding:10px 12px;background:#fff;border:1px solid #b3c4b6;border-radius:6px;box-shadow:0 8px 24px #0002;font-size:12px;color:#223731}
+.dock-menu-pop label{display:flex;align-items:center;gap:6px}
+.dock-menu-row{display:flex;gap:10px;align-items:center;border:0;padding:0;margin:0}.dock-menu-row legend{float:left;min-width:100px;padding:0;color:#4b5e57}
