@@ -10,6 +10,8 @@ on:
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'tests/e17/**'
+      - 'infra/rust-platform/hybrid-gateway.conf'
+      - 'tests/rust-parity/hybrid_gateway_smoke.py'
       - '.github/workflows/e17-web-parity.yml'
   pull_request:
     paths:
@@ -20,6 +22,8 @@ on:
       - 'package.json'
       - 'pnpm-workspace.yaml'
       - 'tests/e17/**'
+      - 'infra/rust-platform/hybrid-gateway.conf'
+      - 'tests/rust-parity/hybrid_gateway_smoke.py'
       - '.github/workflows/e17-web-parity.yml'
   workflow_dispatch:
 permissions:
