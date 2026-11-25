@@ -9,6 +9,7 @@ pub mod middleware;
 pub(crate) mod ops;
 pub mod routes;
 pub mod state;
+pub(crate) mod transfers;
 
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use axum::middleware as axum_mw;

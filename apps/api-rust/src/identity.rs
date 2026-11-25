@@ -32,6 +32,11 @@ impl HumanSession {
     pub(crate) fn session_id(&self) -> Uuid {
         self.verified.id()
     }
+
+    /// Raw session token, used only to verify the request CSRF HMAC.
+    pub(crate) fn token(&self) -> &str {
+        &self.token
+    }
 }
 
 pub(crate) enum IdentityError {

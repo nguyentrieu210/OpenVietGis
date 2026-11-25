@@ -20,6 +20,7 @@ house-numbering = ["dep:ovg-module-house-numbering"]
 axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
+futures-util = { version = "0.3", default-features = false }
 hmac.workspace = true
 http.workspace = true
 ovg-core.workspace = true
@@ -32,7 +33,7 @@ ovg-sync.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["fs", "io-util"] }
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
