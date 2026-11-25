@@ -91,7 +91,8 @@ jobs:
           pytest apps/api/tests/integration/identity/test_live_keycloak_oidc.py --show-capture=no
 
   validate:
-    runs-on: ubuntu-latest
+    # Keep the screenshot renderer and system font stack on a stable OS release.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { visualLaunchOptions } from "./fixtures/visual-launch-options";
 
 import {
   createMapProject,
@@ -9,6 +10,7 @@ import {
 } from "./map-fixtures";
 
 test.use({
+  launchOptions: visualLaunchOptions,
   viewport: { width: 1440, height: 900 },
   trace: "off",
   screenshot: "off",

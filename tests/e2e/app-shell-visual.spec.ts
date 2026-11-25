@@ -1,8 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { visualLaunchOptions } from "./fixtures/visual-launch-options";
 
 import { signInOwner } from "./frontend-auth-helpers";
 
-test.use({ trace: "off", video: "off" });
+test.use({
+  launchOptions: visualLaunchOptions,
+  trace: "off",
+  video: "off"
+});
 
 test("landing visual baseline", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -16,9 +21,12 @@ test("landing visual baseline", async ({ page }) => {
 test("login visual baseline", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/login");
-  await expect(
-    page.getByRole("link", { name: "Đăng nhập với OpenVietGIS Development", exact: true })
-  ).toBeVisible({ timeout: 15_000 });
+  const signIn = page.getByRole("link", {
+    name: "Đăng nhập với OpenVietGIS Development",
+    exact: true
+  });
+  await expect(signIn).toBeVisible({ timeout: 15_000 });
+  await expect(signIn).toHaveCSS("background-color", "rgb(21, 101, 169)");
   await expect(page).toHaveScreenshot("login.png", {
     fullPage: true,
     animations: "disabled"
