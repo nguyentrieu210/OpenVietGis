@@ -257,7 +257,10 @@ impl<'a> EditScope<'a> {
                 Permission::Read => "project.read",
                 Permission::Edit => "project.edit",
             };
-            return Err(EditError::detail(403, format!("missing permission: {name}")));
+            return Err(EditError::detail(
+                403,
+                format!("missing permission: {name}"),
+            ));
         }
         if permission == Permission::Edit && status != "active" {
             return Err(EditError::Spatial(

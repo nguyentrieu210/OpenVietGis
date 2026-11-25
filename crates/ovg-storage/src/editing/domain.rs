@@ -159,9 +159,8 @@ pub fn geometry_wkt(
     family: &str,
 ) -> Result<String, EditError> {
     let invalid = |message: &str| EditError::validation("INVALID_GEOMETRY", message);
-    let geometry = geometry.ok_or_else(|| {
-        EditError::validation("MISSING_GEOMETRY", "geometry object is required")
-    })?;
+    let geometry = geometry
+        .ok_or_else(|| EditError::validation("MISSING_GEOMETRY", "geometry object is required"))?;
     let gtype = geometry.get("type").unwrap_or(&Value::Null);
     if gtype.as_str() != Some(family) {
         return Err(EditError::validation(
@@ -198,10 +197,7 @@ pub fn geometry_wkt(
                     Value::Array(points) if points.len() >= 4 => points,
                     _ => return Err(invalid("Polygon ring requires at least 4 positions")),
                 };
-                let parsed = points
-                    .iter()
-                    .map(position)
-                    .collect::<Result<Vec<_>, _>>()?;
+                let parsed = points.iter().map(position).collect::<Result<Vec<_>, _>>()?;
                 if parsed.first().map(|p| p.1) != parsed.last().map(|p| p.1) {
                     return Err(invalid("Polygon ring must be closed (no silent repair)"));
                 }
@@ -285,9 +281,7 @@ fn canonical_attribute(field: &FieldDef, value: &Value) -> Result<Value, &'stati
     }
     match field.field_type.as_str() {
         "text" => match value {
-            Value::String(s) if s.chars().count() <= 4096 && !s.contains('\0') => {
-                Ok(value.clone())
-            }
+            Value::String(s) if s.chars().count() <= 4096 && !s.contains('\0') => Ok(value.clone()),
             Value::String(_) => Err("text length or encoding outside bounds"),
             _ => Err("text value required"),
         },
@@ -424,7 +418,9 @@ fn canonical_timestamp(value: &Value) -> Result<String, &'static str> {
         if !(1..=6).contains(&count) {
             return Err(RFC);
         }
-        micros = format!("{:0<6}", &after[..count]).parse::<u32>().unwrap_or(0);
+        micros = format!("{:0<6}", &after[..count])
+            .parse::<u32>()
+            .unwrap_or(0);
         rest = &after[count..];
     }
     let offset_minutes: i64 = if rest == "Z" {
@@ -691,8 +687,7 @@ pub fn py_eq(a: &Value, b: &Value) -> bool {
 pub fn redact_audit_value(value: &str) -> &str {
     let token = |s: &str, min: usize| {
         s.len() >= min
-            && s
-                .bytes()
+            && s.bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     };
     let hex32 = |s: Option<&str>| {
@@ -883,7 +878,10 @@ mod tests {
         assert!(validate_feature_id("x".repeat(129).as_str()).is_err());
         assert_eq!(redact_audit_value("op.with.three"), "[REDACTED]");
         assert_eq!(redact_audit_value("plain-op-1"), "plain-op-1");
-        assert!(py_eq(&json!({"a": 1, "b": true}), &json!({"b": 1.0, "a": 1.0})));
+        assert!(py_eq(
+            &json!({"a": 1, "b": true}),
+            &json!({"b": 1.0, "a": 1.0})
+        ));
         assert!(!py_eq(&json!({"a": "1"}), &json!({"a": 1})));
         let vertex = snap((0.0, 0.0), &[(3.0, 4.0)], &[], 5.0);
         assert_eq!(vertex["kind"], "vertex");

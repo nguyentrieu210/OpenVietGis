@@ -24,6 +24,7 @@ from psycopg import sql
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 import benchmark_runner as baseline
+import e03_editing
 
 SEED = 20261125
 API = "/api/v1"
@@ -510,6 +511,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 source list", sources, token=a)
     suite.get("E02 source detail", f"{sources}/{selected['source_id']}", token=a)
     suite.get("E02 ordinary CRS profiles", f"{root_a}/spatial/crs-profiles", token=a)
+    e03_editing.compare_editing(suite, owner_url, fixture, surveyor, difference)
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
         fixture,

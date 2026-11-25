@@ -49,12 +49,20 @@ async fn commit_changeset(
     request: Request,
 ) -> Result<(StatusCode, Json<Value>), Failure> {
     let (session, headers, body) = authenticate_json(&state, request).await?;
-    let scope = open(&state, &session, &organization, &project, Guard::ScopedAllowed).await?;
+    let scope = open(
+        &state,
+        &session,
+        &organization,
+        &project,
+        Guard::ScopedAllowed,
+    )
+    .await?;
     require_csrf(&state, &session, &headers)?;
     let body: CommitRequest = decode(body)?;
-    let schema_ok = body.base_schema_revision.as_deref().is_none_or(|s| {
-        s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-    });
+    let schema_ok = body
+        .base_schema_revision
+        .as_deref()
+        .is_none_or(|s| s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')));
     if !schema_ok || body.summary.chars().count() > 500 || reserved(&body.operation_id) {
         return Err(EditError::InvalidRequest.into());
     }
@@ -110,7 +118,14 @@ async fn revert_changeset(
     request: Request,
 ) -> Result<(StatusCode, Json<Value>), Failure> {
     let (session, headers, body) = authenticate_json(&state, request).await?;
-    let scope = open(&state, &session, &organization, &project, Guard::ScopedDenied).await?;
+    let scope = open(
+        &state,
+        &session,
+        &organization,
+        &project,
+        Guard::ScopedDenied,
+    )
+    .await?;
     require_csrf(&state, &session, &headers)?;
     let body: RevertBody = decode(body)?;
     if reserved(&body.operation_id) {
@@ -143,7 +158,14 @@ async fn compute_snap(
     request: Request,
 ) -> Result<Json<Value>, Failure> {
     let (session, headers, body) = authenticate_json(&state, request).await?;
-    let scope = open(&state, &session, &organization, &project, Guard::ScopedAllowed).await?;
+    let scope = open(
+        &state,
+        &session,
+        &organization,
+        &project,
+        Guard::ScopedAllowed,
+    )
+    .await?;
     require_csrf(&state, &session, &headers)?;
     let body: SnapBody = decode(body)?;
     let tolerance_ok = body.tolerance > 0.0 && body.tolerance <= 10_000.0;
@@ -184,7 +206,12 @@ fn json_content_type(headers: &HeaderMap) -> bool {
     if value.is_empty() {
         return true;
     }
-    let mime = value.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    let mime = value
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
     mime.split_once('/').is_some_and(|(main, sub)| {
         main == "application" && (sub == "json" || sub.ends_with("+json"))
     })
@@ -252,8 +279,8 @@ fn reserved(operation_id: &str) -> bool {
 }
 
 fn query_limit(uri: &Uri) -> Result<i64, Failure> {
-    let Query(pairs) = Query::<Vec<(String, String)>>::try_from_uri(uri)
-        .map_err(|_| EditError::InvalidRequest)?;
+    let Query(pairs) =
+        Query::<Vec<(String, String)>>::try_from_uri(uri).map_err(|_| EditError::InvalidRequest)?;
     match pairs.into_iter().rev().find(|(key, _)| key == "limit") {
         None => Ok(50),
         Some((_, value)) => value
@@ -300,9 +327,11 @@ impl IntoResponse for Failure {
                 }
                 (http(status), Json(body)).into_response()
             }
-            EditError::Spatial(status, code, detail) => {
-                (http(status), Json(json!({ "code": code, "detail": detail }))).into_response()
-            }
+            EditError::Spatial(status, code, detail) => (
+                http(status),
+                Json(json!({ "code": code, "detail": detail })),
+            )
+                .into_response(),
             EditError::InvalidRequest => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(json!({
@@ -348,7 +377,10 @@ mod tests {
         let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
             .await
             .unwrap();
-        (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+        (
+            status,
+            serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+        )
     }
 
     #[tokio::test]
@@ -362,7 +394,10 @@ mod tests {
             ("POST", source),
             ("GET", source),
             ("GET", "/changesets/00000000-0000-0000-0000-000000000004"),
-            ("POST", "/changesets/00000000-0000-0000-0000-000000000004/revert"),
+            (
+                "POST",
+                "/changesets/00000000-0000-0000-0000-000000000004/revert",
+            ),
             ("POST", "/editing/snap"),
         ] {
             let (status, body) = call(method, path, "{}").await;
