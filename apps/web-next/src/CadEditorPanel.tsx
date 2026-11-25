@@ -11,6 +11,7 @@ async function digest(bytes:ArrayBuffer){return Array.from(new Uint8Array(await 
 export function CadEditorPanel({client,path,document,origin,writable,canEdit,close,expire,focusHandle,onNavigate,onBusy}:{client:ApiClient;path:string;document:CadFileVersion;origin:string;writable:boolean;canEdit:boolean;close:(savedId?:string)=>void;onBusy?:(busy:boolean)=>void;expire:()=>void;focusHandle?:string|null;onNavigate?:(link:CadLink,mode:"gis"|"3d")=>void}){
  const mount=useRef<HTMLDivElement>(null),handle=useRef<CadEditorHandle|null>(null),current=useRef(document),permit=useRef(canEdit);
  permit.current=canEdit;
+ const [attempt,setAttempt]=useState(0),[failed,setFailed]=useState(false),[elapsed,setElapsed]=useState(0);
  const [version,setVersion]=useState(document.version),[dirty,setDirty]=useState(false),[saving,setSaving]=useState(false),[ready,setReady]=useState(false),[message,setMessage]=useState("Đang tải OpenCADStudio và mở bản vẽ…");
  const root=path+"/"+document.id+"/versions";
  const [filename,setFilename]=useState(document.filename),filenameRef=useRef(filename);filenameRef.current=filename;
@@ -37,14 +38,17 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
   })().catch(e=>{if(abort.signal.aborted||selectionSerial.current!==serial)return;if(e instanceof ApiError&&e.status===401)expire();else setLookupMessage("Không tra được liên kết của phiên bản này.")});
  };
  useEffect(()=>{
-  const abort=new AbortController();
+  setReady(false);setFailed(false);setElapsed(0);setMessage("Đang đọc và kiểm tra bản vẽ…");
+  const abort=new AbortController();const started=performance.now();const tick=setInterval(()=>setElapsed(Math.floor((performance.now()-started)/1000)),1000);
   const report=(text:string)=>{if(!abort.signal.aborted)setMessage(text)};
   void (async()=>{
    try{
     const r=document.version===0?await fetch(import.meta.env.BASE_URL+"cad/blank-r2018.dxf",{signal:abort.signal,cache:"force-cache"}):await client.requestRaw(root+"/"+document.version+"/download",{cache:"no-store",signal:abort.signal});
     if(!r.ok)throw Error("CAD file unavailable");const bytes=await r.arrayBuffer();if(document.version!==0&&(bytes.byteLength!==document.byte_size||await digest(bytes)!==document.sha256))throw Error("SHA-256 mismatch");
     if(abort.signal.aborted||!mount.current)return;
+    report("Đang tải và khởi tạo engine CAD…");
     const h=await openCadEditor(mount.current,{origin,name:document.filename,bytes,readOnly:!writable},{
+     onStage:()=>report("Engine sẵn sàng · đang mở bản vẽ…"),
      onSelection:value=>{if(!abort.signal.aborted)selectHandle(value)},
      onDirty:d=>{if(!abort.signal.aborted)setDirty(d)},
      onSaving:s=>{if(!abort.signal.aborted)setSaving(s)},
@@ -65,16 +69,16 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
     },abort.signal);
     if(abort.signal.aborted){h.dispose();return}handle.current=h;setSupported(h.supportsSelection);
     if(focusHandle&&isCadHandle(focusHandle))h.requestSelect(focusHandle);
-    setReady(true);report(writable?"Có thể chỉnh sửa và lưu phiên bản mới.":"Chế độ chỉ đọc.");
-   }catch(e){if(!abort.signal.aborted){if(e instanceof ApiError&&e.status===401)expire();else report("Không mở được editor hoặc không xác minh được bản vẽ.")}}
+    clearInterval(tick);setReady(true);report(writable?"Có thể chỉnh sửa và lưu phiên bản mới.":"Chế độ chỉ đọc.");
+   }catch(e){clearInterval(tick);if(!abort.signal.aborted){if(e instanceof ApiError&&e.status===401)expire();else{setFailed(true);report(e instanceof Error?e.message:"Không mở được editor hoặc không xác minh được bản vẽ.")}}}
   })();
-  return()=>{abort.abort();lookup.current?.abort();handle.current?.dispose();handle.current=null};
- },[client,root,document.version,origin,writable]);
+  return()=>{clearInterval(tick);abort.abort();lookup.current?.abort();handle.current?.dispose();handle.current=null};
+ },[client,root,document.version,origin,writable,attempt]);
  useEffect(()=>{if(writable&&!canEdit){handle.current?.dispose();close(current.current.id||undefined)}},[canEdit,writable]);
  useEffect(()=>{if(!dirty&&!saving)return;const warn=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=""};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn)},[dirty,saving]);
  const toolbar=<div className="ovg-cad-inline-toolbar"><button disabled={saving} onClick={async ()=>{if(!dirty||(await uiConfirm("Thoát và bỏ phần chỉnh sửa chưa lưu?")))close(current.current.id||undefined)}}>Bản vẽ</button>{version===0?<input aria-label="Tên bản vẽ" value={filename} maxLength={175} disabled={saving} onChange={e=>setFilename(e.target.value)}/>:<strong>{filename}</strong>}<small>{version?"v"+version:"Bản nháp"}</small><span className="ovg-cad-status" role="status" title={message}>{saving?"Đang lưu…":dirty?"Chưa lưu":!ready?message:message.startsWith("Đã lưu")?message:!writable?"Chỉ đọc":message.startsWith("Có thể chỉnh sửa")?"Sẵn sàng":message}</span><button disabled={!ready||!writable||!canEdit||saving||version>=20} onClick={()=>handle.current?.requestSave()}>Lưu</button><details className="ovg-cad-about"><summary>⋯</summary><div><strong>Giới thiệu CAD</strong><small>OpenVietGIS CAD · OpenVietCAD</small>{origin==="https://cad.gpcds.site"&&<a href={origin+"/ovg-cad-2bc3537/NOTICE.txt"} target="_blank" rel="noopener noreferrer">Giấy phép GPL / mã nguồn</a>}</div></details></div>;
  const slot=window.document.getElementById("ovg-workspace-topbar")??window.document.getElementById("ovg-cad-toolbar-slot");
- return <section className="ovg-cad-editor" data-ovg-cad-dirty={dirty||saving?true:undefined} data-ovg-cad-saving={saving?true:undefined}>{slot?createPortal(toolbar,slot):toolbar}<div ref={mount} className="ovg-cad-engine"/>
+ return <section className="ovg-cad-editor" data-ovg-cad-dirty={dirty||saving?true:undefined} data-ovg-cad-saving={saving?true:undefined}>{slot?createPortal(toolbar,slot):toolbar}<div className="ovg-cad-engine"><div ref={mount} style={{width:"100%",height:"100%"}}/>{!ready&&<div className="ovg-cad-loading" role="status"><b>{failed?"Không thể mở CAD":"Đang mở CAD"}</b><small>{message}</small>{!failed&&<><progress aria-label="Đang tải CAD"/><small>{elapsed} giây · Lần mở đầu tiên cần tải engine WASM.</small></>}{failed&&<button onClick={()=>setAttempt(v=>v+1)}>Thử lại</button>}<button onClick={()=>close(current.current.id||undefined)}>Về bản vẽ</button></div>}</div>
  {supported&&<aside className="ovg-cad-selection" aria-label="Lựa chọn CAD trực tiếp"><strong>CAD ↔ GIS ↔ 3D</strong>
  {!ready?<small>Đang kiểm tra engine…</small>:!supported?<small>Bản OpenCAD Studio này chưa phát lựa chọn CAD trực tiếp. Về kho CAD để tra handle thủ công.</small>:
  <small>{selectedHandle?"Handle đã chọn: "+selectedHandle:"Chọn một đối tượng trên bản vẽ CAD để tra liên kết GIS."}</small>}
