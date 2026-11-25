@@ -981,27 +981,8 @@ export function IntegrationCatalog({
 
                         {profile && (
                           <div className="integration-profile-body">
-                            {adapter.key === "qgis" && (
-                              <QgisBindingManager client={client} org={org} projectId={projectId} />
-                            )}
-
-                            {exportAdapterKey && adapter.lifecycle === "existing_read_only" && (
-                              <BatchExport
-                                key={`${projectId}:${exportAdapterKey}`}
-                                client={client}
-                                org={org}
-                                projectId={projectId}
-                                adapterKey={exportAdapterKey}
-                                layers={profile.layers}
-                              />
-                            )}
-
-                            <details className="integration-export-disclosure" open={adapter.key !== "qgis"}>
-                              <summary>
-                                {adapter.key === "qgis"
-                                  ? "Tùy chọn tải xuất tệp / gửi .gpkg thủ công (Export) ▾"
-                                  : `Thao tác với ${adapter.name}`}
-                              </summary>
+                            <details className="integration-export-disclosure" open>
+                              <summary>{`Thao tác với ${adapter.name}`}</summary>
                               <section className="integration-task-intro" aria-label="Chọn thao tác">
                                 <span className="integration-step-label">BƯỚC 2</span>
                                 <h3>Bạn muốn làm gì với {adapter.name}?</h3>
@@ -1032,7 +1013,7 @@ export function IntegrationCatalog({
                                       >
                                         <span className="integration-task-icon">⌘</span>
                                         <strong>Đồng bộ 2 chiều QGIS (R029)</strong>
-                                        <small>Kết nối realtime & mã ghép nối đã hiển thị ngay phía trên.</small>
+                                        <small>Kết nối realtime & mã ghép nối ở ngay phía dưới.</small>
                                       </button>
                                     )}
                                     {adapter.key === "ogc_services" && (
@@ -1052,6 +1033,21 @@ export function IntegrationCatalog({
                                 {activeTask === "export" && <p className="integration-user-note">Chọn lớp dữ liệu và bấm Tải xuống. Tệp sẽ lưu về máy; dữ liệu gốc trên OpenVietGIS không thay đổi.</p>}
                               </section>
                             </details>
+
+                            {adapter.key === "qgis" && (
+                              <QgisBindingManager client={client} org={org} projectId={projectId} />
+                            )}
+
+                            {exportAdapterKey && adapter.lifecycle === "existing_read_only" && (
+                              <BatchExport
+                                key={`${projectId}:${exportAdapterKey}`}
+                                client={client}
+                                org={org}
+                                projectId={projectId}
+                                adapterKey={exportAdapterKey}
+                                layers={profile.layers}
+                              />
+                            )}
                             {activeTask === "details" && <div className="integration-profile-summary">
                               <span className="integration-badge is-status">
                                 {EXECUTION_STATUS_LABELS[profile.execution_status]}
