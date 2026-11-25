@@ -112,7 +112,8 @@ def rust_client(binary, runtime_url, directory, *, ready_status=200):
     ):
         try:
             with httpx.Client(
-                base_url=f"http://127.0.0.1:{port}", trust_env=False, timeout=4
+                # Above the Rust pool acquire timeout (5 s): a rejected DB role answers 503 only then.
+                base_url=f"http://127.0.0.1:{port}", trust_env=False, timeout=10
             ) as client:
                 ready_path = f"{API}/health/ready"
                 deadline = time.monotonic() + 15
