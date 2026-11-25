@@ -68,7 +68,21 @@ pub fn generate_street_numbers(rule: &NumberingRule) -> Result<Vec<NumberingProp
 
     let mut out = Vec::with_capacity(rule.count);
     for idx in 0..rule.count {
-        let num = rule.start_number + (idx as u32) * rule.step;
+        let offset = u32::try_from(idx)
+            .ok()
+            .and_then(|i| i.checked_mul(rule.step))
+            .ok_or_else(|| {
+                AppError::validation(
+                    "NUMBERING_OVERFLOW",
+                    "numbering sequence exceeds supported house-number range",
+                )
+            })?;
+        let num = rule.start_number.checked_add(offset).ok_or_else(|| {
+            AppError::validation(
+                "NUMBERING_OVERFLOW",
+                "numbering sequence exceeds supported house-number range",
+            )
+        })?;
         let house_number = match &prefix {
             Some(p) => format!("{p}/{num}"),
             None => num.to_string(),
@@ -104,6 +118,20 @@ mod tests {
         assert_eq!(proposals[0].house_number, "12/3A/1");
         assert_eq!(proposals[1].house_number, "12/3A/3");
         assert_eq!(proposals[2].full_address, "12/3A/5 Đường Trần Hưng Đạo");
+    }
+
+    #[test]
+    fn rejects_sequence_overflow_without_panicking() {
+        let err = generate_street_numbers(&NumberingRule {
+            street_name: "Đường A".to_string(),
+            alley_prefix: None,
+            side: HouseSide::LeftOdd,
+            start_number: u32::MAX,
+            step: 2,
+            count: 2,
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), "NUMBERING_OVERFLOW");
     }
 
     #[test]

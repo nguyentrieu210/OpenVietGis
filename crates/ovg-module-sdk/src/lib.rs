@@ -117,6 +117,74 @@ impl ModuleManifest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActivationStatus {
+    Active,
+    Disabled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActivationPin {
+    pub manifest_id: uuid::Uuid,
+    pub revision: i64,
+    pub status: ActivationStatus,
+}
+
+impl ActivationPin {
+    /// Validate a version transition using the same compare-and-set boundary as
+    /// the retained Python repository. Persistence must still lock and update
+    /// the canonical activation row atomically.
+    pub fn transition(
+        self,
+        expected_manifest_id: uuid::Uuid,
+        target_manifest_id: uuid::Uuid,
+    ) -> Result<Self, AppError> {
+        if self.manifest_id != expected_manifest_id {
+            return Err(AppError::conflict(
+                "STALE_EXTENSION_VERSION",
+                "activation version changed",
+            ));
+        }
+        if target_manifest_id.is_nil() {
+            return Err(AppError::validation(
+                "INVALID_MODULE_MANIFEST",
+                "target manifest id must not be nil",
+            ));
+        }
+        Ok(Self {
+            manifest_id: target_manifest_id,
+            revision: self.revision,
+            status: self.status,
+        })
+    }
+
+    #[must_use]
+    pub fn disable(self) -> Self {
+        if self.status == ActivationStatus::Disabled {
+            self
+        } else {
+            Self {
+                status: ActivationStatus::Disabled,
+                revision: self.revision.saturating_add(1),
+                ..self
+            }
+        }
+    }
+
+    #[must_use]
+    pub fn reactivate(self) -> Self {
+        if self.status == ActivationStatus::Active {
+            self
+        } else {
+            Self {
+                status: ActivationStatus::Active,
+                revision: self.revision.saturating_add(1),
+                ..self
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ModuleExecutionContext {
     pub tenant: TenantScope,
@@ -342,6 +410,29 @@ mod tests {
         let mut m = good;
         m.capabilities.push(m.capabilities[0].clone());
         assert!(m.validate().is_err());
+    }
+
+    #[test]
+    fn activation_pin_enforces_version_cas_and_idempotent_status() {
+        let current = uuid::Uuid::new_v4();
+        let target = uuid::Uuid::new_v4();
+        let pin = ActivationPin {
+            manifest_id: current,
+            revision: 7,
+            status: ActivationStatus::Active,
+        };
+        let moved = pin.transition(current, target).unwrap();
+        assert_eq!(moved.manifest_id, target);
+        assert_eq!(moved.revision, 7);
+        assert_eq!(
+            pin.transition(uuid::Uuid::new_v4(), target)
+                .unwrap_err()
+                .code(),
+            "STALE_EXTENSION_VERSION"
+        );
+        assert_eq!(moved.disable().revision, 8);
+        assert_eq!(moved.disable().disable().revision, 8);
+        assert_eq!(moved.disable().reactivate().revision, 9);
     }
 
     struct ChangingManifest(std::sync::atomic::AtomicUsize);
