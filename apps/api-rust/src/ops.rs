@@ -67,8 +67,9 @@ fn probe_artifacts(directory: &Path) -> bool {
         return false;
     };
 
-    let content = *b"openvietgis-readiness";
-    let mut observed = [0; content.len()];
+    const CONTENT: [u8; 21] = *b"openvietgis-readiness";
+    let content = CONTENT;
+    let mut observed = [0; CONTENT.len()];
     let verified = probe
         .write_all(&content)
         .and_then(|()| probe.flush())
