@@ -362,14 +362,12 @@ export function BatchExport({ client, org, projectId, adapterKey, layers }: Inte
 
   return (
     <section className="integration-batch-export" aria-label="Xuất dữ liệu">
+      <div className="xp-step"><b>1</b> Chọn định dạng</div>
+      <div className="xp-formats" role="radiogroup" aria-label="Định dạng xuất">
+        {BATCH_FORMATS.map((option) => <button type="button" role="radio" aria-checked={format === option} key={option} disabled={busy} className={"xp-format" + (format === option ? " on" : "")} onClick={() => setFormat(option)}><span className="xp-ext">{EXPORT_FORMAT_EXT[option]}</span><span>{EXPORT_FORMAT_LABELS[option]}</span></button>)}
+      </div>
+      <div className="xp-step"><b>2</b> Chọn lớp {scopes && (scopes.communes.length > 0 || scopes.hamlets.length > 0 || scopes.routes.length > 0) ? "và phạm vi" : ""}</div>
       <div className="integration-batch-head">
-        <h3>Xuất dữ liệu</h3>
-        <label>
-          Định dạng{" "}
-          <select value={format} disabled={busy} onChange={(event) => setFormat(event.target.value as IntegrationExportFormat)}>
-            {BATCH_FORMATS.map((option) => <option key={option} value={option}>{EXPORT_FORMAT_LABELS[option]}</option>)}
-          </select>
-        </label>
         <label>
           <input
             type="checkbox"
@@ -379,9 +377,6 @@ export function BatchExport({ client, org, projectId, adapterKey, layers }: Inte
           />{" "}
           Chọn tất cả ({eligible.length})
         </label>
-        <button type="button" className="integration-batch-download" disabled={busy || chosen.length === 0} onClick={() => { void start(); }}>
-          {busy ? "Đang tải…" : chosen.length > 1 ? `⬇ Tải ${chosen.length} lớp (.zip)` : chosen.length === 1 ? "⬇ Tải 1 lớp" : "Chọn lớp để tải"}
-        </button>
       </div>
       {scopes && (scopes.communes.length > 0 || scopes.hamlets.length > 0 || scopes.routes.length > 0) && (
         <fieldset className="integration-batch-scope" disabled={busy}>
@@ -445,6 +440,9 @@ export function BatchExport({ client, org, projectId, adapterKey, layers }: Inte
           })}
         </ul>
       )}
+      <footer className="xp-footer"><span>{chosen.length ? `${chosen.length} lớp · ${EXPORT_FORMAT_EXT[format]}${scopeLabel ? " · " + scopeLabel : ""}` : "Chưa chọn lớp nào"}</span><button type="button" className="integration-batch-download" disabled={busy || chosen.length === 0} onClick={() => { void start(); }}>
+          {busy ? "Đang tải…" : chosen.length > 1 ? `⬇ Tải ${chosen.length} lớp (.zip)` : chosen.length === 1 ? "⬇ Tải xuống" : "Chọn lớp để tải"}
+        </button></footer>
       {progress && <p className="integration-profile-status" role="status">{progress}</p>}
       {result && (
         <div role="status" className={result.failed.length ? "integration-batch-result has-errors" : "integration-batch-result"}>
