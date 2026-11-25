@@ -22,7 +22,7 @@ const makeBurst=(id:string,e:string):Burst[]=>Array.from({length:14},(_,k)=>({id
 
 export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const base="/organizations/"+org+"/projects/"+pid+"/collaboration";
- const [room,setRoom]=useState(""),[open,setOpen]=useState(()=>{try{return localStorage.getItem("ovg:chat-open")!=="0"}catch{return true}});
+ const [people,setPeople]=useState(false),[who,setWho]=useState(""),[room,setRoom]=useState(""),[open,setOpen]=useState(()=>{try{return localStorage.getItem("ovg:chat-open")!=="0"}catch{return true}});
  const [logs,setLogs]=useState<Record<string,Msg[]>>({}),[members,setMembers]=useState<Member[]>([]),[unread,setUnread]=useState<Record<string,number>>({});
  const [bubbles,setBubbles]=useState<Msg[]>([]),[bursts,setBursts]=useState<Burst[]>([]),[typing,setTyping]=useState<{x:number;y:number}|null>(null),[text,setText]=useState(""),[draft,setDraft]=useState("");
  const seen=useRef(new Set<string>()),primed=useRef(new Set<string>()),mouse=useRef({x:0,y:0}),view=useRef({room:"",open});view.current={room,open};
@@ -59,10 +59,18 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const rail=<aside className={"ovg-chat-rail"+(open?" open":"")} aria-label="Chat">
   <nav className="ovg-rail" aria-label="Phòng chat">
    <button type="button" className={"ovg-rail-room project"+(open&&!room?" active":"")} title="Phòng dự án · mọi thành viên" onClick={()=>pick("")}>#{unread[""]?<b className="ovg-chat-badge">{unread[""]}</b>:null}</button>
+   <button type="button" className={"ovg-rail-room add"+(people?" active":"")} title="Nhắn tin mới · tìm người, tạo nhóm" onClick={()=>{setPeople(v=>!v);setWho("")}}>＋</button>
    <span className="ovg-rail-sep"/>
    {members.slice(0,20).map(m=><button type="button" key={m.id} className={"ovg-rail-room"+(open&&room===m.id?" active":"")} style={{background:color(m.id)}} title={m.display_name+(online.has(m.id)?" · đang trực tuyến":"")+" · nhắn riêng"} onClick={()=>pick(m.id)}>{initials(m.display_name)}{online.has(m.id)&&<i className="online"/>}{unread[m.id]?<b className="ovg-chat-badge">{unread[m.id]}</b>:null}</button>)}
   </nav>
-  {open&&<section className="ovg-chat-pane">
+  {people&&<section className="ovg-chat-pane ovg-people">
+   <header><b>Nhắn tin mới</b><small>Người trong dự án có quyền sửa</small><button type="button" aria-label="Đóng" onClick={()=>setPeople(false)}>×</button></header>
+   <div className="ovg-people-search"><input autoFocus value={who} onChange={e=>setWho(e.target.value)} placeholder="Tìm theo tên…" aria-label="Tìm người"/></div>
+   <div className="ovg-chat-msgs">{members.filter(m=>m.display_name.toLocaleLowerCase("vi").includes(who.toLocaleLowerCase("vi"))).map(m=><button type="button" key={m.id} className="ovg-person" onClick={()=>{setPeople(false);pick(m.id)}}><span className="av" style={{background:color(m.id)}}>{initials(m.display_name)}</span><span><b>{m.display_name}</b><small>{online.has(m.id)?"Đang trực tuyến":"Nhắn riêng"}</small></span></button>)}
+    {!members.length&&<p className="ovg-live-empty">Dự án chưa có ai khác. Mời người vào tổ chức và cấp quyền sửa dự án (Phân quyền) để nhắn riêng.</p>}
+    <div className="ovg-people-soon"><b>＋ Tạo nhóm chat</b><b>🔍 Tìm người ngoài dự án · kết bạn</b><small>Đang làm ở bước 3 (cần máy chủ): nhóm riêng nhiều người, phòng theo tổ chức, danh bạ và lời mời kết bạn.</small></div>
+   </div></section>}
+  {open&&!people&&<section className="ovg-chat-pane">
    <header><b>{room?"":"# "}{roomName}</b><small>{room?(online.has(room)?"Đang trực tuyến":"Nhắn riêng · chỉ hai người thấy"):members.length+1+" thành viên · tin cũng chạy trên bản đồ"}</small><button type="button" aria-label="Thu gọn chat" onClick={()=>pick(room)}>×</button></header>
    <div className="ovg-chat-msgs" ref={listRef} aria-live="polite">{shown.length?shown.map(m=>{const mine=m.author_id===accountId,rs=reactions.get(m.id);return <div key={m.id} className={"ovg-live-msg"+(mine?" mine":"")+(onlyEmoji(m.body)?" only-emoji":"")}>{!mine&&<span className="av" style={{background:color(m.author_id)}}>{initials(m.author_name)}</span>}<div className="ovg-live-bubble"><p>{!mine&&!room&&<b style={{color:color(m.author_id)}}>{m.author_name}</b>}{m.body}<time>{time(m.created_at)}</time></p>{rs&&<span className="ovg-live-reacts" title={[...rs].map(([e,who])=>e+" "+who.join(", ")).join(" · ")}>{[...rs].map(([e,who])=><span key={e}>{e}{who.length>1?who.length:""}</span>)}</span>}{canWrite&&<span className="ovg-live-reactbar" role="group" aria-label="Thả cảm xúc">{REACTIONS.map(e=><button type="button" key={e} aria-label={"Thả "+e} onClick={()=>void send("⟦react:"+m.id+":"+e+"⟧")}>{e}</button>)}</span>}</div></div>}):<p className="ovg-live-empty">{room?"Bắt đầu cuộc trò chuyện với "+roomName+".":"Chưa có tin nhắn. Bấm / trên bản đồ để nhắn cạnh con trỏ."}</p>}</div>
    {canWrite?<form className="ovg-live-input" onSubmit={e=>{e.preventDefault();submit(draft)}}><div className="ovg-live-quick">{["👍","✅","❓","👀","🔥"].map(q=><button type="button" key={q} onClick={()=>submit(q)} aria-label={"Gửi "+q}>{q}</button>)}</div><input value={draft} maxLength={4000} placeholder={room?"Nhắn riêng cho "+roomName+"…":"Nhắn cho cả dự án…"} onChange={e=>setDraft(e.target.value)}/><button type="submit" className="send" disabled={!draft.trim()} aria-label="Gửi">➤</button></form>:<p className="ovg-live-empty">Bạn chỉ có quyền xem.</p>}

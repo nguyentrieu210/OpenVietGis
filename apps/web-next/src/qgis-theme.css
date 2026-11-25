@@ -651,3 +651,14 @@
 .ovg-danmaku-line{background:#0d1720cc;border:1px solid #ffffff2b;padding:3px 12px 3px 4px;font-size:14px}
 .ovg-danmaku-line b{color:#fff!important;filter:none!important;opacity:.85;font-weight:700}
 .ovg-danmaku-line .av{width:24px;height:24px;font-size:10px}
+
+/* New conversation: people search */
+.ovg-rail-room.add{background:#ffffff1a;font-size:18px;font-weight:400}
+.ovg-people-search{padding:8px 10px;border-bottom:1px solid #ffffff14}
+.ovg-people-search input{width:100%;box-sizing:border-box;height:32px;padding:0 12px;border-radius:16px;border:1px solid #ffffff2b;background:#ffffff12;color:#fff;font-size:13px;outline:none}
+.ovg-person{display:flex;align-items:center;gap:10px;width:100%;padding:8px;border:0;border-radius:10px;background:none;color:#eef4f8;text-align:left;cursor:pointer}
+.ovg-person:hover{background:#ffffff14}
+.ovg-person .av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;color:#fff;flex:none}
+.ovg-person b{display:block;font-size:13.5px}.ovg-person small{color:#9fb0bc;font-size:11.5px}
+.ovg-people-soon{margin-top:auto;display:grid;gap:4px;padding:10px;border:1px dashed #ffffff33;border-radius:10px;color:#9fb0bc}
+.ovg-people-soon b{font-size:12.5px;color:#cbd5e1;font-weight:600}.ovg-people-soon small{font-size:11.5px;line-height:1.4}
