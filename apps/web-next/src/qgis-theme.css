@@ -252,3 +252,16 @@
 .qgis-studio .dsm-form label{display:grid;gap:4px;font-size:12px}
 .qgis-studio .dsm-actions{display:flex;justify-content:flex-end;gap:6px;padding-top:8px;border-top:1px solid var(--ovg-line)}
 .ovg-hotkey-menu button{text-align:left!important;justify-content:flex-start!important}
+
+/* "Tìm công cụ" like the QGIS locator: compact one-line results, no big header, limited height */
+.core-ribbon-menu-fixed:not(.is-dropdown){width:420px!important;max-height:min(440px,calc(100vh - 120px))!important;padding:0!important;border-radius:4px!important;display:flex;flex-direction:column}
+.core-ribbon-menu-fixed:not(.is-dropdown)>header{display:none!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search{padding:6px!important;border-bottom:1px solid #d5dde2;display:flex;align-items:center;gap:8px}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search input{flex:1;min-height:26px!important;padding:2px 8px!important;font-size:12.5px!important;border-radius:3px!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-search small{white-space:nowrap;font-size:11px;color:#6b7a83}
+.core-ribbon-menu-fixed:not(.is-dropdown) button{padding:3px 8px!important;min-height:0!important;border-radius:0!important;font-size:12.5px!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command{display:flex!important;flex-direction:row!important;align-items:baseline;gap:8px;min-width:0;flex:1}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command small{margin-left:auto;color:#7a8a93;font-size:11px;white-space:nowrap}
+.core-ribbon-menu-fixed:not(.is-dropdown) code{font-size:10.5px!important;padding:0 4px!important;min-width:0!important;background:none!important;border:0!important;color:#8a99a2!important}
+.core-ribbon-menu-fixed:not(.is-dropdown) button:hover:not(:disabled),.core-ribbon-menu-fixed:not(.is-dropdown) button:focus-visible{background:#e3eef8!important}
