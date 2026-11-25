@@ -33,7 +33,7 @@ from openvietgis_api.adapters.formats.geopackage import (
     parse_geopackage_member,
     write_geopackage,
 )
-from openvietgis_api.adapters.formats.postgis_sql import write_postgis_sql
+from openvietgis_api.adapters.formats.postgis_sql import ascii_fold, write_postgis_sql
 from openvietgis_api.adapters.http.authorization import context_for
 from openvietgis_api.adapters.http.security import (
     AuthenticatedRequest,
@@ -244,7 +244,7 @@ def _source_allowed(
 
 
 def _safe_filename_slug(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9_-]+", "-", name.strip().lower()).strip("-_")
+    slug = re.sub(r"[^a-z0-9_-]+", "-", ascii_fold(name).strip().lower()).strip("-_")
     if not slug:
         return "layer"
     return slug[:64]

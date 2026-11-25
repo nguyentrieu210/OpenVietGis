@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -34,8 +35,14 @@ _TABLE_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{0,59}$")
 _RESERVED_COLUMNS = frozenset({"fid", "ovg_feature_id", "geom"})
 
 
+def ascii_fold(text: str) -> str:
+    """Drop Vietnamese diacritics ("Bình Hưng" -> "Binh Hung") before ASCII slugging."""
+    decomposed = unicodedata.normalize("NFKD", text.replace("đ", "d").replace("Đ", "D"))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def _sanitize_table_name(layer_name: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9_]+", "_", layer_name.strip().lower()).strip("_")
+    cleaned = re.sub(r"[^a-z0-9_]+", "_", ascii_fold(layer_name).strip().lower()).strip("_")
     if not cleaned or not (cleaned[0].isascii() and cleaned[0].isalpha()):
         cleaned = f"layer_{cleaned or 'export'}"
     cleaned = cleaned[:60]

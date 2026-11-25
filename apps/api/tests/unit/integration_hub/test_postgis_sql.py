@@ -222,3 +222,13 @@ def test_write_postgis_sql_rejects_mismatched_feature_geometry() -> None:
                 )
             ],
         )
+
+
+def test_vietnamese_layer_names_fold_to_readable_ascii() -> None:
+    from openvietgis_api.adapters.formats.postgis_sql import _sanitize_table_name, ascii_fold
+    from openvietgis_api.adapters.http.integration_hub import _safe_filename_slug
+
+    name = "Bình Hưng · Tuyến cần đối soát quan hệ địa chỉ"
+    assert ascii_fold("Đường Ấp ơ ư") == "Duong Ap o u"
+    assert _safe_filename_slug(name) == "binh-hung-tuyen-can-doi-soat-quan-he-dia-chi"
+    assert _sanitize_table_name(name) == "binh_hung_tuyen_can_doi_soat_quan_he_dia_chi"
