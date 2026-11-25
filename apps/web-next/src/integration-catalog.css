@@ -1951,3 +1951,25 @@
   min-width: 0;
   max-width: 100%;
 }
+
+/* 052: chọn nhiều lớp và tải hàng loạt ngay dưới phần kết nối plugin. */
+.integration-batch-export { border: 1px solid #e0e8ef; border-radius: 12px; background: #fff; padding: 14px 16px; margin-block: 12px; }
+.integration-batch-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.integration-batch-head h3 { margin: 0; margin-inline-end: auto; font-size: 15px; }
+.integration-batch-head label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.integration-batch-head select { min-block-size: 36px; padding-inline: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font: inherit; }
+.integration-batch-export input[type="checkbox"] { accent-color: #1d4ed8; inline-size: 1.15em; aspect-ratio: 1; margin: 0; cursor: pointer; }
+.integration-batch-download { min-block-size: 36px; padding: 6px 14px; border-radius: 8px; border: 1px solid #1e40af; background: #1d4ed8; color: #fff; font-weight: 700; cursor: pointer; }
+.integration-batch-download:hover:not(:disabled) { background: #1e40af; }
+.integration-batch-download:disabled { opacity: .55; cursor: not-allowed; }
+.integration-batch-download:focus-visible, .integration-batch-head select:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.integration-batch-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 6px; max-block-size: 260px; overflow-y: auto; }
+.integration-batch-list label { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid #e5eaf0; border-radius: 8px; cursor: pointer; min-block-size: 44px; }
+.integration-batch-list label:has(input:checked) { border-color: #93c5fd; background: #eff6ff; }
+.integration-batch-list label.is-blocked { cursor: not-allowed; opacity: .6; }
+.integration-batch-list span { display: grid; gap: 2px; min-inline-size: 0; }
+.integration-batch-list strong { font-size: 13px; overflow-wrap: anywhere; }
+.integration-batch-list small { font-size: 12px; color: #64748b; }
+.integration-batch-result { margin-block-start: 10px; font-size: 13px; color: #166534; }
+.integration-batch-result.has-errors { color: #b91c1c; }
+.integration-batch-result p, .integration-batch-result ul { margin: 0; }

@@ -277,6 +277,117 @@ function triggerBrowserBlobDownload(blob: Blob, filename: string): void {
   }
 }
 
+const BATCH_FORMATS: Record<IntegrationExportAdapterKey, IntegrationExportFormat[]> = {
+  qgis: ["geopackage", "geojson"],
+  postgis: ["postgis_sql", "geopackage"],
+  autocad: ["dxf"]
+};
+
+// Same eligibility rules as the per-layer export buttons below.
+function batchBlockReason(layer: AdapterLayerDescriptor, format: IntegrationExportFormat): string | null {
+  if (!layer.export_permitted) return "Không được phép xuất";
+  if (format === "dxf" && !isAutocadMetricCrs(layer.stored_crs_code)) return "DXF cần hệ tọa độ phẳng mét (EPSG:5899/3857)";
+  if (format === "geojson" && layer.stored_crs_code !== 4326) return "GeoJSON cần EPSG:4326";
+  return null;
+}
+
+// shortcut: one file per layer (browser may ask once to allow multiple downloads); bundle into one GPKG/DXF/zip needs a server endpoint if users ask.
+function BatchExport({ client, org, projectId, adapterKey, layers }: IntegrationCatalogProps & { adapterKey: IntegrationExportAdapterKey; layers: AdapterLayerDescriptor[] }) {
+  const formats = BATCH_FORMATS[adapterKey];
+  const [format, setFormat] = useState<IntegrationExportFormat>(formats[0]!);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [progress, setProgress] = useState<string | null>(null);
+  const [result, setResult] = useState<{ ok: number; failed: string[] } | null>(null);
+  const run = useRef(0);
+  useEffect(() => () => { run.current++; }, []);
+  const eligible = layers.filter((layer) => !batchBlockReason(layer, format));
+  const chosen = eligible.filter((layer) => selected.has(layer.layer_id));
+  const busy = progress !== null;
+
+  const start = async () => {
+    const id = ++run.current;
+    const failed: string[] = [];
+    let ok = 0;
+    setResult(null);
+    for (const [index, layer] of chosen.entries()) {
+      setProgress(`Đang tải ${index + 1}/${chosen.length}: ${layer.name}`);
+      try {
+        const file = await downloadIntegrationLayerExport(client, org, projectId, adapterKey, layer.layer_id, format);
+        if (run.current !== id) return;
+        triggerBrowserBlobDownload(file.blob, file.filename);
+        ok++;
+      } catch (exportError: unknown) {
+        if (run.current !== id) return;
+        failed.push(formatExportErrorMessage(layer.name, exportError));
+      }
+    }
+    setProgress(null);
+    setResult({ ok, failed });
+  };
+
+  return (
+    <section className="integration-batch-export" aria-label="Xuất dữ liệu">
+      <div className="integration-batch-head">
+        <h3>Xuất dữ liệu</h3>
+        <label>
+          Định dạng{" "}
+          <select value={format} disabled={busy} onChange={(event) => setFormat(event.target.value as IntegrationExportFormat)}>
+            {formats.map((option) => <option key={option} value={option}>{EXPORT_FORMAT_LABELS[option]}</option>)}
+          </select>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={eligible.length > 0 && chosen.length === eligible.length}
+            disabled={busy || eligible.length === 0}
+            onChange={(event) => setSelected(new Set(event.target.checked ? eligible.map((layer) => layer.layer_id) : []))}
+          />{" "}
+          Chọn tất cả ({eligible.length})
+        </label>
+        <button type="button" className="integration-batch-download" disabled={busy || chosen.length === 0} onClick={() => { void start(); }}>
+          {busy ? "Đang tải…" : `⬇ Tải ${chosen.length} lớp`}
+        </button>
+      </div>
+      {layers.length === 0 ? (
+        <p className="integration-profile-empty">Không có lớp dữ liệu nào trong phạm vi quyền hiện tại.</p>
+      ) : (
+        <ul className="integration-batch-list">
+          {layers.map((layer) => {
+            const reason = batchBlockReason(layer, format);
+            return (
+              <li key={layer.layer_id}>
+                <label className={reason ? "is-blocked" : undefined}>
+                  <input
+                    type="checkbox"
+                    disabled={busy || reason !== null}
+                    checked={reason === null && selected.has(layer.layer_id)}
+                    onChange={(event) => setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (event.target.checked) next.add(layer.layer_id); else next.delete(layer.layer_id);
+                      return next;
+                    })}
+                  />
+                  <span>
+                    <strong>{layer.name}</strong>
+                    <small>{reason ?? formatLayerCrs(layer)}</small>
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {progress && <p className="integration-profile-status" role="status">{progress}</p>}
+      {result && (
+        <div role="status" className={result.failed.length ? "integration-batch-result has-errors" : "integration-batch-result"}>
+          <p>Đã tải {result.ok} lớp{result.failed.length ? `, lỗi ${result.failed.length} lớp:` : "."}</p>
+          {result.failed.length > 0 && <ul>{result.failed.map((message) => <li key={message}>{message}</li>)}</ul>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function IntegrationCatalog({
   client,
   org,
@@ -872,6 +983,17 @@ export function IntegrationCatalog({
                           <div className="integration-profile-body">
                             {adapter.key === "qgis" && (
                               <QgisBindingManager client={client} org={org} projectId={projectId} />
+                            )}
+
+                            {exportAdapterKey && adapter.lifecycle === "existing_read_only" && (
+                              <BatchExport
+                                key={`${projectId}:${exportAdapterKey}`}
+                                client={client}
+                                org={org}
+                                projectId={projectId}
+                                adapterKey={exportAdapterKey}
+                                layers={profile.layers}
+                              />
                             )}
 
                             <details className="integration-export-disclosure" open={adapter.key !== "qgis"}>
