@@ -19,11 +19,13 @@ from openvietgis_api.module_sdk import (
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, field_validator
 from sqlalchemy.orm import Session
 
+from modules.house_numbering import survey_signoff
 from modules.house_numbering.address_prefix import canonical_prefix
 from modules.house_numbering.application import HouseNumberingService
 from modules.house_numbering.documents import HouseNumberingDocumentService
 from modules.house_numbering.exports import HouseNumberingExportService
 from modules.house_numbering.imports import HouseNumberingImporter
+from modules.house_numbering.persistence import HouseNumberingRepository
 from modules.house_numbering.privacy import HouseNumberingPrivateData
 from modules.house_numbering.progress import build_progress_xlsx
 from modules.house_numbering.proposal_packet import HouseNumberingProposalPacket
@@ -1566,3 +1568,57 @@ def read_private_households(
         session, _ctx(organization_id, project_id, auth)
     ).read_for_building(building_id, purpose=purpose)
     return {"items": items}
+
+
+class SurveySignoffCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_id: UUID
+    ap: str = Field(min_length=1, max_length=200)
+    ten_duong: str | None = Field(default=None, min_length=1, max_length=300)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class SurveySignoffRevoke(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+def _repo(organization_id: UUID, project_id: UUID, auth: AuthenticatedRequest, session: Session) -> HouseNumberingRepository:
+    return HouseNumberingRepository(session, _ctx(organization_id, project_id, auth))
+
+
+@router.get(f"{_PROJ}/survey-signoffs")
+def list_survey_signoffs(
+    organization_id: UUID,
+    project_id: UUID,
+    source_id: Annotated[UUID, Query()],
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, object]:
+    return {"items": survey_signoff.list_signoffs(_repo(organization_id, project_id, auth, session), source_id)}
+
+
+@router.post(f"{_PROJ}/survey-signoffs", status_code=201)
+def sign_survey_scope(
+    organization_id: UUID,
+    project_id: UUID,
+    body: SurveySignoffCreate,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, object]:
+    return survey_signoff.sign(
+        _repo(organization_id, project_id, auth, session),
+        body.source_id, body.ap.strip(), body.ten_duong.strip() if body.ten_duong else None, body.note,
+    )
+
+
+@router.post(f"{_PROJ}/survey-signoffs/{{signoff_id}}/revoke")
+def revoke_survey_signoff(
+    organization_id: UUID,
+    project_id: UUID,
+    signoff_id: UUID,
+    body: SurveySignoffRevoke,
+    auth: Annotated[AuthenticatedRequest, Depends(require_csrf)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, object]:
+    return survey_signoff.revoke(_repo(organization_id, project_id, auth, session), signoff_id, body.reason.strip())
