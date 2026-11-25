@@ -434,6 +434,32 @@ def test_layer_and_change_revision_evidence_is_safe_and_immutable() -> None:
 
 
 @pytest.mark.parametrize(
+    "operation", [CatalogOperation.EDIT_FEATURES, CatalogOperation.PROCESSING_PUBLISH]
+)
+def test_source_content_operations_are_valid_catalog_history(operation: CatalogOperation) -> None:
+    next_content = "d" * 64
+    change = CatalogChange(
+        id=uuid4(),
+        organization_id=ORG,
+        project_id=PROJECT,
+        resource_type=ResourceType.DATA_SOURCE,
+        resource_id=SOURCE,
+        source_id=SOURCE,
+        layer_id=None,
+        actor_type=ActorType.HUMAN,
+        actor_id=uuid4(),
+        actor_display_snapshot="GIS actor",
+        operation=operation,
+        created_at=AT,
+        audit_event_id=uuid4(),
+        prior_revision=SourceRevision(1, CONTENT, SCHEMA),
+        new_revision=SourceRevision(2, next_content, SCHEMA),
+        changes=(ChangedValue("content_revision", CONTENT, next_content),),
+    )
+    assert change.operation is operation
+
+
+@pytest.mark.parametrize(
     ("geometry", "expected"),
     [
         (NativeGeometry("Point", (1, 2), 4326), "POINT (1.0 2.0)"),

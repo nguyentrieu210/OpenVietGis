@@ -1130,6 +1130,9 @@ mod tests {
             &json!({"b": [1, 2.5, null], "a": "Đất \"x\"\n😀\u{7f}"}),
             &mut out,
         );
-        assert_eq!(out, r#"{"a":"Đất \"x\"\n😀\u007f","b":[1,2.5,null]}"#);
+        assert_eq!(
+            out,
+            r#"{"a":"\u0110\u1ea5t \"x\"\n\ud83d\ude00\u007f","b":[1,2.5,null]}"#
+        );
     }
 }
