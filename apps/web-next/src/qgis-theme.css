@@ -512,3 +512,14 @@
 .ovg-live-chat .ovg-live-reactbar{top:-30px}
 .ovg-live-chat .ovg-live-msg.mine .ovg-live-reactbar{right:0;left:auto}
 .ovg-live-chat .ovg-live-msg:not(.mine) .ovg-live-reactbar{left:0;right:auto}
+
+/* Task reminders */
+.ovg-reminder{position:relative}
+.ovg-reminder-toast{position:fixed;right:16px;top:64px;z-index:4200;width:300px;padding:12px 14px;border-radius:12px;background:#0d1720eb;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #ffffff24;box-shadow:0 16px 36px #0007;color:#eef4f8;font-size:13px;animation:ovg-bubble .2s ease-out}
+.ovg-reminder-toast>b{display:block;margin-bottom:6px}
+.ovg-reminder-toast p{display:flex;justify-content:space-between;gap:8px;margin:4px 0}
+.ovg-reminder-toast p span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ovg-reminder-toast small{flex:none;color:#fbbf24}.ovg-reminder-toast small.late{color:#f87171}
+.ovg-reminder-toast div{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+.ovg-reminder-toast button{padding:4px 10px;border-radius:6px;border:1px solid #ffffff2b;background:#ffffff14;color:#fff;cursor:pointer}
+.ovg-reminder-toast button:first-child{background:#2b7bd0;border-color:#2b7bd0}
