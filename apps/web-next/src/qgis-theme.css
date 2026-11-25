@@ -265,3 +265,13 @@
 .core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command small{margin-left:auto;color:#7a8a93;font-size:11px;white-space:nowrap}
 .core-ribbon-menu-fixed:not(.is-dropdown) code{font-size:10.5px!important;padding:0 4px!important;min-width:0!important;background:none!important;border:0!important;color:#8a99a2!important}
 .core-ribbon-menu-fixed:not(.is-dropdown) button:hover:not(:disabled),.core-ribbon-menu-fixed:not(.is-dropdown) button:focus-visible{background:#e3eef8!important}
+
+/* Collaboration: avatars in the header, editor dots on layer rows, "đang sửa" tags on the map */
+.ovg-avatars{display:inline-flex;align-items:center;gap:0;margin-right:6px}
+.ovg-avatar{width:28px;height:28px;margin-left:-6px;border-radius:50%;border:2px solid #fff!important;background:var(--peer-color,#64748b)!important;color:#fff!important;font-size:11px;font-weight:700;display:grid;place-items:center;padding:0!important;cursor:pointer;box-shadow:0 1px 3px #0003}
+.ovg-avatar:first-child{margin-left:0}.ovg-avatar[aria-pressed=true]{outline:2px solid #fff;outline-offset:1px}
+.ovg-avatar.more{background:#475569!important;cursor:default}
+.ovg-presence-toggle{margin-left:4px;width:22px;height:22px;padding:0!important;border-radius:50%;border:1px solid #ffffff55!important;background:transparent!important;color:#4ade80!important;font-size:12px;cursor:pointer}
+.ovg-presence-toggle[aria-pressed=false]{color:#cbd5e1!important}
+.qgis-studio .ovg-editor-dot{flex:none;width:9px;height:9px;margin:0 2px;border-radius:50%;background:var(--peer-color);box-shadow:0 0 0 2px #fff}
+.ovg-lease-tag{pointer-events:none;white-space:nowrap;font-size:11.5px;font-weight:600;color:#fff;background:var(--peer-color);padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px #0004}
