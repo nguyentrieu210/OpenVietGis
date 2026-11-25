@@ -196,11 +196,12 @@ pub async fn get_avatar(
     session: &VerifiedSession,
 ) -> Result<Option<String>, AppError> {
     let mut tx = begin_self_read(pool, session).await?;
-    let avatar = sqlx::query_scalar("SELECT data_url FROM identity.user_avatars WHERE user_id = $1")
-        .bind(session.user_id())
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_error)?;
+    let avatar =
+        sqlx::query_scalar("SELECT data_url FROM identity.user_avatars WHERE user_id = $1")
+            .bind(session.user_id())
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
     tx.commit().await.map_err(db_error)?;
     Ok(avatar)
 }

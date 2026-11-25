@@ -65,7 +65,10 @@ impl IntoResponse for IdentityError {
 impl FromRequestParts<AppState> for HumanSession {
     type Rejection = IdentityError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let unauthorized = |detail| IdentityError::Http(StatusCode::UNAUTHORIZED, detail);
 
         // The reference API gives bearer credentials precedence. These self routes
@@ -128,9 +131,7 @@ pub(crate) fn router() -> Router<AppState> {
 
 type PrivateJson<T> = ([(header::HeaderName, &'static str); 1], Json<T>);
 
-async fn bootstrap_status(
-    State(state): State<AppState>,
-) -> Result<Json<Value>, IdentityError> {
+async fn bootstrap_status(State(state): State<AppState>) -> Result<Json<Value>, IdentityError> {
     let initialized = identity::installation_initialized(database(&state)?).await?;
     Ok(Json(json!({ "initialized": initialized })))
 }
@@ -162,7 +163,10 @@ async fn get_organization(
             .await?
             .into_iter()
             .next()
-            .ok_or(IdentityError::Http(StatusCode::NOT_FOUND, "organization not found"))?;
+            .ok_or(IdentityError::Http(
+                StatusCode::NOT_FOUND,
+                "organization not found",
+            ))?;
     if member.organization.status != "active" && member.role != "owner" {
         return Err(IdentityError::Http(
             StatusCode::FORBIDDEN,
@@ -209,7 +213,9 @@ async fn get_csrf(
             StatusCode::SERVICE_UNAVAILABLE,
             "CSRF session unavailable",
         ))?;
-    Ok(Json(json!({ "token": make_csrf_token(&session.token, secret)? })))
+    Ok(Json(
+        json!({ "token": make_csrf_token(&session.token, secret)? }),
+    ))
 }
 
 fn make_csrf_token(session_token: &str, secret: &str) -> Result<String, AppError> {

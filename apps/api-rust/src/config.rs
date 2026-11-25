@@ -42,15 +42,15 @@ impl AppConfig {
     #[must_use]
     pub fn from_env() -> Self {
         let mut cfg = Self::default();
-        if let Ok(addr) = std::env::var("OPENVIETGIS_BIND_ADDR")
-            .or_else(|_| std::env::var("OVG_BIND_ADDR"))
+        if let Ok(addr) =
+            std::env::var("OPENVIETGIS_BIND_ADDR").or_else(|_| std::env::var("OVG_BIND_ADDR"))
         {
             if let Ok(parsed) = addr.parse() {
                 cfg.bind_addr = parsed;
             }
         }
-        if let Ok(url) = std::env::var("OPENVIETGIS_DATABASE_URL")
-            .or_else(|_| std::env::var("DATABASE_URL"))
+        if let Ok(url) =
+            std::env::var("OPENVIETGIS_DATABASE_URL").or_else(|_| std::env::var("DATABASE_URL"))
         {
             let trimmed = url.trim();
             if !trimmed.is_empty() {

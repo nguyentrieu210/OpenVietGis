@@ -231,7 +231,6 @@ pub fn lookup_readable_crs(code: u32) -> Option<&'static CrsProfile> {
     lookup_crs(code).filter(|p| p.disposition == CrsDisposition::Readable)
 }
 
-
 impl CrsProfile {
     fn coordinate_wire(&self) -> Value {
         json!({
@@ -246,10 +245,7 @@ impl CrsProfile {
 
     fn profile_wire(&self) -> Value {
         let (native_axes, projection_parameters) = match self.projection {
-            ProjectionKind::Geographic => (
-                [CrsAxis::Latitude, CrsAxis::Longitude],
-                json!({}),
-            ),
+            ProjectionKind::Geographic => ([CrsAxis::Latitude, CrsAxis::Longitude], json!({})),
             ProjectionKind::WebMercator { sphere_radius } => (
                 [CrsAxis::Easting, CrsAxis::Northing],
                 json!({
@@ -510,7 +506,10 @@ mod tests {
         assert_eq!(wire["organization_id"], organization_id.to_string());
         assert_eq!(wire["project_id"], project_id.to_string());
         let profiles = wire["profiles"].as_array().unwrap();
-        let codes: Vec<_> = profiles.iter().map(|profile| profile["code"].as_u64().unwrap()).collect();
+        let codes: Vec<_> = profiles
+            .iter()
+            .map(|profile| profile["code"].as_u64().unwrap())
+            .collect();
         assert_eq!(codes, [4326, 3857, 4756, 5899, 3405, 3406]);
         assert_eq!(profiles[0]["native_axes"], json!(["latitude", "longitude"]));
         assert_eq!(profiles[4]["disposition"], "definition_only");

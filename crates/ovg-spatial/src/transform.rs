@@ -123,10 +123,10 @@ fn transform(
         ));
     }
 
-    let src = lookup_readable_crs(source_epsg)
-        .ok_or_else(|| AppError::unsupported_crs(source_epsg))?;
-    let dst = lookup_readable_crs(target_epsg)
-        .ok_or_else(|| AppError::unsupported_crs(target_epsg))?;
+    let src =
+        lookup_readable_crs(source_epsg).ok_or_else(|| AppError::unsupported_crs(source_epsg))?;
+    let dst =
+        lookup_readable_crs(target_epsg).ok_or_else(|| AppError::unsupported_crs(target_epsg))?;
 
     if source_epsg == target_epsg {
         validate_profile_bounds(src.code, coord)?;
@@ -199,7 +199,10 @@ fn transform(
     }
 }
 
-fn validate_operation_area(profile: &TransformationProfile, coord: Coord2D) -> Result<(), AppError> {
+fn validate_operation_area(
+    profile: &TransformationProfile,
+    coord: Coord2D,
+) -> Result<(), AppError> {
     if !profile.geographic_bounds.contains(coord.x, coord.y, 0.0) {
         return Err(AppError::transformation_out_of_area(
             "Coordinate lies outside the verified operation area.",
@@ -505,12 +508,20 @@ mod tests {
         let kernel = PortableTransformKernel::new();
         let inside = Coord2D::new(107.165, 20.715);
         assert_eq!(
-            kernel.transform_point(4326, 5899, inside).unwrap_err().code(),
+            kernel
+                .transform_point(4326, 5899, inside)
+                .unwrap_err()
+                .code(),
             "TRANSFORMATION_OUT_OF_AREA"
         );
         assert_eq!(
             kernel
-                .transform_reference_point(4326, 5899, inside, VerifiedReferenceProvenance::QuangNinh)
+                .transform_reference_point(
+                    4326,
+                    5899,
+                    inside,
+                    VerifiedReferenceProvenance::QuangNinh
+                )
                 .unwrap_err()
                 .code(),
             "TRANSFORMATION_OUT_OF_AREA"
@@ -542,14 +553,20 @@ mod tests {
             let next_latitude = f64::from_bits(WEB_MERCATOR_MAX_LATITUDE.to_bits() + 1);
             let invalid = Coord2D::new(0.0, sign * next_latitude);
             assert_eq!(
-                kernel.transform_point(4326, 3857, invalid).unwrap_err().code(),
+                kernel
+                    .transform_point(4326, 3857, invalid)
+                    .unwrap_err()
+                    .code(),
                 "TRANSFORMATION_OUT_OF_AREA"
             );
 
             let next_easting = f64::from_bits(WEB_MERCATOR_MAX_COORDINATE_METRE.to_bits() + 1);
             let invalid = Coord2D::new(sign * next_easting, 0.0);
             assert_eq!(
-                kernel.transform_point(3857, 4326, invalid).unwrap_err().code(),
+                kernel
+                    .transform_point(3857, 4326, invalid)
+                    .unwrap_err()
+                    .code(),
                 "TRANSFORMATION_OUT_OF_AREA"
             );
         }

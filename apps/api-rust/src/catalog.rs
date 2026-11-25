@@ -22,8 +22,14 @@ pub fn router() -> Router<AppState> {
         .route(&format!("{PROJECT}/layers"), get(list_layers))
         .route(&format!("{PROJECT}/layers/{{layer_id}}"), get(get_layer))
         .route(&format!("{PROJECT}/spatial/sources"), get(list_sources))
-        .route(&format!("{PROJECT}/spatial/sources/{{source_id}}"), get(get_source))
-        .route(&format!("{PROJECT}/spatial/crs-profiles"), get(list_crs_profiles))
+        .route(
+            &format!("{PROJECT}/spatial/sources/{{source_id}}"),
+            get(get_source),
+        )
+        .route(
+            &format!("{PROJECT}/spatial/crs-profiles"),
+            get(list_crs_profiles),
+        )
 }
 
 #[derive(Deserialize)]
@@ -46,7 +52,11 @@ async fn list_layers(
     let Path((organization_id, project_id)) = path.map_err(|_| CatalogError::InvalidRequest)?;
     let Query(page) = page.map_err(|_| CatalogError::InvalidRequest)?;
     let mut read = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::LayerAcl,
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::LayerAcl,
     )
     .await?;
     let result = read.list_layers(page.after_id, page.limit).await?;
@@ -62,7 +72,11 @@ async fn get_layer(
     let Path((organization_id, project_id, layer_id)) =
         path.map_err(|_| CatalogError::InvalidRequest)?;
     let mut read = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::LayerAcl,
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::LayerAcl,
     )
     .await?;
     let result = read.get_layer(layer_id).await?;
@@ -79,7 +93,11 @@ async fn list_sources(
     let Path((organization_id, project_id)) = path.map_err(|_| CatalogError::InvalidRequest)?;
     let Query(page) = page.map_err(|_| CatalogError::InvalidRequest)?;
     let mut read = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::Unrestricted,
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
     )
     .await?;
     let result = read.list_sources(page.after_id, page.limit).await?;
@@ -95,7 +113,11 @@ async fn get_source(
     let Path((organization_id, project_id, source_id)) =
         path.map_err(|_| CatalogError::InvalidRequest)?;
     let mut read = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::Unrestricted,
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
     )
     .await?;
     let result = read.get_source(source_id).await?;
@@ -110,7 +132,11 @@ async fn list_crs_profiles(
 ) -> Result<Json<Value>, CatalogError> {
     let Path((organization_id, project_id)) = path.map_err(|_| CatalogError::InvalidRequest)?;
     let read = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::Unrestricted,
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
     )
     .await?;
     let result = reference_registry_wire(organization_id, project_id);
@@ -128,9 +154,16 @@ async fn project_read<'a>(
     let pool = state.db_pool.as_ref().ok_or_else(|| {
         AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable")
     })?;
-    ProjectRead::begin(pool, organization_id, project_id, auth.actor_id(), auth.session_id(), policy)
-        .await
-        .map_err(Into::into)
+    ProjectRead::begin(
+        pool,
+        organization_id,
+        project_id,
+        auth.actor_id(),
+        auth.session_id(),
+        policy,
+    )
+    .await
+    .map_err(Into::into)
 }
 
 enum CatalogError {

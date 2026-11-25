@@ -231,10 +231,7 @@ mod tests {
     #[test]
     fn rejects_buffer_parameters_without_coercion() {
         let cases = [
-            (
-                json!({"unexpected": 1}),
-                "unknown buffer parameter",
-            ),
+            (json!({"unexpected": 1}), "unknown buffer parameter"),
             (
                 json!({}),
                 "distance_meters must be a number between 0.1 and 500000",
@@ -304,7 +301,11 @@ mod tests {
         }
 
         let invalid_cases = [
-            (AlgorithmId::Clip, json!({"unexpected": 1}), "unknown clip parameter"),
+            (
+                AlgorithmId::Clip,
+                json!({"unexpected": 1}),
+                "unknown clip parameter",
+            ),
             (
                 AlgorithmId::Dissolve,
                 json!({"unexpected": 1}),

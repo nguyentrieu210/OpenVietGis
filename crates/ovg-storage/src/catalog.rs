@@ -71,7 +71,9 @@ impl<'a> ProjectRead<'a> {
         .await
         .map_err(db_error)?;
         if !safe_role {
-            return Err(AppError::internal("catalog requires the PostGIS runtime RLS role"));
+            return Err(AppError::internal(
+                "catalog requires the PostGIS runtime RLS role",
+            ));
         }
         tx.clear_project_context().await?;
 
@@ -111,14 +113,13 @@ impl<'a> ProjectRead<'a> {
             return Err(AppError::not_found("organization not found"));
         }
 
-        let org_status: String = sqlx::query_scalar(
-            "SELECT status FROM org.organizations WHERE id = $1 FOR SHARE",
-        )
-        .bind(organization_id)
-        .fetch_optional(&mut **tx.tx_mut())
-        .await
-        .map_err(db_error)?
-        .ok_or_else(|| AppError::not_found("organization not found"))?;
+        let org_status: String =
+            sqlx::query_scalar("SELECT status FROM org.organizations WHERE id = $1 FOR SHARE")
+                .bind(organization_id)
+                .fetch_optional(&mut **tx.tx_mut())
+                .await
+                .map_err(db_error)?
+                .ok_or_else(|| AppError::not_found("organization not found"))?;
 
         let project = sqlx::query_as::<_, (String, Option<Uuid>)>(
             "SELECT status, workspace_id FROM workspace.projects
@@ -181,7 +182,11 @@ impl<'a> ProjectRead<'a> {
             .execute(&mut **tx.tx_mut())
             .await
             .map_err(db_error)?;
-        Ok(Self { tx, project_id, gis_scoped })
+        Ok(Self {
+            tx,
+            project_id,
+            gis_scoped,
+        })
     }
 
     pub async fn list_layers(
@@ -354,7 +359,8 @@ impl<'a> ProjectRead<'a> {
                 field_type: field.try_get("type").map_err(db_error)?,
             });
         }
-        if schema_digest(&fields, &dimensions, &geometry_family, &schema_state)? != schema_revision {
+        if schema_digest(&fields, &dimensions, &geometry_family, &schema_state)? != schema_revision
+        {
             return Err(invalid_schema());
         }
 
@@ -366,8 +372,15 @@ impl<'a> ProjectRead<'a> {
         let count: Option<i64> = row.try_get("feature_count").map_err(db_error)?;
         let validation_state: &str = row.try_get("validation_state").map_err(db_error)?;
 
-        let render_supported = render_supported(kind, reference_key, stored_crs, &geometry_family,
-            &dimensions, count, extent.as_ref());
+        let render_supported = render_supported(
+            kind,
+            reference_key,
+            stored_crs,
+            &geometry_family,
+            &dimensions,
+            count,
+            extent.as_ref(),
+        );
         let wire = json!({
             "id": id,
             "organization_id": self.tx.organization_id(),
@@ -411,11 +424,7 @@ impl<'a> ProjectRead<'a> {
         })
     }
 
-    async fn layer_wire(
-        &mut self,
-        row: &PgRow,
-        record: &SourceRecord,
-    ) -> Result<Value, AppError> {
+    async fn layer_wire(&mut self, row: &PgRow, record: &SourceRecord) -> Result<Value, AppError> {
         let source_id: Uuid = row.try_get("source_id").map_err(db_error)?;
         let mut source = record.wire.clone();
         let mut actions = None;
@@ -490,7 +499,12 @@ struct SourceRecord {
 impl SourceRecord {
     fn capabilities(&self, actions: Option<&[String]>) -> Vec<Value> {
         let can_edit = actions.is_none_or(|actions| {
-            actions.iter().any(|action| matches!(action.as_str(), "create" | "geometry" | "attributes" | "delete"))
+            actions.iter().any(|action| {
+                matches!(
+                    action.as_str(),
+                    "create" | "geometry" | "attributes" | "delete"
+                )
+            })
         });
         [
             ("metadata_read", true, true, "project.read"),
@@ -500,7 +514,12 @@ impl SourceRecord {
             ("export", self.render_supported, self.ready, "project.read"),
             ("query", self.render_supported, self.ready, "project.read"),
             ("edit", self.edit_supported, self.ready, "project.edit"),
-            ("analysis", self.render_supported, self.ready, "project.edit"),
+            (
+                "analysis",
+                self.render_supported,
+                self.ready,
+                "project.edit",
+            ),
             ("offline", self.render_supported, self.ready, "project.read"),
         ]
         .into_iter()
@@ -544,7 +563,9 @@ fn schema_digest(
     let ordinals: HashSet<_> = fields.iter().map(|field| field.ordinal).collect();
     if fields.len() > 100
         || (schema_state == "unavailable" && !fields.is_empty())
-        || ordered.windows(2).any(|pair| pair[0].field_id == pair[1].field_id)
+        || ordered
+            .windows(2)
+            .any(|pair| pair[0].field_id == pair[1].field_id)
         || ordinals.len() != fields.len()
     {
         return Err(invalid_schema());
@@ -603,8 +624,10 @@ fn render_supported(
                 use ovg_core::crs::WEB_MERCATOR_MAX_LATITUDE;
                 min >= -WEB_MERCATOR_MAX_LATITUDE && min <= max && max <= WEB_MERCATOR_MAX_LATITUDE
             });
-    matches!(kind, "reference_fixture" | "imported_file" | "derived_processing" | "manual")
-        && matches!(geometry_family, "Point" | "LineString" | "Polygon")
+    matches!(
+        kind,
+        "reference_fixture" | "imported_file" | "derived_processing" | "manual"
+    ) && matches!(geometry_family, "Point" | "LineString" | "Polygon")
         && dimensions == "XY"
         && feature_count.is_some_and(|count| count <= 50_000)
         && matches!(crs, Some(4326 | 3857 | 4756 | 5899))
@@ -625,7 +648,8 @@ fn profile_wire(crs: Option<i32>) -> Result<Option<Value>, AppError> {
 fn extent_wire(extent: Option<Value>) -> Result<Option<Value>, AppError> {
     extent
         .map(|e| {
-            let reference = e.get("crs_code")
+            let reference = e
+                .get("crs_code")
                 .and_then(Value::as_u64)
                 .and_then(|code| u32::try_from(code).ok())
                 .and_then(reference_coordinate_wire)
@@ -655,7 +679,10 @@ fn timestamp(row: &PgRow, key: &str) -> Result<Option<String>, AppError> {
 
 fn page_size(limit: usize) -> Result<i64, AppError> {
     if !(1..=100).contains(&limit) {
-        return Err(AppError::validation("INVALID_CATALOG_PAGE", "invalid catalog limit"));
+        return Err(AppError::validation(
+            "INVALID_CATALOG_PAGE",
+            "invalid catalog limit",
+        ));
     }
     Ok(limit as i64 + 1)
 }

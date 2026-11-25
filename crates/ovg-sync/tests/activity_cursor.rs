@@ -2,7 +2,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use chrono::{DateTime, TimeDelta, Utc};
 use ovg_core::{ActorContext, ActorType, Permission, TenantScope};
-use ovg_sync::activity_cursor::{ActivityCursor, ActivityCursorScope, ActivityStream, CURSOR_MAX_LENGTH};
+use ovg_sync::activity_cursor::{
+    ActivityCursor, ActivityCursorScope, ActivityStream, CURSOR_MAX_LENGTH,
+};
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -69,7 +71,10 @@ fn reads_and_writes_python_reference_tokens() {
             id: fixture.row_id,
         };
         assert_eq!(cursor.encode(&scope).unwrap(), case.token);
-        assert_eq!(ActivityCursor::decode(&case.token, &scope, fixture.cutoff).unwrap(), cursor);
+        assert_eq!(
+            ActivityCursor::decode(&case.token, &scope, fixture.cutoff).unwrap(),
+            cursor
+        );
     }
 }
 
@@ -77,7 +82,10 @@ fn assert_invalid(token: &str, scope: &ActivityCursorScope, now: DateTime<Utc>) 
     let error = ActivityCursor::decode(token, scope, now).unwrap_err();
     assert_eq!(error.status_code(), 422);
     assert_eq!(error.code(), "INVALID_ACTIVITY_CURSOR");
-    assert_eq!(error.to_string(), "activity continuation unavailable; refresh the activity list");
+    assert_eq!(
+        error.to_string(),
+        "activity continuation unavailable; refresh the activity list"
+    );
 }
 
 #[test]
@@ -89,27 +97,57 @@ fn validates_actor_credential_tenant_and_time_window() {
     let cursor = ActivityCursor::decode(&case.token, &scope, fixture.cutoff).unwrap();
 
     let expiry = fixture.cutoff + TimeDelta::minutes(15);
-    assert_eq!(ActivityCursor::decode(&case.token, &scope, expiry).unwrap(), cursor);
+    assert_eq!(
+        ActivityCursor::decode(&case.token, &scope, expiry).unwrap(),
+        cursor
+    );
     assert_invalid(&case.token, &scope, expiry + TimeDelta::microseconds(1));
-    assert_invalid(&case.token, &scope, fixture.cutoff - TimeDelta::microseconds(1));
+    assert_invalid(
+        &case.token,
+        &scope,
+        fixture.cutoff - TimeDelta::microseconds(1),
+    );
 
     for foreign in [
-        TenantScope { organization_id: Uuid::new_v4(), ..tenant.clone() },
-        TenantScope { project_id: Some(Uuid::new_v4()), ..tenant.clone() },
         TenantScope {
-            actor: ActorContext { actor_id: Uuid::new_v4(), ..tenant.actor.clone() },
+            organization_id: Uuid::new_v4(),
             ..tenant.clone()
         },
         TenantScope {
-            actor: ActorContext { credential_id: Some(Uuid::new_v4()), ..tenant.actor.clone() },
+            project_id: Some(Uuid::new_v4()),
+            ..tenant.clone()
+        },
+        TenantScope {
+            actor: ActorContext {
+                actor_id: Uuid::new_v4(),
+                ..tenant.actor.clone()
+            },
+            ..tenant.clone()
+        },
+        TenantScope {
+            actor: ActorContext {
+                credential_id: Some(Uuid::new_v4()),
+                ..tenant.actor.clone()
+            },
             ..tenant.clone()
         },
     ] {
-        assert_invalid(&case.token, &ActivityCursorScope::from(&foreign), fixture.cutoff);
+        assert_invalid(
+            &case.token,
+            &ActivityCursorScope::from(&foreign),
+            fixture.cutoff,
+        );
     }
 
-    let after_cutoff = ActivityCursor { created_at: fixture.cutoff + TimeDelta::microseconds(1), ..cursor };
-    assert_invalid(&after_cutoff.encode(&scope).unwrap(), &scope, fixture.cutoff);
+    let after_cutoff = ActivityCursor {
+        created_at: fixture.cutoff + TimeDelta::microseconds(1),
+        ..cursor
+    };
+    assert_invalid(
+        &after_cutoff.encode(&scope).unwrap(),
+        &scope,
+        fixture.cutoff,
+    );
 }
 
 #[test]

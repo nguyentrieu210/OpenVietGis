@@ -74,14 +74,26 @@ impl ActivityCursor {
     }
 
     /// Decode a canonical version-1 token and validate scope and paging timestamps.
-    pub fn decode(token: &str, scope: &ActivityCursorScope, now: DateTime<Utc>) -> Result<Self, AppError> {
+    pub fn decode(
+        token: &str,
+        scope: &ActivityCursorScope,
+        now: DateTime<Utc>,
+    ) -> Result<Self, AppError> {
         if token.is_empty() || token.len() > CURSOR_MAX_LENGTH {
             return Err(invalid_cursor());
         }
 
-        let raw = URL_SAFE_NO_PAD.decode(token).map_err(|_| invalid_cursor())?;
-        let (version, supplied_scope, cutoff, created_at, stream, id): (u8, &str, &str, &str, u8, Uuid) =
-            serde_json::from_slice(&raw).map_err(|_| invalid_cursor())?;
+        let raw = URL_SAFE_NO_PAD
+            .decode(token)
+            .map_err(|_| invalid_cursor())?;
+        let (version, supplied_scope, cutoff, created_at, stream, id): (
+            u8,
+            &str,
+            &str,
+            &str,
+            u8,
+            Uuid,
+        ) = serde_json::from_slice(&raw).map_err(|_| invalid_cursor())?;
         if version != WIRE_VERSION || supplied_scope != scope.0 {
             return Err(invalid_cursor());
         }
