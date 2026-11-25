@@ -1,9 +1,7 @@
 export const basemaps = [
- {id:"osm",name:"OpenStreetMap",detail:"Đường phố",tiles:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",maxzoom:19,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'},
- {id:"sentinel-month",name:"Sentinel-2 theo tháng",detail:"Ảnh thật · L2A",tiles:"",maxzoom:15,attribution:'Contains modified Copernicus Sentinel data · Microsoft Planetary Computer'},
- {id:"sentinel",name:"Sentinel-2 Cloudless",detail:"Mosaic · 2016",tiles:"https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg",maxzoom:14,attribution:'<a href="https://cloudless.eox.at/">EOxCloudless</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2016 &amp; 2017)'},
- {id:"google-satellite",name:"Google Satellite",detail:"Vệ tinh · legacy",tiles:"https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",maxzoom:20,attribution:'© Google · <a href="https://www.google.com/intl/vi/help/terms_maps/">Điều khoản</a> (nguồn legacy không chính thức)'},
  {id:"google-hybrid",name:"Google Hybrid",detail:"Vệ tinh + nhãn",tiles:"https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",maxzoom:20,attribution:'© Google · <a href="https://www.google.com/intl/vi/help/terms_maps/">Điều khoản</a> (nguồn legacy không chính thức)'},
+ {id:"sentinel-month",name:"Sentinel-2 theo tháng",detail:"Ảnh thật · L2A",tiles:"",maxzoom:15,attribution:'Contains modified Copernicus Sentinel data · Microsoft Planetary Computer'},
+ {id:"google-satellite",name:"Google Satellite",detail:"Vệ tinh · legacy",tiles:"https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",maxzoom:20,attribution:'© Google · <a href="https://www.google.com/intl/vi/help/terms_maps/">Điều khoản</a> (nguồn legacy không chính thức)'},
  {id:"terrain",name:"EOX Terrain Light",detail:"Địa hình",tiles:"https://tiles.maps.eox.at/wmts/1.0.0/terrain-light_3857/default/g/{z}/{y}/{x}.jpg",maxzoom:14,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a> &amp; others; rendering © <a href="https://maps.eox.at/">EOX</a>'},
 ] as const;
 export type BasemapId=typeof basemaps[number]["id"];
