@@ -11,8 +11,9 @@ workspace = true
 [dependencies]
 chrono.workspace = true
 ovg-core.workspace = true
+ovg-spatial.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2.workspace = true
 sqlx.workspace = true
 subtle = "2.6"

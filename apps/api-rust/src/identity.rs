@@ -32,6 +32,50 @@ impl HumanSession {
     pub(crate) fn session_id(&self) -> Uuid {
         self.verified.id()
     }
+
+    /// Python `verify_request_csrf` for a browser session (constant-time compare).
+    pub(crate) fn csrf_matches(&self, candidate: &str, secret: &str) -> bool {
+        make_csrf_token(&self.token, secret).is_ok_and(|expected| {
+            expected.len() == candidate.len()
+                && expected
+                    .bytes()
+                    .zip(candidate.bytes())
+                    .fold(0, |acc, (a, b)| acc | (a ^ b))
+                    == 0
+        })
+    }
+
+    pub(crate) fn display_name(&self) -> &str {
+        self.verified.display_name()
+    }
+}
+
+/// Port of `verify_request_csrf` for browser sessions on unsafe methods.
+pub(crate) fn require_csrf(
+    state: &AppState,
+    session: &HumanSession,
+    headers: &HeaderMap,
+) -> Result<(), IdentityError> {
+    let denied = || IdentityError::Http(StatusCode::FORBIDDEN, "CSRF validation failed");
+    let secret = state.config.csrf_secret.as_deref().ok_or_else(denied)?;
+    let candidate = headers
+        .get("x-openvietgis-csrf")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default();
+    let expected = make_csrf_token(&session.token, secret)?;
+    if candidate.is_empty() || !constant_time_eq(expected.as_bytes(), candidate.as_bytes()) {
+        return Err(denied());
+    }
+    Ok(())
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .fold(0u8, |difference, (a, b)| difference | (a ^ b))
+            == 0
 }
 
 pub(crate) enum IdentityError {
@@ -123,7 +167,10 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/bootstrap/status", get(bootstrap_status))
         .route("/me", get(get_me))
         .route("/me/organizations", get(list_my_organizations))
-        .route("/organizations/{organization_id}", get(get_organization))
+        .route(
+            "/organizations/{organization_id}",
+            get(get_organization).patch(crate::tenancy::update_organization),
+        )
         .route("/me/identity-links", get(list_my_identity_links))
         .route("/me/avatar", get(get_my_avatar))
         .route("/auth/csrf", get(get_csrf))
@@ -242,6 +289,14 @@ mod tests {
             make_csrf_token(raw, "fixture-secret").unwrap(),
             "NRHT3hKZRKygmGgags2U9w6nS8GhV7UjAn6kYsTHxyg"
         );
+    }
+
+    #[test]
+    fn csrf_comparison_is_exact() {
+        assert!(constant_time_eq(b"abc", b"abc"));
+        assert!(!constant_time_eq(b"abc", b"abd"));
+        assert!(!constant_time_eq(b"abc", b"ab"));
+        assert!(!constant_time_eq(b"", b"a"));
     }
 
     #[test]

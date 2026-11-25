@@ -31,7 +31,7 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E04-T05 Review, integration test, document remaining gaps and convergence (E04-AC4).
 
 ## E05 — Map rendering, tile, cache
-- [ ] E05-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E05-AC1).
+- [x] E05-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E05-AC1).
 - [ ] E05-T02 Create golden, failure, permission and interoperability fixtures (E05-AC2).
 - [ ] E05-T03 Implement/retain approved engine and integrate behind public contract (E05-AC2).
 - [ ] E05-T04 Run comparative performance and resource tests, record raw evidence (E05-AC3).

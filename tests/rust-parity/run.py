@@ -24,6 +24,8 @@ from psycopg import sql
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 import benchmark_runner as baseline
+import e03_editing
+from e05_render import compare_render_reads
 
 SEED = 20261125
 API = "/api/v1"
@@ -415,6 +417,60 @@ def compare_feature_reads(suite, features, selected, owner, outsider, surveyor):
     )
 
 
+def compare_owner_transfer(suite, org, owner, member, member_id, owner_csrf):
+    """Execute identical ownership round trips on the isolated fixture DB."""
+    label = "E01 atomic owner transfer and denial audit"
+    path = f"{org}/ownership-transfer"
+    try:
+        owner_headers = session_headers(owner, **{"x-openvietgis-csrf": owner_csrf})
+        member_csrf = suite.oracle.get(
+            f"{API}/auth/csrf", headers=session_headers(member)
+        ).json()["token"]
+        member_headers = session_headers(member, **{"x-openvietgis-csrf": member_csrf})
+        members = suite.oracle.get(f"{org}/members", headers=owner_headers).json()
+        owner_id = next(item["id"] for item in members if item["role"] == "owner")
+
+        def round_trip(client):
+            def post(headers, target):
+                return client.post(path, headers=headers, json={"target_membership_id": target})
+
+            no_csrf = post(session_headers(owner), str(member_id))
+            require(no_csrf.status_code == 403, "Transfer without CSRF accepted")
+            denied = post(member_headers, owner_id)
+            require(denied.status_code == 403, "Member could transfer ownership")
+            promoted = post(owner_headers, str(member_id))
+            require(promoted.status_code == 200, "Owner transfer failed")
+            result = promoted.json()
+            require(result["previous_owner"]["role"] == "admin", "Previous owner not demoted")
+            require(result["new_owner"]["role"] == "owner", "Target not promoted")
+            restored = post(member_headers, owner_id)
+            require(restored.status_code == 200, "New owner could not restore previous owner")
+            require(restored.json()["new_owner"]["id"] == owner_id, "Owner not restored")
+            reset = client.patch(
+                f"{org}/members/{member_id}", headers=owner_headers, json={"role": "member"}
+            )
+            require(reset.status_code == 200, "Fixture membership role was not restored")
+            require(reset.json()["role"] == "member", "Fixture role reset failed")
+            return [no_csrf.json(), denied.json(), result, restored.json(), reset.json()]
+
+        expected = round_trip(suite.oracle)
+        actual = round_trip(suite.rust)
+        mismatch = difference(expected, actual)
+        require(mismatch is None, mismatch)
+        events = suite.oracle.get(f"{org}/audit-events", headers=owner_headers).json()
+        require(
+            sum(event["action"] == "organization.owner.transfer" and event["outcome"] == "denied"
+                for event in events) >= 2,
+            "Denied transfer audit missing",
+        )
+    except (AssertionError, ValueError, KeyError, StopIteration, httpx.HTTPError) as exc:
+        suite.failures.append(label)
+        print(f"FAIL {label}: {exc}", flush=True)
+    else:
+        suite.passed += 1
+        print(f"PASS {label}", flush=True)
+
+
 def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_features):
 
     a, b = fixture["session_a_token"], fixture["session_b_token"]
@@ -462,6 +518,10 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E01 owner organization detail", org_a, token=a)
     suite.get("E01 member organization detail", org_a, token=surveyor)
     suite.get("E01 foreign organization detail", org_b, 404, token=a)
+    suite.get("E01 owner grants", f"{org_a}/grants", token=a)
+    suite.get("E01 member cannot enumerate grants", f"{org_a}/grants", 403, token=surveyor)
+    suite.get("E01 foreign grants denied", f"{org_b}/grants", 404, token=a)
+    suite.get("E01 anonymous grants denied", f"{org_a}/grants", 401)
     suite.get("E02 member without project grant", layers_a, 403, token=surveyor)
     suite.get("E02 owner A layer list", layers_a, token=a)
     suite.get("E02 owner A layer detail", layer_a, token=a)
@@ -510,6 +570,8 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 source list", sources, token=a)
     suite.get("E02 source detail", f"{sources}/{selected['source_id']}", token=a)
     suite.get("E02 ordinary CRS profiles", f"{root_a}/spatial/crs-profiles", token=a)
+    e03_editing.compare_editing(suite, owner_url, fixture, surveyor, difference)
+    e03_editing.compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, mid, user_id)
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
         fixture,
@@ -549,6 +611,12 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 scoped layer hidden", layer_a_other, 404, token=surveyor)
     if include_features:
         compare_feature_reads(suite, f"{layer_a}/features", selected, a, b, surveyor)
+    from e04_queries import compare_queries
+
+    compare_queries(suite, difference, fixture, surveyor, baseline.DEFAULT_CSRF_SECRET)
+    compare_render_reads(
+        suite, fixture, lambda layer_id: f"{layers_a}/{layer_id}", a, b, surveyor
+    )
     response = suite.oracle.delete(
         f"{root_a}/access/rules/{rule}", headers=admin_headers
     )
@@ -557,6 +625,9 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
         f"FastAPI fixture revoke failed ({response.status_code})",
     )
     suite.get("E02 scoped grant revoked immediately", layer_a, 404, token=surveyor)
+    suite.get("E01 owner grants with project grant", f"{org_a}/grants", token=a)
+    suite.get("E01 owner audit events", f"{org_a}/audit-events", token=a)
+    compare_owner_transfer(suite, org_a, a, surveyor, mid, fixture["csrf_a_token"])
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "UPDATE org.organization_memberships SET status='revoked', revoked_at=now() WHERE id=%s",

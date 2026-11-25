@@ -973,6 +973,7 @@ dependencies = [
  "axum",
  "base64",
  "chrono",
+ "futures-util",
  "hmac",
  "http",
  "ovg-core",
@@ -1055,6 +1056,7 @@ version = "0.2.0"
 dependencies = [
  "chrono",
  "ovg-core",
+ "ovg-spatial",
  "serde",
  "serde_json",
  "sha2",

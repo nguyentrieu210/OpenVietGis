@@ -2,13 +2,18 @@
 
 pub(crate) mod catalog;
 pub mod config;
+pub(crate) mod editing;
 pub mod error;
 pub(crate) mod identity;
+pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
+pub(crate) mod queries;
 pub mod routes;
 pub mod state;
+pub(crate) mod tenancy;
+pub(crate) mod transfers;
 
 use axum::http::{header, HeaderName, HeaderValue, Method};
 use axum::middleware as axum_mw;

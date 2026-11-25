@@ -312,6 +312,44 @@ pub enum FixtureRequirement {
     QuangNinhHvs,
 }
 
+/// Fixed PROJ operation strings, identical to the Python reference. Reads run
+/// them inside PostGIS (`ST_TransformPipeline`), never as caller input.
+pub const WEB_MERCATOR_PIPELINE: &str =
+    "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=webmerc +ellps=WGS84";
+pub const EPSG_6960_PIPELINE: &str = "urn:ogc:def:coordinateOperation:EPSG::6960";
+pub const TM3_PIPELINE: &str = "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad      +step +proj=tmerc +lat_0=0 +lon_0=107.75 +k=0.9999      +x_0=500000 +y_0=0 +ellps=WGS84";
+
+/// One explicit PostGIS pipeline step of an approved edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PipelineStep {
+    pub source_code: u32,
+    pub target_code: u32,
+    pub pipeline: &'static str,
+    pub inverse: bool,
+}
+
+const fn step(
+    source_code: u32,
+    target_code: u32,
+    pipeline: &'static str,
+    inverse: bool,
+) -> PipelineStep {
+    PipelineStep {
+        source_code,
+        target_code,
+        pipeline,
+        inverse,
+    }
+}
+
+const WEB_FORWARD_STEP: PipelineStep = step(4326, 3857, WEB_MERCATOR_PIPELINE, false);
+const WEB_INVERSE_STEP: PipelineStep = step(3857, 4326, WEB_MERCATOR_PIPELINE, true);
+const DATUM_FORWARD_STEP: PipelineStep = step(4756, 4326, EPSG_6960_PIPELINE, false);
+const DATUM_INVERSE_STEP: PipelineStep = step(4326, 4756, EPSG_6960_PIPELINE, true);
+/// Inverse TM-3 step, also used to re-check projected outputs against the area.
+pub const TM3_INVERSE_STEP: PipelineStep = step(5899, 4756, TM3_PIPELINE, true);
+const TM3_FORWARD_STEP: PipelineStep = step(4756, 5899, TM3_PIPELINE, false);
+
 /// An independently validated directed edge in the R003 feature read contract.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TransformationProfile {
@@ -325,6 +363,8 @@ pub struct TransformationProfile {
     pub evidence_id: &'static str,
     pub geographic_bounds: CoordinateBounds,
     pub fixture_requirement: FixtureRequirement,
+    /// Explicit PostGIS steps; the only path used by server-side reads.
+    pub steps: &'static [PipelineStep],
 }
 
 impl TransformationProfile {
@@ -361,6 +401,7 @@ const WEB_FORWARD: TransformationProfile = TransformationProfile {
         WEB_MERCATOR_MAX_LATITUDE,
     ),
     fixture_requirement: FixtureRequirement::None,
+    steps: &[WEB_FORWARD_STEP],
 };
 
 const DATUM_FORWARD: TransformationProfile = TransformationProfile {
@@ -376,6 +417,7 @@ const DATUM_FORWARD: TransformationProfile = TransformationProfile {
     evidence_id: "circular-50-2025-tt-bxd-quang-ninh",
     geographic_bounds: CoordinateBounds::new(106.88, 20.70, 108.07, 21.42),
     fixture_requirement: FixtureRequirement::QuangNinh,
+    steps: &[DATUM_FORWARD_STEP],
 };
 
 const TM3_FORWARD: TransformationProfile = TransformationProfile {
@@ -392,6 +434,7 @@ const TM3_FORWARD: TransformationProfile = TransformationProfile {
     evidence_id: "mae-eia-quang-ninh-table-1-4-qh-04",
     geographic_bounds: CoordinateBounds::new(107.15, 20.70, 107.18, 20.73),
     fixture_requirement: FixtureRequirement::QuangNinhHvs,
+    steps: &[TM3_FORWARD_STEP],
 };
 
 static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
@@ -403,6 +446,7 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         method: "analytic Pseudo-Mercator inverse",
         tolerance: 1e-8,
         tolerance_unit: CrsUnit::Degree,
+        steps: &[WEB_INVERSE_STEP],
         ..WEB_FORWARD
     },
     DATUM_FORWARD,
@@ -411,6 +455,7 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         target_code: 4756,
         operation_id: "epsg-6960-inverse",
         method: "inverse EPSG:6960",
+        steps: &[DATUM_INVERSE_STEP],
         ..DATUM_FORWARD
     },
     TransformationProfile {
@@ -418,6 +463,7 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         target_code: 4756,
         operation_id: "epsg-5899-inverse-tm3",
         method: "inverse native EPSG TM-3 107-45 projection",
+        steps: &[TM3_INVERSE_STEP],
         ..TM3_FORWARD
     },
     TM3_FORWARD,
@@ -426,6 +472,7 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         target_code: 4326,
         operation_id: "epsg-5899-to-4326-via-6960",
         method: "explicit inverse TM-3 then EPSG:6960 approved as one registry edge",
+        steps: &[TM3_INVERSE_STEP, DATUM_FORWARD_STEP],
         ..TM3_FORWARD
     },
     TransformationProfile {
@@ -433,6 +480,7 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         target_code: 5899,
         operation_id: "epsg-4326-to-5899-via-6960",
         method: "explicit inverse EPSG:6960 then TM-3 approved as one registry edge",
+        steps: &[DATUM_INVERSE_STEP, TM3_FORWARD_STEP],
         ..TM3_FORWARD
     },
 ];
@@ -520,6 +568,16 @@ mod tests {
         assert!(reference_profile_wire(3405).is_some());
         assert!(reference_coordinate_wire(3405).is_none());
         assert!(reference_profile_wire(9209).is_none());
+        for edge in REFERENCE_TRANSFORMATIONS {
+            let first = edge.steps.first().unwrap();
+            let last = edge.steps.last().unwrap();
+            assert_eq!(first.source_code, edge.source_code);
+            assert_eq!(last.target_code, edge.target_code);
+            assert!(edge
+                .steps
+                .windows(2)
+                .all(|pair| pair[0].target_code == pair[1].source_code));
+        }
     }
 
     #[test]

@@ -1,0 +1,37 @@
+name: E11 Outbox Candidate
+on:
+  push:
+    branches: ["064-e11", "064-rust-platform", "064-integration"]
+    paths:
+      - "infra/rust-platform/e11/**"
+      - "crates/ovg-storage/**"
+      - "tests/rust-parity/e11/**"
+      - ".github/workflows/e11-outbox.yml"
+  pull_request:
+    paths:
+      - "infra/rust-platform/e11/**"
+      - "crates/ovg-storage/**"
+      - "tests/rust-parity/e11/**"
+      - ".github/workflows/e11-outbox.yml"
+permissions:
+  contents: read
+jobs:
+  postgis-outbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-parity
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C debuginfo=0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --project apps/api --frozen
+      - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+      - run: uv run --project apps/api python tests/rust-parity/e11/check_outbox.py

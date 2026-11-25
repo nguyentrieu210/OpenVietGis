@@ -1,9 +1,18 @@
 //! Environment-backed runtime configuration for `openvietgis-api-rust`.
 
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use ovg_storage::DbPoolConfig;
+use serde::Deserialize;
+
+/// Public part of one `OPENVIETGIS_OIDC_PROVIDERS` entry; secrets are ignored.
+#[derive(Clone, Debug, Deserialize)]
+pub struct OidcProvider {
+    pub issuer: String,
+    pub display_name: String,
+}
 
 #[derive(Clone)]
 pub struct AppConfig {
@@ -13,6 +22,10 @@ pub struct AppConfig {
     pub log_json: bool,
     pub cors_origins: Vec<String>,
     pub session_cookie_name: String,
+    pub session_cookie_secure: bool,
+    pub web_base_url: String,
+    pub api_public_base_url: String,
+    pub oidc_providers: BTreeMap<String, OidcProvider>,
     pub csrf_secret: Option<String>,
     pub artifact_store_dir: PathBuf,
     pub service_version: String,
@@ -31,6 +44,10 @@ impl Default for AppConfig {
                 "http://127.0.0.1:5178".to_string(),
             ],
             session_cookie_name: "ovg_session".to_string(),
+            session_cookie_secure: false,
+            web_base_url: "http://127.0.0.1:5173".to_string(),
+            api_public_base_url: "http://127.0.0.1:8000".to_string(),
+            oidc_providers: BTreeMap::new(),
             csrf_secret: None,
             artifact_store_dir: PathBuf::from("/tmp/openvietgis-artifacts"),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -66,6 +83,26 @@ impl AppConfig {
         }
         if let Ok(name) = std::env::var("OPENVIETGIS_SESSION_COOKIE_NAME") {
             cfg.session_cookie_name = name;
+        }
+        if let Ok(secure) = std::env::var("OPENVIETGIS_SESSION_COOKIE_SECURE") {
+            cfg.session_cookie_secure = matches!(
+                secure.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            );
+        }
+        if let Ok(url) = std::env::var("OPENVIETGIS_WEB_BASE_URL") {
+            cfg.web_base_url = url;
+        }
+        if let Ok(url) = std::env::var("OPENVIETGIS_API_PUBLIC_BASE_URL") {
+            cfg.api_public_base_url = url;
+        }
+        if let Ok(providers) = std::env::var("OPENVIETGIS_OIDC_PROVIDERS") {
+            match serde_json::from_str(&providers) {
+                Ok(parsed) => cfg.oidc_providers = parsed,
+                Err(error) => {
+                    tracing::error!(%error, "ignoring invalid OPENVIETGIS_OIDC_PROVIDERS")
+                }
+            }
         }
         cfg.csrf_secret = std::env::var("OPENVIETGIS_CSRF_SECRET")
             .ok()

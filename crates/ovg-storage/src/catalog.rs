@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 use crate::{DbPool, TenantTransaction};
 
+mod features;
+pub use features::FeatureRequest;
+
 #[derive(Clone, Copy)]
 pub enum ProjectReadPolicy {
     LayerAcl,
@@ -24,9 +27,9 @@ pub enum ProjectReadPolicy {
 /// Proof of project.read on exactly one organization and project. The
 /// authorization checks and reads share the same transaction and row locks.
 pub struct ProjectRead<'a> {
-    tx: TenantTransaction<'a>,
-    project_id: Uuid,
-    gis_scoped: bool,
+    pub(crate) tx: TenantTransaction<'a>,
+    pub(crate) project_id: Uuid,
+    pub(crate) gis_scoped: bool,
 }
 
 impl<'a> ProjectRead<'a> {
@@ -38,6 +41,64 @@ impl<'a> ProjectRead<'a> {
         session_id: Uuid,
         policy: ProjectReadPolicy,
     ) -> Result<Self, AppError> {
+        Self::open(
+            pool,
+            organization_id,
+            project_id,
+            actor_id,
+            session_id,
+            policy,
+            false,
+        )
+        .await
+    }
+
+    /// Proof of project.edit on a writable (active) project. Organization and
+    /// project rows are locked FOR UPDATE like the reference mutation guard.
+    pub async fn begin_edit(
+        pool: &'a DbPool,
+        organization_id: Uuid,
+        project_id: Uuid,
+        actor_id: Uuid,
+        session_id: Uuid,
+    ) -> Result<Self, AppError> {
+        Self::open(
+            pool,
+            organization_id,
+            project_id,
+            actor_id,
+            session_id,
+            ProjectReadPolicy::Unrestricted,
+            true,
+        )
+        .await
+    }
+
+    #[must_use]
+    pub fn organization_id(&self) -> Uuid {
+        self.tx.organization_id()
+    }
+
+    #[must_use]
+    pub fn project_id(&self) -> Uuid {
+        self.project_id
+    }
+
+    /// The authorized, RLS-bound transaction for engine repositories.
+    pub fn transaction(&mut self) -> &mut sqlx::Transaction<'a, sqlx::Postgres> {
+        self.tx.tx_mut()
+    }
+
+    async fn open(
+        pool: &'a DbPool,
+        organization_id: Uuid,
+        project_id: Uuid,
+        actor_id: Uuid,
+        session_id: Uuid,
+        policy: ProjectReadPolicy,
+        edit: bool,
+    ) -> Result<Self, AppError> {
+        let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
         if organization_id.is_nil() {
             return Err(AppError::not_found("organization not found"));
         }
@@ -113,23 +174,24 @@ impl<'a> ProjectRead<'a> {
             return Err(AppError::not_found("organization not found"));
         }
 
-        let org_status: String =
-            sqlx::query_scalar("SELECT status FROM org.organizations WHERE id = $1 FOR SHARE")
-                .bind(organization_id)
-                .fetch_optional(&mut **tx.tx_mut())
-                .await
-                .map_err(db_error)?
-                .ok_or_else(|| AppError::not_found("organization not found"))?;
+        let org_sql = format!("SELECT status FROM org.organizations WHERE id = $1 {lock}");
+        let org_status: String = sqlx::query_scalar(&org_sql)
+            .bind(organization_id)
+            .fetch_optional(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| AppError::not_found("organization not found"))?;
 
-        let project = sqlx::query_as::<_, (String, Option<Uuid>)>(
+        let project_sql = format!(
             "SELECT status, workspace_id FROM workspace.projects
-             WHERE organization_id = $1 AND id = $2 FOR SHARE",
-        )
-        .bind(organization_id)
-        .bind(project_id)
-        .fetch_optional(&mut **tx.tx_mut())
-        .await
-        .map_err(db_error)?;
+             WHERE organization_id = $1 AND id = $2 {lock}"
+        );
+        let project = sqlx::query_as::<_, (String, Option<Uuid>)>(&project_sql)
+            .bind(organization_id)
+            .bind(project_id)
+            .fetch_optional(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
 
         let gis_scoped = sqlx::query_scalar::<_, bool>("SELECT gis_access.scoped($1, $2)")
             .bind(organization_id)
@@ -145,17 +207,25 @@ impl<'a> ProjectRead<'a> {
         if org_status != "active" {
             return Err(AppError::forbidden("organization is not active"));
         }
-        let (_, workspace_id) = project
+        let (project_status, workspace_id) = project
             .filter(|(status, _)| matches!(status.as_str(), "active" | "archived"))
             .ok_or_else(|| AppError::not_found("project not found"))?;
 
-        let can_read = sqlx::query_scalar::<_, bool>(
+        let (roles, permission) = if edit {
+            ("'manager', 'editor', 'contributor'", "project.edit")
+        } else {
+            (
+                "'manager', 'editor', 'contributor', 'viewer'",
+                "project.read",
+            )
+        };
+        let permission_sql = format!(
             "SELECT m.role IN ('owner', 'admin') OR EXISTS (
                  SELECT 1 FROM org.resource_grants AS g
                  WHERE g.organization_id = m.organization_id
                    AND g.membership_id = m.id AND g.subject_kind = 'membership'
                    AND g.revoked_at IS NULL
-                   AND g.role IN ('manager', 'editor', 'contributor', 'viewer')
+                   AND g.role IN ({roles})
                    AND (
                        g.scope_kind = 'organization'
                        OR (g.scope_kind = 'workspace' AND g.workspace_id = $3)
@@ -163,18 +233,27 @@ impl<'a> ProjectRead<'a> {
                    )
              )
              FROM org.organization_memberships AS m
-             WHERE m.organization_id = $1 AND m.user_id = $2 AND m.status = 'active'",
-        )
-        .bind(organization_id)
-        .bind(actor_id)
-        .bind(workspace_id)
-        .bind(project_id)
-        .fetch_optional(&mut **tx.tx_mut())
-        .await
-        .map_err(db_error)?
-        .ok_or_else(|| AppError::not_found("organization not found"))?;
-        if !can_read {
-            return Err(AppError::forbidden("missing permission: project.read"));
+             WHERE m.organization_id = $1 AND m.user_id = $2 AND m.status = 'active'"
+        );
+        let allowed = sqlx::query_scalar::<_, bool>(&permission_sql)
+            .bind(organization_id)
+            .bind(actor_id)
+            .bind(workspace_id)
+            .bind(project_id)
+            .fetch_optional(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| AppError::not_found("organization not found"))?;
+        if !allowed {
+            return Err(AppError::forbidden(format!(
+                "missing permission: {permission}"
+            )));
+        }
+        if edit && project_status != "active" {
+            return Err(AppError::conflict(
+                "PROJECT_NOT_WRITABLE",
+                "The project is read-only.",
+            ));
         }
 
         sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
@@ -241,6 +320,19 @@ impl<'a> ProjectRead<'a> {
     pub async fn get_source(&mut self, source_id: Uuid) -> Result<Value, AppError> {
         self.require_unrestricted()?;
         Ok(self.get_source_record(source_id).await?.wire)
+    }
+
+    /// Candidate replay of project-wide spatial invalidations. The caller must
+    /// obtain a fresh ProjectRead for every page (including reconnect).
+    pub async fn replay_spatial_invalidations(
+        &mut self,
+        cursor: Option<crate::e11_outbox::SpatialCursor>,
+        limit: usize,
+    ) -> Result<crate::e11_outbox::SpatialReplay, AppError> {
+        self.require_unrestricted()?;
+        let organization = self.tx.organization_id();
+        crate::e11_outbox::replay(self.tx.tx_mut(), organization, self.project_id, cursor, limit)
+            .await
     }
 
     pub async fn commit(self) -> Result<(), AppError> {
@@ -318,7 +410,10 @@ impl<'a> ProjectRead<'a> {
         .map_err(db_error)
     }
 
-    async fn get_source_record(&mut self, source_id: Uuid) -> Result<SourceRecord, AppError> {
+    pub(crate) async fn get_source_record(
+        &mut self,
+        source_id: Uuid,
+    ) -> Result<SourceRecord, AppError> {
         let row = self
             .source_rows(Some(source_id), None, 1)
             .await?
@@ -489,8 +584,8 @@ impl<'a> ProjectRead<'a> {
     }
 }
 
-struct SourceRecord {
-    wire: Value,
+pub(crate) struct SourceRecord {
+    pub(crate) wire: Value,
     ready: bool,
     render_supported: bool,
     edit_supported: bool,
@@ -706,7 +801,7 @@ fn invalid_schema() -> AppError {
     AppError::internal("catalog schema revision integrity check failed")
 }
 
-fn db_error(error: sqlx::Error) -> AppError {
+pub(crate) fn db_error(error: sqlx::Error) -> AppError {
     AppError::internal(format!("catalog database operation failed: {error}"))
 }
 
