@@ -10,7 +10,7 @@ test("equal and quantile breaks, class lookup and colour ramp", () => {
   assert.deepEqual(computeBreaks([5, 5], 3, "equal"), [5, 5]);
   const b = [0, 10, 20];
   assert.equal(gradClassIndex(0, b), 0); assert.equal(gradClassIndex(10, b), 0);
-  assert.equal(gradClassIndex("15,5", b), 1); assert.equal(gradClassIndex(25, b), -1); assert.equal(gradClassIndex("x", b), -1);
+  assert.equal(gradClassIndex("15,5", b), 1); assert.equal(gradClassIndex(25, b), 1); assert.equal(gradClassIndex(-3, b), 0); assert.equal(gradClassIndex("x", b), -1);
   const v = { gradField: "", gradBreaks: b, gradFrom: "#000000", gradTo: "#ffffff" };
   assert.equal(gradColor(0, v), "#000000"); assert.equal(gradColor(1, v), "#ffffff"); assert.equal(gradColor(-1, v), "#bdbdbd");
   assert.equal(zoomScale(0), "1:591.657.550");
