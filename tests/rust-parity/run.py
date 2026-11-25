@@ -261,6 +261,7 @@ class Differential:
             )
             if check is not None:
                 check(expected_body)
+                check(actual_body)
         except (AssertionError, ValueError, httpx.HTTPError) as exc:
             self.failures.append(label)
             print(f"FAIL {label}: {exc}", flush=True)
