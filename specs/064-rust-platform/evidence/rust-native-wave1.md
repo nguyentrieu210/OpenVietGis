@@ -202,3 +202,20 @@ metadata unpacking. Differential parity on isolated real PostGIS passed:
 - raster list order and wire shape
 - metadata key-collision precedence
 - foreign-tenant denial
+
+### E10 CAD document read side
+
+Rust now owns:
+
+- `GET /cad/documents`
+- `GET /cad/documents/{document_id}/versions`
+
+The native DWG/DXF engines and file bytes remain below the Rust control plane.
+The Rust repository reads the canonical RLS-protected immutable CAD version
+ledger and preserves the Python latest-per-document and descending history
+ordering. Differential parity on isolated real PostGIS passed:
+
+- latest document revision selection
+- version history ordering
+- missing-document 404 envelope
+- foreign-tenant denial
