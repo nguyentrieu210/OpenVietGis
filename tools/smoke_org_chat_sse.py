@@ -63,7 +63,7 @@ def listen(c, out):
                     out.put((event, line[6:], time.monotonic()))
                 if server.should_exit:
                     return
-    except Exception as e:
+    except (httpx.HTTPError, AssertionError, RuntimeError) as e:
         out.put(("error", str(e), time.monotonic()))
 
 
