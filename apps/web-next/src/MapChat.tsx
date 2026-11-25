@@ -17,11 +17,11 @@ const hue=(id:string)=>"hsl("+[...id].reduce((h,c)=>(h*31+c.charCodeAt(0))%360,0
 type Msg={id:string;author_id:string;author_name:string;body:string;created_at:string;recipient_id?:string|null};
 type Member={id:string;display_name:string};
 type Burst={id:string;e:string;x:number;d:number;t:number;r:number};
-type Props={client:ApiClient;org:string;pid:string;map:RefObject<ml.Map|null>;peers:Peer[];accountId:string;canWrite:boolean};
+type Props={projectName?:string;client:ApiClient;org:string;pid:string;map:RefObject<ml.Map|null>;peers:Peer[];accountId:string;canWrite:boolean};
 const sortMsgs=(l:Msg[])=>l.slice().sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
 const makeBurst=(id:string,e:string):Burst[]=>Array.from({length:14},(_,k)=>({id:id+":"+k,e,x:Math.round(Math.random()*90-45),d:+(k*0.09+Math.random()*0.2).toFixed(2),t:+(2.2+Math.random()*1.2).toFixed(2),r:Math.round(Math.random()*40-20)}));
 
-export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
+export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite}:Props){
  const base="/organizations/"+org+"/projects/"+pid+"/collaboration";
  const [railMin,setRailMin]=useState(()=>{try{return localStorage.getItem("ovg:chat-rail-min")==="1"}catch{return false}});
  const foldRail=(v:boolean)=>{setRailMin(v);if(v)setOpen(false);try{localStorage.setItem("ovg:chat-rail-min",v?"1":"0")}catch{/* storage unavailable */}};
@@ -58,7 +58,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const online=new Set(peers.map(p=>p.actor));
  const log=logs[room]??[],shown=log.filter(m=>!REACT.test(m.body));
  const reactions=new Map<string,Map<string,string[]>>();for(const m of log){const r=REACT.exec(m.body);if(!r)continue;const per=reactions.get(r[1])??new Map<string,string[]>();const who=per.get(r[2])??[];if(!who.includes(m.author_name))who.push(m.author_name);per.set(r[2],who);reactions.set(r[1],per)}
- const roomName=room?members.find(m=>m.id===room)?.display_name??"Nhắn riêng":"Phòng dự án";
+ const roomName=room?members.find(m=>m.id===room)?.display_name??"Nhắn riêng":(projectName||"Phòng dự án");
  const submit=(t:string)=>{if(!t.trim())return;setDraft("");void send(t)};
  const host=map.current?.getContainer().parentElement??null;
  const total=Object.values(unread).reduce((a,b)=>a+b,0);
@@ -66,7 +66,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const rail=<aside className={"ovg-chat-rail"+(open?" open":"")} aria-label="Chat">
   {railMin?<button type="button" className="ovg-rail-tab" title="Mở thanh chat" onClick={()=>foldRail(false)}>💬{Object.values(unread).reduce((a,b)=>a+b,0)?<b className="ovg-chat-badge">{Object.values(unread).reduce((a,b)=>a+b,0)}</b>:null}</button>:
   <nav className="ovg-rail" aria-label="Phòng chat">
-   <button type="button" className={"ovg-rail-room project"+(open&&!room?" active":"")} title="Phòng dự án · mọi thành viên" onClick={()=>pick("")}>#{unread[""]?<b className="ovg-chat-badge">{unread[""]}</b>:null}</button>
+   <button type="button" className={"ovg-rail-room project"+(open&&!room?" active":"")} title={"# "+(projectName||"Phòng dự án")+" · mọi thành viên dự án"} onClick={()=>pick("")}>#{unread[""]?<b className="ovg-chat-badge">{unread[""]}</b>:null}</button>
    <button type="button" className={"ovg-rail-room add"+(people?" active":"")} title="Nhắn tin mới · tìm người, tạo nhóm" onClick={()=>{setPeople(v=>!v);setWho("")}}>＋</button>
    <span className="ovg-rail-sep"/>
    {members.slice(0,20).map(m=><button type="button" key={m.id} className={"ovg-rail-room"+(open&&room===m.id?" active":"")} style={{background:color(m.id)}} title={m.display_name+(online.has(m.id)?" · đang trực tuyến":"")+" · nhắn riêng"} onClick={()=>pick(m.id)}>{initials(m.display_name)}{online.has(m.id)&&<i className="online"/>}{unread[m.id]?<b className="ovg-chat-badge">{unread[m.id]}</b>:null}</button>)}
