@@ -10,7 +10,7 @@ use axum::http::{header, HeaderMap, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use ovg_storage::editing::domain::py_strip;
+use ovg_storage::editing::domain::{py_strip, Segment, Xy};
 use ovg_storage::editing::{snap, CommitRequest, EditError, EditScope, Guard, Permission};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -144,11 +144,11 @@ async fn revert_changeset(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SnapBody {
-    target: (f64, f64),
+    target: Xy,
     #[serde(default)]
-    vertices: Vec<(f64, f64)>,
+    vertices: Vec<Xy>,
     #[serde(default)]
-    segments: Vec<((f64, f64), (f64, f64))>,
+    segments: Vec<Segment>,
     tolerance: f64,
 }
 
@@ -178,11 +178,10 @@ async fn compute_snap(
     Ok(Json(result))
 }
 
+type Authenticated = (HumanSession, HeaderMap, Option<Value>);
+
 /// FastAPI decodes a JSON body before dependencies run, then authenticates.
-async fn authenticate_json(
-    state: &AppState,
-    request: Request,
-) -> Result<(HumanSession, HeaderMap, Option<Value>), Failure> {
+async fn authenticate_json(state: &AppState, request: Request) -> Result<Authenticated, Failure> {
     let (mut parts, body) = request.into_parts();
     let bytes = to_bytes(body, MAX_BODY_BYTES)
         .await

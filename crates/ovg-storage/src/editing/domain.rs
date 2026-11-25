@@ -242,7 +242,7 @@ pub fn typed_attributes(
     let raw = properties.unwrap_or(&empty);
     let mut unknown: Vec<&String> = raw
         .keys()
-        .filter(|key| !fields.iter().any(|f| &f.field_id == *key))
+        .filter(|key| !fields.iter().any(|f| f.field_id == **key))
         .collect();
     if !unknown.is_empty() {
         unknown.sort();
@@ -705,7 +705,7 @@ pub fn redact_audit_value(value: &str) -> &str {
             && rest.get(33..).is_some_and(|t| token(t, 16))
     });
     let parts: Vec<_> = trimmed.split('.').collect();
-    let jwt = parts.len() == 3 && parts.iter().all(|p| token(p, 1));
+    let jwt = parts.len() == 3 && parts.iter().all(|p| token(*p, 1));
     if session || invitation || service || jwt {
         "[REDACTED]"
     } else {
@@ -713,12 +713,17 @@ pub fn redact_audit_value(value: &str) -> &str {
     }
 }
 
+/// A 2D position.
+pub type Xy = (f64, f64);
+/// A 2D segment between two positions.
+pub type Segment = (Xy, Xy);
+
 /// `snap_point_to_candidates`: deterministic 2D vertex-then-segment snapping.
 #[must_use]
 pub fn snap(
-    target: (f64, f64),
-    vertices: &[(f64, f64)],
-    segments: &[((f64, f64), (f64, f64))],
+    target: Xy,
+    vertices: &[Xy],
+    segments: &[Segment],
     tolerance: f64,
 ) -> Value {
     let (tx, ty) = target;
