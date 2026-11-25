@@ -195,3 +195,4 @@
 .qgis-studio .insp-table td:first-child{width:42%;color:var(--ovg-muted);border-right:1px solid var(--ovg-line-soft)}
 .qgis-studio .insp-table i{color:#9aa6a0}
 .qgis-studio .insp-note{display:block;margin-top:3px;font-size:10.5px;color:var(--ovg-muted)}
+.qgis-studio .insp-id td{font-size:10.5px;color:#9aa6a0}.qgis-studio .insp-id button{min-height:0!important;padding:0 4px!important;font-size:10px!important}
