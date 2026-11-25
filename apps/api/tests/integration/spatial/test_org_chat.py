@@ -131,7 +131,9 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         pins = check(owner.get(f"{base}/rooms/{org_room}/pins"))["items"]
         assert pins[0]["id"] == first["id"] and pins[0]["pinned_by_name"] == "Member"
         assert check(owner.get(f"{base}/rooms/{org_room}/messages"))["items"][0]["pinned"]
-        check(dao.delete(f"{base}/messages/{first['id']}/pin"))
+        # Org room: only author, pinner or org admin may unpin.
+        assert dao.delete(f"{base}/messages/{first['id']}/pin").status_code == 403
+        check(owner.delete(f"{base}/messages/{first['id']}/pin"))
         assert check(owner.get(f"{base}/rooms/{org_room}/pins"))["items"] == []
 
         # Group: create, non-member 404, invite, rename by admin only, leave.
@@ -158,6 +160,8 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
             == 422
         )
         check(member.post(f"{base}/rooms/{gid}/members", json={"user_ids": [str(third)]}))
+        again = {"user_ids": [str(third), str(world.owner_user_id)]}
+        assert check(member.post(f"{base}/rooms/{gid}/members", json=again))["member_count"] == 3
         assert check(dao.get(f"{base}/rooms/{gid}/messages"))["items"] == []
         assert member.patch(f"{base}/rooms/{gid}", json={"name": "Đổi"}).status_code == 403
         assert check(owner.patch(f"{base}/rooms/{gid}", json={"name": "Đổi"}))["name"] == "Đổi"

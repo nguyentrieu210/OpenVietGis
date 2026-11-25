@@ -159,6 +159,19 @@ def audit(session, ctx, rid, action, metadata, resource_type="chat_room"):
     )
 
 
+def org_admin(session: Session, o: UUID, user: UUID) -> bool:
+    return (
+        session.execute(
+            text(
+                "SELECT 1 FROM org.organization_memberships WHERE organization_id=:o "
+                "AND user_id=:u AND status='active' AND role IN ('owner','admin')"
+            ),
+            {"o": o, "u": user},
+        ).first()
+        is not None
+    )
+
+
 def org_room(session: Session, o: UUID) -> UUID:
     # Lazy and idempotent; the partial unique index serialises concurrent creators.
     session.execute(
@@ -388,6 +401,10 @@ def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: Write
     if any(i not in known for i in ids):
         raise HTTPException(422, "Members must be active organisation members")
     args = {"o": organization_id, "r": room_id}
+    # Serialise invites so concurrent requests cannot exceed the member cap.
+    session.execute(
+        text(f"SELECT 1 FROM {T}chat_rooms WHERE organization_id=:o AND id=:r FOR UPDATE"), args
+    )
     current = {
         r[0]
         for r in session.execute(
@@ -404,7 +421,7 @@ def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: Write
         session.execute(
             text(
                 f"INSERT INTO {T}chat_room_members(organization_id,room_id,user_id) "
-                "VALUES(:o,:r,:u)"
+                "VALUES(:o,:r,:u) ON CONFLICT DO NOTHING"
             ),
             args | {"u": user},
         )
@@ -646,8 +663,14 @@ def unpin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB)
     ctx = org_scope(session, auth, organization_id)
     me = ctx.actor.actor_id
     _, author, kind, role = message_room(session, organization_id, message_id, me)
+    pinner = session.execute(
+        text(f"SELECT pinned_by FROM {T}chat_pins WHERE organization_id=:o AND message_id=:m"),
+        {"o": organization_id, "m": message_id},
+    ).scalar_one_or_none()
     if kind == "group" and role != "admin" and author != me:
         raise HTTPException(403, "Room admin or message author required")
+    if kind == "org" and me not in (author, pinner) and not org_admin(session, organization_id, me):
+        raise HTTPException(403, "Message author, pinner or organisation admin required")
     session.execute(
         text(f"DELETE FROM {T}chat_pins WHERE organization_id=:o AND message_id=:m"),
         {"o": organization_id, "m": message_id},
@@ -809,6 +832,11 @@ def request_contact(organization_id: UUID, body: UserRequest, auth: WriteAuth, s
     me = ctx.actor.actor_id
     if body.user_id == me or body.user_id not in people(session, organization_id):
         raise HTTPException(404, "Person not found")
+    # Per-pair lock: two crossing requests must end as one contact, not two pending.
+    session.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:pair))"),
+        {"pair": f"chat-contact:{min(me, body.user_id)}:{max(me, body.user_id)}"},
+    )
     mine, requests = contact_state(session, me)
     if body.user_id in mine:
         return {"id": None, "status": "contact"}
