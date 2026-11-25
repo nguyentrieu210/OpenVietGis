@@ -1973,3 +1973,9 @@
 .integration-batch-result { margin-block-start: 10px; font-size: 13px; color: #166534; }
 .integration-batch-result.has-errors { color: #b91c1c; }
 .integration-batch-result p, .integration-batch-result ul { margin: 0; }
+.integration-batch-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 10px 0 0; padding: 8px 12px 10px; border: 1px solid #e0e8ef; border-radius: 10px; font-size: 13px; }
+.integration-batch-scope legend { padding-inline: 4px; font-weight: 700; }
+.integration-batch-scope label { display: inline-flex; align-items: center; gap: 6px; }
+.integration-batch-scope select { min-block-size: 34px; max-inline-size: 240px; padding-inline: 8px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font: inherit; }
+.integration-batch-scope input[type="number"] { inline-size: 5em; min-block-size: 32px; padding-inline: 6px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+.integration-batch-scope small { flex-basis: 100%; color: #475569; }

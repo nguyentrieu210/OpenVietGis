@@ -359,16 +359,48 @@ export function buildIntegrationLayerExportPath(
   projectId: string,
   adapterKey: IntegrationExportAdapterKey,
   layerId: string,
-  format: IntegrationExportFormat = "geopackage"
+  format: IntegrationExportFormat = "geopackage",
+  scope?: IntegrationExportScope
 ): string {
+  const query = new URLSearchParams({ format });
+  for (const id of scope?.areaIds ?? []) query.append("scope_area", id);
+  for (const id of scope?.routeIds ?? []) query.append("scope_route", id);
+  if (scope?.routeIds?.length && scope.routeDistanceM !== undefined) {
+    query.set("route_distance_m", String(scope.routeDistanceM));
+  }
   return (
     integrationHubRoot(organizationId, projectId) +
     "/adapters/" +
     encodeURIComponent(adapterKey) +
     "/layers/" +
     encodeURIComponent(layerId) +
-    "/export?format=" +
-    encodeURIComponent(format)
+    "/export?" +
+    query.toString()
+  );
+}
+
+/** Spec 054: limit an export to communes/hamlets (feature ids) and/or routes (route ids). */
+export interface IntegrationExportScope {
+  areaIds?: string[];
+  routeIds?: string[];
+  routeDistanceM?: number;
+}
+
+export interface IntegrationExportScopes {
+  communes: { id: string; name: string; code: string }[];
+  hamlets: { id: string; name: string; commune_code: string }[];
+  routes: { name: string; route_ids: string[]; hamlet_ids: string[] }[];
+}
+
+/** Commune -> hamlet -> route choices for a scoped export. */
+export function getIntegrationExportScopes(
+  client: ApiClient,
+  organizationId: string,
+  projectId: string
+): Promise<IntegrationExportScopes> {
+  return client.request<IntegrationExportScopes>(
+    integrationHubRoot(organizationId, projectId) + "/export-scopes",
+    { method: "GET", cache: "no-store" }
   );
 }
 
@@ -383,14 +415,16 @@ export async function downloadIntegrationLayerExport(
   projectId: string,
   adapterKey: IntegrationExportAdapterKey,
   layerId: string,
-  format: IntegrationExportFormat = "geopackage"
+  format: IntegrationExportFormat = "geopackage",
+  scope?: IntegrationExportScope
 ): Promise<IntegrationLayerExportResult> {
   const path = buildIntegrationLayerExportPath(
     organizationId,
     projectId,
     adapterKey,
     layerId,
-    format
+    format,
+    scope
   );
   const response = await client.requestRaw(path, {
     method: "GET",

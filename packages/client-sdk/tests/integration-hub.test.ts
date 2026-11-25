@@ -280,6 +280,18 @@ describe("Integration Hub client SDK", () => {
     expect(result.layers[1]?.stored_crs_code).toBeNull();
   });
 
+  it("adds repeated commune/hamlet and route scope parameters to an export path", () => {
+    expect(
+      buildIntegrationLayerExportPath("org-1", "proj-1", "qgis", "layer-1", "geopackage", {
+        areaIds: ["ap-27", "ap 28"],
+        routeIds: ["r1"],
+        routeDistanceM: 40
+      })
+    ).toBe(
+      "/organizations/org-1/projects/proj-1/integration-hub/adapters/qgis/layers/layer-1/export?format=geopackage&scope_area=ap-27&scope_area=ap+28&scope_route=r1&route_distance_m=40"
+    );
+  });
+
   it("builds URL-encoded read-only layer export paths for qgis, postgis, and autocad dxf", () => {
     expect(
       buildIntegrationLayerExportPath(

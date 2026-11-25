@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   downloadIntegrationLayerExport,
+  getIntegrationExportScopes,
+  type IntegrationExportScope,
+  type IntegrationExportScopes,
   getIntegrationHubAdapterProfile,
   getIntegrationHubCatalog,
   loadCsrfToken,
@@ -298,9 +301,30 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
   // Track what the user unticked, so every exportable layer starts selected and survives format changes.
   const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
   const [progress, setProgress] = useState<string | null>(null);
-  const [result, setResult] = useState<{ ok: number; failed: string[] } | null>(null);
+  const [result, setResult] = useState<{ ok: number; failed: string[]; empty: string[] } | null>(null);
+  // Spec 054: commune -> hamlet -> route scope; the deepest choice wins.
+  const [scopes, setScopes] = useState<IntegrationExportScopes | null>(null);
+  const [communeId, setCommuneId] = useState("");
+  const [hamletId, setHamletId] = useState("");
+  const [routeName, setRouteName] = useState("");
+  const [distance, setDistance] = useState(30);
   const run = useRef(0);
   useEffect(() => () => { run.current++; }, []);
+  useEffect(() => {
+    let alive = true;
+    getIntegrationExportScopes(client, org, projectId).then((value) => { if (alive) setScopes(value); }).catch(() => {});
+    return () => { alive = false; };
+  }, [client, org, projectId]);
+  const commune = scopes?.communes.find((c) => c.id === communeId);
+  const hamlets = (scopes?.hamlets ?? []).filter((h) => !commune || !commune.code || h.commune_code === commune.code);
+  const hamlet = hamlets.find((h) => h.id === hamletId);
+  const routes = (scopes?.routes ?? []).filter((r) => !hamlet || r.hamlet_ids.includes(hamlet.id));
+  const route = routes.find((r) => r.name === routeName);
+  const scope: IntegrationExportScope | undefined = route
+    ? { routeIds: route.route_ids, routeDistanceM: distance }
+    : hamlet ? { areaIds: [hamlet.id] } : commune ? { areaIds: [commune.id] } : undefined;
+  const scopeLabel = route?.name ?? hamlet?.name ?? commune?.name ?? "";
+  const scopeSlug = scopeLabel.normalize("NFD").replace(/\p{M}/gu, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const eligible = layers.filter((layer) => !batchBlockReason(layer, format));
   const chosen = eligible.filter((layer) => !unticked.has(layer.layer_id));
   const busy = progress !== null;
@@ -308,17 +332,21 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
   const start = async () => {
     const id = ++run.current;
     const failed: string[] = [];
+    const empty: string[] = [];
     const files: { name: string; blob: Blob }[] = [];
+    const prefix = scopeSlug ? `${scopeSlug}-` : "";
     setResult(null);
     for (const [index, layer] of chosen.entries()) {
       setProgress(`Đang chuẩn bị ${index + 1}/${chosen.length}: ${layer.name}`);
       try {
-        const file = await downloadIntegrationLayerExport(client, org, projectId, BATCH_ADAPTER[format], layer.layer_id, format);
+        const file = await downloadIntegrationLayerExport(client, org, projectId, BATCH_ADAPTER[format], layer.layer_id, format, scope);
         if (run.current !== id) return;
-        files.push({ name: file.filename, blob: file.blob });
+        files.push({ name: prefix + file.filename, blob: file.blob });
       } catch (exportError: unknown) {
         if (run.current !== id) return;
-        failed.push(formatExportErrorMessage(layer.name, exportError));
+        const detail = scope && exportError instanceof ApiError && exportError.status === 422 ? (await exportError.readPayload()).detail : undefined;
+        if (detail === "No features in the selected scope.") empty.push(layer.name);
+        else failed.push(formatExportErrorMessage(layer.name, exportError));
       }
     }
     if (files.length === 1) {
@@ -326,10 +354,10 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
     } else if (files.length > 1) {
       setProgress("Đang nén ZIP…");
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-      triggerBrowserBlobDownload(await zipFiles(files), `openvietgis-${files.length}-lop-${EXPORT_FORMAT_EXT[format]}-${stamp}.zip`);
+      triggerBrowserBlobDownload(await zipFiles(files), `openvietgis-${prefix}${files.length}-lop-${EXPORT_FORMAT_EXT[format]}-${stamp}.zip`);
     }
     setProgress(null);
-    setResult({ ok: files.length, failed });
+    setResult({ ok: files.length, failed, empty });
   };
 
   return (
@@ -355,6 +383,39 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
           {busy ? "Đang tải…" : chosen.length > 1 ? `⬇ Tải ${chosen.length} lớp (.zip)` : chosen.length === 1 ? "⬇ Tải 1 lớp" : "Chọn lớp để tải"}
         </button>
       </div>
+      {scopes && (scopes.communes.length > 0 || scopes.hamlets.length > 0 || scopes.routes.length > 0) && (
+        <fieldset className="integration-batch-scope" disabled={busy}>
+          <legend>Phạm vi</legend>
+          <label>
+            Xã{" "}
+            <select value={communeId} onChange={(event) => { setCommuneId(event.target.value); setHamletId(""); setRouteName(""); }}>
+              <option value="">Toàn dự án</option>
+              {scopes.communes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Ấp{" "}
+            <select value={hamletId} onChange={(event) => { setHamletId(event.target.value); setRouteName(""); }}>
+              <option value="">{commune ? `Cả ${commune.name}` : "Tất cả ấp"}</option>
+              {hamlets.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </label>
+          <label>
+            Tuyến{" "}
+            <select value={routeName} onChange={(event) => setRouteName(event.target.value)}>
+              <option value="">{hamlet ? `Cả ${hamlet.name}` : "Tất cả tuyến"}</option>
+              {routes.map((r) => <option key={r.name} value={r.name}>{r.name}</option>)}
+            </select>
+          </label>
+          {route && (
+            <label title="Lớp không có mã tuyến lấy đối tượng trong khoảng cách này tới tuyến">
+              Lớp không có mã tuyến: trong{" "}
+              <input type="number" min={1} max={200} value={distance} onChange={(event) => setDistance(Math.min(200, Math.max(1, Number(event.target.value) || 30)))} />{" "}m
+            </label>
+          )}
+          <small>{scopeLabel ? `Chỉ xuất đối tượng thuộc: ${scopeLabel}` : "Đang xuất toàn bộ dữ liệu của lớp"}</small>
+        </fieldset>
+      )}
       {layers.length === 0 ? (
         <p className="integration-profile-empty">Không có lớp dữ liệu nào trong phạm vi quyền hiện tại.</p>
       ) : (
@@ -389,6 +450,7 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
         <div role="status" className={result.failed.length ? "integration-batch-result has-errors" : "integration-batch-result"}>
           <p>{result.ok > 1 ? `Đã nén ${result.ok} lớp vào một tệp ZIP` : `Đã tải ${result.ok} lớp`}{result.failed.length ? `, lỗi ${result.failed.length} lớp:` : "."}</p>
           {result.failed.length > 0 && <ul>{result.failed.map((message) => <li key={message}>{message}</li>)}</ul>}
+          {result.empty.length > 0 && <p>Không có đối tượng trong phạm vi: {result.empty.join(", ")}.</p>}
         </div>
       )}
     </section>

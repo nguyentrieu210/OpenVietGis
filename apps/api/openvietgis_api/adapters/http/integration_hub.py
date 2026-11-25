@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Annotated, Any, Final, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -167,8 +167,7 @@ _SOURCE_FIELDS_SQL = text(
     """
 )
 
-_EXPORT_FEATURES_SQL = text(
-    """
+_EXPORT_SELECT = """
     SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(geometry, :out_srid)) AS geom_json
     FROM spatial.reference_features
     WHERE organization_id = :org
@@ -176,27 +175,88 @@ _EXPORT_FEATURES_SQL = text(
       AND source_id = :sid
       AND geometry_state = 'present'
       AND geometry IS NOT NULL
-    ORDER BY feature_id ASC
-    LIMIT :limit
-    """
-)
-
-_EXPORT_FEATURES_SCOPED_SQL = text(
-    """
-    SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(geometry, :out_srid)) AS geom_json
-    FROM spatial.reference_features
-    WHERE organization_id = :org
-      AND project_id = :proj
-      AND source_id = :sid
-      AND geometry_state = 'present'
-      AND geometry IS NOT NULL
+"""
+_EXPORT_ACL = """
       AND gis_access.feature_allowed(
           :org, :proj, :sid, feature_id, attributes, geometry, 'export'
       )
-    ORDER BY feature_id ASC
-    LIMIT :limit
+"""
+# Spec 054 export scope (xã/ấp area, tuyến route). Fixed SQL fragments; every value is bound.
+_ROUTE_ID = "coalesce(attributes->>'id', feature_id)"
+_SCOPE_GEOMETRIES = """
+    SELECT ST_Transform(geometry, 4326) AS geometry FROM spatial.reference_features
+    WHERE organization_id = :org AND project_id = :proj AND geometry IS NOT NULL
+      AND source_id = ANY(:{kind}_sids) AND {match}
+"""
+_AREA_FILTER = (
+    "\n      AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry), :native_srid) FROM ("
+    + _SCOPE_GEOMETRIES.format(kind="area", match="feature_id = ANY(:area_fids)")
+    + ") area))"
+)
+_ROUTE_FILTERS = {
+    "self": f"\n      AND {_ROUTE_ID} = ANY(:route_ids)",
+    "attribute": "\n      AND attributes->>'tuyen_id' = ANY(:route_ids)",
+    "distance": (
+        "\n      AND ST_DWithin(ST_Transform(geometry, 4326)::geography, (SELECT ST_Union(geometry)::geography FROM ("
+        + _SCOPE_GEOMETRIES.format(kind="route", match=f"{_ROUTE_ID} = ANY(:route_ids)")
+        + ") route), :route_distance_m)"
+    ),
+}
+
+
+def _export_features_sql(*, scoped: bool, area: bool, route_mode: str | None) -> Any:
+    sql = _EXPORT_SELECT + (_EXPORT_ACL if scoped else "")
+    if area:
+        sql += _AREA_FILTER
+    if route_mode is not None:
+        sql += _ROUTE_FILTERS[route_mode]
+    return text(sql + "\n    ORDER BY feature_id ASC\n    LIMIT :limit\n")
+
+
+@dataclass(frozen=True)
+class _ExportScope:
+    area_sids: list[Any]
+    area_fids: list[str]
+    route_sids: list[Any]
+    route_ids: list[str]
+    route_distance_m: float
+
+    @property
+    def active(self) -> bool:
+        return bool(self.area_fids or self.route_ids)
+
+
+_SCOPE_LAYERS_SQL = text(
+    """
+    SELECT l.id AS layer_id, l.name AS name, l.source_id AS source_id,
+           s.geometry_family AS geometry_family
+    FROM spatial.layers l
+    JOIN spatial.data_sources s
+      ON s.organization_id = l.organization_id AND s.project_id = l.project_id
+     AND s.id = l.source_id
+    WHERE l.organization_id = :org AND l.project_id = :proj AND l.lifecycle = 'active'
     """
 )
+
+
+def _scope_layers(session: Session, organization_id: UUID, project_id: UUID) -> dict[str, list[Any]]:
+    """Find commune, hamlet and route layers by name and geometry.
+
+    shortcut: name-based detection (xã/phường, ấp, tuyến/đường/hẻm); add an explicit per-project
+    setting if a project names its boundary layers differently.
+    """
+    found: dict[str, list[Any]] = {"commune": [], "hamlet": [], "route": []}
+    rows = session.execute(_SCOPE_LAYERS_SQL, {"org": organization_id, "proj": project_id})
+    for row in rows.mappings().all():
+        words = set(re.findall(r"[a-z0-9]+", ascii_fold(str(row["name"])).lower()))
+        family = str(row["geometry_family"])
+        if family in ("Polygon", "MultiPolygon") and words & {"xa", "phuong"}:
+            found["commune"].append(row["source_id"])
+        elif family in ("Polygon", "MultiPolygon") and "ap" in words:
+            found["hamlet"].append(row["source_id"])
+        elif family in ("LineString", "MultiLineString") and words & {"tuyen", "duong", "hem"}:
+            found["route"].append(row["source_id"])
+    return found
 
 _SYNC_FEATURES_SQL = text(
     """
@@ -348,11 +408,15 @@ def _load_export_features(
     is_scoped: bool,
     stored_crs_code: int,
     geometry_family: str | None = None,
+    native_crs_code: int | None = None,
+    scope: _ExportScope | None = None,
+    route_mode: str | None = None,
 ) -> list[tuple[str, dict[str, Any], NativeGeometry]]:
     del context  # Session RLS actor context is already bound by prepare_project_scope.
+    area = scope is not None and bool(scope.area_fids)
     rows = (
         session.execute(
-            _EXPORT_FEATURES_SCOPED_SQL if is_scoped else _EXPORT_FEATURES_SQL,
+            _export_features_sql(scoped=is_scoped, area=area, route_mode=route_mode),
             {
                 "org": organization_id,
                 "proj": project_id,
@@ -360,6 +424,12 @@ def _load_export_features(
                 "limit": MAX_HUB_EXPORT_FEATURES + 1,
                 # Geometry is returned in this CRS; ST_Transform is a no-op when it equals storage.
                 "out_srid": stored_crs_code,
+                "native_srid": native_crs_code or stored_crs_code,
+                "area_sids": scope.area_sids if scope else [],
+                "area_fids": scope.area_fids if scope else [],
+                "route_sids": scope.route_sids if scope else [],
+                "route_ids": scope.route_ids if scope else [],
+                "route_distance_m": scope.route_distance_m if scope else 0.0,
             },
         )
         .mappings()
@@ -866,6 +936,98 @@ def _commit_sync_changeset(
     )
 
 
+_SCOPE_AREAS_SQL = text(
+    """
+    SELECT feature_id, attributes FROM spatial.reference_features
+    WHERE organization_id = :org AND project_id = :proj AND source_id = ANY(:sids)
+      AND geometry IS NOT NULL
+    """
+)
+_SCOPE_ROUTES_SQL = text(
+    """
+    SELECT r.attributes->>'ten' AS name, coalesce(r.attributes->>'id', r.feature_id) AS route_id,
+           array_remove(array_agg(DISTINCT h.feature_id), NULL) AS hamlet_ids
+    FROM spatial.reference_features r
+    LEFT JOIN spatial.reference_features h
+      ON h.organization_id = r.organization_id AND h.project_id = r.project_id
+     AND h.source_id = ANY(:hamlet_sids) AND h.geometry IS NOT NULL
+     AND ST_Intersects(h.geometry, ST_Transform(r.geometry, ST_SRID(h.geometry)))
+    WHERE r.organization_id = :org AND r.project_id = :proj AND r.source_id = ANY(:route_sids)
+      AND r.geometry IS NOT NULL AND coalesce(r.attributes->>'ten', '') <> ''
+    GROUP BY r.feature_id, r.attributes
+    """
+)
+
+
+def _natural_key(name: str) -> tuple[str, int, str]:
+    match = re.search(r"\d+", name)
+    return (name[: match.start()] if match else name, int(match.group()) if match else 0, name)
+
+
+@router.get(
+    "/organizations/{organization_id}/projects/{project_id}/integration-hub/export-scopes",
+    dependencies=[Depends(_set_no_store_headers)],
+)
+def get_export_scopes(
+    organization_id: UUID,
+    project_id: UUID,
+    auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
+    session: Annotated[Session, Depends(get_db_session, scope="function")],
+) -> dict[str, Any]:
+    """Commune -> hamlet -> route choices for scoped export (Spec 054); same read scope as the map."""
+    context = context_for(auth, organization_id=organization_id, project_id=project_id)
+    prepare_project_scope(session, context, permission=Permission.PROJECT_READ)
+    sources = _scope_layers(session, organization_id, project_id)
+    params = {"org": organization_id, "proj": project_id}
+
+    def areas(kind: str) -> list[Mapping[str, Any]]:
+        if not sources[kind]:
+            return []
+        rows = session.execute(_SCOPE_AREAS_SQL, params | {"sids": sources[kind]})
+        return list(rows.mappings().all())
+
+    communes = [
+        {
+            "id": str(row["feature_id"]),
+            "name": str(row["attributes"].get("name") or row["attributes"].get("ten") or "Xã"),
+            "code": str(row["attributes"].get("ma_xa") or ""),
+        }
+        for row in areas("commune")
+    ]
+    hamlets = [
+        {
+            "id": str(row["feature_id"]),
+            "name": str(row["attributes"].get("name") or row["attributes"].get("ten") or "Ấp"),
+            "commune_code": str(row["attributes"].get("ma_xa") or ""),
+        }
+        for row in areas("hamlet")
+    ]
+    routes: dict[str, dict[str, Any]] = {}
+    if sources["route"]:
+        rows = session.execute(
+            _SCOPE_ROUTES_SQL,
+            params | {"route_sids": sources["route"], "hamlet_sids": sources["hamlet"]},
+        )
+        for row in rows.mappings().all():
+            name = " ".join(str(row["name"]).split())
+            entry = routes.setdefault(
+                ascii_fold(name).lower(), {"name": name, "route_ids": [], "hamlet_ids": set()}
+            )
+            entry["route_ids"].append(str(row["route_id"]))
+            entry["hamlet_ids"].update(str(h) for h in row["hamlet_ids"] or [])
+    return {
+        "communes": sorted(communes, key=lambda c: _natural_key(c["name"])),
+        "hamlets": sorted(hamlets, key=lambda h: _natural_key(h["name"])),
+        "routes": sorted(
+            (
+                {"name": r["name"], "route_ids": r["route_ids"], "hamlet_ids": sorted(r["hamlet_ids"])}
+                for r in routes.values()
+            ),
+            key=lambda r: _natural_key(r["name"]),
+        ),
+    }
+
+
 @router.get(
     "/organizations/{organization_id}/projects/{project_id}"
     "/integration-hub/adapters/{adapter_key}/layers/{layer_id}/export",
@@ -879,9 +1041,24 @@ def export_integration_layer(
     auth: Annotated[AuthenticatedRequest, Depends(authenticate_request)],
     session: Annotated[Session, Depends(get_db_session, scope="function")],
     format: Literal["geopackage", "geojson", "postgis_sql", "dxf"] = "geopackage",
+    scope_area: Annotated[list[str] | None, Query(max_length=200)] = None,
+    scope_route: Annotated[list[str] | None, Query(max_length=500)] = None,
+    route_distance_m: Annotated[float, Query(ge=1, le=200)] = 30.0,
 ) -> Response:
     context = context_for(auth, organization_id=organization_id, project_id=project_id)
     prepare_project_scope(session, context, permission=Permission.PROJECT_READ)
+    scope: _ExportScope | None = None
+    if scope_area or scope_route:
+        if any(not v or len(v) > 128 for v in [*(scope_area or []), *(scope_route or [])]):
+            raise HTTPException(status_code=422, detail="Invalid export scope identifier.")
+        scope_sources = _scope_layers(session, organization_id, project_id)
+        scope = _ExportScope(
+            area_sids=scope_sources["commune"] + scope_sources["hamlet"],
+            area_fids=list(scope_area or []),
+            route_sids=scope_sources["route"],
+            route_ids=list(scope_route or []),
+            route_distance_m=route_distance_m,
+        )
 
     adapter = get_adapter(adapter_key)
     if adapter is None:
@@ -985,6 +1162,16 @@ def export_integration_layer(
         for row in field_rows
     ]
 
+    route_mode: str | None = None
+    if scope is not None and scope.route_ids:
+        # Route layers match their own ids, layers carrying tuyen_id match it, others use distance.
+        if source_id in scope.route_sids:
+            route_mode = "self"
+        elif any("tuyen_id" in (row["name"], row["field_id"]) for row in field_rows):
+            route_mode = "attribute"
+        else:
+            route_mode = "distance"
+
     features = _load_export_features(
         session,
         context,
@@ -993,7 +1180,12 @@ def export_integration_layer(
         source_id=source_id,
         is_scoped=is_scoped,
         stored_crs_code=output_crs_code,
+        native_crs_code=stored_crs_code,
+        scope=scope,
+        route_mode=route_mode,
     )
+    if scope is not None and not features:
+        raise HTTPException(status_code=422, detail="No features in the selected scope.")
     if any(geom.type != geometry_family for _, _, geom in features):
         raise HTTPException(
             status_code=422,
@@ -1083,6 +1275,16 @@ def export_integration_layer(
     }
     if format == "dxf":
         headers["X-OpenVietGIS-Attribute-Loss"] = "true"
+    if scope is not None:
+        headers["X-OpenVietGIS-Scope"] = ",".join(
+            part
+            for part in (
+                "area" if scope.area_fids else "",
+                f"route-distance-{scope.route_distance_m:g}m" if route_mode == "distance" else "",
+                f"route-{route_mode}" if route_mode in ("self", "attribute") else "",
+            )
+            if part
+        )
     return Response(
         content=payload,
         media_type=media_type,
