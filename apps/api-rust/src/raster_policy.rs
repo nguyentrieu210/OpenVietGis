@@ -3,7 +3,46 @@
 //! GDAL/PROJ remain worker engines. This module owns bounded OpenVietGIS request
 //! semantics before any raster bytes or worker process are touched.
 
+use axum::extract::{Path, State};
+use axum::routing::get;
+use axum::{Json, Router};
 use ovg_core::AppError;
+use ovg_storage::catalog::ProjectReadPolicy;
+use ovg_storage::raster;
+use serde_json::Value;
+use uuid::Uuid;
+
+use crate::catalog::{project_read, CatalogError};
+use crate::identity::HumanSession;
+use crate::AppState;
+
+const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/raster";
+
+pub(crate) fn router() -> Router<AppState> {
+    Router::new().route(&format!("{BASE}/layers"), get(list_raster_layers))
+}
+
+async fn list_raster_layers(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Value>, CatalogError> {
+    // The Python raster_scope rejects GIS-scoped actors; unrestricted read
+    // reproduces that fail-closed boundary before raster table access.
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await?;
+    let result = raster::list_layers(&mut read)
+        .await
+        .map_err(CatalogError::Application)?;
+    read.commit().await.map_err(CatalogError::Application)?;
+    Ok(Json(result))
+}
 
 pub const ANALYZE_UPLOAD_LIMIT: u64 = 32 * 1024 * 1024;
 pub const PERSIST_UPLOAD_LIMIT: u64 = 64 * 1024 * 1024;

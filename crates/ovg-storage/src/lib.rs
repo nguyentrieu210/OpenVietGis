@@ -9,6 +9,7 @@ pub mod identity;
 pub mod pool;
 pub mod processing_jobs;
 pub mod queries;
+pub mod raster;
 pub mod rls;
 pub mod spatial_transform;
 pub mod tenancy;
