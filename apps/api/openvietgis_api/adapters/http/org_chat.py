@@ -200,7 +200,8 @@ def list_rooms(session: Session, o: UUID, me: UUID, room: UUID | None = None) ->
             text(f"""
       SELECT r.id,r.kind,r.name,
         CASE WHEN r.kind='org' THEN (SELECT count(*) FROM ({MEMBERS_SQL}) a)
-          ELSE (SELECT count(*) FROM {T}chat_room_members c WHERE c.organization_id=r.organization_id
+          ELSE (SELECT count(*) FROM {T}chat_room_members c
+            WHERE c.organization_id=r.organization_id
             AND c.room_id=r.id) END AS member_count,
         (SELECT count(*) FROM {T}chat_messages x WHERE x.organization_id=r.organization_id
           AND x.room_id=r.id AND x.author_id<>:me AND x.created_at>COALESCE(rm.last_read_at,
@@ -390,7 +391,10 @@ def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: Write
     current = {
         r[0]
         for r in session.execute(
-            text(f"SELECT user_id FROM {T}chat_room_members WHERE organization_id=:o AND room_id=:r"),
+            text(
+                f"SELECT user_id FROM {T}chat_room_members WHERE organization_id=:o "
+                "AND room_id=:r"
+            ),
             args,
         )
     }
@@ -488,7 +492,10 @@ def post_message(
     args = {"o": organization_id, "r": room_id}
     if body.reply_to_id is not None and (
         session.execute(
-            text(f"SELECT 1 FROM {T}chat_messages WHERE organization_id=:o AND room_id=:r AND id=:q"),
+            text(
+                f"SELECT 1 FROM {T}chat_messages WHERE organization_id=:o AND room_id=:r "
+                "AND id=:q"
+            ),
             args | {"q": body.reply_to_id},
         ).first()
         is None
@@ -514,7 +521,8 @@ def post_message(
     mid = uuid4()
     session.execute(
         text(f"""INSERT INTO {T}chat_messages(organization_id,room_id,id,author_id,author_name,
-          body,reply_to_id,mentions) VALUES(:o,:r,:id,:me,:name,:body,:q,CAST(:mentions AS jsonb))"""),
+          body,reply_to_id,mentions)
+          VALUES(:o,:r,:id,:me,:name,:body,:q,CAST(:mentions AS jsonb))"""),
         args
         | {
             "id": mid,

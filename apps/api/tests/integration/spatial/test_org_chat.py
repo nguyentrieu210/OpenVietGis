@@ -81,7 +81,8 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         check(dao.post(f"{base}/rooms/{org_room}/read"))
         mine = check(dao.get(base + "/rooms"))["items"][0]
         assert mine["unread"] == 0 and mine["mentioned"] is False
-        assert owner.post(f"{base}/rooms/{org_room}/messages", json={"body": "  "}).status_code == 422
+        blank = owner.post(f"{base}/rooms/{org_room}/messages", json={"body": "  "})
+        assert blank.status_code == 422
 
         # Image attachments: stored apart, served only to room members.
         png = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
@@ -138,7 +139,8 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
         assert owner.post(base + "/rooms", json=bad).status_code == 422
         group = check(
             owner.post(
-                base + "/rooms", json={"name": "Tổ đo đạc", "member_ids": [str(world.member_user_id)]}
+                base + "/rooms",
+                json={"name": "Tổ đo đạc", "member_ids": [str(world.member_user_id)]},
             ),
             201,
         )
@@ -211,7 +213,8 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
             {"user_id": str(third), "display_name": "Nguyễn Thị Đào"}
         ]
         check(member.post(base + "/contacts/requests", json={"user_id": str(third)}), 201)
-        auto = check(dao.post(base + "/contacts/requests", json={"user_id": str(world.member_user_id)}), 201)
+        back = {"user_id": str(world.member_user_id)}
+        auto = check(dao.post(base + "/contacts/requests", json=back), 201)
         assert auto["status"] == "contact"
         assert {c["user_id"] for c in check(dao.get(base + "/contacts"))["items"]} == {
             str(world.owner_user_id),
@@ -225,7 +228,8 @@ def test_org_chat_rooms_messages_and_contacts(migrated_database):
 
         # CSRF required for writes.
         token = owner.headers.pop("X-OpenVietGIS-CSRF")
-        assert owner.post(f"{base}/rooms/{org_room}/messages", json={"body": "x"}).status_code == 403
+        no_csrf = owner.post(f"{base}/rooms/{org_room}/messages", json={"body": "x"})
+        assert no_csrf.status_code == 403
         owner.headers["X-OpenVietGIS-CSRF"] = token
 
 

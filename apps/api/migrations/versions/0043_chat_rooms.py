@@ -119,7 +119,8 @@ def upgrade():
     for table in TENANT_TABLES:
         op.execute(
             f"CREATE POLICY {table}_tenant ON collaboration.{table} FOR ALL TO openvietgis_runtime "
-            f"USING ({TENANT} AND {ACTOR} IS NOT NULL) WITH CHECK ({TENANT} AND {ACTOR} IS NOT NULL)"
+            f"USING ({TENANT} AND {ACTOR} IS NOT NULL) "
+            f"WITH CHECK ({TENANT} AND {ACTOR} IS NOT NULL)"
         )
     op.execute(
         f"CREATE POLICY chat_contacts_self ON collaboration.chat_contacts FOR ALL TO "
