@@ -24,9 +24,9 @@ pub enum ProjectReadPolicy {
 /// Proof of project.read on exactly one organization and project. The
 /// authorization checks and reads share the same transaction and row locks.
 pub struct ProjectRead<'a> {
-    tx: TenantTransaction<'a>,
-    project_id: Uuid,
-    gis_scoped: bool,
+    pub(crate) tx: TenantTransaction<'a>,
+    pub(crate) project_id: Uuid,
+    pub(crate) gis_scoped: bool,
 }
 
 impl<'a> ProjectRead<'a> {
@@ -318,7 +318,10 @@ impl<'a> ProjectRead<'a> {
         .map_err(db_error)
     }
 
-    async fn get_source_record(&mut self, source_id: Uuid) -> Result<SourceRecord, AppError> {
+    pub(crate) async fn get_source_record(
+        &mut self,
+        source_id: Uuid,
+    ) -> Result<SourceRecord, AppError> {
         let row = self
             .source_rows(Some(source_id), None, 1)
             .await?
@@ -489,8 +492,8 @@ impl<'a> ProjectRead<'a> {
     }
 }
 
-struct SourceRecord {
-    wire: Value,
+pub(crate) struct SourceRecord {
+    pub(crate) wire: Value,
     ready: bool,
     render_supported: bool,
     edit_supported: bool,
@@ -706,7 +709,7 @@ fn invalid_schema() -> AppError {
     AppError::internal("catalog schema revision integrity check failed")
 }
 
-fn db_error(error: sqlx::Error) -> AppError {
+pub(crate) fn db_error(error: sqlx::Error) -> AppError {
     AppError::internal(format!("catalog database operation failed: {error}"))
 }
 

@@ -4,6 +4,7 @@ pub(crate) mod catalog;
 pub mod config;
 pub mod error;
 pub(crate) mod identity;
+pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;

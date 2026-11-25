@@ -24,6 +24,7 @@ from psycopg import sql
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 import benchmark_runner as baseline
+from e05_render import compare_render_reads
 
 SEED = 20261125
 API = "/api/v1"
@@ -548,6 +549,9 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 scoped layer hidden", layer_a_other, 404, token=surveyor)
     if include_features:
         compare_feature_reads(suite, f"{layer_a}/features", selected, a, b, surveyor)
+    compare_render_reads(
+        suite, fixture, lambda layer_id: f"{layers_a}/{layer_id}", a, b, surveyor
+    )
     response = suite.oracle.delete(
         f"{root_a}/access/rules/{rule}", headers=admin_headers
     )
