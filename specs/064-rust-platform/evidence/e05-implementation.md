@@ -47,17 +47,17 @@ The 7 operations of the E05 inventory proper (3D Tiles: list/create/generate til
 ## CI / test results
 
 - Rust unit tests added (`crates/ovg-storage/src/viewport.rs`): bounds validation, pin pattern, WKB decode + display checks, feature/position limits and stable order.
-- GitHub Actions `Rust Platform CI` on `064-e05`: see the run linked in the hand-off report (fmt, architecture isolation, clippy `-D warnings`, `cargo test --workspace`, no-default-features test).
-- PostGIS parity (`tests/rust-parity/run.py`): **not run yet** — builds/tests are not allowed on this workstation or VPS1, and the CI PostGIS parity job is being added by another agent. Once it lands on `064-rust-platform`, merge it here and run; `e05_render.py` adds 31 cases: 23 FastAPI-vs-Rust differential (viewport bbox/world/limit/empty, extent, stale pins, 6 invalid inputs, unauthenticated, tenant B 404 ×2, foreign and missing layer, manual source 422, VN-2000 untrusted 422, GIS-scoped viewport only `poly-000001`, GIS-scoped extent, GIS-hidden layer 404) and 8 Rust-only tile checks (populated, GIS-scoped no leak, empty tile, tenant B 404, stale pin 409, x out of range 422, z 23 422, unauthenticated 401).
+- GitHub Actions `Rust Platform CI` run 45668460716 on `064-e05` @ `ff39030` (https://github.com/nguyentrieu210/OpenVietGis/actions/runs/45668460716): fmt, architecture isolation, clippy `-D warnings`, `cargo test --workspace` and the no-default-features test **pass**. `Cargo Audit` fails identically on the base branch (`7f087df`), not caused by E05.
+- PostGIS parity job (FastAPI oracle vs Rust on real PostGIS, same run): **all 31 E05 cases pass**; totals `HTTP parity 90 passed, 11 failed`, the 11 failures being the pre-existing E02 `/layers/{id}/features` cases (route not implemented in Rust yet, same on base). `e05_render.py` covers 23 FastAPI-vs-Rust differential cases (status, JSON body, Cache-Control) (viewport bbox/world/limit/empty, extent, stale pins, 6 invalid inputs, unauthenticated, tenant B 404 ×2, foreign and missing layer, manual source 422, VN-2000 untrusted 422, GIS-scoped viewport only `poly-000001`, GIS-scoped extent, GIS-hidden layer 404) and 8 Rust-only tile checks (populated, GIS-scoped no leak, empty tile, tenant B 404, stale pin 409, x out of range 422, z 23 422, unauthenticated 401).
 
 ## Benchmark
 
-Not run: the comparative run against the Rust binary needs a build and a seeded PostGIS, which now only happens in CI (pending the parity job). Targets from `baseline-benchmark.md`: viewport p95 at c=20 ≤ 70 % of Python (`viewport_bbox_1k_polygon` 3482 ms, `viewport_bbox_10k_point` 4626 ms with 95 % errors), error rate ≤ Python, app RSS ≤ 1 GiB. Expected effect, unmeasured: no per-row topology recheck and no Python WKB/JSON loop; still a full per-source scan because of the RLS/LEAKPROOF finding.
+Not run: the comparative run needs the Rust binary against a seeded 1k/10k/30k PostGIS; builds now happen only in CI and the benchmark job is not wired yet (`benchmark_runner.py --target-url` also runs every non-viewport scenario, most of which Rust does not serve yet). Targets from `baseline-benchmark.md`: viewport p95 at c=20 ≤ 70 % of Python (`viewport_bbox_1k_polygon` 3482 ms, `viewport_bbox_10k_point` 4626 ms with 95 % errors), error rate ≤ Python, app RSS ≤ 1 GiB. Expected effect, unmeasured: no per-row topology recheck and no Python WKB/JSON loop; still a full per-source scan because of the RLS/LEAKPROOF finding.
 
 ## Remaining E05 gaps
 
 1. 3D Tiles inventory (7 operations: tileset catalog, upload, generation, feature lookup, manifest and tile streaming) — not started.
-2. Run parity in CI and the comparative benchmark (E05-T02/T04 evidence).
+2. Comparative benchmark (E05-T04) and parity fixtures above 10k features (the Python oracle 503s there, D1).
 3. Trusted VN-2000 fixture provenance (D3) — needs the native fixture registry (E02).
 4. GIST usage under RLS (index finding) — DBA/schema decision.
 5. Tiles for projected sources, tile caching with revision-keyed invalidation and ACL revocation, PMTiles/Martin, offline packages.
