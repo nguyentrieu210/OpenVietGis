@@ -215,7 +215,21 @@ def gis_to_cad_preview(
                     vertices = coords[0]
             else:
                 vertices = coords
-            ent.set_points([xy(p) for p in vertices], format="xy")
+            # set_points("xy") resets per-vertex widths/bulges, which the
+            # dxf-attrib roundtrip check below cannot see.
+            old = ent.get_points("xyseb")
+            if any(b for *_, b in old):
+                _fail("Native LWPOLYLINE arcs (bulge) require CAD review")
+            widths = [(s, e) for _, _, s, e, _ in old]
+            if any(s or e for s, e in widths):
+                if len(widths) != len(vertices):
+                    _fail("Native LWPOLYLINE vertex widths require CAD review")
+                ent.set_points(
+                    [(*xy(p), s, e, 0) for p, (s, e) in zip(vertices, widths)],
+                    format="xyseb",
+                )
+            else:
+                ent.set_points([xy(p) for p in vertices], format="xy")
         changed.append(handle)
     if len(changed) > 1000:
         _fail("Native delta exceeds 1000 updates")

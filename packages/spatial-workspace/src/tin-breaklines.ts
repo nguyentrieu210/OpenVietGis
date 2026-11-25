@@ -29,16 +29,29 @@ export function constrainTIN(points: readonly XY[], input: Uint32Array, constrai
     }
     for (let i = 0; i < triangles.length; i += 3) indexTriangle(i, true);
 
+    // Points sorted by x: each segment only scans its own bounding box, not every point.
+    const byX = Array.from({length: points.length}, (_, i) => i).sort((a, b) => points[a]![0] - points[b]![0]);
+    const firstAtOrAfter = (value: number) => {
+        let lo = 0, hi = byX.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (points[byX[mid]!]![0] < value) lo = mid + 1; else hi = mid;
+        }
+        return lo;
+    };
     let effort = 0;
     for (const [start, end] of constraints) {
         if (start === end) continue;
         const [x, y, z] = points[start]!, [u, v, w] = points[end]!;
         const length = Math.hypot(u - x, v - y);
         const vertices = [{id: start, fraction: 0}, {id: end, fraction: 1}];
-        for (let id = 0; id < points.length; id++) {
-            if (++effort > 8_000_000) throw Error("Breakline quá phức tạp; hãy chia khu vực.");
-            if (id === start || id === end || Math.abs(orient(start, end, id)) > length * 1e-8) continue;
+        const pad = 1e-6, maxX = Math.max(x, u) + pad, minY = Math.min(y, v) - pad, maxY = Math.max(y, v) + pad;
+        for (let k = firstAtOrAfter(Math.min(x, u) - pad); k < byX.length; k++) {
+            const id = byX[k]!;
             const [px, py, pz] = points[id]!;
+            if (px > maxX) break;
+            if (++effort > 8_000_000) throw Error("Breakline quá phức tạp; hãy chia khu vực.");
+            if (py < minY || py > maxY || id === start || id === end || Math.abs(orient(start, end, id)) > length * 1e-8) continue;
             const fraction = ((px - x) * (u - x) + (py - y) * (v - y)) / (length * length);
             if (fraction <= 0 || fraction >= 1) continue;
             if (z !== undefined && w !== undefined && pz !== undefined && Math.abs(pz - (z + fraction * (w - z))) > .001)

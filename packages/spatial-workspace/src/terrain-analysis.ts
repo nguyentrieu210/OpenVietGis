@@ -48,9 +48,9 @@ export function buildTIN(points:readonly ElevationPoint[],maxEdgeM:number,refere
  for(let i=0;i<tri.length;i+=3){
   const a=p[tri[i]!]!,b1=p[tri[i+1]!]!,c=p[tri[i+2]!]!;
   if(Math.max(length(a,b1),length(a,c),length(b1,c))>maxEdgeM)continue;
+  for(let j=0;j<3;j++)locked.delete(edgeKey(tri[i+j]!,tri[i+(j+1)%3]!));
   const den=(b1[1]-c[1])*(a[0]-c[0])+(c[0]-b1[0])*(a[1]-c[1]);if(Math.abs(den)<1e-10)continue;
   triangleIds.push(tri[i]!,tri[i+1]!,tri[i+2]!);
-  for(let j=0;j<3;j++)locked.delete(edgeKey(tri[i+j]!,tri[i+(j+1)%3]!));
   const col0=bounded(Math.ceil((Math.min(a[0],b1[0],c[0])-l)/dx-1e-7),0,width-1),col1=bounded(Math.floor((Math.max(a[0],b1[0],c[0])-l)/dx+1e-7),0,width-1);
   const row0=bounded(Math.ceil((t-Math.max(a[1],b1[1],c[1]))/dy-1e-7),0,height-1),row1=bounded(Math.floor((t-Math.min(a[1],b1[1],c[1]))/dy+1e-7),0,height-1);
   for(let row=row0;row<=row1;row++)for(let col=col0;col<=col1;col++){
@@ -59,6 +59,8 @@ export function buildTIN(points:readonly ElevationPoint[],maxEdgeM:number,refere
    if(Math.min(u,v,w)>=-1e-7)values[row*width+col]=bounded(a[2]*u+b1[2]*v+c[2]*w,Math.min(a[2],b1[2],c[2]),Math.max(a[2],b1[2],c[2]));
   }
  }
+ // A breakline segment longer than the edge limit can never be in a kept triangle; it only leaves a gap, as before breaklines existed.
+ for(const key of locked){const [s,e]=key.split(":").map(Number) as [number,number];if(length(p[s]!,p[e]!)>maxEdgeM)locked.delete(key)}
  if(locked.size)throw Error("Giới hạn cạnh TIN loại bỏ một phần breakline; hãy chia đoạn hoặc tăng giới hạn.");
  const valid=values.filter((v):v is number=>v!==null);
  if(!valid.length)throw Error("Không đủ tam giác trong giới hạn cạnh đã chọn");

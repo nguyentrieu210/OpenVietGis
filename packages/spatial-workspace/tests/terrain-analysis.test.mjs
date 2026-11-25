@@ -119,3 +119,19 @@ test("dynamic flow leaves NoData dry and preserves uniform depth on a flat bed",
  near(last.depths[3],.002);
  near(last.massResidual,0);
 });
+
+test("breakline insertion scales with contour size, not vertices squared", async () => {
+ const {constrainTIN}=await import("../src/tin-breaklines.ts");
+ const {default:Delaunator}=await import("delaunator");
+ const points=[],constraints=[];
+ for(let line=0;line<30;line++)for(let i=0;i<100;i++){points.push([i,line*10,line]);if(i)constraints.push([points.length-2,points.length-1])}
+ const triangulation=Delaunator.from(points,p=>p[0],p=>p[1]).triangles;
+ assert.doesNotThrow(()=>constrainTIN(points,triangulation,constraints));
+});
+
+test("breakline longer than the TIN edge limit leaves a gap instead of failing", () => {
+ const points=[];
+ for(let y=0;y<3;y++)for(let x=0;x<3;x++)points.push([x*.001,y*.001,x+y]);
+ const g=interpolateTIN(points,200,"BM","local",17,[[0,5]]);
+ assert.ok(g.valid_count>0);
+});
