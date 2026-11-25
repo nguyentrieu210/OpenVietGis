@@ -111,3 +111,32 @@ Still required:
    resource benchmarks and rollback rehearsal on the integrated exact SHA.
 5. Keep FastAPI routes as oracle/rollback until each engine-specific acceptance
    gate is independently green.
+
+## E08 DB-backed vertical slice
+
+After the initial wave checkpoint, E08 progressed from static registry ownership
+to a real RLS-bound PostGIS vertical slice:
+
+- Rust owns GET /processing/jobs, GET /processing/jobs/{job_id}, and
+  POST /processing/jobs/{job_id}/cancel.
+- The SQLx repository reads/writes the canonical processing.jobs table inside
+  the already authorized ProjectRead transaction.
+- Cancel uses FOR UPDATE, preserves JOB_TERMINAL, requires CSRF and
+  project.edit, and commits atomically.
+- Create/retry remain on FastAPI until the geometry publication transaction is
+  ported as one unit; the wave intentionally does not split that transaction.
+
+Real isolated PostGIS differential harness tests/rust-parity/e08_jobs.py passed:
+
+- list jobs;
+- get queued and failed jobs;
+- missing job;
+- foreign-tenant denial;
+- limit bounds 0/201;
+- cancel running job;
+- terminal cancel conflict with exact code/message envelope;
+- missing-CSRF fail-closed.
+
+The harness found and corrected one real Rust HTTP envelope mismatch during
+development (JOB_TERMINAL initially used the catalog detail envelope).
+The final run is green against FastAPI on the same migrated database.
