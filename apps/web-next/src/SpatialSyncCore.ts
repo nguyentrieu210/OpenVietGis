@@ -1,3 +1,13 @@
+export const STUDIO_FEATURE_PAGE_SIZE = 1_000;
+const STUDIO_FEATURE_PAGE_CAP = 50;
+
+export function studioFeaturePageLimit(featureCount: number | null | undefined) {
+  return Math.min(
+    STUDIO_FEATURE_PAGE_CAP,
+    Math.max(1, Math.ceil((featureCount ?? 10_000) / STUDIO_FEATURE_PAGE_SIZE)),
+  );
+}
+
 // A bounded revision chain proves that every changed feature is accounted for.
 // Never read historical attributes into the map: detail reads enforce current ACL and CRS.
 export function revisionChain<T extends {id:string;base_content_revision:string;resulting_content_revision:string;operation_count:number;status:string}>(items:T[],from:string,to:string):T[]|null{

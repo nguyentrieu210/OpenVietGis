@@ -1,3 +1,4 @@
+from math import asinh, pi, radians, tan
 from uuid import uuid4
 
 from tests.fixtures.identity_tenancy import seed_access_world
@@ -81,6 +82,23 @@ def test_scoped_layer_features_and_editing(migrated_database):
             ),
             201,
         )
+        # Keep one feature per detail tile so cache revalidation can distinguish
+        # the hidden feature's tile from the same layer's permitted tile.
+        z = 17
+        tile_count = 2**z
+        y = int((1 - asinh(tan(radians(10.7))) / pi) / 2 * tile_count)
+
+        def tile_url(longitude):
+            x = int((longitude + 180) / 360 * tile_count)
+            return root + f"/pro/tiles/{first['layer_id']}/{z}/{x}/{y}.mvt"
+
+        source = info(member, first)
+        tile_pins = {key: source[key] for key in ("content_revision", "schema_revision")}
+        visible_tile, hidden_tile = tile_url(106.5), tile_url(106.6)
+        before_scope_change = member.get(hidden_tile, params=tile_pins)
+        assert before_scope_change.status_code == 200 and before_scope_change.content
+        old_etag = before_scope_change.headers["etag"]
+
         r = check(
             admin.post(
                 root + "/access/rules",
@@ -97,6 +115,14 @@ def test_scoped_layer_features_and_editing(migrated_database):
         assert [layer["id"] for layer in check(member.get(path))["items"]] == [first["layer_id"]]
         assert member.get(path + "/" + second["layer_id"]).status_code == 404
         assert info(member, first)["feature_count"] == 1
+
+        still_visible = member.get(visible_tile, params=tile_pins)
+        assert still_visible.status_code == 200 and still_visible.content
+        assert still_visible.headers["cache-control"] == "private, no-store"
+        revalidated = member.get(hidden_tile, params=tile_pins, headers={"If-None-Match": old_etag})
+        assert revalidated.status_code == 200 and revalidated.content == b""
+        assert revalidated.headers["cache-control"] == "private, no-store"
+        assert "etag" not in revalidated.headers
 
         def features(client, layer):
             src = info(client, layer)

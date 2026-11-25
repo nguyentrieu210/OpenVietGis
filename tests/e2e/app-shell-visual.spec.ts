@@ -16,6 +16,9 @@ test("landing visual baseline", async ({ page }) => {
 test("login visual baseline", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/login");
+  await expect(
+    page.getByRole("link", { name: "Đăng nhập với OpenVietGIS Development", exact: true })
+  ).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveScreenshot("login.png", {
     fullPage: true,
     animations: "disabled"

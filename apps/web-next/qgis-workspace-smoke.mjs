@@ -20,6 +20,7 @@ try{
   else if(p.endsWith("/extensions/activations")&&method==="POST"){active=true;body={id:"activation",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}}
   else if(p.endsWith("/extensions/manifests"))body={items:[{id:"manifest",extension_key:"house_numbering",version:"2.0.0",api_compatibility:"1.x",enabled:true}]};
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
+  else if(p.endsWith("/access/mine"))body={restricted:false};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
   else if(p.endsWith("/features")){const part=p.includes("layer3")?3:p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
@@ -42,7 +43,7 @@ try{
  await page.getByRole("button",{name:"Mở ký hiệu Ranh giới xã Bình Hưng"}).click();await page.getByText("Polygon · EPSG:4326").waitFor();
  const box=await page.locator(".qgis-dock").boundingBox();const handle=await page.locator(".qgis-resizer").boundingBox();await page.mouse.move(handle.x+handle.width/2,handle.y+80);await page.mouse.down();await page.mouse.move(handle.x+handle.width/2+55,handle.y+80,{steps:5});await page.mouse.up();assert.ok((await page.locator(".qgis-dock").boundingBox()).width>box.width+40);
  console.log("PASS layer select independent of visibility, filter, symbol, context attribute table, table filter, order, resize");
- await page.getByRole("button",{name:/Plugin/}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).click();await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({timeout:20000});await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();await page.getByText(/300 đang hiển thị/).waitFor({timeout:20000});
+ await page.getByRole("button",{name:"◈ Plugin",exact:true}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).click();await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({timeout:20000});await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();await page.getByText(/300 đang hiển thị/).waitFor({timeout:20000});
  await page.getByRole("button",{name:"Mở nhóm Điểm khảo sát số nhà"}).click();await page.locator(".qgis-group [data-layer-id]").first().waitFor();assert.equal(await page.locator(".qgis-group [data-layer-id]").count(),2);await page.locator(".qgis-group [data-layer-id]").first().locator("input").uncheck();assert.equal(await page.locator(".studio-layer-group input").evaluate(el=>el.indeterminate),true);await page.locator(".qgis-group [data-layer-id]").first().locator("input").check();
  await page.screenshot({path:"/tmp/ovg-qgis-desktop.png"});console.log("PASS plugin tree expansion, independent sublayer visibility and mixed group checkbox");
  const layerBox=await page.locator(".qgis-dock").boundingBox(), mapBox=await page.locator(".qgis-map-region").boundingBox();assert.ok(mapBox.x>=layerBox.x+layerBox.width-1);

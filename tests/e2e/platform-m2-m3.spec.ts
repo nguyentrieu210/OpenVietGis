@@ -53,8 +53,13 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
   // 2. R007 Query Workbench
   await page.goto(`${base}/queries`);
   await expect(page.getByTestId("query-workbench")).toBeVisible();
+  await page.getByLabel("Sắp xếp theo").selectOption("name");
+  await page.getByLabel("Thứ tự sắp xếp").selectOption("desc");
   await page.getByRole("button", { name: "Chạy truy vấn" }).click();
   await expect(page.getByText(/Kết quả: 2 đối tượng phù hợp/i)).toBeVisible({ timeout: 10000 });
+  const sortedResult = page.getByTestId("query-result");
+  await expect(sortedResult.locator("tbody tr").first()).toContainText("Point Two");
+  await expect(sortedResult.locator("tbody tr").last()).toContainText("Point One");
 
   // Compose and persist a real typed AND/NOT query, then replay it after reload.
   const first = page.getByTestId("query-filter-0");

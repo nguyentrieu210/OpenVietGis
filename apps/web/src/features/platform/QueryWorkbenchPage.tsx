@@ -30,6 +30,8 @@ function QueryWorkbench({organizationId,projectId,accountId}:{organizationId:str
   const [group,setGroup] = useState<"and"|"or">("and");
   const [refLayerId,setRefLayerId] = useState("");
   const [predicate,setPredicate] = useState<"intersects"|"within"|"contains">("intersects");
+  const [sortField,setSortField] = useState("");
+  const [sortDirection,setSortDirection] = useState<"asc"|"desc">("asc");
   const [queryName,setQueryName] = useState("Bộ lọc đã lưu");
   const [executed,setExecuted] = useState<ExecutedQuery|null>(null);
   const [error,setError] = useState<string|null>(null);
@@ -71,9 +73,17 @@ function QueryWorkbench({organizationId,projectId,accountId}:{organizationId:str
   }
   function chooseLayer(id:string) {
     setLayerId(id);setRows([blankRow()]);setRefLayerId("");setExecuted(null);setError(null);setNotice(null);
+    setSortField("");setSortDirection("asc");
   }
-  function buildDefinition():QueryDefinition {
-    return buildQueryDefinition(rows,fields,group,predicate,refLayerId || undefined);
+  function buildDefinition():ExecutedQuery["definition"] {
+    if (sortField && !fields.some(field => field.field_id === sortField)) {
+      throw new Error("Trường sắp xếp đã thay đổi. Chọn lại trường.");
+    }
+    return {
+      ...buildQueryDefinition(rows,fields,group,predicate,refLayerId || undefined),
+      ...(sortField ? {sort_field:sortField} : {}),
+      sort_direction:sortDirection
+    };
   }
 
   async function execute(layer:SpatialLayer, definition:ExecutedQuery["definition"], offset=0, sourceName="Bộ lọc hiện tại", fingerprint?:string) {
@@ -186,6 +196,18 @@ function QueryWorkbench({organizationId,projectId,accountId}:{organizationId:str
           <label>Lớp tham chiếu (tùy chọn)
             <select value={refLayerId} disabled={disabled} onChange={e=>{setRefLayerId(e.target.value);setExecuted(null);}}>
               <option value="">Không chọn</option>{layers.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </label>
+          <label>Sắp xếp theo
+            <select value={sortField} disabled={disabled} onChange={e=>{setSortField(e.target.value);setExecuted(null);}}>
+              <option value="">Mã đối tượng</option>
+              {fields.map(field=><option key={field.field_id} value={field.field_id}>{field.name}</option>)}
+            </select>
+          </label>
+          <label>Thứ tự sắp xếp
+            <select value={sortDirection} disabled={disabled} onChange={e=>{setSortDirection(e.target.value as typeof sortDirection);setExecuted(null);}}>
+              <option value="asc">Tăng dần</option>
+              <option value="desc">Giảm dần</option>
             </select>
           </label>
           <label>Tên truy vấn lưu<input value={queryName} disabled={disabled} onChange={e=>setQueryName(e.target.value)}/></label>

@@ -334,15 +334,43 @@ def commit_managed_changes(
     if base_schema_revision:
         payload["base_schema_revision"] = base_schema_revision
     res = _json_request(config, "POST", f"{_managed_base(config)}/commits", payload)
+    return _commit_receipt(
+        res, operation_id=operation_id, source_id=source_id, operation_count=len(operations)
+    )
+
+
+def _commit_receipt(
+    body: dict[str, Any],
+    *,
+    operation_id: str,
+    source_id: str | None = None,
+    operation_count: int | None = None,
+) -> ManagedCommitReceipt:
+    required_text = ("changeset_id", "source_id", "audit_event_id", "resulting_content_revision")
+    count = body.get("operation_count")
+    cursor = body.get("event_cursor", 0)
+    if (
+        body.get("status") != "accepted"
+        or body.get("operation_id") != operation_id.strip()
+        or any(not isinstance(body.get(key), str) or not body[key] for key in required_text)
+        or not re.fullmatch(r"[a-f0-9]{64}", body["resulting_content_revision"])
+        or (source_id is not None and body["source_id"] != source_id)
+        or type(count) is not int
+        or count < 1
+        or (operation_count is not None and count != operation_count)
+        or type(cursor) is not int
+        or cursor < 0
+    ):
+        raise ApiError("Biên nhận lưu không khớp với giao dịch. Bản nháp được giữ để đối chiếu.")
     return ManagedCommitReceipt(
-        status=str(res["status"]),
-        changeset_id=str(res["changeset_id"]),
-        operation_id=str(res["operation_id"]),
-        source_id=str(res["source_id"]),
-        resulting_content_revision=str(res["resulting_content_revision"]),
-        operation_count=int(res["operation_count"]),
-        event_cursor=int(res.get("event_cursor", 0)),
-        audit_event_id=str(res["audit_event_id"]),
+        status=body["status"],
+        changeset_id=body["changeset_id"],
+        operation_id=body["operation_id"],
+        source_id=body["source_id"],
+        resulting_content_revision=body["resulting_content_revision"],
+        operation_count=count,
+        event_cursor=cursor,
+        audit_event_id=body["audit_event_id"],
     )
 
 
@@ -350,18 +378,14 @@ def get_managed_commit_receipt(
     config: OpenVietGisConfig,
     *,
     operation_id: str,
+    source_id: str | None = None,
+    operation_count: int | None = None,
 ) -> ManagedCommitReceipt:
     encoded = urllib.parse.quote(operation_id, safe="")
-    res = _json_request(config, "GET", f"{_managed_base(config)}/commits/{encoded}")
-    return ManagedCommitReceipt(
-        status=str(res["status"]),
-        changeset_id=str(res["changeset_id"]),
-        operation_id=str(res["operation_id"]),
-        source_id=str(res["source_id"]),
-        resulting_content_revision=str(res["resulting_content_revision"]),
-        operation_count=int(res["operation_count"]),
-        event_cursor=int(res.get("event_cursor", 0)),
-        audit_event_id=str(res["audit_event_id"]),
+    query = "?" + urllib.parse.urlencode({"source_id": source_id}) if source_id else ""
+    res = _json_request(config, "GET", f"{_managed_base(config)}/commits/{encoded}{query}")
+    return _commit_receipt(
+        res, operation_id=operation_id, source_id=source_id, operation_count=operation_count
     )
 
 
@@ -541,7 +565,13 @@ def send_pending_commit(config, pending, *, recover=False, permit_replay=True):
     """Only network I/O. A retry checks the durable receipt before sending again."""
     if recover:
         try:
-            return get_managed_commit_receipt(config, operation_id=pending["operation_id"])
+            request = pending["request"]
+            return get_managed_commit_receipt(
+                config,
+                operation_id=pending["operation_id"],
+                source_id=request["source_id"],
+                operation_count=len(request["operations"]),
+            )
         except ApiError as exc:
             if exc.status_code != 404:
                 raise

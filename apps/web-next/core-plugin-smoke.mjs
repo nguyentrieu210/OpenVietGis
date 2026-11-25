@@ -34,7 +34,7 @@ try{
  assert.equal(await page.locator(".live-left label.live-layer").count(),2);
  await page.getByRole("button",{name:"Bảng thuộc tính"}).click();await page.locator(".live-table-row").first().click();await page.locator(".live-inspector").getByRole("button",{name:"Di chuyển điểm"}).waitFor();
  console.log("PASS Core independent, map/layers/table/point inspector available, no module API or chunk");
- await page.getByRole("button",{name:/Plugin/}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).click();
+ await page.getByRole("button",{name:"◈ Plugin",exact:true}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({timeout:20000});
  await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();
  await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
@@ -49,9 +49,9 @@ try{
  await page.getByRole("button",{name:"Đóng địa bàn"}).click();
  await page.getByLabel("Tìm kiếm",{exact:true}).fill("1000");await page.getByLabel("Tìm kiếm",{exact:true}).press("Enter");await page.locator(".live-search-result").first().click();await page.locator(".live-inspector").waitFor();
  console.log("PASS Plugin activated, own chunk and API, territory filters 200→100→50→25, search and map");
- await page.getByRole("button",{name:/Plugin/}).click();await page.getByRole("button",{name:"Mở Core",exact:true}).click();
+ await page.getByRole("button",{name:"◈ Plugin · Đang mở",exact:true}).click();await page.getByRole("button",{name:"Mở Core",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached",timeout:20000});await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});assert.equal(await page.getByRole("button",{name:"Địa bàn",exact:true}).count(),0);const calls=pluginCalls;
- await page.getByRole("button",{name:/Plugin/}).click();page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"Tắt",exact:true}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).waitFor();
+ await page.getByRole("button",{name:"◈ Plugin",exact:true}).click();page.once("dialog",d=>d.accept());await page.getByRole("button",{name:"Tắt",exact:true}).click();await page.getByRole("button",{name:"Kích hoạt",exact:true}).waitFor();
  await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();
  assert.equal(active,false);assert.equal(pluginCalls,calls);assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS Core switch and disable plugin do not remove layers or call domain APIs");

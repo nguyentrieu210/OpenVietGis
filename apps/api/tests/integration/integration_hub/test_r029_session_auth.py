@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
+import pytest
+from sqlalchemy.orm import Session
+
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.integration_hub.test_integration_hub_rls_acl import (
     _credential,
@@ -10,6 +16,7 @@ from tests.integration.integration_hub.test_integration_hub_rls_acl import (
     _root,
 )
 from tests.integration.service_identity.test_service_authorization import _service_client
+from tests.integration.spatial.test_layers import _wait_for_blocked_runtime_query
 from tests.integration.spatial.test_sources import _client
 
 
@@ -38,7 +45,9 @@ def test_managed_qgis_session_preserves_project_scope_and_edit_capability(
             assert client.get(f"{url}/{data['id']}").status_code == 200
 
 
-def test_real_pairing_credential_can_open_only_its_binding(migrated_database: None) -> None:
+def test_real_pairing_credential_can_open_only_its_binding(
+    migrated_database: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from uuid import uuid4
 
     world = seed_access_world()
@@ -328,6 +337,61 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
         assert empty_delta.json()["changes"] == []
         print("R031: 100 alternating Web/QGIS mutations converged over 10 ordered commits")
 
+        # Pause the real snapshot reader inside its project scope, then observe
+        # an actual database lock wait from a concurrent Web commit.
+        ready = Event()
+        release = Event()
+        execute = Session.execute
+
+        def pause_bootstrap(self, statement, *args, **kwargs):
+            if "ST_AsGeoJSON(f.geometry, 15, 0) AS geom_json" in str(statement):
+                ready.set()
+                assert release.wait(25), "test did not release the bootstrap reader"
+            return execute(self, statement, *args, **kwargs)
+
+        bootstrap_params = {"session_id": second_id, "layer_id": alias_id, "limit": 500}
+        mutation = {
+            "operation_id": str(uuid4()),
+            "base_content_revision": revision,
+            "base_schema_revision": page["schema_revision"],
+            "operations": [
+                {
+                    "op_type": "update",
+                    "feature_id": "initial",
+                    "properties": {"fld_name": "after concurrent commit"},
+                }
+            ],
+        }
+        with _client(world.owner_user_id) as writer:
+            with monkeypatch.context() as patch:
+                patch.setattr(Session, "execute", pause_bootstrap)
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    read = pool.submit(device.get, managed + "/bootstrap", params=bootstrap_params)
+                    try:
+                        assert ready.wait(15), "bootstrap never reached the real reader boundary"
+                        write = pool.submit(writer.post, seed_url, json=mutation)
+                        _wait_for_blocked_runtime_query()
+                        assert not write.done()
+                    finally:
+                        release.set()
+                    old = read.result(timeout=25)
+                    new = write.result(timeout=25)
+        assert old.status_code == 200, old.text
+        old_snapshot = old.json()
+        assert old_snapshot["content_revision"] == revision
+        assert all(row["content_revision"] == revision for row in old_snapshot["features"])
+        assert new.status_code == 201, new.text
+        new_revision = new.json()["resulting_content_revision"]
+        assert new_revision != revision
+        after = device.get(
+            managed + "/delta", params={"session_id": second_id, "cursor": old_snapshot["cursor"]}
+        )
+        assert after.status_code == 200, after.text
+        assert {change["layer_id"] for change in after.json()["changes"]} == {layer, alias_id}
+        for change in after.json()["changes"]:
+            assert change["content_revision"] == new_revision
+            assert change["upserts"][0]["properties"]["fld_name"] == "after concurrent commit"
+
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
         assert device.post(
             _root(foreign) + "/integration-hub/managed/sessions", json={"binding_id": bid}
@@ -342,6 +406,52 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
     with _service_client(issued["bearer_token"]) as device:
         assert device.post(sessions, json={"binding_id": bid}).status_code == 401
         assert not _session_still_valid(recheck, world.organization_id, world.project_id, UUID(sid))
+
+
+def test_managed_receipt_requires_source_when_operation_id_is_ambiguous(
+    migrated_database: None,
+) -> None:
+    from uuid import uuid4
+
+    world = seed_access_world()
+    project = _root(world)
+    operation_id = "shared-operation-id"
+    sources = {}
+    with _client(world.owner_user_id) as client:
+        for name in ("First", "Second"):
+            layer = client.post(
+                project + "/layers/manual",
+                json={"operation_id": str(uuid4()), "name": name, "geometry_family": "Point"},
+            )
+            assert layer.status_code == 201, layer.text
+            source_id = layer.json()["source_id"]
+            source = client.get(project + "/layers/" + layer.json()["layer_id"]).json()["source"]
+            written = client.post(
+                f"{project}/sources/{source_id}/changesets",
+                json={
+                    "base_content_revision": source["content_revision"],
+                    "base_schema_revision": source["schema_revision"],
+                    "operation_id": operation_id,
+                    "operations": [
+                        {
+                            "op_type": "create",
+                            "feature_id": "test-point",
+                            "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                            "properties": {},
+                        }
+                    ],
+                },
+            )
+            assert written.status_code == 201, written.text
+            sources[source_id] = written.json()["id"]
+
+        url = f"{project}/integration-hub/managed/commits/{operation_id}"
+        assert client.get(url).status_code == 409
+        for source_id, receipt_id in sources.items():
+            receipt = client.get(url, params={"source_id": source_id})
+            assert receipt.status_code == 200, receipt.text
+            assert receipt.json()["changeset_id"] == receipt_id
+        assert client.get(url, params={"source_id": str(uuid4())}).status_code == 404
 
 
 def test_managed_session_actor_isolation_and_epoch_authority(migrated_database: None) -> None:

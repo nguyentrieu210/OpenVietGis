@@ -97,7 +97,8 @@ def test_platform_error_message_is_not_discarded():
 def test_pending_retry_checks_receipt_before_replaying(monkeypatch):
     from integrations.qgis_plugin.openvietgis_connector import managed_client as client
     sent = []
-    pending = {"operation_id": "op", "request": {"operation_id": "op"}}
+    request = {"operation_id": "op", "source_id": "source", "operations": [{}]}
+    pending = {"operation_id": "op", "request": request}
     monkeypatch.setattr(client, "commit_managed_changes", lambda *a, **kw: sent.append(kw) or "sent")
     monkeypatch.setattr(client, "get_managed_commit_receipt", lambda *a, **kw: "receipt")
     assert client.send_pending_commit(None, pending, recover=True) == "receipt"
@@ -109,7 +110,46 @@ def test_pending_retry_checks_receipt_before_replaying(monkeypatch):
         client.send_pending_commit(None, pending, recover=True, permit_replay=False)
     assert sent == []
     assert client.send_pending_commit(None, pending, recover=True) == "sent"
-    assert sent == [{"operation_id": "op"}]
+    assert sent == [request]
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    [
+        {"operation_id": "other"},
+        {"source_id": "other"},
+        {"operation_count": 2},
+        {"event_cursor": -1},
+        {"resulting_content_revision": "bad"},
+        {"status": "unknown"},
+    ],
+)
+def test_unconfirmed_receipt_does_not_replay_pending_commit(monkeypatch, mismatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+
+    wire = {
+        "status": "accepted",
+        "changeset_id": "changeset",
+        "operation_id": "pending-op",
+        "source_id": "expected-source",
+        "resulting_content_revision": "a" * 64,
+        "operation_count": 1,
+        "event_cursor": 12,
+        "audit_event_id": "audit",
+    } | mismatch
+    request = {"source_id": "expected-source", "operations": [{}]}
+    pending = {"operation_id": "pending-op", "request": request}
+    monkeypatch.setattr(client, "_managed_base", lambda _config: "https://test.invalid")
+
+    def reply(_config, method, url):
+        assert method == "GET"
+        assert url.endswith("/commits/pending-op?source_id=expected-source")
+        return wire
+
+    monkeypatch.setattr(client, "_json_request", reply)
+    with pytest.raises(ApiError, match="Biên nhận"):
+        client.send_pending_commit(None, pending, recover=True)
+    assert pending["request"] is request
 
 
 def test_required_fields_preflight_preserves_draft_and_allows_valid_point():

@@ -1023,10 +1023,11 @@ def get_managed_commit_receipt(
     operation_id: str,
     auth: ReadAuth,
     session: DB,
+    source_id: Annotated[UUID | None, Query()] = None,
 ) -> dict[str, Any]:
     """Recover durable receipt for an uncertain commit using scoped operation_id."""
     _prep_scope(session, auth, organization_id, project_id, Permission.PROJECT_READ, mutation=False)
-    row = (
+    matches = (
         session.execute(
             text(
                 "SELECT c.id, c.source_id, c.operation_id, c.resulting_content_revision, "
@@ -1037,21 +1038,26 @@ def get_managed_commit_receipt(
                 "  AND e.changeset_id=c.id "
                 "WHERE c.organization_id=:o AND c.project_id=:p "
                 "  AND c.operation_id=:op_id AND c.actor_id=:aid AND c.actor_type=:atype "
-                "ORDER BY c.created_at DESC LIMIT 1"
+                "  AND c.source_id=COALESCE(CAST(:src AS uuid), c.source_id) "
+                "ORDER BY c.created_at DESC LIMIT 2"
             ),
             {
                 "o": organization_id,
                 "p": project_id,
                 "op_id": operation_id.strip(),
+                "src": source_id,
                 "aid": auth.actor.actor_id,
                 "atype": auth.actor.actor_type,
             },
         )
         .mappings()
-        .first()
+        .all()
     )
-    if row is None:
+    if not matches:
         raise HTTPException(404, "Commit receipt not found for this operation_id.")
+    if len(matches) > 1:
+        raise HTTPException(409, "Multiple commit receipts match this operation_id.")
+    row = matches[0]
     return {
         "status": "accepted",
         "changeset_id": str(row["id"]),

@@ -17,7 +17,11 @@ from openvietgis_api.adapters.http.security import (
     require_csrf,
 )
 from openvietgis_api.adapters.persistence.query_repository import SqlQueryRepository
-from openvietgis_api.domains.queries.domain import SavedQueryRecord
+from openvietgis_api.domains.queries.domain import (
+    MAX_QUERY_LIMIT,
+    MAX_QUERY_OFFSET,
+    SavedQueryRecord,
+)
 
 router = APIRouter(tags=["queries"])
 _BASE = "/organizations/{organization_id}/projects/{project_id}"
@@ -50,8 +54,8 @@ class ExecuteQueryRequest(BaseModel):
     expected_query_fingerprint: str | None = None
     sort_field: str | None = None
     sort_direction: str = "asc"
-    limit: int = Field(default=100, ge=1, le=500, strict=True)
-    offset: int = Field(default=0, ge=0, le=25000, strict=True)
+    limit: int = Field(default=100, ge=1, le=MAX_QUERY_LIMIT, strict=True)
+    offset: int = Field(default=0, ge=0, le=MAX_QUERY_OFFSET, strict=True)
 
 
 class CreateSavedQueryRequest(BaseModel):

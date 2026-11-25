@@ -178,6 +178,10 @@ def test_typed_decimal_literal_and_revision_paging(migrated_database):
             part = _query(client, path, continuation | {"offset": offset})
             ids.extend(part["selection_feature_ids"])
         assert ids == ["a", "b", "c", "d"] and not part["has_more"]
+        final_page = _query(client, path, continuation | {"offset": 50_000})
+        assert final_page["offset"] == 50_000
+        assert not final_page["selection_feature_ids"] and not final_page["has_more"]
+        assert client.post(path, json=continuation | {"offset": 50_001}).status_code == 422
         missing = client.post(path, json=body | {"offset": 1})
         assert missing.status_code == 409 and missing.json()["code"] == "MISSING_QUERY_PIN"
         changed = client.post(path, json=continuation | {"offset": 1, "sort_direction": "desc"})

@@ -216,6 +216,8 @@ Production & Commercial Readiness.
 
 ### R031
 
+Cross-cutting [Spec 059 — Core, Realtime & Reference Plugin Acceptance](specs/059-core-realtime-acceptance/spec.md): new stabilization round, child of R031–R047 with dependencies R003/R004/R005/R006/R007/R011/R013/R014/R015 and R027/R029; preserves R051/053 domain scope. Implementation in progress with 11 of 34 tasks verified. The branch includes main at 4e721a9. Release acceptance remains open. [Plan](specs/059-core-realtime-acceptance/plan.md) · [Tasks](specs/059-core-realtime-acceptance/tasks.md) · [Evidence](specs/059-core-realtime-acceptance/evidence/README.md). No production promotion implied.
+
 **Engine-first architecture migration** — in progress (specification / partial baseline inventory). Supports unified v1.0 (R030), depends on R002/R003/R004/R006/R008/R012/R014, R022 and R027/R029. Reuse proven engines through existing contracts; freeze net-new scope, preserve tenant/revision/CRS and data, replace only after measured parity, security/license review and rollback. No deployment or certification implied. [Spec](specs/031-engine-first/spec.md) · [Plan](specs/031-engine-first/plan.md) · [Tasks](specs/031-engine-first/tasks.md) · [Research](specs/031-engine-first/research.md).
 Cross-cutting [Spec 031 — Product inventory & audit](specs/031-product-inventory-audit/spec.md): static baseline and remediation backlog for Spec 030 unified v1.0; [audit evidence](specs/031-product-inventory-audit/AUDIT.md). Runtime acceptance remains open; prioritize repository/release consolidation before new features.
 
