@@ -108,6 +108,13 @@ try{
  await pan();
  assert.equal(await cmd.inputValue(),"PAN");
  console.log("PASS selection mode, command contains PAN and still focused: Space pans without executing command");
+ // Simulate a map decoration rendered as a sibling above the actual canvas.
+ await page.evaluate(()=>{const region=document.querySelector(".qgis-map-region");const el=document.createElement("div");el.id="pan-test-map-decoration";el.style.cssText="position:absolute;left:35%;top:35%;width:30%;height:35%;z-index:25;pointer-events:auto";region.append(el)});
+ await page.mouse.move(rect.x+rect.width*.42,rect.y+rect.height*.44);
+ await pan();
+ await page.evaluate(()=>document.getElementById("pan-test-map-decoration")?.remove());
+ console.log("PASS Space drag beginning on map decoration above canvas");
+
  await cmd.fill("ABC");await cmd.hover();
  await page.keyboard.press("Space");assert.equal(await page.getByRole("textbox",{name:"Dòng lệnh GIS"}).inputValue(),"ABC ");
  assert.equal(await page.evaluate(()=>document.body.dataset.ovgSpacePan),undefined);

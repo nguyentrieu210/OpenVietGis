@@ -9,3 +9,8 @@ body[data-ovg-space-pan] .maplibregl-canvas:active{cursor:grabbing!important}
 body[data-ovg-space-pan] .maplibregl-marker{pointer-events:none!important}
 
 body[data-ovg-space-dragging] .maplibregl-canvas{cursor:grabbing!important}
+
+.ovg-space-pan-hint{display:none;position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:40;pointer-events:none;background:#173e58;color:white;padding:6px 12px;border-radius:6px;font-size:12px;white-space:nowrap}body[data-ovg-space-pan] .ovg-space-pan-hint{display:block}
+
+body[data-ovg-space-pan] .qgis-map-region .live-map-empty,body[data-ovg-space-pan] .qgis-map-region .live-map-top{pointer-events:none}
+body[data-ovg-space-dragging] .qgis-map-region{cursor:grabbing;user-select:none}
