@@ -52,4 +52,8 @@ def test_historic_hamlet_layer_is_not_a_current_hamlet_scope() -> None:
         execute=lambda *_: SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: rows))
     )
     found = _scope_layers(session, uuid4(), uuid4())  # type: ignore[arg-type]
-    assert found == {"commune": ["Ranh xã, phường"], "hamlet": ["Ấp hiện hành"], "route": ["Đường và hẻm"]}
+    assert found == {
+        "commune": ["Ranh xã, phường"],
+        "hamlet": ["Ấp hiện hành"],
+        "route": ["Đường và hẻm"],
+    }
