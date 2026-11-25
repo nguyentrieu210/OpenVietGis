@@ -268,6 +268,8 @@ def utm_code(longitude: float, latitude: float) -> int:
     return (32600 if latitude >= 0 else 32700) + zone
 
 
+# shortcut: one zone from the layer centroid; a layer straddling 108°E (zones 48/49) is
+# distorted slightly more on its far side. Upgrade to VN-2000 TM-3 when the province is known.
 def _utm_code_for(
     session: Session, organization_id: UUID, project_id: UUID, source_id: UUID
 ) -> int:
