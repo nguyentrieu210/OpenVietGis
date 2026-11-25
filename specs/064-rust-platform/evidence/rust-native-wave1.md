@@ -219,3 +219,22 @@ ordering. Differential parity on isolated real PostGIS passed:
 - version history ordering
 - missing-document 404 envelope
 - foreign-tenant denial
+
+### E12 integration-hub catalog
+
+Rust now owns `GET /integration-hub/catalog`.
+
+The route preserves the intentional scoped-GIS behavior (catalog remains
+visible and reports `scoped_access`), derives effective Read/Edit/Manage
+capability from active membership/resource grants inside the authorized
+transaction, emits all 12 adapters with the exact eight-action matrix, and
+sets `Cache-Control: no-store` on successful catalog responses.
+
+Differential parity on isolated real PostGIS passed:
+
+- viewer + `scoped_access=true`
+- editor action matrix
+- manager action matrix
+- exact 12-adapter body/wire contract
+- successful no-store header
+- foreign-tenant denial
