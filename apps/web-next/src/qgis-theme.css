@@ -674,3 +674,21 @@
 .ovg-danmaku-line{gap:7px!important}
 .ovg-danmaku-line b{font-size:13.5px!important;text-transform:none}
 .ovg-danmaku-line b::after{content:":";margin-left:1px;color:#ffe08a}
+
+/* Real profile photos in chat and running lines */
+.av.photo{overflow:hidden;padding:0}.av.photo img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+/* Reaction bar inside the pane: mine anchors right, others left; counts don't overlap the next message */
+.ovg-chat-pane .ovg-live-msg.mine .ovg-live-reactbar{right:0!important;left:auto!important}
+.ovg-chat-pane .ovg-live-msg:not(.mine) .ovg-live-reactbar{left:0!important;right:auto!important}
+.ovg-chat-pane .ovg-live-msg:has(.ovg-live-reacts){margin-bottom:12px}
+/* Emoji picker */
+.ovg-live-quick{flex-wrap:wrap}
+.ovg-live-quick .more{font-size:12px!important;padding:1px 8px!important}
+.ovg-emoji{grid-column:1/-1;display:grid;gap:4px;padding:6px;border-radius:12px;background:#0d1720;border:1px solid #ffffff24}
+.ovg-emoji nav{display:flex;gap:2px;border-bottom:1px solid #ffffff1a;padding-bottom:4px}
+.ovg-emoji nav button{flex:1;border:0;background:none;font-size:17px;padding:3px;border-radius:8px;cursor:pointer;opacity:.6}
+.ovg-emoji nav button[aria-pressed=true]{opacity:1;background:#ffffff1f}
+.ovg-emoji small{color:#9fb0bc;font-size:11px;padding:0 4px}
+.ovg-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);max-height:190px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#ffffff33 transparent}
+.ovg-emoji-grid button{border:0;background:none;font-size:21px;padding:3px;border-radius:8px;cursor:pointer;line-height:1.2}
+.ovg-emoji-grid button:hover{background:#ffffff1f;transform:scale(1.15)}
