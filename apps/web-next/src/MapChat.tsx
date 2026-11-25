@@ -14,7 +14,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const base="/organizations/"+org+"/projects/"+pid+"/collaboration";
  const [log,setLog]=useState<Msg[]>([]),[typing,setTyping]=useState<{x:number;y:number}|null>(null),[text,setText]=useState(""),[open,setOpen]=useState(false),[unread,setUnread]=useState(0),[bubbles,setBubbles]=useState<Msg[]>([]),[bursts,setBursts]=useState<{id:string;e:string;x:number;d:number;t:number;r:number}[]>([]);
  const seen=useRef(new Set<string>()),first=useRef(true),mouse=useRef({x:0,y:0}),peersRef=useRef(peers);peersRef.current=peers;const openRef=useRef(false);
- const load=async()=>{try{const r=await client.request<Msg[]|{items:Msg[]}>(base+"/messages?limit=30",{cache:"no-store"});const items=(Array.isArray(r)?r:r.items).slice().reverse();
+ const load=async()=>{try{const r=await client.request<Msg[]|{items:Msg[]}>(base+"/messages?limit=30",{cache:"no-store"});const items=(Array.isArray(r)?r:r.items).slice().sort((a,b)=>a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id));
   const fresh=items.filter(m=>!seen.current.has(m.id)).map(m=>{const r=REACT.exec(m.body);return r?{...m,body:r[2]}:m});items.forEach(m=>seen.current.add(m.id));setLog(items);
   if(!first.current&&fresh.length){const isEmoji=(t:string)=>/^(\p{Extended_Pictographic}|\uFE0F|\u200D|\s)+$/u.test(t);
   setBubbles(b=>[...b,...fresh.filter(m=>!isEmoji(m.body))].slice(-8));
