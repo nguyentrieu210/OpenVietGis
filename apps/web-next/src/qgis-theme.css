@@ -432,3 +432,22 @@
 .ovg-burst span{position:absolute;left:0;bottom:0;font-size:26px;opacity:0;animation-name:ovg-rise;animation-timing-function:cubic-bezier(.2,.6,.3,1);animation-fill-mode:forwards;will-change:transform,opacity}
 @keyframes ovg-rise{0%{opacity:0;transform:translate(0,0) scale(.4)}12%{opacity:1;transform:translate(calc(var(--x)*.3),-40px) scale(1.15)}60%{opacity:1}100%{opacity:0;transform:translate(var(--x),-320px) rotate(var(--r)) scale(.9)}}
 @media (prefers-reduced-motion:reduce){.ovg-burst{display:none}}
+
+/* Zalo-like message list: mine right in blue, others left with avatar, hover reaction bar, counts under bubble */
+.ovg-live-msg{position:relative}
+.ovg-live-msg.mine{justify-content:flex-end}
+.ovg-live-bubble{position:relative;max-width:82%}
+.ovg-live-bubble p{padding:6px 10px 5px;border-radius:12px 12px 12px 4px;background:#ffffff1a}
+.ovg-live-msg.mine .ovg-live-bubble p{background:#1f6fb8;border-radius:12px 12px 4px 12px}
+.ovg-live-bubble b{display:block;font-size:11.5px;margin:0 0 1px}
+.ovg-live-bubble time{display:block;margin-top:2px;font-size:10px;color:#9fb0bc;text-align:right}
+.ovg-live-msg.mine time{color:#cfe3f5}
+.ovg-live-reacts{position:absolute;right:6px;bottom:-9px;display:inline-flex;gap:2px;padding:1px 5px;border-radius:10px;background:#fff;color:#1f2a30;font-size:11.5px;box-shadow:0 1px 4px #0005}
+.ovg-live-msg.mine .ovg-live-reacts{right:auto;left:6px}
+.ovg-live-msg:has(.ovg-live-reacts){margin-bottom:8px}
+.ovg-live-reactbar{position:absolute;top:-30px;right:0;display:none;gap:1px;padding:2px 4px;border-radius:16px;background:#fff;box-shadow:0 4px 14px #0006;z-index:2}
+.ovg-live-msg.mine .ovg-live-reactbar{right:auto;left:0}
+.ovg-live-msg:hover .ovg-live-reactbar,.ovg-live-reactbar:focus-within{display:inline-flex}
+.ovg-live-reactbar button{border:0;background:none;font-size:17px;padding:1px 3px;cursor:pointer;border-radius:50%;transition:transform .12s}
+.ovg-live-reactbar button:hover{transform:scale(1.35)}
+.ovg-live-chat-list{padding-top:34px}

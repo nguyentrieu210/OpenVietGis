@@ -6,6 +6,8 @@ import type {Peer} from "./LivePresence";
 
 // Spec 058: chat on the project like cursor chat — press "/" to type, the message floats next to your
 // cursor for everyone in the project (stored in the project chat, so the log keeps it).
+const REACT=/^⟦react:([\w-]{1,64}):(.{1,16})⟧$/u;
+export const REACTIONS=["❤️","👍","😆","😮","😢","🔥"];
 type Msg={id:string;author_id:string;author_name:string;body:string;created_at:string};
 type Props={client:ApiClient;org:string;pid:string;map:RefObject<ml.Map|null>;peers:Peer[];accountId:string;canWrite:boolean};
 export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
@@ -13,7 +15,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const [log,setLog]=useState<Msg[]>([]),[typing,setTyping]=useState<{x:number;y:number}|null>(null),[text,setText]=useState(""),[open,setOpen]=useState(false),[unread,setUnread]=useState(0),[bubbles,setBubbles]=useState<Msg[]>([]),[bursts,setBursts]=useState<{id:string;e:string;x:number;d:number;t:number;r:number}[]>([]);
  const seen=useRef(new Set<string>()),first=useRef(true),mouse=useRef({x:0,y:0}),peersRef=useRef(peers);peersRef.current=peers;const openRef=useRef(false);
  const load=async()=>{try{const r=await client.request<Msg[]|{items:Msg[]}>(base+"/messages?limit=30",{cache:"no-store"});const items=(Array.isArray(r)?r:r.items).slice().reverse();
-  const fresh=items.filter(m=>!seen.current.has(m.id));items.forEach(m=>seen.current.add(m.id));setLog(items);
+  const fresh=items.filter(m=>!seen.current.has(m.id)).map(m=>{const r=REACT.exec(m.body);return r?{...m,body:r[2]}:m});items.forEach(m=>seen.current.add(m.id));setLog(items);
   if(!first.current&&fresh.length){const isEmoji=(t:string)=>/^(\p{Extended_Pictographic}|\uFE0F|\u200D|\s)+$/u.test(t);
   setBubbles(b=>[...b,...fresh.filter(m=>!isEmoji(m.body))].slice(-8));
   const burst=fresh.filter(m=>isEmoji(m.body)).flatMap(m=>Array.from({length:14},(_,k)=>({id:m.id+":"+k,e:m.body.trim(),x:Math.round(Math.random()*90-45),d:+(k*0.09+Math.random()*0.2).toFixed(2),t:+(2.2+Math.random()*1.2).toFixed(2),r:Math.round(Math.random()*40-20)})));
@@ -32,6 +34,8 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const toggle=(v:boolean)=>{setOpen(v);if(v)setUnread(0);try{localStorage.setItem("ovg:chat-open",v?"1":"0")}catch{/* storage unavailable */}};
  const initials=(n:string)=>n.trim().split(/\s+/).slice(-2).map(w=>w[0]??"").join("").toUpperCase()||"?";
  const viewers=new Set(peers.map(p=>p.actor)).size;
+ const shown=log.filter(m=>!REACT.test(m.body));
+ const reactions=new Map<string,Map<string,string[]>>();for(const m of log){const r=REACT.exec(m.body);if(!r)continue;const per=reactions.get(r[1])??new Map<string,string[]>();const who=per.get(r[2])??[];if(!who.includes(m.author_name))who.push(m.author_name);per.set(r[2],who);reactions.set(r[1],per)}
  const submit=(t:string)=>{if(!t.trim())return;setDraft("");setAtBottom(true);void send(t)};
  // Live-stream style overlay on the map: always visible, newest at the bottom, old lines fade out at the top.
  const [pos,setPos]=useState<{x:number;y:number}|null>(()=>{try{const v=JSON.parse(localStorage.getItem("ovg:chat-pos")??"null");return v&&Number.isFinite(v.x)&&Number.isFinite(v.y)?v:null}catch{return null}});
@@ -42,7 +46,7 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
   addEventListener("pointermove",mv);addEventListener("pointerup",up)};
  const panel=<aside className={"ovg-live-chat"+(open?" open":" closed")+(pos?" moved":"")} style={pos?{left:pos.x,top:pos.y,right:"auto"}:undefined} aria-label="Chat dự án">
   <header onPointerDown={drag} title="Kéo để di chuyển · nhấp đúp để về góc phải" onDoubleClick={()=>{setPos(null);try{localStorage.removeItem("ovg:chat-pos")}catch{/* storage unavailable */}}}><button type="button" className="ovg-live-chat-title" onClick={()=>{if(dragged.current){dragged.current=false;return}toggle(!open)}} aria-expanded={open}><span className="dot"/>Chat trực tiếp{viewers>1?<small>· {viewers} người đang xem</small>:null}{!open&&unread?<b className="ovg-chat-badge static">{unread}</b>:null}</button><button type="button" className="ovg-live-chat-min" aria-label={open?"Thu nhỏ chat":"Mở chat"} onClick={()=>toggle(!open)}>{open?"–":"▴"}</button></header>
-  {open&&<><div className="ovg-live-chat-list" ref={listRef} onScroll={e=>{const el=e.currentTarget;setAtBottom(el.scrollHeight-el.scrollTop-el.clientHeight<24)}} aria-live="polite">{log.length?log.map(m=><div key={m.id} className={"ovg-live-msg"+(m.author_id===accountId?" mine":"")}><span className="av" style={{background:color(m.author_id)}}>{initials(m.author_name)}</span><p><b style={{color:color(m.author_id)}}>{m.author_id===accountId?"Bạn":m.author_name}</b><time>{time(m.created_at)}</time><br/>{m.body}</p></div>):<p className="ovg-live-empty">Chưa có tin nhắn. Gõ bên dưới hoặc bấm <kbd>/</kbd> trên bản đồ để nhắn cạnh con trỏ.</p>}</div>
+  {open&&<><div className="ovg-live-chat-list" ref={listRef} onScroll={e=>{const el=e.currentTarget;setAtBottom(el.scrollHeight-el.scrollTop-el.clientHeight<24)}} aria-live="polite">{shown.length?shown.map(m=>{const mine=m.author_id===accountId,rs=reactions.get(m.id);return <div key={m.id} className={"ovg-live-msg"+(mine?" mine":"")}>{!mine&&<span className="av" style={{background:color(m.author_id)}}>{initials(m.author_name)}</span>}<div className="ovg-live-bubble"><p>{!mine&&<b style={{color:color(m.author_id)}}>{m.author_name}</b>}{m.body}<time>{time(m.created_at)}</time></p>{rs&&<span className="ovg-live-reacts" title={[...rs].map(([e,who])=>e+" "+who.join(", ")).join(" · ")}>{[...rs].map(([e,who])=><span key={e}>{e}{who.length>1?who.length:""}</span>)}</span>}{canWrite&&<span className="ovg-live-reactbar" role="group" aria-label="Thả cảm xúc">{REACTIONS.map(e=><button type="button" key={e} aria-label={"Thả "+e} onClick={()=>void send("⟦react:"+m.id+":"+e+"⟧")}>{e}</button>)}</span>}</div></div>}):<p className="ovg-live-empty">Chưa có tin nhắn. Gõ bên dưới hoặc bấm <kbd>/</kbd> trên bản đồ để nhắn cạnh con trỏ.</p>}</div>
   {!atBottom&&<button type="button" className="ovg-live-jump" onClick={()=>{listRef.current?.scrollTo({top:listRef.current.scrollHeight,behavior:"smooth"});setAtBottom(true)}}>↓ Tin mới</button>}
   {canWrite?<form className="ovg-live-input" onSubmit={e=>{e.preventDefault();submit(draft)}}><div className="ovg-live-quick">{["👍","✅","❓","👀","🔥"].map(q=><button type="button" key={q} onClick={()=>submit(q)} aria-label={"Gửi "+q}>{q}</button>)}</div><input value={draft} maxLength={500} placeholder="Nhắn cho cả dự án…" onChange={e=>setDraft(e.target.value)}/><button type="submit" className="send" disabled={!draft.trim()} aria-label="Gửi">➤</button></form>:<p className="ovg-live-empty">Bạn chỉ có quyền xem.</p>}</>}
  </aside>;
