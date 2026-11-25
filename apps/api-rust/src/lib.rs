@@ -9,6 +9,7 @@ pub(crate) mod editing;
 pub mod error;
 pub(crate) mod extensions;
 pub(crate) mod field_offline;
+pub(crate) mod house_numbering;
 pub(crate) mod identity;
 pub(crate) mod map_render;
 pub mod metrics;
