@@ -12,6 +12,8 @@ on:
       - "crates/**"
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
+      - "tests/rust-parity/**"
+      - "tools/benchmark/rust-platform/**"
   pull_request:
     paths:
       - "Cargo.toml"
@@ -22,6 +24,8 @@ on:
       - "crates/**"
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
+      - "tests/rust-parity/**"
+      - "tools/benchmark/rust-platform/**"
 
 concurrency:
   group: rust-platform-${{ github.ref }}
@@ -96,6 +100,67 @@ jobs:
 
       - name: Verify the core API with no official modules
         run: cargo test --locked -p openvietgis-api-rust --no-default-features
+
+  postgis-parity:
+    name: PostGIS Parity (FastAPI oracle vs Rust)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-parity
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: parity
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --project apps/api --frozen
+
+      # Same PostGIS image, port 54330, template_postgis and openvietgis_runtime role as the Python CI.
+      - name: Start dedicated PostGIS test database
+        run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+
+      # No --locked: check-and-test already gates lockfile drift; parity should still report behaviour.
+      - name: Build Rust API candidate
+        run: cargo build -p openvietgis-api-rust --bin openvietgis-api-rust
+
+      - name: Run differential parity
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/run.py \
+            --candidate target/debug/openvietgis-api-rust --include-features \
+            2>&1 | tee dist/parity/parity.log
+
+      - name: Record PostGIS version
+        if: always()
+        run: |
+          mkdir -p dist/parity
+          docker compose -f infra/dev/compose.yaml exec -T postgres-test \
+            psql -U openvietgis -d openvietgis_test -Atc "SELECT version(), PostGIS_Full_Version()" \
+            > dist/parity/postgis-version.txt 2>&1 || true
+
+      - name: Upload parity output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgis-parity
+          path: dist/parity/
+          if-no-files-found: warn
 
   security-audit:
     name: Cargo Audit
