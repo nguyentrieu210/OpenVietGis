@@ -13,9 +13,9 @@ export function Splitter({storageKey,cssVar,axis,edge,min,max,label,defaultSize}
  const apply=(v:number|null)=>{const panel=ref.current?.parentElement;if(!panel)return;if(v===null)panel.style.removeProperty(cssVar);else panel.style.setProperty(cssVar,clampSize(v,min,limit())+"px")};
  useEffect(()=>{apply(read(storageKey))},[storageKey]);
  const size=()=>{const r=ref.current?.parentElement?.getBoundingClientRect();return r?(axis==="x"?r.width:r.height):defaultSize??min};
- const start=(e:React.PointerEvent<HTMLDivElement>)=>{e.preventDefault();const el=e.currentTarget,from=axis==="x"?e.clientX:e.clientY,base=size(),sign=edge==="start"?-1:1;el.setPointerCapture(e.pointerId);let last=base;
-  const move=(ev:PointerEvent)=>{last=clampSize(base+sign*((axis==="x"?ev.clientX:ev.clientY)-from),min,limit());apply(last)};
-  const end=()=>{write(storageKey,last);el.removeEventListener("pointermove",move);el.removeEventListener("pointerup",end);el.removeEventListener("pointercancel",end);window.dispatchEvent(new Event("resize"))};
+ const start=(e:React.PointerEvent<HTMLDivElement>)=>{e.preventDefault();const el=e.currentTarget,from=axis==="x"?e.clientX:e.clientY,base=size(),sign=edge==="start"?-1:1;el.setPointerCapture(e.pointerId);let last=base,moved=false;
+  const move=(ev:PointerEvent)=>{moved=true;last=clampSize(base+sign*((axis==="x"?ev.clientX:ev.clientY)-from),min,limit());apply(last)};
+  const end=()=>{if(moved)write(storageKey,last);el.removeEventListener("pointermove",move);el.removeEventListener("pointerup",end);el.removeEventListener("pointercancel",end);window.dispatchEvent(new Event("resize"))};
   el.addEventListener("pointermove",move);el.addEventListener("pointerup",end);el.addEventListener("pointercancel",end)};
  const key=(e:React.KeyboardEvent)=>{const grow=axis==="x"?(edge==="start"?"ArrowLeft":"ArrowRight"):(edge==="start"?"ArrowUp":"ArrowDown"),shrink=axis==="x"?(edge==="start"?"ArrowRight":"ArrowLeft"):(edge==="start"?"ArrowDown":"ArrowUp");if(e.key!==grow&&e.key!==shrink)return;e.preventDefault();const v=clampSize(size()+(e.key===grow?20:-20),min,limit());apply(v);write(storageKey,v);window.dispatchEvent(new Event("resize"))};
  const reset=()=>{apply(null);write(storageKey,null);window.dispatchEvent(new Event("resize"))};
