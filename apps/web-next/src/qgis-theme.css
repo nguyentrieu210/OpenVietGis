@@ -142,3 +142,27 @@
 .qgis-studio .crs-picker .crs-row.active{background:var(--ovg-primary-soft)!important;color:var(--ovg-primary)}
 .qgis-studio .crs-picker .crs-row small{color:var(--ovg-muted)}
 .qgis-studio .crs-detail{display:grid;gap:2px;padding:8px 10px;border:1px solid var(--ovg-line);background:var(--ovg-surface)}
+
+/* Identify panel (selected feature): compact like QGIS, nothing stretches */
+.qgis-studio .live-inspector-body{display:flex!important;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px;padding:8px 10px!important}
+.qgis-studio .live-inspector-body>*{flex:0 0 auto}
+.qgis-studio .live-inspector>header{padding:6px 8px 6px 10px;background:var(--ovg-header);border-bottom:1px solid var(--ovg-line)}
+.qgis-studio .live-inspector>header small{display:block;font-size:11px;color:var(--ovg-muted);letter-spacing:0;text-transform:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .live-inspector>header h3{font-size:13px;margin:1px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .live-inspector-body button{align-self:flex-start;min-height:26px!important;height:auto!important;padding:2px 10px!important;font-size:12px!important;border:1px solid var(--ovg-line)!important;border-radius:3px!important;background:var(--ovg-surface)!important;color:var(--ovg-ink)!important;box-shadow:none!important;width:auto!important}
+.qgis-studio .live-inspector-body button.primary{background:var(--ovg-primary)!important;border-color:var(--ovg-primary)!important;color:#fff!important}
+.qgis-studio .live-inspector-body button.danger{color:var(--ovg-danger)!important}
+.qgis-studio .live-inspector-body>p{margin:0;font-size:11.5px;color:var(--ovg-muted)}
+.qgis-studio .live-inspector-body label{display:grid;grid-template-columns:70px 1fr;align-items:center;gap:6px;font-size:12px}
+.qgis-studio .insp-attrs{border-top:1px solid var(--ovg-line-soft);padding-top:4px}
+.qgis-studio .insp-attrs summary{font-weight:600;font-size:12px;cursor:pointer;padding:2px 0}
+.qgis-studio .insp-attrs .live-list-row{display:grid;grid-template-columns:minmax(80px,40%) 1fr;gap:6px;padding:3px 0;border-bottom:1px solid var(--ovg-line-soft);font-size:12px}
+.qgis-studio .insp-attrs .live-list-row>:first-child{color:var(--ovg-muted);overflow:hidden;text-overflow:ellipsis}
+
+/* Context menus: left-aligned like QGIS */
+.qgis-studio .qgis-context{border-radius:3px;border-color:var(--ovg-line);padding:3px 0;width:240px}
+.qgis-studio .qgis-context>strong{display:block;padding:5px 12px;font-size:11.5px;color:var(--ovg-muted);border-bottom:1px solid var(--ovg-line-soft);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .qgis-context button{justify-content:flex-start!important;text-align:left!important;min-height:26px!important;padding:3px 12px!important;font-size:12.5px!important;color:var(--ovg-ink)!important;background:transparent!important;border:0!important}
+.qgis-studio .qgis-context button:hover{background:var(--ovg-primary-soft)!important}
+.qgis-studio .qgis-context button.danger{color:var(--ovg-danger)!important;border-top:1px solid var(--ovg-line-soft)!important;margin-top:2px}
+.qgis-studio .qgis-context button svg{color:var(--ovg-muted);flex:none}

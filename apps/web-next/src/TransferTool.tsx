@@ -10,13 +10,14 @@ const reloadMap=()=>window.dispatchEvent(new CustomEvent("ovg:menu-command",{det
 function Tabs<T extends string>({tabs,tab,set}:{tabs:[T,string][];tab:T;set:(t:T)=>void}){return <div className="tool-tabs" role="tablist">{tabs.map(([k,t])=><button key={k} type="button" role="tab" aria-selected={tab===k} className={tab===k?"active":""} onClick={()=>set(k)}>{t}</button>)}</div>}
 
 export function TransferTool({org,pid}:{org:string;pid:string}){
- const [tab,setTab]=useState<"import"|"export">("import"),[busy,setBusy]=useState(false),[err,setErr]=useState(""),[profile,setProfile]=useState<IntegrationAdapterProfileResponse|null>(null);
- useEffect(()=>{if(tab!=="export"||profile)return;let live=true;getIntegrationHubAdapterProfile(client,org,pid,"qgis").then(p=>{if(live)setProfile(p)}).catch(()=>{if(live)setErr("Không tải được danh sách lớp để xuất.")});return()=>{live=false}},[tab,org,pid,profile]);
+ const [tab,setTab]=useState<"import"|"export">(()=>{try{const t=sessionStorage.getItem("ovg:transfer-tab");sessionStorage.removeItem("ovg:transfer-tab");return t==="export"?"export":"import"}catch{return "import"}}),[busy,setBusy]=useState(false),[err,setErr]=useState(""),[profile,setProfile]=useState<IntegrationAdapterProfileResponse|null>(null);
+ const [loadFailed,setLoadFailed]=useState(false);
+ useEffect(()=>{if(tab!=="export"||profile||loadFailed)return;let live=true;getIntegrationHubAdapterProfile(client,org,pid,"qgis").then(p=>{if(live)setProfile(p)}).catch(()=>{if(live){setErr("Không tải được danh sách lớp để xuất.");setLoadFailed(true)}});return()=>{live=false}},[tab,org,pid,profile,loadFailed]);
  const action=async(fn:()=>Promise<void>)=>{if(busy)return;setBusy(true);setErr("");try{await loadCsrfToken(client);await fn()}catch(e){setErr(e instanceof ApiError?"Không thực hiện được ("+e.status+").":e instanceof Error?e.message:"Không thực hiện được.")}finally{setBusy(false)}};
  return <div><Tabs tabs={[["import","Nhập tệp vào dự án"],["export","Xuất dữ liệu"]]} tab={tab} set={setTab}/>
   {err&&<p className="error" role="alert">{err}</p>}
   {tab==="import"?<ImportPanel org={org} pid={pid} busy={busy} action={action} refresh={reloadMap}/>
-  :profile?<BatchExport client={client} org={org} projectId={pid} adapterKey="qgis" layers={profile.layers}/>:<p>Đang tải danh sách lớp…</p>}
+  :profile?<BatchExport client={client} org={org} projectId={pid} adapterKey="qgis" layers={profile.layers}/>:loadFailed?<button type="button" onClick={()=>{setErr("");setLoadFailed(false)}}>Thử tải lại</button>:<p>Đang tải danh sách lớp…</p>}
  </div>;
 }
 
