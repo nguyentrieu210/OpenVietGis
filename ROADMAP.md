@@ -206,6 +206,8 @@ Child [Spec 019 — House Numbering Plugin](specs/019-house-numbering-plugin/spe
 
 Child [Spec 051 — Số nhà đúng nghiệp vụ Bình Hưng và thuận tay người dùng](specs/051-house-numbering-parity/spec.md): đang làm từ 2026-11-25; đợt 1 trạng thái đối chiếu theo điểm, tiến độ và ký khóa theo ấp/đường (FR-025…028). [Plan](specs/051-house-numbering-parity/plan.md) | [Tasks](specs/051-house-numbering-parity/tasks.md).
 
+Child [Spec 055 — Nút xóa dự án, tổ chức, đối tượng](specs/055-delete-controls/spec.md) (R002 + R006): 2026-11-25; xóa mềm dự án/tổ chức có gõ tên, xóa một đối tượng và xóa hàng loạt trong một lớp. [Plan](specs/055-delete-controls/plan.md) | [Tasks](specs/055-delete-controls/tasks.md).
+
 Child [Spec 021 — AI Copilot / MCP](specs/021-ai-copilot/spec.md): isolated MCP adapter, live bridge and remote OAuth candidate, 27 automated tests plus Partner SDK/first-party browser acceptance (R002, R003, R004, R014); real Keycloak/Claude OAuth exchange, merged frontend integration, real-project verification and production release remain open. [Plan](specs/021-ai-copilot/plan.md) | [Tasks](specs/021-ai-copilot/tasks.md).
 
 ### R015

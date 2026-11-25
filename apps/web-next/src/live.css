@@ -4,3 +4,9 @@
 .ovg-search-flash span { display: block; inline-size: 100%; block-size: 100%; border-radius: 50%; border: 3px solid #f43f5e; background: rgb(244 63 94 / .25); animation: ovg-search-flash .7s ease-out 6; }
 @keyframes ovg-search-flash { from { transform: scale(.35); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .ovg-search-flash span { animation: none; } }
+
+/* Spec 055: destructive controls */
+.live-studio button.danger,.ovg-account-popover .ovg-menu-danger{color:#b42318}
+.live-studio button.danger:not(:disabled):hover{background:#fef3f2;border-color:#fda29b}
+.delete-confirm{display:grid;gap:10px;max-width:460px}.delete-confirm label{display:grid;gap:6px}.delete-confirm input{min-height:40px}
+.delete-confirm button.danger{min-height:40px;background:#b42318;color:#fff;border:0;border-radius:8px;font-weight:700}.delete-confirm button.danger:disabled{background:#f4c7c3;color:#fff}
