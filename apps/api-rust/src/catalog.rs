@@ -2,7 +2,7 @@
 
 use axum::extract::rejection::{PathRejection, QueryRejection};
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -19,6 +19,12 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     const PROJECT: &str = "/organizations/{organization_id}/projects/{project_id}";
     Router::new()
+        .route(&format!("{PROJECT}/map"), get(get_map))
+        .route(&format!("{PROJECT}/map/history"), get(map_history))
+        .route(
+            &format!("{PROJECT}/map/operations/{{operation_id}}"),
+            get(map_operation),
+        )
         .route(&format!("{PROJECT}/layers"), get(list_layers))
         .route(&format!("{PROJECT}/layers/{{layer_id}}"), get(get_layer))
         .route(&format!("{PROJECT}/spatial/sources"), get(list_sources))
@@ -290,6 +296,60 @@ async fn list_crs_profiles(
     Ok(Json(result))
 }
 
+async fn get_map(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+) -> Result<Response, CatalogError> {
+    let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let mut read = project_read(&state, &auth, org, project, ProjectReadPolicy::LayerAcl).await?;
+    let value = read.get_map().await?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
+}
+
+#[derive(Deserialize)]
+struct MapHistoryQuery {
+    after_revision: Option<i64>,
+    limit: Option<usize>,
+}
+
+async fn map_history(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    query: Result<Query<MapHistoryQuery>, QueryRejection>,
+) -> Result<Response, CatalogError> {
+    let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let mut read =
+        project_read(&state, &auth, org, project, ProjectReadPolicy::Unrestricted).await?;
+    let Query(query) = query.map_err(|_| CatalogError::InvalidRequest)?;
+    let value = read
+        .map_history(query.after_revision, query.limit.unwrap_or(50))
+        .await?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
+}
+
+async fn map_operation(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    path: Result<Path<(Uuid, Uuid, Uuid)>, PathRejection>,
+) -> Result<Response, CatalogError> {
+    let Path((org, project, operation)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let mut read = project_read(
+        &state,
+        &auth,
+        org,
+        project,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
+    let value = read.map_operation(operation).await?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(value)).into_response())
+}
+
 async fn project_read<'a>(
     state: &'a AppState,
     auth: &HumanSession,
@@ -309,7 +369,7 @@ async fn project_read<'a>(
         policy,
     )
     .await
-    .map_err(Into::into)
+    .map_err(CatalogError::spatial)
 }
 
 enum CatalogError {
@@ -320,7 +380,8 @@ enum CatalogError {
 }
 
 /// Spatial error codes with a fixed public description in the reference API.
-const SPATIAL_CODES: [&str; 7] = [
+const SPATIAL_CODES: [&str; 8] = [
+    "PROJECT_NOT_WRITABLE",
     "SOURCE_NOT_READY",
     "STALE_READ_PIN",
     "INVALID_CURSOR",

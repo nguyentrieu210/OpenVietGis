@@ -650,6 +650,28 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 source list", sources, token=a)
     suite.get("E02 source detail", f"{sources}/{selected['source_id']}", token=a)
     suite.get("E02 ordinary CRS profiles", f"{root_a}/spatial/crs-profiles", token=a)
+    suite.get("E02 empty map state", f"{root_a}/map", token=a)
+    suite.get("E02 empty map history", f"{root_a}/map/history", token=a)
+    suite.get("E02 foreign map denied", f"{root_b}/map", 404, token=a)
+    suite.get("E02 member map denied before grant", f"{root_a}/map", 403, token=surveyor)
+    map_operation = str(uuid4())
+    map_save = suite.oracle.put(
+        f"{root_a}/map",
+        headers=session_headers(a, **{"x-openvietgis-csrf": fixture["csrf_a_token"]}),
+        json={"operation_id":map_operation,"expected_revision":0,"basemap":"grid",
+              "layers":[{"layer_id":selected["layer_id"],"visible":True,
+                         "style":{"color":"#2563EB","opacity":0.8,"width":2,"radius":5}},
+                        {"layer_id":fixture["layers"]["edit_4326"]["layer_id"],"visible":True,
+                         "style":{"color":"#2563EB","opacity":0.8,"width":2,"radius":5}}],
+              "default_viewpoint":{"mode":"set","value":{"longitude":106,"latitude":10,
+                "zoom":8,"bearing":0,"pitch":0,"crs":4326}}},
+    )
+    require(map_save.status_code == 200, "FastAPI map fixture save failed")
+    suite.get("E02 committed map state", f"{root_a}/map", token=a)
+    suite.get("E02 committed map history", f"{root_a}/map/history", token=a)
+    suite.get("E02 map operation receipt", f"{root_a}/map/operations/{map_operation}", token=a)
+    suite.get("E02 missing map operation", f"{root_a}/map/operations/{uuid4()}", 404, token=a)
+
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
         fixture,
@@ -687,6 +709,15 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
         "E02 scoped layer source redaction", layer_a, token=surveyor, check=redacted
     )
     suite.get("E02 scoped layer hidden", layer_a_other, 404, token=surveyor)
+    def scoped_map(body):
+        require([item["layer_id"] for item in body["configuration"]["layers"]] == [selected["layer_id"]],
+                "Scoped map disclosed unauthorized layers")
+        require(body["configuration"]["default_viewpoint"] is None, "Scoped map leaked viewpoint")
+
+    suite.get("E02 scoped map redacted", f"{root_a}/map", token=surveyor, check=scoped_map)
+    suite.get("E02 scoped map history denied", f"{root_a}/map/history", 403, token=surveyor)
+    suite.get("E02 scoped map operation denied", f"{root_a}/map/operations/{map_operation}", 403, token=surveyor)
+
     if include_features:
         compare_feature_reads(suite, f"{layer_a}/features", selected, a, b, surveyor)
     response = suite.oracle.delete(
