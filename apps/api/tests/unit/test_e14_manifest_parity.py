@@ -14,7 +14,11 @@ CASES = json.loads(
 
 @pytest.mark.parametrize("case", CASES, ids=[case["id"] for case in CASES])
 def test_shared_manifest_contract(case):
-    manifest = {k: v for k, v in case["manifest"].items() if k not in {"display_name", "description"}}
+    manifest = {
+        k: v
+        for k, v in case["manifest"].items()
+        if k not in {"display_name", "description"}
+    }
     if case["valid"]:
         validate_manifest_contract(**manifest)
     else:

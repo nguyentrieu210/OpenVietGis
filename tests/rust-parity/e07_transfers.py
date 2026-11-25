@@ -74,15 +74,15 @@ def fixtures():
             ("active", FieldType.BOOLEAN),
         ]
     ]
-    args = dict(
-        layer_name="e07_points",
-        crs_code=4326,
-        geometry_family="Point",
-        field_mappings=mappings,
-        features=[
+    args = {
+        "layer_name": "e07_points",
+        "crs_code": 4326,
+        "geometry_family": "Point",
+        "field_mappings": mappings,
+        "features": [
             (fid, attrs, NativeGeometry("Point", coords, 4326)) for fid, attrs, coords in points
         ],
-    )
+    }
     yield "geopackage", "sample.gpkg", write_geopackage(**args)[0]
     yield "shapefile_zip", "sample.zip", write_shapefile_zip(**args)[0]
 

@@ -16,7 +16,15 @@ import time
 from pathlib import Path
 
 import httpx
-from run import ROOT, SEED, baseline, configure_python, database, difference, verify_database_role
+from run import (
+    ROOT,
+    SEED,
+    baseline,
+    configure_python,
+    database,
+    difference,
+    verify_database_role,
+)
 
 
 @contextlib.contextmanager

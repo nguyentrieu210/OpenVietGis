@@ -507,7 +507,7 @@ def compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, memb
         parity.same("E03 ACL replay rechecks revoked feature scope", "POST", path, 403,
                     headers=editor, body=body)
     finally:
-        for rule_id in list(rule_ids):
+        for rule_id in rule_ids:
             revoke(rule_id)
         response = suite.oracle.post(f"{org}/grants/{grant_id}/revoke", headers=admin)
         assert response.status_code == 204, response.text

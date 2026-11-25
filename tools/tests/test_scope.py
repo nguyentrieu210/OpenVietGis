@@ -117,3 +117,24 @@ def test_r031_adapter_allowlist_is_narrow(tmp_path: Path) -> None:
     assert len(find_scope_violations(tmp_path)) == 2
     (root / "src/TerraDraftValidation.ts").write_text('import "house-number";')
     assert len(find_scope_violations(tmp_path)) == 3
+
+
+def test_hybrid_retained_marker_allowlist_is_path_specific(tmp_path: Path) -> None:
+    api = tmp_path / "apps/api-rust/Cargo.toml"
+    api.parent.mkdir(parents=True)
+    api.write_text('house-numbering = []', encoding="utf-8")
+
+    web = tmp_path / "apps/web-next/src"
+    web.mkdir(parents=True)
+    (web / "AppMarket.tsx").write_text('const module = "house_numbering";', encoding="utf-8")
+    (web / "DsmPanes.tsx").write_text('const example = "/geoserver/wfs";', encoding="utf-8")
+    (web / "LiveApp.tsx").write_text('import { Map } from "maplibre-gl";', encoding="utf-8")
+
+    assert find_scope_violations(tmp_path) == []
+
+    (web / "Unexpected.tsx").write_text(
+        'const module = "house_numbering"; const server = "geoserver"; import "maplibre-gl";',
+        encoding="utf-8",
+    )
+    violations = find_scope_violations(tmp_path)
+    assert len(violations) == 3

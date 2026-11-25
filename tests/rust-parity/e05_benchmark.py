@@ -11,7 +11,14 @@ from pathlib import Path
 
 import httpx
 from e04_benchmark import measure_phase, server
-from run import SEED, baseline, configure_python, database, difference, verify_database_role
+from run import (
+    SEED,
+    baseline,
+    configure_python,
+    database,
+    difference,
+    verify_database_role,
+)
 
 CONCURRENCIES = (1, 10, 20)
 SCALES = ("1k", "10k", "30k")
