@@ -169,7 +169,7 @@ _SOURCE_FIELDS_SQL = text(
 
 _EXPORT_FEATURES_SQL = text(
     """
-    SELECT feature_id, attributes, ST_AsGeoJSON(geometry) AS geom_json
+    SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(geometry, :out_srid)) AS geom_json
     FROM spatial.reference_features
     WHERE organization_id = :org
       AND project_id = :proj
@@ -183,7 +183,7 @@ _EXPORT_FEATURES_SQL = text(
 
 _EXPORT_FEATURES_SCOPED_SQL = text(
     """
-    SELECT feature_id, attributes, ST_AsGeoJSON(geometry) AS geom_json
+    SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(geometry, :out_srid)) AS geom_json
     FROM spatial.reference_features
     WHERE organization_id = :org
       AND project_id = :proj
@@ -358,6 +358,8 @@ def _load_export_features(
                 "proj": project_id,
                 "sid": source_id,
                 "limit": MAX_HUB_EXPORT_FEATURES + 1,
+                # Geometry is returned in this CRS; ST_Transform is a no-op when it equals storage.
+                "out_srid": stored_crs_code,
             },
         )
         .mappings()
@@ -937,17 +939,25 @@ def export_integration_layer(
             ),
         )
 
-    if format == "geojson" and stored_crs_code != 4326:
+    # Only the exact, datum-free EPSG:3857 <-> EPSG:4326 conversion is applied; every other CRS
+    # still has to match the format natively.
+    output_crs_code = stored_crs_code
+    if format == "geojson" and stored_crs_code == 3857:
+        output_crs_code = 4326
+    if format == "dxf" and stored_crs_code == 4326:
+        output_crs_code = 3857
+
+    if format == "geojson" and output_crs_code != 4326:
         raise HTTPException(
             status_code=422,
             detail=(
-                "GeoJSON export requires EPSG:4326; use geopackage or postgis_sql "
+                "GeoJSON export requires EPSG:4326 or EPSG:3857; use geopackage or postgis_sql "
                 "to preserve native EPSG coordinates without unverified reprojection."
             ),
         )
 
     if format == "dxf":
-        crs_profile = get_readable_crs_profile(stored_crs_code)
+        crs_profile = get_readable_crs_profile(output_crs_code)
         if crs_profile is None or crs_profile.unit != "metre":
             raise HTTPException(
                 status_code=422,
@@ -982,7 +992,7 @@ def export_integration_layer(
         project_id=project_id,
         source_id=source_id,
         is_scoped=is_scoped,
-        stored_crs_code=stored_crs_code,
+        stored_crs_code=output_crs_code,
     )
     if any(geom.type != geometry_family for _, _, geom in features):
         raise HTTPException(
@@ -1001,7 +1011,7 @@ def export_integration_layer(
         if format == "geopackage":
             payload, ext, media_type = write_geopackage(
                 layer_name=layer_name,
-                crs_code=stored_crs_code,
+                crs_code=output_crs_code,
                 geometry_family=geometry_family,
                 field_mappings=field_mappings,
                 features=features,
@@ -1032,7 +1042,7 @@ def export_integration_layer(
         else:
             payload, ext, media_type = write_postgis_sql(
                 layer_name=layer_name,
-                crs_code=stored_crs_code,
+                crs_code=output_crs_code,
                 geometry_family=geometry_family,
                 field_mappings=field_mappings,
                 features=features,
@@ -1053,7 +1063,7 @@ def export_integration_layer(
         layer_id=layer_id,
         adapter_key=adapter.key,
         export_format=format,
-        stored_crs_code=stored_crs_code,
+        stored_crs_code=output_crs_code,
         feature_count=feature_count,
         content_revision=content_revision,
         schema_revision=schema_revision,
@@ -1066,7 +1076,7 @@ def export_integration_layer(
         "Cache-Control": "no-store",
         "Content-Disposition": f'attachment; filename="{filename}"',
         "X-Content-SHA256": sha256,
-        "X-OpenVietGIS-CRS": f"EPSG:{stored_crs_code}",
+        "X-OpenVietGIS-CRS": f"EPSG:{output_crs_code}",
         "X-OpenVietGIS-Content-Revision": content_revision,
         "X-OpenVietGIS-Schema-Revision": schema_revision,
         "X-OpenVietGIS-Feature-Count": str(feature_count),

@@ -58,3 +58,11 @@ Người dùng mở "Kết nối phần mềm", chọn tab QGIS, PostGIS hoặc 
 - Mỗi lớp một tệp; chưa gộp nhiều lớp vào một tệp GeoPackage/DXF hay một tệp nén (cần thay đổi máy chủ, làm sau nếu cần).
 - Nút "Tải công cụ QGIS" và "Lấy mã kết nối" giữ nguyên ở phần kết nối QGIS; AutoCAD dùng DXF, chưa có plugin.
 - Phần xuất từng lớp và đồng bộ .gpkg cũ giữ nguyên.
+
+## Clarifications
+
+### Session 2026-11-25 (sau khi lên live)
+
+- Chủ dự án: tải từng tệp rất khó chịu; nhiều lớp MUST gộp thành MỘT tệp ZIP; cho chọn đuôi xuất và chọn lớp. → Mọi tab có đủ 4 định dạng máy chủ hỗ trợ (.gpkg, .geojson, .dxf, .sql); mọi lớp xuất được chọn sẵn; nhiều lớp tải về một tệp `openvietgis-<N>-lop-<đuôi>-<thời gian>.zip`, lớp lỗi được liệt kê, các lớp còn lại vẫn có trong ZIP.
+- GeoJSON nhận lớp EPSG:3857 (đổi chính xác sang 4326), DXF nhận lớp EPSG:4326 (đổi chính xác sang 3857 mét). Các hệ tọa độ khác giữ ràng buộc cũ (không đổi hệ khi chưa kiểm chứng).
+- Tìm số nhà xong, điểm được nhấp nháy khoảng 4 giây tại vị trí (tắt chuyển động nếu người dùng chọn giảm chuyển động).

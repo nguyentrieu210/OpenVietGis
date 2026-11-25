@@ -452,11 +452,12 @@ def test_integration_hub_autocad_dxf_export_and_crs_guard(
         )
         assert r_bad_fmt.status_code == 422, r_bad_fmt.text
 
-        # Geographic degree CRS (EPSG:4326) is refused for DXF export with 422.
+        # EPSG:4326 is converted exactly to EPSG:3857 metres for DXF; other CRS still fail closed.
         r_geo_dxf = owner.get(
             f"{root}/integration-hub/adapters/autocad/layers/{layer_4326}/export?format=dxf"
         )
-        assert r_geo_dxf.status_code == 422, r_geo_dxf.text
+        assert r_geo_dxf.status_code == 200, r_geo_dxf.text
+        assert r_geo_dxf.headers["X-OpenVietGIS-CRS"] == "EPSG:3857"
 
 
 def test_integration_hub_qgis_sync_preview_push_and_gis_acl(

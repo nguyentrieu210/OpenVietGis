@@ -26,6 +26,14 @@ import {LayerLabels,categoryColor,categoryKey,matchesLayerView,readWorkspace,sto
 import "./layer-properties.css";
 import "./studio-shell.css";
 import {Brand} from "./Brand";
+// Pulse the point a search result jumps to, so it is easy to spot among thousands of labels.
+let searchFlash:{marker:ml.Marker;timer:number}|undefined;
+function flashPoint(map:ml.Map,at:[number,number]){
+ if(searchFlash){window.clearTimeout(searchFlash.timer);searchFlash.marker.remove();}
+ const el=document.createElement("div");el.className="ovg-search-flash";el.setAttribute("aria-hidden","true");el.append(document.createElement("span"));
+ const marker=new ml.Marker({element:el}).setLngLat(at).addTo(map);
+ searchFlash={marker,timer:window.setTimeout(()=>{marker.remove();searchFlash=undefined},4200)};
+}
 import {AccountMenu} from "./AccountMenu";
 import {DeveloperPortal} from "./DeveloperPortal";
 import {ExternalPluginHub} from "./ExternalPluginHub";
@@ -144,7 +152,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
  const row=data.rows.find(r=>r.key===selected);
   const hasAction=(l:SpatialLayer|undefined,a:string)=>!data.restricted||!!(l as (SpatialLayer&{access_actions?:string[]})|undefined)?.access_actions?.includes(a);
   const canEdit=!!row&&hasAction(row.layer,"geometry")&&row.layer.source.stored_crs?.code===4326&&row.geometry?.type==="Point"&&row.layer.capabilities.some(x=>x.name==="edit"&&x.available&&x.actor_authorized);
-  const goto=(k:string)=>{if(draft)return;setSelected(k);const r=data.rows.find(x=>x.key===k);if(!r?.geometry||!map.current)return;if(r.geometry.type==="Point"){map.current.easeTo({center:r.geometry.coordinates as [number,number],zoom:Math.max(15,map.current.getZoom())});return}if(r.geometry.type==="LineString"||r.geometry.type==="MultiLineString"){const bounds=new ml.LngLatBounds();const visit=(a:unknown)=>{if(Array.isArray(a)){if(typeof a[0]==="number"&&typeof a[1]==="number"&&Number.isFinite(a[0])&&Number.isFinite(a[1]))bounds.extend([a[0],a[1]]);else a.forEach(visit)}};visit(r.geometry.coordinates);if(!bounds.isEmpty())map.current.fitBounds(bounds,{padding:80,maxZoom:19,duration:450})}};
+  const goto=(k:string)=>{if(draft)return;setSelected(k);const r=data.rows.find(x=>x.key===k);if(!r?.geometry||!map.current)return;if(r.geometry.type==="Point"){map.current.easeTo({center:r.geometry.coordinates as [number,number],zoom:Math.max(15,map.current.getZoom())});flashPoint(map.current,r.geometry.coordinates as [number,number]);return}if(r.geometry.type==="LineString"||r.geometry.type==="MultiLineString"){const bounds=new ml.LngLatBounds();const visit=(a:unknown)=>{if(Array.isArray(a)){if(typeof a[0]==="number"&&typeof a[1]==="number"&&Number.isFinite(a[0])&&Number.isFinite(a[1]))bounds.extend([a[0],a[1]]);else a.forEach(visit)}};visit(r.geometry.coordinates);if(!bounds.isEmpty())map.current.fitBounds(bounds,{padding:80,maxZoom:19,duration:450})}};
   useEffect(()=>{if(!draft||!map.current){marker.current?.remove();marker.current=null;return}if(!marker.current){const m=new ml.Marker({draggable:!draft.locked,color:"#ef973d"}).setLngLat(draft.point).addTo(map.current);m.on("dragend",()=>{const p=m.getLngLat(),raw:[number,number]=[p.lng,p.lat],snapped=map.current?snapCoordinate(map.current,raw,snapPrefsRef.current,draftRef.current?.row.key,key=>geometryLookupRef.current.get(key)):null;if(snapped)setNotice("Snapping · "+snapLabel[snapped.kind]);setDraft(d=>d&&!d.locked?{...d,point:snapped?.point??raw}:d)});marker.current=m}else{marker.current.setLngLat(draft.point);marker.current.setDraggable(!draft.locked)}},[draft]);
   useEffect(()=>()=>{marker.current?.remove()},[]);
   const action=async(fn:()=>Promise<void>)=>{if(running.current)return;running.current=true;setBusy(true);setError("");try{await loadCsrfToken(client);await fn()}catch(e){fail(e)}finally{running.current=false;setBusy(false)}};

@@ -21,6 +21,7 @@ import {
   type IntegrationSyncPushResponse
 } from "@openvietgis/client-sdk";
 import { QgisBindingManager } from "./QgisBindingManager";
+import { zipFiles } from "./zip";
 import "./integration-catalog.css";
 
 interface IntegrationCatalogProps {
@@ -158,6 +159,7 @@ const EXPORT_FORMAT_LABELS: Record<IntegrationExportFormat, string> = {
   postgis_sql: "PostGIS SQL (.sql)",
   dxf: "AutoCAD DXF (.dxf)"
 };
+const EXPORT_FORMAT_EXT: Record<IntegrationExportFormat, string> = { geopackage: "gpkg", geojson: "geojson", postgis_sql: "sql", dxf: "dxf" };
 
 const CATEGORY_LABELS: Record<string, string> = {
   gis: "GIS",
@@ -277,52 +279,57 @@ function triggerBrowserBlobDownload(blob: Blob, filename: string): void {
   }
 }
 
-const BATCH_FORMATS: Record<IntegrationExportAdapterKey, IntegrationExportFormat[]> = {
-  qgis: ["geopackage", "geojson"],
-  postgis: ["postgis_sql", "geopackage"],
-  autocad: ["dxf"]
-};
+// Every format the server writes, whichever connector tab is open; the server endpoint is chosen by format.
+const BATCH_FORMATS: IntegrationExportFormat[] = ["geopackage", "geojson", "dxf", "postgis_sql"];
+const BATCH_ADAPTER: Record<IntegrationExportFormat, IntegrationExportAdapterKey> = { geopackage: "qgis", geojson: "qgis", dxf: "autocad", postgis_sql: "postgis" };
+const BATCH_DEFAULT: Record<IntegrationExportAdapterKey, IntegrationExportFormat> = { qgis: "geopackage", postgis: "postgis_sql", autocad: "dxf" };
 
-// Same eligibility rules as the per-layer export buttons below.
+// Mirrors the server: GeoJSON is written in EPSG:4326 (3857 is converted), DXF in metres (4326 is converted to 3857).
 function batchBlockReason(layer: AdapterLayerDescriptor, format: IntegrationExportFormat): string | null {
   if (!layer.export_permitted) return "Không được phép xuất";
-  if (format === "dxf" && !isAutocadMetricCrs(layer.stored_crs_code)) return "DXF cần hệ tọa độ phẳng mét (EPSG:5899/3857)";
-  if (format === "geojson" && layer.stored_crs_code !== 4326) return "GeoJSON cần EPSG:4326";
+  if (!layer.crs_explicit) return "Chưa xác định hệ tọa độ";
+  if (format === "dxf" && !isAutocadMetricCrs(layer.stored_crs_code) && layer.stored_crs_code !== 4326) return "DXF cần hệ tọa độ mét hoặc EPSG:4326";
+  if (format === "geojson" && layer.stored_crs_code !== 4326 && layer.stored_crs_code !== 3857) return "GeoJSON cần EPSG:4326 hoặc 3857";
   return null;
 }
 
-// shortcut: one file per layer (browser may ask once to allow multiple downloads); bundle into one GPKG/DXF/zip needs a server endpoint if users ask.
 function BatchExport({ client, org, projectId, adapterKey, layers }: IntegrationCatalogProps & { adapterKey: IntegrationExportAdapterKey; layers: AdapterLayerDescriptor[] }) {
-  const formats = BATCH_FORMATS[adapterKey];
-  const [format, setFormat] = useState<IntegrationExportFormat>(formats[0]!);
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [format, setFormat] = useState<IntegrationExportFormat>(BATCH_DEFAULT[adapterKey]);
+  // Track what the user unticked, so every exportable layer starts selected and survives format changes.
+  const [unticked, setUnticked] = useState<Set<string>>(() => new Set());
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ ok: number; failed: string[] } | null>(null);
   const run = useRef(0);
   useEffect(() => () => { run.current++; }, []);
   const eligible = layers.filter((layer) => !batchBlockReason(layer, format));
-  const chosen = eligible.filter((layer) => selected.has(layer.layer_id));
+  const chosen = eligible.filter((layer) => !unticked.has(layer.layer_id));
   const busy = progress !== null;
 
   const start = async () => {
     const id = ++run.current;
     const failed: string[] = [];
-    let ok = 0;
+    const files: { name: string; blob: Blob }[] = [];
     setResult(null);
     for (const [index, layer] of chosen.entries()) {
-      setProgress(`Đang tải ${index + 1}/${chosen.length}: ${layer.name}`);
+      setProgress(`Đang chuẩn bị ${index + 1}/${chosen.length}: ${layer.name}`);
       try {
-        const file = await downloadIntegrationLayerExport(client, org, projectId, adapterKey, layer.layer_id, format);
+        const file = await downloadIntegrationLayerExport(client, org, projectId, BATCH_ADAPTER[format], layer.layer_id, format);
         if (run.current !== id) return;
-        triggerBrowserBlobDownload(file.blob, file.filename);
-        ok++;
+        files.push({ name: file.filename, blob: file.blob });
       } catch (exportError: unknown) {
         if (run.current !== id) return;
         failed.push(formatExportErrorMessage(layer.name, exportError));
       }
     }
+    if (files.length === 1) {
+      triggerBrowserBlobDownload(files[0]!.blob, files[0]!.name);
+    } else if (files.length > 1) {
+      setProgress("Đang nén ZIP…");
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
+      triggerBrowserBlobDownload(await zipFiles(files), `openvietgis-${files.length}-lop-${EXPORT_FORMAT_EXT[format]}-${stamp}.zip`);
+    }
     setProgress(null);
-    setResult({ ok, failed });
+    setResult({ ok: files.length, failed });
   };
 
   return (
@@ -332,7 +339,7 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
         <label>
           Định dạng{" "}
           <select value={format} disabled={busy} onChange={(event) => setFormat(event.target.value as IntegrationExportFormat)}>
-            {formats.map((option) => <option key={option} value={option}>{EXPORT_FORMAT_LABELS[option]}</option>)}
+            {BATCH_FORMATS.map((option) => <option key={option} value={option}>{EXPORT_FORMAT_LABELS[option]}</option>)}
           </select>
         </label>
         <label>
@@ -340,12 +347,12 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
             type="checkbox"
             checked={eligible.length > 0 && chosen.length === eligible.length}
             disabled={busy || eligible.length === 0}
-            onChange={(event) => setSelected(new Set(event.target.checked ? eligible.map((layer) => layer.layer_id) : []))}
+            onChange={(event) => setUnticked(new Set(event.target.checked ? [] : eligible.map((layer) => layer.layer_id)))}
           />{" "}
           Chọn tất cả ({eligible.length})
         </label>
         <button type="button" className="integration-batch-download" disabled={busy || chosen.length === 0} onClick={() => { void start(); }}>
-          {busy ? "Đang tải…" : `⬇ Tải ${chosen.length} lớp`}
+          {busy ? "Đang tải…" : chosen.length > 1 ? `⬇ Tải ${chosen.length} lớp (.zip)` : chosen.length === 1 ? "⬇ Tải 1 lớp" : "Chọn lớp để tải"}
         </button>
       </div>
       {layers.length === 0 ? (
@@ -360,10 +367,10 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
                   <input
                     type="checkbox"
                     disabled={busy || reason !== null}
-                    checked={reason === null && selected.has(layer.layer_id)}
-                    onChange={(event) => setSelected((prev) => {
+                    checked={reason === null && !unticked.has(layer.layer_id)}
+                    onChange={(event) => setUnticked((prev) => {
                       const next = new Set(prev);
-                      if (event.target.checked) next.add(layer.layer_id); else next.delete(layer.layer_id);
+                      if (event.target.checked) next.delete(layer.layer_id); else next.add(layer.layer_id);
                       return next;
                     })}
                   />
@@ -380,7 +387,7 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
       {progress && <p className="integration-profile-status" role="status">{progress}</p>}
       {result && (
         <div role="status" className={result.failed.length ? "integration-batch-result has-errors" : "integration-batch-result"}>
-          <p>Đã tải {result.ok} lớp{result.failed.length ? `, lỗi ${result.failed.length} lớp:` : "."}</p>
+          <p>{result.ok > 1 ? `Đã nén ${result.ok} lớp vào một tệp ZIP` : `Đã tải ${result.ok} lớp`}{result.failed.length ? `, lỗi ${result.failed.length} lớp:` : "."}</p>
           {result.failed.length > 0 && <ul>{result.failed.map((message) => <li key={message}>{message}</li>)}</ul>}
         </div>
       )}
