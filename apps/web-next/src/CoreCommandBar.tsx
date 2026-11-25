@@ -1,4 +1,3 @@
-import {isStudioMapCanvas} from "./map-surface";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 export const SINGLE_KEY_HOTKEYS=new Set(["a"]);
@@ -50,13 +49,13 @@ export function CoreCommandBar(host:Host){
   if(e.key==="F3"||e.key==="F8"){e.preventDefault();e.stopPropagation();const result=latest.current.shortcut(e.key);if(result)report(result);return}
   if(own)return;
   if(e.key==="/"&&!button){e.preventDefault();latest.current.focus();return}
-  if((e.key==="Enter"||e.key===" ")&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
+  if(e.key==="Enter"&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
   // Single-key tool hotkeys (MapInfo style) win over type-to-command; press / to type such commands.
   if(SINGLE_KEY_HOTKEYS.has(e.key.toLowerCase()))return;
   if(!button&&/^[a-zA-Z0-9?@.,+-]$/.test(e.key)){e.preventDefault();e.stopPropagation();setValue(e.key.toUpperCase());setCursor(-1);setHighlight(-1);setHelp(false);latest.current.focus()}
  };window.addEventListener("keydown",key,true);return()=>window.removeEventListener("keydown",key,true)},[]);
  useEffect(()=>{const run=(e:Event)=>{const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
- useEffect(()=>{const menu=(e:MouseEvent)=>{const target=e.target as HTMLElement;if(!isStudioMapCanvas(target)||document.querySelector('[aria-modal="true"]'))return;e.preventDefault();void latest.current.execute("");};document.addEventListener("contextmenu",menu);return()=>document.removeEventListener("contextmenu",menu)},[]);
+ // Right-click no longer repeats the last command (AutoCAD habit): in QGIS it opens context menus / finishes digitizing.
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
  const open=focused&&(help||!!prefix&&!value.includes(" ")&&!pending)&&matches.length>0;
