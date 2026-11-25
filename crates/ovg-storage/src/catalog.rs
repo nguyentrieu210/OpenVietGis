@@ -243,6 +243,19 @@ impl<'a> ProjectRead<'a> {
         Ok(self.get_source_record(source_id).await?.wire)
     }
 
+    /// Candidate replay of project-wide spatial invalidations. The caller must
+    /// obtain a fresh ProjectRead for every page (including reconnect).
+    pub async fn replay_spatial_invalidations(
+        &mut self,
+        cursor: Option<crate::e11_outbox::SpatialCursor>,
+        limit: usize,
+    ) -> Result<crate::e11_outbox::SpatialReplay, AppError> {
+        self.require_unrestricted()?;
+        let organization = self.tx.organization_id();
+        crate::e11_outbox::replay(self.tx.tx_mut(), organization, self.project_id, cursor, limit)
+            .await
+    }
+
     pub async fn commit(self) -> Result<(), AppError> {
         self.tx.commit().await
     }

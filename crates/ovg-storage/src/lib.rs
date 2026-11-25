@@ -1,6 +1,7 @@
 //! PostgreSQL/PostGIS pool and fail-closed tenant RLS transaction primitives.
 
 pub mod catalog;
+pub mod e11_outbox;
 pub mod identity;
 pub mod pool;
 pub mod rls;

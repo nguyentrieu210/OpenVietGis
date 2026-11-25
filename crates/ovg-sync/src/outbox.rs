@@ -163,9 +163,9 @@ impl InMemoryOutboxLog {
         idempotency_key: Option<IdempotencyKey>,
     ) -> OutboxEvent {
         if let Some(ref key) = idempotency_key {
-            if let Some(&existing_seq) = self
-                .idempotency_index
-                .get(&(organization_id, project_id, key.as_str().to_string()))
+            if let Some(&existing_seq) =
+                self.idempotency_index
+                    .get(&(organization_id, project_id, key.as_str().to_string()))
             {
                 if let Some(existing) = self.events.iter().find(|e| e.sequence == existing_seq) {
                     return existing.clone();
@@ -190,10 +190,8 @@ impl InMemoryOutboxLog {
         };
 
         if let Some(key) = idempotency_key {
-            self.idempotency_index.insert(
-                (organization_id, project_id, key.as_str().to_string()),
-                seq,
-            );
+            self.idempotency_index
+                .insert((organization_id, project_id, key.as_str().to_string()), seq);
         }
 
         self.events.push_back(event.clone());
