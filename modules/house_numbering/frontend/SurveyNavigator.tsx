@@ -4,7 +4,7 @@ export const emptySurveyFilter=():SurveyFilter=>({area:"",road:"",alley:"",statu
 export type SurveyRow={key:string;feature:{attributes:Record<string,unknown>}};
 export function surveyText(row:SurveyRow,field:string){return String(row.feature.attributes[field]??"").trim()}
 const fold=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").replace(/[đĐ]/g,"d").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
-const NUMBER_FIELDS=["so_nha","so_sua","so_de_xuat","so_luoi"],SEARCH_FIELDS=[...NUMBER_FIELDS,"ten_duong","hem","ap","ma_phieu"];
+const NUMBER_FIELDS=["so_nha","so_sua","so_de_xuat","so_luoi"],SEARCH_FIELDS=[...NUMBER_FIELDS,"ten_duong","hem","ap","ma_phieu","ma_goc"];
 const searchIndex=new WeakMap<object,{numbers:string[];tokens:string[]}>();
 function indexed(row:SurveyRow){
  let entry=searchIndex.get(row.feature.attributes);

@@ -57,3 +57,36 @@ def test_historic_hamlet_layer_is_not_a_current_hamlet_scope() -> None:
         "hamlet": ["Ấp hiện hành"],
         "route": ["Đường và hẻm"],
     }
+
+
+def test_ordinary_layers_mentioning_xa_or_duong_are_not_scope_layers() -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from openvietgis_api.adapters.http.integration_hub import _scope_layers
+
+    rows = [
+        {"layer_id": uuid4(), "name": n, "source_id": n, "geometry_family": f}
+        for n, f in [
+            ("Thửa đất xã Bình Hưng", "Polygon"),
+            ("Trạm biến áp", "Polygon"),
+            ("Đường dây điện", "LineString"),
+            ("Ranh giới xã Bình Hưng", "Polygon"),
+            ("Tuyến cần đối soát", "LineString"),
+        ]
+    ]
+    session = SimpleNamespace(
+        execute=lambda *_: SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: rows))
+    )
+    found = _scope_layers(session, uuid4(), uuid4())  # type: ignore[arg-type]
+    assert found == {
+        "commune": ["Ranh giới xã Bình Hưng"],
+        "hamlet": [],
+        "route": ["Tuyến cần đối soát"],
+    }
+
+
+def test_commune_boundary_scope_selects_the_commune_not_its_neighbours() -> None:
+    sql = str(_export_features_sql(scoped=False, area_mode="commune", route_mode=None))
+    assert "feature_id = ANY(:area_fids)" in sql and ":area_codes" in sql
+    assert "ST_Intersects" not in sql

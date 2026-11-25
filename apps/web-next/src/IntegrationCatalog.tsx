@@ -321,7 +321,7 @@ function BatchExport({ client, org, projectId, adapterKey, layers }: Integration
   const routes = (scopes?.routes ?? []).filter((r) => !hamlet || r.hamlet_ids.includes(hamlet.id));
   const route = routes.find((r) => r.name === routeName);
   const scope: IntegrationExportScope | undefined = route
-    ? { routeIds: route.route_ids, routeDistanceM: distance }
+    ? { routeIds: route.route_ids, routeDistanceM: distance, areaIds: hamlet ? [hamlet.id] : commune ? [commune.id] : undefined }
     : hamlet ? { areaIds: [hamlet.id] } : commune ? { areaIds: [commune.id] } : undefined;
   const scopeLabel = route?.name ?? hamlet?.name ?? commune?.name ?? "";
   const scopeSlug = scopeLabel.normalize("NFD").replace(/\p{M}/gu, "").replace(/[đĐ]/g, "d").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

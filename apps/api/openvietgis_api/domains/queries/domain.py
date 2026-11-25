@@ -24,7 +24,7 @@ from openvietgis_api.domains.spatial.domain import (
 )
 
 MAX_QUERY_LIMIT = 500
-MAX_QUERY_OFFSET = 25000
+MAX_QUERY_OFFSET = 50_000  # page through the whole 50k-feature layer (Spec 053)
 MAX_QUERY_FEATURES = 50_000
 MAX_QUERY_POSITIONS = 1_000_000
 MAX_REFERENCE_FEATURES = 500

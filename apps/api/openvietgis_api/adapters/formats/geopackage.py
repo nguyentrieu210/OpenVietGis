@@ -10,7 +10,7 @@ import struct
 import tempfile
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
+from decimal import Context, Decimal
 from pathlib import Path
 from typing import Any
 
@@ -475,6 +475,10 @@ def parse_geopackage_member(
         tmp_path.unlink(missing_ok=True)
 
 
+# The canonical decimal check allows 38 significant digits; the default context (28) would round.
+_EXACT_DECIMAL = Context(prec=38)
+
+
 def _coerce_gpkg_value(ftype: FieldType, val: Any) -> AttributeValue:
     if val is None:
         return None
@@ -496,9 +500,9 @@ def _coerce_gpkg_value(ftype: FieldType, val: Any) -> AttributeValue:
         if isinstance(val, (int, float)):
             if not math.isfinite(float(val)):
                 raise ValueError("non-finite decimal")
-            return format(Decimal(str(val)).normalize(), "f")
+            return format(Decimal(str(val)).normalize(_EXACT_DECIMAL), "f")
         if isinstance(val, str):
-            return format(Decimal(val).normalize(), "f")
+            return format(Decimal(val).normalize(_EXACT_DECIMAL), "f")
         raise ValueError("expected decimal")
     if ftype == FieldType.TIMESTAMP:
         if not isinstance(val, str) or not _ISO_TS_RE.match(val):

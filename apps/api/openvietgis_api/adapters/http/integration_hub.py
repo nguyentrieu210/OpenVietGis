@@ -168,7 +168,13 @@ _SOURCE_FIELDS_SQL = text(
 )
 
 _EXPORT_SELECT = """
-    SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(geometry, :out_srid)) AS geom_json
+    SELECT feature_id, attributes,
+           -- rows stored with SRID 0 take the layer's declared CRS before conversion
+           ST_AsGeoJSON(ST_Transform(
+               CASE WHEN ST_SRID(geometry) = 0 THEN ST_SetSRID(geometry, :native_srid)
+                    ELSE geometry END,
+               :out_srid
+           )) AS geom_json
     FROM spatial.reference_features
     WHERE organization_id = :org
       AND project_id = :proj
@@ -194,6 +200,10 @@ _AREA_FILTERS = {
     "attribute": "\n      AND attributes->>'ap' = ANY(:area_names)",
     # Exporting the hamlet boundary layer itself: the chosen hamlets, not their neighbours.
     "own_name": "\n      AND attributes->>'name' = ANY(:area_names)",
+    # Commune boundary layer: the chosen commune(s), not every commune sharing a border.
+    "commune": (
+        "\n      AND (feature_id = ANY(:area_fids) OR attributes->>'ma_xa' = ANY(:area_codes))"
+    ),
     "spatial": (
         "\n      AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry),"
         " :native_srid) FROM ("
@@ -226,8 +236,10 @@ def _export_features_sql(*, scoped: bool, area_mode: str | None, route_mode: str
 class _ExportScope:
     area_sids: list[Any]
     hamlet_sids: list[Any]
+    commune_sids: list[Any]
     area_fids: list[str]
     area_names: list[str]
+    area_codes: list[str]
     route_sids: list[Any]
     route_ids: list[str]
     route_distance_m: float
@@ -257,14 +269,20 @@ def _scope_layers(
     found: dict[str, list[Any]] = {"commune": [], "hamlet": [], "route": []}
     rows = session.execute(_SCOPE_LAYERS_SQL, {"org": organization_id, "proj": project_id})
     for row in rows.mappings().all():
-        words = set(re.findall(r"[a-z0-9]+", ascii_fold(str(row["name"])).lower()))
+        tokens = re.findall(r"[a-z0-9]+", ascii_fold(str(row["name"])).lower())
+        words, first = set(tokens), (tokens[0] if tokens else "")
         family = str(row["geometry_family"])
-        if family in ("Polygon", "MultiPolygon") and words & {"xa", "phuong"}:
+        polygon = family in ("Polygon", "MultiPolygon")
+        # Boundary layers are named "Ranh ... xã/ấp" or start with xã/ấp; "Thửa đất xã ..." is not.
+        boundary = "ranh" in words
+        if polygon and words & {"xa", "phuong"} and (boundary or first in {"xa", "phuong"}):
             found["commune"].append(row["source_id"])
-        elif family in ("Polygon", "MultiPolygon") and "ap" in words and not words & {"cu", "lich"}:
+        elif polygon and "ap" in words and (boundary or first == "ap") and not words & {"cu", "lich"}:
             # "Ấp cũ" / "lịch sử" are historic boundaries, not today's hamlets.
             found["hamlet"].append(row["source_id"])
-        elif family in ("LineString", "MultiLineString") and words & {"tuyen", "duong", "hem"}:
+        elif family in ("LineString", "MultiLineString") and (
+            "tuyen" in words or {"duong", "hem"} <= words
+        ):
             found["route"].append(row["source_id"])
     return found
 
@@ -439,6 +457,7 @@ def _load_export_features(
                 "area_sids": scope.area_sids if scope else [],
                 "area_fids": scope.area_fids if scope else [],
                 "area_names": scope.area_names if scope else [],
+                "area_codes": scope.area_codes if scope else [],
                 "route_sids": scope.route_sids if scope else [],
                 "route_ids": scope.route_ids if scope else [],
                 "route_distance_m": scope.route_distance_m if scope else 0.0,
@@ -977,13 +996,15 @@ def _scope_hamlet_names(
     project_id: UUID,
     sources: dict[str, list[Any]],
     area_fids: list[str],
-) -> list[str]:
-    """Hamlet names covered by the chosen communes/hamlets (a commune covers its ma_xa hamlets)."""
-    if not area_fids or not sources["hamlet"]:
-        return []
+) -> tuple[list[str], list[str]]:
+    """Hamlet names and commune codes covered by the chosen communes/hamlets.
+
+    A commune covers its ma_xa hamlets. Names are only usable when unique in the project
+    (two communes may both have an "Ấp 1"); otherwise callers fall back to boundaries.
+    """
+    if not area_fids:
+        return [], []
     params = {"org": organization_id, "proj": project_id}
-    hamlets = session.execute(_SCOPE_AREAS_SQL, params | {"sids": sources["hamlet"]})
-    hamlet_rows = list(hamlets.mappings().all())
     chosen = set(area_fids)
     codes: set[str] = set()
     if sources["commune"]:
@@ -993,12 +1014,21 @@ def _scope_hamlet_names(
             for row in communes.mappings().all()
             if str(row["feature_id"]) in chosen and row["attributes"].get("ma_xa")
         }
-    return [
-        str(row["attributes"]["name"])
+    if not sources["hamlet"]:
+        return [], sorted(codes)
+    hamlets = session.execute(_SCOPE_AREAS_SQL, params | {"sids": sources["hamlet"]})
+    hamlet_rows = list(hamlets.mappings().all())
+    picked = [
+        row
         for row in hamlet_rows
-        if row["attributes"].get("name")
-        and (str(row["feature_id"]) in chosen or str(row["attributes"].get("ma_xa")) in codes)
+        if str(row["feature_id"]) in chosen or str(row["attributes"].get("ma_xa")) in codes
     ]
+    codes |= {str(r["attributes"]["ma_xa"]) for r in picked if r["attributes"].get("ma_xa")}
+    names = [str(r["attributes"]["name"]) for r in picked if r["attributes"].get("name")]
+    all_names = [str(r["attributes"].get("name")) for r in hamlet_rows]
+    if any(all_names.count(name) > 1 for name in names):
+        return [], sorted(codes)
+    return names, sorted(codes)
 
 
 def _natural_key(name: str) -> tuple[str, int, str]:
@@ -1098,13 +1128,16 @@ def export_integration_layer(
         if any(not v or len(v) > 128 for v in [*(scope_area or []), *(scope_route or [])]):
             raise HTTPException(status_code=422, detail="Invalid export scope identifier.")
         scope_sources = _scope_layers(session, organization_id, project_id)
+        area_names, area_codes = _scope_hamlet_names(
+            session, organization_id, project_id, scope_sources, list(scope_area or [])
+        )
         scope = _ExportScope(
             area_sids=scope_sources["commune"] + scope_sources["hamlet"],
             hamlet_sids=scope_sources["hamlet"],
+            commune_sids=scope_sources["commune"],
             area_fids=list(scope_area or []),
-            area_names=_scope_hamlet_names(
-                session, organization_id, project_id, scope_sources, list(scope_area or [])
-            ),
+            area_names=area_names,
+            area_codes=area_codes,
             route_sids=scope_sources["route"],
             route_ids=list(scope_route or []),
             route_distance_m=route_distance_m,
@@ -1217,9 +1250,11 @@ def export_integration_layer(
 
     area_mode: str | None = None
     if scope is not None and scope.area_fids:
-        # Hamlet layer: the chosen hamlets by name; layers recording "ap": by that name;
-        # the commune layer and everything else: the drawn boundary.
-        if source_id in scope.hamlet_sids and scope.area_names:
+        # Commune layer: the chosen commune(s) by id/ma_xa; hamlet layer: the chosen hamlets by
+        # name; layers recording "ap": by that name; everything else: the drawn boundary.
+        if source_id in scope.commune_sids and (scope.area_codes or scope.area_fids):
+            area_mode = "commune"
+        elif source_id in scope.hamlet_sids and scope.area_names:
             area_mode = "own_name"
         elif source_id not in scope.area_sids and has_field("ap") and scope.area_names:
             area_mode = "attribute"
