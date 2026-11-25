@@ -627,10 +627,16 @@ mod tests {
                 ),
                 (
                     "EPSG:6960 inverse",
-                    geodesic_m(datum_inverse, xy(&point["wgs84_input_to_vn2000_pipeline_6960"])),
+                    geodesic_m(
+                        datum_inverse,
+                        xy(&point["wgs84_input_to_vn2000_pipeline_6960"]),
+                    ),
                 ),
                 ("TM forward", euclidean_m(forward, xy(&point["projected"]))),
-                ("TM inverse", geodesic_m(inverse, xy(&point["projected_input_to_vn2000"]))),
+                (
+                    "TM inverse",
+                    geodesic_m(inverse, xy(&point["projected_input_to_vn2000"])),
+                ),
                 (
                     "TM inverse then EPSG:6960",
                     geodesic_m(
@@ -661,7 +667,10 @@ mod tests {
             .unwrap()
             .iter()
             .map(|point| {
-                geodesic_m(xy(&point["wgs84_st_transform"]), xy(&point["wgs84_pipeline_6960"]))
+                geodesic_m(
+                    xy(&point["wgs84_st_transform"]),
+                    xy(&point["wgs84_pipeline_6960"]),
+                )
             })
             .fold(0.0, f64::max);
         assert!(worst > 0.5, "{worst}");
