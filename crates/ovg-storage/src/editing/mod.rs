@@ -14,8 +14,10 @@ use chrono::{DateTime, SubsecRound, Utc};
 use ovg_core::{ActorContext, ActorType, TenantScope};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgRow;
 use sqlx::Row;
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use domain::{
@@ -74,6 +76,7 @@ pub struct EditScope<'a> {
     project_id: Uuid,
     actor_id: Uuid,
     display_name: String,
+    credential_id: Option<Uuid>,
     scoped: bool,
     organization_status: Option<String>,
     project: Option<(String, Option<Uuid>)>,
@@ -86,6 +89,70 @@ struct Prepared {
     after_wkb: Option<Vec<u8>>,
     before_props: Option<Value>,
     after_props: Option<Value>,
+}
+
+/// Verified bearer identity, pinned to exactly one tenant. Fields are private.
+pub struct ServiceAuth {
+    organization_id: Uuid,
+    principal_id: Uuid,
+    credential_id: Uuid,
+}
+
+fn invalid_credential() -> EditError {
+    EditError::detail(401, "invalid service credential")
+}
+
+/// Resolve a bearer against the canonical credential store before any project
+/// access. This provisional transaction has no human actor or project scope.
+pub async fn authenticate_service(
+    pool: &DbPool,
+    organization_id: Uuid,
+    raw: &str,
+) -> Result<ServiceAuth, EditError> {
+    let (prefix, _) = raw.split_once('_').ok_or_else(invalid_credential)?;
+    let hex = prefix
+        .strip_prefix("ovgsvc")
+        .ok_or_else(invalid_credential)?;
+    if hex.len() != 32 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) || organization_id.is_nil() {
+        return Err(invalid_credential());
+    }
+    let credential_id = Uuid::parse_str(hex).map_err(|_| invalid_credential())?;
+    let mut tx = pool.inner().begin().await.map_err(db_error)?;
+    sqlx::query(crate::rls::BIND_TENANT_GUCS_SQL)
+        .bind(organization_id.to_string())
+        .bind("")
+        .bind("")
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    let row = sqlx::query(
+        "SELECT sp.id AS principal_id, c.secret_hash
+         FROM org.service_credentials c
+         JOIN org.service_principals sp ON sp.organization_id=c.organization_id
+              AND sp.id=c.service_principal_id
+         JOIN org.organizations o ON o.id=c.organization_id
+         WHERE c.organization_id=$1 AND c.id=$2 AND c.revoked_at IS NULL
+           AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
+           AND sp.status='active' AND sp.revoked_at IS NULL AND o.status='active'",
+    )
+    .bind(organization_id)
+    .bind(credential_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_error)?
+    .ok_or_else(invalid_credential)?;
+    let expected: Vec<u8> = get(&row, "secret_hash")?;
+    let actual = Sha256::digest(raw.as_bytes());
+    if !bool::from(expected.as_slice().ct_eq(&actual[..])) {
+        return Err(invalid_credential());
+    }
+    let principal_id = get(&row, "principal_id")?;
+    tx.rollback().await.map_err(db_error)?;
+    Ok(ServiceAuth {
+        organization_id,
+        principal_id,
+        credential_id,
+    })
 }
 
 impl<'a> EditScope<'a> {
@@ -204,10 +271,113 @@ impl<'a> EditScope<'a> {
             project_id,
             actor_id,
             display_name,
+            credential_id: None,
             scoped,
             organization_status,
             project,
         })
+    }
+
+    /// Revalidate under the organization lock, then pin the project. A service
+    /// actor never inherits human membership or GIS ACL bypass settings.
+    pub async fn begin_service(
+        pool: &'a DbPool,
+        organization_id: Uuid,
+        project_id: Uuid,
+        auth: &ServiceAuth,
+        guard: Guard,
+    ) -> Result<Self, EditError> {
+        if auth.organization_id != organization_id {
+            return Err(invalid_credential());
+        }
+        let mut tx = TenantTransaction::begin(
+            pool,
+            &TenantScope {
+                organization_id,
+                workspace_id: None,
+                project_id: None,
+                actor: ActorContext {
+                    actor_type: ActorType::ServicePrincipal,
+                    actor_id: auth.principal_id,
+                    credential_id: Some(auth.credential_id),
+                    email: None,
+                },
+                permissions: Vec::new(),
+            },
+        )
+        .await
+        .map_err(|e| EditError::Internal(e.to_string()))?;
+        let safe_role: bool = sqlx::query_scalar(
+            "SELECT current_user = 'openvietgis_runtime'
+                 AND row_security_active('spatial.data_sources'::regclass)
+                 AND row_security_active('spatial.reference_features'::regclass)
+                 AND row_security_active('editing.changesets'::regclass)
+                 AND row_security_active('editing.changeset_operations'::regclass)",
+        )
+        .fetch_one(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
+        if !safe_role {
+            return Err(EditError::Internal(
+                "editing requires the PostGIS runtime RLS role".into(),
+            ));
+        }
+        tx.clear_project_context()
+            .await
+            .map_err(|e| EditError::Internal(e.to_string()))?;
+        let organization_status: Option<String> = sqlx::query_scalar(
+            "SELECT status FROM org.organizations WHERE id=$1 AND status='active' FOR UPDATE",
+        )
+        .bind(organization_id)
+        .fetch_optional(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
+        if organization_status.is_none() {
+            return Err(invalid_credential());
+        }
+        let display_name: String = sqlx::query_scalar(
+            "UPDATE org.service_credentials c SET last_used_at=GREATEST(c.last_used_at, clock_timestamp())
+             FROM org.service_principals sp
+             WHERE c.organization_id=$1 AND c.service_principal_id=$2 AND c.id=$3
+               AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
+               AND sp.organization_id=c.organization_id AND sp.id=c.service_principal_id
+               AND sp.status='active' AND sp.revoked_at IS NULL
+             RETURNING sp.name",
+        ).bind(organization_id).bind(auth.principal_id).bind(auth.credential_id)
+            .fetch_optional(&mut **tx.tx_mut()).await.map_err(db_error)?
+            .ok_or_else(invalid_credential)?;
+        let lock = if guard == Guard::Read {
+            "FOR SHARE"
+        } else {
+            "FOR UPDATE"
+        };
+        let project = sqlx::query_as::<_, (String, Option<Uuid>)>(&format!(
+            "SELECT status, workspace_id FROM workspace.projects
+             WHERE organization_id=$1 AND id=$2 {lock}",
+        ))
+        .bind(organization_id)
+        .bind(project_id)
+        .fetch_optional(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
+        Ok(Self {
+            tx,
+            project_id,
+            actor_id: auth.principal_id,
+            display_name,
+            credential_id: Some(auth.credential_id),
+            scoped: false,
+            organization_status,
+            project,
+        })
+    }
+
+    fn actor_type(&self) -> &'static str {
+        if self.credential_id.is_some() {
+            "service_principal"
+        } else {
+            "human"
+        }
     }
 
     /// `prepare_project_scope`: lifecycle, live grants and project writability.
@@ -227,8 +397,33 @@ impl<'a> EditScope<'a> {
             Permission::Read => &["manager", "editor", "contributor", "viewer"],
             Permission::Edit => &["manager", "editor", "contributor"],
         };
-        let granted = sqlx::query_scalar::<_, bool>(
-            "SELECT m.role IN ('owner', 'admin') OR EXISTS (
+        let granted = if let Some(credential_id) = self.credential_id {
+            let name = match permission {
+                Permission::Read => "project.read",
+                Permission::Edit => "project.edit",
+            };
+            sqlx::query_scalar::<_, bool>(
+                "SELECT EXISTS (
+                     SELECT 1 FROM org.service_credentials c
+                     JOIN org.service_principals sp ON sp.organization_id=c.organization_id
+                          AND sp.id=c.service_principal_id
+                     JOIN org.resource_grants g ON g.organization_id=sp.organization_id
+                          AND g.subject_kind='service_principal' AND g.service_principal_id=sp.id
+                     WHERE c.organization_id=$1 AND sp.id=$2 AND c.id=$6
+                       AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
+                       AND sp.status='active' AND sp.revoked_at IS NULL
+                       AND g.revoked_at IS NULL AND g.role=ANY($5)
+                       AND (c.permission_ceiling IS NULL OR $7=ANY(c.permission_ceiling))
+                       AND (g.scope_kind='organization'
+                            OR (g.scope_kind='workspace' AND g.workspace_id=$3)
+                            OR (g.scope_kind='project' AND g.project_id=$4))
+                 )",
+            ).bind(organization_id).bind(self.actor_id).bind(workspace_id)
+                .bind(self.project_id).bind(roles).bind(credential_id).bind(name)
+                .fetch_one(&mut **self.tx.tx_mut()).await.map_err(db_error)?
+        } else {
+            sqlx::query_scalar::<_, bool>(
+                "SELECT m.role IN ('owner', 'admin') OR EXISTS (
                  SELECT 1 FROM org.resource_grants AS g
                  WHERE g.organization_id = m.organization_id
                    AND g.membership_id = m.id AND g.subject_kind = 'membership'
@@ -242,16 +437,17 @@ impl<'a> EditScope<'a> {
              )
              FROM org.organization_memberships AS m
              WHERE m.organization_id = $1 AND m.user_id = $2 AND m.status = 'active'",
-        )
-        .bind(organization_id)
-        .bind(self.actor_id)
-        .bind(workspace_id)
-        .bind(self.project_id)
-        .bind(roles)
-        .fetch_optional(&mut **self.tx.tx_mut())
-        .await
-        .map_err(db_error)?
-        .ok_or_else(|| EditError::detail(404, "organization not found"))?;
+            )
+            .bind(organization_id)
+            .bind(self.actor_id)
+            .bind(workspace_id)
+            .bind(self.project_id)
+            .bind(roles)
+            .fetch_optional(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| EditError::detail(404, "organization not found"))?
+        };
         if !granted {
             let name = match permission {
                 Permission::Read => "project.read",
@@ -396,6 +592,7 @@ impl<'a> EditScope<'a> {
         self.authorize(Permission::Edit).await?;
         let org = self.tx.organization_id();
         let proj = self.project_id;
+        let actor_type = self.actor_type();
         if self.scoped {
             if reverted_from.is_some() {
                 return Err(gis_denied());
@@ -478,7 +675,7 @@ impl<'a> EditScope<'a> {
             let actor_type: String = get(&row, "actor_type")?;
             let stored: Option<String> = get(&row, "request_digest")?;
             if actor != self.actor_id
-                || actor_type != "human"
+                || actor_type != self.actor_type()
                 || stored.as_deref() != Some(digest.as_str())
             {
                 return Err(EditError::conflict(
@@ -715,7 +912,7 @@ impl<'a> EditScope<'a> {
             "SELECT 1 FROM collaboration.feature_edit_leases
              WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
                AND feature_id = ANY(CAST($4 AS varchar[])) AND expires_at > clock_timestamp()
-               AND actor_id <> $5
+               AND (NOT $6 OR actor_id <> $5)
              LIMIT 1",
         )
         .bind(org)
@@ -723,6 +920,7 @@ impl<'a> EditScope<'a> {
         .bind(source_id)
         .bind(&feature_ids)
         .bind(self.actor_id)
+        .bind(actor_type == "human")
         .fetch_optional(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?;
@@ -849,7 +1047,7 @@ impl<'a> EditScope<'a> {
             "INSERT INTO audit.audit_events (
                  id, organization_id, actor_type, actor_id, actor_display_snapshot,
                  action, resource_type, resource_id, outcome, metadata, created_at
-             ) VALUES ($1, $2, 'human', $3, $4, 'editing.changeset.commit', 'data_source',
+             ) VALUES ($1, $2, $8, $3, $4, 'editing.changeset.commit', 'data_source',
                        $5, 'success', $6, $7)",
         )
         .bind(audit_id)
@@ -867,6 +1065,7 @@ impl<'a> EditScope<'a> {
             "resulting_content_revision": new_content,
         }))
         .bind(now)
+        .bind(actor_type)
         .execute(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?;
@@ -888,7 +1087,7 @@ impl<'a> EditScope<'a> {
                  id, organization_id, project_id, resource_type, resource_id,
                  source_id, layer_id, actor_type, actor_id, actor_display_snapshot,
                  operation, created_at, audit_event_id, prior_revision, new_revision, changes
-             ) VALUES ($1, $2, $3, 'data_source', $4, $4, NULL, 'human', $5, $6,
+             ) VALUES ($1, $2, $3, 'data_source', $4, $4, NULL, $12, $5, $6,
                        'edit_features', $7, $8, $9, $10, $11)",
         )
         .bind(Uuid::new_v4())
@@ -906,6 +1105,7 @@ impl<'a> EditScope<'a> {
             "old_value": content_revision,
             "new_value": new_content,
         }]))
+        .bind(actor_type)
         .execute(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?;
@@ -919,7 +1119,7 @@ impl<'a> EditScope<'a> {
                  base_catalog_revision, resulting_catalog_revision,
                  summary, status, operation_count, audit_event_id,
                  reverted_from_changeset_id, created_at
-             ) VALUES ($1, $2, $3, $4, 'human', $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+             ) VALUES ($1, $2, $3, $4, $18, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
                        $15, $16, $17)
              RETURNING {CHANGESET_COLUMNS}"
         ))
@@ -944,6 +1144,7 @@ impl<'a> EditScope<'a> {
         .bind(audit_id)
         .bind(reverted_from)
         .bind(now)
+        .bind(actor_type)
         .fetch_one(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?;
@@ -974,19 +1175,21 @@ impl<'a> EditScope<'a> {
         }
 
         let operations = self.load_operations(changeset_id).await?;
-        sqlx::query(
-            "DELETE FROM collaboration.feature_edit_leases
+        if actor_type == "human" {
+            sqlx::query(
+                "DELETE FROM collaboration.feature_edit_leases
              WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
                AND feature_id = ANY(CAST($4 AS varchar[])) AND actor_id = $5",
-        )
-        .bind(org)
-        .bind(proj)
-        .bind(source_id)
-        .bind(&feature_ids)
-        .bind(self.actor_id)
-        .execute(&mut **self.tx.tx_mut())
-        .await
-        .map_err(db_error)?;
+            )
+            .bind(org)
+            .bind(proj)
+            .bind(source_id)
+            .bind(&feature_ids)
+            .bind(self.actor_id)
+            .execute(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        }
         changeset_wire(&row, operations)
     }
 

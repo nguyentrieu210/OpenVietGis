@@ -790,7 +790,7 @@ mod tests {
         );
         assert_eq!(
             out,
-            r#"{"a":"Mã\n\"x\"😀\u007f","b":[1,1.0,1e-05],"c":null}"#
+            r#"{"a":"M\u00e3\n\"x\"\ud83d\ude00\u007f","b":[1,1.0,1e-05],"c":null}"#
         );
     }
 

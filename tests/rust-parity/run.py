@@ -513,6 +513,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 ordinary CRS profiles", f"{root_a}/spatial/crs-profiles", token=a)
     e03_editing.compare_editing(suite, owner_url, fixture, surveyor, difference)
     e03_editing.compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, mid, user_id)
+    e03_editing.compare_service_editing(suite, owner_url, fixture, difference)
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
         fixture,

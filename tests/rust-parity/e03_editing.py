@@ -515,3 +515,87 @@ def compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, memb
 
 def _assert_revision(actual, expected):
     assert actual == expected, "Rejected ACL operation changed content revision"
+
+
+def compare_service_editing(suite, owner_url, fixture, difference):
+    """Machine credentials have no human fallback, obey ceiling and live grants."""
+    parity = EditingParity(suite, difference)
+    admin = _headers(fixture["session_a_token"], fixture["csrf_a_token"])
+    org = f"{API}/organizations/{fixture['org_a_id']}"
+    root = f"{org}/projects/{fixture['project_a_id']}"
+    source_id = fixture["layers"]["edit_4326"]["source_id"]
+    path = f"{root}/sources/{source_id}/changesets"
+    snap = f"{root}/editing/snap"
+    principal = suite.oracle.post(
+        f"{org}/service-principals", headers=admin, json={"name": "E03 parity service"},
+    )
+    assert principal.status_code == 201, principal.text
+    pid = principal.json()["id"]
+    credential_path = f"{org}/service-principals/{pid}/credentials"
+    grant = suite.oracle.post(
+        f"{org}/grants", headers=admin,
+        json={"subject_kind": "service_principal", "subject_id": pid,
+              "scope_kind": "project", "project_id": fixture["project_a_id"], "role": "editor"},
+    )
+    assert grant.status_code == 201, grant.text
+
+    def credential(name, ceiling=None):
+        response = suite.oracle.post(
+            credential_path, headers=admin, json={"name": name, "permission_ceiling": ceiling},
+        )
+        assert response.status_code == 201, f"Issue credential: {response.status_code}"
+        data = response.json()
+        return data["id"], {"authorization": f"Bearer {data['secret']}"}
+
+    full_id, full = credential("full")
+    _, read_only = credential("read only", ["project.read"])
+    with psycopg.connect(owner_url) as conn:
+        revision = conn.execute(
+            "SELECT content_revision FROM spatial.data_sources WHERE id=%s", (source_id,)
+        ).fetchone()[0]
+    body = {
+        "operation_id": "e03-service-create", "base_content_revision": revision,
+        "summary": "Tạo đối tượng 🗺",
+        "operations": [{"op_type": "create", "feature_id": "e03-service",
+                        "geometry": {"type": "Point", "coordinates": [105.84, 21.02]},
+                        "properties": {"code": "Mã địa chính", "ward": "W1",
+                                       "metric_val": 7, "active": True}}],
+    }
+    parity.same("E03 bearer read-only ceiling denies writes", "POST", path, 403,
+                headers=read_only, body=body)
+    parity.same("E03 bearer read-only ceiling permits list", "GET", path, 200, headers=read_only)
+    parity.same("E03 invalid bearer does not fall back to owner cookie", "POST", path, 401,
+                headers=admin | {"authorization": "Bearer invalid"}, body=body)
+    foreign = f"{API}/organizations/{fixture['org_b_id']}/projects/{fixture['project_b_id']}/editing/snap"
+    parity.same("E03 bearer cross-tenant denied", "POST", foreign, 401, headers=full,
+                body={"target": [0, 0], "tolerance": 1})
+    parity.same("E03 bearer snap without CSRF", "POST", snap, 200, headers=full,
+                body={"target": [0, 0], "vertices": [[1, 0]], "tolerance": 1})
+    receipt = parity.cross("E03 bearer Rust edit replayed by FastAPI with Unicode digest",
+                           "rust", path, body, full)
+    if receipt:
+        def actor_matches():
+            assert receipt["actor_type"] == "service_principal"
+            assert receipt["actor_id"] == pid
+            with psycopg.connect(owner_url) as conn:
+                assert conn.execute(
+                    "SELECT actor_type, actor_id FROM audit.audit_events WHERE id=%s",
+                    (receipt["audit_event_id"],),
+                ).fetchone() == ("service_principal", UUID(pid))
+                assert conn.execute(
+                    "SELECT last_used_at IS NOT NULL FROM org.service_credentials WHERE id=%s",
+                    (full_id,),
+                ).fetchone()[0]
+        parity.record("E03 bearer audit actor and credential use", actor_matches)
+        detail = f"{root}/changesets/{receipt['id']}"
+        parity.same("E03 bearer detail", "GET", detail, 200, headers=full)
+        parity.same("E03 bearer replay cannot impersonate service as human", "POST", path, 409,
+                    headers=admin, body=body)
+        parity.cross("E03 bearer Rust revert replayed by FastAPI",
+                     "rust", f"{detail}/revert", {"operation_id": "e03-service-revert"}, full)
+    response = suite.oracle.post(f"{credential_path}/{full_id}/revoke", headers=admin)
+    assert response.status_code == 204, response.status_code
+    parity.same("E03 revoked bearer denied before replay", "POST", path, 401, headers=full, body=body)
+    response = suite.oracle.post(f"{org}/grants/{grant.json()['id']}/revoke", headers=admin)
+    assert response.status_code == 204, response.status_code
+    parity.same("E03 bearer live grant revocation denies history", "GET", path, 403, headers=read_only)
