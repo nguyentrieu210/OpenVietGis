@@ -38,7 +38,9 @@ from uuid import uuid4
 from qgis.core import (
     QgsApplication,
     QgsEditorWidgetSetup,
+    QgsExpression,
     QgsFeature,
+    QgsFeatureRequest,
     QgsField,
     QgsFieldConstraints,
     QgsGeometry,
@@ -2298,10 +2300,18 @@ class OpenVietGisConnectorDialog(QDialog):
                 if was_edit and not layer.commitChanges():
                     raise ApiError("Không thể kết thúc phiên sửa cục bộ.")
                 prov = layer.dataProvider()
+                removed_ids = {str(oid) for oid in change.get("removals", [])}
+                upserts = change.get("upserts", [])
+                upsert_ids = {str(item["feature_id"]) for item in upserts}
+                affected_ids = removed_ids | upsert_ids
                 id_to_fid: dict[str, int] = {}
-                for feat in layer.getFeatures():
-                    id_to_fid[str(feat["ovg_feature_id"])] = feat.id()
-                removals = [id_to_fid[str(oid)] for oid in change.get("removals", []) if str(oid) in id_to_fid]
+                if affected_ids:
+                    request = self._managed_feature_request(affected_ids)
+                    request.setFlags(QgsFeatureRequest.NoGeometry)
+                    request.setSubsetOfAttributes(["ovg_feature_id"], layer.fields())
+                    for feat in layer.getFeatures(request):
+                        id_to_fid[str(feat["ovg_feature_id"])] = feat.id()
+                removals = [id_to_fid[oid] for oid in removed_ids if oid in id_to_fid]
                 if removals:
                     if not prov.deleteFeatures(removals):
                         raise ApiError("Không thể áp dụng xóa từ Web.")
@@ -2310,7 +2320,7 @@ class OpenVietGisConnectorDialog(QDialog):
                 to_add: list[QgsFeature] = []
                 geom_updates: dict[int, QgsGeometry] = {}
                 attr_updates: dict[int, dict[int, Any]] = {}
-                for item in change.get("upserts", []):
+                for item in upserts:
                     oid = str(item["feature_id"])
                     qgeom = self._geojson_to_qgs_geometry(item.get("geometry"))
                     props = item.get("properties") or {}
@@ -2332,12 +2342,21 @@ class OpenVietGisConnectorDialog(QDialog):
                     raise ApiError("Không thể áp dụng đối tượng mới từ Web.")
                 layer.updateExtents()
                 layer.triggerRepaint()
+                if upsert_ids:
+                    updated = self._managed_snapshot(
+                        layer, field_names, request=self._managed_feature_request(upsert_ids)
+                    )
+                    if updated.keys() != upsert_ids:
+                        raise ApiError("Không thể đối chiếu đầy đủ đối tượng đã cập nhật.")
+                    info["baseline"].update(updated)
+                for oid in removed_ids:
+                    info["baseline"].pop(oid, None)
                 info["content_revision"] = str(change["content_revision"])
-                info["baseline"] = self._managed_snapshot(layer, field_names)
-                info["checked_generation"] = None
                 info["cursor"] = int(change["cursor"])
                 if was_edit:
                     layer.startEditing()
+                info["checked_generation"] = info.get("edit_generation")
+                info["dirty"] = False
                 applying = None
             self._managed_cursor = min(delta.next_cursor, blocked_cursor - 1) if blocked_cursor else delta.next_cursor
             if delta.has_more and blocked_cursor is None:
@@ -2373,14 +2392,23 @@ class OpenVietGisConnectorDialog(QDialog):
             self.ws_status.setText(f"Dữ liệu cập nhật không hợp lệ: {exc}")
 
     @staticmethod
-    def _managed_snapshot(layer: QgsVectorLayer, fields: list[str], assign_ids: bool = False) -> dict:
+    def _managed_feature_request(feature_ids: set[str]) -> QgsFeatureRequest:
+        field = QgsExpression.quotedColumnRef("ovg_feature_id")
+        values = ", ".join(QgsExpression.quotedValue(oid) for oid in sorted(feature_ids))
+        return QgsFeatureRequest().setFilterExpression(f"{field} IN ({values})")
+
+    @staticmethod
+    def _managed_snapshot(
+        layer: QgsVectorLayer, fields: list[str], assign_ids: bool = False,
+        *, request: QgsFeatureRequest | None = None,
+    ) -> dict:
         names = layer.fields().names()
         if names == ["ovg_local_fid", "ovg_feature_id", *fields]:
             names = names[1:]
         if names != ["ovg_feature_id", *fields]:
             raise ApiError("Cấu trúc lớp đã thay đổi; hãy xuất bản sao và mở lại.")
         result = {}
-        for feat in layer.getFeatures():
+        for feat in layer.getFeatures(request if request is not None else QgsFeatureRequest()):
             raw_id = feat["ovg_feature_id"]
             oid = "" if QgsVariantUtils.isNull(raw_id) else str(raw_id).strip()
             if not oid:

@@ -106,8 +106,18 @@ def test_extension_lifecycle_requires_admin_and_project_manage(
         assert disabled.status_code == 200, disabled.text
         assert disabled.json()["status"] == "disabled"
 
+        # Disabling the runtime removes mutation authority, not authorized
+        # access to retained Core records (same contract as deactivate).
         inactive_read = owner.get(records)
-        assert inactive_read.status_code == 404, inactive_read.text
+        assert inactive_read.status_code == 200, inactive_read.text
+        assert [row["id"] for row in inactive_read.json()["items"]] == [record_id]
+        inactive_write = owner.post(
+            records, json={"entity_name": "note", "payload": {"text": "must not be saved"}}
+        )
+        assert inactive_write.status_code == 404, inactive_write.text
+        foreign = seed_access_world()
+        with _client(foreign.owner_user_id) as outsider:
+            assert outsider.get(records).status_code in (403, 404)
 
         reactivated = member.post(
             f"{project}/extensions/activations",

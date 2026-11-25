@@ -38,7 +38,7 @@ test("background /me revalidation keeps authenticated shell mounted", async ({
   await expect(page.locator(".ovg-session-bootstrap")).toHaveCount(0);
   await expect(
     page.getByRole("heading", {
-      name: "Quản lý dữ liệu không gian trên một giao diện hiện đại, thuần Việt."
+      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
     })
   ).toHaveCount(0);
 

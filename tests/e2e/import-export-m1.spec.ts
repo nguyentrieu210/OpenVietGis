@@ -66,6 +66,7 @@ test("M1 end-to-end: import GeoJSON, view/select/save in Map Workspace, export f
   await table.getByRole("button", { name: "m1-pt-01", exact: true }).click();
   await expect(page.getByTestId("map-inspector")).toHaveAttribute("data-feature-id", "m1-pt-01");
 
+  await page.getByRole("button", { name: /^Cấu hình bản đồ dùng chung/ }).click();
   const shared = page.getByRole("region", { name: "Cấu hình bản đồ dùng chung" });
   await shared.getByRole("button", { name: "Lưu bản đồ", exact: true }).click();
   await expect(page.getByTestId("map-save-indicator")).toHaveAttribute("data-save-state", "saved");

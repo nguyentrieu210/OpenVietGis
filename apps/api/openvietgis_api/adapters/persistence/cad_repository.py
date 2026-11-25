@@ -336,6 +336,8 @@ class SqlCadRepository:
             cad_fields, GeometryFamily(family), GeometryDimensions.XY
         )
         content_rev = hashlib.sha256(f"{out_source_id}:{sha256_hex}".encode()).hexdigest()
+        if placement is not None:
+            entity_summary["imported_schema_revision"] = schema_rev
         ref_key = f"cad_dxf_{str(out_source_id).replace('-', '')[:12]}"
 
         self._session.execute(

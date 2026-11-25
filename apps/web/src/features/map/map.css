@@ -651,7 +651,7 @@
 }
 
 /* Hide redundant floating toggle pills inside map layout because Ribbon & Statusbar already control panels */
-.gis-workstation-main .map-layout-controls {
+.gis-workstation-main .map-workspace-layout:not(.is-mobile) .map-layout-controls {
   display: none !important;
 }
 .gis-workstation-main .map-inspector {
@@ -971,10 +971,21 @@
 
 
 /* === Final 4 Pixel-Perfection Fixes for Full-Bleed GIS/CAD Workstation === */
-/* 1. Reclaim +120px vertical map height: hide legacy bottom save panel & session bar (Lưu bản đồ is in floating HUD & Statusbar is flush at bottom!) */
-.gis-workspace .map-sessionbar,
-.gis-workspace .map-save-panel {
+/* Keep shared map actions reachable without shrinking the viewport. */
+.gis-workspace .map-sessionbar {
   display: none !important;
+}
+.map-shared-controls:not([hidden]) {
+  position: absolute;
+  z-index: 60;
+  inset: 52px 10px auto auto;
+  width: min(510px, calc(100% - 20px));
+  max-height: calc(100% - 96px);
+  overflow: auto;
+  background: var(--ovg-surface, #fff);
+  border: 1px solid var(--ovg-border, #c7d4e0);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #172c4330;
 }
 
 /* 2. Keep 42px Top Menubar strictly single-row with zero wrapping/clipping */
@@ -1027,10 +1038,15 @@
 
 
 /* === Ultra-Clean Minimalist GIS/CAD Workstation (Zero Duplication, Pure Map!) === */
-.gis-workspace .map-sessionbar,
-.gis-workspace .map-save-panel,
-.gis-workspace .map-notice {
+.gis-workspace .map-sessionbar {
   display: none !important;
+}
+.gis-workspace .map-notice {
+  position: absolute;
+  inset: auto 10px 35px auto;
+  z-index: 50;
+  max-width: min(480px, calc(100% - 20px));
+  border-radius: 6px;
 }
 .gis-workspace .map-stage-status {
   display: none !important;
@@ -1047,6 +1063,19 @@
   gap: 8px !important;
   min-width: 0;
 }
+.gis-top-menubar .gis-header-left h1 {
+  min-width: 0;
+}
+.gis-top-menubar .gis-header-left h1 > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gis-top-menubar .gis-header-left h1 > small,
+.gis-top-menubar .gis-header-left > a,
+.gis-top-menubar .gis-header-left > button {
+  flex-shrink: 0;
+}
+
 .gis-top-menubar .gis-top-primary {
   background: var(--ovg-primary) !important;
   border-color: var(--ovg-primary) !important;
@@ -1434,6 +1463,9 @@
   top: 12px !important;
   left: 12px !important;
   bottom: auto !important;
+}
+.map-workspace-layout.is-mobile .map-basemap-picker {
+  top: 60px !important;
 }
 .map-basemap-menu {
   top: calc(100% + 6px) !important;

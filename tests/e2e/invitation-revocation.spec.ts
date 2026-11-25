@@ -169,7 +169,7 @@ test(
 
       await owner.goto("/app/organizations/" + orgId + "/membership");
       await expect(
-        owner.getByRole("heading", { name: "Lời mời", exact: true })
+        owner.getByRole("heading", { name: "Lời mời thành viên", exact: true })
       ).toBeVisible();
 
       await owner.getByLabel("Email người nhận").fill("member-a@example.test");

@@ -38,6 +38,12 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
+      - name: Install system GDAL runtime for raster fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin python3-gdal python3-numpy
+          /usr/bin/python3 -c "from osgeo import gdal, osr; import numpy; print(gdal.VersionInfo())"
+
       - name: Validate Python, contracts, scope, architecture and docs
         run: |
           uv run --project apps/api ruff check apps/api tools tests
@@ -121,6 +127,12 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
+      - name: Install system GDAL runtime for raster fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gdal-bin python3-gdal python3-numpy
+          /usr/bin/python3 -c "from osgeo import gdal, osr; import numpy; print(gdal.VersionInfo())"
+
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -148,10 +160,18 @@ jobs:
           "from openvietgis_api.adapters.persistence.db import get_engine;
           connection = get_engine().connect(); connection.close()"
 
+      - name: Test CAD and GIS draft review in Chromium
+        if: ${{ !inputs.browser_only }}
+        working-directory: packages/spatial-workspace
+        run: node tests/browser/cad-draft-smoke.mjs
+
       - name: Run the full Node 26 root validation workflow
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
 
+      - name: Validate Engine-First editor and cache regression
+        if: ${{ !inputs.browser_only }}
+        run: bash tools/validate_engine_first.sh
       - name: Test canonical built workspace (synthetic API)
         if: ${{ !inputs.browser_only }}
         run: pnpm validate:canonical-smoke

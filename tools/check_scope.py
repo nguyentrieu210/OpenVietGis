@@ -34,6 +34,8 @@ MAP_ENGINE_ADAPTER = MAP_UI_ROOT + "maplibre-engine.ts"
 RENDERER_OWNERS = {
     MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
+    # SurveyTerrain owns the native MapLibre DEM interaction.
+    "apps/web-next/src/SurveyTerrain.tsx",
     "packages/spatial-workspace/src/maplibre3d.ts",
     "packages/spatial-workspace/src/renderer3d.ts",
     # Isolated browser fixture bootstraps a renderer worker; never production.
@@ -45,6 +47,29 @@ RENDERER_MANIFESTS = {
     "apps/web-next/package.json",
     "apps/web-next/tsconfig.json",
     "packages/spatial-workspace/package.json",
+}
+# R031 explicitly permits only the pinned draft-validation dependency and
+# its isolated adapter. No editor engine imports from workspace or domain code.
+EDITING_ENGINE_OWNERS = {
+    "apps/web-next/package.json",
+    "apps/web-next/src/TerraDraftValidation.ts",
+}
+# These two existing R022 references are not renderer imports: a UI label
+# and an internal type-only contract. Remove only the exact allowed text.
+RENDERER_NON_API_REFERENCES = {
+    "apps/web-next/src/SpatialWorkspace.tsx": (
+        '"3d tiles · maplibre (tương thích)"',
+        '"địa hình thực tế trên bản đồ gis (maplibre)"',
+        'import type {geographiccamera} from "@openvietgis/spatial-workspace/maplibre3d";',
+    ),
+    "apps/web-next/src/TerrainEngineering.tsx": (
+        'import type {map as mlmap} from "maplibre-gl";',
+    ),
+    "apps/web-next/src/LiveApp.tsx": ('"cập nhật nguồn maplibre"',),
+    "packages/spatial-workspace/src/cesium3d.ts": (
+        'import type {geographiccamera,namedmodel,selectablefootprintengine} from "./maplibre3d";',
+        'import type {geographiccamera,namedmodel,selectablefootprintengine,sharedvector} from "./maplibre3d";',
+    ),
 }
 RENDERER_IMPORT = re.compile(
     r"""(?:from\s*|import\s*(?:\(\s*)?)["']maplibre-gl(?:/[^"']*)?["']"""
@@ -63,7 +88,11 @@ def find_scope_violations(root: Path = ROOT) -> list[str]:
                 continue
             content = path.read_text(encoding="utf-8", errors="ignore").lower()
             relative = path.relative_to(root).as_posix()
+            for reference in RENDERER_NON_API_REFERENCES.get(relative, ()):
+                content = content.replace(reference, "")
             for marker, label in FORBIDDEN_MARKERS.items():
+                if marker in {"terra-draw", "terradraw"} and relative in EDITING_ENGINE_OWNERS:
+                    continue
                 if marker == "maplibre":
                     if relative in RENDERER_OWNERS or relative in RENDERER_MANIFESTS:
                         continue

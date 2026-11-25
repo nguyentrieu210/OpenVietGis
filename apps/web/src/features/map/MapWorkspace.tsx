@@ -92,6 +92,7 @@ function Workspace({organizationId,projectId,accountId,project,initial,canEdit,c
  const [engineReady,setEngineReady]=useState(false),[engineError,setEngineError]=useState(false),[blocked,setBlocked]=useState<string|null>(null);
  const [viewpointIntent,setViewpointIntent]=useState<SaveMapInput["default_viewpoint"]>({mode:"preserve"});
  const [pending,setPending]=useState<PendingSave|null>(null),[notice,setNotice]=useState(""),[working,setWorking]=useState(false);
+ const [sharedControlsOpen,setSharedControlsOpen]=useState(false);
  const [showHistory,setShowHistory]=useState(false),[historyCursor,setHistoryCursor]=useState<number|undefined>();
  const [contextMenu,setContextMenu]=useState(false),[addDataOpen,setAddDataOpen]=useState(false),[technicalDetailsOpen,setTechnicalDetailsOpen]=useState(false),[cmdLineOpen,setCmdLineOpen]=useState(true);
  const [displayCrs,setDisplayCrs]=useState<DisplayCrsOption>(()=>{try{const savedCode=Number(window.localStorage.getItem("ovg-display-crs"));return VIETNAM_CRS_PRESETS.find(c=>c.code===savedCode)??VIETNAM_CRS_PRESETS[0]!;}catch{return VIETNAM_CRS_PRESETS[0]!;}});
@@ -361,10 +362,11 @@ function Workspace({organizationId,projectId,accountId,project,initial,canEdit,c
    onToggleTable={()=>updateLayoutPreference({...layoutPreference,attributeTableCollapsed:!layoutPreference.attributeTableCollapsed})}
    onSelectTool={setActiveTool}
    needsRecovery={pending?.status==="unresolved"||pending?.status==="conflict"}
+   sharedControlsOpen={sharedControlsOpen}
    cmdLineOpen={cmdLineOpen}
    onToggleCmdLine={()=>setCmdLineOpen(v=>!v)}
    onOpenTechnical={()=>setTechnicalDetailsOpen(true)}
-   onReloadShared={()=>void reloadShared()}
+   onToggleSharedControls={()=>setSharedControlsOpen(open=>!open)}
   />
   <div className="gis-workstation-stage">
    <MapActivityRail
@@ -469,17 +471,20 @@ function Workspace({organizationId,projectId,accountId,project,initial,canEdit,c
     </div>
    </div>
   </div>:null}
-  <div className="map-sessionbar"><span>Giữ Shift hoặc Ctrl khi bấm để chọn nhiều · {selected.length}/100 đang chọn</span><span data-testid="map-camera-summary">Tọa độ tâm {camera.longitude.toFixed(5)}, {camera.latitude.toFixed(5)} · mức thu phóng {camera.zoom.toFixed(2)}</span><button onClick={()=>void revalidate()}>Kiểm tra lại quyền truy cập</button></div>
+  <div className="map-sessionbar"><span>Giữ Shift hoặc Ctrl khi bấm để chọn nhiều · {selected.length}/100 đang chọn</span><span data-testid="map-camera-summary">Tọa độ tâm {camera.longitude.toFixed(5)}, {camera.latitude.toFixed(5)} · mức thu phóng {camera.zoom.toFixed(2)}</span></div>
+  <div id="map-shared-controls" className="map-shared-controls" hidden={!sharedControlsOpen}>
   <section className="map-save-panel" aria-label="Cấu hình bản đồ dùng chung"><div><h2>Cấu hình bản đồ dùng chung</h2><SaveStateIndicator dirty={dirty} pendingStatus={pending?.status??null} revision={saved.configuration_revision}/><p className="map-muted">Góc nhìn mặc định: {viewpointIntent.mode==="preserve"?(saved.configuration.default_viewpoint?"giữ nguyên":"chưa đặt"):viewpointIntent.mode==="clear"?"xóa khi lưu":"cập nhật khi lưu"}</p></div>
    <button disabled={!writable||locked} onClick={()=>invokeCommand(commands,"map.set-default-viewpoint","toolbar")}>Đặt góc nhìn mặc định</button>
    <button disabled={!writable||locked} onClick={()=>{setViewpointIntent({mode:"clear"});setPending(null);}}>Xóa góc nhìn mặc định</button>
    <button disabled={!writable||locked} onClick={()=>void submitSave()}>Lưu bản đồ</button>
-   <button disabled={working} onClick={()=>void reloadShared()}>Tải lại bản đồ chung</button>
+   <button disabled={working||pending?.status==="unresolved"} onClick={()=>void reloadShared()}>Tải lại bản đồ chung</button>
    {pending?.status==="unresolved"?<><button disabled={working||!writable} onClick={()=>void reconcile()}>Đối chiếu bản lưu</button><button disabled={working||!writable} onClick={()=>void submitSave(true)}>Thử lưu lại</button></>:null}
+   <button onClick={()=>void revalidate()}>Kiểm tra lại quyền truy cập</button>
    <button onClick={()=>setShowHistory(!showHistory)}>{showHistory?"Ẩn":"Xem"} lịch sử bản đồ</button>
   </section>
-  {notice?<p className="map-notice" role="status">{notice}</p>:null}
   {showHistory?<section className="map-history" aria-label="Lịch sử cấu hình bản đồ"><h2>Lịch sử cấu hình bản đồ</h2>{history?<><ol>{history.items.map(revision=><li key={revision.configuration_revision}><strong>Phiên bản {revision.configuration_revision}</strong> · {revision.actor_display_snapshot} · {revision.created_at}<details><summary>Cấu hình trước / sau</summary><pre>{JSON.stringify({before:revision.before_configuration,after:revision.after_configuration},null,2)}</pre></details></li>)}</ol><button disabled={history.next_after_revision===null} onClick={()=>{if(history.next_after_revision!==null)setHistoryCursor(history.next_after_revision);}}>Các phiên bản cũ hơn</button><button disabled={historyCursor===undefined} onClick={()=>setHistoryCursor(undefined)}>Các phiên bản mới nhất</button></>:<p>{historyQuery.error?"Không thể truy cập lịch sử hiện tại.":"Đang kiểm tra lịch sử bản đồ…"}</p>}</section>:null}
+  </div>
+  {notice?<p className="map-notice" role="status">{notice}</p>:null}
  </main>;
 }
 

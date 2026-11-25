@@ -63,13 +63,18 @@ def test_populated_extension_history_refuses_lossy_downgrade(
         assert before.status_code == 200, before.text
 
     config = Config(str(ROOT / "apps" / "api" / "alembic.ini"))
+    with get_admin_engine().connect() as connection:
+        before_revisions = set(
+            connection.execute(text("SELECT version_num FROM alembic_version")).scalars()
+        )
     with pytest.raises(DBAPIError, match="R014 history exists; restore pre-upgrade backup"):
         command.downgrade(config, "0018_production_ops")
 
     with get_admin_engine().connect() as connection:
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
-            "0019_extension_history"
-        )
+        # The complete downgrade is transactional, including all later revisions.
+        assert set(
+            connection.execute(text("SELECT version_num FROM alembic_version")).scalars()
+        ) == before_revisions
         for table in ("record_revisions", "activation_events", "import_receipts"):
             assert (
                 connection.execute(

@@ -108,7 +108,7 @@ def test_qgis_workspace_manual_roundtrip_real_http_postgis(
             return SimpleNamespace(**res.json())
 
         def push(_config, *, layer_id, gpkg_path, base_content_revision, base_schema_revision,
-                 expected_diff_sha256, operation_id, summary):
+                 expected_diff_sha256, operation_id, summary, allow_deletes=False):
             assert layer_id == create.json()["layer_id"]
             res = owner.post(
                 push_url,
@@ -118,6 +118,7 @@ def test_qgis_workspace_manual_roundtrip_real_http_postgis(
                     "expected_diff_sha256": expected_diff_sha256,
                     "operation_id": operation_id,
                     "summary": summary,
+                    "allow_deletes": "true" if allow_deletes else "false",
                 },
                 files={"file": ("edited.gpkg", Path(gpkg_path).read_bytes(),
                                 "application/geopackage+sqlite3")},

@@ -44,6 +44,16 @@ d.GetRasterBand(1).Fill(6000);d.GetRasterBand(2).Fill(2000);d=None
         assert c.get(base).json()["items"][0] == j
         f = c.get(path + "/file")
         assert f.status_code == 200 and f.content.startswith(b"II*\x00")
+        partial = c.get(path + "/file", headers={"Range": "bytes=8-23"})
+        assert partial.status_code == 206 and partial.content == f.content[8:24]
+        assert partial.headers["content-range"] == f"bytes 8-23/{len(f.content)}"
+        assert partial.headers["accept-ranges"] == "bytes"
+        assert partial.headers["cache-control"] == "private, no-store"
+        suffix = c.get(path + "/file", headers={"Range": "bytes=-4"})
+        assert suffix.status_code == 206 and suffix.content == f.content[-4:]
+        invalid = c.get(path + "/file", headers={"Range": f"bytes={len(f.content)}-"})
+        assert invalid.status_code == 416
+        assert invalid.headers["content-range"] == f"bytes */{len(f.content)}"
         tile = c.get(path + "/tiles/0/0/0.png")
         assert tile.status_code == 200 and tile.content.startswith(b"\x89PNG")
         assert tile.headers["cache-control"] == "private, no-store"
@@ -51,6 +61,8 @@ d.GetRasterBand(1).Fill(6000);d.GetRasterBand(2).Fill(2000);d=None
         with _client(world.wrong_user_id) as other:
             for url in (base, path + "/file", path + "/tiles/0/0/0.png"):
                 assert other.get(url).status_code in (403, 404)
+            denied = other.get(path + "/file", headers={"Range": "bytes=0-3"})
+            assert denied.status_code in (403, 404)
         with get_admin_engine().begin() as db:
             db.execute(
                 text(

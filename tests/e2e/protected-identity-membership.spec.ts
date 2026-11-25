@@ -236,6 +236,7 @@ test(
     await page
       .getByRole("link", { name: organizationName, exact: true })
       .click();
+    await expect(page).toHaveURL(/\/app\/organizations\/[0-9a-f-]{36}$/);
 
     const organizationId = new URL(page.url()).pathname.split("/").at(-1);
     expect(organizationId).toMatch(/^[0-9a-f-]{36}$/);
@@ -253,7 +254,7 @@ test(
       page.getByRole("heading", { name: "Phân quyền tài nguyên" })
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Lời mời", exact: true })
+      page.getByRole("heading", { name: "Lời mời thành viên", exact: true })
     ).toBeVisible();
 
     // A normal lifecycle conflict keeps safe errors and controls mounted.
@@ -277,7 +278,7 @@ test(
         "Không thể thay đổi tư cách thành viên"
       );
       await expect(
-        page.getByRole("heading", { name: "Lời mời", exact: true })
+        page.getByRole("heading", { name: "Lời mời thành viên", exact: true })
       ).toBeVisible();
       await expect(
         page.getByTestId("member-list").locator("li").first()
@@ -335,7 +336,7 @@ test(
           page.getByTestId("resource-grant-list")
         ).toHaveCount(0);
         await expect(
-          page.getByRole("heading", { name: "Lời mời", exact: true })
+          page.getByRole("heading", { name: "Lời mời thành viên", exact: true })
         ).toHaveCount(0);
         await expect(
           page.getByRole("region", { name: "Lời mời đã tạo" })

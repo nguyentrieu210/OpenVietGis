@@ -255,6 +255,79 @@ def test_real_pairing_credential_can_open_only_its_binding(migrated_database: No
             params={"session_id": second_id, "cursor": page["cursor"], "limit": 1},
         ).json()
         assert stale["reset_required"] and stale["changes"] == []
+        # Cross-engine acceptance: 100 new features, alternating the public
+        # Web ChangeSet path and the managed desktop path, ten commits total.
+        # Both use the real restricted database and authenticated API.
+        cursor = second_commit.json()["event_cursor"]
+        revision = second_commit.json()["resulting_content_revision"]
+        expected_ids = set()
+        last_payload = None
+        last_receipt = None
+        for batch in range(10):
+            operations = [
+                {
+                    "op_type": "create",
+                    "feature_id": f"r031-{batch}-{index}",
+                    "geometry": {"type": "Point", "coordinates": [106.6, 10.7]},
+                    "properties": feature["properties"],
+                }
+                for index in range(10)
+            ]
+            expected_ids.update(op["feature_id"] for op in operations)
+            payload = {
+                "source_id": page["source_id"],
+                "session_id": sid,
+                "base_content_revision": revision,
+                "base_schema_revision": page["schema_revision"],
+                "operation_id": str(uuid4()),
+                "operations": operations,
+            }
+            if batch % 2 == 0:
+                with _client(world.owner_user_id) as owner:
+                    reply = owner.post(
+                        seed_url,
+                        json={
+                            key: value for key, value in payload.items()
+                            if key not in {"source_id", "session_id"}
+                        },
+                    )
+            else:
+                reply = device.post(managed + "/commits", json=payload)
+            assert reply.status_code == 201, reply.text
+            revision = reply.json()["resulting_content_revision"]
+            if batch % 2:
+                last_payload, last_receipt = payload, reply.json()
+
+        assert last_payload is not None and last_receipt is not None
+        replay = device.post(managed + "/commits", json=last_payload)
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["changeset_id"] == last_receipt["changeset_id"]
+        assert replay.json()["event_cursor"] == last_receipt["event_cursor"]
+
+        # A full bounded page coalesces all ten commits per source/alias.
+        # Partial pages that cannot prove a coherent revision must reset.
+        reply = device.get(managed + "/delta", params={
+            "session_id": second_id, "cursor": cursor, "limit": 20,
+        })
+        assert reply.status_code == 200, reply.text
+        body = reply.json()
+        assert not body["reset_required"], body
+        assert not body["has_more"]
+        assert {change["layer_id"] for change in body["changes"]} == {layer, alias_id}
+        for change in body["changes"]:
+            ids = [item["feature_id"] for item in change["upserts"]]
+            assert len(ids) == 100 and set(ids) == expected_ids
+            assert change["coalesced_changesets"] == 10
+            assert change["content_revision"] == revision
+            assert not change["removals"]
+        cursor = body["next_cursor"]
+        empty_delta = device.get(managed + "/delta", params={
+            "session_id": second_id, "cursor": cursor,
+        })
+        assert empty_delta.status_code == 200
+        assert empty_delta.json()["changes"] == []
+        print("R031: 100 alternating Web/QGIS mutations converged over 10 ordered commits")
+
         assert device.post(sessions, json={"binding_id": other_bid}).status_code == 403
         assert device.post(
             _root(foreign) + "/integration-hub/managed/sessions", json={"binding_id": bid}

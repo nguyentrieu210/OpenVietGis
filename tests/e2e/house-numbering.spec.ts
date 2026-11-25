@@ -6,23 +6,24 @@ import {
 
 
 async function hnSignIn(page: Page, member = false): Promise<void> {
-  await page.goto("/");
+  await page.goto("/login");
   await page.getByRole("link", { name: /Đăng nhập với OpenVietGIS Development|Continue with OpenVietGIS Development/ }).click();
   await page.locator("#username").fill(member ? "member-a" : "owner-a");
   await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
   await page.locator("#kc-login").click();
-  await expect(page.getByText(member ? "Member Alpha" : "Owner Alpha", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mở menu tài khoản" }))
+    .toContainText(member ? "Member Alpha" : "Owner Alpha");
 }
 
 test.use({ viewport: { width: 1440, height: 1000 }, trace: "off", screenshot: "off", video: "off" });
 
-test("House Numbering official module lifecycle and seven UI journeys", async ({ page, browser }) => {
+test("House Numbering official module lifecycle and seven UI journeys", async ({ page, browser, baseURL }) => {
   test.setTimeout(180_000);
   await hnSignIn(page);
   const fixture = await createMapProject(page, Date.now().toString() + "-hn");
 
   await page.goto(fixture.root + "/platform-hub");
-  await page.getByRole("tab", { name: /R014 Nền tảng Module/i }).click();
+  await page.getByRole("tab", { name: "Quản lý Plugin & Số nhà" }).click();
   const row = page.getByRole("row").filter({ hasText: "Quản lý và đánh số nhà" });
   await expect(row).toBeVisible();
   await row.getByRole("button", { name: "Đăng ký" }).click();
@@ -110,7 +111,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
   await expect(page.getByText(/Đã tạo gói 0 bản ghi/)).toBeVisible();
 
   // Viewer can enter an active module through project read grant but cannot mutate private data.
-  const viewerContext = await browser.newContext({ baseURL: "http://127.0.0.1:5178" });
+  const viewerContext = await browser.newContext({ baseURL });
   const viewer = await viewerContext.newPage();
   await hnSignIn(viewer, true);
   await grantMapCollaborator(page, viewer, fixture, "viewer");
@@ -122,7 +123,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
 
   // Mobile regression — active module must remain usable without page-level horizontal overflow.
   const mobileContext = await browser.newContext({
-    baseURL: "http://127.0.0.1:5178",
+    baseURL,
     viewport: { width: 390, height: 844 },
     permissions: ["geolocation"],
     geolocation: { longitude: 106.7, latitude: 10.8, accuracy: 7 }
@@ -144,7 +145,7 @@ test("House Numbering official module lifecycle and seven UI journeys", async ({
 
   // Disable must hide runtime without deleting module data.
   await page.goto(fixture.root + "/platform-hub");
-  await page.getByRole("tab", { name: /R014 Nền tảng Module/i }).click();
+  await page.getByRole("tab", { name: "Quản lý Plugin & Số nhà" }).click();
   const activeRow = page.getByRole("row").filter({ hasText: "Quản lý và đánh số nhà" });
   await activeRow.getByRole("button", { name: "Tắt" }).click();
   await expect(page.getByText(/Đã tắt Quản lý và đánh số nhà/)).toBeVisible();

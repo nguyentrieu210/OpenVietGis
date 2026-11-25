@@ -1,3 +1,4 @@
+import {constrainTIN, edgeKey, type BreaklineEdge} from "./tin-breaklines.ts";
 import Delaunator from "delaunator";
 import type {Feature,FeatureCollection,Geometry,Polygon} from "geojson";
 import {geographic3857,project3857,terrainTriangles,validateTerrain,type TerrainGrid} from "./terrain.ts";
@@ -9,30 +10,47 @@ const bounded=(n:number,lo:number,hi:number)=>Math.max(lo,Math.min(hi,n));
 const range=(g:TerrainGrid)=>{const [l,b,r,t]=g.extent;return {l,b,r,t,dx:(r-l)/(g.width-1),dy:(t-b)/(g.height-1)}};
 const node=(g:TerrainGrid,i:number):[number,number]=>{const {l,t,dx,dy}=range(g);return [l+i%g.width*dx,t-Math.floor(i/g.width)*dy]};
 const area=(g:TerrainGrid,i:number)=>{const {dx,dy}=range(g);return dx*dy*scale(node(g,i)[1])**2};
-export function elevationPoints(geometry:Geometry,z:number):ElevationPoint[]{
- if(!finite(z)||z< -12000||z>10000)throw Error("Cao độ mét ngoài miền hỗ trợ");
- const point=(p:number[]):ElevationPoint=>{if(p.length<2||!finite(p[0]!)||!finite(p[1]!)||Math.abs(p[0]!)>180||Math.abs(p[1]!)>85)throw Error("Tọa độ nguồn không hợp lệ");return [p[0]!,p[1]!,z]};
+export function elevationPoints(geometry:Geometry,z?:number):ElevationPoint[]{
+ const point=(p:number[]):ElevationPoint=>{
+  if(p.length<2||!finite(p[0]!)||!finite(p[1]!)||Math.abs(p[0]!)>180||Math.abs(p[1]!)>85)throw Error("Tọa độ nguồn không hợp lệ");
+  const elevation=z??p[2];
+  if(elevation===undefined||!finite(elevation)||elevation< -12000||elevation>10000)throw Error("Thiếu cao độ Z hoặc cao độ mét ngoài miền hỗ trợ");
+  return [p[0]!,p[1]!,elevation];
+ };
  if(geometry.type==="Point")return [point(geometry.coordinates)];
  if(geometry.type==="MultiPoint"||geometry.type==="LineString")return geometry.coordinates.map(point);
  if(geometry.type==="MultiLineString")return geometry.coordinates.flatMap(l=>l.map(point));
  throw Error("Chỉ nhận điểm cao độ hoặc đường bình độ");
 }
-export function interpolateTIN(points:readonly ElevationPoint[],maxEdgeM:number,referenceLabel:string,verticalReference:TerrainGrid["vertical_reference"]="local",resolution=96):TerrainGrid{
+export function interpolateTIN(...args:Parameters<typeof buildTIN>):TerrainGrid {
+ return buildTIN(...args).grid;
+}
+export function buildTIN(points:readonly ElevationPoint[],maxEdgeM:number,referenceLabel:string,verticalReference:TerrainGrid["vertical_reference"]="local",resolution=96,breaklines:readonly BreaklineEdge[]=[]){
  if(points.length<3||points.length>8000||!finite(maxEdgeM)||maxEdgeM<1||maxEdgeM>100000||!referenceLabel.trim()||referenceLabel.length>120||!Number.isInteger(resolution)||resolution<16||resolution>128)throw Error("Cần 3–8.000 điểm, cạnh tối đa hợp lệ và mốc cao độ");
+ const keys:string[]=[];
  const unique=new Map<string,[number,number,number]>();
- for(const [lon,lat,z] of points){if(![lon,lat,z].every(finite)||Math.abs(lon)>180||Math.abs(lat)>85||z< -12000||z>10000)throw Error("Điểm cao độ không hợp lệ");const [x,y]=project3857(lon,lat),key=x.toFixed(4)+","+y.toFixed(4),prev=unique.get(key);if(prev&&Math.abs(prev[2]-z)>.001)throw Error("Cùng tọa độ nhưng khác cao độ");unique.set(key,[x,y,z])}
+ for(const [lon,lat,z] of points){if(![lon,lat,z].every(finite)||Math.abs(lon)>180||Math.abs(lat)>85||z< -12000||z>10000)throw Error("Điểm cao độ không hợp lệ");const [x,y]=project3857(lon,lat),key=x.toFixed(4)+","+y.toFixed(4),prev=unique.get(key);if(prev&&Math.abs(prev[2]-z)>.001)throw Error("Cùng tọa độ nhưng khác cao độ");keys.push(key);unique.set(key,[x,y,z])}
  const p=[...unique.values()];if(p.length<3)throw Error("Thiếu điểm không trùng");
  const xs=p.map(v=>v[0]),ys=p.map(v=>v[1]),l=Math.min(...xs),r=Math.max(...xs),b=Math.min(...ys),t=Math.max(...ys),span=Math.max(r-l,t-b);
  if(r-l<.01||t-b<.01||span>100000)throw Error("Phạm vi TIN phải có diện tích và không quá 100 km Web Mercator");
  const width=Math.max(2,Math.ceil(resolution*(r-l)/span)),height=Math.max(2,Math.ceil(resolution*(t-b)/span)),dx=(r-l)/(width-1),dy=(t-b)/(height-1);
  const values:(number|null)[]=Array(width*height).fill(null);
- const tri=Delaunator.from(p,v=>v[0],v=>v[1]).triangles;
+ const ids=new Map([...unique.keys()].map((key,i)=>[key,i]));
+ const constraints=breaklines.map(([a,b]):BreaklineEdge=>{
+  const start=ids.get(keys[a]!),end=ids.get(keys[b]!);
+  if(start===undefined||end===undefined)throw Error("Chỉ số breakline không hợp lệ");
+  return [start,end];
+ });
+ const {triangles:tri,locked}=constrainTIN(p,Delaunator.from(p,v=>v[0],v=>v[1]).triangles,constraints);
  const length=(a:number[],b:number[])=>Math.hypot(a[0]!-b[0]!,a[1]!-b[1]!)*scale((a[1]!+b[1]!)/2);
+ const triangleIds:number[]=[];
  let iterations=0;
  for(let i=0;i<tri.length;i+=3){
   const a=p[tri[i]!]!,b1=p[tri[i+1]!]!,c=p[tri[i+2]!]!;
   if(Math.max(length(a,b1),length(a,c),length(b1,c))>maxEdgeM)continue;
+  for(let j=0;j<3;j++)locked.delete(edgeKey(tri[i+j]!,tri[i+(j+1)%3]!));
   const den=(b1[1]-c[1])*(a[0]-c[0])+(c[0]-b1[0])*(a[1]-c[1]);if(Math.abs(den)<1e-10)continue;
+  triangleIds.push(tri[i]!,tri[i+1]!,tri[i+2]!);
   const col0=bounded(Math.ceil((Math.min(a[0],b1[0],c[0])-l)/dx-1e-7),0,width-1),col1=bounded(Math.floor((Math.max(a[0],b1[0],c[0])-l)/dx+1e-7),0,width-1);
   const row0=bounded(Math.ceil((t-Math.max(a[1],b1[1],c[1]))/dy-1e-7),0,height-1),row1=bounded(Math.floor((t-Math.min(a[1],b1[1],c[1]))/dy+1e-7),0,height-1);
   for(let row=row0;row<=row1;row++)for(let col=col0;col<=col1;col++){
@@ -41,10 +59,14 @@ export function interpolateTIN(points:readonly ElevationPoint[],maxEdgeM:number,
    if(Math.min(u,v,w)>=-1e-7)values[row*width+col]=bounded(a[2]*u+b1[2]*v+c[2]*w,Math.min(a[2],b1[2],c[2]),Math.max(a[2],b1[2],c[2]));
   }
  }
+ // A breakline segment longer than the edge limit can never be in a kept triangle; it only leaves a gap, as before breaklines existed.
+ for(const key of locked){const [s,e]=key.split(":").map(Number) as [number,number];if(length(p[s]!,p[e]!)>maxEdgeM)locked.delete(key)}
+ if(locked.size)throw Error("Giới hạn cạnh TIN loại bỏ một phần breakline; hãy chia đoạn hoặc tăng giới hạn.");
  const valid=values.filter((v):v is number=>v!==null);
  if(!valid.length)throw Error("Không đủ tam giác trong giới hạn cạnh đã chọn");
  const g=validateTerrain({source_id:"tin-preview",name:"TIN nội suy",crs_code:3857,source_crs_code:4326,width,height,extent:[l,b,r,t],values,min_m:Math.min(...valid),max_m:Math.max(...valid),valid_count:valid.length,nodata_count:values.length-valid.length,render_origin_m:Math.min(...valid),vertical_reference:verticalReference,reference_label:referenceLabel.trim(),elevation_unit:"metre",sampled:true,survey_grade:false,declared_by_user:true},"tin-preview");
- terrainTriangles(g);return g;
+ terrainTriangles(g);
+ return {grid:g,vertices:p.map(([x,y,z]):ElevationPoint=>[...geographic3857(x,y),z]),triangleIds};
 }
 type P=[number,number,number];
 // Integrate a piecewise-linear elevation difference over clipped triangle polygons.
@@ -98,7 +120,7 @@ export function analysisFeatures(g:TerrainGrid,mode:AnalysisMode,level:number):F
  if(mode==="flow"&&flow){for(let i=0;i<g.values.length;i++){const j=flow.down[i]!;if(j<0)continue;const v=flow.acc[i]!;features.push({type:"Feature",geometry:{type:"LineString",coordinates:[geographic3857(...node(g,i)),geographic3857(...node(g,j))]},properties:{upstream_area_m2:v,color:"#2374a5",width:bounded(Math.log10(Math.max(1,v)),1,5)}})}return {type:"FeatureCollection",features}}
  for(let y=0;y<g.height-1;y++)for(let x=0;x<g.width-1;x++){
   const i=y*g.width+x,ids=[i,i+1,i+g.width,i+g.width+1];if(ids.some(j=>g.values[j]==null))continue;
-  const z=ids.reduce((sum,j)=>sum+g.values[j]!,0)/4;let value=z,color="#59864d";
+  const z=ids.reduce((sum,j)=>sum+g.values[j]!,0)/4;let value=z,color:string;
   if(mode==="slope"){const v=d!.slope[i];if(v==null)continue;value=v;color=v<5?"#5eae71":v<15?"#dfcf58":v<30?"#e79643":"#bf4b39"}
   else if(mode==="aspect"){const v=d!.aspect[i];if(v==null)continue;value=v;color=["#356aac","#66a6c5","#78b86f","#c0c75b","#df9d52","#c86f61","#a16cab","#6f79bd"][Math.floor((v+22.5)%360/45)]!}
   else if(mode==="cutfill"){value=z-level;color=value>0?"#c45346":"#3787bf"}
@@ -164,4 +186,111 @@ export function connectedInundation(g:TerrainGrid,level:number):{features:Featur
  for(let p=0;p<queue.length;p++){const k=queue[p]!,x=k%w,y=Math.floor(k/w);for(const [ox,oy] of [[1,0],[-1,0],[0,1],[0,-1]] as const){const nx=x+ox,ny=y+oy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const j=ny*w+nx;if(low[j]&&!seen[j]){seen[j]=1;queue.push(j)}}}
  for(const k of queue){const x=k%w,y=Math.floor(k/w),i=y*g.width+x,[a,b]=node(g,i);features.push({type:"Feature",geometry:{type:"Polygon",coordinates:[[geographic3857(a,b),geographic3857(a+dx,b),geographic3857(a+dx,b-dy),geographic3857(a,b-dy),geographic3857(a,b)]]},properties:{color:"#267fbd",water_level_m:level,mode:"boundary-connected"}})}
  return {features:{type:"FeatureCollection",features},connected:queue.length,isolated:low.reduce((s,v)=>s+v,0)-queue.length};
+}
+
+export type HydraulicOptions = {
+    durationMinutes: number;
+    rainMmHour: number;
+    infiltrationMmHour: number;
+    manningN: number;
+};
+
+export function simulateSurfaceFlow(grid: TerrainGrid, options: HydraulicOptions) {
+    const {durationMinutes, rainMmHour, infiltrationMmHour, manningN} = options;
+    if (![durationMinutes, rainMmHour, infiltrationMmHour, manningN].every(finite) ||
+        durationMinutes < 1 || durationMinutes > 30 || rainMmHour <= 0 || rainMmHour > 500 ||
+        infiltrationMmHour < 0 || infiltrationMmHour > 500 || manningN < .01 || manningN > .3)
+        throw Error("Thời lượng 1–30 phút, mưa >0–500 mm/h, thấm 0–500 mm/h, hệ số Manning 0,01–0,30.");
+
+    const {dx, dy} = range(grid);
+    const width = grid.width - 1, height = grid.height - 1, size = width * height;
+    const bed = new Float64Array(size).fill(NaN), cellArea = new Float64Array(size);
+    const volume = new Float64Array(size), outgoing = new Float64Array(size), delta = new Float64Array(size);
+    const faces: {a: number; b: number; length: number; distance: number}[] = [];
+    const valid: number[] = [];
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const i = y * width + x, j = y * grid.width + x;
+        const [nw, ne, sw, se] = [grid.values[j], grid.values[j+1], grid.values[j+grid.width], grid.values[j+grid.width+1]];
+        if (nw == null || ne == null || sw == null || se == null) continue;
+        const k = scale(node(grid, j)[1] - dy / 2);
+        bed[i] = (nw + ne + sw + se) / 4;
+        cellArea[i] = dx * dy * k * k;
+        valid.push(i);
+        if (x && finite(bed[i-1]!)) faces.push({a: i-1, b: i, length: dy*k, distance: dx*k});
+        if (y && finite(bed[i-width]!)) faces.push({a: i-width, b: i, length: dx*k, distance: dy*k});
+    }
+    if (!valid.length) throw Error("Cần ô DEM có đủ bốn góc cao độ.");
+
+    const duration = durationMinutes * 60;
+    const frameCount = 12, stepsPerFrame = Math.ceil(duration / frameCount);
+    const dt = duration / (frameCount * stepsPerFrame);
+    const rain = rainMmHour * dt / 3_600_000, infiltration = infiltrationMmHour * dt / 3_600_000;
+    const transfers = new Float64Array(faces.length);
+    let rainVolume = 0, infiltratedVolume = 0;
+    const frames = [frame(0)];
+    function frame(seconds: number) {
+        const depths = new Float64Array(size);
+        let storedVolume = 0, maxDepth = 0;
+        for (const i of valid) {
+            depths[i] = volume[i]! / cellArea[i]!;
+            maxDepth = Math.max(maxDepth, depths[i]!);
+            storedVolume += volume[i]!;
+        }
+        return {seconds, depths, maxDepth, storedVolume, rainVolume, infiltratedVolume,
+            massResidual: rainVolume - infiltratedVolume - storedVolume};
+    }
+
+    for (let index = 1; index <= frameCount; index++) {
+        for (let sub = 0; sub < stepsPerFrame; sub++) {
+            for (const i of valid) {
+                const added = cellArea[i]! * rain;
+                const lost = Math.min(volume[i]! + added, cellArea[i]! * infiltration);
+                volume[i]! += added - lost;
+                rainVolume += added;
+                infiltratedVolume += lost;
+            }
+            outgoing.fill(0);
+            delta.fill(0);
+            for (let j = 0; j < faces.length; j++) {
+                const {a, b, length, distance} = faces[j]!;
+                const headA = bed[a]! + volume[a]! / cellArea[a]!;
+                const headB = bed[b]! + volume[b]! / cellArea[b]!;
+                const difference = headA - headB;
+                const donor = difference >= 0 ? a : b;
+                const effectiveDepth = Math.max(0, Math.max(headA, headB) - Math.max(bed[a]!, bed[b]!));
+                const demand = dt * length * effectiveDepth ** (5/3) * Math.sqrt(Math.abs(difference) / distance) / manningN;
+                const equilibrium = Math.abs(difference) / (1 / cellArea[a]! + 1 / cellArea[b]!);
+                const transfer = Math.min(demand, equilibrium / 4);
+                transfers[j] = Math.sign(difference) * transfer;
+                outgoing[donor]! += transfer;
+            }
+            for (let j = 0; j < faces.length; j++) {
+                const {a, b} = faces[j]!;
+                const transfer = transfers[j]!;
+                if (!transfer) continue;
+                const donor = transfer > 0 ? a : b;
+                const actual = transfer * Math.min(1, volume[donor]! / outgoing[donor]!);
+                delta[a]! -= actual;
+                delta[b]! += actual;
+            }
+            for (const i of valid) volume[i] = Math.max(0, volume[i]! + delta[i]!);
+        }
+        frames.push(frame(index * duration / frameCount));
+    }
+    return frames;
+}
+
+export function surfaceFlowFeatures(grid: TerrainGrid, depths: Float64Array): FeatureCollection {
+    const {dx, dy} = range(grid);
+    const width = grid.width - 1;
+    const features: Feature[] = [];
+    depths.forEach((depth, i) => {
+        if (depth < .001) return;
+        const [x, y] = node(grid, Math.floor(i / width) * grid.width + i % width);
+        const coordinates = [[geographic3857(x,y), geographic3857(x+dx,y), geographic3857(x+dx,y-dy),
+            geographic3857(x,y-dy), geographic3857(x,y)]];
+        features.push({type:"Feature", geometry:{type:"Polygon", coordinates},
+            properties:{depth_m:depth,color:depth < .05 ? "#78c8e9" : depth < .2 ? "#398cc7" : "#194783"}});
+    });
+    return {type:"FeatureCollection", features};
 }

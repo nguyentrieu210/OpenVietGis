@@ -121,6 +121,7 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
 
   // 5. R010–R015 Platform Hub (Ops Readiness + COGO)
   await page.goto(`${base}/platform-hub`);
+  await page.getByRole("tab", { name: "Vận hành & Sẵn sàng" }).click();
   await expect(page.getByTestId("ops-readiness-panel")).toBeVisible();
   await expect(
     page.getByRole("cell", {
@@ -136,7 +137,7 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
   await expect(opsPanel.getByRole("cell", { name: "Chưa nghiệm thu", exact: true })).toHaveCount(15);
 
   // R011 genuine post-commit review; comments anchored to immutable evidence.
-  await page.getByRole("tab", {name:"Cộng tác nhóm", exact:true}).click();
+  await page.getByRole("tab", {name:"Cộng tác nhóm & Duyệt", exact:true}).click();
   const collaboration = page.getByTestId("collaboration-workbench");
   await expect(collaboration).toBeVisible();
   const importedLayer = layers.items.find(layer => layer.source.kind === "imported_file");
@@ -156,10 +157,9 @@ test("M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartogra
   await collaboration.getByRole("button", {name:"Phê duyệt", exact:true}).click();
   await expect(collaboration.getByText("Ý kiến quyết định: Đã đối chiếu")).toBeVisible();
 
-  await page.getByRole("tab", { name: "CAD 2D & COGO", exact: true }).click();
-  await expect(page.getByText(/chưa gắn CRS, không phải tọa độ khảo sát/i)).toBeVisible();
+  await page.getByRole("tab", { name: "AutoCAD 2D (DXF) & COGO", exact: true }).click();
   await page.getByRole("button", { name: "Tính tọa độ điểm cuối" }).click();
   await expect(
-    page.getByText(/Tọa độ điểm tính được: \(500100\.0000, 2300000\.0000\)/i)
+    page.getByText(/Tọa độ điểm tính được: \(500100\.0000, 2300000\.0000\) · tính thử, chưa gắn CRS/i)
   ).toBeVisible();
 });

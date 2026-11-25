@@ -36,6 +36,10 @@ from tests.fixtures.identity_tenancy import AccessWorld, seed_access_world
 
 ROOT = Path(__file__).resolve().parents[5]
 TABLES = ("data_sources", "source_fields", "reference_features", "layers", "catalog_changes")
+# The original fixture seeds only the R003 tables. The full current schema
+# also includes the immutable model/scene/tile tables, all checked for RLS.
+ALL_TABLES = (*TABLES, "model_assets", "model_placements", "scene_versions",
+              "tilesets", "tileset_contents")
 SCHEMA_REVISION = "a" * 64
 CONTENT_REVISION = "b" * 64
 MANIFEST_DIGEST = "c" * 64
@@ -251,7 +255,7 @@ def test_spatial_schema_runtime_role_is_non_owner_and_rls_forced(
             .mappings()
             .all()
         )
-        assert {row["relname"] for row in rows} == set(TABLES)
+        assert {row["relname"] for row in rows} == set(ALL_TABLES)
         for row in rows:
             assert row["relrowsecurity"] and row["relforcerowsecurity"], row["relname"]
             assert row["owner"] != runtime[0]
@@ -561,7 +565,7 @@ def test_downgrade_to_0005_and_upgrade_preserves_r002_rows_and_policies(
             )
     finally:
         command.upgrade(config, "head")
-    assert set(inspect(get_admin_engine()).get_table_names(schema="spatial")) == set(TABLES)
+    assert set(inspect(get_admin_engine()).get_table_names(schema="spatial")) == set(ALL_TABLES)
     with get_admin_engine().connect() as connection:
         policies_after = connection.execute(
             text("""

@@ -1388,7 +1388,10 @@ class SqlExtensionsRepository:
     ) -> list[ExtensionDataRecord]:
         prepare_project_scope(self._session, context, permission=Permission.PROJECT_READ)
         assert context.organization_id is not None and context.project_id is not None
-        self._active_manifest(context, extension_key)
+        # Retained Core data remains readable after deactivation or a legacy
+        # manifest fails mutation validation, just as in export_bundle.
+        # Keep project authorization/RLS and the activation existence check.
+        self._activation_row(context, extension_key)
         sql = """
             SELECT * FROM extensions.records
             WHERE organization_id = :org AND project_id = :proj AND extension_key = :key

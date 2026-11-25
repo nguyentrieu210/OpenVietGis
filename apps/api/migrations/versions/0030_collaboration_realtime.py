@@ -87,10 +87,10 @@ def downgrade():
     # A migration owner may be subject to FORCE RLS; temporarily remove FORCE
     # inside this transactional migration before inspecting for private rows.
     op.execute("ALTER TABLE collaboration.messages NO FORCE ROW LEVEL SECURITY")
-    op.execute("""DO $ BEGIN IF EXISTS(SELECT 1 FROM collaboration.messages WHERE recipient_id
+    op.execute("""DO $$ BEGIN IF EXISTS(SELECT 1 FROM collaboration.messages WHERE recipient_id
       IS NOT NULL) THEN
       RAISE EXCEPTION 'Private messages exist; backup and explicit migration plan required';
-        END IF; END $""")
+        END IF; END $$""")
     op.execute("ALTER TABLE collaboration.messages FORCE ROW LEVEL SECURITY")
     op.execute("DROP POLICY tasks_create ON collaboration.tasks")
     op.execute("DROP TRIGGER reads_realtime ON collaboration.task_notification_reads")

@@ -1,0 +1,20 @@
+{
+  "status": "research-only",
+  "version": "1.8.4",
+  "formats": "geojson,topojson,gml,gpx,kml,flatgeobuf,geopackage,kmz,geoparquet",
+  "libraryBytes": 6695780,
+  "cliBytes": 24417970,
+  "librarySha256": "f2f06219a1a1477448bcea619629723631a01e3b82b4385e9695ef5189be212f",
+  "cliSha256": "d797665705db7fa2c604b564cd5e2eb5bf14e1f63fe614ebe7678e34d6283007",
+  "initMs": 54.114768000000026,
+  "geometryAndAttributesPreserved": true,
+  "idsPreserved": false,
+  "authoritativeWriteAllowed": false,
+  "mercatorControlErrorM": 1.862645149230957e-9,
+  "features": 10000,
+  "samples": 30,
+  "p50Ms": 96.76037500000007,
+  "p95Ms": 177.6446679999999,
+  "inputBytes": 1302621,
+  "node": "v26.13.1"
+}

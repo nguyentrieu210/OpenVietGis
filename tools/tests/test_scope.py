@@ -92,3 +92,28 @@ def test_renderer_owner_still_rejects_vertical_dependencies(tmp_path: Path) -> N
     violations = find_scope_violations(tmp_path)
     assert len(violations) == 1
     assert "house-numbering vertical" in violations[0]
+
+
+def test_r031_adapter_allowlist_is_narrow(tmp_path: Path) -> None:
+    root = tmp_path / "apps/web-next"
+    (root / "src").mkdir(parents=True)
+    (root / "package.json").write_text('{"dependencies":{"terra-draw":"1.40.0"}}')
+    (root / "src/TerraDraftValidation.ts").write_text(
+        'import {ValidateNotSelfIntersecting} from "terra-draw";'
+    )
+    workspace = root / "src/SpatialWorkspace.tsx"
+    workspace.write_text('const label = "3D Tiles · MapLibre (tương thích)";', encoding="utf-8")
+    cesium = tmp_path / "packages/spatial-workspace/src/cesium3d.ts"
+    cesium.parent.mkdir(parents=True)
+    cesium.write_text(
+        'import type {GeographicCamera,NamedModel,SelectableFootprintEngine} '
+        'from "./maplibre3d";'
+    )
+    assert find_scope_violations(tmp_path) == []
+    workspace.write_text('import {TerraDraw} from "terra-draw";')
+    assert len(find_scope_violations(tmp_path)) == 2
+    workspace.write_text('import "maplibre-gl";')
+    cesium.write_text('import "maplibre-gl";')
+    assert len(find_scope_violations(tmp_path)) == 2
+    (root / "src/TerraDraftValidation.ts").write_text('import "house-number";')
+    assert len(find_scope_violations(tmp_path)) == 3

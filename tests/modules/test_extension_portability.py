@@ -26,7 +26,13 @@ def manifest(name: str) -> dict:
 
 
 def registration(client, org, project, body):
-    created = client.post(f"{org}/extensions/manifests", json=body)
+    if body["extension_key"] == "house_numbering":
+        rejected = client.post(f"{org}/extensions/manifests", json=body)
+        assert rejected.status_code == 409
+        assert rejected.json()["code"] == "OFFICIAL_MANIFEST_REQUIRED"
+        created = client.post(f"{org}/extensions/official/house_numbering/register")
+    else:
+        created = client.post(f"{org}/extensions/manifests", json=body)
     assert created.status_code == 201, created.text
     mid = created.json()["id"]
     activation = client.post(
@@ -348,9 +354,16 @@ def test_land_asset_atomic_copy_explicit_transition_and_replay():
             events[1]["previous_manifest_id"] == mid
             and events[1]["manifest_id"] == nextid
         )
-        assert (
-            owner.get(f"{dp}/extensions/house_numbering/records").json()["items"] == []
-        )
+        # An unrelated module has no activation in this project. A 404 is
+        # the existing contract; verify directly that no records leaked.
+        unrelated = owner.get(f"{dp}/extensions/house_numbering/records")
+        assert unrelated.status_code == 404, unrelated.text
+        with get_admin_engine().connect() as conn:
+            assert conn.execute(
+                text("SELECT count(*) FROM extensions.records WHERE organization_id=:o "
+                     "AND project_id=:p AND extension_key='house_numbering'"),
+                {"o": dest.organization_id, "p": dest.project_id},
+            ).scalar_one() == 0
 
     # Database enforceability, not merely absence of an HTTP DELETE endpoint.
     with get_admin_engine().begin() as conn:

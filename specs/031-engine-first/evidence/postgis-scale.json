@@ -1,0 +1,66 @@
+{
+  "version": "POSTGIS=\"3.7.0 1fdbb1c\" [EXTENSION] PGSQL=\"180\" GEOS=\"3.15.0-CAPI-1.21.0\" PROJ=\"9.9.0 NETWORK_ENABLED=OFF URL_ENDPOINT=https://cdn.proj.org USER_WRITABLE_DIRECTORY=/var/lib/postgresql/.local/share/proj DATABASE_PATH=/usr/share/proj/proj.db\" (compiled against PROJ 9.9.0) LIBXML=\"2.9.14\" LIBJSON=\"0.18\" LIBPROTOBUF=\"1.5.1\" WAGYU=\"0.5.0 (Internal)\" TOPOLOGY",
+  "scope": "synthetic indexed SQL and local tile bytes, no RLS/HTTP/browser/WAN",
+  "results": [
+    {
+      "features": 10000,
+      "scenarios": [
+        {
+          "name": "cluster_z14",
+          "samples": 30,
+          "p50_ms": 1.711,
+          "p95_ms": 8.135,
+          "tile_bytes": 3240
+        },
+        {
+          "name": "detail_z17",
+          "samples": 30,
+          "p50_ms": 0.436,
+          "p95_ms": 2.161,
+          "tile_bytes": 102
+        }
+      ]
+    },
+    {
+      "features": 100000,
+      "scenarios": [
+        {
+          "name": "cluster_z14",
+          "samples": 30,
+          "p50_ms": 12.541,
+          "p95_ms": 14.528,
+          "tile_bytes": 12964
+        },
+        {
+          "name": "detail_z17",
+          "samples": 30,
+          "p50_ms": 0.478,
+          "p95_ms": 0.681,
+          "tile_bytes": 523
+        }
+      ]
+    },
+    {
+      "features": 1000000,
+      "scenarios": [
+        {
+          "name": "cluster_z14",
+          "samples": 30,
+          "p50_ms": 112.627,
+          "p95_ms": 186.992,
+          "tile_bytes": 18537
+        },
+        {
+          "name": "detail_z17",
+          "samples": 30,
+          "p50_ms": 1.602,
+          "p95_ms": 7.127,
+          "tile_bytes": 5417
+        }
+      ]
+    }
+  ],
+  "source_tree": "8ecfdc3d91bb4fa1e16529fcb152f15a40e3e5fd",
+  "database_image": "postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262",
+  "warmups_per_scenario": 5
+}
