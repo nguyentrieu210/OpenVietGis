@@ -29,6 +29,7 @@ pub(crate) fn router() -> Router<AppState> {
 }
 
 type LayerPath = Result<Path<(Uuid, Uuid, Uuid)>, PathRejection>;
+type TilePath = Result<Path<(Uuid, Uuid, Uuid, u32, u32, String)>, PathRejection>;
 
 #[derive(Deserialize)]
 struct PinQuery {
@@ -106,7 +107,7 @@ async fn display_extent(
 async fn vector_tile(
     auth: HumanSession,
     State(state): State<AppState>,
-    path: Result<Path<(Uuid, Uuid, Uuid, u32, u32, String)>, PathRejection>,
+    path: TilePath,
     query: Result<Query<PinQuery>, QueryRejection>,
 ) -> Result<Response, RenderError> {
     let Path((organization_id, project_id, layer_id, z, x, tile)) =
