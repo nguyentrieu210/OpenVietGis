@@ -19,13 +19,14 @@
 #        - Exact rollback & verification duration is measured and logged.
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 ROLLBACK_TAG="rollback/064-baseline-3e78ac1"
 LIVE_RELEASE_DIR="/opt/openvietgis-releases/v2026.11.25-1aa8dcb-chat-rooms"
-SOURCE_CONTAINER="hn019-preview-postgres"
+SOURCE_CONTAINER="dev-postgres-test-1"
 SOURCE_DB="openvietgis_test"
 TARGET_CONTAINER="dev-postgres-test-1"
 TARGET_DB=""
@@ -40,7 +41,7 @@ Usage: rollback-rehearsal.sh [options]
 Options:
   --rollback-tag TAG          Git rollback tag to verify (default: rollback/064-baseline-3e78ac1)
   --live-release-dir PATH     Live release directory to verify (default: /opt/openvietgis-releases/v2026.11.25-1aa8dcb-chat-rooms)
-  --source-container NAME     Source PostGIS container (default: hn019-preview-postgres)
+  --source-container NAME     Source PostGIS container (default: dev-postgres-test-1)
   --source-db NAME            Source DB to snapshot (default: openvietgis_test)
   --target-container NAME     Isolated target container (default: dev-postgres-test-1)
   --target-db NAME            Isolated rehearsal DB (MUST match ^ovg_rehearsal_[a-z0-9_]+$)
@@ -72,7 +73,7 @@ if [[ -z "$TARGET_DB" ]]; then
   TARGET_DB="ovg_rehearsal_rb_${TS_UTC,,}"
 fi
 
-if [[ ! "$TARGET_DB" =~ ^ovg_rehearsal_[a-z0-9_]+$ ]]; then
+if [[ ! "$TARGET_DB" =~ ^ovg_rehearsal_[a-z0-9_]+$ || ${#TARGET_DB} -gt 63 ]]; then
   echo "FATAL: --target-db '$TARGET_DB' must match ^ovg_rehearsal_[a-z0-9_]+$" >&2
   exit 10
 fi
@@ -84,13 +85,16 @@ log() {
 # Step 1: Verify Git rollback tag & live release anchor
 log "Step 1/5: Verifying rollback anchors..."
 TAG_SHA="$(git -C "$REPO_ROOT" rev-parse --verify "refs/tags/${ROLLBACK_TAG}^{commit}" 2>/dev/null || true)"
-if [[ -z "$TAG_SHA" ]]; then
+if [[ "$TAG_SHA" != 3e78ac142acfc050ec22d30da5c44ad0e6b8459a ]]; then
   echo "FATAL: rollback tag '${ROLLBACK_TAG}' does not exist in ${REPO_ROOT}" >&2
   exit 11
 fi
 LIVE_RELEASE_PRESENT="no"
 if [[ -d "$LIVE_RELEASE_DIR" ]]; then
   LIVE_RELEASE_PRESENT="yes"
+fi
+if [[ "$LIVE_RELEASE_PRESENT" != yes ]]; then
+  echo "FATAL: rollback release artifact is absent" >&2; exit 11
 fi
 log "Verified rollback tag: ${ROLLBACK_TAG} -> ${TAG_SHA}; live_release_present=${LIVE_RELEASE_PRESENT}"
 
@@ -108,7 +112,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
+TARGET_CREATED=0
 cleanup() {
+  [[ "$TARGET_CREATED" -eq 1 ]] || return 0
   docker exec "$TARGET_CONTAINER" psql -U "$DB_USER" -d postgres -X -v ON_ERROR_STOP=1 \
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${TARGET_DB}' AND pid <> pg_backend_pid();" >/dev/null 2>&1 || true
   docker exec "$TARGET_CONTAINER" psql -U "$DB_USER" -d postgres -X -v ON_ERROR_STOP=1 \
@@ -128,6 +134,7 @@ log "Step 2/5: Provisioning isolated rehearsal DB '${TARGET_DB}'..."
   --source-user "$DB_USER" \
   --target-user "$DB_USER" \
   --keep-target-db
+TARGET_CREATED=1
 
 # Capture pre-migration baseline counts (RLS tables, policies, alembic_version)
 PRE_STATE="$(docker exec -i "$TARGET_CONTAINER" psql -U "$DB_USER" -d "$TARGET_DB" -X -At -v ON_ERROR_STOP=1 <<'SQL'
@@ -254,6 +261,8 @@ additive_migration_duration_s=$((T_MIG_END - T_MIG_START))
 rollback_verify_duration_s=${ROLLBACK_VERIFY_SECONDS}
 total_rehearsal_duration_s=${TOTAL_SECONDS}
 rehearsal_status=${STATUS}
+scope=synthetic_schema_and_rls_only
+application_rollback_verified=no
 EOF
 )"
 
@@ -268,5 +277,5 @@ if [[ "$STATUS" != "PASS" ]]; then
   echo "FATAL: Rollback rehearsal failed: ${STATUS}" >&2
   exit 21
 fi
-log "SUCCESS: Post-write rollback rehearsal passed in ${TOTAL_SECONDS}s (rollback verify ${ROLLBACK_VERIFY_SECONDS}s)."
+log "SUCCESS: Synthetic schema/RLS rehearsal passed (application rollback not tested) in ${TOTAL_SECONDS}s (rollback verify ${ROLLBACK_VERIFY_SECONDS}s)."
 

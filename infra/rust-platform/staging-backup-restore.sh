@@ -10,8 +10,9 @@
 # - Never stops, restarts, or modifies live services.
 
 set -euo pipefail
+umask 077
 
-SOURCE_CONTAINER="hn019-preview-postgres"
+SOURCE_CONTAINER="dev-postgres-test-1"
 SOURCE_DB="openvietgis_test"
 SOURCE_USER="openvietgis"
 TARGET_CONTAINER="dev-postgres-test-1"
@@ -29,7 +30,7 @@ usage() {
 Usage: staging-backup-restore.sh [options]
 
 Options:
-  --source-container NAME     Docker PostGIS container to dump from (default: hn019-preview-postgres)
+  --source-container NAME     Docker PostGIS container to dump from (default: dev-postgres-test-1)
   --source-db NAME            Source database name (default: openvietgis_test)
   --source-user NAME          Source PostgreSQL superuser/dump role (default: openvietgis)
   --target-container NAME     Docker PostGIS container for isolated restore (default: dev-postgres-test-1)
@@ -76,9 +77,21 @@ case "$TARGET_DB" in
     exit 10
     ;;
 esac
-if [[ ! "$TARGET_DB" =~ ^ovg_(staging|rehearsal)_[a-z0-9_]+$ ]]; then
+if [[ ! "$TARGET_DB" =~ ^ovg_(staging|rehearsal)_[a-z0-9_]+$ || ${#TARGET_DB} -gt 63 ]]; then
   echo "FATAL: --target-db '$TARGET_DB' must match ^ovg_(staging|rehearsal)_[a-z0-9_]+$" >&2
   exit 10
+fi
+
+# Only designated disposable PostGIS containers may receive writes.
+case "$TARGET_CONTAINER" in
+  dev-postgres-test-1|ovg-064-staging-postgres-staging-1) ;;
+  *) echo "FATAL: target container is not an approved isolated test container" >&2; exit 10 ;;
+esac
+if [[ "$SOURCE_CONTAINER" != dev-postgres-test-1 && "$SOURCE_CONTAINER" != ovg-064-staging-postgres-staging-1 ]]; then
+  echo "FATAL: source must be an isolated test container" >&2; exit 10
+fi
+if [[ ! "$SOURCE_DB" =~ ^[a-zA-Z0-9_]{1,63}$ || "$SOURCE_DB" == "$TARGET_DB" ]]; then
+  echo "FATAL: invalid source name or source/target collision" >&2; exit 10
 fi
 
 log() {
@@ -107,15 +120,18 @@ fingerprint_db() {
 SELECT 'pg_version=' || current_setting('server_version');
 SELECT 'postgis_version=' || COALESCE((SELECT extversion FROM pg_extension WHERE extname='postgis'), 'none');
 SELECT 'core_alembic=' || COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version), 'none');
-SELECT 'hn_alembic=' || CASE WHEN to_regclass('public.alembic_version_house_numbering') IS NOT NULL
-  THEN COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version_house_numbering), 'none')
-  ELSE 'none' END;
+SELECT to_regclass('public.alembic_version_house_numbering') IS NOT NULL AS has_hn \gset
+\if :has_hn
+SELECT 'hn_alembic=' || COALESCE((SELECT string_agg(version_num, ',' ORDER BY version_num) FROM public.alembic_version_house_numbering), 'none');
+\else
+SELECT 'hn_alembic=none';
+\endif
 SELECT 'base_table_count=' || count(*)
   FROM information_schema.tables
-  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_type = 'BASE TABLE';
+  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%' AND table_type = 'BASE TABLE';
 SELECT 'view_count=' || count(*)
   FROM information_schema.views
-  WHERE table_schema NOT IN ('pg_catalog', 'information_schema');
+  WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%';
 SELECT 'rls_table_count=' || count(*)
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog', 'information_schema') AND c.relrowsecurity = true;
@@ -131,7 +147,7 @@ SQL
   docker exec -i "$ctr" psql -U "$user" -d "$db" -X -At -v ON_ERROR_STOP=1 <<'SQL' | LC_ALL=C sort > "${out_prefix}.schema"
 SELECT 'COL|' || table_schema || '.' || table_name || '.' || column_name || '|' || data_type || '|' || is_nullable
 FROM information_schema.columns
-WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%'
 UNION ALL
 SELECT 'RLS|' || n.nspname || '.' || c.relname || '|' || p.polname || '|' || p.polcmd::text || '|' || COALESCE(pg_get_expr(p.polqual, p.polrelid), '') || '|' || COALESCE(pg_get_expr(p.polwithcheck, p.polrelid), '')
 FROM pg_policy p
@@ -152,7 +168,7 @@ BEGIN
   FOR r IN
     SELECT table_schema, table_name
     FROM information_schema.tables
-    WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+    WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_schema NOT LIKE 'pg_temp_%'
       AND table_type = 'BASE TABLE'
     ORDER BY table_schema, table_name
   LOOP
@@ -219,11 +235,18 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 
 mkdir -p "$BACKUP_DIR"
+FREE_BYTES="$(df -PB1 "$BACKUP_DIR" | awk 'NR==2 {print $4}')"
+# Allow room for a dump and restore; this is a lower bound, not a capacity guarantee.
+if [[ ! "$FREE_BYTES" =~ ^[0-9]+$ || "$FREE_BYTES" -lt $(( SRC_SIZE_BYTES * 2 + 1073741824 )) ]]; then
+  echo "FATAL: insufficient free backup filesystem capacity" >&2; exit 12
+fi
 WORK_DIR="$(mktemp -d "${BACKUP_DIR}/run-${TS_UTC}-XXXXXX")"
+TARGET_CREATED=0
+VERIFIED=0
 DUMP_FILE="${WORK_DIR}/${SOURCE_DB}_${TS_UTC}.dump"
 
 cleanup() {
-  if [[ "$KEEP_TARGET_DB" -eq 0 ]]; then
+  if [[ "$TARGET_CREATED" -eq 1 && ( "$KEEP_TARGET_DB" -eq 0 || "$VERIFIED" -eq 0 ) ]]; then
     docker exec "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 \
       -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${TARGET_DB}' AND pid <> pg_backend_pid();" >/dev/null 2>&1 || true
     docker exec "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 \
@@ -240,6 +263,7 @@ trap cleanup EXIT
 T_START="$(date +%s)"
 
 # Step 1: Fingerprint source DB before dump
+check_additive_migrations "$CANDIDATE_MIGRATION_DIR" >/dev/null
 log "Step 1/5: Computing deterministic source DB fingerprint (read-only)..."
 fingerprint_db "$SOURCE_CONTAINER" "$SOURCE_USER" "$SOURCE_DB" "${WORK_DIR}/src"
 SRC_SCHEMA_SHA="$(cat "${WORK_DIR}/src.schema.sha256")"
@@ -260,16 +284,20 @@ log "Backup complete: bytes=${DUMP_BYTES}, sha256=${DUMP_SHA256}, duration=${DUM
 log "Step 3/5: Creating isolated target DB '${TARGET_DB}' in '${TARGET_CONTAINER}' and restoring..."
 T_RESTORE_START="$(date +%s)"
 docker exec -i "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d postgres -X -v ON_ERROR_STOP=1 <<SQL >/dev/null
-DROP DATABASE IF EXISTS "${TARGET_DB}";
 CREATE DATABASE "${TARGET_DB}" WITH TEMPLATE template0 ENCODING 'UTF8';
 SQL
+TARGET_CREATED=1
 
 # Ensure non-superuser runtime role exists (NOBYPASSRLS) so RLS policies reference valid role
 docker exec -i "$TARGET_CONTAINER" psql -U "$TARGET_USER" -d "$TARGET_DB" -X -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime') THEN
-    CREATE ROLE openvietgis_runtime LOGIN PASSWORD 'staging_rehearsal_only' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+    RAISE EXCEPTION 'restricted runtime role must already exist in the isolated cluster';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openvietgis_runtime'
+             AND (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)) THEN
+    RAISE EXCEPTION 'unsafe runtime role';
   END IF;
 END$$;
 SQL
@@ -345,5 +373,6 @@ if [[ "$PARITY_STATUS" != "PASS" ]]; then
   echo "FATAL: Staging restore verification failed: ${PARITY_STATUS}" >&2
   exit 20
 fi
+VERIFIED=1
 log "SUCCESS: Staging backup/restore parity verified in ${TOTAL_SECONDS}s."
 

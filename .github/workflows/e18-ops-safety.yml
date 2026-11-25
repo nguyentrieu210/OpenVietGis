@@ -1,0 +1,30 @@
+name: E18 Operations Safety
+
+on:
+  push:
+    branches: ["064-**", "main", "dev"]
+    paths:
+      - "infra/rust-platform/**"
+      - "tools/benchmark/rust-platform/**"
+      - ".github/workflows/e18-ops-safety.yml"
+  pull_request:
+    paths:
+      - "infra/rust-platform/**"
+      - "tools/benchmark/rust-platform/**"
+      - ".github/workflows/e18-ops-safety.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: bash -n infra/rust-platform/staging-backup-restore.sh && bash -n infra/rust-platform/rollback-rehearsal.sh
+      - name: Fail-closed guards and collision tests
+        run: python3 -m unittest discover -s infra/rust-platform/tests -v
+      - name: Python syntax
+        run: python3 -m py_compile tools/benchmark/rust-platform/benchmark_runner.py
