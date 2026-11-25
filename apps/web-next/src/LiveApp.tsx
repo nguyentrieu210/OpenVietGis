@@ -169,7 +169,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
  useEffect(()=>{const m=map.current;if(!ready||!m)return;const busyTool=()=>!!(draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current);
   const layersFor=()=>renderLayers.current.length?renderLayers.current:["point","line","polygon"];
   let box:{x:number;y:number;el:HTMLDivElement|null;add:boolean;remove:boolean}|null=null;
-  const down=(e:ml.MapMouseEvent)=>{const ev=e.originalEvent;if(ev.button!==0||busyTool()||mouseModeRef.current!=="select")return;box={x:e.point.x,y:e.point.y,el:null,add:ev.shiftKey,remove:ev.ctrlKey||ev.metaKey};m.dragPan.disable()};
+  const down=(e:ml.MapMouseEvent)=>{const ev=e.originalEvent;if(ev.button!==0||busyTool()||mouseModeRef.current!=="select"||document.body.dataset.ovgSpacePan)return;box={x:e.point.x,y:e.point.y,el:null,add:ev.shiftKey,remove:ev.ctrlKey||ev.metaKey};m.dragPan.disable()};
   const move=(e:ml.MapMouseEvent)=>{if(!box)return;const w=e.point.x-box.x,h=e.point.y-box.y;if(!box.el){if(Math.hypot(w,h)<5)return;box.el=document.createElement("div");box.el.className="ovg-select-box";m.getCanvasContainer().appendChild(box.el)}Object.assign(box.el.style,{left:Math.min(box.x,e.point.x)+"px",top:Math.min(box.y,e.point.y)+"px",width:Math.abs(w)+"px",height:Math.abs(h)+"px"})};
   const up=(e:ml.MapMouseEvent)=>{if(!box)return;const b=box;box=null;m.dragPan.enable();if(!b.el)return;b.el.remove();const keys=new Set(m.queryRenderedFeatures([[Math.min(b.x,e.point.x),Math.min(b.y,e.point.y)],[Math.max(b.x,e.point.x),Math.max(b.y,e.point.y)]],{layers:layersFor()}).map(f=>String(f.properties?.key??"")).filter(Boolean));
    setSelection(prev=>{const next=b.add||b.remove?new Set(prev):new Set<string>();for(const k of keys){if(b.remove)next.delete(k);else next.add(k)}setNotice("Đã chọn "+next.size.toLocaleString("vi-VN")+" đối tượng");return next});suppressClick.current=true};
@@ -188,6 +188,11 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
   else if(h.action==="@DELETE")window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:selectionRef.current>1?"DELSEL":"ERASE"}));
   else window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:h.action}))};window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key)},[]);
 
+ // QGIS: hold Space to pan temporarily with any tool (also while digitizing); release returns to the tool.
+ useEffect(()=>{const m=()=>map.current;let held=false;const typing=(e:KeyboardEvent)=>!!(e.target as HTMLElement|null)?.closest?.("input,textarea,select,button,[contenteditable=true]");
+  const down=(e:KeyboardEvent)=>{if(e.code!=="Space"||typing(e))return;e.preventDefault();if(held||e.repeat)return;held=true;document.body.dataset.ovgSpacePan="1";const map0=m();if(map0){map0.dragPan.enable();map0.getCanvas().style.cursor="grab"}};
+  const up=(e:KeyboardEvent)=>{if(e.code!=="Space"||!held)return;held=false;delete document.body.dataset.ovgSpacePan;const map0=m();if(map0)map0.getCanvas().style.cursor=""};
+  window.addEventListener("keydown",down);window.addEventListener("keyup",up);return()=>{window.removeEventListener("keydown",down);window.removeEventListener("keyup",up);delete document.body.dataset.ovgSpacePan}},[]);
  const selectionRef=useRef(0);selectionRef.current=selection.size||(selected?1:0);
 
  useEffect(()=>{if(!mapMenu)return;const shut=(e:Event)=>{if(!(e.target as HTMLElement)?.closest?.(".ovg-map-menu"))setMapMenu(null)};const key=(e:KeyboardEvent)=>{if(e.key==="Escape")setMapMenu(null)};document.addEventListener("pointerdown",shut);document.addEventListener("keydown",key);return()=>{document.removeEventListener("pointerdown",shut);document.removeEventListener("keydown",key)}},[mapMenu]);
