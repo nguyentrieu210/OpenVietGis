@@ -764,7 +764,7 @@ async fn list_projects(
     tx.member(organization_id, false, false).await?;
     if let Some(workspace_id) = workspace_id {
         let workspace = tx.workspace(organization_id, workspace_id).await?;
-        if !workspace.is_some_and(|workspace| workspace.status != "deleted") {
+        if workspace.is_none_or(|workspace| workspace.status == "deleted") {
             return Err(not_found("workspace not found"));
         }
     }

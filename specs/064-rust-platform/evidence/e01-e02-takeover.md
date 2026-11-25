@@ -11,3 +11,7 @@
 ## Remaining acceptance gaps
 
 E01: OIDC login/callback, bootstrap initialization, invitation lifecycle, avatar mutations/identity unlink, grant creation/revocation, GIS ACL administration/reviews/export, service principal and credential lifecycle/authentication. Existing human-only endpoints must still prove exact wire, lock, tenant and error parity; valid service credentials are not implemented on the candidate. E02: source/layer mutations, geometry preview, map persistence/history/operation lookup, spatial changes, display extent and viewport (coordinate with the dedicated viewport agent). Existing read and CRS ports also require end-to-end differential verification. E01/E02 benchmark, dependency/security review, independent integration and rollback gates are open. No engine completion or deployment is asserted.
+
+## Inherited CI findings
+
+GitHub Actions run 45670685353 on the pre-takeover commit `4e1e862`: PostGIS parity succeeded, but Clippy failed on `nonminimal_bool` in the project workspace filter and Cargo Audit failed on RUSTSEC-2026-0459 (`libsqlite3-sys` 0.30.1) and RUSTSEC-2023-0071 (`rsa` 0.9.10); `chrono` also has RUSTSEC-2026-0543 unmaintained warning. The boolean expression was simplified without changing behavior. The shared dependency findings remain release blockers until dependency reachability and upgrade/removal are verified. No advisory is ignored and no CI gate is disabled.
