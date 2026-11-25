@@ -451,3 +451,18 @@
 .ovg-live-reactbar button{border:0;background:none;font-size:17px;padding:1px 3px;cursor:pointer;border-radius:50%;transition:transform .12s}
 .ovg-live-reactbar button:hover{transform:scale(1.35)}
 .ovg-live-chat-list{padding-top:34px}
+
+/* Chat without a frame: transparent over the map, only avatars, bubbles, icons and effects; resizable */
+.ovg-live-chat{background:transparent!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;overflow:hidden}
+.ovg-live-chat.open{resize:both;min-width:220px;min-height:160px;max-width:min(640px,calc(100% - 24px));max-height:calc(100% - 20px)}
+.ovg-live-chat.open .ovg-live-chat-list{flex:1;max-height:none;min-height:0}
+.ovg-live-chat>header{border:0!important;align-self:flex-start;border-radius:16px;background:#0f1b2480;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.ovg-live-chat-list{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 40px);mask-image:linear-gradient(to bottom,transparent 0,#000 40px)}
+.ovg-live-bubble p{background:#0f1b24a6;box-shadow:0 2px 8px #0005;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.ovg-live-msg.mine .ovg-live-bubble p{background:#1f6fb8e6}
+.ovg-live-msg .av{box-shadow:0 1px 4px #0006;border:1.5px solid #ffffffb3}
+.ovg-live-input{border:0!important;padding:4px 0 0!important}
+.ovg-live-input input{background:#0f1b2499!important;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:0 2px 8px #0005}
+.ovg-live-quick button{background:#0f1b2480!important;box-shadow:0 1px 4px #0004}
+.ovg-live-empty{text-shadow:0 1px 3px #000}
+.ovg-live-chat.open::after{content:"";position:absolute;right:2px;bottom:2px;width:10px;height:10px;border-right:2px solid #ffffffa0;border-bottom:2px solid #ffffffa0;border-radius:0 0 3px 0;pointer-events:none}
