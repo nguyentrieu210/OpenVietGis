@@ -28,8 +28,15 @@ try{
  });
  await page.goto("http://127.0.0.1:5199/org-chat-test.html");
  await page.getByRole("button",{name:"# Tổ chức thử"}).waitFor();
- await page.getByRole("textbox",{name:"Tin nhắn"}).fill("Tin kiểm thử");
- await page.getByRole("button",{name:"Gửi",exact:true}).click();
+ await page.getByRole("textbox",{name:"Tìm cuộc trò chuyện"}).fill("không tồn tại");
+ await page.getByRole("button",{name:"# Tổ chức thử"}).waitFor({state:"detached"});
+ await page.getByRole("textbox",{name:"Tìm cuộc trò chuyện"}).fill("");
+ await page.getByRole("button",{name:"# Tổ chức thử"}).waitFor();
+ await page.getByRole("textbox",{name:"Tin nhắn"}).fill("Tin kiểm");
+ await page.getByRole("textbox",{name:"Tin nhắn"}).press("End");
+ await page.getByRole("textbox",{name:"Tin nhắn"}).press("Space");
+ await page.getByRole("textbox",{name:"Tin nhắn"}).pressSequentially("thử");
+ await page.getByRole("textbox",{name:"Tin nhắn"}).press("Enter");
  await page.getByText("Tin kiểm thử",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Trả lời",exact:true}).click();
  await page.getByRole("textbox",{name:"Tin nhắn"}).fill("Trả lời thử");
