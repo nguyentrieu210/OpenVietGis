@@ -30,3 +30,26 @@ def test_area_and_route_filters_use_bound_values_only() -> None:
 def test_hamlets_sort_numerically() -> None:
     names = ["Ấp 10", "Ấp 2", "Ấp 1"]
     assert sorted(names, key=_natural_key) == ["Ấp 1", "Ấp 2", "Ấp 10"]
+
+
+def test_historic_hamlet_layer_is_not_a_current_hamlet_scope() -> None:
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from openvietgis_api.adapters.http.integration_hub import _scope_layers
+
+    rows = [
+        {"layer_id": uuid4(), "name": n, "source_id": n, "geometry_family": f}
+        for n, f in [
+            ("Ranh xã, phường", "Polygon"),
+            ("Ấp hiện hành", "Polygon"),
+            ("Ấp cũ", "Polygon"),
+            ("Đường và hẻm", "LineString"),
+            ("Số nhà cũ (sổ biên mục, dự án)", "Point"),
+        ]
+    ]
+    session = SimpleNamespace(
+        execute=lambda *_: SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: rows))
+    )
+    found = _scope_layers(session, uuid4(), uuid4())  # type: ignore[arg-type]
+    assert found == {"commune": ["Ranh xã, phường"], "hamlet": ["Ấp hiện hành"], "route": ["Đường và hẻm"]}

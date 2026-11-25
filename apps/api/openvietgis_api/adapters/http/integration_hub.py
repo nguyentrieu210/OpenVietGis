@@ -261,7 +261,8 @@ def _scope_layers(
         family = str(row["geometry_family"])
         if family in ("Polygon", "MultiPolygon") and words & {"xa", "phuong"}:
             found["commune"].append(row["source_id"])
-        elif family in ("Polygon", "MultiPolygon") and "ap" in words:
+        elif family in ("Polygon", "MultiPolygon") and "ap" in words and not words & {"cu", "lich"}:
+            # "Ấp cũ" / "lịch sử" are historic boundaries, not today's hamlets.
             found["hamlet"].append(row["source_id"])
         elif family in ("LineString", "MultiLineString") and words & {"tuyen", "duong", "hem"}:
             found["route"].append(row["source_id"])
