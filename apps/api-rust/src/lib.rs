@@ -7,6 +7,7 @@ pub mod config;
 pub mod connectors;
 pub(crate) mod editing;
 pub mod error;
+pub(crate) mod field_offline;
 pub(crate) mod identity;
 pub(crate) mod map_render;
 pub mod metrics;

@@ -3,7 +3,69 @@
 //! MapLibre/QGIS/renderer engines stay below this boundary. Rust owns validation
 //! of portable page/style contracts so invalid state never reaches a renderer.
 
+use axum::extract::{Path, State};
+use axum::routing::get;
+use axum::{Json, Router};
 use ovg_core::AppError;
+use ovg_storage::cartography as cartography_store;
+use ovg_storage::catalog::ProjectReadPolicy;
+use serde_json::Value;
+use uuid::Uuid;
+
+use crate::catalog::{project_read, CatalogError};
+use crate::identity::HumanSession;
+use crate::AppState;
+
+const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/cartography";
+
+pub(crate) fn router() -> Router<AppState> {
+    Router::new()
+        .route(
+            &format!("{BASE}/layers/{{layer_id}}/style"),
+            get(get_layer_style),
+        )
+        .route(&format!("{BASE}/layouts"), get(list_layouts))
+}
+
+async fn get_layer_style(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id, layer_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Json<Value>, CatalogError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await?;
+    let result = cartography_store::get_layer_style(&mut read, layer_id)
+        .await
+        .map_err(CatalogError::Application)?;
+    read.commit().await.map_err(CatalogError::Application)?;
+    Ok(Json(result))
+}
+
+async fn list_layouts(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<Value>, CatalogError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await?;
+    let result = cartography_store::list_layouts(&mut read)
+        .await
+        .map_err(CatalogError::Application)?;
+    read.commit().await.map_err(CatalogError::Application)?;
+    Ok(Json(result))
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaperSize {
