@@ -29,6 +29,7 @@ from openvietgis_api.adapters.http import (
     me,
     model_vault,
     ops,
+    org_chat,
     organizations,
     partner_platform,
     processing,
@@ -126,6 +127,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(terrain.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(tilesets.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(team_chat.router, dependencies=[Depends(project_access_guard)])
+    api_v1.include_router(org_chat.router)
     api_v1.include_router(team_locks.router, dependencies=[Depends(project_access_guard)])
     # WebSocket presence authenticates its cookie, checks project read and
     # rejects scoped users in team_presence.authorize, including revalidation.
