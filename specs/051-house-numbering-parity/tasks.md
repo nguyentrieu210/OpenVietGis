@@ -10,6 +10,7 @@
 - [x] T006 Frontend: nhận lớp khảo sát gộp và ranh "Ấp hiện hành"/"Ranh xã, phường"
 - [x] T007 Test tích hợp PostGIS + test vitest
 - [ ] T008 Nghiệm thu SC-011 trên dữ liệu Bình Hưng thật
+- [x] T009 FR-063 (phần đầu): cây cha con Xã → Ấp → Đường → Hẻm ở đầu khung Địa bàn, dựng từ danh mục địa bàn + điểm khảo sát, có số điểm và % đối chiếu, bấm nút để lọc bản đồ và xem tiến độ/ký
 
 ## Đợt sau
 
