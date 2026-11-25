@@ -22,4 +22,4 @@ function kmlGeom(g:G|null):string{if(!g)return "";const c=g.coordinates as never
  default:return ""}}
 export function toKml(name:string,feats:Feat[],label?:(f:Feat)=>string):string{return '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+esc(name)+"</name>"+feats.map(f=>"<Placemark><name>"+esc(label?.(f)??"")+"</name><ExtendedData>"+Object.entries(f.properties).map(([k,v])=>'<Data name="'+esc(k)+'"><value>'+esc(v===null||v===undefined?"":String(v))+"</value></Data>").join("")+"</ExtendedData>"+kmlGeom(f.geometry)+"</Placemark>").join("")+"</Document></kml>"}
 export const toGeoJson=(feats:Feat[])=>JSON.stringify({type:"FeatureCollection",features:feats.map(f=>({type:"Feature",geometry:f.geometry,properties:f.properties}))});
-export const safeName=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").replace(/[đĐ]/g,"d").replace(/[^\w.-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"du-lieu";
+export const safeName=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").replace(/đ/g,"d").replace(/Đ/g,"D").replace(/[^\w.-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60)||"du-lieu";
