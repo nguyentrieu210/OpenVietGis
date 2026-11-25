@@ -662,3 +662,10 @@
 .ovg-person b{display:block;font-size:13.5px}.ovg-person small{color:#9fb0bc;font-size:11.5px}
 .ovg-people-soon{margin-top:auto;display:grid;gap:4px;padding:10px;border:1px dashed #ffffff33;border-radius:10px;color:#9fb0bc}
 .ovg-people-soon b{font-size:12.5px;color:#cbd5e1;font-weight:600}.ovg-people-soon small{font-size:11.5px;line-height:1.4}
+
+/* Live-stream text: topmost, floating white text with outline, no box */
+.ovg-danmaku{position:fixed!important;right:auto!important;height:120px;z-index:6000!important;pointer-events:none;overflow:hidden}
+.ovg-burst{position:fixed!important;right:auto!important;bottom:auto!important;z-index:6000!important}
+.ovg-danmaku-line{background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:0!important;font-size:17px!important;font-weight:700!important;color:#fff!important;letter-spacing:.01em;text-shadow:0 0 3px #000,0 0 3px #000,0 1px 2px #000,1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000!important}
+.ovg-danmaku-line b{color:#ffe08a!important;opacity:1!important;margin-right:2px}
+.ovg-danmaku-line .av{box-shadow:0 0 0 2px #fff,0 2px 6px #0008;text-shadow:none}
