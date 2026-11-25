@@ -88,9 +88,81 @@ pub async fn list_activations(
         .collect()
 }
 
+const MAX_ACTIVATION_REVISIONS: i64 = 1_000;
+
+pub async fn activation_history(
+    read: &mut ProjectRead<'_>,
+    activation_id: uuid::Uuid,
+) -> Result<Value, AppError> {
+    let visible = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT id
+         FROM extensions.project_activations
+         WHERE organization_id = $1 AND project_id = $2 AND id = $3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(activation_id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+    if visible.is_none() {
+        return Err(AppError::not_found("extension activation not found"));
+    }
+
+    let rows = sqlx::query(
+        "SELECT id, event, previous_manifest_id, manifest_id, status, actor_id, occurred_at
+         FROM extensions.activation_events
+         WHERE organization_id = $1 AND project_id = $2 AND activation_id = $3
+         ORDER BY occurred_at, id
+         LIMIT $4",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(activation_id)
+    .bind(MAX_ACTIVATION_REVISIONS + 1)
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+
+    if rows.len() > MAX_ACTIVATION_REVISIONS as usize {
+        return Err(AppError::validation(
+            "EXTENSION_TRANSFER_LIMIT",
+            "activation history exceeds portable limit",
+        ));
+    }
+
+    let items = rows
+        .into_iter()
+        .map(|row| {
+            let previous_manifest_id = row
+                .try_get::<Option<uuid::Uuid>, _>("previous_manifest_id")
+                .map_err(db_error)?;
+            Ok(json!({
+                "id": row.try_get::<uuid::Uuid, _>("id").map_err(db_error)?,
+                "event": row.try_get::<String, _>("event").map_err(db_error)?,
+                "previous_manifest_id": previous_manifest_id,
+                "manifest_id": row.try_get::<uuid::Uuid, _>("manifest_id").map_err(db_error)?,
+                "status": row.try_get::<String, _>("status").map_err(db_error)?,
+                "actor_id": row.try_get::<uuid::Uuid, _>("actor_id").map_err(db_error)?,
+                "occurred_at": iso(
+                    row.try_get::<DateTime<Utc>, _>("occurred_at")
+                        .map_err(db_error)?
+                ),
+            }))
+        })
+        .collect::<Result<Vec<Value>, AppError>>()?;
+
+    Ok(json!({ "items": items }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn activation_history_limit_matches_python() {
+        assert_eq!(MAX_ACTIVATION_REVISIONS, 1_000);
+    }
 
     #[test]
     fn python_isoformat_uses_explicit_utc_offset() {

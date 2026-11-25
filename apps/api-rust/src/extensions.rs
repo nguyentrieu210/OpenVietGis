@@ -1,8 +1,11 @@
 //! E14 Rust-native project extension activation read control plane.
 
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use ovg_core::AppError;
 use ovg_module_sdk::ModuleManifest;
 use ovg_storage::catalog::ProjectReadPolicy;
 use ovg_storage::extensions as extension_store;
@@ -16,7 +19,55 @@ use crate::AppState;
 const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/extensions";
 
 pub(crate) fn router() -> Router<AppState> {
-    Router::new().route(&format!("{BASE}/activations"), get(list_activations))
+    Router::new()
+        .route(&format!("{BASE}/activations"), get(list_activations))
+        .route(
+            &format!("{BASE}/activations/{{activation_id}}/history"),
+            get(list_activation_history),
+        )
+}
+
+async fn list_activation_history(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id, activation_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Json<Value>, ExtensionHistoryError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(ExtensionHistoryError::Access)?;
+    let result = extension_store::activation_history(&mut read, activation_id)
+        .await
+        .map_err(ExtensionHistoryError::Domain)?;
+    read.commit().await.map_err(ExtensionHistoryError::Domain)?;
+    Ok(Json(result))
+}
+
+enum ExtensionHistoryError {
+    Access(CatalogError),
+    Domain(AppError),
+}
+
+impl IntoResponse for ExtensionHistoryError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Access(error) => error.into_response(),
+            Self::Domain(AppError::Internal { internal_detail }) => {
+                tracing::error!(detail = %internal_detail, "extension history request failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+            Self::Domain(error) => {
+                let status = StatusCode::from_u16(error.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                (status, Json(error.to_envelope(None))).into_response()
+            }
+        }
+    }
 }
 
 async fn list_activations(
