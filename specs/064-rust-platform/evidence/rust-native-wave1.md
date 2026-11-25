@@ -272,3 +272,36 @@ Validation:
 
 - Rust policy: 6/6 tests PASS under `rustc -D warnings --test`.
 - Retained Python `BridgeStore`: 6/6 tests PASS.
+
+### E15 House Numbering registry read side
+
+Rust now owns these official-module read surfaces:
+
+- `GET /modules/house-numbering/rules`
+- `GET /modules/house-numbering/areas`
+- `GET /modules/house-numbering/routes`
+- `GET /modules/house-numbering/buildings?route_id=...`
+
+Every request preserves the Python module gate: project.read, global GIS-scope
+fail-closed behavior, active `house_numbering` activation, and exact stored
+manifest compatibility with the shipped Rust runtime contract.
+
+The storage wire uses the module-owned RLS schema directly, preserves added
+route/building fields from later module migrations, route active-building
+counts, and the current-number priority:
+`approved > submitted > proposed > certificate > survey > cad > other`.
+
+A parity mismatch found during implementation established that the untyped
+FastAPI module response serializes SQLAlchemy `Decimal max_distance_m` as a
+scale-preserving string (for example `"200.50"`); Rust now preserves that
+wire exactly rather than coercing it to a float.
+
+Differential parity on isolated real PostGIS passed 10 gates:
+
+- rules / areas / routes / buildings exact bodies
+- route building counts exclude removed buildings
+- current-number priority
+- route-filtered buildings
+- foreign-tenant denial
+- stored official manifest mismatch -> 404
+- GIS-scoped module access -> 403
