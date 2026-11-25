@@ -25,7 +25,15 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
   const poll=setInterval(()=>void load(),30000);return()=>{es.close();clearInterval(poll)}},[org,pid]);
  useEffect(()=>{const mv=(e:MouseEvent)=>{mouse.current={x:e.clientX,y:e.clientY}};const start=()=>{if(!canWrite)return;const {x,y}=mouse.current;setTyping({x:x||innerWidth/2,y:y||innerHeight/2});setText("")};
   window.addEventListener("mousemove",mv);window.addEventListener("ovg:chat",start);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("ovg:chat",start)}},[canWrite]);
- const send=async(body:string)=>{const t=body.trim().slice(0,4000);if(!t)return;await loadCsrfToken(client);await client.request(base+"/messages",{method:"POST",body:JSON.stringify({body:t})});void load()};
+ const send=async(body:string)=>{const t=body.trim().slice(0,4000);if(!t)return;
+  const temp:Msg={id:"local-"+crypto.randomUUID(),author_id:accountId,author_name:"Bạn",body:t,created_at:new Date().toISOString()};
+  setLog(l=>[...l,temp]);
+  const r=/^⟦react:[\w-]{1,64}:(.{1,16})⟧$/u.exec(t),shown=r?r[1]:t;
+  if(onlyEmoji(shown)){const burst=Array.from({length:14},(_,k)=>({id:temp.id+":"+k,e:shown,x:Math.round(Math.random()*90-45),d:+(k*0.09+Math.random()*0.2).toFixed(2),t:+(2.2+Math.random()*1.2).toFixed(2),r:Math.round(Math.random()*40-20)}));setBursts(b=>[...b,...burst].slice(-120));setTimeout(()=>setBursts(b=>b.filter(x=>!burst.includes(x))),4200)}
+  else if(!r){setBubbles(b=>[...b,temp].slice(-8));setTimeout(()=>setBubbles(b=>b.filter(x=>x.id!==temp.id)),9000)}
+  try{await loadCsrfToken(client);const saved=await client.request<Msg>(base+"/messages",{method:"POST",body:JSON.stringify({body:t})});if(saved?.id)seen.current.add(saved.id)}
+  catch{setLog(l=>l.filter(m=>m.id!==temp.id));return}
+  void load()};
  const color=(actor:string)=>peers.find(p=>p.actor===actor)?.color??"#1565a9";
  const time=(s:string)=>new Date(s).toLocaleTimeString("vi-VN",{hour:"2-digit",minute:"2-digit"});
  openRef.current=open;
