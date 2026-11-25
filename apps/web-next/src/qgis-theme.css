@@ -275,3 +275,16 @@
 .ovg-presence-toggle[aria-pressed=false]{color:#cbd5e1!important}
 .qgis-studio .ovg-editor-dot{flex:none;width:9px;height:9px;margin:0 2px;border-radius:50%;background:var(--peer-color);box-shadow:0 0 0 2px #fff}
 .ovg-lease-tag{pointer-events:none;white-space:nowrap;font-size:11.5px;font-weight:600;color:#fff;background:var(--peer-color);padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px #0004}
+
+/* Header order (25/11): [logo · tổ chức / dự án · GIS|CAD] ……… [người đang xem · công cụ nhỏ · AI Copilot · tài khoản] */
+.qgis-studio header.top{display:flex;align-items:center;gap:8px}
+.qgis-studio header.top #ovg-workspace-topbar{display:contents}
+.qgis-studio header.top .ovg-workspace-switch{order:2}
+.qgis-studio header.top .top-integration-hub-btn{order:4;margin-left:auto}
+.qgis-studio header.top .ovg-header-tools{order:5;display:flex;align-items:center;gap:4px}
+.qgis-studio header.top .top-right{order:6}
+.qgis-studio header.top .ovg-header-tools .ovg-avatars{order:0;margin-right:8px}
+.qgis-studio header.top .ovg-header-tools>.ai-copilot,.qgis-studio header.top .ovg-header-tools>[class*=copilot]{order:9;margin-left:6px}
+/* small utility buttons look the same: quiet, same height */
+.qgis-studio header.top .top-integration-hub-btn,.qgis-studio header.top .ovg-header-tools .plugin-tool,.qgis-studio header.top .ovg-header-tools summary.plugin-tool{height:30px;padding:0 10px;border:1px solid #ffffff2e!important;background:#ffffff14!important;color:#e6edf3!important;border-radius:4px;font-size:12.5px;font-weight:500;box-shadow:none!important}
+.qgis-studio header.top .top-integration-hub-btn:hover,.qgis-studio header.top .ovg-header-tools .plugin-tool:hover{background:#ffffff26!important}
