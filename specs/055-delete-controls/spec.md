@@ -3,6 +3,7 @@
 **Feature Branch**: `feat/055-delete-controls`
 **Created**: 2026-11-25
 **Status**: Đang làm
+**Parent**: R002 (Identity, Organization & Tenancy — vòng đời dự án/tổ chức) và R006 (Editing & Change History — xóa đối tượng qua changeset).
 **Input**: Chủ dự án: "cho tao nút xoá dự án xoá tổ chức xoá điểm và đối tượng". Chọn: xóa mềm, gõ tên để xác nhận.
 
 ## Clarifications
@@ -24,7 +25,8 @@
 - **FR-001**: Menu tài khoản MUST có "Xóa dự án…" cho chủ/quản trị tổ chức và "Xóa tổ chức…" chỉ cho chủ; máy chủ kiểm lại quyền `project.delete` / `organization.delete`.
 - **FR-002**: Hộp thoại xóa MUST nói rõ phạm vi bị xóa và chỉ cho bấm khi tên gõ vào trùng đúng tên.
 - **FR-003**: Khung thông tin đối tượng MUST có nút "🗑 Xóa đối tượng" (dùng lệnh ERASE có xác nhận của Core), tắt khi không có quyền sửa lớp.
-- **FR-004**: Khi có đối tượng đang chọn, thanh công cụ MUST có "🗑 Xóa N đã chọn"; xác nhận nêu số đối tượng và tên lớp; mỗi lớp một changeset; từ chối cả thao tác nếu có lớp không có quyền sửa.
+- **FR-004**: Khi có đối tượng đang chọn, thanh công cụ MUST có "🗑 Xóa đã chọn (N)"; mỗi lần chỉ trong **một lớp** và tối đa **2.000** đối tượng để là một changeset nguyên khối; xác nhận nêu số đối tượng đã tải và tên lớp; thử lại sau lỗi mạng dùng lại cùng mã thao tác.
+- **FR-006**: So khớp tên xác nhận MUST chuẩn hóa Unicode (NFC) để gõ bằng bộ gõ tổ hợp vẫn khớp.
 - **FR-005**: Điểm thuộc ấp/tuyến đã ký đối chiếu (spec 051) vẫn bị khóa; xóa trả lỗi 409 bằng tiếng Việt.
 
 ## Success Criteria

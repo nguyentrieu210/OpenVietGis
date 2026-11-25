@@ -77,11 +77,21 @@ export function useProfessionalTools(h:Host){
  function zoom(g:Geometry){const m=h.map.current;if(!m)return;const b=new ml.LngLatBounds();const add=(x:unknown)=>{if(Array.isArray(x)){if(typeof x[0]==="number")b.extend([x[0],x[1]]);else x.forEach(add)}};if("coordinates" in g)add(g.coordinates);if(g.type==="GeometryCollection")g.geometries.forEach(x=>{"coordinates" in x&&add(x.coordinates)});if(!b.isEmpty())m.fitBounds(b,{padding:100,maxZoom:19,duration:200})}
  // Spec 055: delete the current multi-selection, one changeset per layer (history and revert stay in Core).
  const deletable=(l?:SpatialLayer)=>!!l&&l.capabilities.some(c=>c.name==="edit"&&c.available&&c.actor_authorized);
- function deleteSelection(){if(disabled)return;const rows=h.data.rows.filter(r=>h.selection.has(r.key));if(!rows.length)return;const groups=new Map<string,{layer:SpatialLayer;ids:string[]}>();for(const r of rows){if(!deletable(r.layer)){h.notify("Không có quyền xóa đối tượng trong lớp "+r.layer.name);return}const g=groups.get(r.layer.id)??{layer:r.layer,ids:[]};g.ids.push(r.feature.feature_id);groups.set(r.layer.id,g)}
-  if(!window.confirm("Xóa "+rows.length.toLocaleString("vi-VN")+" đối tượng đang chọn trong "+groups.size+" lớp ("+[...groups.values()].map(g=>g.layer.name).join(", ")+")? Có thể khôi phục trong Lịch sử thay đổi của lớp."))return;
-  void h.action(async()=>{try{for(const g of groups.values())await commit({layer:g.layer,operations:g.ids.map(id=>({op_type:"delete" as const,feature_id:id})),operationId:crypto.randomUUID(),summary:"Xóa "+g.ids.length+" đối tượng đã chọn"})}catch(e){fail(e);throw e}})}
+ // One source and at most MAX_DELETE per action so the delete is a single atomic changeset.
+ const MAX_DELETE=2000,deletePlan=useRef<{key:string;layer:SpatialLayer;ids:string[];operationId:string}|null>(null);
+ const selectedRows=()=>{const seen=new Map<string,typeof h.data.rows[number]>();for(const r of h.data.rows)if(h.selection.has(r.key)&&!seen.has(r.key))seen.set(r.key,r);return [...seen.values()]};
+ function deleteSelection(){if(disabled)return;const rows=selectedRows();if(!rows.length){h.notify("Các đối tượng đang chọn chưa được tải; phóng to vùng chứa chúng rồi thử lại.");return}
+  const sources=new Set(rows.map(r=>r.layer.source_id));if(sources.size>1){h.notify("Đang chọn đối tượng ở "+sources.size+" lớp; mỗi lần chỉ xóa hàng loạt trong một lớp.");return}
+  if(rows.length>MAX_DELETE){h.notify("Mỗi lần xóa tối đa "+MAX_DELETE.toLocaleString("vi-VN")+" đối tượng; đang chọn "+rows.length.toLocaleString("vi-VN")+".");return}
+  const layer=rows[0]!.layer;if(!deletable(layer)){h.notify("Không có quyền xóa đối tượng trong lớp "+layer.name);return}
+  const ids=rows.map(r=>r.feature.feature_id).sort(),key=layer.source_id+":"+ids.join(",");
+  const missing=h.selection.size-rows.length;
+  if(!window.confirm("Xóa "+rows.length.toLocaleString("vi-VN")+" đối tượng của lớp "+layer.name+"?"+(missing>0?" ("+missing+" đối tượng đang chọn chưa tải sẽ không bị xóa.)":"")+" Có thể khôi phục trong Lịch sử thay đổi của lớp."))return;
+  // Same selection retried after a failure reuses the operation id, so a delete the server already applied is not sent twice.
+  if(deletePlan.current?.key!==key)deletePlan.current={key,layer,ids,operationId:crypto.randomUUID()};const p=deletePlan.current;
+  void h.action(async()=>{try{await commit({layer:p.layer,operations:p.ids.map(id=>({op_type:"delete" as const,feature_id:id})),operationId:p.operationId,summary:"Xóa "+p.ids.length+" đối tượng đã chọn"});deletePlan.current=null}catch(e){if(e instanceof ApiError&&e.status<500)deletePlan.current=null;fail(e);throw e}})}
  const commands:CoreCommand[]=[
- {alias:"DELSEL",label:"Xóa các đối tượng đang chọn",group:"Biên tập",disabled:disabled||!h.selection.size,run:deleteSelection},
+ {alias:"DELSEL",label:"Xóa các đối tượng đang chọn (một lớp)",group:"Biên tập",disabled:disabled||!h.selection.size,run:deleteSelection},
  ...Object.entries(cad).map(([op,label])=>({alias:op==="move_batch"?"MOVESET":op.toUpperCase(),label,group:"CAD",disabled:disabled||!write||(op==="move_batch"?h.data.restricted||!canEdit(h.layer)||h.selection.size<2||h.selection.size>100||h.data.rows.filter(r=>h.selection.has(r.key)&&r.layer.id===h.layer?.id&&r.geometry).length!==h.selection.size:!canEdit(h.row?.layer)||!h.row?.geometry),run:()=>start("geometry",op)})),
  ...Object.entries(analysis).map(([op,label])=>({alias:op==="spatial_join"?"SPJOIN":op.toUpperCase(),label,group:"Phân tích",disabled:disabled||!h.layer||!(h.row||h.selection.size),run:()=>start("geometry",op)})),
  {alias:"TOPOLOGY",label:"Kiểm tra topology",group:"Phân tích",disabled:disabled||!h.layer,run:()=>start("topology","duplicate")},
