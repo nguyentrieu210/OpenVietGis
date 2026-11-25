@@ -1,4 +1,9 @@
 //! Bounded portable CRS transformations for the R003 directed operation registry.
+//!
+//! Server reads do not use this kernel: they run the fixed PostGIS
+//! `ST_TransformPipeline` steps (`ovg_storage::spatial_transform`) exactly like
+//! the Python reference. This kernel is a portable cross-check, differentially
+//! tested against recorded PostGIS/PROJ output below.
 
 use std::f64::consts::PI;
 
@@ -538,6 +543,128 @@ mod tests {
                 .unwrap_err();
             assert_eq!(error.code(), "TRANSFORMATION_OUT_OF_AREA");
         }
+    }
+
+    /// Differential fixture recorded from PostGIS 3.7.0 / PROJ 9.9.0.
+    const POSTGIS_FIXTURE: &str =
+        include_str!("../tests/fixtures/vn2000_postgis_differential.json");
+
+    /// Central meridian and scale of every VN-2000 zone in the fixture, as
+    /// reported by `postgis_srs('EPSG', code)`.
+    fn zone(epsg: u64) -> (f64, f64) {
+        let central_meridian = match epsg {
+            3405 | 5897 => 105.0,
+            3406 => 111.0,
+            5896 => 102.0,
+            5898 => 108.0,
+            5899 => 107.75,
+            9205 => 103.0,
+            9206 => 104.0,
+            9207 => 104.5,
+            9208 => 104.75,
+            9209 => 105.5,
+            9210 => 105.75,
+            9211 => 106.0,
+            9212 => 106.25,
+            9213 => 106.5,
+            9214 => 107.0,
+            9215 => 107.25,
+            9216 => 107.5,
+            9217 => 108.25,
+            9218 => 108.5,
+            other => panic!("no zone parameters for EPSG:{other}"),
+        };
+        let scale = if matches!(epsg, 3405 | 3406) {
+            0.9996
+        } else {
+            0.9999
+        };
+        (central_meridian, scale)
+    }
+
+    fn xy(value: &serde_json::Value) -> Coord2D {
+        Coord2D::new(value[0].as_f64().unwrap(), value[1].as_f64().unwrap())
+    }
+
+    fn euclidean_m(a: Coord2D, b: Coord2D) -> f64 {
+        (a.x - b.x).hypot(a.y - b.y)
+    }
+
+    /// Local ellipsoidal metric; sub-millimetric at the residual scales tested.
+    fn geodesic_m(a: Coord2D, b: Coord2D) -> f64 {
+        let latitude = b.y.to_radians();
+        let w = (1.0 - WGS84_E2 * latitude.sin().powi(2)).sqrt();
+        let prime_vertical = WGS84_A / w;
+        let meridional = WGS84_A * (1.0 - WGS84_E2) / w.powi(3);
+        ((a.x - b.x).to_radians() * prime_vertical * latitude.cos())
+            .hypot((a.y - b.y).to_radians() * meridional)
+    }
+
+    #[test]
+    fn portable_kernel_matches_postgis_explicit_operations_within_one_centimetre() {
+        let fixture: serde_json::Value = serde_json::from_str(POSTGIS_FIXTURE).unwrap();
+        let points = fixture["points"].as_array().unwrap();
+        assert_eq!(points.len(), 39);
+        let p = EPSG_6960_VN2000_TO_WGS84;
+        let mut worst = [0.0_f64; 6];
+        for point in points {
+            let id = point["id"].as_str().unwrap();
+            let (cm, k) = zone(point["epsg"].as_u64().unwrap());
+            let geographic = xy(&point["vn2000_lonlat"]);
+            let wgs84 = xy(&point["wgs84_input"]);
+            let projected = xy(&point["projected_input"]);
+            let inverse = tmerc_inverse(projected, cm, k, 500_000.0, 0.0, 0.0).unwrap();
+            let forward = tmerc_forward(geographic, cm, k, 500_000.0, 0.0, 0.0).unwrap();
+            let datum_inverse = helmert_wgs84_to_vn2000(wgs84, p);
+            let reprojected = tmerc_forward(datum_inverse, cm, k, 500_000.0, 0.0, 0.0).unwrap();
+            let checks = [
+                (
+                    "EPSG:6960 forward",
+                    geodesic_m(
+                        helmert_vn2000_to_wgs84(geographic, p),
+                        xy(&point["wgs84_pipeline_6960"]),
+                    ),
+                ),
+                (
+                    "EPSG:6960 inverse",
+                    geodesic_m(datum_inverse, xy(&point["wgs84_input_to_vn2000_pipeline_6960"])),
+                ),
+                ("TM forward", euclidean_m(forward, xy(&point["projected"]))),
+                ("TM inverse", geodesic_m(inverse, xy(&point["projected_input_to_vn2000"]))),
+                (
+                    "TM inverse then EPSG:6960",
+                    geodesic_m(
+                        helmert_vn2000_to_wgs84(inverse, p),
+                        xy(&point["projected_input_to_wgs84"]),
+                    ),
+                ),
+                (
+                    "inverse EPSG:6960 then TM",
+                    euclidean_m(reprojected, xy(&point["wgs84_input_to_projected"])),
+                ),
+            ];
+            for (index, (name, residual)) in checks.iter().enumerate() {
+                assert!(*residual <= 0.01, "{id} {name}: {residual} m");
+                worst[index] = worst[index].max(*residual);
+            }
+        }
+        println!("maximum residuals in metres: {worst:?}");
+    }
+
+    #[test]
+    fn plain_st_transform_is_not_the_reference_operation() {
+        // Reads use ST_TransformPipeline: PROJ's default VN-2000 -> WGS 84
+        // choice departs from EPSG:6960 by about 0.8 m in southern provinces.
+        let fixture: serde_json::Value = serde_json::from_str(POSTGIS_FIXTURE).unwrap();
+        let worst = fixture["points"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|point| {
+                geodesic_m(xy(&point["wgs84_st_transform"]), xy(&point["wgs84_pipeline_6960"]))
+            })
+            .fold(0.0, f64::max);
+        assert!(worst > 0.5, "{worst}");
     }
 
     #[test]
