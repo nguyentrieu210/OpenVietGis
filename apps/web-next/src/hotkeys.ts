@@ -18,6 +18,7 @@ export const HOTKEYS: Hotkey[] = [
   { combo: "Ctrl+Shift+J", label: "Đo diện tích", action: "AREA" },
   { combo: "Delete", label: "Xóa đối tượng đang chọn", action: "@DELETE" },
   { combo: "Shift+?", label: "Bảng phím tắt", action: "@HELP" },
+  { combo: "/", label: "Chat nhanh trên bản đồ (hiện cạnh con trỏ)", action: "@CHAT" },
 ];
 export const FIXED_KEYS: Hotkey[] = [
   { combo: "Enter", label: "Vào ô lệnh · hoàn tất khi đang vẽ/đo", action: "" },
