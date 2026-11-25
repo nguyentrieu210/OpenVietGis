@@ -154,3 +154,11 @@
 .qgis-dock[data-tabs=browser] .qgis-browser{flex:1;border-bottom:0}.qgis-dock[data-tabs=browser] .qgis-browser .qgis-browser-list{height:auto;max-height:none}
 .qgis-dock[data-tabs=legend] .qgis-browser,.qgis-dock[data-tabs=legend] .qgis-layers>*:not(.qgis-legend){display:none}
 .qgis-dock[data-tabs=legend] .qgis-legend{flex:1;height:auto;max-height:none}
+
+/* Spec 057: toolbar visibility and icon size (QGIS View > Toolbars, Settings > Icon size) */
+html[data-ovg-ribbon=off] .core-ribbon{display:none}
+html[data-ovg-tools=off] .qgis-toolstrip{display:none}
+html[data-ovg-icons=small] .qgis-toolrow .qgis-icon-button{width:24px;height:24px;min-width:24px;min-height:24px}
+html[data-ovg-icons=small] .qgis-toolrow .qgis-icon-button svg{width:15px;height:15px}
+html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button{width:38px;height:38px;min-width:38px;min-height:38px}
+html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height:24px}

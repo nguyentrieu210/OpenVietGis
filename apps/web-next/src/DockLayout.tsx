@@ -2,12 +2,14 @@ import React,{useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 
 // Spec 057 bước B: QGIS-style dock placement for the main panels, remembered per browser.
-export type DockLayout={layers:"left"|"right";inspector:"right"|"left"|"float";table:"bottom"|"right"|"float";browser:boolean;legend:boolean;tabs:boolean};
-export const defaultDockLayout:DockLayout={layers:"left",inspector:"right",table:"bottom",browser:true,legend:true,tabs:false};
+export type DockLayout={layers:"left"|"right";inspector:"right"|"left"|"float";table:"bottom"|"right"|"float";browser:boolean;legend:boolean;tabs:boolean;ribbon:boolean;tools:boolean;icons:"small"|"medium"|"large"};
+export const defaultDockLayout:DockLayout={layers:"left",inspector:"right",table:"bottom",browser:true,legend:true,tabs:false,ribbon:true,tools:true,icons:"medium"};
 const KEY="ovg:layout:docks";
-export function cleanDockLayout(x:unknown):DockLayout{const v=(x&&typeof x==="object"?x:{}) as Partial<DockLayout>;return {layers:v.layers==="right"?"right":"left",inspector:v.inspector==="left"||v.inspector==="float"?v.inspector:"right",table:v.table==="right"||v.table==="float"?v.table:"bottom",browser:v.browser!==false,legend:v.legend!==false,tabs:v.tabs===true}}
+export function cleanDockLayout(x:unknown):DockLayout{const v=(x&&typeof x==="object"?x:{}) as Partial<DockLayout>;return {layers:v.layers==="right"?"right":"left",inspector:v.inspector==="left"||v.inspector==="float"?v.inspector:"right",table:v.table==="right"||v.table==="float"?v.table:"bottom",browser:v.browser!==false,legend:v.legend!==false,tabs:v.tabs===true,ribbon:v.ribbon!==false,tools:v.tools!==false,icons:v.icons==="small"||v.icons==="large"?v.icons:"medium"}}
 export function useDockLayout():[DockLayout,(patch:Partial<DockLayout>|null)=>void]{
  const [layout,setLayout]=useState<DockLayout>(()=>{try{return cleanDockLayout(JSON.parse(localStorage.getItem(KEY)??"null"))}catch{return defaultDockLayout}});
+ // Toolbars live outside the work area, so their switches go on <html> as data attributes.
+ useEffect(()=>{const d=document.documentElement.dataset;d.ovgRibbon=layout.ribbon?"on":"off";d.ovgTools=layout.tools?"on":"off";d.ovgIcons=layout.icons;return()=>{delete d.ovgRibbon;delete d.ovgTools;delete d.ovgIcons}},[layout.ribbon,layout.tools,layout.icons]);
  const update=(patch:Partial<DockLayout>|null)=>setLayout(prev=>{const next=patch?{...prev,...patch}:defaultDockLayout;try{localStorage.setItem(KEY,JSON.stringify(next))}catch{/* storage unavailable */}requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));return next});
  return [layout,update];
 }
@@ -24,6 +26,10 @@ export function DockLayoutMenu({layout,set,panels,toggleLayers,toggleTable}:{lay
   <label><input type="checkbox" checked={layout.browser} onChange={e=>set({browser:e.target.checked})}/> Trình duyệt</label>
   <label><input type="checkbox" checked={layout.legend} onChange={e=>set({legend:e.target.checked})}/> Chú giải nghiệp vụ</label>
   <label><input type="checkbox" checked={panels.table} onChange={toggleTable}/> Bảng thuộc tính</label>
+  <b>Thanh công cụ</b>
+  <label><input type="checkbox" checked={layout.ribbon} onChange={e=>set({ribbon:e.target.checked})}/> Thanh menu (Bản đồ, Layer, Biên tập…)</label>
+  <label><input type="checkbox" checked={layout.tools} onChange={e=>set({tools:e.target.checked})}/> Thanh nút công cụ</label>
+  <fieldset className="dock-menu-row"><legend>Cỡ biểu tượng</legend>{([["small","Nhỏ"],["medium","Vừa"],["large","Lớn"]] as const).map(([v,t])=><label key={v}><input type="radio" name="dock-icons" checked={layout.icons===v} onChange={()=>set({icons:v})}/>{t}</label>)}</fieldset>
   <b>Vị trí gắn</b>
   {side("layers","Khung Lớp",[["left","Trái"],["right","Phải"]])}
   {side("inspector","Khung thông tin",[["right","Phải"],["left","Trái"],["float","Nổi"]])}
