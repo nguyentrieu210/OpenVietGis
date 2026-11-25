@@ -79,3 +79,43 @@ snap p95 c20 203.667 / 164.813 ms; peak RSS 188.59 / 17.50 MiB;
 zero unexpected errors. Editing p95 c10 147.041 / 195.969 ms
 (regression). Do not claim uniform speedup. The new topology fixtures
 require another CI run; independent release/security gate remains open.
+
+Dependency reachability: offline `cargo tree --locked --offline -p
+openvietgis-api-rust --edges normal -i rsa` and the same command for
+`libsqlite3-sys` both returned "nothing to print" on the Linux candidate.
+These lockfile advisories therefore do not occur in the active normal
+API dependency graph for that target. This is scoped evidence, not a
+waiver: do not suppress the workspace audit or infer other targets are safe.
+`chrono` is active and needs a shared maintenance decision.
+
+The 0eb1a5a benchmark/parity artifact is
+[15050852754](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/45674243065/artifacts/15050852754)
+(archive SHA-256 fa5389d4d58e94e004d18320919a26fb69a24c43451b296ac468819738627f9e).
+The tested branch and integration c16a34b produced a conflict-free
+`git merge-tree` dry run; no other branch was changed.
+
+## Final E03 code/test candidate: 2b12dda
+
+CI [45674622700](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/45674622700):
+**77/77 E03 HTTP parity checks pass**. Added eight real GEOS/concurrency/lease
+tests: invalid self-intersection, atomic rejection, open ring, concurrent
+Python/Rust replay of a polygon with a hole, active lease denial, expired
+lease acceptance, short line rejection, valid line replay. Workspace tests,
+strict Clippy, formatting, architecture isolation and no-default-features
+tests pass. Overall HTTP parity 136 passed / 11 failed, all failures E02
+missing feature endpoints on the isolated E03 branch.
+
+Repeat candidate benchmark (same run, 0 unexpected errors):
+editing p95 c20 Python 303.898 ms / Rust 209.803 ms; p99 321.403 / 213.770;
+snap p95 c20 509.046 / 182.902 ms; peak RSS 188.50 / 18.27 MiB.
+Editing p95 c10 171.390 / 220.967 ms remains a regression. Results are
+host-specific; no blanket speedup or deployment acceptance is asserted.
+Raw evidence [artifact 15052050676](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/45674622700/artifacts/15052050676)
+archive SHA-256 e82854d4208d7831cc953c69bfd88894fd5f0314659d6e595eb5e52ae1871607.
+
+**Agent handoff status: code and E03-specific tests complete; release
+acceptance BLOCKED pending E01/E02/E05/E11 integration and independent
+security/consumer review.** E03-T01 through T04 are complete. E03-T05
+remains open because the parent AC4 requires unresolved gaps to block
+acceptance. No test exclusions, advisory ignores, production deployment
+or cross-branch changes have been made.

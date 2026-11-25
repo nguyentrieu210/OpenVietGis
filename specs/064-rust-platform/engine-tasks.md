@@ -17,10 +17,10 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E02-T05 Review, integration test, document remaining gaps and convergence (E02-AC4).
 
 ## E03 — Geometry, editing, topology
-- [ ] E03-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E03-AC1).
-- [ ] E03-T02 Create golden, failure, permission and interoperability fixtures (E03-AC2).
-- [ ] E03-T03 Implement/retain approved engine and integrate behind public contract (E03-AC2).
-- [ ] E03-T04 Run comparative performance and resource tests, record raw evidence (E03-AC3).
+- [x] E03-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E03-AC1).
+- [x] E03-T02 Create golden, failure, permission and interoperability fixtures (E03-AC2).
+- [x] E03-T03 Implement/retain approved engine and integrate behind public contract (E03-AC2).
+- [x] E03-T04 Run comparative performance and resource tests, record raw evidence (E03-AC3).
 - [ ] E03-T05 Review, integration test, document remaining gaps and convergence (E03-AC4).
 
 ## E04 — Queries, expression, attribute table
