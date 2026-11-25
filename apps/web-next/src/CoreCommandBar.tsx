@@ -1,6 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
-export const SINGLE_KEY_HOTKEYS=new Set(["a"]);
 export type CoreCommand={alias:string;label:string;group:string;hint?:string;disabled?:boolean;disabledReason?:string;run:(args:string)=>void|Promise<void>};
 const normalize=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toUpperCase();
 const aliases:Record<string,string>={L:"LINE",PL:"POLYGON",PO:"POINT",M:"MOVE",CO:"COPY",CP:"COPY",O:"OFFSET",RO:"ROTATE",SC:"SCALE",S:"STRETCH",TR:"TRIM",EX:"EXTEND",F:"FILLET",E:"ERASE",DI:"DIST",AA:"AREA",P:"PAN",Z:"ZOOM",U:"UNDO",OS:"OSNAP",QSELECT:"SELRECT",RE:"RELOAD"};
@@ -49,10 +48,9 @@ export function CoreCommandBar(host:Host){
   if(e.key==="F3"||e.key==="F8"){e.preventDefault();e.stopPropagation();const result=latest.current.shortcut(e.key);if(result)report(result);return}
   if(own)return;
   if(e.key==="/"&&!button){e.preventDefault();latest.current.focus();return}
+  // Enter: finish what is in progress, otherwise open the command line (plain keys are shortcuts).
+  if(e.key==="Enter"&&!button&&!latest.current.activePrompt){e.preventDefault();e.stopPropagation();latest.current.focus();return}
   if(e.key==="Enter"&&!button){e.preventDefault();e.stopPropagation();void latest.current.execute("");return}
-  // Single-key tool hotkeys (MapInfo style) win over type-to-command; press / to type such commands.
-  if(SINGLE_KEY_HOTKEYS.has(e.key.toLowerCase()))return;
-  if(!button&&/^[a-zA-Z0-9?@.,+-]$/.test(e.key)){e.preventDefault();e.stopPropagation();setValue(e.key.toUpperCase());setCursor(-1);setHighlight(-1);setHelp(false);latest.current.focus()}
  };window.addEventListener("keydown",key,true);return()=>window.removeEventListener("keydown",key,true)},[]);
  useEffect(()=>{const run=(e:Event)=>{const alias=(e as CustomEvent<string>).detail;void latest.current.execute(alias,true)};window.addEventListener("ovg:menu-command",run);return()=>window.removeEventListener("ovg:menu-command",run)},[]);
  // Right-click no longer repeats the last command (AutoCAD habit): in QGIS it opens context menus / finishes digitizing.
