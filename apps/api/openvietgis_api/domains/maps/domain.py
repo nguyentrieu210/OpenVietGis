@@ -13,6 +13,7 @@ from uuid import UUID, uuid5
 
 MAX_REVISION = 2**53 - 1
 MAX_LAYERS = 32
+MAX_DISPLAY_BYTES = 16_000
 MAX_LATITUDE = 85.05112878
 
 
@@ -114,11 +115,21 @@ class LayerReference:
     style: Style
     # Spec 056: project-shared layer group path (QGIS-style tree), e.g. "Hiện trạng/Giao thông".
     group: str | None = None
+    # Spec 056 đợt 3: project-shared display settings (renderer, classes, labels, filter, scale
+    # range). Opaque to Core: a bounded JSON object the web client validates and renders.
+    display: dict[str, object] | None = None
 
     def __post_init__(self) -> None:
         _id(self.layer_id)
         if type(self.visible) is not bool or not isinstance(self.style, Style):
             raise MapValidationError("invalid map Layer reference")
+        if self.display is not None:
+            try:
+                encoded = json.dumps(self.display, ensure_ascii=False, allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                raise MapValidationError("invalid map Layer display") from exc
+            if not isinstance(self.display, dict) or len(encoded.encode()) > MAX_DISPLAY_BYTES:
+                raise MapValidationError("invalid map Layer display")
         if self.group is not None:
             parts = self.group.split("/") if isinstance(self.group, str) else []
             if (
@@ -138,6 +149,8 @@ class LayerReference:
         # Omitted when ungrouped so existing revisions keep their digest.
         if self.group is not None:
             wire["group"] = self.group
+        if self.display is not None:
+            wire["display"] = self.display
         return wire
 
 

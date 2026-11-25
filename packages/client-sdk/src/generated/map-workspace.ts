@@ -110,6 +110,10 @@ export interface components {
             style: components["schemas"]["MapStyle"];
             /** @description Spec 056: project-shared layer group path, segments separated by '/', at most 4 levels. Omitted when the layer is not grouped. */
             group?: string;
+            /** @description Spec 056: project-shared display settings (renderer, classes, labels, filter, scale range) read by the web client; JSON object up to 16 000 bytes. Omitted when unset. */
+            display?: {
+                [key: string]: unknown;
+            };
         };
         MapConfiguration: {
             /** @description Layer IDs must be unique; order is render order. */

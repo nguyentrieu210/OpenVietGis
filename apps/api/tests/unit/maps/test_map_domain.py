@@ -104,3 +104,13 @@ def test_layer_group_is_optional_bounded_and_omitted_when_unset():
     for bad in ("", "/", "A//B", " A", "A/B/C/D/E", "x" * 201):
         with pytest.raises(MapValidationError):
             LayerReference(uuid4(), True, Style(), bad)
+
+
+def test_layer_display_is_bounded_json_and_omitted_when_unset():
+    """Spec 056 đợt 3: project-shared display settings."""
+    assert "display" not in LayerReference(uuid4(), True, Style()).to_wire()
+    view = {"renderer": "graduated", "gradField": "dien_tich", "gradBreaks": [0, 10.5, 99]}
+    assert LayerReference(uuid4(), True, Style(), None, view).to_wire()["display"] == view
+    for bad in ({"x": "y" * 17_000}, {"n": float("nan")}, {"s": {1, 2}}):
+        with pytest.raises(MapValidationError):
+            LayerReference(uuid4(), True, Style(), None, bad)

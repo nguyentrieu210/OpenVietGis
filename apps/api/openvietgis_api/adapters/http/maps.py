@@ -54,6 +54,7 @@ class MapLayerRequest(StrictRequest):
     visible: bool
     style: BasicStyleRequest
     group: Annotated[str, Field(min_length=1, max_length=200)] | None = None
+    display: dict[str, object] | None = None
 
     @field_validator("layer_id", mode="before")
     @classmethod
@@ -126,7 +127,9 @@ class SaveMapRequest(StrictRequest):
             self.operation_id,
             self.expected_revision,
             tuple(
-                LayerReference(item.layer_id, item.visible, item.style.domain(), item.group)
+                LayerReference(
+                    item.layer_id, item.visible, item.style.domain(), item.group, item.display
+                )
                 for item in self.layers
             ),
             self.basemap,

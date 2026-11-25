@@ -39,7 +39,11 @@ def _configuration(value: dict[str, Any]) -> Configuration:
     return Configuration(
         tuple(
             LayerReference(
-                UUID(item["layer_id"]), item["visible"], Style(**item["style"]), item.get("group")
+                UUID(item["layer_id"]),
+                item["visible"],
+                Style(**item["style"]),
+                item.get("group"),
+                item.get("display"),
             )
             for item in value["layers"]
         ),
