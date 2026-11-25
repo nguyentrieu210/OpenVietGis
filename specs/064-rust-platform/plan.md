@@ -32,3 +32,6 @@ I platform/module isolation via SDK; II open formats and documented API; III ten
 6 Explicitly approved cutover; keep compatible rollback until observation and approval for retirement.
 ## Dependencies & decisions
 See research.md, data-model.md, contracts/parity.md, tasks.md. Existing Spec 063 WKB work is isolated; reuse only after review and evidence. No new DB schema or public API invented before inventory.
+
+## Engine decomposition and scope freeze
+Execute [engine registry](engine-scope.md) and [90 child tasks](engine-tasks.md) under the parent gates. The [static inventory generator](contracts/build-static-inventory.py) reads pinned Git objects without importing the live application. T001–T005 remain blocking: runtime route/schema extraction, command/algorithm registry, migrations and per-feature evidence, live/dev reconciliation, classification of cross-cutting sources and dependency reviews. No static count constitutes implemented functionality. E01/E02 foundation first, then E03–E07 vertical workflows, E08–E16 dependent workflows, E17 canonical clients throughout, E18 release gates throughout.

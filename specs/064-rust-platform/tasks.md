@@ -30,3 +30,6 @@ All implementation tasks unchecked. IDs map requirements and success criteria.
 - [ ] T021 [FR-011 SC-006] Staging migration/rollback rehearsal preserving acknowledged writes; verify hashes and recovery.
 - [ ] T022 [FR-014 SC-001 SC-006] Convergence report on exact SHA, obtain owner approval before production cutover.
 - [ ] T023 [FR-014] Only after successful observation and explicit approval, retire legacy backend; preserve rollback artifacts.
+
+## Child engine execution
+[Engine tasks](engine-tasks.md) contains 90 additional unchecked tasks (18 slices × 5); child tasks refine rather than replace parent gates. T002 must close all static inventory triage and enumerate dynamic registrations, frontend commands, algorithms and runtime routes before scope freeze.

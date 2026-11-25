@@ -7,3 +7,7 @@
 - [ ] Baseline contract inventory and measured benchmark completed
 - [ ] Dependency versions/license/security review and ADR approval
 - [ ] Implementation, parity, security, performance and convergence
+- [x] 18 engine scopes and 90 child tasks documented
+- [x] Pinned static source and handler candidate inventory generated
+- [ ] Every operation, dynamic route, command, algorithm and migration verified/classified with test mapping
+- [ ] Cross-cutting sources and unclassified inventory reviewed; current dev/live drift reconciled
