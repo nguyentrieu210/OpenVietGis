@@ -28,7 +28,11 @@ async fn fixed_pipelines_reproduce_recorded_postgis_output() {
     let outputs = apply_steps(&mut conn, datum, &inputs).await.unwrap();
     for (point, (x, y)) in points.iter().zip(outputs) {
         let (ex, ey) = xy(&point["wgs84_pipeline_6960"]);
-        assert!((x - ex).abs() < 1e-9 && (y - ey).abs() < 1e-9, "{}", point["id"]);
+        assert!(
+            (x - ex).abs() < 1e-9 && (y - ey).abs() < 1e-9,
+            "{}",
+            point["id"]
+        );
     }
 
     let tm3 = reference_transformation(4756, 5899).unwrap();
