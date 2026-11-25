@@ -5,8 +5,8 @@
 //! constants only; every request value is bound.
 
 use ovg_core::crs::{
-    reference_coordinate_wire, reference_transformation, FixtureRequirement,
-    TransformationProfile, WEB_MERCATOR_MAX_LATITUDE,
+    reference_coordinate_wire, reference_transformation, FixtureRequirement, TransformationProfile,
+    WEB_MERCATOR_MAX_LATITUDE,
 };
 use ovg_core::AppError;
 use serde_json::{json, Value};
@@ -297,7 +297,10 @@ impl ProjectRead<'_> {
         let source = self.get_source_record(source_id).await?.wire;
 
         if source["validation_state"] != "ready" {
-            return Err(AppError::conflict("SOURCE_NOT_READY", "The source is not ready."));
+            return Err(AppError::conflict(
+                "SOURCE_NOT_READY",
+                "The source is not ready.",
+            ));
         }
         if source["content_revision"] != pins.content_revision
             || source["schema_revision"] != pins.schema_revision
@@ -336,7 +339,9 @@ impl ProjectRead<'_> {
         } else {
             source["feature_count"].as_i64()
         };
-        let geometry_family = source["schema"]["geometry_family"].as_str().unwrap_or_default();
+        let geometry_family = source["schema"]["geometry_family"]
+            .as_str()
+            .unwrap_or_default();
         let renderable_kind = matches!(
             source["kind"].as_str(),
             Some("reference_fixture" | "imported_file" | "derived_processing")

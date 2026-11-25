@@ -1307,5 +1307,31 @@
     "Malformed 3D Tiles archives, path traversal in {uri:path}, or invalid boundingVolume/geometricError trees must be rejected.",
     "Edit-to-tile invalidation and bounded zoom/geometry payloads on 30k/100k/1M feature layers.",
     "Cross-engine convergence across 3D tilesets (E05), map_viewport (E02), MVT /pro/tiles (E08), and raster PNG tiles (E09)."
+  ],
+  "rust_native_operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/tiles/{z}/{x}/{y}.mvt",
+      "status": "new in Rust; no FastAPI oracle",
+      "handler": "apps/api-rust/src/map_render.rs::vector_tile",
+      "auth_tenant_scope": "session cookie; ProjectRead (project.read, LayerAcl policy) under openvietgis_runtime RLS including restrictive reference_features_gis_acl",
+      "parameters": {
+        "path": ["organization_id", "project_id", "layer_id", "z (0-22)", "x (< 2^z)", "y (< 2^z, suffix .mvt)"],
+        "query": ["content_revision (^[a-f0-9]{64}$)", "schema_revision (^[a-f0-9]{64}$)"]
+      },
+      "response": {
+        "200": "application/vnd.mapbox-vector-tile; layer 'features', extent 4096, buffer 64, property feature_id; empty body when no feature intersects",
+        "headers": {
+          "Cache-Control": "private, no-store",
+          "x-openvietgis-tile-complete": "false when more than 10000 features intersect (first 10000 by feature_id COLLATE \"C\" are encoded)"
+        },
+        "401": "authentication required",
+        "404": "foreign organization/project/layer or layer hidden by GIS ACL",
+        "409": "STALE_READ_PIN or SOURCE_NOT_READY {code, detail}",
+        "422": "invalid tile address/pins (generic validation envelope); UNSUPPORTED_TRANSFORMATION for non-EPSG:4326 or non-renderable sources",
+        "503": "MAP_READ_UNAVAILABLE {code, detail} on SQL failure or the 2000 ms statement timeout"
+      },
+      "crs": "Native EPSG:4326 rows clipped to the tile area and projected with the fixed analytic Web Mercator pipeline (ST_TransformPipeline), never an implicit ST_Transform."
+    }
   ]
 }

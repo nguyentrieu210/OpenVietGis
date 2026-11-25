@@ -22,7 +22,10 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{LAYER}/viewport"), get(viewport))
         .route(&format!("{LAYER}/display-extent"), get(display_extent))
-        .route(&format!("{LAYER}/tiles/{{z}}/{{x}}/{{tile}}"), get(vector_tile))
+        .route(
+            &format!("{LAYER}/tiles/{{z}}/{{x}}/{{tile}}"),
+            get(vector_tile),
+        )
 }
 
 type LayerPath = Result<Path<(Uuid, Uuid, Uuid)>, PathRejection>;
@@ -57,7 +60,9 @@ fn read_pins<'a>(
         content_revision,
         schema_revision,
     };
-    pins.well_formed().then_some(pins).ok_or(RenderError::InvalidRequest)
+    pins.well_formed()
+        .then_some(pins)
+        .ok_or(RenderError::InvalidRequest)
 }
 
 async fn viewport(
@@ -180,8 +185,8 @@ impl IntoResponse for RenderError {
             tracing::error!(detail = %internal_detail, "map render request failed");
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
         }
-        let status = StatusCode::from_u16(error.status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        let status =
+            StatusCode::from_u16(error.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
         // FastAPI renders spatial domain errors as {code, detail}; tenancy ones as {detail}.
         let coded = matches!(
             error,
