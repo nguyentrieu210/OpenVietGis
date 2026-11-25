@@ -3,10 +3,12 @@
 
 use std::collections::BTreeSet;
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, SecondsFormat, Utc};
 use ovg_core::AppError;
 use serde::Serialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
@@ -20,6 +22,7 @@ pub const ORGANIZATION_OWNER_TRANSFER: &str = "organization.owner.transfer";
 pub const ORGANIZATION_DELETE: &str = "organization.delete";
 pub const AUDIT_READ: &str = "audit.read";
 pub const AUTHORIZATION_MANAGE_GRANTS: &str = "authorization.manage_grants";
+pub const SERVICE_PRINCIPAL_MANAGE: &str = "service_principal.manage";
 pub const WORKSPACE_READ: &str = "workspace.read";
 pub const WORKSPACE_MANAGE: &str = "workspace.manage";
 pub const PROJECT_READ: &str = "project.read";
@@ -39,7 +42,7 @@ const ALL_PERMISSIONS: [&str; 19] = [
     ORGANIZATION_DELETE,
     AUTHORIZATION_MANAGE_GRANTS,
     "invitation.manage",
-    "service_principal.manage",
+    SERVICE_PRINCIPAL_MANAGE,
     AUDIT_READ,
     WORKSPACE_READ,
     WORKSPACE_MANAGE,
@@ -126,6 +129,16 @@ pub struct Project {
     pub name: String,
     pub slug: String,
     pub status: String,
+}
+
+/// Validated resource grant request. Scope and subject are rechecked in storage.
+pub struct GrantInput<'a> {
+    pub subject_kind: &'a str,
+    pub subject_id: Uuid,
+    pub scope_kind: &'a str,
+    pub workspace_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+    pub role: &'a str,
 }
 
 const MEMBERSHIP_COLUMNS: &str = "id, organization_id, user_id, role, status";
@@ -894,6 +907,380 @@ impl TenantTx {
         .execute(&mut *self.tx)
         .await
         .map_err(db_error)?;
+        Ok(())
+    }
+
+    /// Create a grant under the organization lock, with tenant-local subject and scope checks.
+    pub async fn create_grant(
+        &mut self,
+        organization_id: Uuid,
+        input: GrantInput<'_>,
+    ) -> Result<Value, AppError> {
+        self.member(organization_id, true, false).await?;
+        self.require(organization_id, None, None, AUTHORIZATION_MANAGE_GRANTS)
+            .await?;
+        let (membership_id, principal_id, subject_key) = match input.subject_kind {
+            "membership" => {
+                if self
+                    .membership(organization_id, input.subject_id, false)
+                    .await?
+                    .is_none()
+                {
+                    return Err(AppError::bad_request(
+                        "membership does not belong to organization",
+                    ));
+                }
+                (Some(input.subject_id), None, "membership_id")
+            }
+            "service_principal" => {
+                if self
+                    .principal_status(organization_id, input.subject_id, false)
+                    .await?
+                    .as_deref()
+                    != Some("active")
+                {
+                    return Err(AppError::bad_request(
+                        "service principal does not belong to organization",
+                    ));
+                }
+                (None, Some(input.subject_id), "service_principal_id")
+            }
+            _ => return Err(AppError::bad_request("invalid grant subject")),
+        };
+        match (input.scope_kind, input.workspace_id, input.project_id) {
+            ("organization", None, None) => {}
+            ("organization", _, _) => {
+                return Err(AppError::bad_request(
+                    "organization scope cannot include resource id",
+                ))
+            }
+            ("workspace", Some(id), None) => {
+                if self.workspace(organization_id, id).await?.is_none() {
+                    return Err(AppError::bad_request(
+                        "workspace does not belong to organization",
+                    ));
+                }
+            }
+            ("workspace", _, _) => {
+                return Err(AppError::bad_request(
+                    "workspace scope requires workspace_id only",
+                ))
+            }
+            ("project", None, Some(id)) => {
+                if self.project(organization_id, id).await?.is_none() {
+                    return Err(AppError::bad_request(
+                        "project does not belong to organization",
+                    ));
+                }
+            }
+            ("project", _, _) => {
+                return Err(AppError::bad_request(
+                    "project scope requires project_id only",
+                ))
+            }
+            _ => return Err(AppError::bad_request("invalid grant scope")),
+        }
+        if resource_role_permissions(input.role).is_empty() {
+            return Err(AppError::bad_request("invalid grant role"));
+        }
+        let id = Uuid::new_v4();
+        let now = Utc::now();
+        sqlx::query(
+            "INSERT INTO org.resource_grants (
+                 id, organization_id, subject_kind, membership_id, service_principal_id,
+                 scope_kind, workspace_id, project_id, role, created_at,
+                 created_by_actor_type, created_by_actor_id, revoked_at
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'human',$11,NULL)",
+        )
+        .bind(id)
+        .bind(organization_id)
+        .bind(input.subject_kind)
+        .bind(membership_id)
+        .bind(principal_id)
+        .bind(input.scope_kind)
+        .bind(input.workspace_id)
+        .bind(input.project_id)
+        .bind(input.role)
+        .bind(now)
+        .bind(self.actor_id)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(|error| {
+            if matches!(&error, sqlx::Error::Database(db) if db.code().is_some_and(|code| code.starts_with("23"))) {
+                AppError::bad_request("invalid or duplicate grant")
+            } else {
+                db_error(error)
+            }
+        })?;
+        let mut metadata = json!({"scope_kind": input.scope_kind, "role": input.role});
+        metadata[subject_key] = json!(input.subject_id.to_string());
+        self.audit(
+            organization_id,
+            "authorization.grant.create",
+            "resource_grant",
+            Some(id),
+            "success",
+            metadata,
+        )
+        .await?;
+        Ok(json!({
+            "id": id, "organization_id": organization_id, "subject_kind": input.subject_kind,
+            "subject_id": input.subject_id, "scope_kind": input.scope_kind,
+            "workspace_id": input.workspace_id, "project_id": input.project_id,
+            "role": input.role, "created_at": python_timestamp(now), "revoked_at": null,
+        }))
+    }
+
+    /// Revoke once; duplicate requests do not create duplicate audit events.
+    pub async fn revoke_grant(&mut self, organization_id: Uuid, id: Uuid) -> Result<(), AppError> {
+        self.member(organization_id, true, false).await?;
+        let revoked: Option<DateTime<Utc>> = sqlx::query_scalar(
+            "SELECT revoked_at FROM org.resource_grants WHERE organization_id=$1 AND id=$2 FOR UPDATE",
+        )
+        .bind(organization_id).bind(id)
+        .fetch_optional(&mut *self.tx).await.map_err(db_error)?
+        .ok_or_else(|| AppError::not_found("grant not found"))?;
+        self.require(organization_id, None, None, AUTHORIZATION_MANAGE_GRANTS)
+            .await?;
+        if revoked.is_none() {
+            sqlx::query("UPDATE org.resource_grants SET revoked_at=now() WHERE organization_id=$1 AND id=$2 AND revoked_at IS NULL")
+                .bind(organization_id).bind(id).execute(&mut *self.tx).await.map_err(db_error)?;
+            self.audit(
+                organization_id,
+                "authorization.grant.revoke",
+                "resource_grant",
+                Some(id),
+                "success",
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    async fn principal_status(
+        &mut self,
+        organization_id: Uuid,
+        id: Uuid,
+        lock: bool,
+    ) -> Result<Option<String>, AppError> {
+        let suffix = if lock { " FOR UPDATE" } else { "" };
+        sqlx::query_scalar(&format!(
+            "SELECT status FROM org.service_principals WHERE organization_id=$1 AND id=$2{suffix}"
+        ))
+        .bind(organization_id)
+        .bind(id)
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)
+    }
+
+    pub async fn list_principals(&mut self, organization_id: Uuid) -> Result<Vec<Value>, AppError> {
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        let rows: Vec<(Uuid, String, Option<String>, String)> = sqlx::query_as(
+            "SELECT id, name, description, status FROM org.service_principals WHERE organization_id=$1 ORDER BY created_at,id"
+        ).bind(organization_id).fetch_all(&mut *self.tx).await.map_err(db_error)?;
+        Ok(rows.into_iter().map(|(id, name, description, status)| json!({"id":id,"organization_id":organization_id,"name":name,"description":description,"status":status})).collect())
+    }
+
+    pub async fn create_principal(
+        &mut self,
+        organization_id: Uuid,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<Value, AppError> {
+        self.member(organization_id, true, false).await?;
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(AppError::bad_request("service principal name is required"));
+        }
+        let id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO org.service_principals (id,organization_id,name,description,status,created_at,created_by_actor_type,created_by_actor_id,revoked_at)
+             VALUES ($1,$2,$3,$4,'active',now(),'human',$5,NULL)"
+        ).bind(id).bind(organization_id).bind(name).bind(description).bind(self.actor_id)
+         .execute(&mut *self.tx).await.map_err(|error| {
+            if matches!(&error, sqlx::Error::Database(db) if db.code().as_deref()==Some("23505")) {
+                AppError::conflict("SERVICE_PRINCIPAL_EXISTS","service principal name already exists")
+            } else { db_error(error) }
+         })?;
+        self.audit(
+            organization_id,
+            "service_principal.create",
+            "service_principal",
+            Some(id),
+            "success",
+            json!({}),
+        )
+        .await?;
+        Ok(
+            json!({"id":id,"organization_id":organization_id,"name":name,"description":description,"status":"active"}),
+        )
+    }
+
+    pub async fn revoke_principal(
+        &mut self,
+        organization_id: Uuid,
+        id: Uuid,
+    ) -> Result<(), AppError> {
+        self.member(organization_id, true, false).await?;
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        let status = self
+            .principal_status(organization_id, id, true)
+            .await?
+            .ok_or_else(|| AppError::not_found("service principal not found"))?;
+        if status != "revoked" {
+            sqlx::query("UPDATE org.service_principals SET status='revoked', revoked_at=now() WHERE organization_id=$1 AND id=$2")
+                .bind(organization_id).bind(id).execute(&mut *self.tx).await.map_err(db_error)?;
+            self.audit(
+                organization_id,
+                "service_principal.revoke",
+                "service_principal",
+                Some(id),
+                "success",
+                json!({}),
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Credential list selects metadata only, never the digest.
+    pub async fn list_credentials(
+        &mut self,
+        organization_id: Uuid,
+        principal_id: Uuid,
+    ) -> Result<Vec<Value>, AppError> {
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        self.principal_status(organization_id, principal_id, false)
+            .await?
+            .ok_or_else(|| AppError::not_found("service principal not found"))?;
+        let rows = sqlx::query(
+            "SELECT id,name,prefix,permission_ceiling,created_at,expires_at,last_used_at,revoked_at
+             FROM org.service_credentials WHERE organization_id=$1 AND service_principal_id=$2 ORDER BY created_at DESC,id"
+        ).bind(organization_id).bind(principal_id).fetch_all(&mut *self.tx).await.map_err(db_error)?;
+        rows.iter().map(|row| -> Result<Value,sqlx::Error> {
+            let created: DateTime<Utc> = row.try_get("created_at")?;
+            let expiry: Option<DateTime<Utc>> = row.try_get("expires_at")?;
+            let last: Option<DateTime<Utc>> = row.try_get("last_used_at")?;
+            let revoked: Option<DateTime<Utc>> = row.try_get("revoked_at")?;
+            Ok(json!({"id":row.try_get::<Uuid,_>("id")?,"name":row.try_get::<String,_>("name")?,
+                "prefix":row.try_get::<String,_>("prefix")?,"permission_ceiling":row.try_get::<Option<Vec<String>>,_>("permission_ceiling")?,
+                "created_at":python_timestamp(created),"expires_at":expiry.map(python_timestamp),
+                "last_used_at":last.map(python_timestamp),"revoked_at":revoked.map(python_timestamp)}))
+        }).collect::<Result<_,_>>().map_err(db_error)
+    }
+
+    /// Issue a one-time secret using OS randomness; store only its digest.
+    pub async fn issue_credential(
+        &mut self,
+        organization_id: Uuid,
+        principal_id: Uuid,
+        name: &str,
+        ceiling: Option<BTreeSet<String>>,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Result<Value, AppError> {
+        self.member(organization_id, true, false).await?;
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        if self
+            .principal_status(organization_id, principal_id, true)
+            .await?
+            .as_deref()
+            != Some("active")
+        {
+            return Err(AppError::not_found("service principal not found"));
+        }
+        let now = Utc::now();
+        if expires_at.is_some_and(|expiry| expiry <= now) {
+            return Err(AppError::bad_request(
+                "credential expiry must be in the future",
+            ));
+        }
+        if let Some(values) = &ceiling {
+            if values
+                .iter()
+                .any(|value| !ALL_PERMISSIONS.contains(&value.as_str()))
+            {
+                return Err(AppError::bad_request(
+                    "unknown permission in credential ceiling",
+                ));
+            }
+            let roles: Vec<String>=sqlx::query_scalar(
+                "SELECT role FROM org.resource_grants WHERE organization_id=$1 AND subject_kind='service_principal' AND service_principal_id=$2 AND revoked_at IS NULL"
+            ).bind(organization_id).bind(principal_id).fetch_all(&mut *self.tx).await.map_err(db_error)?;
+            let granted: BTreeSet<&str> = roles
+                .iter()
+                .flat_map(|role| resource_role_permissions(role).iter().copied())
+                .collect();
+            if values.iter().any(|value| !granted.contains(value.as_str())) {
+                return Err(AppError::bad_request(
+                    "permission ceiling contains permission principal cannot receive",
+                ));
+            }
+        }
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(AppError::bad_request("credential name is required"));
+        }
+        let id = Uuid::new_v4();
+        let mut entropy = [0u8; 32];
+        getrandom::getrandom(&mut entropy)
+            .map_err(|_| AppError::internal("OS credential randomness unavailable"))?;
+        let secret = format!("ovgsvc{}_{}", id.simple(), URL_SAFE_NO_PAD.encode(entropy));
+        let prefix = &secret[..20];
+        let digest = Sha256::digest(secret.as_bytes()).to_vec();
+        let ceiling = ceiling.map(|values| values.into_iter().collect::<Vec<_>>());
+        sqlx::query(
+            "INSERT INTO org.service_credentials (id,organization_id,service_principal_id,name,prefix,secret_hash,permission_ceiling,created_at,expires_at,last_used_at,revoked_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,NULL)"
+        ).bind(id).bind(organization_id).bind(principal_id).bind(name).bind(prefix).bind(digest)
+         .bind(&ceiling).bind(now).bind(expires_at).execute(&mut *self.tx).await.map_err(db_error)?;
+        self.audit(
+            organization_id,
+            "service_credential.issue",
+            "service_credential",
+            Some(id),
+            "success",
+            json!({"service_principal_id":principal_id.to_string()}),
+        )
+        .await?;
+        Ok(
+            json!({"id":id,"prefix":prefix,"secret":secret,"permission_ceiling":ceiling,"expires_at":expires_at.map(python_timestamp)}),
+        )
+    }
+
+    pub async fn revoke_credential(
+        &mut self,
+        organization_id: Uuid,
+        principal_id: Uuid,
+        id: Uuid,
+    ) -> Result<(), AppError> {
+        self.member(organization_id, true, false).await?;
+        self.require(organization_id, None, None, SERVICE_PRINCIPAL_MANAGE)
+            .await?;
+        let revoked: Option<DateTime<Utc>> = sqlx::query_scalar(
+            "SELECT revoked_at FROM org.service_credentials WHERE organization_id=$1 AND service_principal_id=$2 AND id=$3 FOR UPDATE"
+        ).bind(organization_id).bind(principal_id).bind(id).fetch_optional(&mut *self.tx).await.map_err(db_error)?
+          .ok_or_else(|| AppError::not_found("service credential not found"))?;
+        if revoked.is_none() {
+            sqlx::query("UPDATE org.service_credentials SET revoked_at=now() WHERE organization_id=$1 AND service_principal_id=$2 AND id=$3 AND revoked_at IS NULL")
+                .bind(organization_id).bind(principal_id).bind(id).execute(&mut *self.tx).await.map_err(db_error)?;
+            self.audit(
+                organization_id,
+                "service_credential.revoke",
+                "service_credential",
+                Some(id),
+                "success",
+                json!({"service_principal_id":principal_id.to_string()}),
+            )
+            .await?;
+        }
         Ok(())
     }
 

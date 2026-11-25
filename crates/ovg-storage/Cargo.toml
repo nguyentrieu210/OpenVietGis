@@ -9,6 +9,8 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+base64.workspace = true
+getrandom = "0.2"
 chrono.workspace = true
 ovg-core.workspace = true
 ovg-spatial.workspace = true

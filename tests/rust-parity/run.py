@@ -469,6 +469,88 @@ def compare_owner_transfer(suite, org, owner, member, member_id, owner_csrf):
         print(f"PASS {label}", flush=True)
 
 
+def compare_grant_and_machine_lifecycle(suite, org, foreign_org, owner, member, owner_csrf):
+    """Test stateful operations against both implementations with distinct fixtures."""
+    label = "E01 grants, machine principal and credential lifecycle"
+    try:
+        owner_headers = session_headers(owner, **{"x-openvietgis-csrf": owner_csrf})
+        member_csrf = suite.oracle.get(
+            f"{API}/auth/csrf", headers=session_headers(member)
+        ).json()["token"]
+        member_headers = session_headers(member, **{"x-openvietgis-csrf": member_csrf})
+        principals = f"{org}/service-principals"
+
+        def round_trip(client, suffix):
+            def post(path, body, headers=owner_headers):
+                return client.post(path, headers=headers, json=body)
+
+            require(post(principals, {"name": suffix}, member_headers).status_code == 403,
+                    "Member could create a machine principal")
+            require(post(principals, {"name": suffix}, session_headers(owner)).status_code == 403,
+                    "Principal creation without CSRF accepted")
+            created = post(principals, {"name": suffix})
+            require(created.status_code == 201, "Machine principal creation failed")
+            principal = created.json()
+            pid = principal["id"]
+            require(principal["status"] == "active", "Principal must be active")
+            require(post(principals, {"name": suffix}).status_code == 409, "Duplicate principal accepted")
+            creds = f"{principals}/{pid}/credentials"
+            require(client.get(creds, headers=member_headers).status_code == 403,
+                    "Member could enumerate credentials")
+            require(client.get(f"{foreign_org}/service-principals/{pid}/credentials",
+                               headers=owner_headers).status_code == 404,
+                    "Cross-tenant credential access accepted")
+            require(post(creds, {"name": "parity", "permission_ceiling": ["project.read"]}).status_code == 400,
+                    "Unassigned credential permission accepted")
+            grant_body = {"subject_kind": "service_principal", "subject_id": pid,
+                          "scope_kind": "organization", "role": "viewer"}
+            require(post(f"{org}/grants", grant_body | {"project_id": str(uuid4())}).status_code == 400,
+                    "Invalid grant scope accepted")
+            grant = post(f"{org}/grants", grant_body)
+            require(grant.status_code == 201, "Machine grant creation failed")
+            gid = grant.json()["id"]
+            require(post(f"{org}/grants", grant_body).status_code == 400, "Duplicate grant accepted")
+            issued = post(creds, {"name": "parity", "permission_ceiling": ["project.read"]})
+            require(issued.status_code == 201, "Credential issuance failed")
+            require(issued.headers.get("cache-control") == "no-store", "Credential response cached")
+            credential = issued.json()
+            cid = credential["id"]
+            secret = credential["secret"]
+            require(secret.startswith("ovgsvc" + cid.replace("-", "") + "_"),
+                    "Credential token format incompatible")
+            metadata_response = client.get(creds, headers=owner_headers)
+            require(metadata_response.status_code == 200, "Credential metadata inaccessible")
+            require(metadata_response.headers.get("cache-control") == "no-store", "Metadata response cached")
+            require(secret not in metadata_response.text, "Secret disclosed in metadata")
+            meta = metadata_response.json()[0]
+            require(set(meta) == {"id","name","prefix","permission_ceiling","created_at",
+                                  "expires_at","last_used_at","revoked_at"}, "Unexpected credential metadata")
+            require(meta["prefix"] == secret[:20] and meta["permission_ceiling"] == ["project.read"],
+                    "Credential prefix or ceiling differs")
+            for _ in range(2):
+                require(post(f"{creds}/{cid}/revoke", None).status_code == 204,
+                        "Credential revocation not idempotent")
+                require(post(f"{org}/grants/{gid}/revoke", None).status_code == 204,
+                        "Grant revocation not idempotent")
+                require(post(f"{principals}/{pid}/revoke", None).status_code == 204,
+                        "Principal revocation not idempotent")
+            require(client.get(creds, headers=owner_headers).json()[0]["revoked_at"] is not None,
+                    "Credential revocation did not persist")
+            require(post(creds, {"name": "denied"}).status_code == 404,
+                    "Revoked principal could issue credential")
+
+        round_trip(suite.oracle, "parity-oracle-machine")
+        round_trip(suite.rust, "parity-rust-machine")
+        suite.get("E01 machine principal list after lifecycle", principals, token=owner)
+        suite.get("E01 grant list after lifecycle", f"{org}/grants", token=owner)
+    except (AssertionError, ValueError, KeyError, IndexError, httpx.HTTPError) as exc:
+        suite.failures.append(label)
+        print(f"FAIL {label}: {exc}", flush=True)
+    else:
+        suite.passed += 1
+        print(f"PASS {label}", flush=True)
+
+
 def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_features):
 
     a, b = fixture["session_a_token"], fixture["session_b_token"]
@@ -618,6 +700,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E01 owner grants with project grant", f"{org_a}/grants", token=a)
     suite.get("E01 owner audit events", f"{org_a}/audit-events", token=a)
     compare_owner_transfer(suite, org_a, a, surveyor, mid, fixture["csrf_a_token"])
+    compare_grant_and_machine_lifecycle(suite, org_a, org_b, a, surveyor, fixture["csrf_a_token"])
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             "UPDATE org.organization_memberships SET status='revoked', revoked_at=now() WHERE id=%s",
