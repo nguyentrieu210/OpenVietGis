@@ -119,11 +119,19 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
   const extentDetail = page.waitForResponse(response =>
     new URL(response.url()).pathname.endsWith("/features/point-000001") && response.request().method() === "GET"
   );
+  const selectedViewport = page.waitForResponse(response =>
+    new URL(response.url()).pathname === fixture.api + "/layers/" + points.id + "/viewport"
+  );
   const command = page.getByRole("textbox", { name: "Nhập lệnh bản đồ" });
   await command.fill("ZS");
   await command.press("Enter");
   await command.blur();
   expect((await extentDetail).status()).toBe(200);
+  const selectedFrame = await selectedViewport;
+  expect(selectedFrame.status()).toBe(200);
+  expect((await selectedFrame.json()).items).toEqual(expect.arrayContaining([
+    expect.objectContaining({ feature_id: "point-000001" })
+  ]));
   await expect(page.getByTestId("map-engine-ready")).toHaveAttribute("data-ready", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("map-inspector")).not.toHaveAttribute("data-feature-id", "point-000001");
