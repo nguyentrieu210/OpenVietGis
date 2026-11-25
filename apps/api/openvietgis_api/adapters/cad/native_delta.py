@@ -225,7 +225,7 @@ def gis_to_cad_preview(
                 if len(widths) != len(vertices):
                     _fail("Native LWPOLYLINE vertex widths require CAD review")
                 ent.set_points(
-                    [(*xy(p), s, e, 0) for p, (s, e) in zip(vertices, widths)],
+                    [(*xy(p), s, e, 0) for p, (s, e) in zip(vertices, widths, strict=True)],
                     format="xyseb",
                 )
             else:
