@@ -5,6 +5,7 @@ pub mod e11_outbox;
 pub mod editing;
 pub mod identity;
 pub mod pool;
+pub mod processing_jobs;
 pub mod queries;
 pub mod rls;
 pub mod spatial_transform;
