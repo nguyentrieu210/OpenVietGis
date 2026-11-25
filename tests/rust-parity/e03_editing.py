@@ -423,3 +423,95 @@ def compare_editing(suite, owner_url, fixture, surveyor, difference):
         ("member without grant", 403, surveyor_write, {"target": [0, 0], "tolerance": 1}),
     ]:
         parity.same(f"E03 snap {label}", "POST", snap, status, headers=headers, body=body)
+
+def compare_scoped_editing(suite, owner_url, fixture, surveyor, difference, member_id, user_id):
+    """Exercise positive and negative ACL edits against the same PostGIS state."""
+    from openvietgis_api.security.csrf import make_csrf_token
+
+    parity = EditingParity(suite, difference)
+    admin = _headers(fixture["session_a_token"], fixture["csrf_a_token"])
+    editor = _headers(surveyor, make_csrf_token(surveyor, baseline.DEFAULT_CSRF_SECRET))
+    org = f"{API}/organizations/{fixture['org_a_id']}"
+    root = f"{org}/projects/{fixture['project_a_id']}"
+    layer = fixture["layers"]["edit_4326"]
+    sid = layer["source_id"]
+    path = f"{root}/sources/{sid}/changesets"
+    grant = suite.oracle.post(
+        f"{org}/grants", headers=admin,
+        json={"subject_kind": "membership", "subject_id": str(member_id),
+              "scope_kind": "project", "project_id": fixture["project_a_id"], "role": "editor"},
+    )
+    assert grant.status_code == 201, grant.text
+    grant_id = grant.json()["id"]
+    rule_ids = []
+
+    def rule(ids, actions):
+        response = suite.oracle.post(
+            f"{root}/access/rules", headers=admin,
+            json={"user_id": str(user_id), "layer_id": layer["layer_id"],
+                  "actions": actions, "feature_ids": ids},
+        )
+        assert response.status_code == 201, response.text
+        rule_id = response.json()["id"]
+        rule_ids.append(rule_id)
+        return rule_id
+
+    def revoke(rule_id):
+        response = suite.oracle.delete(f"{root}/access/rules/{rule_id}", headers=admin)
+        assert response.status_code == 204, response.text
+        rule_ids.remove(rule_id)
+
+    def snapshot():
+        with psycopg.connect(owner_url) as conn:
+            revision = conn.execute(
+                "SELECT content_revision FROM spatial.data_sources WHERE id=%s", (sid,)
+            ).fetchone()[0]
+            rows = conn.execute(
+                """SELECT feature_id, attributes FROM spatial.reference_features
+                   WHERE source_id=%s ORDER BY feature_id LIMIT 2""", (sid,)
+            ).fetchall()
+            return revision, rows
+
+    def payload(op_id, rev, operations):
+        return {"operation_id": op_id, "base_content_revision": rev,
+                "summary": "E03 scoped ACL parity", "operations": operations}
+
+    try:
+        rev, rows = snapshot()
+        (allowed, props), (hidden, _) = rows
+        r = rule([allowed], ["read", "geometry"])
+        point = {"type": "Point", "coordinates": [105.98, 21.12]}
+        update = {"op_type": "update", "feature_id": allowed, "geometry": point}
+        forbidden = {"op_type": "update", "feature_id": hidden, "geometry": point}
+        parity.same("E03 ACL hidden feature denied", "POST", path, 403,
+                    headers=editor, body=payload("e03-acl-hidden", rev, [forbidden]))
+        parity.same("E03 ACL mixed batch denied atomically", "POST", path, 403,
+                    headers=editor, body=payload("e03-acl-batch", rev, [update, forbidden]))
+        parity.same("E03 ACL attributes denied", "POST", path, 403, headers=editor,
+                    body=payload("e03-acl-attrs", rev, [
+                        {"op_type": "update", "feature_id": allowed,
+                         "properties": props | {"code": "ACL-FORBIDDEN"}}
+                    ]))
+        parity.record("E03 ACL rejected writes preserve revision",
+                      lambda: _assert_revision(snapshot()[0], rev))
+        body = payload("e03-acl-update", rev, [update])
+        receipt = parity.cross("E03 ACL allowed Rust edit replayed by FastAPI",
+                               "rust", path, body, editor)
+        if receipt:
+            parity.same("E03 ACL history still denied", "GET", path, 403, headers=editor)
+            parity.same("E03 ACL revert denied", "POST",
+                        f"{root}/changesets/{receipt['id']}/revert", 403,
+                        headers=editor, body={"operation_id": "e03-acl-revert"})
+        revoke(r)
+        rule([hidden], ["read", "geometry"])
+        parity.same("E03 ACL replay rechecks revoked feature scope", "POST", path, 403,
+                    headers=editor, body=body)
+    finally:
+        for rule_id in list(rule_ids):
+            revoke(rule_id)
+        response = suite.oracle.post(f"{org}/grants/{grant_id}/revoke", headers=admin)
+        assert response.status_code == 204, response.text
+
+
+def _assert_revision(actual, expected):
+    assert actual == expected, "Rejected ACL operation changed content revision"

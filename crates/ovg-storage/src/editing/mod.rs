@@ -397,12 +397,30 @@ impl<'a> EditScope<'a> {
         let org = self.tx.organization_id();
         let proj = self.project_id;
         if self.scoped {
-            // shortcut: scoped (GIS ACL) edits need `openvietgis.acl_internal`, which request
-            // paths must never set; they fail closed until a reviewed ACL edit adapter exists.
-            return Err(EditError::forbidden(
-                "GIS_ACCESS_DENIED",
-                "Đối tượng hoặc thao tác nằm ngoài quyền được cấp",
-            ));
+            if reverted_from.is_some() {
+                return Err(gis_denied());
+            }
+            // Only this private changeset transaction may enter internal mode.
+            // Source authorization precedes it; every before/after snapshot,
+            // including replays, is independently checked before publication.
+            let allowed: bool = sqlx::query_scalar(
+                "SELECT gis_access.source_allowed($1, $2, $3, 'read')
+                   AND EXISTS (SELECT 1 FROM unnest(ARRAY['create','geometry','attributes','delete']) AS a(action)
+                               WHERE gis_access.source_allowed($1, $2, $3, a.action))",
+            )
+            .bind(org)
+            .bind(proj)
+            .bind(source_id)
+            .fetch_one(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+            if !allowed {
+                return Err(gis_denied());
+            }
+            sqlx::query("SELECT set_config('openvietgis.acl_internal','on',true)")
+                .execute(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
         }
         let op_id = validate_operation_id(&request.operation_id)?;
         let summary: String = py_strip(&request.summary).chars().take(500).collect();
@@ -468,7 +486,44 @@ impl<'a> EditScope<'a> {
                     "operation_id already committed with different or unverified request identity",
                 ));
             }
-            let operations = self.load_operations(get(&row, "id")?).await?;
+            let changeset_id = get(&row, "id")?;
+            if self.scoped {
+                let snapshots = sqlx::query(
+                    "SELECT op_type, feature_id, before_geometry_wkb, after_geometry_wkb,
+                            before_properties, after_properties
+                     FROM editing.changeset_operations
+                     WHERE organization_id=$1 AND project_id=$2 AND changeset_id=$3",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(changeset_id)
+                .fetch_all(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if snapshots.len()
+                    != usize::try_from(get::<i32>(&row, "operation_count")?).unwrap_or(0)
+                {
+                    return Err(EditError::Internal("incomplete replay evidence".into()));
+                }
+                for snapshot in &snapshots {
+                    let op_type = match get::<String>(snapshot, "op_type")?.as_str() {
+                        "create" => OpType::Create,
+                        "update" => OpType::Update,
+                        "delete" => OpType::Delete,
+                        _ => return Err(EditError::Internal("invalid replay operation".into())),
+                    };
+                    let item = Prepared {
+                        op_type,
+                        feature_id: get(snapshot, "feature_id")?,
+                        before_wkb: get(snapshot, "before_geometry_wkb")?,
+                        after_wkb: get(snapshot, "after_geometry_wkb")?,
+                        before_props: get(snapshot, "before_properties")?,
+                        after_props: get(snapshot, "after_properties")?,
+                    };
+                    self.verify_scoped_edit(source_id, &item).await?;
+                }
+            }
+            let operations = self.load_operations(changeset_id).await?;
             return changeset_wire(&row, operations);
         }
 
@@ -558,6 +613,20 @@ impl<'a> EditScope<'a> {
             .fetch_optional(&mut **self.tx.tx_mut())
             .await
             .map_err(db_error)?;
+            if self.scoped {
+                if let Some(row) = &current {
+                    let props: Value = get(row, "attributes")?;
+                    let wkb: Option<Vec<u8>> = get(row, "geom_wkb")?;
+                    if !self
+                        .feature_allowed(source_id, &fid, Some(&props), wkb.as_deref(), "read")
+                        .await?
+                    {
+                        return Err(gis_denied());
+                    }
+                } else if op.op_type != OpType::Create {
+                    return Err(gis_denied());
+                }
+            }
             let missing = || EditError::not_found(format!("feature '{fid}' not found"));
             match op.op_type {
                 OpType::Create => {
@@ -619,6 +688,11 @@ impl<'a> EditScope<'a> {
                         after_props: None,
                     });
                 }
+            }
+        }
+        if self.scoped {
+            for item in &prepared {
+                self.verify_scoped_edit(source_id, item).await?;
             }
         }
         if prepared.iter().all(|item| {
@@ -916,6 +990,89 @@ impl<'a> EditScope<'a> {
         changeset_wire(&row, operations)
     }
 
+    async fn feature_allowed(
+        &mut self,
+        source_id: Uuid,
+        feature_id: &str,
+        props: Option<&Value>,
+        wkb: Option<&[u8]>,
+        action: &str,
+    ) -> Result<bool, EditError> {
+        sqlx::query_scalar(
+            "SELECT gis_access.feature_allowed($1,$2,$3,$4,COALESCE($5::jsonb,'{}'::jsonb),
+                                               ST_GeomFromEWKB($6::bytea),$7)",
+        )
+        .bind(self.tx.organization_id())
+        .bind(self.project_id)
+        .bind(source_id)
+        .bind(feature_id)
+        .bind(props)
+        .bind(wkb)
+        .bind(action)
+        .fetch_one(&mut **self.tx.tx_mut())
+        .await
+        .map_err(db_error)
+    }
+
+    async fn verify_scoped_edit(
+        &mut self,
+        source_id: Uuid,
+        item: &Prepared,
+    ) -> Result<(), EditError> {
+        let props_changed = match (&item.before_props, &item.after_props) {
+            (Some(before), Some(after)) => !py_eq(before, after),
+            (None, None) => false,
+            _ => true,
+        };
+        let geom_changed = item.before_wkb != item.after_wkb;
+        let checks: &[(bool, &str)] = match item.op_type {
+            OpType::Create => &[(false, "create"), (false, "read")],
+            OpType::Delete => &[(true, "delete"), (true, "read")],
+            OpType::Update => &[(true, "read"), (false, "read")],
+        };
+        for &(before, action) in checks {
+            self.require_snapshot(source_id, item, before, action)
+                .await?;
+        }
+        if item.op_type == OpType::Update {
+            for (changed, action) in [(geom_changed, "geometry"), (props_changed, "attributes")] {
+                if changed {
+                    self.require_snapshot(source_id, item, true, action).await?;
+                    self.require_snapshot(source_id, item, false, action)
+                        .await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn require_snapshot(
+        &mut self,
+        source_id: Uuid,
+        item: &Prepared,
+        before: bool,
+        action: &str,
+    ) -> Result<(), EditError> {
+        let (props, wkb) = if before {
+            (&item.before_props, &item.before_wkb)
+        } else {
+            (&item.after_props, &item.after_wkb)
+        };
+        if !self
+            .feature_allowed(
+                source_id,
+                &item.feature_id,
+                props.as_ref(),
+                wkb.as_deref(),
+                action,
+            )
+            .await?
+        {
+            return Err(gis_denied());
+        }
+        Ok(())
+    }
+
     /// PostGIS validity (GEOS `ST_IsValid`, no repair) and the 4096-vertex bound,
     /// so inserts always satisfy `ck_feature_geometry_state`.
     async fn validated_wkb(&mut self, wkt: &str, srid: i32) -> Result<Vec<u8>, EditError> {
@@ -1010,6 +1167,13 @@ impl<'a> EditScope<'a> {
             })
             .collect()
     }
+}
+
+fn gis_denied() -> EditError {
+    EditError::forbidden(
+        "GIS_ACCESS_DENIED",
+        "Đối tượng hoặc thao tác nằm ngoài quyền được cấp",
+    )
 }
 
 fn changeset_wire(row: &PgRow, operations: Vec<Value>) -> Result<Value, EditError> {

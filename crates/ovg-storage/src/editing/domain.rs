@@ -720,12 +720,7 @@ pub type Segment = (Xy, Xy);
 
 /// `snap_point_to_candidates`: deterministic 2D vertex-then-segment snapping.
 #[must_use]
-pub fn snap(
-    target: Xy,
-    vertices: &[Xy],
-    segments: &[Segment],
-    tolerance: f64,
-) -> Value {
+pub fn snap(target: Xy, vertices: &[Xy], segments: &[Segment], tolerance: f64) -> Value {
     let (tx, ty) = target;
     let mut best_dist = tolerance;
     let mut best = target;
