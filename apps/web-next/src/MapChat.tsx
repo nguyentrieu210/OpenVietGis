@@ -23,6 +23,8 @@ const makeBurst=(id:string,e:string):Burst[]=>Array.from({length:14},(_,k)=>({id
 
 export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const base="/organizations/"+org+"/projects/"+pid+"/collaboration";
+ const [railMin,setRailMin]=useState(()=>{try{return localStorage.getItem("ovg:chat-rail-min")==="1"}catch{return false}});
+ const foldRail=(v:boolean)=>{setRailMin(v);if(v)setOpen(false);try{localStorage.setItem("ovg:chat-rail-min",v?"1":"0")}catch{/* storage unavailable */}};
  const [size,setSize]=useState<number>(()=>{try{const v=Number(localStorage.getItem("ovg:chat-size-level"));return v>=0&&v<=2?v:1}catch{return 1}}),[pickEmoji,setPickEmoji]=useState(false),[photos,setPhotos]=useState<Record<string,string>>({}),[people,setPeople]=useState(false),[who,setWho]=useState(""),[room,setRoom]=useState(""),[open,setOpen]=useState(()=>{try{return localStorage.getItem("ovg:chat-open")!=="0"}catch{return true}});
  const [logs,setLogs]=useState<Record<string,Msg[]>>({}),[members,setMembers]=useState<Member[]>([]),[unread,setUnread]=useState<Record<string,number>>({});
  const [bubbles,setBubbles]=useState<Msg[]>([]),[bursts,setBursts]=useState<Burst[]>([]),[typing,setTyping]=useState<{x:number;y:number}|null>(null),[text,setText]=useState(""),[draft,setDraft]=useState("");
@@ -62,12 +64,14 @@ export function MapChat({client,org,pid,map,peers,accountId,canWrite}:Props){
  const total=Object.values(unread).reduce((a,b)=>a+b,0);
  const lastOf=(r:string)=>{const l=(logs[r]??[]).filter(m=>!REACT.test(m.body));return l[l.length-1]};
  const rail=<aside className={"ovg-chat-rail"+(open?" open":"")} aria-label="Chat">
+  {railMin?<button type="button" className="ovg-rail-tab" title="Mở thanh chat" onClick={()=>foldRail(false)}>💬{Object.values(unread).reduce((a,b)=>a+b,0)?<b className="ovg-chat-badge">{Object.values(unread).reduce((a,b)=>a+b,0)}</b>:null}</button>:
   <nav className="ovg-rail" aria-label="Phòng chat">
    <button type="button" className={"ovg-rail-room project"+(open&&!room?" active":"")} title="Phòng dự án · mọi thành viên" onClick={()=>pick("")}>#{unread[""]?<b className="ovg-chat-badge">{unread[""]}</b>:null}</button>
    <button type="button" className={"ovg-rail-room add"+(people?" active":"")} title="Nhắn tin mới · tìm người, tạo nhóm" onClick={()=>{setPeople(v=>!v);setWho("")}}>＋</button>
    <span className="ovg-rail-sep"/>
    {members.slice(0,20).map(m=><button type="button" key={m.id} className={"ovg-rail-room"+(open&&room===m.id?" active":"")} style={{background:color(m.id)}} title={m.display_name+(online.has(m.id)?" · đang trực tuyến":"")+" · nhắn riêng"} onClick={()=>pick(m.id)}>{initials(m.display_name)}{online.has(m.id)&&<i className="online"/>}{unread[m.id]?<b className="ovg-chat-badge">{unread[m.id]}</b>:null}</button>)}
-  </nav>
+   <button type="button" className="ovg-rail-fold" title="Thu thanh chat vào mép" aria-label="Thu thanh chat" onClick={()=>foldRail(true)}>›</button>
+  </nav>}
   {people&&<section className="ovg-chat-pane ovg-people">
    <header><b>Nhắn tin mới</b><small>Người trong dự án có quyền sửa</small><button type="button" aria-label="Đóng" onClick={()=>setPeople(false)}>×</button></header>
    <div className="ovg-people-search"><input autoFocus value={who} onChange={e=>setWho(e.target.value)} placeholder="Tìm theo tên…" aria-label="Tìm người"/></div>

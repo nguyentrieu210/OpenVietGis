@@ -710,3 +710,10 @@
 .qgis-studio .core-command button:hover{background:#ffffff1a!important;color:#fff!important}
 .qgis-studio .core-command-prompt,.qgis-studio .core-command>span:first-child{color:#cfe3f5!important}
 .qgis-studio .core-command-status{color:#cbd5e1!important}
+
+/* Folded chat rail: a small tab on the right edge */
+.ovg-rail-fold{flex:none;width:28px;height:20px;border:0;border-radius:6px;background:none;color:#9fb0bc;font-size:16px;line-height:1;cursor:pointer}
+.ovg-rail-fold:hover{background:#ffffff17;color:#fff}
+.ovg-rail-tab{pointer-events:auto;position:fixed;right:0;top:50%;transform:translateY(-50%);width:30px;height:44px;border:1px solid #ffffff2b;border-right:0;border-radius:12px 0 0 12px;background:#0d1720d9;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:-4px 0 14px #0004;font-size:15px;cursor:pointer;padding:0}
+.ovg-rail-tab:hover{width:36px}
+.ovg-rail-tab .ovg-chat-badge{top:-6px;left:-6px;right:auto}
