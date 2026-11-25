@@ -94,7 +94,7 @@ Every engine requires inventory, contracts, tests, implementation, evidence. No 
 - [ ] E13-T05 Review, integration test, document remaining gaps and convergence (E13-AC4).
 
 ## E14 — Plugin SDK, marketplace, modules
-- [ ] E14-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E14-AC1).
+- [x] E14-T01 Extract operation-level inventory and contracts from mapped sources; baseline evidence and test identifiers (E14-AC1).
 - [ ] E14-T02 Create golden, failure, permission and interoperability fixtures (E14-AC2).
 - [ ] E14-T03 Implement/retain approved engine and integrate behind public contract (E14-AC2).
 - [ ] E14-T04 Run comparative performance and resource tests, record raw evidence (E14-AC3).

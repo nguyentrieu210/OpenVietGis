@@ -3,7 +3,7 @@
 //! Constitutional rule (I): `ovg-module-sdk` and all core crates MUST have zero
 //! compile-time dependencies on any vertical module (`house_numbering`, `land_asset`, etc.).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use ovg_core::{AppError, TenantScope};
@@ -32,24 +32,86 @@ pub struct ModuleManifest {
     pub capabilities: Vec<ModuleCapability>,
 }
 
+// The internal native SDK supports only trusted, compiled-in official modules.
+// Partner manifests and all persistent activation checks remain in the legacy API.
+fn identifier(s: &str) -> bool {
+    let mut bytes = s.bytes();
+    s.len() <= 64
+        && bytes.next().is_some_and(|b| b.is_ascii_alphabetic())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+fn unique_bounded<'a>(values: impl Iterator<Item = &'a str>) -> bool {
+    let mut seen = HashSet::new();
+    values
+        .into_iter()
+        .all(|s| seen.len() < 64 && seen.insert(s))
+}
+
 impl ModuleManifest {
     pub fn validate(&self) -> Result<(), AppError> {
-        if self.extension_key.is_empty()
-            || !self
-                .extension_key
+        let invalid = |message| AppError::validation("INVALID_MODULE_MANIFEST", message);
+        let key = &self.extension_key;
+        if !(2..=100).contains(&key.len())
+            || !key.as_bytes()[0].is_ascii_lowercase()
+            || !key
                 .bytes()
                 .all(|b| matches!(b, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-'))
+            || key.starts_with("partner_")
+        {
+            return Err(invalid("invalid official module extension_key"));
+        }
+        let parts: Vec<_> = self.version.split('.').collect();
+        if self.version.len() > 32
+            || parts.len() != 3
+            || parts.iter().any(|p| {
+                p.is_empty()
+                    || !p.bytes().all(|b| b.is_ascii_digit())
+                    || (p.len() > 1 && p.starts_with('0'))
+            })
         {
             return Err(AppError::validation(
-                "INVALID_MODULE_MANIFEST",
-                "extension_key must be non-empty lowercase ASCII [a-z0-9_-]",
+                "INVALID_VERSION",
+                "version must be semver X.Y.Z",
             ));
         }
-        if self.version.trim().is_empty() || self.display_name.trim().is_empty() {
+        if self.api_compatibility != "1.x" {
             return Err(AppError::validation(
-                "INVALID_MODULE_MANIFEST",
-                "module version and display_name are required",
+                "INCOMPATIBLE_EXTENSION_API",
+                "expected API compatibility 1.x",
             ));
+        }
+        if self.display_name.trim().is_empty() {
+            return Err(invalid("display_name is required"));
+        }
+        let prefix = format!("ext.{key}.");
+        if !unique_bounded(self.permissions.iter().map(String::as_str))
+            || self
+                .permissions
+                .iter()
+                .any(|p| !p.strip_prefix(&prefix).is_some_and(identifier))
+        {
+            return Err(AppError::validation(
+                "INVALID_PERMISSION_NAMESPACE",
+                "permissions must be unique and module-namespaced",
+            ));
+        }
+        if !unique_bounded(self.commands.iter().map(|c| c.id.as_str()))
+            || self.commands.iter().any(|c| {
+                !identifier(&c.id)
+                    || c.label.trim().is_empty()
+                    || c.label.chars().count() > 200
+                    || !self.permissions.contains(&c.required_permission)
+            })
+        {
+            return Err(invalid(
+                "invalid, duplicate, or undeclared command permission",
+            ));
+        }
+        if !unique_bounded(self.capabilities.iter().map(|c| c.0.as_str()))
+            || self.capabilities.iter().any(|c| !identifier(&c.0))
+        {
+            return Err(invalid("invalid or duplicate capability"));
         }
         Ok(())
     }
@@ -91,10 +153,16 @@ pub trait OvgModule: Send + Sync {
     ) -> Result<ModuleCommandResult, AppError>;
 }
 
+#[derive(Clone)]
+struct RegisteredModule {
+    manifest: ModuleManifest,
+    runtime: Arc<dyn OvgModule>,
+}
+
 /// Thread-safe registry of official vertical modules loaded at application startup.
 #[derive(Default, Clone)]
 pub struct ModuleRegistry {
-    modules: HashMap<String, Arc<dyn OvgModule>>,
+    modules: HashMap<String, RegisteredModule>,
 }
 
 impl ModuleRegistry {
@@ -112,13 +180,21 @@ impl ModuleRegistry {
                 format!("module '{}' is already registered", manifest.extension_key),
             ));
         }
-        self.modules.insert(manifest.extension_key, module);
+        self.modules.insert(
+            manifest.extension_key.clone(),
+            RegisteredModule {
+                manifest,
+                runtime: module,
+            },
+        );
         Ok(())
     }
 
     #[must_use]
     pub fn get(&self, extension_key: &str) -> Option<Arc<dyn OvgModule>> {
-        self.modules.get(extension_key).cloned()
+        self.modules
+            .get(extension_key)
+            .map(|entry| Arc::clone(&entry.runtime))
     }
 
     #[must_use]
@@ -134,7 +210,7 @@ impl ModuleRegistry {
     #[must_use]
     pub fn list_manifests(&self) -> Vec<ModuleManifest> {
         let mut manifests: Vec<ModuleManifest> =
-            self.modules.values().map(|m| m.manifest()).collect();
+            self.modules.values().map(|m| m.manifest.clone()).collect();
         manifests.sort_by(|a, b| a.extension_key.cmp(&b.extension_key));
         manifests
     }
@@ -147,10 +223,16 @@ impl ModuleRegistry {
         request: &ModuleCommandRequest,
     ) -> Result<ModuleCommandResult, AppError> {
         ctx.tenant.validate()?;
+        // Never expose dispatch as an HTTP endpoint without verified activation and
+        // grants from the E01/project persistence boundary. This is internal only.
+        if ctx.tenant.project_id.is_none() {
+            return Err(AppError::forbidden("module commands require project scope"));
+        }
         let module = self
+            .modules
             .get(extension_key)
             .ok_or_else(|| AppError::not_found("module not found"))?;
-        let manifest = module.manifest();
+        let manifest = &module.manifest;
         let spec = manifest
             .commands
             .iter()
@@ -164,7 +246,13 @@ impl ModuleRegistry {
             )));
         }
 
-        module.execute_command(ctx, request)
+        let result = module.runtime.execute_command(ctx, request)?;
+        if result.command_id != request.command_id {
+            return Err(AppError::Internal {
+                internal_detail: "module returned mismatched command ID".into(),
+            });
+        }
+        Ok(result)
     }
 }
 
@@ -185,11 +273,11 @@ mod tests {
                 api_compatibility: "1.x".to_string(),
                 display_name: "Dummy".to_string(),
                 description: "Test module".to_string(),
-                permissions: vec!["ext.dummy.read".to_string()],
+                permissions: vec!["ext.dummy_mod.read".to_string()],
                 commands: vec![ModuleCommandSpec {
                     id: "ping".to_string(),
                     label: "Ping".to_string(),
-                    required_permission: "ext.dummy.read".to_string(),
+                    required_permission: "ext.dummy_mod.read".to_string(),
                 }],
                 capabilities: vec![ModuleCapability("ping".to_string())],
             }
@@ -205,6 +293,86 @@ mod tests {
                 output: json!({ "pong": true }),
             })
         }
+    }
+
+    #[test]
+    fn shared_python_manifest_contract_fixtures() {
+        let cases: Value = serde_json::from_str(include_str!(
+            "../../../fixtures/rust-platform/e14/manifest-contract.json"
+        ))
+        .unwrap();
+        for case in cases.as_array().unwrap() {
+            let manifest: ModuleManifest =
+                serde_json::from_value(case["manifest"].clone()).unwrap();
+            assert_eq!(
+                manifest.validate().is_ok(),
+                case["valid"].as_bool().unwrap(),
+                "{}",
+                case["id"]
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_native_manifest_contracts() {
+        let good = DummyModule.manifest();
+        assert!(good.validate().is_ok());
+        for key in ["a", "1test", "partner_demo", "Foo", "bad key"] {
+            let mut m = good.clone();
+            m.extension_key = key.into();
+            assert!(m.validate().is_err(), "{key}");
+        }
+        for version in ["1", "01.2.3", "1.2.3-beta", "1.2.3.4"] {
+            let mut m = good.clone();
+            m.version = version.into();
+            assert!(m.validate().is_err(), "{version}");
+        }
+        let mut m = good.clone();
+        m.api_compatibility = "2.x".into();
+        assert!(m.validate().is_err());
+        let mut m = good.clone();
+        m.permissions.push("ext.other.read".into());
+        assert!(m.validate().is_err());
+        let mut m = good.clone();
+        m.commands[0].required_permission = "ext.dummy_mod.write".into();
+        assert!(m.validate().is_err());
+        let mut m = good.clone();
+        m.commands.push(m.commands[0].clone());
+        assert!(m.validate().is_err());
+        let mut m = good;
+        m.capabilities.push(m.capabilities[0].clone());
+        assert!(m.validate().is_err());
+    }
+
+    struct ChangingManifest(std::sync::atomic::AtomicUsize);
+    impl OvgModule for ChangingManifest {
+        fn manifest(&self) -> ModuleManifest {
+            let mut m = DummyModule.manifest();
+            if self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0 {
+                m.commands[0].required_permission = "ext.other.read".into();
+            }
+            m
+        }
+        fn execute_command(
+            &self,
+            ctx: &ModuleExecutionContext,
+            request: &ModuleCommandRequest,
+        ) -> Result<ModuleCommandResult, AppError> {
+            DummyModule.execute_command(ctx, request)
+        }
+    }
+
+    #[test]
+    fn pins_manifest_at_registration() {
+        let mut registry = ModuleRegistry::new();
+        registry
+            .register(Arc::new(ChangingManifest(0.into())))
+            .unwrap();
+        assert_eq!(registry.list_manifests(), vec![DummyModule.manifest()]);
+        assert_eq!(
+            registry.clone().list_manifests(),
+            vec![DummyModule.manifest()]
+        );
     }
 
     #[test]
@@ -251,8 +419,16 @@ mod tests {
         // With extension permission -> succeeds
         let ok_ctx = ModuleExecutionContext {
             tenant: scope,
-            granted_extension_permissions: vec!["ext.dummy.read".to_string()],
+            granted_extension_permissions: vec!["ext.dummy_mod.read".to_string()],
         };
+        let mut no_project = ok_ctx.clone();
+        no_project.tenant.project_id = None;
+        assert_eq!(
+            reg.dispatch("dummy_mod", &no_project, &req)
+                .unwrap_err()
+                .status_code(),
+            403
+        );
         let res = reg.dispatch("dummy_mod", &ok_ctx, &req).unwrap();
         assert_eq!(res.output, json!({ "pong": true }));
     }
