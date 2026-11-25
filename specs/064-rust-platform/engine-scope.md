@@ -2,13 +2,17 @@
 
 All slices are specification candidates, not implemented. Scope = existing supported behavior on frozen baseline plus explicitly approved improvements; static presence is not evidence of operation. Optional desktop and custom GPU renderer are discovery-only.
 
-## Owner decision 2026-11-26: hybrid platform
+## Owner decision 2026-11-26: Rust-native OpenVietGIS control plane
 
-Rust serves the hot request paths; the Python service keeps the engines whose work happens inside existing open-source native libraries (GDAL/PROJ, the CAD engine, PyQGIS, raster/terrain tooling) or in stable domain modules, where a Rust rewrite would add FFI and build cost without speed. A reverse proxy routes each migrated path to Rust and everything else to FastAPI; both use the same PostgreSQL/PostGIS, roles and RLS.
+This decision supersedes the earlier same-day hybrid-only interpretation. The migration target is the original Rust-native platform boundary: OpenVietGIS-owned backend API, authorization, orchestration, lifecycle, revision, job, sync, module and policy logic move to Rust. Existing specialized open-source engines are reused rather than rewritten.
 
-- **Migrate to Rust:** E01, E02, E03, E04, E05, E07 (GeoJSON/streamed transfer), E11, E18 (ops for the Rust service).
-- **Keep in Python / existing adapters (no migration):** E06, E08, E09, E10, E12, E13, E14, E15, E16. E17 (web client) is unchanged; it keeps calling the same public API.
-- Evidence: evidence/baseline-benchmark.md and the E05 hand-off show latency is dominated by PostGIS/RLS plan shape, not the Python runtime.
+- **Rust-owned control plane:** E01-E16 and E18. E17 remains the canonical React/TypeScript client and keeps the stable public API contract.
+- **Retained engines beneath Rust:** PostgreSQL/PostGIS, GDAL, GEOS, PROJ, Martin, MapLibre, Cesium and other accepted native/open-source engines remain replaceable implementation engines.
+- **Thin adapters allowed where technically required:** PyQGIS/QGIS and licensed/platform-specific CAD bridges may remain Python/native adapter processes, but they do not own OpenVietGIS authorization, business lifecycle, revision or orchestration semantics.
+- **No rewrite-for-rewrite's-sake:** migration acceptance depends on behavioral parity, tenant isolation, failure recovery and resource bounds; it does not require reimplementing third-party engines in Rust.
+- **Cutover remains incremental:** FastAPI remains the behavioral oracle and rollback path until each Rust-owned engine slice passes its parity, security, interoperability and recovery gates. No legacy path is retired merely because a Rust candidate exists.
+
+The superseded hybrid proposal correctly observed that many heavy operations are dominated by PostGIS/GDAL/GEOS rather than Python runtime overhead. That evidence still informs performance expectations, but it no longer removes E06, E08-E10 or E12-E16 from the Rust control-plane migration scope.
 
 | Engine | Scope | Parent references | Child spec |
 |---|---|---|---|
