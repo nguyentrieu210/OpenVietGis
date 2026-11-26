@@ -884,7 +884,7 @@ pub fn selection_rows<'r>(
     let state = |k: &str| by_key.get(k).map(|r| s(r, "state"));
     if keys.is_empty()
         || keys.len() != selected.len()
-        || keys.iter().any(|k| state(*k) != Some("ready"))
+        || keys.iter().any(|k| state(k) != Some("ready"))
     {
         return Err(invalid(
             "INVALID_ROUTE_SELECTION",
@@ -1479,7 +1479,7 @@ pub fn merge_suggestions(rows: &[Row], existing: &[Value]) -> Vec<Row> {
             let codes: HashSet<&str> = members.iter().map(|r| s(r, "code")).collect();
             if prefix_conflict
                 || directions.len() != 1
-                || members.iter().any(|r| has_errors(*r))
+                || members.iter().any(|r| has_errors(r))
                 || codes.len() != members.len()
             {
                 "attribute_conflict"
