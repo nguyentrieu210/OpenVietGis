@@ -2413,6 +2413,539 @@ def batch_building_assignment(ctx: Ctx) -> None:
     case("E15 prefix recovery bad offset", "/prefix-recovery/preview", {"offset": -1})
 
 
+def sorted_lists(*names):
+    """View sorting lists ordered by generated building ids (after normalization)."""
+
+    def view(body):
+        if isinstance(body, list):
+            return [view(v) for v in body]
+        if not isinstance(body, dict):
+            return body
+        out = {k: view(v) for k, v in body.items()}
+        for key in names:
+            if isinstance(out.get(key), list):
+                out[key] = sorted(out[key], key=lambda x: json.dumps(x, sort_keys=True))
+        return out
+
+    return view
+
+
+def batch_route_import(ctx: Ctx) -> None:
+    """Route-tree import, staged geometry, address verification and verified links.
+
+    Each side owns its lines/points (offset x) and side-tagged road names and codes, so
+    address paths, survey codes and staged reviews never collide in the shared project.
+    """
+    from modules.house_numbering.route_topology import stable_id
+
+    viewer = make_member(ctx.owner_url, ctx.fx, "viewer", "HN Route Import Viewer")
+    keys = {"Zqo": "Zq", "Zqr": "Zq", "zqo": "zq", "zqr": "zq"}
+    mapping = {
+        "code": "code",
+        "name": "name",
+        "parent_code": "parent",
+        "prefix": "prefix",
+        "route_type": "kind",
+    }
+    examples = sorted_lists("examples")
+    listed = sorted_lists("items", "members", "examples")
+
+    for side in SIDES:
+        d = ctx.data[side]
+        x, t = (300000 if side == "o" else 400000), f"Zq{side}"
+        road = f"Đường {t}"
+        d["t"], d["road"] = t, road
+
+        def ln(*points, x=x):
+            return "LINESTRING(" + ",".join(f"{x + a} {b}" for a, b in points) + ")"
+
+        def attrs(code, name, kind, parent="", prefix="", review=None, t=t):
+            a = {
+                "code": f"{code}-{t}",
+                "name": name,
+                "kind": kind,
+                "parent": f"{parent}-{t}" if parent else "",
+                "prefix": prefix,
+            }
+            if review:
+                a["review_reason"] = review
+            return a
+
+        def source(family, features, attributes=None):
+            return seed_source(ctx.owner_url, ctx.fx, family, features, attributes)
+
+        d["s_main"] = source(
+            "LineString",
+            {"A": ln((0, 0), (100, 0)), "B": ln((50, 0), (50, 80)), "C": ln((50, 40), (100, 40))},
+            {
+                "A": attrs("A", road, "street"),
+                "B": attrs("B", f"{road} hẻm 155", "alley", "A", "155"),
+                "C": attrs("C", f"{road} hẻm 155/3", "alley", "B", "3"),
+            },
+        )
+        d["s_x"] = source(
+            "LineString",
+            {"X": ln((50, 60), (0, 60))},
+            {"X": attrs("X", f"{road} hẻm 155/7", "alley", "B", "7", "legacy_review")},
+        )
+        d["s_rec"] = source(
+            "LineString",
+            {
+                "M1": ln((50, 20), (20, 20)),
+                "M2": ln((20, 20), (0, 20)),
+                "P": ln((60, -50), (90, -50)),
+            },
+            {
+                "M1": attrs("M1", f"{road} hẻm 155/9", "alley", "B", "155/9", "legacy_review"),
+                "M2": attrs("M2", f"{road} hẻm 155/9", "alley", "B", "155/9", "legacy_review"),
+                "P": attrs("P", f"{road} hẻm 160/4", "alley", "", "4", "legacy_review"),
+            },
+        )
+        d["s_par"] = source(
+            "LineString", {"p160": ln((60, 0), (60, -50)), "p160b": ln((70, 0), (70, -50))}
+        )
+        code = f"X-{t}"
+        survey = {
+            "b1": ({"ten_duong": road, "hem": "155/7", "tuyen_id": code}, (10, 62)),
+            "b2": ({"ten_duong": f"Đường Khác {t}", "hem": "", "tuyen_id": code}, (20, 65)),
+            "b3": ({"ten_duong": road, "hem": "", "tuyen_id": code}, (20, 63)),
+            "b4": ({"ten_duong": road, "hem": "", "tuyen_id": code}, (30, 57)),
+        }
+        d["s_pts"] = source(
+            "Point",
+            {fid: f"POINT({x + a} {b})" for fid, (_, (a, b)) in survey.items()},
+            {fid: a for fid, (a, _) in survey.items()},
+        )
+        for fid in survey:
+            made = ctx.call(
+                side, "POST", "/buildings", json={"source_id": d["s_pts"], "feature_id": fid}
+            )
+            req(made.status_code == 201, f"building {fid}: {made.text}")
+            d[fid] = made.json()["id"]
+        d["key"] = {
+            fid: f"{d[src]}:{fid}"
+            for src, fids in (
+                ("s_main", "ABC"),
+                ("s_x", ["X"]),
+                ("s_rec", ["M1", "M2", "P"]),
+                ("s_par", ["p160", "p160b"]),
+            )
+            for fid in fids
+        }
+        merge = stable_id(d["key"]["M1"], d["key"]["M2"])
+        d["merge_id"], d["task_id"] = f"recovery-{merge}", stable_id(f"zq{side}", "160")
+        keys[merge], keys[d["task_id"]] = "<merge-155-9>", "<task-160>"
+
+    def layer(source):
+        return {"source_id": source, "mapping": mapping}
+
+    def tree(d, **kw):
+        return {"layers": [layer(d["s_main"])], **kw}
+
+    def route_case(label, path, body, *, headers=None, keep=None, status=None, view=None):
+        o, r = ctx.pair(
+            label,
+            "POST",
+            "/route-import" + path,
+            body=body,
+            headers=headers,
+            extra=keys,
+            view=view,
+            status=status,
+        )
+        if keep:
+            ctx.keep(keep, o, r)
+
+    def token_parity(label, body):
+        """Both runtimes plan one side's fixtures to the same bytes, token included."""
+        for side in SIDES:
+            b = body(ctx.data[side])
+            o = ctx.call("o", "POST", "/route-import/preview", json=b)
+            r = ctx.call("r", "POST", "/route-import/preview", json=b)
+            req(
+                o.status_code == r.status_code == 200,
+                f"{label}: {o.status_code}/{r.status_code} {r.text[:800]}",
+            )
+            diff = parity.difference(o.json(), r.json())
+            req(diff is None, f"{label} ({side} fixtures): {diff}")
+        PASSED.append(label)
+        print(f"PASS {label}", flush=True)
+
+    def cross_apply(label, preview, apply):
+        """Preview on one runtime, apply that token on the other."""
+        resp = {}
+        for side, other in (("o", "r"), ("r", "o")):
+            d = ctx.data[side]
+            planned = ctx.call(other, "POST", "/route-import/preview", json=preview(d))
+            req(planned.status_code == 200, f"{label}: {planned.text[:800]}")
+            body = {**apply(d), "preview_token": planned.json()["preview_token"]}
+            resp[side] = ctx.call(side, "POST", "/route-import/apply", json=body)
+        compare(label, resp["o"], resp["r"], extra=keys)
+        req(resp["r"].status_code == 201, f"{label}: {resp['r'].text[:800]}")
+
+    # Tree import (mirrors test_route_tree_import).
+    def missing_parent(d):
+        return tree(d, overrides={d["key"]["B"]: {"parent_code": "", "prefix": "155"}})
+
+    def apply_tree(d, **kw):
+        return tree(d, preview_token=d["t_plan"]["preview_token"], **kw)
+
+    route_case("E15 route import preview missing parent", "/preview", missing_parent, status=200)
+    route_case("E15 route import preview", "/preview", tree, keep="t_plan", status=200)
+    token_parity("E15 route import preview token parity", tree)
+    route_case(
+        "E15 route import preview duplicate source",
+        "/preview",
+        lambda d: {"layers": [layer(d["s_main"]), layer(d["s_main"])]},
+    )
+    route_case(
+        "E15 route import preview unknown source",
+        "/preview",
+        {"layers": [layer("00000000-0000-4000-8000-000000000000")]},
+    )
+    route_case("E15 route import preview extra field", "/preview", lambda d: tree(d, foo=1))
+    route_case("E15 route import preview no layers", "/preview", {"layers": []})
+    route_case(
+        "E15 route import preview bad mapping",
+        "/preview",
+        lambda d: {"layers": [{"source_id": d["s_main"], "mapping": {"street": "x"}}]},
+    )
+    route_case(
+        "E15 route import preview bad override",
+        "/preview",
+        lambda d: tree(
+            d, overrides={"k": {"parent_code": "", "prefix": "1", "route_type": "road"}}
+        ),
+    )
+    route_case("E15 route import preview viewer", "/preview", tree, headers=viewer["csrf"])
+    route_case("E15 route import preview without CSRF", "/preview", tree, headers=ctx.h)
+    route_case(
+        "E15 route import apply stale token", "/apply", lambda d: tree(d, preview_token="0" * 64)
+    )
+    route_case("E15 route import apply bad token", "/apply", lambda d: tree(d, preview_token="x"))
+    route_case("E15 route import apply missing token", "/apply", tree)
+    route_case(
+        "E15 route import apply parent not selected",
+        "/apply",
+        lambda d: apply_tree(d, selected_keys=[d["key"]["C"]]),
+    )
+    route_case(
+        "E15 route import apply duplicate selection",
+        "/apply",
+        lambda d: apply_tree(d, selected_keys=[d["key"]["A"], d["key"]["A"]]),
+    )
+    route_case(
+        "E15 route import apply empty selection",
+        "/apply",
+        lambda d: apply_tree(d, selected_keys=[]),
+    )
+    route_case("E15 route import apply viewer", "/apply", apply_tree, headers=viewer["csrf"])
+    cross_apply("E15 route import apply (cross-runtime token)", tree, tree)
+    route_case("E15 route import preview after apply", "/preview", tree, keep="t_again", status=200)
+    route_case("E15 route import apply stale after apply", "/apply", apply_tree)
+    route_case(
+        "E15 route import apply idempotent",
+        "/apply",
+        lambda d: tree(d, preview_token=d["t_again"]["preview_token"]),
+        status=201,
+    )
+    for side in SIDES:
+        d = ctx.data[side]
+        routes = ctx.call(side, "GET", "/routes", headers=ctx.h).json()["items"]
+        d["A_id"] = next(r["id"] for r in routes if r["name"] == d["road"])
+
+    # Legacy review row: survey conflict → staged geometry → address decisions.
+    def review(d, **kw):
+        overrides = {d["key"]["X"]: {"parent_code": f"B-{d['t']}", "prefix": "7", "reviewed": True}}
+        return {"layers": [layer(d["s_main"]), layer(d["s_x"])], "overrides": overrides, **kw}
+
+    def stage(d, **kw):
+        body = {
+            "preview_token": d["x_plan"]["preview_token"],
+            "selected_keys": [d["key"]["X"]],
+            "reason": "Hình học đã khớp hiện trạng ngoài thực địa",
+            **kw,
+        }
+        return review(d, **body)
+
+    route_case("E15 route import review preview", "/preview", review, keep="x_plan", view=examples)
+    token_parity("E15 route import review token parity", review)
+    route_case(
+        "E15 route import apply with errors",
+        "/apply",
+        lambda d: review(d, preview_token=d["x_plan"]["preview_token"]),
+    )
+    route_case("E15 stage geometry short reason", "/stage-geometry", lambda d: stage(d, reason="x"))
+    route_case(
+        "E15 stage geometry blank reason",
+        "/stage-geometry",
+        lambda d: stage(d, reason="          x"),
+    )
+    route_case(
+        "E15 stage geometry duplicate keys",
+        "/stage-geometry",
+        lambda d: stage(d, selected_keys=[d["key"]["X"], d["key"]["X"]]),
+    )
+    route_case(
+        "E15 stage geometry stale token",
+        "/stage-geometry",
+        lambda d: stage(d, preview_token="0" * 64),
+    )
+    route_case(
+        "E15 stage geometry ineligible key",
+        "/stage-geometry",
+        lambda d: stage(d, selected_keys=[d["key"]["A"]]),
+    )
+    route_case("E15 stage geometry viewer", "/stage-geometry", stage, headers=viewer["csrf"])
+    route_case("E15 stage geometry", "/stage-geometry", stage, keep="x_stage", status=201)
+    route_case("E15 stage geometry stale after stage", "/stage-geometry", stage)
+    route_case(
+        "E15 route import review preview staged",
+        "/preview",
+        review,
+        keep="x_plan2",
+        view=examples,
+        status=200,
+    )
+    route_case(
+        "E15 stage geometry unchanged",
+        "/stage-geometry",
+        lambda d: stage(d, preview_token=d["x_plan2"]["preview_token"]),
+        status=201,
+    )
+
+    def reviews(d, tail=""):
+        return f"/geometry-reviews/{d['x_stage']['items'][0]['id']}{tail}"
+
+    def addresses(d, tail=""):
+        return reviews(d, "/addresses" + tail)
+
+    def links(d):
+        return reviews(d, "/verified-links")
+
+    def get(label, path, *, params=None, keep=None, view=listed, status=None):
+        o, r = ctx.pair(
+            label, "GET", path, params=params, headers=ctx.h, extra=keys, view=view, status=status
+        )
+        if keep:
+            ctx.keep(keep, o, r)
+
+    get("E15 address review list", addresses, keep="x_addr", status=200)
+    get(
+        "E15 address review page",
+        addresses,
+        params={"limit": 1},
+        view=lambda b: {"n": len(b["items"]), "next": b["next_offset"], "counts": b["counts"]},
+    )
+    get("E15 address review bad offset", addresses, params={"offset": -1})
+    get("E15 address review bad limit", addresses, params={"limit": 0})
+    get("E15 address review non-integer limit", addresses, params={"limit": "x"})
+    get(
+        "E15 address review unknown",
+        "/geometry-reviews/00000000-0000-4000-8000-000000000000/addresses",
+    )
+    get("E15 address review invalid id", "/geometry-reviews/not-a-uuid/addresses")
+    get("E15 verified links not promoted", links, status=200)
+
+    def item(d, building):
+        return next(i for i in d["x_addr"]["items"] if i["building_id"] == d[building])
+
+    def verify(d, **kw):
+        it = item(d, "b2")
+        return {
+            "evidence_token": it["evidence_token"],
+            "expected_revision": it["revision"],
+            "decision": "other_address",
+            "verified_road": f"Đường Khác {d['t']}",
+            "evidence": "Biển số nhà ghi đường khác",
+            **kw,
+        }
+
+    def put(label, body, *, headers=None, status=None):
+        ctx.pair(
+            label,
+            "PUT",
+            lambda d: addresses(d, "/" + d["b2"]),
+            body=body,
+            headers=headers,
+            extra=keys,
+            status=status,
+        )
+
+    put("E15 address verify stale token", lambda d: verify(d, evidence_token="0" * 64))
+    put("E15 address verify wrong decision", lambda d: verify(d, decision="belongs"))
+    put("E15 address verify blank evidence", lambda d: verify(d, evidence="          x"))
+    put("E15 address verify short evidence", lambda d: verify(d, evidence="x"))
+    put("E15 address verify bad prefix", lambda d: verify(d, verified_prefix="???"))
+    put("E15 address verify unknown road", lambda d: verify(d, verified_road="Chưa rõ"))
+    put("E15 address verify bad decision", lambda d: verify(d, decision="maybe"))
+    put("E15 address verify viewer", verify, headers=viewer["csrf"])
+    put("E15 address verify without CSRF", verify, headers=ctx.h)
+    put("E15 address verify", verify, status=200)
+    put("E15 address verify repeated", verify)
+
+    def batch(d, **kw):
+        group = d["x_addr"]["batch_groups"][0]
+        members = [
+            {
+                "building_id": m["building_id"],
+                "evidence_token": m["evidence_token"],
+                "expected_revision": m["revision"],
+            }
+            for m in group["members"]
+        ]
+        return {
+            "key": group["key"],
+            "members": members,
+            "evidence": "Cùng tổ khảo sát xác nhận hẻm 155/7",
+            "confirmed": True,
+            **kw,
+        }
+
+    def post_batch(label, body, *, headers=None, status=None):
+        ctx.pair(
+            label,
+            "POST",
+            lambda d: addresses(d, "/batch"),
+            body=body,
+            headers=headers,
+            extra=keys,
+            status=status,
+        )
+
+    post_batch(
+        "E15 address batch single member", lambda d: batch(d, members=batch(d)["members"][:1])
+    )
+    post_batch(
+        "E15 address batch duplicate member",
+        lambda d: batch(d, members=[batch(d)["members"][0]] * 2),
+    )
+    post_batch("E15 address batch wrong key", lambda d: batch(d, key="0" * 64))
+    post_batch(
+        "E15 address batch stale member",
+        lambda d: batch(
+            d, members=[{**m, "evidence_token": "0" * 64} for m in batch(d)["members"]]
+        ),
+    )
+    post_batch("E15 address batch unconfirmed", lambda d: batch(d, confirmed=False))
+    post_batch("E15 address batch viewer", batch, headers=viewer["csrf"])
+    post_batch("E15 address batch", batch, status=200)
+    post_batch("E15 address batch repeated", batch)
+    get("E15 address review list after decisions", addresses, status=200)
+
+    # Every address decided: the reviewed row is ready and can be promoted.
+    route_case("E15 route import review preview verified", "/preview", review, keep="x_plan3")
+    route_case(
+        "E15 route import apply reviewed",
+        "/apply",
+        lambda d: review(
+            d, preview_token=d["x_plan3"]["preview_token"], selected_keys=[d["key"]["X"]]
+        ),
+        status=201,
+    )
+    put("E15 address verify promoted", verify)
+
+    # Verified links: only verified buildings of the exact promoted route.
+    get("E15 verified links", links, keep="x_links", status=200)
+    get("E15 verified links bad offset", links, params={"offset": -1})
+
+    def link(d, **kw):
+        return {
+            "preview_token": d["x_links"]["preview_token"],
+            "building_ids": [d["b3"], d["b4"]],
+            "confirmed": True,
+            **kw,
+        }
+
+    def post_link(label, body, *, headers=None, status=None):
+        ctx.pair(label, "POST", links, body=body, headers=headers, extra=keys, status=status)
+
+    post_link("E15 verified links stale token", lambda d: link(d, preview_token="0" * 64))
+    post_link("E15 verified links other address", lambda d: link(d, building_ids=[d["b2"]]))
+    post_link("E15 verified links duplicate", lambda d: link(d, building_ids=[d["b3"], d["b3"]]))
+    post_link("E15 verified links unconfirmed", lambda d: link(d, confirmed=False))
+    post_link("E15 verified links viewer", link, headers=viewer["csrf"])
+    post_link("E15 verified links apply", link, status=200)
+    post_link("E15 verified links repeated", link)
+    get("E15 verified links after", links, status=200)
+
+    # Recovery: merge two segments of one path and supply a missing parent feature.
+    def recovery(d, **kw):
+        k = d["key"]
+        overrides = {
+            k["M1"]: {"parent_code": f"B-{d['t']}", "prefix": "155/9", "reviewed": True},
+            k["p160"]: {"parent_code": d["A_id"], "prefix": "160", "reviewed": True},
+            k["P"]: {
+                "parent_code": f"recovery-parent-{d['task_id']}",
+                "prefix": "4",
+                "reviewed": True,
+            },
+        }
+        body = {
+            "layers": [layer(d["s_main"]), layer(d["s_rec"])],
+            "merge_groups": [d["merge_id"]],
+            "parent_features": pick(d),
+            "overrides": overrides,
+        }
+        return {**body, **kw}
+
+    def plain(d):
+        return {"layers": [layer(d["s_main"]), layer(d["s_rec"])]}
+
+    def pick(d, **kw):
+        return [{"task_id": d["task_id"], "source_id": d["s_par"], "feature_id": "p160", **kw}]
+
+    route_case("E15 route import recovery suggestions", "/preview", plain, status=200)
+    token_parity("E15 route import recovery token parity", recovery)
+    route_case("E15 route import recovery preview", "/preview", recovery, status=200)
+    route_case(
+        "E15 route import invalid merge group",
+        "/preview",
+        lambda d: recovery(d, merge_groups=["recovery-" + "0" * 32]),
+    )
+    route_case(
+        "E15 route import duplicate merge group",
+        "/preview",
+        lambda d: recovery(d, merge_groups=[d["merge_id"]] * 2),
+    )
+    route_case(
+        "E15 route import stale parent task",
+        "/preview",
+        lambda d: recovery(d, parent_features=pick(d, task_id="0" * 32)),
+    )
+    route_case(
+        "E15 route import duplicate parent task",
+        "/preview",
+        lambda d: recovery(d, parent_features=pick(d) + pick(d, feature_id="p160b")),
+    )
+    route_case(
+        "E15 route import parent feature already selected",
+        "/preview",
+        lambda d: recovery(d, parent_features=pick(d, source_id=d["s_rec"], feature_id="P")),
+    )
+    route_case(
+        "E15 route import invalid parent feature",
+        "/preview",
+        lambda d: recovery(d, parent_features=pick(d, feature_id="missing")),
+    )
+    route_case(
+        "E15 route import bad parent task pattern",
+        "/preview",
+        lambda d: recovery(d, parent_features=pick(d, task_id="XYZ")),
+    )
+    route_case(
+        "E15 route import locked identity",
+        "/preview",
+        lambda d: recovery(d, overrides={d["key"]["M1"]: {"parent_code": "", "prefix": "155/8"}}),
+    )
+    cross_apply(
+        "E15 route import recovery apply (cross-runtime token)",
+        recovery,
+        lambda d: recovery(d, selected_keys=[d["key"]["M1"], d["key"]["p160"], d["key"]["P"]]),
+    )
+    route_case("E15 route import recovery after apply", "/preview", plain, status=200)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -2469,6 +3002,7 @@ def main() -> int:
                     batch_numbering(ctx)
                     batch_geometry(ctx)
                     batch_building_assignment(ctx)
+                    batch_route_import(ctx)
             finally:
                 get_engine().dispose()
 
