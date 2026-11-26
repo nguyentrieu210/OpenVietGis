@@ -14,7 +14,7 @@ const params=new URLSearchParams(location.search);
 const base=import.meta.env.BASE_URL;
 const offlineRoute=/^\/offline-field\/[^/]+\/[^/]+\/?$/.test(location.pathname.replace(/^\/devui(?=\/)/,""));
 if(import.meta.env.PROD&&base==="/"&&"serviceWorker" in navigator&&window.isSecureContext){
- void navigator.serviceWorker.register("/offline-shell-sw.js").catch(()=>{/* Field UI reports shell readiness. */});
+ void navigator.serviceWorker.register("/offline-shell-sw.js").catch(error=>{console.warn("Offline shell unavailable",error);});
 }
 const offlinePage=<BrowserRouter basename={location.pathname.startsWith("/devui/")?"/devui":undefined}><Suspense fallback={<p role="status">Đang mở gói thực địa…</p>}><Routes><Route path="/offline-field/:organizationId/:projectId" element={<Field/>}/></Routes></Suspense></BrowserRouter>;
 

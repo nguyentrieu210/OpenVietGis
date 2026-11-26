@@ -161,9 +161,12 @@ export function OfflineFieldPage() {
     window.addEventListener("storage", status);
     const onFocus = () => {if (navigator.onLine) setRefresh(n => n + 1);};
     window.addEventListener("focus", onFocus);
-    const checkShell = () => setShellReady(Boolean(navigator.serviceWorker?.controller));
+    let mounted = true;
+    const checkShell = () => {if (mounted) setShellReady(Boolean(navigator.serviceWorker?.controller));};
     navigator.serviceWorker?.addEventListener("controllerchange", checkShell);
-    return () => {clearInterval(timer);window.removeEventListener("online", status);window.removeEventListener("offline", status);window.removeEventListener("storage", status);window.removeEventListener("focus", onFocus);navigator.serviceWorker?.removeEventListener("controllerchange", checkShell);};
+    checkShell();
+    void navigator.serviceWorker?.ready.then(checkShell);
+    return () => {mounted = false; clearInterval(timer);window.removeEventListener("online", status);window.removeEventListener("offline", status);window.removeEventListener("storage", status);window.removeEventListener("focus", onFocus);navigator.serviceWorker?.removeEventListener("controllerchange", checkShell);};
   }, []);
   useEffect(() => {
     let live = true;
