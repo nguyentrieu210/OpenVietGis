@@ -64,7 +64,21 @@ def body_of(resp):
         return resp.text
 
 
-def compare(
+# Per-case runner from run.py (064-ci-speed): a mismatch prints FAIL and the run continues.
+case = getattr(parity, "case", lambda compare: compare)
+
+
+def status_label(label: str, status: int) -> str:
+    """Negative cases carry their HTTP status in the label."""
+    return f"{label} {status}" if status >= 400 and not label.endswith(str(status)) else label
+
+
+def compare(label: str, e, a, **kwargs):
+    return _compare(status_label(label, e.status_code), e, a, **kwargs)
+
+
+@case
+def _compare(
     label: str, e, a, *, extra: dict[str, str] | None = None, sort: bool = False, view=None
 ):
     req(
@@ -1387,6 +1401,7 @@ def seed_artifact(ctx: Ctx, namespace: str, filename: str, content_type: str, da
     return artifact_id
 
 
+@case
 def compare_download(label: str, e, a) -> None:
     req(e.status_code == a.status_code, f"{label}: status {e.status_code} != {a.status_code}")
     for name in ("content-type", "content-disposition"):
