@@ -87,7 +87,9 @@ def compare(
     return e, a
 
 
-def seed_source(owner_url: str, fx: dict, family: str, features: dict[str, str]) -> str:
+def seed_source(
+    owner_url: str, fx: dict, family: str, features: dict[str, str], attributes=None
+) -> str:
     source_id = uuid4()
     with psycopg.connect(owner_url) as conn:
         conn.execute(
@@ -127,13 +129,14 @@ def seed_source(owner_url: str, fx: dict, family: str, features: dict[str, str])
                 INSERT INTO spatial.reference_features (
                     organization_id,project_id,source_id,feature_id,attributes,geometry,
                     geometry_state,content_revision,schema_revision
-                ) VALUES (%s,%s,%s,%s,'{}'::jsonb,ST_GeomFromText(%s,3857),'present',%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s::jsonb,ST_GeomFromText(%s,3857),'present',%s,%s)
                 """,
                 (
                     fx["org_a_id"],
                     fx["project_a_id"],
                     source_id,
                     feature_id,
+                    json.dumps((attributes or {}).get(feature_id, {})),
                     wkt,
                     "a" * 64,
                     "b" * 64,
@@ -1032,6 +1035,593 @@ def batch_proposals(ctx: Ctx) -> None:
     )
 
 
+def batch_field(ctx: Ctx) -> None:
+    from datetime import date, timedelta
+
+    today = date.today()
+    editor = make_member(ctx.owner_url, ctx.fx, "editor", "HN Field Editor")
+    owner = ctx.fx["user_a_id"]
+
+    def assignment(d, **over):
+        body = {
+            "scope_kind": "route",
+            "scope_id": d["street"]["id"],
+            "assignee_actor_id": owner,
+            "starts_on": str(today - timedelta(days=1)),
+            "ends_on": str(today + timedelta(days=30)),
+            "target_count": 4,
+        }
+        body.update(over)
+        return body
+
+    o, r = ctx.pair("E15 create assignment", "POST", "/assignments", body=assignment, status=201)
+    ctx.keep("asg", o, r)
+    ctx.pair(
+        "E15 assignment end before start",
+        "POST",
+        "/assignments",
+        body=lambda d: assignment(d, ends_on=str(today - timedelta(days=9))),
+    )
+    ctx.pair(
+        "E15 assignment bad scope",
+        "POST",
+        "/assignments",
+        body=lambda d: assignment(d, scope_kind="parcel"),
+    )
+    ctx.pair(
+        "E15 assignment negative target",
+        "POST",
+        "/assignments",
+        body=lambda d: assignment(d, target_count=-1),
+    )
+    ctx.pair(
+        "E15 assignment editor denied",
+        "POST",
+        "/assignments",
+        body=assignment,
+        headers=editor["csrf"],
+    )
+    ctx.pair(
+        "E15 reassign stale",
+        "PATCH",
+        lambda d: f"/assignments/{d['asg']['id']}",
+        body={"expected_revision": 3, "assignee_actor_id": editor["id"]},
+    )
+    ctx.pair(
+        "E15 reassign",
+        "PATCH",
+        lambda d: f"/assignments/{d['asg']['id']}",
+        status=200,
+        body={"expected_revision": 1, "assignee_actor_id": editor["id"]},
+    )
+    ctx.pair("E15 list assignments", "GET", "/assignments", headers=ctx.h)
+
+    def op(d, client, **over):
+        body = {"client_uuid": d.setdefault(client, str(uuid4())), "condition": "house"}
+        body.update(over)
+        return body
+
+    def sync(label, ops, headers=None, status=None):
+        return ctx.pair(
+            label,
+            "POST",
+            "/survey/sync",
+            headers=headers,
+            status=status,
+            body=lambda d: {"operations": ops(d)},
+        )
+
+    def first(d):
+        return [
+            op(d, "c1", building_id=d["b2"]["id"], x=41, y=10, crs_code=3857, gps_accuracy_m=5),
+            op(
+                d,
+                "c2",
+                building_id=d["b4"]["id"],
+                condition="vacant",
+                x=80.5,
+                y=12,
+                crs_code=3857,
+            ),
+            op(d, "c4", condition="other"),
+        ]
+
+    sync("E15 survey sync", first, status=200)
+    sync("E15 survey sync replay", first, status=200)
+    sync(
+        "E15 survey sync payload conflict",
+        lambda d: [op(d, "c1", building_id=d["b2"]["id"], condition="other")],
+    )
+    sync("E15 survey sync bad condition", lambda d: [op(d, "c9", condition="ruin")])
+    sync("E15 survey sync bad client uuid", lambda d: [{"client_uuid": "nope"}])
+    sync("E15 survey sync accuracy without point", lambda d: [op(d, "c9", gps_accuracy_m=3)])
+    sync("E15 survey sync partial point", lambda d: [op(d, "c9", x=1, y=2)])
+    sync(
+        "E15 survey sync point without building",
+        lambda d: [op(d, "c9", x=1, y=2, crs_code=3857)],
+    )
+    sync(
+        "E15 survey sync invalid gps",
+        lambda d: [op(d, "c9", building_id=d["b2"]["id"], x="abc", y=2, crs_code=3857)],
+    )
+    sync(
+        "E15 survey sync unknown crs",
+        lambda d: [op(d, "c9", building_id=d["b2"]["id"], x=1, y=2, crs_code=999999)],
+    )
+    sync(
+        "E15 survey sync missing photo",
+        lambda d: [op(d, "c9", photo_artifact_ids=[str(uuid4())])],
+    )
+    sync(
+        "E15 survey sync duplicate photos",
+        lambda d: [op(d, "c9", photo_artifact_ids=[d["b2"]["id"], d["b2"]["id"]])],
+    )
+    sync(
+        "E15 survey sync delegated non member",
+        lambda d: [op(d, "c9", recorded_by_actor_id=str(uuid4()))],
+    )
+    sync(
+        "E15 survey sync editor delegation denied",
+        lambda d: [op(d, "c9", recorded_by_actor_id=owner)],
+        headers=editor["csrf"],
+    )
+    sync("E15 survey sync empty", lambda d: [])
+    ctx.pair("E15 list surveys", "GET", "/surveys", headers=ctx.h, params={"state": "submitted"})
+    ctx.pair("E15 list surveys all", "GET", "/surveys", headers=ctx.h)
+
+    def survey_id(d, client):
+        with psycopg.connect(ctx.owner_url) as conn:
+            row = conn.execute(
+                "SELECT id FROM house_numbering.surveys WHERE client_uuid=%s", (d[client],)
+            ).fetchone()
+            return str(row[0])
+
+    for side in SIDES:
+        d = ctx.data[side]
+        d["s1"], d["s2"] = survey_id(d, "c1"), survey_id(d, "c2")
+    ctx.pair(
+        "E15 review survey editor denied",
+        "POST",
+        lambda d: f"/surveys/{d['s1']}/review",
+        headers=editor["csrf"],
+        body={"expected_revision": 1, "decision": "accepted"},
+    )
+    ctx.pair(
+        "E15 review survey",
+        "POST",
+        lambda d: f"/surveys/{d['s1']}/review",
+        status=200,
+        body={"expected_revision": 1, "decision": "accepted"},
+    )
+    ctx.pair(
+        "E15 review survey stale",
+        "POST",
+        lambda d: f"/surveys/{d['s1']}/review",
+        body={"expected_revision": 1, "decision": "rejected"},
+    )
+    ctx.pair(
+        "E15 review survey missing",
+        "POST",
+        f"/surveys/{uuid4()}/review",
+        body={"expected_revision": 1, "decision": "accepted"},
+    )
+    ctx.pair(
+        "E15 review survey rejected",
+        "POST",
+        lambda d: f"/surveys/{d['s2']}/review",
+        status=200,
+        body={"expected_revision": 1, "decision": "rejected"},
+    )
+    sync(
+        "E15 survey sync building already accepted",
+        lambda d: [op(d, "c5", building_id=d["b2"]["id"], condition="vacant")],
+    )
+    ctx.pair("E15 progress", "GET", "/progress", headers=ctx.h)
+
+    attrs = {
+        "s-1": {"ap": "Ấp 1", "ten_duong": "Đường A", "xu_ly": "da_xu_ly", "trang_thai": "lech"},
+        "s-2": {
+            "ap": "Ấp 1",
+            "ten_duong": "Đường B",
+            "xu_ly": "chua_xu_ly",
+            "trang_thai": "lech",
+        },
+        "s-3": {"ap": "Ấp 2", "xu_ly": "", "trang_thai": "khop"},
+    }
+    for side in SIDES:
+        ctx.data[side]["survey_src"] = seed_source(
+            ctx.owner_url,
+            ctx.fx,
+            "Point",
+            {"s-1": "POINT(1 1)", "s-2": "POINT(2 2)", "s-3": "POINT(3 3)"},
+            attrs,
+        )
+
+    def sign(d, ap, road=None, **over):
+        body = {"source_ids": [d["survey_src"]], "ap": ap, "ten_duong": road}
+        body.update(over)
+        return body
+
+    o, r = ctx.pair(
+        "E15 sign survey road",
+        "POST",
+        "/survey-signoffs",
+        status=201,
+        body=lambda d: sign(d, " Ấp 1 ", "Đường A", note=" ok "),
+    )
+    ctx.data["o"]["sig"], ctx.data["r"]["sig"] = o.json()["items"][0], r.json()["items"][0]
+    ctx.pair(
+        "E15 sign survey hamlet incomplete",
+        "POST",
+        "/survey-signoffs",
+        body=lambda d: sign(d, "Ấp 1"),
+    )
+    ctx.pair(
+        "E15 sign survey empty scope", "POST", "/survey-signoffs", body=lambda d: sign(d, "Ấp 9")
+    )
+    ctx.pair(
+        "E15 sign survey twice",
+        "POST",
+        "/survey-signoffs",
+        body=lambda d: sign(d, "Ấp 1", "Đường A"),
+    )
+    ctx.pair(
+        "E15 sign survey hamlet 2",
+        "POST",
+        "/survey-signoffs",
+        status=201,
+        body=lambda d: sign(d, "Ấp 2"),
+    )
+    ctx.pair("E15 sign survey blank ap", "POST", "/survey-signoffs", body=lambda d: sign(d, "   "))
+    ctx.pair(
+        "E15 sign survey editor denied",
+        "POST",
+        "/survey-signoffs",
+        headers=editor["csrf"],
+        body=lambda d: sign(d, "Ấp 2"),
+    )
+    ctx.pair(
+        "E15 list signoffs",
+        "GET",
+        "/survey-signoffs",
+        headers=ctx.h,
+        params=lambda d: {"source_id": d["survey_src"]},
+    )
+    ctx.pair("E15 list signoffs missing source", "GET", "/survey-signoffs", headers=ctx.h)
+    ctx.pair(
+        "E15 revoke signoff short reason",
+        "POST",
+        lambda d: f"/survey-signoffs/{d['sig']['id']}/revoke",
+        body={"reason": " ab "},
+    )
+    ctx.pair(
+        "E15 revoke signoff",
+        "POST",
+        lambda d: f"/survey-signoffs/{d['sig']['id']}/revoke",
+        status=200,
+        body={"reason": "mở lại để sửa"},
+    )
+    ctx.pair(
+        "E15 revoke signoff again",
+        "POST",
+        lambda d: f"/survey-signoffs/{d['sig']['id']}/revoke",
+        body={"reason": "lần hai"},
+    )
+
+
+def seed_evidence(ctx: Ctx, d: dict, building, origin: str, raw, route=None) -> str:
+    evidence_id = uuid4()
+    with psycopg.connect(ctx.owner_url) as conn:
+        conn.execute(
+            """
+            INSERT INTO house_numbering.evidence (
+                id, organization_id, project_id, building_id, route_id, origin, raw_number,
+                source_reference, evidence_date, confidence, private_ref,
+                created_by_actor_id, created_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,'PARITY-REF',NULL,'observed',NULL,%s,now())
+            """,
+            (
+                evidence_id,
+                ctx.fx["org_a_id"],
+                ctx.fx["project_a_id"],
+                d[building]["id"] if building else None,
+                d[route]["id"] if route else None,
+                origin,
+                raw,
+                ctx.fx["user_a_id"],
+            ),
+        )
+    return str(evidence_id)
+
+
+def seed_artifact(ctx: Ctx, namespace: str, filename: str, content_type: str, data: bytes):
+    import hashlib
+
+    artifact_id = str(uuid4())
+    root = Path(os.environ["OPENVIETGIS_ARTIFACT_STORE_DIR"])
+    folder = (
+        root / "extensions" / ctx.fx["org_a_id"] / ctx.fx["project_a_id"] / namespace / artifact_id
+    )
+    folder.mkdir(parents=True)
+    (folder / filename).write_bytes(data)
+    (folder / f"{filename}.json").write_text(
+        json.dumps(
+            {
+                "id": artifact_id,
+                "filename": filename,
+                "content_type": content_type,
+                "byte_size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "storage_key": f"extensions/{namespace}/{artifact_id}/{filename}",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return artifact_id
+
+
+def compare_download(label: str, e, a) -> None:
+    req(e.status_code == a.status_code, f"{label}: status {e.status_code} != {a.status_code}")
+    for name in ("content-type", "content-disposition"):
+        req(
+            e.headers.get(name) == a.headers.get(name),
+            f"{label}: {name} {e.headers.get(name)!r} != {a.headers.get(name)!r}",
+        )
+    req(e.content == a.content, f"{label}: body differs")
+    PASSED.append(label)
+    print(f"PASS {label}", flush=True)
+
+
+def batch_records(ctx: Ctx) -> None:
+    editor = make_member(ctx.owner_url, ctx.fx, "editor", "HN Records Editor")
+    for side in SIDES:
+        d = ctx.data[side]
+        seed_evidence(ctx, d, "b2", "certificate", "4")
+        seed_evidence(ctx, d, "b2", "cad", "5")
+        seed_evidence(ctx, d, "b4", "survey", "7")
+        seed_evidence(ctx, d, "b5", "certificate", None)
+        d["ev_unmatched"] = seed_evidence(ctx, d, None, "certificate", " 4 ", route="street")
+        d["ev_noroute"] = seed_evidence(ctx, d, None, "certificate", "9")
+
+    ctx.pair(
+        "E15 reconciliation rebuild",
+        "POST",
+        "/reconciliation/rebuild",
+        status=200,
+        body=lambda d: {"estimated_building_ids": [d["b4"]["id"]]},
+    )
+    ctx.pair("E15 reconciliation rebuild idempotent", "POST", "/reconciliation/rebuild", body={})
+    ctx.pair(
+        "E15 reconciliation rebuild unknown field",
+        "POST",
+        "/reconciliation/rebuild",
+        body={"bogus": []},
+    )
+    ctx.pair("E15 list reconcile cases", "GET", "/reconciliation/cases", headers=ctx.h)
+    ctx.pair(
+        "E15 list reconcile cases filtered",
+        "GET",
+        "/reconciliation/cases",
+        headers=ctx.h,
+        params={"status": "open", "case_class": "cad_certificate_mismatch"},
+    )
+    ctx.pair(
+        "E15 suggest certificate match",
+        "GET",
+        lambda d: f"/reconciliation/evidence/{d['ev_unmatched']}/suggest",
+        headers=ctx.h,
+        extra={},
+        view=lambda b: b,
+    )
+    ctx.pair(
+        "E15 suggest certificate no route",
+        "GET",
+        lambda d: f"/reconciliation/evidence/{d['ev_noroute']}/suggest",
+        headers=ctx.h,
+    )
+    ctx.pair(
+        "E15 suggest certificate missing",
+        "GET",
+        f"/reconciliation/evidence/{uuid4()}/suggest",
+        headers=ctx.h,
+    )
+    for side in SIDES:
+        d = ctx.data[side]
+        with psycopg.connect(ctx.owner_url) as conn:
+            d["case"] = str(
+                conn.execute(
+                    "SELECT id FROM house_numbering.reconcile_cases WHERE building_id=%s",
+                    (d["b2"]["id"],),
+                ).fetchone()[0]
+            )
+    ctx.pair(
+        "E15 resolve case stale",
+        "POST",
+        lambda d: f"/reconciliation/cases/{d['case']}/resolve",
+        body={"expected_revision": 2, "status": "resolved", "resolution": "ok"},
+    )
+    ctx.pair(
+        "E15 resolve case",
+        "POST",
+        lambda d: f"/reconciliation/cases/{d['case']}/resolve",
+        status=200,
+        body=lambda d: {
+            "expected_revision": 1,
+            "status": "resolved",
+            "resolution": "  đã kiểm tra  ",
+            "building_id": d["b2"]["id"],
+        },
+    )
+    ctx.pair(
+        "E15 resolve case closed",
+        "POST",
+        lambda d: f"/reconciliation/cases/{d['case']}/resolve",
+        body={"expected_revision": 2, "status": "ignored", "resolution": "x"},
+    )
+    ctx.pair(
+        "E15 resolve case bad status",
+        "POST",
+        lambda d: f"/reconciliation/cases/{d['case']}/resolve",
+        body={"expected_revision": 2, "status": "open", "resolution": "x"},
+    )
+
+    def household(d, **over):
+        body = {
+            "building_id": d["b2"]["id"],
+            "purpose": " cấp số nhà ",
+            "consent": True,
+            "lawful_basis_ref": "ND-01",
+            "protected_data": {"chu_ho": "Nguyễn Văn A", "so_nguoi": 4, "ghi_chu": None},
+            "expires_at": "2099-01-01T00:00:00Z",
+        }
+        body.update(over)
+        return body
+
+    o, r = ctx.pair(
+        "E15 private household create", "POST", "/private-households", status=201, body=household
+    )
+    ctx.keep("hh", o, r)
+    ctx.pair(
+        "E15 private household update",
+        "POST",
+        "/private-households",
+        status=201,
+        body=lambda d: household(
+            d, record_id=d["hh"]["id"], expected_revision=1, protected_data={"chu_ho": "B"}
+        ),
+    )
+    ctx.pair(
+        "E15 private household stale",
+        "POST",
+        "/private-households",
+        body=lambda d: household(d, record_id=d["hh"]["id"], expected_revision=1),
+    )
+    ctx.pair(
+        "E15 private household update needs revision",
+        "POST",
+        "/private-households",
+        body=lambda d: household(d, record_id=d["hh"]["id"]),
+    )
+    ctx.pair(
+        "E15 private household blank purpose",
+        "POST",
+        "/private-households",
+        body=lambda d: household(d, purpose="   "),
+    )
+    ctx.pair(
+        "E15 private household missing building",
+        "POST",
+        "/private-households",
+        body=lambda d: household(d, building_id=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 private household editor denied",
+        "POST",
+        "/private-households",
+        headers=editor["csrf"],
+        body=household,
+    )
+    ctx.pair(
+        "E15 private household bad payload",
+        "POST",
+        "/private-households",
+        body=lambda d: household(d, protected_data=["not", "object"]),
+    )
+    ctx.pair(
+        "E15 private household read",
+        "GET",
+        lambda d: f"/buildings/{d['b2']['id']}/private-households",
+        headers=ctx.h,
+        params={"purpose": "tra cứu"},
+    )
+    ctx.pair(
+        "E15 private household read blank purpose",
+        "GET",
+        lambda d: f"/buildings/{d['b2']['id']}/private-households",
+        headers=ctx.h,
+        params={"purpose": "  "},
+    )
+    ctx.pair(
+        "E15 private household read editor denied",
+        "GET",
+        lambda d: f"/buildings/{d['b2']['id']}/private-households",
+        headers=editor["h"],
+        params={"purpose": "tra cứu"},
+    )
+
+    for label, params in (
+        ("E15 search exact parcel", {"query": "P-1A"}),
+        ("E15 search like route", {"query": "Parity", "limit": 3}),
+        ("E15 search no hit", {"query": "zzzz"}),
+        ("E15 search blank", {"query": "   "}),
+        ("E15 search coordinates", {"x": 40, "y": 10, "crs_code": 3857, "max_distance": 5}),
+        ("E15 search partial coordinates", {"x": 40}),
+        ("E15 search nothing", {}),
+        ("E15 search bad limit", {"query": "P", "limit": 0}),
+        ("E15 search bad distance", {"x": 1, "y": 1, "crs_code": 3857, "max_distance": 0}),
+    ):
+        ctx.pair(label, "GET", "/search", headers=ctx.h, params=params)
+
+    ctx.pair("E15 list imports", "GET", "/imports", headers=ctx.h)
+    ctx.pair(
+        "E15 document history",
+        "GET",
+        lambda d: f"/buildings/{d['b1']['id']}/documents",
+        headers=ctx.h,
+    )
+    ctx.pair(
+        "E15 document download missing", "GET", f"/documents/{uuid4()}/download", headers=ctx.h
+    )
+    ctx.pair(
+        "E15 export download private denied",
+        "GET",
+        f"/exports/{uuid4()}/download",
+        headers=editor["h"],
+    )
+
+    data = "building_id,house_number\nb1,2\n".encode()
+    resp = {}
+    for side in SIDES:
+        artifact = seed_artifact(ctx, "house-numbering-exports", "export.csv", "text/csv", data)
+        resp[side] = ctx.call(side, "GET", f"/exports/{artifact}/download", headers=ctx.h)
+    compare_download("E15 export download", resp["o"], resp["r"])
+    pdf = b"%PDF-1.4 parity document"
+    for side in SIDES:
+        d = ctx.data[side]
+        artifact = seed_artifact(
+            ctx, "house-numbering-documents", "inspection.pdf", "application/pdf", pdf
+        )
+        d["doc"] = str(uuid4())
+        with psycopg.connect(ctx.owner_url) as conn:
+            conn.execute(
+                """
+                INSERT INTO house_numbering.documents (
+                    id, organization_id, project_id, building_id, number_id, doc_type,
+                    template_revision, status, artifact_id, issued_at, replaces_document_id,
+                    revision, created_by_actor_id, updated_by_actor_id, created_at, updated_at
+                ) VALUES (%s,%s,%s,%s,NULL,'inspection','tpl-1','draft',%s,NULL,NULL,1,%s,%s,
+                          now(),now())
+                """,
+                (
+                    d["doc"],
+                    ctx.fx["org_a_id"],
+                    ctx.fx["project_a_id"],
+                    d["b1"]["id"],
+                    artifact,
+                    ctx.fx["user_a_id"],
+                    ctx.fx["user_a_id"],
+                ),
+            )
+        resp[side] = ctx.call(side, "GET", f"/documents/{d['doc']}/download", headers=ctx.h)
+    compare_download("E15 document download", resp["o"], resp["r"])
+    ctx.pair(
+        "E15 document history with row",
+        "GET",
+        lambda d: f"/buildings/{d['b1']['id']}/documents",
+        headers=ctx.h,
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -1080,6 +1670,8 @@ def main() -> int:
                     batch_hierarchy(ctx)
                     batch_buildings(ctx)
                     batch_proposals(ctx)
+                    batch_field(ctx)
+                    batch_records(ctx)
             finally:
                 get_engine().dispose()
 

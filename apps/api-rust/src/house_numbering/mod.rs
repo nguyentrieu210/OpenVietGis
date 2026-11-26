@@ -1,8 +1,10 @@
 //! E15 Rust-native control plane for the official House Numbering module.
 
 mod buildings;
+mod field;
 mod hierarchy;
 mod proposals;
+mod records;
 
 use std::collections::HashMap;
 
@@ -43,6 +45,8 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(hierarchy::router())
         .merge(buildings::router())
         .merge(proposals::router())
+        .merge(field::router())
+        .merge(records::router())
 }
 
 #[derive(Debug, Deserialize)]
@@ -356,7 +360,12 @@ impl IntoResponse for HouseNumberingError {
 
 impl From<AppError> for HouseNumberingError {
     fn from(error: AppError) -> Self {
-        Self::Domain(error)
+        match error {
+            AppError::Forbidden { code, .. } if code == house_numbering::MANAGE_REQUIRED => {
+                Self::Permission("missing permission: project.manage")
+            }
+            other => Self::Domain(other),
+        }
     }
 }
 

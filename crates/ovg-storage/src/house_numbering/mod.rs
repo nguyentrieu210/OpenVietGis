@@ -12,12 +12,16 @@ use uuid::Uuid;
 use crate::catalog::ProjectRead;
 
 mod buildings;
+mod field;
 mod hierarchy;
 mod proposals;
+mod records;
 
 pub use buildings::*;
+pub use field::*;
 pub use hierarchy::*;
 pub use proposals::*;
+pub use records::*;
 
 /// Read the `wire` jsonb column that every module query projects, with Python
 /// `datetime.isoformat()` timestamps (`_wire` rows).
