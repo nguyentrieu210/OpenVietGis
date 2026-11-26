@@ -1,5 +1,6 @@
 //! E15 Rust-native control plane for the official House Numbering module.
 
+mod assignment;
 mod buildings;
 mod field;
 mod hierarchy;
@@ -44,6 +45,7 @@ pub(crate) fn router() -> Router<AppState> {
             get(list_buildings).post(buildings::create_building),
         )
         .merge(hierarchy::router())
+        .merge(assignment::router())
         .merge(buildings::router())
         .merge(proposals::router())
         .merge(field::router())

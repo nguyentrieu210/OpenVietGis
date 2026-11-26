@@ -70,7 +70,7 @@ pub(crate) async fn get_building(
     wire(&row)
 }
 
-async fn official_number(
+pub(crate) async fn official_number(
     edit: &mut ProjectRead<'_>,
     building_id: Uuid,
     kinds: &[&str],

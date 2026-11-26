@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::catalog::ProjectRead;
 
+mod assignment;
 mod buildings;
 mod field;
 mod hierarchy;
@@ -18,6 +19,7 @@ mod numbering;
 mod proposals;
 mod records;
 
+pub use assignment::*;
 pub use buildings::*;
 pub use field::*;
 pub use hierarchy::*;
