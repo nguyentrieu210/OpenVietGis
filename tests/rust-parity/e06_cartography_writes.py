@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""E06 cartography write differential parity on isolated real PostGIS."""
+"""E06 cartography and layout-designer write differential parity on isolated real PostGIS."""
 
 from __future__ import annotations
 
 import argparse
+import copy
+import hashlib
+import io
 import json
 import os
 import sys
@@ -13,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import psycopg
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
@@ -65,11 +69,9 @@ def clone_layer_pair(owner_url: str, fixture: dict):
 
 def seed_exports(owner_url: str, fixture: dict, layer_id: str):
     base = datetime(2026, 11, 26, 6, 7, 8, 123456, tzinfo=UTC)
-    layouts = []
     with psycopg.connect(owner_url) as conn:
         for idx in range(2):
             layout_id = uuid4()
-            layouts.append(layout_id)
             when = base + timedelta(seconds=idx)
             conn.execute(
                 """
@@ -135,12 +137,33 @@ def normalize_layout(body: dict) -> dict:
     return out
 
 
+def normalize_designer(body: dict) -> dict:
+    out = json.loads(json.dumps(body))
+    out["id"] = "<id>"
+    out["created_at"] = "<created_at>"
+    out["updated_at"] = "<updated_at>"
+    return out
+
+
+def normalize_preview(body: dict) -> dict:
+    out = json.loads(json.dumps(body))
+    if "revision_manifest" in out and isinstance(out["revision_manifest"], dict):
+        out["revision_manifest"]["renderer_profile"] = "<renderer_profile>"
+    if "revision_fingerprint" in out:
+        out["revision_fingerprint"] = "<revision_fingerprint>"
+    return out
+
+
 def compare(label: str, expected, actual, normalize=lambda x: x):
     require(
         expected.status_code == actual.status_code,
         f"{label}: status {expected.status_code} != {actual.status_code}; "
         f"oracle={expected.text} rust={actual.text}",
     )
+    if expected.status_code == 204:
+        require(actual.text == "", f"{label}: Rust 204 body must be empty")
+        print(f"PASS {label}", flush=True)
+        return None
     try:
         ebody, abody = normalize(expected.json()), normalize(actual.json())
     except ValueError:
@@ -150,6 +173,402 @@ def compare(label: str, expected, actual, normalize=lambda x: x):
     require(mismatch is None, f"{label}: {mismatch}; oracle={ebody}; rust={abody}")
     print(f"PASS {label}", flush=True)
     return actual.json()
+
+
+def audit_count(owner_url: str, fixture: dict, prefix: str) -> int:
+    with psycopg.connect(owner_url) as conn:
+        return conn.execute(
+            """
+            SELECT count(*) FROM audit.audit_events
+            WHERE organization_id=%s AND action LIKE %s
+            """,
+            (fixture["org_a_id"], prefix + "%"),
+        ).fetchone()[0]
+
+
+def fill_designer_quota(owner_url: str, fixture: dict, doc: dict) -> None:
+    with psycopg.connect(owner_url) as conn:
+        for idx in range(50):
+            conn.execute(
+                """
+                INSERT INTO cartography.designer_layouts (
+                    organization_id, project_id, id, name, document, revision
+                ) VALUES (%s,%s,%s,%s,%s::jsonb,1)
+                """,
+                (
+                    fixture["org_a_id"],
+                    fixture["project_a_id"],
+                    uuid4(),
+                    f"Quota {idx:02d}",
+                    json.dumps(doc),
+                ),
+            )
+
+
+def run_designer_parity(oracle, rust, owner_url, fixture, root, headers, csrf, foreign):
+    designer_root = f"{root}/designer"
+    camera = {"lng": 106.66, "lat": 10.70, "zoom": 14, "bearing": 10, "reference_width": 900}
+    map_a, map_b = str(uuid4()), str(uuid4())
+    doc = {
+        "version": 1,
+        "paper": "A4",
+        "landscape": True,
+        "dpi": 300,
+        "items": [
+            {
+                "id": map_a,
+                "kind": "map",
+                "x": 5,
+                "y": 20,
+                "w": 150,
+                "h": 140,
+                "camera": camera,
+                "grid": True,
+            },
+            {
+                "id": map_b,
+                "kind": "map",
+                "x": 160,
+                "y": 20,
+                "w": 130,
+                "h": 140,
+                "camera": {**camera, "zoom": 17},
+            },
+            {
+                "id": str(uuid4()),
+                "kind": "scale",
+                "x": 5,
+                "y": 175,
+                "w": 110,
+                "h": 15,
+                "map_id": map_a,
+            },
+            {
+                "id": str(uuid4()),
+                "kind": "north",
+                "x": 120,
+                "y": 175,
+                "w": 20,
+                "h": 20,
+                "map_id": map_a,
+            },
+            {
+                "id": str(uuid4()),
+                "kind": "text",
+                "x": 5,
+                "y": 3,
+                "w": 280,
+                "h": 15,
+                "text": "BẢN ĐỒ BÌNH HƯNG",
+                "font_size": 6,
+            },
+        ],
+    }
+    payload = {"name": "  Layout 2 frames  ", "document": doc}
+    before = audit_count(owner_url, fixture, "cartography.designer.")
+
+    exp = oracle.post(designer_root, json=payload, headers=csrf)
+    act = rust.post(designer_root, json=payload, headers=csrf)
+    rust_created = compare("E06 designer create", exp, act, normalize_designer)
+    require(exp.status_code == 201, exp.text)
+    oracle_id = exp.json()["id"]
+    rust_id = rust_created["id"]
+    require(rust_created["name"] == "Layout 2 frames", rust_created)
+    require(rust_created["revision"] == 1, rust_created)
+
+    compare(
+        "E06 designer list shared DB",
+        oracle.get(designer_root, headers=headers),
+        rust.get(designer_root, headers=headers),
+    )
+
+    update_payload = {"name": "  Revision 2  ", "document": doc, "revision": 1}
+    exp_u = oracle.put(f"{designer_root}/{oracle_id}", json=update_payload, headers=csrf)
+    act_u = rust.put(f"{designer_root}/{rust_id}", json=update_payload, headers=csrf)
+    compare("E06 designer update", exp_u, act_u, normalize_designer)
+    require(act_u.json()["revision"] == 2, act_u.text)
+
+    compare(
+        "E06 designer stale update conflict",
+        oracle.put(f"{designer_root}/{oracle_id}", json=update_payload, headers=csrf),
+        rust.put(f"{designer_root}/{rust_id}", json=update_payload, headers=csrf),
+    )
+    compare(
+        "E06 designer stale delete conflict",
+        oracle.delete(f"{designer_root}/{oracle_id}", params={"revision": 1}, headers=csrf),
+        rust.delete(f"{designer_root}/{rust_id}", params={"revision": 1}, headers=csrf),
+    )
+    compare(
+        "E06 designer delete",
+        oracle.delete(f"{designer_root}/{oracle_id}", params={"revision": 2}, headers=csrf),
+        rust.delete(f"{designer_root}/{rust_id}", params={"revision": 2}, headers=csrf),
+    )
+
+    require(
+        audit_count(owner_url, fixture, "cartography.designer.") == before + 6,
+        "expected create/update/delete designer audit rows from both runtimes",
+    )
+    print("PASS E06 designer audit append", flush=True)
+
+    overflow = copy.deepcopy(doc)
+    overflow["items"][0]["w"] = 300
+    bad_map = copy.deepcopy(doc)
+    bad_map["items"][2]["map_id"] = str(uuid4())
+    extra_cam = copy.deepcopy(doc)
+    extra_cam["items"][0]["camera"]["url"] = "https://example.com"
+    bad_dpi = copy.deepcopy(doc)
+    bad_dpi["paper"] = "A2"
+
+    for label, bad_payload in (
+        ("blank name", {"name": "   ", "document": doc}),
+        ("element overflow", {"name": "bad", "document": overflow}),
+        ("unknown map_id", {"name": "bad", "document": bad_map}),
+        ("extra camera field", {"name": "bad", "document": extra_cam}),
+        ("A2 at 300 dpi", {"name": "bad", "document": bad_dpi}),
+    ):
+        compare(
+            f"E06 designer reject {label}",
+            oracle.post(designer_root, json=bad_payload, headers=csrf),
+            rust.post(designer_root, json=bad_payload, headers=csrf),
+        )
+
+    compare(
+        "E06 designer foreign tenant denied",
+        oracle.post(designer_root, json=payload, headers=foreign),
+        rust.post(designer_root, json=payload, headers=foreign),
+    )
+    no_csrf = rust.post(designer_root, json=payload, headers=headers)
+    require(no_csrf.status_code == 403, no_csrf.text)
+    print("PASS E06 designer CSRF fail-closed", flush=True)
+
+    fill_designer_quota(owner_url, fixture, doc)
+    compare(
+        "E06 designer quota 50",
+        oracle.post(designer_root, json=payload, headers=csrf),
+        rust.post(designer_root, json=payload, headers=csrf),
+    )
+
+
+def run_print_export_parity(oracle, rust, fixture, root, headers, csrf, foreign):
+    edit_layer = fixture["layers"]["edit_4326"]["layer_id"]
+    poly_layer = fixture["layers"]["epsg4326_1k"]["layer_id"]
+
+    # Create a multi-layer A4 landscape layout for preview/export/download parity.
+    layout_payload = {
+        "name": "Pinned print",
+        "title": "Pinned print map",
+        "paper_size": "A4",
+        "orientation": "landscape",
+        "crs_code": 4326,
+        "attribution": "OpenVietGIS Parity",
+        "layer_ids": [poly_layer, edit_layer],
+        "show_north_arrow": True,
+        "show_scale_bar": True,
+        "show_legend": True,
+    }
+    created = rust.post(f"{root}/layouts", json=layout_payload, headers=csrf)
+    require(created.status_code == 201, created.text)
+    layout_id = created.json()["id"]
+    exports_path = f"{root}/layouts/{layout_id}/exports"
+
+    settings_png = {"output_format": "png", "dpi": 150}
+    exp_prev = oracle.post(f"{exports_path}/preview", json=settings_png, headers=csrf)
+    act_prev = rust.post(f"{exports_path}/preview", json=settings_png, headers=csrf)
+    rust_prev = compare("E06 print preview PNG", exp_prev, act_prev, normalize_preview)
+    manifest = rust_prev["revision_manifest"]
+    independent_fp = hashlib.sha256(
+        json.dumps(
+            manifest,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    require(
+        rust_prev["revision_fingerprint"] == independent_fp,
+        f"fingerprint mismatch: {rust_prev['revision_fingerprint']} != {independent_fp}",
+    )
+    require(
+        manifest["pixel_width"] == 1754 and manifest["pixel_height"] == 1240,
+        manifest,
+    )
+    print("PASS E06 print revision_fingerprint SHA-256", flush=True)
+
+    # Cross-CRS Web Mercator layout preview parity (4326 -> 3857 via ST_TransformPipeline).
+    mercator_layout = dict(layout_payload)
+    mercator_layout["name"] = "Mercator print"
+    mercator_layout["crs_code"] = 3857
+    mercator_layout["layer_ids"] = [edit_layer]
+    m_res = rust.post(f"{root}/layouts", json=mercator_layout, headers=csrf)
+    require(m_res.status_code == 201, m_res.text)
+    m_id = m_res.json()["id"]
+    compare(
+        "E06 cross-CRS 4326->3857 print preview",
+        oracle.post(f"{root}/layouts/{m_id}/exports/preview", json=settings_png, headers=csrf),
+        rust.post(f"{root}/layouts/{m_id}/exports/preview", json=settings_png, headers=csrf),
+        normalize_preview,
+    )
+
+    # Unsupported CRS transform (4326 -> 5899) rejected identically.
+    vn_layout = dict(layout_payload)
+    vn_layout["name"] = "Unsupported transform"
+    vn_layout["crs_code"] = 5899
+    vn_layout["layer_ids"] = [edit_layer]
+    vn_res = rust.post(f"{root}/layouts", json=vn_layout, headers=csrf)
+    require(vn_res.status_code == 201, vn_res.text)
+    vn_id = vn_res.json()["id"]
+    compare(
+        "E06 unsupported print transform rejected",
+        oracle.post(f"{root}/layouts/{vn_id}/exports/preview", json=settings_png, headers=csrf),
+        rust.post(f"{root}/layouts/{vn_id}/exports/preview", json=settings_png, headers=csrf),
+    )
+
+    # Large paper at 300 DPI rejected identically.
+    a2_layout = dict(layout_payload)
+    a2_layout["name"] = "A2 layout"
+    a2_layout["paper_size"] = "A2"
+    a2_layout["layer_ids"] = [edit_layer]
+    a2_res = rust.post(f"{root}/layouts", json=a2_layout, headers=csrf)
+    require(a2_res.status_code == 201, a2_res.text)
+    a2_id = a2_res.json()["id"]
+    compare(
+        "E06 A2 300 DPI rejected",
+        oracle.post(
+            f"{root}/layouts/{a2_id}/exports/preview",
+            json={"output_format": "png", "dpi": 300},
+            headers=csrf,
+        ),
+        rust.post(
+            f"{root}/layouts/{a2_id}/exports/preview",
+            json={"output_format": "png", "dpi": 300},
+            headers=csrf,
+        ),
+    )
+
+    # Missing fingerprint -> 422; stale fingerprint -> 409 STALE_PRINT_REVISION.
+    compare(
+        "E06 export missing fingerprint 422",
+        oracle.post(exports_path, json=settings_png, headers=csrf),
+        rust.post(exports_path, json=settings_png, headers=csrf),
+    )
+    compare(
+        "E06 export stale fingerprint 409",
+        oracle.post(
+            exports_path,
+            json={**settings_png, "expected_revision_fingerprint": "0" * 64},
+            headers=csrf,
+        ),
+        rust.post(
+            exports_path,
+            json={**settings_png, "expected_revision_fingerprint": "0" * 64},
+            headers=csrf,
+        ),
+    )
+
+    # Execute real PNG export on Rust and verify artifact + download + Pillow parse!
+    rust_png = rust.post(
+        exports_path,
+        json={**settings_png, "expected_revision_fingerprint": rust_prev["revision_fingerprint"]},
+        headers=csrf,
+    )
+    require(rust_png.status_code == 201, rust_png.text)
+    png_rec = rust_png.json()
+    dl_png = rust.get(f"{root}/exports/{png_rec['id']}/download", headers=headers)
+    require(dl_png.status_code == 200, dl_png.text)
+    require(dl_png.headers.get("content-type") == "image/png", dl_png.headers)
+    require(
+        hashlib.sha256(dl_png.content).hexdigest()
+        == png_rec["sha256"]
+        == dl_png.headers.get("x-content-sha256"),
+        "PNG sha256 mismatch",
+    )
+    require(len(dl_png.content) == png_rec["byte_size"], "PNG byte_size mismatch")
+    with Image.open(io.BytesIO(dl_png.content)) as img:
+        require(img.format == "PNG" and img.size == (1754, 1240), f"bad PNG {img.format} {img.size}")
+    print("PASS E06 Rust PNG export + download + Pillow verification", flush=True)
+
+    # Execute real PDF export on Rust and verify PDF container!
+    settings_pdf = {"output_format": "pdf", "dpi": 150}
+    pdf_prev = rust.post(f"{exports_path}/preview", json=settings_pdf, headers=csrf)
+    require(pdf_prev.status_code == 200, pdf_prev.text)
+    rust_pdf = rust.post(
+        exports_path,
+        json={
+            **settings_pdf,
+            "expected_revision_fingerprint": pdf_prev.json()["revision_fingerprint"],
+        },
+        headers=csrf,
+    )
+    require(rust_pdf.status_code == 201, rust_pdf.text)
+    pdf_rec = rust_pdf.json()
+    dl_pdf = rust.get(f"{root}/exports/{pdf_rec['id']}/download", headers=headers)
+    require(dl_pdf.status_code == 200, dl_pdf.text)
+    require(dl_pdf.headers.get("content-type") == "application/pdf", dl_pdf.headers)
+    require(
+        dl_pdf.content.startswith(b"%PDF-1.4\n") and dl_pdf.content.endswith(b"%%EOF\n"),
+        "invalid PDF container",
+    )
+    require(
+        hashlib.sha256(dl_pdf.content).hexdigest()
+        == pdf_rec["sha256"]
+        == dl_pdf.headers.get("x-content-sha256"),
+        "PDF sha256 mismatch",
+    )
+    print("PASS E06 Rust PDF export + download verification", flush=True)
+
+    # Style change invalidates previously previewed fingerprint.
+    style_up = rust.put(
+        f"{root}/layers/{edit_layer}/style",
+        json={"mode": "single", "style_spec": {"fill_color": "#dc2626"}},
+        headers=csrf,
+    )
+    require(style_up.status_code == 200, style_up.text)
+    stale_after_style = rust.post(
+        exports_path,
+        json={**settings_png, "expected_revision_fingerprint": rust_prev["revision_fingerprint"]},
+        headers=csrf,
+    )
+    require(
+        stale_after_style.status_code == 409
+        and stale_after_style.json()["code"] == "STALE_PRINT_REVISION",
+        stale_after_style.text,
+    )
+    print("PASS E06 style mutation invalidates preview pin", flush=True)
+
+    # Foreign tenant and missing CSRF fail-closed checks on preview/export.
+    compare(
+        "E06 foreign tenant preview denied",
+        oracle.post(f"{exports_path}/preview", json=settings_png, headers=foreign),
+        rust.post(f"{exports_path}/preview", json=settings_png, headers=foreign),
+    )
+    compare(
+        "E06 foreign tenant export denied",
+        oracle.post(
+            exports_path,
+            json={**settings_png, "expected_revision_fingerprint": "0" * 64},
+            headers=foreign,
+        ),
+        rust.post(
+            exports_path,
+            json={**settings_png, "expected_revision_fingerprint": "0" * 64},
+            headers=foreign,
+        ),
+    )
+    require(
+        rust.post(f"{exports_path}/preview", json=settings_png, headers=headers).status_code == 403,
+        "preview without CSRF must fail",
+    )
+    require(
+        rust.post(
+            exports_path,
+            json={**settings_png, "expected_revision_fingerprint": "0" * 64},
+            headers=headers,
+        ).status_code
+        == 403,
+        "export without CSRF must fail",
+    )
+    print("PASS E06 preview/export CSRF fail-closed", flush=True)
 
 
 def main() -> int:
@@ -370,6 +789,18 @@ def main() -> int:
                     )
                     require(no_csrf.status_code == 403, no_csrf.text)
                     print("PASS E06 style CSRF fail-closed", flush=True)
+
+                    run_print_export_parity(oracle, rust, fixture, root, headers, csrf, foreign)
+
+                    compare(
+                        "E06 list exports after Rust PNG/PDF publish",
+                        oracle.get(f"{root}/exports", headers=headers),
+                        rust.get(f"{root}/exports", headers=headers),
+                    )
+
+                    run_designer_parity(
+                        oracle, rust, owner_url, fixture, root, headers, csrf, foreign
+                    )
             finally:
                 get_engine().dispose()
 
