@@ -18,5 +18,12 @@ try {
   });
  }
 } finally {
- await new Promise((resolve,reject)=>server.httpServer.close(err=>err?reject(err):resolve()));
+ const http=server.httpServer;
+ await new Promise((resolve,reject)=>{
+  http.close(err=>err&&err.code!=="ERR_SERVER_NOT_RUNNING"?reject(err):resolve());
+  // Browser smoke can leave keep-alive sockets behind after the child exits.
+  // Drain them after close() stops accepting new connections so Node never
+  // terminates an unsettled top-level await with exit code 13.
+  http.closeAllConnections?.();
+ });
 }
