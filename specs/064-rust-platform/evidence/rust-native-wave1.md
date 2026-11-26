@@ -305,3 +305,31 @@ Differential parity on isolated real PostGIS passed 10 gates:
 - foreign-tenant denial
 - stored official manifest mismatch -> 404
 - GIS-scoped module access -> 403
+
+### E15 House Numbering write control
+
+Rust now additionally owns:
+
+- `POST /modules/house-numbering/rules`
+- `POST /modules/house-numbering/areas`
+
+The rule path preserves the official-module activation gate, CSRF, unrestricted
+GIS access guard, `project.manage` requirement, scale-preserving
+`max_distance_m` wire form, atomic audit append and committed module row.
+
+The area path preserves the corresponding `project.edit` requirement, name
+trimming, optional source/feature pair invariant, active-ready spatial source
+validation, Polygon geometry requirement, explicit CRS requirement, atomic
+audit append and module RLS transaction.
+
+Differential parity on isolated real PostGIS passed:
+
+- owner/manage rule creation
+- rule audit append
+- owner/edit area creation
+- area name trimming and audit append
+- missing-CSRF fail-closed
+- editor denied rule creation
+- editor allowed area creation
+- missing linked spatial feature
+- source/feature pair validation
