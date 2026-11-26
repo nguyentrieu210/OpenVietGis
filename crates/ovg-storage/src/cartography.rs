@@ -851,7 +851,7 @@ pub async fn prepare_print_snapshot(
                 content_revision: content_rev,
                 schema_revision: schema_rev,
                 source_crs: source_srid,
-                transformation_operation,
+                transformation_operation: transform_operation,
                 style: style_dict,
                 style_id,
                 style_revision,
