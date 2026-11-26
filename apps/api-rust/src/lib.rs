@@ -192,6 +192,8 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
+        assert!(text.starts_with("# HELP openvietgis_up "));
+        assert!(text.contains("openvietgis_database_ready 0\n"));
         assert!(text.contains("ovg_http_requests_total"));
         assert!(text.contains(&format!("ovg_registered_modules_total {expected_modules}")));
 

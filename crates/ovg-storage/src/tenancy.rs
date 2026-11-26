@@ -889,6 +889,19 @@ impl TenantTx {
         outcome: &str,
         metadata: Value,
     ) -> Result<(), AppError> {
+        let event = (action, resource_type, resource_id, outcome);
+        self.audit_at(organization_id, event, metadata, Utc::now())
+            .await
+    }
+
+    /// [`Self::audit`] at a caller-chosen time (one clock for a change and its audit row).
+    async fn audit_at(
+        &mut self,
+        organization_id: Uuid,
+        (action, resource_type, resource_id, outcome): (&str, &str, Option<Uuid>, &str),
+        metadata: Value,
+        at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
         if self.organization_id != Some(organization_id) {
             return Err(AppError::internal("audit requires the verified tenant"));
         }
@@ -907,7 +920,7 @@ impl TenantTx {
         .bind(resource_id)
         .bind(outcome)
         .bind(metadata)
-        .bind(Utc::now())
+        .bind(at)
         .execute(&mut *self.tx)
         .await
         .map_err(db_error)?;
@@ -1405,6 +1418,116 @@ impl TenantTx {
             .map_err(db_error)?;
         Ok(())
     }
+
+    /// Port of `require_member_context` for a human: active membership only (no
+    /// organization status check), then bind the tenant scope.
+    pub async fn member_scope(&mut self, organization_id: Uuid) -> Result<(), AppError> {
+        self.bind(None).await?;
+        self.active_membership(organization_id)
+            .await?
+            .ok_or_else(|| AppError::not_found("organization not found"))?;
+        self.bind(Some(organization_id)).await
+    }
+
+    /// E18 `SqlOpsRepository.get_entitlement` wire, or `None` when unset.
+    pub async fn entitlement(&mut self, organization_id: Uuid) -> Result<Option<Value>, AppError> {
+        let row: Option<EntitlementRow> = sqlx::query_as(&format!(
+            "SELECT {ENTITLEMENT_COLUMNS} FROM ops.organization_entitlements
+             WHERE organization_id = $1"
+        ))
+        .bind(organization_id)
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        Ok(row.map(entitlement_wire))
+    }
+
+    /// E18 `SqlOpsRepository.upsert_entitlement` after validation, with its audit event.
+    pub async fn upsert_entitlement(
+        &mut self,
+        organization_id: Uuid,
+        deployment_profile: &str,
+        plan_tier: &str,
+        max_projects: i32,
+        max_storage_mb: i32,
+        features_enabled: &[String],
+    ) -> Result<Value, AppError> {
+        let now = Utc::now();
+        let row: EntitlementRow = sqlx::query_as(&format!(
+            "INSERT INTO ops.organization_entitlements (
+                 organization_id, deployment_profile, plan_tier, max_projects,
+                 max_storage_mb, features_enabled, updated_by_actor_id, updated_at
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (organization_id) DO UPDATE
+             SET deployment_profile = EXCLUDED.deployment_profile,
+                 plan_tier = EXCLUDED.plan_tier,
+                 max_projects = EXCLUDED.max_projects,
+                 max_storage_mb = EXCLUDED.max_storage_mb,
+                 features_enabled = EXCLUDED.features_enabled,
+                 updated_by_actor_id = EXCLUDED.updated_by_actor_id,
+                 updated_at = EXCLUDED.updated_at
+             RETURNING {ENTITLEMENT_COLUMNS}"
+        ))
+        .bind(organization_id)
+        .bind(deployment_profile)
+        .bind(plan_tier)
+        .bind(max_projects)
+        .bind(max_storage_mb)
+        .bind(json!(features_enabled))
+        .bind(self.actor_id)
+        .bind(now)
+        .fetch_one(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        self.audit_at(
+            organization_id,
+            (
+                "ops.entitlement.configure",
+                "organization_entitlement",
+                Some(organization_id),
+                "success",
+            ),
+            json!({
+                "deployment_profile": deployment_profile,
+                "plan_tier": plan_tier,
+                "max_projects": max_projects,
+                "max_storage_mb": max_storage_mb,
+                "requested_features": features_enabled,
+                "enforcement": "metadata_only",
+            }),
+            now,
+        )
+        .await?;
+        Ok(entitlement_wire(row))
+    }
+}
+
+const ENTITLEMENT_COLUMNS: &str = "organization_id, deployment_profile, plan_tier, max_projects,
+     max_storage_mb, features_enabled, updated_at";
+type EntitlementRow = (Uuid, String, String, i32, i32, Value, DateTime<Utc>);
+
+fn entitlement_wire(row: EntitlementRow) -> Value {
+    let (
+        organization_id,
+        deployment_profile,
+        plan_tier,
+        max_projects,
+        max_storage_mb,
+        features,
+        at,
+    ) = row;
+    json!({
+        "organization_id": organization_id,
+        "deployment_profile": deployment_profile,
+        "plan_tier": plan_tier,
+        "max_projects": max_projects,
+        "max_storage_mb": max_storage_mb,
+        "features_enabled": features,
+        "updated_at": crate::transfers::iso(at),
+        "authorization_distinct": true,
+        "data_deletion_on_plan_change": false,
+        "enforcement": "metadata_only",
+    })
 }
 
 type MembershipRow = (Uuid, Uuid, Uuid, String, String);
