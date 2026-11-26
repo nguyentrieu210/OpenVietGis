@@ -24,4 +24,5 @@ sqlx-postgres.workspace = true
 subtle = "2.6"
 tokio.workspace = true
 tracing.workspace = true
+unicode-normalization = "0.1.26"
 uuid.workspace = true

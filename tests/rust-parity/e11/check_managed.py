@@ -59,7 +59,10 @@ def same(label, pair, method, path, status, *, headers, body=None, params=None, 
             response.status_code == status,
             f"{name} status {response.status_code}, wanted {status}: {response.text[:300]}",
         )
-    left, right = (response.json() for response in responses)
+    try:
+        left, right = (response.json() for response in responses)
+    except ValueError as error:
+        raise AssertionError(f"response is not JSON: {error}") from None
     if normalize is not None:
         left, right = normalize(left), normalize(right)
     mismatch = parity.difference(left, right)

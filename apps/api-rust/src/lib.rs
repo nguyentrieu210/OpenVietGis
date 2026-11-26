@@ -17,6 +17,7 @@ pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
+pub(crate) mod org_chat;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
 pub(crate) mod queries;

@@ -54,10 +54,7 @@ pub(crate) fn router() -> Router<AppState> {
         )
         .route(&format!("{BASE}/edit-locks"), get(leases).post(acquire))
         .route(&format!("{BASE}/edit-locks/release"), post(release))
-        .route(
-            &format!("{BASE}/reviews"),
-            get(reviews).post(create_review),
-        )
+        .route(&format!("{BASE}/reviews"), get(reviews).post(create_review))
         .route(
             &format!("{BASE}/reviews/{{review_id}}/comments"),
             get(review_comments).post(add_review_comment),

@@ -25,7 +25,7 @@ type MessageAnchor = (Option<Uuid>, Option<String>, Option<f64>, Option<f64>);
 type SourceState = (String, String, String, String);
 
 /// FastAPI `jsonable_encoder(dict(row))` for the column types these routes return.
-fn row_json(row: &PgRow) -> Result<Value, EditError> {
+pub(crate) fn row_json(row: &PgRow) -> Result<Value, EditError> {
     let mut map = Map::new();
     for column in row.columns() {
         let name = column.name();
@@ -411,9 +411,7 @@ impl EditScope<'_> {
     pub async fn create_team_task(&mut self, task: NewTask) -> Result<Value, EditError> {
         self.authorize(Permission::Edit).await?;
         let eligible = self.eligible().await?;
-        let Some((_, assignee_name)) = eligible
-            .into_iter()
-            .find(|(id, _)| *id == task.assignee_id)
+        let Some((_, assignee_name)) = eligible.into_iter().find(|(id, _)| *id == task.assignee_id)
         else {
             return Err(detail(
                 422,
@@ -728,7 +726,11 @@ impl EditScope<'_> {
         .await
         .map_err(db_error)?;
         if existing.is_some_and(|(actor, held)| actor != self.actor_id || held != token) {
-            return Err(platform(409, "FEATURE_LOCKED", "feature already being edited"));
+            return Err(platform(
+                409,
+                "FEATURE_LOCKED",
+                "feature already being edited",
+            ));
         }
         let sql = match existing {
             Some(_) => format!(
@@ -1234,7 +1236,12 @@ impl EditScope<'_> {
         .map_err(db_error)?
         .into_iter()
         .collect();
-        Ok(analyze_draft_conflicts(validated, &intervening, &current, &existing))
+        Ok(analyze_draft_conflicts(
+            validated,
+            &intervening,
+            &current,
+            &existing,
+        ))
     }
 }
 
@@ -1262,7 +1269,11 @@ fn validate_rebase_draft(draft: &[Value]) -> Result<Vec<(String, Map<String, Val
         }
         let feature_id = validate_feature_id(raw)?;
         if !seen.insert(feature_id.clone()) {
-            return Err(platform(422, "DUPLICATE_FEATURE_OP", "duplicate draft feature"));
+            return Err(platform(
+                422,
+                "DUPLICATE_FEATURE_OP",
+                "duplicate draft feature",
+            ));
         }
         let mut operation = operation.clone();
         operation.insert("feature_id".into(), json!(feature_id));

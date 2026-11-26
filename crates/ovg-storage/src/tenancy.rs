@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 use crate::DbPool;
 
+pub mod chat;
 mod invitations;
 pub use invitations::{InvitationInput, InvitationProof, InvitationResult};
 
