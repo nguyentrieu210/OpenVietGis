@@ -358,7 +358,8 @@ def same_frame(label, streams, wanted, timeout=10):
     print(f"PASS {label}", flush=True)
 
 
-def compare_events(pair, owner, fixture, scoped_token, csrf_headers, bearers):
+def compare_events(pair, owner, fixture, member, csrf_headers, bearers):
+    scoped_token = member[2]
     a = session_headers(fixture["session_a_token"])
     org, project = fixture["org_a_id"], fixture["project_a_id"]
     path = f"{project_path(org, project)}/collaboration/events"
@@ -376,10 +377,77 @@ def compare_events(pair, owner, fixture, scoped_token, csrf_headers, bearers):
     check("E11 events 422 malformed project id", pair,
           f"{project_path(org, 'not-a-uuid')}/collaboration/events", 422, headers=a,
           normalize=validation_shape)
+    compare_chat_events(pair, owner, fixture, member, csrf_headers, bearers)
 
     streams = [Frames(client, path, a) for client in (pair.oracle, pair.rust)]
     try:
         compare_stream(streams, pair, owner, fixture, csrf_headers)
+    finally:
+        for stream in streams:
+            stream.close()
+
+
+def pg_notify(owner, channel, payload):
+    text = payload if isinstance(payload, str) else json.dumps(payload)
+    with psycopg.connect(owner, autocommit=True) as conn:
+        conn.execute("SELECT pg_notify(%s, %s)", (channel, text))
+
+
+def compare_chat_events(pair, owner, fixture, member, csrf_headers, bearers):
+    """org_chat.events for a (GIS-scoped) organization member; ends by revoking it."""
+    user, membership, token = member
+    org = fixture["org_a_id"]
+    path = f"/api/v1/organizations/{org}/chat/events"
+    mine = session_headers(token)
+    check("E11 chat events 401 anonymous", pair, path, 401, headers={})
+    check("E11 chat events 401 invalid bearer", pair, path, 401,
+          headers={"authorization": "Bearer unavailable"})
+    check("E11 chat events 401 bearer on malformed organization id", pair,
+          "/api/v1/organizations/not-a-uuid/chat/events", 401, headers=bearers[0])
+    check("E11 chat events 403 service principal", pair, path, 403, headers=bearers[0])
+    check("E11 chat events 404 foreign organization", pair,
+          f"/api/v1/organizations/{fixture['org_b_id']}/chat/events", 404, headers=mine)
+    check("E11 chat events 422 malformed organization id", pair,
+          "/api/v1/organizations/not-a-uuid/chat/events", 422, headers=mine,
+          normalize=validation_shape)
+
+    rooms = f"/api/v1/organizations/{org}/chat/rooms"
+    room = pair.oracle.post(rooms, headers=csrf_headers,
+                            json={"name": "E11 parity room", "member_ids": [user]})
+    require(room.status_code == 201, f"fixture chat room failed: {room.text}")
+    room_id = room.json()["id"]
+    chat_frame = f'event: chat\ndata: {{"room_id": "{room_id}"}}\n\n'
+
+    def notify(payload):
+        pg_notify(owner, "ovg_chat", payload)
+
+    streams = [Frames(client, path, mine) for client in (pair.oracle, pair.rust)]
+    try:
+        same_headers("E11 chat events stream headers", streams)
+        same_frame("E11 chat events ready frame", streams, READY)
+        notify({"k": "chat", "o": org, "r": room_id})
+        same_frame("E11 chat events member room", streams, chat_frame)
+        # Ignored: a room this member cannot read, malformed and foreign notices.
+        notify({"k": "chat", "o": org, "r": str(uuid4())})
+        notify("not json")
+        notify({"k": "chat", "o": fixture["org_b_id"], "r": room_id})
+        notify({"k": "contacts", "u": [str(uuid4()), str(uuid4())]})
+        notify({"k": "contacts", "u": [str(uuid4()), user]})
+        same_frame("E11 chat events contact change naming this member", streams,
+                   "event: contacts\ndata: {}\n\n")
+        posted = pair.oracle.post(f"{rooms}/{room_id}/messages", headers=csrf_headers,
+                                  json={"body": "E11 parity message"})
+        require(posted.status_code == 201, f"fixture chat message failed: {posted.text}")
+        same_frame("E11 chat events committed message", streams, chat_frame)
+        with psycopg.connect(owner) as conn:
+            conn.execute(
+                "UPDATE org.organization_memberships SET status='revoked', revoked_at=now() "
+                "WHERE id=%s",
+                (membership,),
+            )
+        notify({"k": "contacts", "u": [user]})
+        same_frame("E11 chat events revoked membership", streams, "event: revoked\ndata: {}\n\n")
+        same_frame("E11 chat events stream closes after revoke", streams, "<closed>")
     finally:
         for stream in streams:
             stream.close()
@@ -400,9 +468,7 @@ def compare_stream(streams, pair, owner, fixture, csrf_headers):
     same_frame("E11 events ready frame", streams, READY)
 
     def notify(payload):
-        text = payload if isinstance(payload, str) else json.dumps(payload)
-        with psycopg.connect(owner, autocommit=True) as conn:
-            conn.execute("SELECT pg_notify(%s, %s)", (CHANNEL, text))
+        pg_notify(owner, CHANNEL, payload)
 
     public = {"o": org, "p": project, "a": None, "b": None}
     notify(public | {"kind": "spatial_change"})
@@ -470,7 +536,9 @@ def main():
             compare_activities(pair, fixture, scoped_token)
             bearers = service_bearers(oracle, fixture, csrf_headers)
             compare_service_activities(pair, fixture, bearers)
-            compare_events(pair, owner, fixture, scoped_token, csrf_headers, bearers)
+            compare_events(
+                pair, owner, fixture, (user, membership, scoped_token), csrf_headers, bearers
+            )
     print("E11 realtime parity finished", flush=True)
 
 

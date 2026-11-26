@@ -199,6 +199,28 @@ impl TenantTx {
         self.tx.commit().await.map_err(db_error)
     }
 
+    /// `org_chat.org_scope` + `allowed_rooms`: active membership (404), then the
+    /// organization-wide rooms and the rooms this member belongs to.
+    pub async fn chat_rooms(&mut self, organization_id: Uuid) -> Result<Vec<Uuid>, AppError> {
+        self.bind(None).await?;
+        self.active_membership(organization_id)
+            .await?
+            .ok_or_else(|| AppError::not_found("organization not found"))?;
+        self.bind(Some(organization_id)).await?;
+        sqlx::query_scalar(
+            "SELECT r.id FROM collaboration.chat_rooms r WHERE r.organization_id = $1
+               AND (r.kind = 'org' OR EXISTS (
+                   SELECT 1 FROM collaboration.chat_room_members m
+                   WHERE m.organization_id = r.organization_id AND m.room_id = r.id
+                     AND m.user_id = $2))",
+        )
+        .bind(organization_id)
+        .bind(self.actor_id)
+        .fetch_all(&mut *self.tx)
+        .await
+        .map_err(db_error)
+    }
+
     async fn bind(&mut self, organization_id: Option<Uuid>) -> Result<(), AppError> {
         sqlx::query(crate::rls::BIND_TENANT_GUCS_SQL)
             .bind(organization_id.map(|id| id.to_string()).unwrap_or_default())
