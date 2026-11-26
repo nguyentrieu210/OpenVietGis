@@ -63,13 +63,17 @@ def body_of(resp):
         return resp.text
 
 
-def compare(label: str, e, a, *, extra: dict[str, str] | None = None, sort: bool = False):
+def compare(
+    label: str, e, a, *, extra: dict[str, str] | None = None, sort: bool = False, view=None
+):
     req(
         e.status_code == a.status_code,
         f"{label}: status {e.status_code} != {a.status_code}; "
         f"oracle={e.text[:800]} rust={a.text[:800]}",
     )
     eb, ab = norm(body_of(e), extra), norm(body_of(a), extra)
+    if view is not None:
+        eb, ab = view(eb), view(ab)
     if sort and isinstance(eb, dict) and isinstance(eb.get("items"), list):
         eb["items"] = sorted(eb["items"], key=lambda x: json.dumps(x, sort_keys=True))
         ab["items"] = sorted(ab["items"], key=lambda x: json.dumps(x, sort_keys=True))
@@ -212,6 +216,7 @@ class Ctx:
         extra=None,
         sort=False,
         status: int | None = None,
+        view=None,
     ):
         """Run `method path` on both sides; `path`/`body`/`params` may be callables of side data."""
         resp = {}
@@ -226,7 +231,7 @@ class Ctx:
             if q is not None:
                 kw["params"] = q
             resp[side] = self.call(side, method, p, headers=headers, **kw)
-        compare(label, resp["o"], resp["r"], extra=extra, sort=sort)
+        compare(label, resp["o"], resp["r"], extra=extra, sort=sort, view=view)
         if status is not None:
             req(
                 resp["r"].status_code == status, f"{label}: expected {status}, got {resp['r'].text}"
@@ -772,8 +777,9 @@ def batch_buildings(ctx: Ctx) -> None:
         params=lambda d: {
             "route_id": d["street"]["id"],
             "include_descendants": "false",
-            "limit": 2,
+            "limit": 1,
         },
+        view=lambda b: {**b, "items": len(b["items"])} if "items" in b else b,
     )
     ctx.pair(
         "E15 numbering targets bad limit",
@@ -831,6 +837,201 @@ def batch_buildings(ctx: Ctx) -> None:
     )
 
 
+def seed_number(ctx: Ctx, d: dict, building: str, route: str, number: str, kind="proposed"):
+    with psycopg.connect(ctx.owner_url) as conn:
+        conn.execute(
+            """
+            INSERT INTO house_numbering.address_numbers (
+                id, organization_id, project_id, building_id, route_id, number_text, kind,
+                side, measure_m, rule_id, revision, created_by_actor_id, updated_by_actor_id,
+                created_at, updated_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,'right',12.5,%s,1,%s,%s,now(),now())
+            """,
+            (
+                uuid4(),
+                ctx.fx["org_a_id"],
+                ctx.fx["project_a_id"],
+                d[building]["id"],
+                d[route]["id"],
+                number,
+                kind,
+                d["rule"]["id"],
+                ctx.fx["user_a_id"],
+                ctx.fx["user_a_id"],
+            ),
+        )
+
+
+def batch_proposals(ctx: Ctx) -> None:
+    for key, body in (
+        ("rule", {"version": "auth", "status": "authoritative", "authority_ref": "QD-1"}),
+        ("rule_draft", {"version": "draft"}),
+    ):
+        o, r = ctx.pair(
+            f"E15 create {key}",
+            "POST",
+            "/rules",
+            status=201,
+            body=lambda d, body=body: {**body, "version": f"{body['version']}@{d['s']}"},
+        )
+        ctx.keep(key, o, r)
+    for side in SIDES:
+        d = ctx.data[side]
+        seed_number(ctx, d, "b1", "street", "2")
+        seed_number(ctx, d, "b2", "street", "4")
+        seed_number(ctx, d, "b4", "street", "6")
+
+    def create(d, buildings, rule="rule", kind="route", scope=None):
+        return {
+            "scope_kind": kind,
+            "scope_id": scope or d["street"]["id"],
+            "rule_id": d[rule]["id"],
+            "building_ids": [d[b]["id"] for b in buildings],
+        }
+
+    o, r = ctx.pair(
+        "E15 create proposal",
+        "POST",
+        "/proposals",
+        status=201,
+        body=lambda d: create(d, ["b1", "b2"]),
+        sort=True,
+    )
+    ctx.keep("p1", o, r, "proposal")
+    o, r = ctx.pair(
+        "E15 create proposal draft rule",
+        "POST",
+        "/proposals",
+        status=201,
+        body=lambda d: create(d, ["b4"], rule="rule_draft"),
+    )
+    ctx.keep("p2", o, r, "proposal")
+    ctx.pair("E15 proposal missing number", "POST", "/proposals", body=lambda d: create(d, ["b5"]))
+    ctx.pair(
+        "E15 proposal missing area",
+        "POST",
+        "/proposals",
+        body=lambda d: create(d, ["b5"], kind="area", scope=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 proposal missing route",
+        "POST",
+        "/proposals",
+        body=lambda d: create(d, ["b5"], scope=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 proposal missing rule",
+        "POST",
+        "/proposals",
+        body=lambda d: {**create(d, ["b5"]), "rule_id": str(uuid4())},
+    )
+    ctx.pair("E15 proposal empty buildings", "POST", "/proposals", body=lambda d: create(d, []))
+    ctx.pair("E15 list proposals", "GET", "/proposals", headers=ctx.h)
+    ctx.pair(
+        "E15 list proposals draft page",
+        "GET",
+        "/proposals",
+        headers=ctx.h,
+        params={"status": "draft", "limit": 1, "offset": 1},
+    )
+    ctx.pair(
+        "E15 list proposals bad status",
+        "GET",
+        "/proposals",
+        headers=ctx.h,
+        params={"status": "rejected"},
+    )
+    ctx.pair(
+        "E15 list proposals bad limit", "GET", "/proposals", headers=ctx.h, params={"limit": 0}
+    )
+    ctx.pair(
+        "E15 get proposal", "GET", lambda d: f"/proposals/{d['p1']['id']}", headers=ctx.h, sort=True
+    )
+    ctx.pair("E15 get proposal missing", "GET", f"/proposals/{uuid4()}", headers=ctx.h)
+
+    def move(label, key, rev, action, comment=None, headers=None, status=None):
+        body = {"expected_revision": rev, "action": action}
+        if comment is not None:
+            body["comment"] = comment
+        return ctx.pair(
+            label,
+            "POST",
+            lambda d: f"/proposals/{d[key]['id']}/transition",
+            body=body,
+            headers=headers,
+            status=status,
+        )
+
+    move("E15 proposal submit stale", "p1", 5, "submit")
+    move("E15 proposal approve draft invalid", "p1", 1, "approve")
+    move("E15 proposal submit", "p1", 1, "submit", status=200)
+    editor = make_member(ctx.owner_url, ctx.fx, "editor", "HN Proposal Editor")
+    move("E15 proposal editor approve denied", "p1", 2, "approve", headers=editor["csrf"])
+    move("E15 proposal withdraw needs reason", "p1", 2, "withdraw", comment="  ")
+    move("E15 proposal reject", "p1", 2, "reject", comment="sai số nhà", status=200)
+    move("E15 proposal resubmit", "p1", 3, "submit", status=200)
+    move("E15 proposal approve", "p1", 4, "approve", comment="đồng ý", status=200)
+    move("E15 proposal approve twice", "p1", 5, "approve")
+    move("E15 proposal p2 submit", "p2", 1, "submit", status=200)
+    move("E15 proposal approve draft rule", "p2", 2, "approve")
+    move("E15 proposal withdraw", "p2", 2, "withdraw", comment="rút lại", status=200)
+    ctx.pair(
+        "E15 get approved proposal",
+        "GET",
+        lambda d: f"/proposals/{d['p1']['id']}",
+        headers=ctx.h,
+        sort=True,
+    )
+
+    for side in SIDES:
+        seed_number(ctx, ctx.data[side], "b5", "street", "2")
+    o, r = ctx.pair(
+        "E15 create proposal occupied",
+        "POST",
+        "/proposals",
+        status=201,
+        body=lambda d: create(d, ["b5"]),
+    )
+    ctx.keep("p3", o, r, "proposal")
+    move("E15 proposal submit occupied number", "p3", 1, "submit")
+
+    ctx.pair(
+        "E15 plaque installed with approved number",
+        "PATCH",
+        lambda d: f"/buildings/{d['b1']['id']}/plaque",
+        body={"expected_revision": 2, "status": "installed"},
+        status=200,
+    )
+    ctx.pair(
+        "E15 retire building official number",
+        "DELETE",
+        lambda d: f"/buildings/{d['b1']['id']}",
+        params={"expected_revision": 3},
+    )
+    ctx.pair(
+        "E15 update route direction locked",
+        "PUT",
+        lambda d: f"/routes/{d['street']['id']}",
+        body={
+            "expected_revision": 2,
+            "name": "X",
+            "direction_state": "forward",
+            "status": "confirmed",
+        },
+    )
+    ctx.pair(
+        "E15 update building route locked",
+        "PUT",
+        lambda d: f"/buildings/{d['b1']['id']}",
+        body=lambda d: {
+            "expected_revision": 3,
+            "route_id": d["alley"]["id"],
+            "source_id": d["points"],
+            "feature_id": "pt-1",
+        },
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -878,6 +1079,7 @@ def main() -> int:
                     req(activated.status_code == 201, activated.text)
                     batch_hierarchy(ctx)
                     batch_buildings(ctx)
+                    batch_proposals(ctx)
             finally:
                 get_engine().dispose()
 

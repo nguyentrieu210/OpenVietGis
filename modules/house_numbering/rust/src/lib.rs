@@ -1,5 +1,6 @@
 //! Isolated official `house_numbering` vertical module depending ONLY on `ovg-module-sdk` and `ovg-core`.
 
+pub mod domain;
 pub mod module;
 pub mod numbering;
 pub mod prefix;

@@ -13,13 +13,65 @@ use crate::catalog::ProjectRead;
 
 mod buildings;
 mod hierarchy;
+mod proposals;
 
 pub use buildings::*;
 pub use hierarchy::*;
+pub use proposals::*;
 
-/// Read the `wire` jsonb column that every module query projects.
+/// Read the `wire` jsonb column that every module query projects, with Python
+/// `datetime.isoformat()` timestamps (`_wire` rows).
 pub(crate) fn wire(row: &sqlx::postgres::PgRow) -> Result<Value, AppError> {
-    row.try_get::<Value, _>("wire").map_err(db_error)
+    let mut value = row.try_get::<Value, _>("wire").map_err(db_error)?;
+    fix_times(&mut value, false);
+    Ok(value)
+}
+
+/// Like [`wire`] for rows FastAPI serializes with Pydantic (`...Z` for UTC).
+pub(crate) fn wire_py(row: &sqlx::postgres::PgRow) -> Result<Value, AppError> {
+    let mut value = row.try_get::<Value, _>("wire").map_err(db_error)?;
+    fix_times(&mut value, true);
+    Ok(value)
+}
+
+/// Postgres trims trailing fractional zeros; Python keeps six microsecond digits.
+pub(crate) fn fix_times(value: &mut Value, pydantic: bool) {
+    if let Some(object) = value.as_object_mut() {
+        for (key, item) in object.iter_mut() {
+            if !key.ends_with("_at") {
+                continue;
+            }
+            if let Some(fixed) = item.as_str().and_then(|text| py_timestamp(text, pydantic)) {
+                *item = Value::String(fixed);
+            }
+        }
+    }
+}
+
+fn py_timestamp(text: &str, pydantic: bool) -> Option<String> {
+    if text.len() < 25 || text.as_bytes().get(10) != Some(&b'T') {
+        return None;
+    }
+    let (main, offset) = text.split_at(text.len() - 6);
+    let ob = offset.as_bytes();
+    if !matches!(ob[0], b'+' | b'-') || ob[3] != b':' {
+        return None;
+    }
+    let (seconds, fraction) = main.split_once('.').unwrap_or((main, ""));
+    if seconds.len() != 19 || fraction.len() > 6 || !fraction.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let fraction = if fraction.bytes().all(|b| b == b'0') {
+        String::new()
+    } else {
+        format!(".{fraction:0<6}")
+    };
+    let offset = if pydantic && offset == "+00:00" {
+        "Z"
+    } else {
+        offset
+    };
+    Some(format!("{seconds}{fraction}{offset}"))
 }
 
 pub(crate) fn db_error(error: sqlx::Error) -> AppError {
@@ -91,10 +143,7 @@ async fn json_rows(
         .fetch_all(&mut **read.transaction())
         .await
         .map_err(db_error)?;
-    let items = rows
-        .iter()
-        .map(|row| row.try_get::<Value, _>("wire").map_err(db_error))
-        .collect::<Result<Vec<_>, _>>()?;
+    let items = rows.iter().map(wire).collect::<Result<Vec<_>, _>>()?;
     Ok(json!({ "items": items }))
 }
 
@@ -346,6 +395,7 @@ pub(crate) async fn spatial_feature(
 }
 
 fn rule_wire(mut wire: Value, distance: String) -> Result<Value, AppError> {
+    fix_times(&mut wire, false);
     let object = wire
         .as_object_mut()
         .ok_or_else(|| AppError::internal("house-numbering rule row must be an object"))?;
@@ -459,7 +509,7 @@ pub async fn create_area(
         json!({ "name": persisted_name }),
     )
     .await?;
-    row.try_get::<Value, _>("wire").map_err(db_error)
+    wire(&row)
 }
 
 #[cfg(test)]

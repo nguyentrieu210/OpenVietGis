@@ -2,6 +2,7 @@
 
 mod buildings;
 mod hierarchy;
+mod proposals;
 
 use std::collections::HashMap;
 
@@ -41,6 +42,7 @@ pub(crate) fn router() -> Router<AppState> {
         )
         .merge(hierarchy::router())
         .merge(buildings::router())
+        .merge(proposals::router())
 }
 
 #[derive(Debug, Deserialize)]
