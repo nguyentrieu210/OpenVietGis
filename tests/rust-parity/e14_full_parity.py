@@ -124,6 +124,17 @@ def norm_fields(body: object, *keys: str) -> object:
     return out
 
 
+# Each runtime registers its own extension key; map the Rust-side keys onto the oracle ones.
+RUST_SIDE_KEYS = {"demo_rust": "demo_oracle", "partner_acme_rust_tool": "partner_acme_oracle_tool"}
+
+
+def same_side(body: object) -> object:
+    text = json.dumps(body)
+    for rust_key, oracle_key in RUST_SIDE_KEYS.items():
+        text = text.replace(rust_key, oracle_key)
+    return json.loads(text)
+
+
 def compare(label: str, e, a, norm=lambda x: x, *, check_cache: bool = False):
     req(
         e.status_code == a.status_code,
@@ -135,7 +146,7 @@ def compare(label: str, e, a, norm=lambda x: x, *, check_cache: bool = False):
             f"{label}: cache-control {e.headers.get('cache-control')!r} != {a.headers.get('cache-control')!r}",
         )
     eb = norm(e.json())
-    ab = norm(a.json())
+    ab = norm(same_side(a.json()))
     diff = parity.difference(eb, ab)
     req(diff is None, f"{label}: {diff}\nexpected={eb}\nactual={ab}")
     print(f"PASS {label}", flush=True)
