@@ -36,12 +36,16 @@ fn wire(row: &PgRow) -> Result<Value, ModelStoreError> {
     }))
 }
 
+struct ModelActor<'a> {
+    actor_type: &'a str,
+    actor_id: Uuid,
+    actor_display: &'a str,
+}
+
 async fn audit(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     organization_id: Uuid,
-    actor_type: &str,
-    actor_id: Uuid,
-    actor_display: &str,
+    actor: ModelActor<'_>,
     resource_id: Uuid,
     action: &str,
     name: &str,
@@ -54,9 +58,9 @@ async fn audit(
     )
     .bind(Uuid::new_v4())
     .bind(organization_id)
-    .bind(actor_type)
-    .bind(actor_id)
-    .bind(actor_display)
+    .bind(actor.actor_type)
+    .bind(actor.actor_id)
+    .bind(actor.actor_display)
     .bind(action)
     .bind(resource_id)
     .bind(json!({"name": name}))
@@ -190,9 +194,11 @@ async fn create_model_tx(
     audit(
         tx,
         organization_id,
-        actor_type,
-        actor_id,
-        actor_display,
+        ModelActor {
+            actor_type,
+            actor_id,
+            actor_display,
+        },
         id,
         "processing.model.create",
         &input.name,
@@ -281,9 +287,11 @@ async fn update_model_tx(
     audit(
         tx,
         organization_id,
-        actor_type,
-        actor_id,
-        actor_display,
+        ModelActor {
+            actor_type,
+            actor_id,
+            actor_display,
+        },
         model_id,
         "processing.model.update",
         &input.name,
@@ -364,9 +372,11 @@ async fn delete_model_tx(
     audit(
         tx,
         organization_id,
-        actor_type,
-        actor_id,
-        actor_display,
+        ModelActor {
+            actor_type,
+            actor_id,
+            actor_display,
+        },
         model_id,
         "processing.model.delete",
         &name,

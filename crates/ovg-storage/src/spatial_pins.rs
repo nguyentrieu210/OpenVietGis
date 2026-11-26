@@ -33,8 +33,13 @@ pub struct FeaturePinInput {
 pub fn normalize_negative_zero(value: &Value) -> Value {
     match value {
         Value::Number(n) => match n.as_f64() {
-            Some(f) if f == 0.0 => json!(0.0_f64),
-            Some(f) => json!(f),
+            Some(f) => {
+                if f == 0.0 {
+                    json!(0.0_f64)
+                } else {
+                    json!(f)
+                }
+            }
             None => value.clone(),
         },
         Value::Array(items) => Value::Array(items.iter().map(normalize_negative_zero).collect()),

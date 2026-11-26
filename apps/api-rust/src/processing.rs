@@ -82,6 +82,12 @@ fn app_to_edit_error(err: AppError) -> EditError {
         AppError::BadRequest { code, message, .. } => EditError::validation(code, message),
         AppError::RateLimited { .. } => EditError::conflict("RATE_LIMITED", "too many requests"),
         AppError::ServiceUnavailable { message, .. } => EditError::detail(503, message),
+        AppError::Unauthorized { code, message } => EditError::Platform {
+            status: 401,
+            code,
+            message,
+            details: None,
+        },
         AppError::Internal { internal_detail } => EditError::Internal(internal_detail),
     }
 }

@@ -152,11 +152,10 @@ async fn pinned(
     }
 
     let stored_crs: Option<i32> = src_row.try_get("stored_crs").map_err(db_err)?;
-    let crs_ok = match (tile_read, stored_crs) {
-        (true, Some(4326 | 3857)) => true,
-        (false, Some(4326)) => true,
-        _ => false,
-    };
+    let crs_ok = matches!(
+        (tile_read, stored_crs),
+        (true, Some(4326 | 3857)) | (false, Some(4326))
+    );
     if !crs_ok {
         return Err(EditError::detail(
             422,
@@ -236,7 +235,7 @@ fn fillet_points(
     let u = (u.0 / lu, u.1 / lu);
     let v = (v.0 / lv, v.1 / lv);
     let theta = (u.0 * v.0 + u.1 * v.1).clamp(-1.0, 1.0).acos();
-    if theta < 0.01 || theta > std::f64::consts::PI - 0.01 {
+    if !(0.01..=std::f64::consts::PI - 0.01).contains(&theta) {
         return Err(EditError::detail(422, "Fillet requires a valid corner"));
     }
     let tangent = radius / (theta / 2.0).tan();

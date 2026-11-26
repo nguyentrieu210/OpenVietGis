@@ -712,28 +712,32 @@ fn web_transform_expr(
     ))
 }
 
+struct WebDomainCheck<'a> {
+    source_id: Uuid,
+    native_srid: i32,
+    expression: &'a str,
+    expression_srid: i32,
+    margin: f64,
+}
+
 async fn require_web_domain(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     org_id: Uuid,
     project_id: Uuid,
-    source_id: Uuid,
-    native_srid: i32,
-    expression: &str,
-    expression_srid: i32,
-    margin: f64,
+    check: WebDomainCheck<'_>,
 ) -> Result<(), EditError> {
-    let (min_x, min_y, max_x, max_y) = match expression_srid {
+    let (min_x, min_y, max_x, max_y) = match check.expression_srid {
         4326 => (
-            -180.0_f64 + margin,
-            -WEB_MERCATOR_MAX_LATITUDE + margin,
-            180.0_f64 - margin,
-            WEB_MERCATOR_MAX_LATITUDE - margin,
+            -180.0_f64 + check.margin,
+            -WEB_MERCATOR_MAX_LATITUDE + check.margin,
+            180.0_f64 - check.margin,
+            WEB_MERCATOR_MAX_LATITUDE - check.margin,
         ),
         3857 => (
-            -WEB_MERCATOR_MAX_COORDINATE_METRE + margin,
-            -WEB_MERCATOR_MAX_COORDINATE_METRE + margin,
-            WEB_MERCATOR_MAX_COORDINATE_METRE - margin,
-            WEB_MERCATOR_MAX_COORDINATE_METRE - margin,
+            -WEB_MERCATOR_MAX_COORDINATE_METRE + check.margin,
+            -WEB_MERCATOR_MAX_COORDINATE_METRE + check.margin,
+            WEB_MERCATOR_MAX_COORDINATE_METRE - check.margin,
+            WEB_MERCATOR_MAX_COORDINATE_METRE - check.margin,
         ),
         _ => {
             return Err(EditError::validation(
@@ -742,6 +746,7 @@ async fn require_web_domain(
             ))
         }
     };
+    let expr = check.expression;
     let sql = format!(
         "SELECT EXISTS (
             SELECT 1
@@ -752,10 +757,10 @@ async fn require_web_domain(
                     AND ST_SRID(geometry) = $4 AND ST_IsValid(geometry)
                     AND ST_Zmflag(geometry) = 0 AND NOT ST_IsEmpty(geometry)
                 THEN (
-                    ST_XMin({expression}) >= $5
-                    AND ST_XMax({expression}) <= $6
-                    AND ST_YMin({expression}) >= $7
-                    AND ST_YMax({expression}) <= $8
+                    ST_XMin({expr}) >= $5
+                    AND ST_XMax({expr}) <= $6
+                    AND ST_YMin({expr}) >= $7
+                    AND ST_YMax({expr}) <= $8
                 ) ELSE false END
             ) IS NOT TRUE
         )"
@@ -763,8 +768,8 @@ async fn require_web_domain(
     let invalid: bool = sqlx::query_scalar(&sql)
         .bind(org_id)
         .bind(project_id)
-        .bind(source_id)
-        .bind(native_srid)
+        .bind(check.source_id)
+        .bind(check.native_srid)
         .bind(min_x)
         .bind(max_x)
         .bind(min_y)
@@ -937,22 +942,26 @@ async fn prepare_inside_savepoint(
                     sp,
                     org_id,
                     project_id,
-                    input_src_id,
-                    input_srid,
-                    "geometry",
-                    input_srid,
-                    0.0,
+                    WebDomainCheck {
+                        source_id: input_src_id,
+                        native_srid: input_srid,
+                        expression: "geometry",
+                        expression_srid: input_srid,
+                        margin: 0.0,
+                    },
                 )
                 .await?;
                 require_web_domain(
                     sp,
                     org_id,
                     project_id,
-                    input_src_id,
-                    input_srid,
-                    &projected,
-                    3857,
-                    dist,
+                    WebDomainCheck {
+                        source_id: input_src_id,
+                        native_srid: input_srid,
+                        expression: &projected,
+                        expression_srid: 3857,
+                        margin: dist,
+                    },
                 )
                 .await?;
                 let (proj_rf, _, _) = web_transform_expr("rf.geometry", input_srid, 3857)?;
@@ -1051,11 +1060,13 @@ async fn prepare_inside_savepoint(
                     sp,
                     org_id,
                     project_id,
-                    overlay_src_id,
-                    overlay_srid,
-                    "geometry",
-                    overlay_srid,
-                    0.0,
+                    WebDomainCheck {
+                        source_id: overlay_src_id,
+                        native_srid: overlay_srid,
+                        expression: "geometry",
+                        expression_srid: overlay_srid,
+                        margin: 0.0,
+                    },
                 )
                 .await?;
                 format!("ST_Union({transformed})")
