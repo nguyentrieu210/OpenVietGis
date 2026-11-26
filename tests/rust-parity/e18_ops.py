@@ -327,12 +327,12 @@ def main() -> int:
             artifacts.mkdir()
             parity.configure_python(owner_url, runtime_url, artifacts)
             baseline.run_alembic_upgrade(owner_url, runtime_url)
-            secret = baseline.DEFAULT_CSRF_SECRET
+            key = baseline.DEFAULT_CSRF_SECRET
             fixture = baseline.seed_benchmark_database(
                 owner_url,
                 seed=20261126,
                 scales=["1k"],
-                csrf_secret=secret,
+                csrf_secret=key,
             )
             _, _, member = parity.scoped_member(owner_url, fixture)
 
