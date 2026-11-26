@@ -18,6 +18,7 @@ mod hierarchy;
 mod numbering;
 mod proposals;
 mod records;
+mod route_import;
 
 pub use assignment::*;
 pub use buildings::*;
@@ -26,6 +27,7 @@ pub use hierarchy::*;
 pub use numbering::*;
 pub use proposals::*;
 pub use records::*;
+pub use route_import::*;
 
 /// Read the `wire` jsonb column that every module query projects, with Python
 /// `datetime.isoformat()` timestamps (`_wire` rows).

@@ -254,7 +254,7 @@ pub async fn delete_area(
 }
 
 /// Port of `HouseNumberingRepository.validate_route_segments`.
-async fn validate_route_segments(
+pub(crate) async fn validate_route_segments(
     edit: &mut ProjectRead<'_>,
     source_id: Uuid,
     feature_id: &str,

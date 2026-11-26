@@ -7,6 +7,7 @@ mod hierarchy;
 mod numbering;
 mod proposals;
 mod records;
+mod route_import;
 
 use std::collections::HashMap;
 
@@ -51,6 +52,7 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(field::router())
         .merge(records::router())
         .merge(numbering::router())
+        .merge(route_import::router())
 }
 
 #[derive(Debug, Deserialize)]
