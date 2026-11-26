@@ -59,7 +59,8 @@ jobs:
 
       - name: Regenerate only canonical visual baselines
         run: >-
-          pnpm exec playwright test
+          uv run --project apps/api python -m tools.run_with_test_database
+          node node_modules/@playwright/test/cli.js test
           tests/e2e/app-shell-visual.spec.ts
           tests/e2e/map-workspace-visual.spec.ts
           --update-snapshots
