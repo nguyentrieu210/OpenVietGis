@@ -80,7 +80,7 @@ def stamped(body):
     return {key: value for key, value in body.items() if key != "updated_at"}
 
 
-def run_cases(oracle, rust, owner_url, fixture, surveyor):
+def run_cases(oracle, rust, owner_url, fixture, member):
     def both(method, path, *, token=None, csrf=None, body=None, raw=None, content_type=None):
         headers = parity.session_headers(token)
         if csrf is not None:
@@ -95,7 +95,7 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
     owner, csrf = fixture["session_a_token"], fixture["csrf_a_token"]
     from openvietgis_api.security.csrf import make_csrf_token
 
-    surveyor_csrf = make_csrf_token(surveyor, baseline.DEFAULT_CSRF_SECRET)
+    member_csrf = make_csrf_token(member, baseline.DEFAULT_CSRF_SECRET)
     org_a = f"{API}/organizations/{fixture['org_a_id']}"
     org_b = f"{API}/organizations/{fixture['org_b_id']}"
     entitlement = f"{org_a}/ops/entitlement"
@@ -114,7 +114,7 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
     compare_metrics("E18 Prometheus metrics", *both("GET", f"{API}/ops/metrics"))
 
     compare("E18 entitlement defaults for owner", *both("GET", entitlement, token=owner), 200)
-    compare("E18 entitlement member read", *both("GET", entitlement, token=surveyor), 200)
+    compare("E18 entitlement member read", *both("GET", entitlement, token=member), 200)
     compare("E18 entitlement anonymous 401", *both("GET", entitlement), 401)
     compare("E18 entitlement foreign tenant 404", *both("GET", foreign, token=owner), 404)
     compare(
@@ -148,7 +148,7 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
         )
     compare(
         "E18 entitlement put by member without settings permission 403",
-        *both("PUT", entitlement, token=surveyor, csrf=surveyor_csrf, body=put),
+        *both("PUT", entitlement, token=member, csrf=member_csrf, body=put),
         403,
     )
     compare(
@@ -327,13 +327,14 @@ def main() -> int:
             artifacts.mkdir()
             parity.configure_python(owner_url, runtime_url, artifacts)
             baseline.run_alembic_upgrade(owner_url, runtime_url)
+            secret = baseline.DEFAULT_CSRF_SECRET
             fixture = baseline.seed_benchmark_database(
                 owner_url,
                 seed=20261126,
                 scales=["1k"],
-                csrf_secret=baseline.DEFAULT_CSRF_SECRET,
+                csrf_secret=secret,
             )
-            _, _, surveyor = parity.scoped_member(owner_url, fixture)
+            _, _, member = parity.scoped_member(owner_url, fixture)
 
             from fastapi.testclient import TestClient
             from openvietgis_api.adapters.persistence.db import get_engine
@@ -344,7 +345,7 @@ def main() -> int:
                     TestClient(app, raise_server_exceptions=False) as oracle,
                     parity.rust_client(binary, runtime_url, work) as rust,
                 ):
-                    run_cases(oracle, rust, owner_url, fixture, surveyor)
+                    run_cases(oracle, rust, owner_url, fixture, member)
             finally:
                 get_engine().dispose()
             check_privileged_role(binary, owner_url, work)
