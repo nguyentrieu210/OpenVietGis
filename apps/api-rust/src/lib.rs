@@ -24,6 +24,7 @@ pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;
 pub mod state;
+pub(crate) mod team;
 pub(crate) mod tenancy;
 pub(crate) mod three_d;
 pub(crate) mod tilesets;

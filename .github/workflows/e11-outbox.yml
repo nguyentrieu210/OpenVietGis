@@ -53,3 +53,8 @@ jobs:
         run: |
           uv run --project apps/api python tests/rust-parity/e11/check_managed.py \
             --candidate target/debug/openvietgis-api-rust
+      - name: E11 project collaboration REST parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_team.py \
+            --candidate target/debug/openvietgis-api-rust

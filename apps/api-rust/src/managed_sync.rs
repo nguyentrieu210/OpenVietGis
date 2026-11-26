@@ -59,20 +59,20 @@ pub(crate) fn router() -> Router<AppState> {
 
 type Ids = Path<(String, String)>;
 type SessionIds = Path<(String, String, String)>;
-type Pairs = Vec<(String, String)>;
+pub(crate) type Pairs = Vec<(String, String)>;
 
-fn invalid() -> Failure {
+pub(crate) fn invalid() -> Failure {
     EditError::InvalidRequest.into()
 }
 
-fn query_pairs(uri: &Uri) -> Result<Pairs, Failure> {
+pub(crate) fn query_pairs(uri: &Uri) -> Result<Pairs, Failure> {
     Query::<Pairs>::try_from_uri(uri)
         .map(|Query(pairs)| pairs)
         .map_err(|_| invalid())
 }
 
 /// The last repeated value wins, like Starlette's `QueryParams`.
-fn param<'a>(pairs: &'a Pairs, key: &str) -> Option<&'a str> {
+pub(crate) fn param<'a>(pairs: &'a Pairs, key: &str) -> Option<&'a str> {
     pairs
         .iter()
         .rev()
@@ -80,13 +80,19 @@ fn param<'a>(pairs: &'a Pairs, key: &str) -> Option<&'a str> {
         .map(|(_, value)| value.as_str())
 }
 
-fn uuid_param(pairs: &Pairs, key: &str) -> Result<Uuid, Failure> {
+pub(crate) fn uuid_param(pairs: &Pairs, key: &str) -> Result<Uuid, Failure> {
     param(pairs, key)
         .and_then(|value| Uuid::parse_str(value).ok())
         .ok_or_else(invalid)
 }
 
-fn int_param(pairs: &Pairs, key: &str, default: i64, min: i64, max: i64) -> Result<i64, Failure> {
+pub(crate) fn int_param(
+    pairs: &Pairs,
+    key: &str,
+    default: i64,
+    min: i64,
+    max: i64,
+) -> Result<i64, Failure> {
     match param(pairs, key) {
         None => Ok(default),
         Some(value) => value
@@ -99,7 +105,7 @@ fn int_param(pairs: &Pairs, key: &str, default: i64, min: i64, max: i64) -> Resu
 }
 
 /// Pydantic lax boolean from a query string.
-fn bool_param(pairs: &Pairs, key: &str) -> Result<bool, Failure> {
+pub(crate) fn bool_param(pairs: &Pairs, key: &str) -> Result<bool, Failure> {
     let Some(value) = param(pairs, key) else {
         return Ok(false);
     };
@@ -111,7 +117,11 @@ fn bool_param(pairs: &Pairs, key: &str) -> Result<bool, Failure> {
 }
 
 /// `StringConstraints(strip_whitespace=True, min_length=1, max_length=max)`.
-fn stripped(value: Option<String>, default: &str, max: usize) -> Result<String, Failure> {
+pub(crate) fn stripped(
+    value: Option<String>,
+    default: &str,
+    max: usize,
+) -> Result<String, Failure> {
     let value = value.unwrap_or_else(|| default.to_owned());
     let value = py_strip(&value);
     let length = value.chars().count();
@@ -121,7 +131,7 @@ fn stripped(value: Option<String>, default: &str, max: usize) -> Result<String, 
     Ok(value.to_owned())
 }
 
-fn uuid(value: &str) -> Result<Uuid, Failure> {
+pub(crate) fn uuid(value: &str) -> Result<Uuid, Failure> {
     Uuid::parse_str(value).map_err(|_| invalid())
 }
 
@@ -150,7 +160,7 @@ async fn write_scope<'a>(
     Ok((scope, body, query_pairs(&uri)?))
 }
 
-async fn finish(
+pub(crate) async fn finish(
     scope: EditScope<'_>,
     body: Value,
     status: StatusCode,

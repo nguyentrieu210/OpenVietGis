@@ -8,6 +8,7 @@
 
 pub mod domain;
 pub mod managed;
+pub mod team;
 
 use std::collections::HashSet;
 

@@ -29,7 +29,7 @@ pub struct NewSession {
     pub expires_in_hours: i64,
 }
 
-fn now() -> DateTime<Utc> {
+pub(super) fn now() -> DateTime<Utc> {
     Utc::now().trunc_subsecs(6)
 }
 
@@ -147,7 +147,7 @@ impl EditScope<'_> {
         Ok(row.unwrap_or((0, 1, 0)))
     }
 
-    async fn audit_project(
+    pub(super) async fn audit_project(
         &mut self,
         action: &str,
         resource_type: &str,
@@ -218,8 +218,11 @@ impl EditScope<'_> {
     ) -> Result<PgRow, EditError> {
         let row = self.session_row(session_id).await?;
         // Do not disclose whether another actor's session is active or expired.
-        if !self.owns(&row)? && !(allow_manager && self.granted(Permission::Manage).await?) {
-            return Err(EditError::detail(404, SESSION_NOT_FOUND));
+        if !self.owns(&row)? {
+            let manager = allow_manager && self.granted(Permission::Manage).await?;
+            if !manager {
+                return Err(EditError::detail(404, SESSION_NOT_FOUND));
+            }
         }
         let state: String = get(&row, "state")?;
         let revoked_at: Option<DateTime<Utc>> = get(&row, "revoked_at")?;
