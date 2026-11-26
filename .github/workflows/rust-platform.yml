@@ -178,6 +178,24 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e07-transfers.log
 
+      - name: Run E14 extension, marketplace & partner parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e14_activations.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activations.log
+          uv run --project apps/api python tests/rust-parity/e14_activation_history.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activation-history.log
+          uv run --project apps/api python tests/rust-parity/e14_activation_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activation-writes.log
+          uv run --project apps/api python tests/rust-parity/e14_full_parity.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-full-parity.log
+
       - name: Record PostGIS version
         if: always()
         run: |

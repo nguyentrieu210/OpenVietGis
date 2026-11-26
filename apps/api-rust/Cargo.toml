@@ -22,6 +22,7 @@ house-numbering = ["dep:ovg-module-house-numbering"]
 axum.workspace = true
 base64.workspace = true
 chrono.workspace = true
+ed25519-dalek.workspace = true
 futures-util = { version = "0.3", default-features = false }
 hmac.workspace = true
 http.workspace = true
