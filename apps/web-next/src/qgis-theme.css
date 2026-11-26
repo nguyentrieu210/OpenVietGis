@@ -324,7 +324,7 @@
 
 /* CAD drawing bar lives in the header next to GIS | CAD */
 .qgis-studio header.top:has(.ovg-cad-inline-toolbar) .ovg-workspace-picker{flex:0 1 auto!important;min-width:0!important;max-width:220px}
-.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .top-integration-hub-btn{margin-left:0!important}
+.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .top-integration-hub-btn,.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .ovg-header-tools{display:none!important}
 .qgis-studio header.top .ovg-cad-inline-toolbar{order:3;flex:1 1 0;display:flex;flex-wrap:nowrap;align-items:center;gap:6px;min-width:0;max-width:none;overflow:hidden;padding:0;background:none!important;border:0!important;color:#dfe8ee}
 .qgis-studio header.top .ovg-cad-inline-toolbar input{flex:0 1 150px;height:26px;min-width:60px;max-width:200px;padding:2px 8px;border:1px solid #ffffff33!important;border-radius:5px;background:#ffffff14!important;color:#fff!important;font-size:12.5px}
 .qgis-studio header.top .ovg-cad-inline-toolbar strong{flex:0 1 auto;min-width:40px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
