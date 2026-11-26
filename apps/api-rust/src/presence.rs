@@ -83,7 +83,9 @@ fn broadcast(room: &Room) {
 }
 
 fn rooms() -> std::sync::MutexGuard<'static, HashMap<(Uuid, Uuid), Room>> {
-    ROOMS.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    ROOMS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn leave(key: (Uuid, Uuid), peer: &str) {
@@ -101,9 +103,9 @@ fn leave(key: (Uuid, Uuid), peer: &str) {
 /// Python `COLORS[int(sha256(actor).hexdigest(), 16) % 6]`.
 fn color(actor: &str) -> &'static str {
     let digest = Sha256::digest(actor.as_bytes());
-    let index = digest
-        .iter()
-        .fold(0usize, |acc, byte| (acc * 256 + usize::from(*byte)) % COLORS.len());
+    let index = digest.iter().fold(0usize, |acc, byte| {
+        (acc * 256 + usize::from(*byte)) % COLORS.len()
+    });
     COLORS[index]
 }
 
@@ -272,7 +274,9 @@ impl Reader {
                 }
                 0x1 | 0x2 => (opcode, payload),
                 0x8 => {
-                    let code = payload.get(..2).map(|code| u16::from_be_bytes([code[0], code[1]]));
+                    let code = payload
+                        .get(..2)
+                        .map(|code| u16::from_be_bytes([code[0], code[1]]));
                     return Ok(Some(Frame::Close(code)));
                 }
                 0x9 => return Ok(Some(Frame::Ping(payload))),
@@ -306,7 +310,10 @@ impl Reader {
             127 if buffer.len() >= 10 => {
                 let mut bytes = [0u8; 8];
                 bytes.copy_from_slice(&buffer[2..10]);
-                (usize::try_from(u64::from_be_bytes(bytes)).unwrap_or(usize::MAX), 10)
+                (
+                    usize::try_from(u64::from_be_bytes(bytes)).unwrap_or(usize::MAX),
+                    10,
+                )
             }
             126 | 127 => return Ok(None),
             short => (usize::from(short), 2),
@@ -383,7 +390,13 @@ fn update(cursor: &Value, view: &Value, raw: &str) -> Option<(Value, Value)> {
         None => view.clone(),
         Some(value) => numbers(
             value,
-            &[(-180.0, 180.0), (-85.0, 85.0), (0.0, 24.0), (-180.0, 180.0), (0.0, 85.0)],
+            &[
+                (-180.0, 180.0),
+                (-85.0, 85.0),
+                (0.0, 24.0),
+                (-180.0, 180.0),
+                (0.0, 85.0),
+            ],
         )?,
     };
     Some((cursor, view))
@@ -398,11 +411,7 @@ struct Connection {
 }
 
 impl Connection {
-    async fn run(
-        self,
-        io: TokioIo<hyper::upgrade::Upgraded>,
-        mut inbox: watch::Receiver<String>,
-    ) {
+    async fn run(self, io: TokioIo<hyper::upgrade::Upgraded>, mut inbox: watch::Receiver<String>) {
         let (mut reader, mut writer) = tokio::io::split(io);
         let (control, mut controls) = mpsc::channel::<Vec<u8>>(4);
         let sender = tokio::spawn(async move {
@@ -566,7 +575,10 @@ mod tests {
         assert!(update(&null, &null, r#"{}"#).is_none());
         assert!(update(&null, &null, r#"{"zoom":1}"#).is_none());
         let view = r#"{"view":[105,21,12,0,45]}"#;
-        assert_eq!(update(&null, &null, view).unwrap().1, json!([105, 21, 12, 0, 45]));
+        assert_eq!(
+            update(&null, &null, view).unwrap().1,
+            json!([105, 21, 12, 0, 45])
+        );
     }
 
     #[test]
@@ -575,7 +587,10 @@ mod tests {
         headers.insert(header::UPGRADE, "websocket".parse().unwrap());
         headers.insert(header::CONNECTION, "keep-alive, Upgrade".parse().unwrap());
         headers.insert(header::SEC_WEBSOCKET_VERSION, "13".parse().unwrap());
-        headers.insert(header::SEC_WEBSOCKET_KEY, "dGhlIHNhbXBsZSBub25jZQ==".parse().unwrap());
+        headers.insert(
+            header::SEC_WEBSOCKET_KEY,
+            "dGhlIHNhbXBsZSBub25jZQ==".parse().unwrap(),
+        );
         // RFC 6455 section 1.3 example.
         assert_eq!(
             accept_key(&headers).as_deref(),
