@@ -66,6 +66,118 @@ pub async fn list_layers(read: &mut ProjectRead<'_>) -> Result<Value, AppError> 
     Ok(serde_json::json!({ "items": items }))
 }
 
+pub async fn tile(
+    read: &mut ProjectRead<'_>,
+    layer_id: Uuid,
+    z: i32,
+    x: i32,
+    y: i32,
+) -> Result<Option<Vec<u8>>, AppError> {
+    sqlx::query_scalar::<_, Vec<u8>>(
+        "SELECT png FROM raster.tiles
+         WHERE organization_id=$1 AND project_id=$2
+           AND layer_id=$3 AND z=$4 AND x=$5 AND y=$6",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(layer_id)
+    .bind(z)
+    .bind(x)
+    .bind(y)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub async fn file_size(
+    read: &mut ProjectRead<'_>,
+    layer_id: Uuid,
+) -> Result<Option<i64>, AppError> {
+    sqlx::query_scalar::<_, i64>(
+        "SELECT octet_length(cog)::bigint FROM raster.layers
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(layer_id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub async fn file_slice(
+    read: &mut ProjectRead<'_>,
+    layer_id: Uuid,
+    offset_one_based: i64,
+    length: i64,
+) -> Result<Option<Vec<u8>>, AppError> {
+    sqlx::query_scalar::<_, Vec<u8>>(
+        "SELECT substring(cog, $4::integer, $5::integer) FROM raster.layers
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(layer_id)
+    .bind(offset_one_based)
+    .bind(length)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub async fn file(read: &mut ProjectRead<'_>, layer_id: Uuid) -> Result<Option<Vec<u8>>, AppError> {
+    sqlx::query_scalar::<_, Vec<u8>>(
+        "SELECT cog FROM raster.layers
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(layer_id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub async fn delete_layer(
+    edit: &mut ProjectRead<'_>,
+    actor_id: Uuid,
+    actor_display: &str,
+    layer_id: Uuid,
+) -> Result<Option<String>, AppError> {
+    let name = sqlx::query_scalar::<_, String>(
+        "DELETE FROM raster.layers
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3
+         RETURNING name",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(layer_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    sqlx::query(
+        "INSERT INTO audit.audit_events (
+            id,organization_id,actor_type,actor_id,actor_display_snapshot,
+            action,resource_type,resource_id,outcome,metadata,created_at
+         ) VALUES ($1,$2,'human',$3,$4,'raster.layer.delete',
+                   'raster_layer',$5,'success',$6,$7)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(edit.organization_id())
+    .bind(actor_id)
+    .bind(actor_display)
+    .bind(layer_id)
+    .bind(serde_json::json!({"name": name}))
+    .bind(Utc::now())
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    Ok(Some(name))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
