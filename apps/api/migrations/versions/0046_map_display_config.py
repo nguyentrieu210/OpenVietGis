@@ -60,7 +60,8 @@ _EXTRA = """
                     IF jsonb_typeof(item->'group') <> 'string'
                         OR char_length(item->>'group') NOT BETWEEN 1 AND 200
                         OR cardinality(string_to_array(item->>'group','/')) > 4
-                        OR EXISTS (SELECT 1 FROM unnest(string_to_array(item->>'group','/')) AS parts(part)
+                        OR EXISTS (SELECT 1 FROM
+                            unnest(string_to_array(item->>'group','/')) AS parts(part)
                             WHERE part = '' OR part ~ '^[[:space:]]|[[:space:]]$')
                     THEN RETURN false; END IF;
                 END IF;
@@ -84,9 +85,14 @@ def downgrade():
     # Revalidating explicit constraints checks every row regardless of runtime RLS.
     op.execute(_BASE)
     op.execute("ALTER TABLE maps.project_maps DROP CONSTRAINT ck_map_configuration")
-    op.execute("ALTER TABLE maps.project_maps ADD CONSTRAINT ck_map_configuration CHECK(maps.valid_configuration(configuration))")
+    op.execute(
+        "ALTER TABLE maps.project_maps ADD CONSTRAINT ck_map_configuration "
+        "CHECK(maps.valid_configuration(configuration))"
+    )
     op.execute("ALTER TABLE maps.map_revisions DROP CONSTRAINT ck_map_revision_configurations")
-    op.execute("""ALTER TABLE maps.map_revisions ADD CONSTRAINT ck_map_revision_configurations CHECK(
+    op.execute(
+        """ALTER TABLE maps.map_revisions ADD CONSTRAINT ck_map_revision_configurations CHECK(
         maps.valid_configuration(after_configuration)
         AND (before_configuration IS NULL OR maps.valid_configuration(before_configuration))
-        AND (before_configuration IS NULL OR before_configuration<>after_configuration))""")
+        AND (before_configuration IS NULL OR before_configuration<>after_configuration))"""
+    )

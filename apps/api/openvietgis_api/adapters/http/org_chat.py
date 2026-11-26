@@ -142,6 +142,13 @@ def org_scope(session: Session, auth: AuthenticatedRequest, o: UUID) -> Authoriz
     return ctx
 
 
+def human_actor_id(ctx: AuthorizationContext) -> UUID:
+    actor_id = ctx.actor.actor_id
+    if actor_id is None:
+        raise HTTPException(403, "Human organisation member required")
+    return actor_id
+
+
 def people(session: Session, o: UUID) -> dict[UUID, str]:
     return {r[0]: r[1] for r in session.execute(text(MEMBERS_SQL), {"o": o}).all()}
 
@@ -309,13 +316,13 @@ def rooms(organization_id: UUID, auth: ReadAuth, session: DB, response: Response
     ctx = org_scope(session, auth, organization_id)
     response.headers["Cache-Control"] = "no-store"
     org_room(session, organization_id)
-    return {"items": list_rooms(session, organization_id, ctx.actor.actor_id)}
+    return {"items": list_rooms(session, organization_id, human_actor_id(ctx))}
 
 
 @router.post(BASE + "/rooms", status_code=201)
 def create_room(organization_id: UUID, body: RoomRequest, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     ids = [i for i in dict.fromkeys(body.member_ids) if i != me]
     known = people(session, organization_id)
     if not ids or any(i not in known for i in ids):
@@ -343,7 +350,7 @@ def create_room(organization_id: UUID, body: RoomRequest, auth: WriteAuth, sessi
 @router.post(BASE + "/rooms/direct")
 def direct_room(organization_id: UUID, body: UserRequest, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     if body.user_id == me or body.user_id not in people(session, organization_id):
         raise HTTPException(404, "Person not found")
     low, high = min(me, body.user_id), max(me, body.user_id)
@@ -377,7 +384,7 @@ def rename_room(
     organization_id: UUID, room_id: UUID, body: RenameRequest, auth: WriteAuth, session: DB
 ):
     ctx = org_scope(session, auth, organization_id)
-    kind, role = room_access(session, organization_id, room_id, ctx.actor.actor_id)
+    kind, role = room_access(session, organization_id, room_id, human_actor_id(ctx))
     if kind != "group":
         raise HTTPException(422, "Only group rooms can be renamed")
     if role != "admin":
@@ -387,13 +394,13 @@ def rename_room(
         {"o": organization_id, "r": room_id, "name": body.name},
     )
     audit(session, ctx, room_id, "chat.room.rename", {})
-    return one_room(session, organization_id, ctx.actor.actor_id, room_id)
+    return one_room(session, organization_id, human_actor_id(ctx), room_id)
 
 
 @router.post(BASE + "/rooms/{room_id}/members")
 def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    kind, _ = room_access(session, organization_id, room_id, ctx.actor.actor_id)
+    kind, _ = room_access(session, organization_id, room_id, human_actor_id(ctx))
     if kind != "group":
         raise HTTPException(422, "Only group rooms accept members")
     known = people(session, organization_id)
@@ -426,7 +433,7 @@ def invite(organization_id: UUID, room_id: UUID, body: UsersRequest, auth: Write
             args | {"u": user},
         )
     audit(session, ctx, room_id, "chat.room.members.add", {"added": [str(i) for i in added]})
-    return one_room(session, organization_id, ctx.actor.actor_id, room_id)
+    return one_room(session, organization_id, human_actor_id(ctx), room_id)
 
 
 @router.delete(BASE + "/rooms/{room_id}/members/{user_id}", status_code=204)
@@ -434,7 +441,7 @@ def remove_member(
     organization_id: UUID, room_id: UUID, user_id: UUID, auth: WriteAuth, session: DB
 ):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     kind, role = room_access(session, organization_id, room_id, me)
     if kind != "group":
         raise HTTPException(422, "Only group rooms have removable members")
@@ -475,7 +482,7 @@ def messages(
     before: UUID | None = None,
 ):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     room_access(session, organization_id, room_id, me)
     response.headers["Cache-Control"] = "no-store"
     cursor = (
@@ -503,7 +510,7 @@ def post_message(
     organization_id: UUID, room_id: UUID, body: ChatMessageRequest, auth: WriteAuth, session: DB
 ):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     kind, _ = room_access(session, organization_id, room_id, me)
     args = {"o": organization_id, "r": room_id}
     if body.reply_to_id is not None and (
@@ -581,7 +588,7 @@ def attachment(organization_id: UUID, attachment_id: UUID, auth: ReadAuth, sessi
     ).one_or_none()
     if row is None:
         raise HTTPException(404, "Attachment not found")
-    message_room(session, organization_id, row[0], ctx.actor.actor_id)
+    message_room(session, organization_id, row[0], human_actor_id(ctx))
     return Response(
         bytes(row[2]),
         media_type=row[1],
@@ -596,12 +603,12 @@ def attachment(organization_id: UUID, attachment_id: UUID, auth: ReadAuth, sessi
 @router.post(BASE + "/rooms/{room_id}/read")
 def mark_read(organization_id: UUID, room_id: UUID, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    room_access(session, organization_id, room_id, ctx.actor.actor_id)
+    room_access(session, organization_id, room_id, human_actor_id(ctx))
     session.execute(
         text(f"""INSERT INTO {T}chat_room_members(organization_id,room_id,user_id,last_read_at)
           VALUES(:o,:r,:me,clock_timestamp()) ON CONFLICT (organization_id,room_id,user_id)
           DO UPDATE SET last_read_at=clock_timestamp()"""),
-        {"o": organization_id, "r": room_id, "me": ctx.actor.actor_id},
+        {"o": organization_id, "r": room_id, "me": human_actor_id(ctx)},
     )
     return {"read": True}
 
@@ -611,7 +618,7 @@ def react(
     organization_id: UUID, message_id: UUID, body: ReactionRequest, auth: WriteAuth, session: DB
 ):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     message_room(session, organization_id, message_id, me)
     args = {"o": organization_id, "m": message_id, "me": me, "e": body.emoji}
     removed = session.execute(
@@ -635,7 +642,7 @@ def react(
 @router.post(BASE + "/messages/{message_id}/pin")
 def pin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    room, _, _, _ = message_room(session, organization_id, message_id, ctx.actor.actor_id)
+    room, _, _, _ = message_room(session, organization_id, message_id, human_actor_id(ctx))
     args = {"o": organization_id, "r": room, "m": message_id}
     # Lock the room row so concurrent pins cannot exceed the cap.
     session.execute(
@@ -653,7 +660,7 @@ def pin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB):
         session.execute(
             text(f"""INSERT INTO {T}chat_pins(organization_id,room_id,message_id,pinned_by,
               pinned_by_name) VALUES(:o,:r,:m,:me,:name)"""),
-            args | {"me": ctx.actor.actor_id, "name": ctx.actor.display_name[:200]},
+            args | {"me": human_actor_id(ctx), "name": ctx.actor.display_name[:200]},
         )
     return {"pinned": True}
 
@@ -661,7 +668,7 @@ def pin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB):
 @router.delete(BASE + "/messages/{message_id}/pin")
 def unpin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     _, author, kind, role = message_room(session, organization_id, message_id, me)
     pinner = session.execute(
         text(f"SELECT pinned_by FROM {T}chat_pins WHERE organization_id=:o AND message_id=:m"),
@@ -681,7 +688,7 @@ def unpin(organization_id: UUID, message_id: UUID, auth: WriteAuth, session: DB)
 @router.get(BASE + "/rooms/{room_id}/pins")
 def pins(organization_id: UUID, room_id: UUID, auth: ReadAuth, session: DB, response: Response):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     room_access(session, organization_id, room_id, me)
     response.headers["Cache-Control"] = "no-store"
     rows = (
@@ -694,8 +701,8 @@ def pins(organization_id: UUID, room_id: UUID, auth: ReadAuth, session: DB, resp
         .mappings()
         .all()
     )
-    rows = [{k: v for k, v in r.items() if k != "message_id"} for r in rows]
-    return {"items": shape(session, organization_id, me, rows)}
+    shaped_rows = [{k: v for k, v in r.items() if k != "message_id"} for r in rows]
+    return {"items": shape(session, organization_id, me, shaped_rows)}
 
 
 def fold(value: str) -> str:
@@ -733,7 +740,7 @@ def list_people(
     q: Annotated[str | None, Query(max_length=80)] = None,
 ):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     response.headers["Cache-Control"] = "no-store"
     contacts, requests = contact_state(session, me)
     pending = {r["from_user"]: "incoming" for r in requests if r["to_user"] == me} | {
@@ -789,7 +796,7 @@ def person_avatar(
 @router.get(BASE + "/contacts")
 def contacts(organization_id: UUID, auth: ReadAuth, session: DB, response: Response):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     response.headers["Cache-Control"] = "no-store"
     known = people(session, organization_id)
     mine, requests = contact_state(session, me)
@@ -829,7 +836,7 @@ def make_contact(session: Session, a: UUID, b: UUID) -> None:
 @router.post(BASE + "/contacts/requests", status_code=201)
 def request_contact(organization_id: UUID, body: UserRequest, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     if body.user_id == me or body.user_id not in people(session, organization_id):
         raise HTTPException(404, "Person not found")
     # Per-pair lock: two crossing requests must end as one contact, not two pending.
@@ -864,7 +871,7 @@ def request_contact(organization_id: UUID, body: UserRequest, auth: WriteAuth, s
 
 
 def answer(session: Session, ctx, request_id: UUID, accept: bool) -> dict:
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     sender = session.execute(
         text(
             f"DELETE FROM {T}chat_contact_requests WHERE id=:id AND to_user=:me RETURNING from_user"
@@ -893,7 +900,7 @@ def decline(organization_id: UUID, request_id: UUID, auth: WriteAuth, session: D
 @router.delete(BASE + "/contacts/{user_id}", status_code=204)
 def remove_contact(organization_id: UUID, user_id: UUID, auth: WriteAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
-    me = ctx.actor.actor_id
+    me = human_actor_id(ctx)
     if (
         session.execute(
             text(
@@ -988,7 +995,7 @@ async def stream(request: Request, org: UUID, actor: UUID) -> AsyncIterator[str]
 def events(organization_id: UUID, request: Request, auth: ReadAuth, session: DB):
     ctx = org_scope(session, auth, organization_id)
     return StreamingResponse(
-        stream(request, organization_id, ctx.actor.actor_id),
+        stream(request, organization_id, human_actor_id(ctx)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store, no-transform",

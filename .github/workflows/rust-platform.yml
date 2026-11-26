@@ -7,6 +7,7 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
       - "rust-toolchain.toml"
       - ".cargo/**"
       - "apps/api-rust/**"
@@ -22,6 +23,7 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - "deny.toml"
       - "rust-toolchain.toml"
       - ".cargo/**"
       - "apps/api-rust/**"
@@ -215,6 +217,12 @@ jobs:
           set -o pipefail
           mkdir -p dist/audit
           cargo +stable audit --json | tee dist/audit/cargo-audit.json
+
+      - name: Install pinned cargo-deny
+        run: cargo +stable install cargo-deny --version 0.22.1 --locked
+
+      - name: Run cargo-deny
+        run: cargo +stable deny check all
 
       - name: Upload audit output
         if: always()

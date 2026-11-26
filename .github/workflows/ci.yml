@@ -91,7 +91,8 @@ jobs:
           pytest apps/api/tests/integration/identity/test_live_keycloak_oidc.py --show-capture=no
 
   validate:
-    runs-on: ubuntu-latest
+    # Visual baselines were recorded on Ubuntu 24.04; pin font/render stack.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -168,6 +169,17 @@ jobs:
       - name: Run the full Node 26 root validation workflow
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
+
+      - name: Upload Playwright diagnostics when root validation fails
+        if: ${{ failure() && !inputs.browser_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-validation-playwright-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Validate Engine-First editor and cache regression
         if: ${{ !inputs.browser_only }}

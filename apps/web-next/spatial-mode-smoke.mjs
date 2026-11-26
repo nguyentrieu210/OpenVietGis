@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
+ // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
+ await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
@@ -88,7 +90,7 @@ try{
  for(let i=0;i<100&&!releaseSave;i++)await new Promise(resolve=>setTimeout(resolve,20));
  assert.ok(releaseSave,"CAD save should be in flight");
  try{
-  await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click();
+  await modes.getByRole("button",{name:"GIS",exact:true}).click();
   await page.getByText("Hãy lưu hoặc hủy chỉnh sửa trước khi chuyển chế độ.").waitFor();
   assert.equal(await modes.getByRole("button",{name:"CAD",exact:true}).getAttribute("aria-pressed"),"true");
  }finally{holdSave=false;releaseSave()}
@@ -96,7 +98,7 @@ try{
  console.log("PASS in-flight CAD save blocks mode switch");
  console.log("PASS live CAD version UI");
  assert.equal(await page.getByRole("button",{name:"Tải xuống",exact:true}).count(),2);
- await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click({noWaitAfter:true});
+ await modes.getByRole("button",{name:"GIS",exact:true}).click({noWaitAfter:true});
  await page.locator(".qgis-map-region .maplibregl-canvas").waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -116,17 +118,17 @@ try{
  await modes.getByRole("button",{name:"GIS",exact:true}).click();
  await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click();
  await page.locator('[data-ovg-alternate-active="3d"] canvas').waitFor();
- await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').click();
+ await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"2D",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  console.log("PASS enabled business module can enter CAD and 3D without switching to Core");
  pluginCompatible=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached"});
- await page.getByRole("button",{name:/Plugin/}).click();
- const mismatch=page.locator(".studio-module-card").filter({hasText:"Quản lý và đánh số nhà"});
- await mismatch.getByText(/Phiên bản không tương thích/).waitFor();
- assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).isDisabled(),true);
- await page.getByRole("dialog",{name:"Plugin của dự án"}).getByRole("button",{name:"Đóng",exact:true}).click();
- await page.locator('body:has([data-workspace-mode="cad"]) #ovg-workspace-topbar button:first-child,body:not(:has([data-workspace-mode="cad"])) .ovg-map-mode>button:first-child').waitFor();
+ await page.getByRole("button",{name:/Chợ ứng dụng/}).click();
+ const mismatch=page.locator(".ovg-app").filter({hasText:"Quản lý và đánh số nhà"});
+ await mismatch.getByText("Phiên bản không khớp",{exact:true}).waitFor();
+ assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).count(),0);
+ await page.getByRole("dialog",{name:"Chợ ứng dụng"}).getByRole("button",{name:"Đóng",exact:true}).click();
+ await modes.getByRole("button",{name:"GIS",exact:true}).waitFor();
  console.log("PASS incompatible activation falls back to Core with explicit reason");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS integrated GIS → 3D → CAD, upload/revision, return to GIS, authorization revocation");
