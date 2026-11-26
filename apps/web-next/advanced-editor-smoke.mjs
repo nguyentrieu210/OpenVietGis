@@ -32,6 +32,9 @@ try{
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
   else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
+  else if(p.endsWith("/collaboration/edit-locks")&&method==="GET")body={items:[]};
+  else if(p.endsWith("/collaboration/edit-locks")&&method==="POST")body={ok:true};
+  else if(p.endsWith("/collaboration/edit-locks/release")&&method==="POST")body={ok:true};
   else return route.fulfill({status:404,json:{}});
   return route.fulfill({json:body});
  });
