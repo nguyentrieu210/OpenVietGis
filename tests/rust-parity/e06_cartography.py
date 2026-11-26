@@ -190,6 +190,7 @@ def seed_cartography(owner_url: str, fixture: dict, artifacts: Path):
     )
 
 
+@parity.case
 def compare_response(label: str, expected, actual) -> dict:
     require(
         expected.status_code == actual.status_code,

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import contextlib
+import functools
 import hashlib
 import os
 import socket
@@ -35,6 +37,33 @@ COOKIE_NAME = "ovg_session"
 def require(condition, detail):
     if not condition:
         raise AssertionError(detail)
+
+
+_CASE_FAILURES: list[str] = []
+
+
+def case(compare):
+    """Per-case comparison: record a mismatch and keep going (one run reports them all)."""
+
+    @functools.wraps(compare)
+    def run_case(label, *args, **kwargs):
+        try:
+            return compare(label, *args, **kwargs)
+        except AssertionError as exc:
+            _CASE_FAILURES.append(str(label))
+            print(f"FAIL {label}: {exc}", flush=True)
+            return None
+
+    return run_case
+
+
+@atexit.register
+def _fail_on_case_mismatch():
+    if _CASE_FAILURES:
+        failed = "; ".join(_CASE_FAILURES)
+        print(f"{len(_CASE_FAILURES)} parity case(s) failed: {failed}", flush=True)
+        sys.stderr.flush()
+        os._exit(1)
 
 
 @contextlib.contextmanager

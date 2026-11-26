@@ -105,6 +105,7 @@ def insert_activation(
     return aid
 
 
+@parity.case
 def compare_response(label: str, expected, actual):
     require(
         expected.status_code == actual.status_code,

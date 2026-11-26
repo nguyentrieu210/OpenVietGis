@@ -28,6 +28,7 @@ def require(condition: bool, detail: str) -> None:
         raise AssertionError(detail)
 
 
+@parity.case
 def compare(label: str, expected, actual, normalize=lambda x: x) -> None:
     require(
         expected.status_code == actual.status_code,
