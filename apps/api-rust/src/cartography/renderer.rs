@@ -1314,7 +1314,8 @@ mod tests {
         let raw: Vec<u8> = (0..200_000_u32).map(|i| (i % 7) as u8).collect();
         let packed = zlib(&raw);
         assert!(packed.len() < raw.len() / 10);
-        assert_eq!(miniz_oxide::inflate::decompress_to_vec_zlib(&packed).unwrap(), raw);
+        let unpacked = miniz_oxide::inflate::decompress_to_vec_zlib(&packed).unwrap();
+        assert_eq!(unpacked, raw);
         assert_eq!(crc32fast::hash(b"IEND"), 0xAE42_6082);
     }
 
@@ -1336,14 +1337,15 @@ mod tests {
     #[test]
     fn long_clipped_segment_is_continuous() {
         let mut canvas = Canvas::new(200, 100, [255, 255, 255]);
-        canvas.draw_line(-1.0e7, 50.0, 1.0e7, 50.0, [0, 0, 0], 1, Some([10, 10, 189, 89]));
+        let clip = Some([10, 10, 189, 89]);
+        canvas.draw_line(-1.0e7, 50.0, 1.0e7, 50.0, [0, 0, 0], 1, clip);
         for x in 0..200 {
             let idx = (50 * 200 + x) * 3;
             let inked = canvas.rgb[idx] == 0;
             assert_eq!(inked, (10..=189).contains(&x), "x={x}");
         }
         // Entirely outside the clip: nothing drawn.
-        canvas.draw_line(-1.0e7, 5.0, 1.0e7, 5.0, [0, 0, 0], 1, Some([10, 10, 189, 89]));
+        canvas.draw_line(-1.0e7, 5.0, 1.0e7, 5.0, [0, 0, 0], 1, clip);
         assert_eq!(canvas.rgb[(5 * 200 + 100) * 3], 255);
     }
 
