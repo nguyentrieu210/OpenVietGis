@@ -25,6 +25,7 @@ pub enum ProjectReadPolicy {
     LayerAcl,
     Unrestricted,
     UnrestrictedEdit,
+    UnrestrictedManage,
 }
 
 /// Proof of project.read on exactly one organization and project. The
@@ -34,6 +35,7 @@ pub struct ProjectRead<'a> {
     pub(crate) project_id: Uuid,
     pub(crate) gis_scoped: bool,
     edit_authorized: bool,
+    service_display_name: Option<String>,
 }
 
 impl<'a> ProjectRead<'a> {
@@ -86,9 +88,191 @@ impl<'a> ProjectRead<'a> {
         self.project_id
     }
 
+    #[must_use]
+    pub fn actor_id(&self) -> Uuid {
+        self.tx.actor_id()
+    }
+
+    #[must_use]
+    pub fn actor_type(&self) -> &'static str {
+        if self.service_display_name.is_some() {
+            "service_principal"
+        } else {
+            "human"
+        }
+    }
+
+    #[must_use]
+    pub fn service_display_name(&self) -> Option<&str> {
+        self.service_display_name.as_deref()
+    }
+
+    #[must_use]
+    pub fn is_gis_scoped(&self) -> bool {
+        self.gis_scoped
+    }
+
     /// The authorized, RLS-bound transaction for engine repositories.
     pub fn transaction(&mut self) -> &mut sqlx::Transaction<'a, sqlx::Postgres> {
         self.tx.tx_mut()
+    }
+
+    pub async fn begin_service(
+        pool: &'a DbPool,
+        organization_id: Uuid,
+        project_id: Uuid,
+        auth: &crate::editing::ServiceAuth,
+        policy: ProjectReadPolicy,
+    ) -> Result<Self, AppError> {
+        if auth.organization_id() != organization_id {
+            return Err(AppError::unauthorized("invalid service credential"));
+        }
+        let edit = matches!(
+            policy,
+            ProjectReadPolicy::UnrestrictedEdit | ProjectReadPolicy::UnrestrictedManage
+        );
+        let manage = matches!(policy, ProjectReadPolicy::UnrestrictedManage);
+        let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
+        let mut tx = TenantTransaction::begin(
+            pool,
+            &TenantScope {
+                organization_id,
+                workspace_id: None,
+                project_id: None,
+                actor: ActorContext {
+                    actor_type: ActorType::ServicePrincipal,
+                    actor_id: auth.principal_id(),
+                    credential_id: Some(auth.credential_id()),
+                    email: None,
+                },
+                permissions: Vec::new(),
+            },
+        )
+        .await?;
+
+        let safe_role: bool = sqlx::query_scalar(
+            "SELECT current_user = 'openvietgis_runtime'
+                 AND row_security_active('spatial.layers'::regclass)
+                 AND row_security_active('spatial.data_sources'::regclass)
+                 AND row_security_active('spatial.source_fields'::regclass)
+                 AND row_security_active('spatial.reference_features'::regclass)",
+        )
+        .fetch_one(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
+        if !safe_role {
+            return Err(AppError::internal(
+                "catalog requires the PostGIS runtime RLS role",
+            ));
+        }
+        tx.clear_project_context().await?;
+
+        let org_sql = format!("SELECT status FROM org.organizations WHERE id = $1 {lock}");
+        let org_status: String = sqlx::query_scalar(&org_sql)
+            .bind(organization_id)
+            .fetch_optional(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?
+            .ok_or_else(|| AppError::unauthorized("invalid service credential"))?;
+        if org_status != "active" {
+            return Err(AppError::unauthorized("invalid service credential"));
+        }
+
+        let display_name: String = sqlx::query_scalar(
+            "UPDATE org.service_credentials c
+             SET last_used_at = GREATEST(c.last_used_at, clock_timestamp())
+             FROM org.service_principals sp
+             WHERE c.organization_id = $1 AND c.service_principal_id = $2 AND c.id = $3
+               AND c.revoked_at IS NULL
+               AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
+               AND sp.organization_id = c.organization_id AND sp.id = c.service_principal_id
+               AND sp.status = 'active' AND sp.revoked_at IS NULL
+             RETURNING sp.name",
+        )
+        .bind(organization_id)
+        .bind(auth.principal_id())
+        .bind(auth.credential_id())
+        .fetch_optional(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| AppError::unauthorized("invalid service credential"))?;
+
+        let project_sql = format!(
+            "SELECT status, workspace_id FROM workspace.projects
+             WHERE organization_id = $1 AND id = $2 {lock}"
+        );
+        let project = sqlx::query_as::<_, (String, Option<Uuid>)>(&project_sql)
+            .bind(organization_id)
+            .bind(project_id)
+            .fetch_optional(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        let (project_status, workspace_id) = project
+            .filter(|(status, _)| matches!(status.as_str(), "active" | "archived"))
+            .ok_or_else(|| AppError::not_found("project not found"))?;
+
+        let (roles, permission) = if manage {
+            ("'manager'", "project.manage")
+        } else if edit {
+            ("'manager', 'editor', 'contributor'", "project.edit")
+        } else {
+            (
+                "'manager', 'editor', 'contributor', 'viewer'",
+                "project.read",
+            )
+        };
+        let permission_sql = format!(
+            "SELECT EXISTS (
+                 SELECT 1 FROM org.service_credentials c
+                 JOIN org.service_principals sp ON sp.organization_id = c.organization_id
+                      AND sp.id = c.service_principal_id
+                 JOIN org.resource_grants g ON g.organization_id = sp.organization_id
+                      AND g.subject_kind = 'service_principal' AND g.service_principal_id = sp.id
+                 WHERE c.organization_id = $1 AND sp.id = $2 AND c.id = $5
+                   AND c.revoked_at IS NULL
+                   AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
+                   AND sp.status = 'active' AND sp.revoked_at IS NULL
+                   AND g.revoked_at IS NULL AND g.role IN ({roles})
+                   AND (c.permission_ceiling IS NULL OR $6 = ANY(c.permission_ceiling))
+                   AND (g.scope_kind = 'organization'
+                        OR (g.scope_kind = 'workspace' AND g.workspace_id = $3)
+                        OR (g.scope_kind = 'project' AND g.project_id = $4))
+             )"
+        );
+        let allowed = sqlx::query_scalar::<_, bool>(&permission_sql)
+            .bind(organization_id)
+            .bind(auth.principal_id())
+            .bind(workspace_id)
+            .bind(project_id)
+            .bind(auth.credential_id())
+            .bind(permission)
+            .fetch_one(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        if !allowed {
+            return Err(AppError::forbidden(format!(
+                "missing permission: {permission}"
+            )));
+        }
+        if edit && project_status != "active" {
+            return Err(AppError::conflict(
+                "PROJECT_NOT_WRITABLE",
+                "The project is read-only.",
+            ));
+        }
+
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(project_id.to_string())
+            .execute(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        Ok(Self {
+            tx,
+            project_id,
+            gis_scoped: false,
+            edit_authorized: edit,
+            service_display_name: Some(display_name),
+        })
     }
 
     async fn open(
@@ -99,7 +283,11 @@ impl<'a> ProjectRead<'a> {
         session_id: Uuid,
         policy: ProjectReadPolicy,
     ) -> Result<Self, AppError> {
-        let edit = matches!(policy, ProjectReadPolicy::UnrestrictedEdit);
+        let edit = matches!(
+            policy,
+            ProjectReadPolicy::UnrestrictedEdit | ProjectReadPolicy::UnrestrictedManage
+        );
+        let manage = matches!(policy, ProjectReadPolicy::UnrestrictedManage);
         let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
         if organization_id.is_nil() {
             return Err(AppError::not_found("organization not found"));
@@ -213,7 +401,9 @@ impl<'a> ProjectRead<'a> {
             .filter(|(status, _)| matches!(status.as_str(), "active" | "archived"))
             .ok_or_else(|| AppError::not_found("project not found"))?;
 
-        let (roles, permission) = if edit {
+        let (roles, permission) = if manage {
+            ("'manager'", "project.manage")
+        } else if edit {
             ("'manager', 'editor', 'contributor'", "project.edit")
         } else {
             (
@@ -268,6 +458,7 @@ impl<'a> ProjectRead<'a> {
             project_id,
             gis_scoped,
             edit_authorized: edit,
+            service_display_name: None,
         })
     }
 

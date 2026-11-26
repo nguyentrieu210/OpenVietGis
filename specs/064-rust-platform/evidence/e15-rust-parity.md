@@ -1,9 +1,10 @@
 # E15 Rust-native house numbering — parity evidence
 
 Branch `064-e15-rust-native` (off `064-convergence`). Owner decision 2026-11-26 moves the
-E15 control plane to Rust; FastAPI stays the oracle and rollback path for routes not yet
-accepted. Per-route status lives in `contracts/engines/e15.json` (`rust_status`,
-`rust_note`): 57 native, 6 retained Python engines, 9 pending.
+E15 control plane to Rust while retaining six bounded document/file adapters in Python.
+FastAPI remains the differential oracle and rollback reference. Per-route status lives in
+`contracts/engines/e15.json` (`rust_status`, `rust_note`): **66 native, 6 retained
+Python adapters, 0 pending**.
 
 ## Layout (Principle I)
 - Pure rules: `modules/house_numbering/rust/src/domain.rs` (number parse/format,
@@ -39,6 +40,13 @@ timestamps, sha256 tokens), status codes and, for downloads, bytes plus content 
 The PostGIS parity job also runs the existing `e15_house_numbering_reads.py` and
 `e15_house_numbering_writes.py`.
 
+Takeover verification on 2026-11-26 completed **375/375 E15 differential cases** against
+FastAPI. This includes route-tree preview/apply/recovery, staged geometry, address-review
+list/single/batch writes, verified-link preview/apply, and the final
+`integrations/v1/addresses` projection with valid, invalid and revoked bearer credentials.
+The Rust module crate also passes **43/43 unit tests**, `cargo check`, and Clippy with
+`-D warnings`.
+
 ## Building assignment
 The eight `building-assignment/*` routes (audit, preview/apply, catalog and prefix recovery,
 correction preview/apply) are native. Parity seeds each runtime's own lines, points and
@@ -55,7 +63,12 @@ encoding (CSV/GeoJSON/DXF/Shapefile) and multipart evidence import. Rust already
 JSON/history/download sides of these features, so tenant authorization never depends on the
 retained adapters.
 
-## Pending
-Route-tree import (preview/apply/stage-geometry), address verification and verified links,
-and the service-credential integration lookup (needs E14's
-`ProjectRead::begin_service`). These stay on FastAPI until ported with parity.
+## Rust-native completion
+All E15 JSON/control-plane routes selected for migration are now Rust-native. The final
+service-credential address lookup uses the same tenant-bound credential validation and
+project-read grant/permission-ceiling checks as E14's `ProjectRead::begin_service`, then
+executes the approved-address projection inside the RLS-bound project transaction.
+
+The six retained Python routes are intentional format/document adapters rather than pending
+control-plane work. E15-AC3 synthetic 30k performance qualification and independent review
+remain release-quality gates; they do not represent missing Rust HTTP routes.

@@ -2962,6 +2962,73 @@ def batch_route_import(ctx: Ctx) -> None:
     route_case("E15 route import recovery after apply", "/preview", plain, status=200)
 
 
+
+def batch_integration(ctx: Ctx) -> None:
+    """V1 approved-address projection accepts scoped service credentials on both runtimes."""
+    org = f"{API}/organizations/{ctx.fx['org_a_id']}"
+    principal = ctx.client["o"].post(
+        f"{org}/service-principals",
+        headers=ctx.csrf,
+        json={"name": "E15 parity address partner"},
+    )
+    req(principal.status_code == 201, f"E15 service principal: {principal.text}")
+    principal_id = principal.json()["id"]
+    grant = ctx.client["o"].post(
+        f"{org}/grants",
+        headers=ctx.csrf,
+        json={
+            "subject_kind": "service_principal",
+            "subject_id": principal_id,
+            "scope_kind": "project",
+            "project_id": ctx.fx["project_a_id"],
+            "role": "viewer",
+        },
+    )
+    req(grant.status_code == 201, f"E15 service grant: {grant.text}")
+    credential = ctx.client["o"].post(
+        f"{org}/service-principals/{principal_id}/credentials",
+        headers=ctx.csrf,
+        json={"name": "readonly", "permission_ceiling": ["project.read"]},
+    )
+    req(credential.status_code == 201, f"E15 service credential: {credential.text}")
+    credential_id = credential.json()["id"]
+    bearer = {"authorization": f"Bearer {credential.json()['secret']}"}
+    path = ctx.root + "/integrations/v1/addresses"
+
+    compare(
+        "E15 integration approved addresses",
+        ctx.client["o"].get(path, headers=bearer, params={"query": "10", "limit": 20}),
+        ctx.client["r"].get(path, headers=bearer, params={"query": "10", "limit": 20}),
+        sort=True,
+    )
+    compare(
+        "E15 integration literal wildcard query",
+        ctx.client["o"].get(path, headers=bearer, params={"query": "%_"}),
+        ctx.client["r"].get(path, headers=bearer, params={"query": "%_"}),
+        sort=True,
+    )
+    compare(
+        "E15 integration short query",
+        ctx.client["o"].get(path, headers=bearer, params={"query": "1"}),
+        ctx.client["r"].get(path, headers=bearer, params={"query": "1"}),
+    )
+    compare(
+        "E15 integration invalid bearer",
+        ctx.client["o"].get(path, headers={"authorization": "Bearer invalid"}, params={"query": "10"}),
+        ctx.client["r"].get(path, headers={"authorization": "Bearer invalid"}, params={"query": "10"}),
+    )
+
+    revoked = ctx.client["o"].post(
+        f"{org}/service-principals/{principal_id}/credentials/{credential_id}/revoke",
+        headers=ctx.csrf,
+    )
+    req(revoked.status_code == 204, f"E15 credential revoke: {revoked.text}")
+    compare(
+        "E15 integration revoked bearer",
+        ctx.client["o"].get(path, headers=bearer, params={"query": "10"}),
+        ctx.client["r"].get(path, headers=bearer, params={"query": "10"}),
+    )
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -3019,6 +3086,7 @@ def main() -> int:
                     batch_geometry(ctx)
                     batch_building_assignment(ctx)
                     batch_route_import(ctx)
+                    batch_integration(ctx)
             finally:
                 get_engine().dispose()
 

@@ -593,6 +593,64 @@ pub async fn read_private(
 
 // ------------------------------------------------------------------------ search
 
+pub async fn integration_addresses(
+    read: &mut ProjectRead<'_>,
+    query: &str,
+    limit: i64,
+) -> Result<Value, AppError> {
+    let q = query.trim();
+    if !(2..=120).contains(&q.chars().count()) || !(1..=100).contains(&limit) {
+        return Err(validation("query length must be 2..120 and limit 1..100"));
+    }
+    let rows = sqlx::query(
+        "SELECT b.id AS address_id,n.number_text AS house_number,
+                r.name AS street,a.name AS area,
+                ST_X(ST_Transform(ST_PointOnSurface(f.geometry),4326)) AS longitude,
+                ST_Y(ST_Transform(ST_PointOnSurface(f.geometry),4326)) AS latitude
+         FROM house_numbering.address_numbers n
+         JOIN house_numbering.buildings b
+           ON b.organization_id=n.organization_id AND b.project_id=n.project_id
+          AND b.id=n.building_id AND b.state='active'
+         LEFT JOIN house_numbering.routes r
+           ON r.organization_id=b.organization_id AND r.project_id=b.project_id
+          AND r.id=n.route_id
+         LEFT JOIN house_numbering.areas a
+           ON a.organization_id=b.organization_id AND a.project_id=b.project_id
+          AND a.id=b.area_id
+         JOIN spatial.reference_features f
+           ON f.organization_id=b.organization_id AND f.project_id=b.project_id
+          AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
+         WHERE n.organization_id=$1 AND n.project_id=$2
+           AND n.kind='approved' AND n.retired_at IS NULL
+           AND f.geometry IS NOT NULL AND NOT ST_IsEmpty(f.geometry)
+           AND strpos(lower(concat_ws(' ',n.number_text,r.name,a.name)),lower($3))>0
+         ORDER BY CASE WHEN n.number_text=$3 THEN 0 ELSE 1 END,
+                  r.name,n.number_text,b.id
+         LIMIT $4",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(q)
+    .bind(limit)
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        let address_id: Uuid = row.try_get("address_id").map_err(db_error)?;
+        items.push(json!({
+            "address_id": address_id.to_string(),
+            "house_number": row.try_get::<String, _>("house_number").map_err(db_error)?,
+            "street": row.try_get::<Option<String>, _>("street").map_err(db_error)?,
+            "area": row.try_get::<Option<String>, _>("area").map_err(db_error)?,
+            "longitude": row.try_get::<f64, _>("longitude").map_err(db_error)?,
+            "latitude": row.try_get::<f64, _>("latitude").map_err(db_error)?,
+        }));
+    }
+    Ok(json!({"items": items, "crs": "EPSG:4326"}))
+}
+
 pub struct SearchInput<'a> {
     pub query: Option<&'a str>,
     pub x: Option<f64>,

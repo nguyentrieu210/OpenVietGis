@@ -19,6 +19,7 @@ use axum::{Json, Router};
 use ovg_core::AppError;
 use ovg_module_sdk::ModuleManifest;
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
+use ovg_storage::editing::{EditError, ServiceAuth};
 use ovg_storage::house_numbering;
 use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
 use serde::de::DeserializeOwned;
@@ -110,20 +111,11 @@ struct BuildingQuery {
     route_id: Option<Uuid>,
 }
 
-async fn module_scope<'a>(
-    state: &'a AppState,
-    auth: &HumanSession,
-    organization_id: Uuid,
-    project_id: Uuid,
-    policy: ProjectReadPolicy,
-) -> Result<ProjectRead<'a>, HouseNumberingError> {
-    // The global Python project_access_guard does not whitelist module paths.
-    // Unrestricted policies therefore preserve the scoped-GIS fail-closed behavior.
-    let mut read = project_read(state, auth, organization_id, project_id, policy)
-        .await
-        .map_err(HouseNumberingError::Access)?;
-
-    let active = house_numbering::active_manifest_contract(&mut read)
+async fn ensure_module_active(
+    state: &AppState,
+    read: &mut ProjectRead<'_>,
+) -> Result<(), HouseNumberingError> {
+    let active = house_numbering::active_manifest_contract(read)
         .await
         .map_err(HouseNumberingError::Domain)?;
     let shipped = state
@@ -148,6 +140,47 @@ async fn module_scope<'a>(
             "official module activation does not match shipped runtime",
         )));
     }
+    Ok(())
+}
+
+async fn module_scope<'a>(
+    state: &'a AppState,
+    auth: &HumanSession,
+    organization_id: Uuid,
+    project_id: Uuid,
+    policy: ProjectReadPolicy,
+) -> Result<ProjectRead<'a>, HouseNumberingError> {
+    // The global Python project_access_guard does not whitelist module paths.
+    // Unrestricted policies therefore preserve the scoped-GIS fail-closed behavior.
+    let mut read = project_read(state, auth, organization_id, project_id, policy)
+        .await
+        .map_err(HouseNumberingError::Access)?;
+    ensure_module_active(state, &mut read).await?;
+    Ok(read)
+}
+
+pub(super) async fn module_service_read<'a>(
+    state: &'a AppState,
+    auth: &ServiceAuth,
+    organization_id: Uuid,
+    project_id: Uuid,
+) -> Result<ProjectRead<'a>, HouseNumberingError> {
+    let pool = state.db_pool.as_ref().ok_or_else(|| {
+        HouseNumberingError::Domain(AppError::service_unavailable(
+            "DATABASE_UNAVAILABLE",
+            "database unavailable",
+        ))
+    })?;
+    let mut read = ProjectRead::begin_service(
+        pool,
+        organization_id,
+        project_id,
+        auth,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(service_scope_error)?;
+    ensure_module_active(state, &mut read).await?;
     Ok(read)
 }
 
@@ -331,6 +364,7 @@ async fn list_buildings(
 pub(super) enum HouseNumberingError {
     InvalidRequest,
     Permission(&'static str),
+    Detail(StatusCode, String),
     Access(CatalogError),
     Domain(AppError),
 }
@@ -350,6 +384,9 @@ impl IntoResponse for HouseNumberingError {
                 Json(serde_json::json!({"detail": detail})),
             )
                 .into_response(),
+            Self::Detail(status, detail) => {
+                (status, Json(serde_json::json!({"detail": detail}))).into_response()
+            }
             Self::Access(error) => error.into_response(),
             Self::Domain(AppError::Internal { internal_detail }) => {
                 tracing::error!(detail = %internal_detail, "house-numbering request failed");
@@ -361,6 +398,48 @@ impl IntoResponse for HouseNumberingError {
                 (status, Json(error.to_envelope(None))).into_response()
             }
         }
+    }
+}
+
+pub(super) fn service_auth_error(error: EditError) -> HouseNumberingError {
+    match error {
+        EditError::Detail(status, detail) => HouseNumberingError::Detail(
+            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            detail,
+        ),
+        EditError::InvalidRequest => HouseNumberingError::InvalidRequest,
+        EditError::Internal(detail) => HouseNumberingError::Domain(AppError::internal(detail)),
+        EditError::Spatial(status, code, detail) => {
+            HouseNumberingError::Access(CatalogError::Spatial(
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                code,
+                detail.into(),
+            ))
+        }
+        EditError::Platform {
+            status,
+            code,
+            message,
+            ..
+        } => HouseNumberingError::Detail(
+            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            format!("{code}: {message}"),
+        ),
+    }
+}
+
+fn service_scope_error(error: AppError) -> HouseNumberingError {
+    match error {
+        AppError::Unauthorized { message, .. } => {
+            HouseNumberingError::Detail(StatusCode::UNAUTHORIZED, message)
+        }
+        AppError::Forbidden { message, .. } => {
+            HouseNumberingError::Detail(StatusCode::FORBIDDEN, message)
+        }
+        AppError::NotFound { message, .. } => {
+            HouseNumberingError::Detail(StatusCode::NOT_FOUND, message)
+        }
+        other => HouseNumberingError::Domain(other),
     }
 }
 

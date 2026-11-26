@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use axum::body::Bytes;
-use axum::extract::{Path, Query, State};
+use axum::extract::{FromRequestParts, Path, Query, Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -12,6 +12,8 @@ use axum::{Json, Router};
 use ovg_module_house_numbering::domain::{
     classify_reconciliation, match_certificate, EvidenceCandidate,
 };
+use ovg_storage::editing::authenticate_service;
+use ovg_storage::editing::domain::py_strip;
 use ovg_storage::house_numbering as store;
 use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
 use serde::Deserialize;
@@ -20,9 +22,11 @@ use uuid::Uuid;
 
 use super::hierarchy::query_int;
 use super::{
-    audit_actor, csrf, decode, module_edit, module_manage, module_read, opt_text_len, path_id,
-    scope_ids, text_len, HnResult, HouseNumberingError, BASE,
+    audit_actor, csrf, decode, module_edit, module_manage, module_read, module_service_read,
+    opt_text_len, path_id, scope_ids, service_auth_error, text_len, HnResult, HouseNumberingError,
+    BASE,
 };
+use crate::catalog::CatalogError;
 use crate::identity::HumanSession;
 use crate::AppState;
 
@@ -64,6 +68,63 @@ pub(super) fn router() -> Router<AppState> {
             get(list_geometry_reviews),
         )
         .route(&format!("{BASE}/search"), get(search))
+        .route(
+            &format!("{BASE}/integrations/v1/addresses"),
+            get(integration_addresses),
+        )
+}
+
+async fn integration_addresses(
+    State(state): State<AppState>,
+    Path(params): Path<HashMap<String, String>>,
+    Query(query): Query<HashMap<String, String>>,
+    request: Request,
+) -> HnResult<Response> {
+    let (organization_id, project_id) = scope_ids(&params)?;
+    let q = query
+        .get("query")
+        .map(|value| value.trim())
+        .filter(|value| text_len(value, 2, 120))
+        .ok_or(HouseNumberingError::InvalidRequest)?;
+    let limit = query_int(&query, "limit", 50, 1, 100)?;
+
+    let (mut parts, _body) = request.into_parts();
+    let bearer = parts
+        .headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .filter(|value| {
+            value
+                .get(..7)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bearer "))
+        })
+        .map(|value| py_strip(&value[7..]));
+
+    let mut read = if let Some(raw) = bearer {
+        let pool = state.db_pool.as_ref().ok_or_else(|| {
+            HouseNumberingError::Domain(ovg_core::AppError::service_unavailable(
+                "DATABASE_UNAVAILABLE",
+                "database unavailable",
+            ))
+        })?;
+        let auth = authenticate_service(pool, organization_id, raw)
+            .await
+            .map_err(service_auth_error)?;
+        module_service_read(&state, &auth, organization_id, project_id).await?
+    } else {
+        let auth = HumanSession::from_request_parts(&mut parts, &state)
+            .await
+            .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))?;
+        module_read(&state, &auth, organization_id, project_id).await?
+    };
+
+    let result = store::integration_addresses(&mut read, q, limit).await?;
+    read.commit().await?;
+    let mut response = Json(result).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
 }
 
 async fn list_imports(

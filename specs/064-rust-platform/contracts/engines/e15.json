@@ -2694,8 +2694,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Address verification report, suggestions and batch groups."
+      "rust_status": "native",
+      "rust_note": "Rust-native address verification report/listing; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2778,8 +2778,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Address verification batch write path."
+      "rust_status": "native",
+      "rust_note": "Rust-native batch address verification write path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2863,8 +2863,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Address verification write path."
+      "rust_status": "native",
+      "rust_note": "Rust-native single address verification write path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2947,8 +2947,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Verified-link planner over address reviews."
+      "rust_status": "native",
+      "rust_note": "Rust-native verified-link preview/apply planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -3031,8 +3031,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Verified-link planner over address reviews."
+      "rust_status": "native",
+      "rust_note": "Rust-native verified-link preview/apply planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -3365,8 +3365,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Needs service-principal project credentials; waits for ProjectRead::begin_service from the E14 branch."
+      "rust_status": "native",
+      "rust_note": "Rust-native approved-address integration projection with scoped service credentials via ProjectRead::begin_service; differential bearer/revocation parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4688,8 +4688,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Route-tree import planner (route_import/route_recovery/route_topology)."
+      "rust_status": "native",
+      "rust_note": "Rust-native route-tree import apply path with preview-token and recovery semantics; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4771,8 +4771,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Route-tree import planner (route_import/route_recovery/route_topology)."
+      "rust_status": "native",
+      "rust_note": "Rust-native route-tree import preview/recovery/topology planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4854,8 +4854,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Depends on the route-tree import planner."
+      "rust_status": "native",
+      "rust_note": "Rust-native staged geometry review path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
