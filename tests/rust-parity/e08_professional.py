@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -42,6 +43,9 @@ def compare_json(label: str, expected, actual, *, tol=None):
         f"{label}: status {expected.status_code} != {actual.status_code}; "
         f"oracle={expected.text[:300]} rust={actual.text[:300]}",
     )
+    # a case not named with an error status must succeed, or both runtimes rejecting it would "pass"
+    if not re.search(r"\b[45]\d\d\b", label):
+        require(expected.status_code < 400, f"{label}: oracle {expected.status_code}: {expected.text[:300]}")
     ebody = expected.json()
     abody = actual.json()
     if tol is not None:
@@ -50,6 +54,10 @@ def compare_json(label: str, expected, actual, *, tol=None):
         mismatch = parity.difference(ebody, abody)
         require(mismatch is None, f"{label}: {mismatch}; oracle={ebody}; rust={abody}")
     print(f"PASS {label}", flush=True)
+
+
+# layer_id -> source_id; kept out of the selection because FastAPI Selection forbids extra fields
+SOURCES: dict[str, str] = {}
 
 
 def make_layer(client, project_root: str, csrf: dict, family: str, geoms: list, name: str):
@@ -89,9 +97,9 @@ def make_layer(client, project_root: str, csrf: dict, family: str, geoms: list, 
         )
         require(cs.status_code in (200, 201), cs.text)
         s = client.get(f"{project_root}/layers/{lid}", headers=csrf).json()["source"]
+    SOURCES[lid] = sid
     return {
         "layer_id": lid,
-        "source_id": sid,
         "content_revision": s["content_revision"],
         "schema_revision": s["schema_revision"],
         "feature_ids": ids,
@@ -305,7 +313,7 @@ def main() -> int:
                             (
                                 fixture["org_a_id"],
                                 fixture["project_a_id"],
-                                inv_layer["source_id"],
+                                SOURCES[inv_layer["layer_id"]],
                                 inv_layer["content_revision"],
                                 inv_layer["schema_revision"],
                             ),
