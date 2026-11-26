@@ -1579,7 +1579,7 @@ def batch_records(ctx: Ctx) -> None:
         headers=editor["h"],
     )
 
-    data = "building_id,house_number\nb1,2\n".encode()
+    data = b"building_id,house_number\nb1,2\n"
     resp = {}
     for side in SIDES:
         artifact = seed_artifact(ctx, "house-numbering-exports", "export.csv", "text/csv", data)
