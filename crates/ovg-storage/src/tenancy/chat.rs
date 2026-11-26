@@ -3,13 +3,13 @@
 
 use std::collections::{HashMap, HashSet};
 
+use base64::alphabet;
+use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Map, Value};
 use sqlx::postgres::PgRow;
-use base64::alphabet;
-use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
-use base64::Engine;
 use sqlx::Row;
 use unicode_normalization::char::canonical_combining_class;
 use unicode_normalization::UnicodeNormalization;
@@ -760,12 +760,12 @@ impl TenantTx {
              WHERE a.organization_id=$1 AND a.id=$2"
         );
         let (message, content_type, data) = sqlx::query_as::<_, (Uuid, String, Vec<u8>)>(&sql)
-        .bind(organization)
-        .bind(attachment)
-        .fetch_optional(&mut *self.tx)
-        .await
-        .map_err(db)?
-        .ok_or_else(|| EditError::detail(404, "Attachment not found"))?;
+            .bind(organization)
+            .bind(attachment)
+            .fetch_optional(&mut *self.tx)
+            .await
+            .map_err(db)?
+            .ok_or_else(|| EditError::detail(404, "Attachment not found"))?;
         self.message_room(organization, message).await?;
         Ok((content_type, data))
     }
@@ -1255,7 +1255,10 @@ fn room_wire(row: &PgRow) -> Result<Value, EditError> {
     wire.insert("id".into(), json!(field::<Uuid>(row, "id")?));
     wire.insert("kind".into(), json!(kind));
     wire.insert("name".into(), json!(name));
-    wire.insert("member_count".into(), json!(field::<i64>(row, "member_count")?));
+    wire.insert(
+        "member_count".into(),
+        json!(field::<i64>(row, "member_count")?),
+    );
     wire.insert("unread".into(), json!(field::<i64>(row, "unread")?));
     wire.insert("mentioned".into(), json!(field::<bool>(row, "mentioned")?));
     wire.insert("last_message".into(), last_message);

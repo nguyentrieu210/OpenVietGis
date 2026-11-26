@@ -350,9 +350,18 @@ async fn attachment(
         .map_err(|_| EditError::Internal("attachment content type".into()))?;
     let headers = [
         (header::CONTENT_TYPE, content_type),
-        (header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=86400")),
-        (header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")),
-        (header::CONTENT_DISPOSITION, HeaderValue::from_static("inline")),
+        (
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("private, max-age=86400"),
+        ),
+        (
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ),
+        (
+            header::CONTENT_DISPOSITION,
+            HeaderValue::from_static("inline"),
+        ),
     ];
     Ok((headers, Body::from(data)).into_response())
 }
