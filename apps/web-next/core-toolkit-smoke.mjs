@@ -27,8 +27,8 @@ try{
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
   else if(p.endsWith("/access/mine"))body={restricted:false};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
-  else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Vùng đệm",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Cắt lớp",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Gộp vùng",required_inputs:["input_layer"],parameters_schema:{}}]};
-  else if(p.endsWith("/processing/jobs")&&method==="GET")body={items:[]};
+  else if(p.includes("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Vùng đệm",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Cắt lớp",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Gộp vùng",required_inputs:["input_layer"],parameters_schema:{}}]};
+  else if(p.includes("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
   else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
   else return route.fulfill({status:404,json:{}});
