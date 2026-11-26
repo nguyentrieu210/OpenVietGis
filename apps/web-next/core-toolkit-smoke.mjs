@@ -41,7 +41,7 @@ try{
  const command=async(t)=>{const input=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await input.fill(t);await input.press("Enter")};
  await command("HELP");assert.ok(await page.locator(".core-command-list button").count()>35);
  await command("DIST 106.7,10.8 106.701,10.8");const sketch=page.locator(".core-sketch");await sketch.waitFor();const distance=sketch.locator(".core-sketch-measure dd").nth(1);await distance.waitFor();assert.match(await distance.innerText(),/^109\.\d{2} m$/);
- await command("END");await page.getByText(/hoàn tất/).first().waitFor();await command("ESC");await page.locator(".core-sketch").waitFor({state:"detached"});
+ await command("END");await page.getByText("Hoàn tất thao tác",{exact:true}).first().waitFor();await command("ESC");await page.locator(".core-sketch").waitFor({state:"detached"});
  await command("HIDE");await page.getByText(/100 đang hiển thị/).waitFor();await command("SHOW");await page.getByText(/200 đang hiển thị/).waitFor();
  await command("LAYER");await page.getByRole("dialog",{name:/Thuộc tính layer/}).waitFor();await page.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();
  const savedMap=page.waitForResponse(r=>r.request().method()==="PUT"&&new URL(r.url()).pathname.endsWith("/map"));await command("SAVE");const saveResponse=await savedMap;assert.equal(saveResponse.status(),200);assert.equal((await saveResponse.json()).configuration_revision,2);assert.equal(mapSavePayload.expected_revision,1);assert.equal(mapSavePayload.layers.length,2);await page.getByText("Đã lưu bố cục, thứ tự, kiểu và trạng thái layer.",{exact:true}).first().waitFor();
