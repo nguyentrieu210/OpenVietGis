@@ -121,6 +121,43 @@ pub async fn scene_history(
     ))
 }
 
+#[derive(Debug, Clone)]
+pub struct ModelBinary {
+    pub filename: String,
+    pub payload: Vec<u8>,
+}
+
+pub async fn model_binary(
+    read: &mut ProjectRead<'_>,
+    id: Uuid,
+) -> Result<Option<ModelBinary>, AppError> {
+    use sha2::{Digest, Sha256};
+    let row = sqlx::query(
+        "SELECT filename,sha256,payload FROM spatial.model_assets
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db)?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let filename = row.try_get::<String, _>("filename").map_err(db)?;
+    let expected = row.try_get::<String, _>("sha256").map_err(db)?;
+    let payload = row.try_get::<Vec<u8>, _>("payload").map_err(db)?;
+    let actual = format!("{:x}", Sha256::digest(&payload));
+    if actual != expected {
+        return Err(AppError::conflict(
+            "MODEL_INTEGRITY_FAILED",
+            "Model integrity check failed",
+        ));
+    }
+    Ok(Some(ModelBinary { filename, payload }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
