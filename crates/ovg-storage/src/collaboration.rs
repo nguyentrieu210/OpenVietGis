@@ -1,11 +1,9 @@
 //! Project activity history: committed edits merged with review events, keyset paged.
 
-use std::time::Duration;
-
 use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Value};
-use sqlx::postgres::{PgListener, PgPool, PgPoolOptions};
+use sqlx::postgres::{PgListener, PgPool};
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
@@ -163,13 +161,8 @@ pub struct ChangeListener {
 
 impl ChangeListener {
     pub async fn connect(pool: &DbPool, channel: &str) -> Result<Self, AppError> {
-        let options = (*pool.inner().connect_options()).clone();
-        let dedicated = PgPoolOptions::new()
-            .max_connections(1)
-            .acquire_timeout(Duration::from_secs(5))
-            .connect_with(options)
-            .await
-            .map_err(listener_error)?;
+        // Same runtime-role verification as the request pool.
+        let dedicated = pool.dedicated().await.map_err(listener_error)?;
         let listener = match PgListener::connect_with(&dedicated).await {
             Ok(listener) => listener,
             Err(error) => {

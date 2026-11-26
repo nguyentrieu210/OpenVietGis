@@ -32,6 +32,10 @@ const COLORS: [&str; 6] = [
 ];
 const MAX_PEERS: usize = 64;
 const MAX_ROOM: usize = 40;
+// Not in the Python route: one user cannot take the whole process budget.
+const MAX_PER_ACTOR: usize = 8;
+const KEEPALIVE: Duration = Duration::from_secs(20);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(3);
 const ACCEPT_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const REAUTHORIZE_EVERY: Duration = Duration::from_secs(5);
 const MIN_INTERVAL: Duration = Duration::from_millis(80);
@@ -200,7 +204,12 @@ async fn presence(
     {
         let mut rooms = rooms();
         let total: usize = rooms.values().map(Vec::len).sum();
-        if total >= MAX_PEERS || rooms.get(&key).map_or(0, Vec::len) >= MAX_ROOM {
+        let same_actor = |other: &&Peer| other.actor == peer.actor;
+        let mine = rooms.values().flatten().filter(same_actor).count();
+        if total >= MAX_PEERS
+            || rooms.get(&key).map_or(0, Vec::len) >= MAX_ROOM
+            || mine >= MAX_PER_ACTOR
+        {
             return forbidden();
         }
         rooms.entry(key).or_default().push(peer);
@@ -318,6 +327,11 @@ impl Reader {
             126 | 127 => return Ok(None),
             short => (usize::from(short), 2),
         };
+        // RFC 6455 5.5: control frames are unfragmented, at most 125 bytes, and a close
+        // body is either empty or a two-byte code plus reason.
+        if opcode >= 0x8 && (!fin || length > 125 || (opcode == 0x8 && length == 1)) {
+            return Err(1002);
+        }
         if length > MAX_FRAME {
             return Err(POLICY);
         }
@@ -410,85 +424,115 @@ struct Connection {
     session: Uuid,
 }
 
+/// How a presence connection ended.
+#[derive(Debug, PartialEq)]
+enum Ending {
+    /// The server closes with this code.
+    Close(u16),
+    /// The client closed; the echo is already queued.
+    Echoed,
+    /// The transport is gone or the writer failed: nothing more to send.
+    Gone,
+}
+
 impl Connection {
     async fn run(self, io: TokioIo<hyper::upgrade::Upgraded>, mut inbox: watch::Receiver<String>) {
         let (mut reader, mut writer) = tokio::io::split(io);
         let (control, mut controls) = mpsc::channel::<Vec<u8>>(4);
-        let sender = tokio::spawn(async move {
+        let mut sender = tokio::spawn(async move {
             loop {
-                tokio::select! {
+                let frame = tokio::select! {
                     changed = inbox.changed() => {
                         if changed.is_err() {
                             break;
                         }
-                        let frame = encode(0x1, inbox.borrow_and_update().as_bytes());
-                        let sent = tokio::time::timeout(
-                            Duration::from_secs(3),
-                            writer.write_all(&frame),
-                        );
-                        if !matches!(sent.await, Ok(Ok(()))) {
-                            break;
-                        }
+                        encode(0x1, inbox.borrow_and_update().as_bytes())
                     }
                     frame = controls.recv() => {
                         let Some(frame) = frame else {
                             break;
                         };
-                        let closing = frame.first() == Some(&0x88);
-                        if writer.write_all(&frame).await.is_err() || closing {
-                            let _ = writer.shutdown().await;
-                            break;
-                        }
+                        frame
                     }
+                };
+                // Every write is bounded so a stalled peer cannot pin the connection.
+                let written = tokio::time::timeout(WRITE_TIMEOUT, writer.write_all(&frame));
+                if !matches!(written.await, Ok(Ok(()))) {
+                    break;
+                }
+                if frame.first() == Some(&0x88) {
+                    let _ = tokio::time::timeout(WRITE_TIMEOUT, writer.shutdown()).await;
+                    break;
                 }
             }
         });
         if let Some(room) = rooms().get(&self.key) {
             broadcast(room);
         }
-        let close = self.receive(&mut reader, &control, &sender).await;
-        if let Some(code) = close {
-            let _ = control.send(encode(0x8, &code.to_be_bytes())).await;
-            let _ = tokio::time::timeout(Duration::from_secs(2), sender).await;
-        } else {
-            sender.abort();
+        let ending = self.receive(&mut reader, &control, &sender).await;
+        let queued = match ending {
+            Ending::Close(code) => control.try_send(encode(0x8, &code.to_be_bytes())).is_ok(),
+            Ending::Echoed => true,
+            Ending::Gone => false,
+        };
+        if queued {
+            // Let the close frame go out (bounded by the write timeout) before dropping.
+            let _ = tokio::time::timeout(Duration::from_secs(2), &mut sender).await;
         }
+        sender.abort();
         leave(self.key, &self.peer);
     }
 
-    /// Read until the connection ends; `Some(code)` when the server closes it.
+    /// Read until the connection ends.
     async fn receive(
         &self,
         reader: &mut tokio::io::ReadHalf<TokioIo<hyper::upgrade::Upgraded>>,
         control: &mpsc::Sender<Vec<u8>>,
         sender: &tokio::task::JoinHandle<()>,
-    ) -> Option<u16> {
+    ) -> Ending {
         let mut frames = Reader::default();
         let mut check = Instant::now() + REAUTHORIZE_EVERY;
+        let mut ping_at = Instant::now() + KEEPALIVE;
+        let mut pong_by: Option<Instant> = None;
         let mut last: Option<Instant> = None;
         loop {
             if sender.is_finished() {
-                return None;
+                return Ending::Gone;
             }
-            if Instant::now() >= check {
+            let now = Instant::now();
+            if now >= check {
                 let (actor, session) = (self.actor, self.session);
                 if !still_allowed(&self.state, self.key, actor, session).await {
-                    return Some(POLICY);
+                    return Ending::Close(POLICY);
                 }
                 check = Instant::now() + REAUTHORIZE_EVERY;
             }
+            // Keepalive like uvicorn: ping every 20 s, give up after 20 s of silence.
+            if pong_by.is_some_and(|deadline| now >= deadline) {
+                return Ending::Close(1011);
+            }
+            if pong_by.is_none() && now >= ping_at {
+                if control.try_send(encode(0x9, b"")).is_err() {
+                    return Ending::Gone;
+                }
+                pong_by = Some(now + KEEPALIVE);
+                ping_at = now + KEEPALIVE;
+            }
             let frame = match frames.next() {
-                Err(code) => return Some(code),
+                Err(code) => return Ending::Close(code),
                 Ok(Some(frame)) => frame,
                 Ok(None) => {
-                    let read = tokio::time::timeout_at(check, reader.read_buf(&mut frames.buffer));
+                    let wake = check.min(pong_by.unwrap_or(ping_at));
+                    let read = tokio::time::timeout_at(wake, reader.read_buf(&mut frames.buffer));
                     match read.await {
                         Err(_) => continue,
-                        Ok(Ok(0) | Err(_)) => return None,
+                        Ok(Ok(0) | Err(_)) => return Ending::Gone,
                         Ok(Ok(_)) => continue,
                     }
                 }
             };
+            // Any frame proves the peer is alive.
+            pong_by = None;
             match frame {
                 Frame::Text(text) => {
                     let now = Instant::now();
@@ -497,19 +541,26 @@ impl Connection {
                     }
                     last = Some(now);
                     if !self.apply(&text) {
-                        return Some(POLICY);
+                        return Ending::Close(POLICY);
                     }
                 }
                 // Binary frames are not part of the presence protocol.
-                Frame::Binary => return Some(1003),
+                Frame::Binary => return Ending::Close(1003),
                 Frame::Ping(payload) => {
-                    let _ = control.send(encode(0xA, &payload)).await;
+                    // A peer that does not drain its pongs is stuck: drop it.
+                    if control.try_send(encode(0xA, &payload)).is_err() {
+                        return Ending::Gone;
+                    }
                 }
                 Frame::Pong => {}
                 Frame::Close(code) => {
                     let echo = code.map(|code| code.to_be_bytes().to_vec());
-                    let _ = control.send(encode(0x8, &echo.unwrap_or_default())).await;
-                    return None;
+                    let echo = encode(0x8, &echo.unwrap_or_default());
+                    return if control.try_send(echo).is_ok() {
+                        Ending::Echoed
+                    } else {
+                        Ending::Gone
+                    };
                 }
             }
         }
@@ -562,6 +613,12 @@ mod tests {
         assert_eq!(reader.next(), Ok(Some(Frame::Close(Some(1000)))));
         reader.buffer.extend([0x81, 0x01, b'x']);
         assert_eq!(reader.next(), Err(1002));
+        // Control frames must be final, short, and never carry a one-byte close body.
+        for frame in [masked(0x09, b""), masked(0x88, b"x")] {
+            let mut reader = Reader::default();
+            reader.buffer.extend(frame);
+            assert_eq!(reader.next(), Err(1002));
+        }
     }
 
     #[test]

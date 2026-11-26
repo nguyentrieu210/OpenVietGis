@@ -20,7 +20,7 @@ use ovg_storage::editing::managed::NewSession;
 use ovg_storage::editing::{CommitRequest, EditError, EditOperation, EditScope, Guard, Permission};
 use serde::Deserialize;
 use serde_json::{Map, Value};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio::time::Instant;
 use uuid::Uuid;
 
@@ -33,6 +33,10 @@ const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/integ
 const RETRY: &str = "retry: 3000\n\n";
 const SESSION_REVOKED: &str = "event: session_revoked\ndata: {\"revoked\":true}\n\n";
 const HEARTBEAT: &str = "event: heartbeat\ndata: {\"ok\":true}\n\n";
+const UNAVAILABLE: &str = "event: unavailable\ndata: {}\n\n";
+
+/// Dedicated LISTEN connections for managed streams per process (like `MAX_LISTENERS`).
+static MANAGED_LISTENERS: Semaphore = Semaphore::const_new(40);
 
 pub(crate) fn router() -> Router<AppState> {
     let commands = format!("{BASE}/desktop-sessions/{{session_id}}/commands");
@@ -526,10 +530,19 @@ async fn pump(state: AppState, sender: mpsc::Sender<String>, feed: ManagedFeed) 
     if sender.send(RETRY.to_owned()).await.is_err() {
         return;
     }
-    let Some(pool) = state.db_pool.as_ref() else {
+    // Bounded like the other streams: each one holds a dedicated LISTEN connection.
+    // A terminal frame (not a silent end) keeps clients on their 3 s retry.
+    let Ok(_slot) = MANAGED_LISTENERS.try_acquire() else {
+        let _ = sender.send(UNAVAILABLE.to_owned()).await;
         return;
     };
-    let Ok(mut listener) = ChangeListener::connect(pool, "ovg_team_collaboration").await else {
+    let channel = "ovg_team_collaboration";
+    let connected = match state.db_pool.as_ref() {
+        Some(pool) => ChangeListener::connect(pool, channel).await.ok(),
+        None => None,
+    };
+    let Some(mut listener) = connected else {
+        let _ = sender.send(UNAVAILABLE.to_owned()).await;
         return;
     };
     wake(&state, &sender, &feed, &mut listener).await;

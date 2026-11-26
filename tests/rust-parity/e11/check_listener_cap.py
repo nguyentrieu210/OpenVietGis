@@ -28,6 +28,7 @@ from run import (
 
 CAP = 40
 UNAVAILABLE = "event: unavailable\ndata: {}\n\n"
+RETRY = "retry: 3000\n\n"
 
 
 def settle(owner, limit=25, timeout=90):
@@ -42,6 +43,28 @@ def settle(owner, limit=25, timeout=90):
             return
         time.sleep(1)
     print(f"WARN {count} database connections still open", flush=True)
+
+
+@parity.case
+def managed_cap(label, client, path, headers):
+    """Rust-only: managed streams hold a LISTEN connection each, so they are capped too."""
+    streams = [Frames(client, path, headers) for _ in range(CAP)]
+    try:
+        for index, stream in enumerate(streams):
+            frame = stream.next(20)
+            require(frame == RETRY, f"managed stream {index} got {frame!r}")
+        time.sleep(3)  # `retry` precedes LISTEN: let every stream take its slot.
+        extra = Frames(client, path, headers)
+        try:
+            frames = [extra.next(20) for _ in range(3)]
+            require(frames == [RETRY, UNAVAILABLE, "<closed>"],
+                    f"managed stream {CAP + 1} got {frames!r}")
+        finally:
+            extra.close()
+    finally:
+        for stream in streams:
+            stream.close()
+    print(f"PASS {label}", flush=True)
 
 
 @parity.case
@@ -90,7 +113,7 @@ def main():
             "organization chat": f"/api/v1/organizations/{fixture['org_a_id']}/chat/events",
         }
         with fastapi_server(work) as oracle, rust_client(binary, runtime, work) as rust:
-            _, editor, _ = editor_member(owner, oracle, fixture, csrf)
+            _, editor, editor_csrf = editor_member(owner, oracle, fixture, csrf)
             # FastAPI frees a slot only at its next 15 s wake-up: wait for each family
             # to release its connections so the test never hits max_connections.
             for name, client in (("Rust", rust), ("FastAPI", oracle)):
@@ -98,6 +121,12 @@ def main():
                     settle(owner)
                     listener_cap(f"E11 {name} {family} stream 41 is unavailable", client, path,
                                  editor)
+            settle(owner)
+            created = rust.post(f"{project}/integration-hub/managed/sessions", headers=editor_csrf,
+                                json={})
+            require(created.status_code == 201, f"managed session: {created.text}")
+            managed = f"{project}/integration-hub/managed/events?session_id={created.json()['id']}"
+            managed_cap("E11 Rust managed stream 41 is unavailable", rust, managed, editor)
     print("E11 listener cap parity finished", flush=True)
 
 
