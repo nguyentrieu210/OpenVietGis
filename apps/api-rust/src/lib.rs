@@ -3,6 +3,7 @@
 pub(crate) mod cad_bridge;
 pub mod cartography;
 pub(crate) mod catalog;
+pub(crate) mod collaboration;
 pub mod config;
 pub mod connectors;
 pub(crate) mod editing;

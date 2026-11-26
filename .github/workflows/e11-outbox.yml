@@ -6,6 +6,7 @@ on:
       - "infra/rust-platform/e11/**"
       - "apps/api-rust/**"
       - "crates/ovg-storage/**"
+      - "crates/ovg-sync/**"
       - "tests/rust-parity/e11/**"
       - ".github/workflows/e11-outbox.yml"
   pull_request:
@@ -13,6 +14,7 @@ on:
       - "infra/rust-platform/e11/**"
       - "apps/api-rust/**"
       - "crates/ovg-storage/**"
+      - "crates/ovg-sync/**"
       - "tests/rust-parity/e11/**"
       - ".github/workflows/e11-outbox.yml"
 permissions:
@@ -40,4 +42,9 @@ jobs:
       - run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust --features e11-candidate
       - run: |
           uv run --project apps/api python tests/rust-parity/e11/check_outbox.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 activity cursor and SSE parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_realtime.py \
             --candidate target/debug/openvietgis-api-rust

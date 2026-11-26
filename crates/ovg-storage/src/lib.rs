@@ -3,6 +3,7 @@
 pub mod cad_documents;
 pub mod cartography;
 pub mod catalog;
+pub mod collaboration;
 pub mod e11_outbox;
 pub mod editing;
 pub mod extensions;
