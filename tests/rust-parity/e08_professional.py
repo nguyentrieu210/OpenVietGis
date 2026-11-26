@@ -67,27 +67,28 @@ def make_layer(client, project_root: str, csrf: dict, family: str, geoms: list, 
     lid, sid = rec.json()["layer_id"], rec.json()["source_id"]
     s = client.get(f"{project_root}/layers/{lid}", headers=csrf).json()["source"]
     ids = [f"feat_{i}_{uuid4().hex[:8]}" for i in range(len(geoms))]
-    cs = client.post(
-        f"{project_root}/sources/{sid}/changesets",
-        headers=csrf,
-        json={
-            "operation_id": str(uuid4()),
-            "base_content_revision": s["content_revision"],
-            "base_schema_revision": s["schema_revision"],
-            "summary": f"seed {name}",
-            "operations": [
-                {
-                    "op_type": "create",
-                    "feature_id": fid,
-                    "geometry": {"type": family, "coordinates": g},
-                    "properties": {"nm": "A"},
-                }
-                for fid, g in zip(ids, geoms, strict=True)
-            ],
-        },
-    )
-    require(cs.status_code in (200, 201), cs.text)
-    s = client.get(f"{project_root}/layers/{lid}", headers=csrf).json()["source"]
+    if ids:
+        cs = client.post(
+            f"{project_root}/sources/{sid}/changesets",
+            headers=csrf,
+            json={
+                "operation_id": str(uuid4()),
+                "base_content_revision": s["content_revision"],
+                "base_schema_revision": s["schema_revision"],
+                "summary": f"seed {name}",
+                "operations": [
+                    {
+                        "op_type": "create",
+                        "feature_id": fid,
+                        "geometry": {"type": family, "coordinates": g},
+                        "properties": {"nm": "A"},
+                    }
+                    for fid, g in zip(ids, geoms, strict=True)
+                ],
+            },
+        )
+        require(cs.status_code in (200, 201), cs.text)
+        s = client.get(f"{project_root}/layers/{lid}", headers=csrf).json()["source"]
     return {
         "layer_id": lid,
         "source_id": sid,
@@ -428,7 +429,7 @@ def main() -> int:
 
                     # Register native 3857 fixture via oracle and test tile on both
                     reg = oracle.post(
-                        f"{project_root}/spatial/sources/register",
+                        f"{project_root}/spatial/sources",
                         headers=csrf,
                         json={"reference_key": "reference_points_3857", "name": "Ref 3857"},
                     )

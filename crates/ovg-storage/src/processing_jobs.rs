@@ -1153,7 +1153,7 @@ async fn prepare_inside_savepoint(
                 if exists.is_none() {
                     return Err(EditError::validation(
                         "UNKNOWN_FIELD",
-                        format!("unknown dissolve group_by_field {gf:?}"),
+                        format!("unknown dissolve group_by_field '{gf}'"),
                     ));
                 }
             }
@@ -1262,7 +1262,7 @@ async fn prepare_inside_savepoint(
         _ => {
             return Err(EditError::validation(
                 "INVALID_ALGORITHM",
-                format!("unsupported algorithm {algorithm_id:?}"),
+                format!("unsupported algorithm '{algorithm_id}'"),
             ));
         }
     }
