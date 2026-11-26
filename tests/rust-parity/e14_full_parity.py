@@ -211,7 +211,7 @@ def main() -> int:
             )
 
             # Create member, developer users, reviewer, and second project before starting apps.
-            member_uid, _, member_tok, member_csrf = create_user_session(
+            _, _, member_tok, member_csrf = create_user_session(
                 owner_url, f["org_a_id"], "member", "Org Member"
             )
             dev_o_uid, _, dev_o_tok, dev_o_csrf = create_user_session(
@@ -269,12 +269,8 @@ def main() -> int:
             owner_csrf = parity.session_headers(
                 f["session_a_token"], **{"x-openvietgis-csrf": f["csrf_a_token"]}
             )
-            member_h = parity.session_headers(member_tok)
             member_csrf_h = parity.session_headers(member_tok, **{"x-openvietgis-csrf": member_csrf})
             foreign_h = parity.session_headers(f["session_b_token"])
-            foreign_csrf_h = parity.session_headers(
-                f["session_b_token"], **{"x-openvietgis-csrf": f["csrf_b_token"]}
-            )
 
             try:
                 with (

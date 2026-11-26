@@ -6,6 +6,7 @@ pub mod records;
 pub mod validation;
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use ovg_core::AppError;
@@ -104,7 +105,12 @@ pub fn canonical_bytes(value: &Value, limit: usize) -> Result<Vec<u8>, AppError>
 
 pub fn bundle_digest(bundle: &Value) -> Result<String, AppError> {
     let bytes = canonical_bytes(bundle, MAX_BUNDLE_BYTES)?;
-    Ok(hex::encode(Sha256::digest(&bytes)))
+    let digest = Sha256::digest(&bytes);
+    let mut out = String::with_capacity(64);
+    for b in digest {
+        let _ = write!(out, "{b:02x}");
+    }
+    Ok(out)
 }
 
 #[must_use]
