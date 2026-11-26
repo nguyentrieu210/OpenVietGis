@@ -23,6 +23,8 @@ const LEASE_COLS: &str = "source_id,feature_id,actor_id,actor_name,expires_at";
 
 type MessageAnchor = (Option<Uuid>, Option<String>, Option<f64>, Option<f64>);
 type SourceState = (String, String, String, String);
+/// A validated draft operation keyed by its normalized feature ID.
+type DraftOperation = (String, Map<String, Value>);
 
 /// FastAPI `jsonable_encoder(dict(row))` for the column types these routes return.
 pub(crate) fn row_json(row: &PgRow) -> Result<Value, EditError> {
@@ -1246,7 +1248,7 @@ impl EditScope<'_> {
 }
 
 /// `validate_rebase_draft`: (normalized feature ID, operation with that ID).
-fn validate_rebase_draft(draft: &[Value]) -> Result<Vec<(String, Map<String, Value>)>, EditError> {
+fn validate_rebase_draft(draft: &[Value]) -> Result<Vec<DraftOperation>, EditError> {
     if !(1..=2000).contains(&draft.len()) {
         return Err(platform(
             422,
@@ -1283,7 +1285,7 @@ fn validate_rebase_draft(draft: &[Value]) -> Result<Vec<(String, Map<String, Val
 }
 
 fn analyze_draft_conflicts(
-    draft: Vec<(String, Map<String, Value>)>,
+    draft: Vec<DraftOperation>,
     intervening: &HashSet<String>,
     current: &str,
     existing: &HashSet<String>,
