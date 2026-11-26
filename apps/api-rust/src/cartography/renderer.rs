@@ -7,11 +7,12 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
+use ab_glyph::{point, Font, FontRef, Glyph, GlyphId, PxScale, ScaleFont};
 use ovg_core::AppError;
 use ovg_storage::cartography::PrintLayerSnapshot;
 use serde_json::{json, Value};
 
-use super::{Orientation, PaperSize, PrintFormat};
+use super::{pythonish_str, Orientation, PaperSize, PrintFormat};
 
 #[derive(Debug, Clone)]
 pub(crate) struct PrintFrameMetrics {
@@ -215,13 +216,13 @@ fn resolve_feature_color(style: Option<&Value>, attributes: &Value) -> (String, 
                 .and_then(|s| s.get("field"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let val_str = json_str_cmp(attributes.get(field));
+            let val_str = pythonish_str(attributes.get(field).unwrap_or(&Value::Null));
             if let Some(cats) = spec
                 .and_then(|s| s.get("categories"))
                 .and_then(Value::as_array)
             {
                 for cat in cats {
-                    if json_str_cmp(cat.get("value")) == val_str {
+                    if pythonish_str(cat.get("value").unwrap_or(&Value::Null)) == val_str {
                         let color = cat
                             .get("color")
                             .and_then(Value::as_str)
@@ -241,16 +242,12 @@ fn resolve_feature_color(style: Option<&Value>, attributes: &Value) -> (String, 
                 .and_then(|s| s.get("field"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let num = attributes.get(field).and_then(|v| match v {
-                Value::Number(n) => n.as_f64(),
-                Value::String(s) => s.parse::<f64>().ok(),
-                _ => None,
-            });
+            let num = attributes.get(field).and_then(py_float);
             if let Some(num) = num.filter(|n| n.is_finite()) {
                 if let Some(breaks) = spec.and_then(|s| s.get("breaks")).and_then(Value::as_array) {
                     for brk in breaks {
-                        let lo = brk.get("min").and_then(Value::as_f64);
-                        let hi = brk.get("max").and_then(Value::as_f64);
+                        let lo = brk.get("min").and_then(py_float);
+                        let hi = brk.get("max").and_then(py_float);
                         if let (Some(lo), Some(hi)) = (lo, hi) {
                             if lo <= num && num <= hi {
                                 let color = brk
@@ -269,14 +266,13 @@ fn resolve_feature_color(style: Option<&Value>, attributes: &Value) -> (String, 
     }
 }
 
-fn json_str_cmp(value: Option<&Value>) -> String {
+/// Python `float(value)` for JSON scalars: bools are 0/1, strings are trimmed.
+fn py_float(value: &Value) -> Option<f64> {
     match value {
-        None | Some(Value::Null) => "None".to_owned(),
-        Some(Value::Bool(true)) => "True".to_owned(),
-        Some(Value::Bool(false)) => "False".to_owned(),
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => n.to_string(),
-        Some(other) => other.to_string(),
+        Value::Bool(b) => Some(f64::from(u8::from(*b))),
+        Value::Number(n) => n.as_f64(),
+        Value::String(s) => s.trim().parse::<f64>().ok(),
+        _ => None,
     }
 }
 
@@ -342,8 +338,7 @@ pub(crate) fn render_print_map(
         }
         let max_label_x = frame.width as i32 - frame.margin - 8;
         for (label, _, _) in &legend_entries {
-            let text_w = (label.chars().count() as i32) * 6;
-            if lx0 + 38 + text_w > max_label_x {
+            if lx0 + 38 + text_width(label) > max_label_x {
                 return Err(AppError::validation(
                     "PRINT_LEGEND_OVERFLOW",
                     "legend label does not fit",
@@ -455,7 +450,7 @@ pub(crate) fn render_print_map(
             )?;
             if let (Some(lf), Some((ax, ay))) = (label_field, anchor) {
                 if let Some(val) = feat.attributes.get(lf).filter(|v| !v.is_null()) {
-                    let label = json_str_cmp(Some(val));
+                    let label = pythonish_str(val);
                     canvas.draw_text_clipped(
                         ax.round() as i32,
                         ay.round() as i32,
@@ -805,11 +800,23 @@ impl Canvas {
         if !x0.is_finite() || !y0.is_finite() || !x1.is_finite() || !y1.is_finite() {
             return;
         }
-        let dx = x1 - x0;
-        let dy = y1 - y0;
-        let steps = dx.abs().max(dy.abs()).ceil().min(20_000.0) as i32;
         let half = (width - 1).max(0) / 2;
         let extra = width - 1 - half;
+        // Clip to the visible rect (plus stroke width) so step count is bounded without gaps.
+        let [rx0, ry0, rx1, ry1] =
+            clip.unwrap_or([0, 0, self.width as i32 - 1, self.height as i32 - 1]);
+        let rect = [
+            f64::from(rx0 - width),
+            f64::from(ry0 - width),
+            f64::from(rx1 + width),
+            f64::from(ry1 + width),
+        ];
+        let Some((x0, y0, x1, y1)) = clip_segment(x0, y0, x1, y1, rect) else {
+            return;
+        };
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        let steps = dx.abs().max(dy.abs()).ceil() as i32;
         if steps == 0 {
             let ix = x0.round() as i32;
             let iy = y0.round() as i32;
@@ -905,125 +912,96 @@ impl Canvas {
         color: [u8; 3],
         clip: Option<[i32; 4]>,
     ) {
-        let mut cursor = x;
-        for ch in text.chars() {
-            let glyph = glyph_5x7(ch);
-            for (row, bits) in glyph.iter().enumerate() {
-                for col in 0..5 {
-                    if (bits >> (4 - col)) & 1 == 1 {
-                        self.blend_pixel(cursor + col, y + row as i32, color, 255, clip);
-                    }
-                }
+        let font = text_font();
+        let (glyphs, _) = layout_text(&font, text, x as f32, y as f32);
+        for glyph in glyphs {
+            let Some(outlined) = font.outline_glyph(glyph) else {
+                continue;
+            };
+            let bounds = outlined.px_bounds();
+            let (ox, oy) = (bounds.min.x as i32, bounds.min.y as i32);
+            outlined.draw(|gx, gy, coverage| {
+                let alpha = (coverage.clamp(0.0, 1.0) * 255.0).round() as u8;
+                self.blend_pixel(ox + gx as i32, oy + gy as i32, color, alpha, clip);
+            });
+        }
+    }
+}
+
+/// Liang-Barsky: the part of segment (x0,y0)-(x1,y1) inside `[min_x, min_y, max_x, max_y]`.
+fn clip_segment(
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    rect: [f64; 4],
+) -> Option<(f64, f64, f64, f64)> {
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let (mut t0, mut t1) = (0.0_f64, 1.0_f64);
+    for (p, q) in [
+        (-dx, x0 - rect[0]),
+        (dx, rect[2] - x0),
+        (-dy, y0 - rect[1]),
+        (dy, rect[3] - y0),
+    ] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return None;
             }
-            cursor += 6;
+        } else {
+            let r = q / p;
+            if p < 0.0 {
+                t0 = t0.max(r);
+            } else {
+                t1 = t1.min(r);
+            }
+            if t0 > t1 {
+                return None;
+            }
         }
     }
+    Some((x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy))
 }
 
-/// Minimal 5x7 uppercase/ASCII bitmap glyphs for deterministic labels without font files.
-fn glyph_5x7(ch: char) -> [u8; 7] {
-    match ch.to_ascii_uppercase() {
-        ' ' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
-        'A' => [0x04, 0x0A, 0x11, 0x11, 0x1F, 0x11, 0x11],
-        'B' => [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E],
-        'C' => [0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E],
-        'D' => [0x1C, 0x12, 0x11, 0x11, 0x11, 0x12, 0x1C],
-        'E' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F],
-        'F' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10],
-        'G' => [0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F],
-        'H' => [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
-        'I' => [0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E],
-        'J' => [0x07, 0x02, 0x02, 0x02, 0x12, 0x12, 0x0C],
-        'K' => [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11],
-        'L' => [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
-        'M' => [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11],
-        'N' => [0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11],
-        'O' => [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
-        'P' => [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
-        'Q' => [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D],
-        'R' => [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11],
-        'S' => [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E],
-        'T' => [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
-        'U' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E],
-        'V' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04],
-        'W' => [0x11, 0x11, 0x11, 0x15, 0x15, 0x1B, 0x11],
-        'X' => [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
-        'Y' => [0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04],
-        'Z' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F],
-        '0' => [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E],
-        '1' => [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
-        '2' => [0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F],
-        '3' => [0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E],
-        '4' => [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02],
-        '5' => [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
-        '6' => [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E],
-        '7' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
-        '8' => [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E],
-        '9' => [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
-        ':' => [0x00, 0x04, 0x04, 0x00, 0x04, 0x04, 0x00],
-        ';' => [0x00, 0x04, 0x04, 0x00, 0x04, 0x04, 0x08],
-        '.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x04],
-        ',' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x08],
-        '-' => [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00],
-        '_' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F],
-        '|' => [0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
-        '(' => [0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02],
-        ')' => [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
-        '/' => [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10],
-        _ => [0x0E, 0x11, 0x02, 0x04, 0x04, 0x00, 0x04],
-    }
+// Noto Sans Regular (SIL OFL 1.1, see assets/fonts/OFL.txt): covers Vietnamese.
+const FONT_BYTES: &[u8] = include_bytes!("../../assets/fonts/NotoSans-Regular.ttf");
+/// Pillow's default `ImageDraw.text` font is a 10 px em FreeType font.
+const TEXT_EM_PX: f32 = 10.0;
+
+fn text_font() -> FontRef<'static> {
+    FontRef::try_from_slice(FONT_BYTES).expect("bundled font parses")
 }
 
-// ----- Pure-Rust PNG and PDF encoders (zero external dependencies) -----
-
-fn crc32(data: &[u8]) -> u32 {
-    let mut crc: u32 = 0xFFFF_FFFF;
-    for &byte in data {
-        crc ^= u32::from(byte);
-        for _ in 0..8 {
-            let mask = (crc & 1).wrapping_neg();
-            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+/// Lays out `text` with its top (ascender) at `y`, like Pillow's default "la" anchor.
+/// Returns positioned glyphs and the caret x after the last glyph.
+fn layout_text(font: &FontRef<'_>, text: &str, x: f32, y: f32) -> (Vec<Glyph>, f32) {
+    let upem = font.units_per_em().unwrap_or(1000.0);
+    let scaled = font.as_scaled(PxScale::from(TEXT_EM_PX * font.height_unscaled() / upem));
+    let baseline = y + scaled.ascent();
+    let mut caret = x;
+    let mut prev: Option<GlyphId> = None;
+    let mut glyphs = Vec::with_capacity(text.len());
+    for ch in text.chars().filter(|c| !c.is_control()) {
+        let id = scaled.glyph_id(ch);
+        if let Some(prev) = prev {
+            caret += scaled.kern(prev, id);
         }
+        glyphs.push(id.with_scale_and_position(scaled.scale(), point(caret, baseline)));
+        caret += scaled.h_advance(id);
+        prev = Some(id);
     }
-    !crc
+    (glyphs, caret)
 }
 
-fn adler32(data: &[u8]) -> u32 {
-    const MOD: u32 = 65_521;
-    let mut s1: u32 = 1;
-    let mut s2: u32 = 0;
-    for &b in data {
-        s1 = (s1 + u32::from(b)) % MOD;
-        s2 = (s2 + s1) % MOD;
-    }
-    (s2 << 16) | s1
+fn text_width(text: &str) -> i32 {
+    layout_text(&text_font(), text, 0.0, 0.0).1.ceil() as i32
 }
 
-/// Standard RFC 1950 zlib stream using uncompressed DEFLATE stored blocks.
-fn zlib_stored(raw: &[u8]) -> Vec<u8> {
-    let max_block = usize::from(u16::MAX);
-    let block_count = raw.len().div_ceil(max_block).max(1);
-    let mut out = Vec::with_capacity(2 + raw.len() + block_count * 5 + 4);
-    out.push(0x78);
-    out.push(0x01);
-    if raw.is_empty() {
-        out.push(0x01);
-        out.extend_from_slice(&0_u16.to_le_bytes());
-        out.extend_from_slice(&(!0_u16).to_le_bytes());
-    } else {
-        let chunks = raw.chunks(max_block);
-        let total = chunks.len();
-        for (idx, chunk) in chunks.enumerate() {
-            let is_last = idx + 1 == total;
-            out.push(u8::from(is_last));
-            let len = chunk.len() as u16;
-            out.extend_from_slice(&len.to_le_bytes());
-            out.extend_from_slice(&(!len).to_le_bytes());
-            out.extend_from_slice(chunk);
-        }
-    }
-    out.extend_from_slice(&adler32(raw).to_be_bytes());
-    out
+// ----- PNG and PDF encoders -----
+
+/// RFC 1950 zlib stream (DEFLATE + Adler-32); level 6 is zlib's and Pillow's default.
+fn zlib(raw: &[u8]) -> Vec<u8> {
+    miniz_oxide::deflate::compress_to_vec_zlib(raw, 6)
 }
 
 fn push_png_chunk(out: &mut Vec<u8>, tag: &[u8; 4], data: &[u8]) {
@@ -1031,7 +1009,7 @@ fn push_png_chunk(out: &mut Vec<u8>, tag: &[u8; 4], data: &[u8]) {
     let start = out.len();
     out.extend_from_slice(tag);
     out.extend_from_slice(data);
-    let crc = crc32(&out[start..]);
+    let crc = crc32fast::hash(&out[start..]);
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
@@ -1042,7 +1020,7 @@ fn encode_png(width: u32, height: u32, dpi: u16, rgb: &[u8]) -> Vec<u8> {
         scanlines.push(0_u8);
         scanlines.extend_from_slice(row);
     }
-    let idat = zlib_stored(&scanlines);
+    let idat = zlib(&scanlines);
 
     let mut out = Vec::with_capacity(128 + idat.len());
     out.extend_from_slice(b"\x89PNG\r\n\x1a\n");
@@ -1066,24 +1044,33 @@ fn encode_png(width: u32, height: u32, dpi: u16, rgb: &[u8]) -> Vec<u8> {
     out
 }
 
-fn pdf_escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
+/// PDF text string: a literal for printable ASCII, else UTF-16BE hex with a BOM.
+fn pdf_text_string(text: &str) -> String {
+    if text.chars().any(|c| !c.is_ascii() || c.is_ascii_control()) {
+        let mut out = String::from("<FEFF");
+        for unit in text.encode_utf16() {
+            let _ = write!(out, "{unit:04X}");
+        }
+        out.push('>');
+        return out;
+    }
+    let mut out = String::from("(");
     for ch in text.chars() {
         match ch {
             '\\' => out.push_str("\\\\"),
             '(' => out.push_str("\\("),
             ')' => out.push_str("\\)"),
-            c if c.is_ascii() && !c.is_ascii_control() => out.push(c),
-            _ => out.push(' '),
+            c => out.push(c),
         }
     }
+    out.push(')');
     out
 }
 
 fn encode_pdf(width: u32, height: u32, dpi: u16, title: &str, rgb: &[u8]) -> Vec<u8> {
     let pt_w = (f64::from(width) * 72.0) / f64::from(dpi);
     let pt_h = (f64::from(height) * 72.0) / f64::from(dpi);
-    let compressed_rgb = zlib_stored(rgb);
+    let compressed_rgb = zlib(rgb);
     let content_stream = format!("q {pt_w:.4} 0 0 {pt_h:.4} 0 0 cm /Im0 Do Q");
 
     let mut pdf = Vec::with_capacity(1024 + compressed_rgb.len());
@@ -1129,8 +1116,8 @@ fn encode_pdf(width: u32, height: u32, dpi: u16, title: &str, rgb: &[u8]) -> Vec
     // 6: Info
     offsets.push(pdf.len());
     let info = format!(
-        "6 0 obj\n<< /Title ({}) /Producer (OpenVietGIS) /Creator (OpenVietGIS) >>\nendobj\n",
-        pdf_escape(title)
+        "6 0 obj\n<< /Title {} /Producer (OpenVietGIS) /Creator (OpenVietGIS) >>\nendobj\n",
+        pdf_text_string(title)
     );
     pdf.extend_from_slice(info.as_bytes());
 
@@ -1315,5 +1302,77 @@ mod tests {
         let (pdf, _) = render_test(vec![], None, false, None, PrintFormat::Pdf).unwrap();
         assert!(pdf.bytes.starts_with(b"%PDF-1.4\n"));
         assert!(pdf.bytes.ends_with(b"%%EOF\n"));
+    }
+
+    #[test]
+    fn blank_a4_outputs_are_deflate_compressed() {
+        let (png, _) = render_test(vec![], None, true, None, PrintFormat::Png).unwrap();
+        let (pdf, _) = render_test(vec![], None, true, None, PrintFormat::Pdf).unwrap();
+        assert!(png.bytes.len() < 1_000_000, "png {} bytes", png.bytes.len());
+        assert!(pdf.bytes.len() < 1_000_000, "pdf {} bytes", pdf.bytes.len());
+
+        let raw: Vec<u8> = (0..200_000_u32).map(|i| (i % 7) as u8).collect();
+        let packed = zlib(&raw);
+        assert!(packed.len() < raw.len() / 10);
+        assert_eq!(miniz_oxide::inflate::decompress_to_vec_zlib(&packed).unwrap(), raw);
+        assert_eq!(crc32fast::hash(b"IEND"), 0xAE42_6082);
+    }
+
+    #[test]
+    fn vietnamese_text_renders_real_glyphs() {
+        let font = text_font();
+        for ch in "Bản đồ Việt Nam ạỹ".chars().filter(|c| !c.is_whitespace()) {
+            assert_ne!(font.glyph_id(ch).0, 0, "missing glyph for {ch}");
+        }
+        let mut canvas = Canvas::new(200, 30, [255, 255, 255]);
+        canvas.draw_text(2, 2, "Bản đồ Việt Nam", [0, 0, 0]);
+        let ink = canvas.rgb.iter().filter(|&&v| v < 128).count();
+        assert!(ink > 50, "only {ink} dark channels");
+        assert!(text_width("Bản đồ") > 0);
+        assert_eq!(pdf_text_string("Bản"), "<FEFF00421EA3006E>");
+        assert_eq!(pdf_text_string("Map (1)"), "(Map \\(1\\))");
+    }
+
+    #[test]
+    fn long_clipped_segment_is_continuous() {
+        let mut canvas = Canvas::new(200, 100, [255, 255, 255]);
+        canvas.draw_line(-1.0e7, 50.0, 1.0e7, 50.0, [0, 0, 0], 1, Some([10, 10, 189, 89]));
+        for x in 0..200 {
+            let idx = (50 * 200 + x) * 3;
+            let inked = canvas.rgb[idx] == 0;
+            assert_eq!(inked, (10..=189).contains(&x), "x={x}");
+        }
+        // Entirely outside the clip: nothing drawn.
+        canvas.draw_line(-1.0e7, 5.0, 1.0e7, 5.0, [0, 0, 0], 1, Some([10, 10, 189, 89]));
+        assert_eq!(canvas.rgb[(5 * 200 + 100) * 3], 255);
+    }
+
+    #[test]
+    fn style_matching_follows_python_coercions() {
+        let range = json!({
+            "mode": "range",
+            "style_spec": {"field": "v", "breaks": [{"min": 1, "max": 1, "color": "#ff0000"}]}
+        });
+        let hit = resolve_feature_color(Some(&range), &json!({"v": true}));
+        assert_eq!(hit.0, "#ff0000");
+        let hit = resolve_feature_color(Some(&range), &json!({"v": " 1 "}));
+        assert_eq!(hit.0, "#ff0000");
+        let miss = resolve_feature_color(Some(&range), &json!({"v": false}));
+        assert_eq!(miss.0, "#9ca3af");
+
+        let categorical = json!({
+            "mode": "categorical",
+            "style_spec": {"field": "v", "categories": [
+                {"value": "1.0", "color": "#00ff00"},
+                {"value": "1e-05", "color": "#0000ff"},
+                {"value": "True", "color": "#123456"}
+            ]}
+        });
+        let hit = resolve_feature_color(Some(&categorical), &json!({"v": 1.0}));
+        assert_eq!(hit.0, "#00ff00");
+        let hit = resolve_feature_color(Some(&categorical), &json!({"v": 0.00001}));
+        assert_eq!(hit.0, "#0000ff");
+        let hit = resolve_feature_color(Some(&categorical), &json!({"v": true}));
+        assert_eq!(hit.0, "#123456");
     }
 }

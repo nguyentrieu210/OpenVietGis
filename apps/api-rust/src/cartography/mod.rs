@@ -517,7 +517,7 @@ async fn prepare_print_manifest(
         "renderer_profile": {
             "id": "rust-print-v1",
             "engine": "openvietgis-cartography",
-            "font": "bitmap-5x7",
+            "font": "Noto Sans Regular 10px",
         },
         "layers": manifest_layers,
     });
@@ -600,21 +600,29 @@ async fn export_layout(
         )));
     }
 
-    let rendered = renderer::render_print_map(
-        &prepared.snapshot.layout.title,
-        prepared.paper_size,
-        prepared.orientation,
-        prepared.dpi,
-        body.output_format,
-        prepared.snapshot.layout.crs_code,
-        &prepared.snapshot.layout.attribution,
-        prepared.snapshot.layout.show_north_arrow,
-        prepared.snapshot.layout.show_scale_bar,
-        prepared.snapshot.layout.show_legend,
-        &prepared.use_extent,
-        &prepared.snapshot.layers,
-    )
-    .map_err(CartographyError::Domain)?;
+    // Rendering is CPU-bound: keep it off the async workers. The read transaction stays
+    // open (as in Python) so the export row is inserted under the same revision locks.
+    let output_format = body.output_format;
+    let (prepared, rendered) = tokio::task::spawn_blocking(move || {
+        let rendered = renderer::render_print_map(
+            &prepared.snapshot.layout.title,
+            prepared.paper_size,
+            prepared.orientation,
+            prepared.dpi,
+            output_format,
+            prepared.snapshot.layout.crs_code,
+            &prepared.snapshot.layout.attribution,
+            prepared.snapshot.layout.show_north_arrow,
+            prepared.snapshot.layout.show_scale_bar,
+            prepared.snapshot.layout.show_legend,
+            &prepared.use_extent,
+            &prepared.snapshot.layers,
+        );
+        (prepared, rendered)
+    })
+    .await
+    .map_err(|error| CartographyError::Domain(AppError::internal(error.to_string())))?;
+    let rendered = rendered.map_err(CartographyError::Domain)?;
 
     let export_id = Uuid::new_v4();
     let storage_key = format!(
@@ -848,13 +856,18 @@ fn python_truthy(value: &Value) -> bool {
     }
 }
 
-fn pythonish_str(value: &Value) -> String {
+pub(crate) fn pythonish_str(value: &Value) -> String {
     match value {
         Value::Null => "None".to_owned(),
         Value::Bool(true) => "True".to_owned(),
         Value::Bool(false) => "False".to_owned(),
         Value::String(text) => text.clone(),
-        Value::Number(number) => number.to_string(),
+        Value::Number(number) if number.is_i64() || number.is_u64() => number.to_string(),
+        Value::Number(number) => {
+            let mut out = String::new();
+            cartography_store::push_py_float(&mut out, number.as_f64().unwrap_or(0.0));
+            out
+        }
         Value::Array(items) => {
             let body = items
                 .iter()
@@ -1098,6 +1111,7 @@ enum CartographyError {
     Access(CatalogError),
     Domain(AppError),
     Coded(StatusCode, &'static str, String),
+    Detail(StatusCode, String),
 }
 
 impl CartographyError {
@@ -1112,15 +1126,10 @@ impl CartographyError {
                 code,
                 message,
             ),
-            TransferError::Detail { status, detail } => Self::Domain(AppError::BadRequest {
-                code: if status == 404 {
-                    "NOT_FOUND"
-                } else {
-                    "BAD_REQUEST"
-                },
-                message: detail,
-                details: None,
-            }),
+            TransferError::Detail { status, detail } => Self::Detail(
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                detail,
+            ),
             TransferError::ReadOnly => Self::Access(CatalogError::Spatial(
                 StatusCode::CONFLICT,
                 "PROJECT_NOT_WRITABLE",
@@ -1141,6 +1150,9 @@ impl IntoResponse for CartographyError {
             Self::Access(error) => error.into_response(),
             Self::Coded(status, code, message) => {
                 (status, Json(json!({ "code": code, "message": message }))).into_response()
+            }
+            Self::Detail(status, detail) => {
+                (status, Json(json!({ "detail": detail }))).into_response()
             }
             Self::Domain(AppError::Internal { internal_detail }) => {
                 tracing::error!(detail = %internal_detail, "cartography request failed");
@@ -1213,5 +1225,20 @@ mod tests {
         let mut invalid = valid.clone();
         invalid.insert("max_x".to_owned(), 181.0);
         assert!(validate_print_extent(&invalid, 4326).is_err());
+    }
+
+    #[test]
+    fn transfer_detail_errors_keep_their_status() {
+        for status in [403, 404, 409] {
+            let error = CartographyError::from_transfer(TransferError::detail(status, "x"));
+            assert_eq!(error.into_response().status().as_u16(), status);
+        }
+    }
+
+    #[test]
+    fn pythonish_str_formats_floats_like_python() {
+        assert_eq!(pythonish_str(&json!(1.0)), "1.0");
+        assert_eq!(pythonish_str(&json!(1e-5)), "1e-05");
+        assert_eq!(pythonish_str(&json!(3)), "3");
     }
 }

@@ -34,7 +34,7 @@ pub fn iso(ts: DateTime<Utc>) -> String {
 }
 
 /// Append Python's `repr(float)` (shortest round-trip, Python exponent rules).
-fn push_py_float(out: &mut String, value: f64) {
+pub fn push_py_float(out: &mut String, value: f64) {
     if value == 0.0 {
         out.push_str(if value.is_sign_negative() {
             "-0.0"
