@@ -24,6 +24,17 @@ pub const MAX_REVISIONS: i64 = 1_000;
 pub const MAX_BUNDLE_BYTES: usize = 2 * 1024 * 1024;
 pub const PORTABLE_FORMAT: &str = "openvietgis.extension.portable.v1";
 
+/// FastAPI raises tenant-access failures as `TenantResourceNotFoundError` (`{detail}`),
+/// not as a `PlatformDomainError` (`{code, message}`); the HTTP layer keys on this code.
+pub const TENANT_NOT_FOUND: &str = "TENANT_NOT_FOUND";
+
+fn tenant_not_found() -> AppError {
+    AppError::NotFound {
+        code: TENANT_NOT_FOUND,
+        message: "organization not found".to_owned(),
+    }
+}
+
 pub(crate) fn db_error(error: sqlx::Error) -> AppError {
     tracing::error!(%error, "extension database operation failed");
     AppError::internal("extension database operation failed")
@@ -259,7 +270,7 @@ impl<'a> OrgExtensionScope<'a> {
         session_id: Uuid,
     ) -> Result<Self, AppError> {
         if organization_id.is_nil() {
-            return Err(AppError::not_found("organization not found"));
+            return Err(tenant_not_found());
         }
         let mut tx = pool.inner().begin().await.map_err(db_error)?;
         sqlx::query(crate::rls::BIND_TENANT_GUCS_SQL)
@@ -314,7 +325,7 @@ impl<'a> OrgExtensionScope<'a> {
         .await
         .map_err(db_error)?;
         if !member {
-            return Err(AppError::not_found("organization not found"));
+            return Err(tenant_not_found());
         }
 
         sqlx::query(crate::rls::BIND_TENANT_GUCS_SQL)
@@ -418,7 +429,7 @@ impl<'a> OrgExtensionScope<'a> {
                 .await
                 .map_err(db_error)?;
         if org_status.as_deref() != Some("active") {
-            return Err(AppError::not_found("organization not found"));
+            return Err(tenant_not_found());
         }
         if self.is_service {
             return Err(AppError::forbidden(

@@ -16,7 +16,7 @@ use axum::{Json, Router};
 use ovg_core::AppError;
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
 use ovg_storage::editing::{authenticate_service, domain::py_strip, EditError, ServiceAuth};
-use ovg_storage::extensions::OrgExtensionScope;
+use ovg_storage::extensions::{OrgExtensionScope, TENANT_NOT_FOUND};
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -244,8 +244,12 @@ pub(crate) enum ExtensionError {
 }
 
 impl ExtensionError {
-    /// Extension storage errors are FastAPI `PlatformDomainError`s: always the `{code, message}` envelope.
+    /// Extension storage errors are FastAPI `PlatformDomainError`s (`{code, message}`),
+    /// except tenant-access failures, which FastAPI renders as `{detail}`.
     pub(crate) fn from_catalog_app(error: AppError) -> Self {
+        if matches!(&error, AppError::NotFound { code, .. } if *code == TENANT_NOT_FOUND) {
+            return Self::Access(CatalogError::Application(error));
+        }
         Self::Domain(error)
     }
 
