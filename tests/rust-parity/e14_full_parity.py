@@ -146,7 +146,8 @@ def compare(label: str, e, a, norm=lambda x: x, *, check_cache: bool = False):
             f"{label}: cache-control {e.headers.get('cache-control')!r} != {a.headers.get('cache-control')!r}",
         )
     eb = norm(e.json())
-    ab = norm(same_side(a.json()))
+    # only error messages embed the per-side key; success bodies can list both sides
+    ab = norm(same_side(a.json()) if a.status_code >= 400 else a.json())
     diff = parity.difference(eb, ab)
     req(diff is None, f"{label}: {diff}\nexpected={eb}\nactual={ab}")
     print(f"PASS {label}", flush=True)
