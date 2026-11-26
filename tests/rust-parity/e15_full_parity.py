@@ -2844,7 +2844,13 @@ def batch_route_import(ctx: Ctx) -> None:
     get("E15 address review list after decisions", addresses, status=200)
 
     # Every address decided: the reviewed row is ready and can be promoted.
-    route_case("E15 route import review preview verified", "/preview", review, keep="x_plan3")
+    route_case(
+        "E15 route import review preview verified",
+        "/preview",
+        review,
+        keep="x_plan3",
+        view=examples,
+    )
     route_case(
         "E15 route import apply reviewed",
         "/apply",
