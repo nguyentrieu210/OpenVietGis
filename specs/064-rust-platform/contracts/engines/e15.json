@@ -32,9 +32,9 @@
       "approved_retire": 0
     },
     "rust_route_status": {
-      "native": 49,
+      "native": 57,
       "retain": 6,
-      "pending": 17
+      "pending": 9
     }
   },
   "auth_and_tenant_boundaries": {
@@ -706,8 +706,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Building-to-route assignment planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -789,8 +789,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Unlinked-building assignment audit (RouteIndex matching, Unicode road normalization)."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -872,8 +872,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Catalog recovery planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -955,8 +955,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Catalog recovery planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1038,8 +1038,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Cluster correction planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1121,8 +1121,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Cluster correction planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1204,8 +1204,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Prefix recovery planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1287,8 +1287,8 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Building-to-route assignment planner."
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -6028,7 +6028,7 @@
         "extension_key": "house_numbering",
         "version": "2.0.0",
         "api_compatibility": "1.x",
-        "display_name": "Qu\u1ea3n l\u00fd v\u00e0 \u0111\u00e1nh s\u1ed1 nh\u00e0",
+        "display_name": "Quản lý và đánh số nhà",
         "description": "Official project-scoped house numbering workflow: registry, inspection, numbering, approval, reconciliation, field work and handover.",
         "permissions": [
           "ext.house_numbering.read",
@@ -6043,27 +6043,27 @@
         "commands": [
           {
             "id": "inspect_location",
-            "label": "Ki\u1ec3m tra v\u1ecb tr\u00ed",
+            "label": "Kiểm tra vị trí",
             "required_permission": "ext.house_numbering.read"
           },
           {
             "id": "preview_numbering",
-            "label": "Xem tr\u01b0\u1edbc \u0111\u00e1nh s\u1ed1",
+            "label": "Xem trước đánh số",
             "required_permission": "ext.house_numbering.assign"
           },
           {
             "id": "apply_numbering",
-            "label": "\u00c1p d\u1ee5ng s\u1ed1 \u0111\u1ec1 xu\u1ea5t",
+            "label": "Áp dụng số đề xuất",
             "required_permission": "ext.house_numbering.assign"
           },
           {
             "id": "submit_proposal",
-            "label": "Tr\u00ecnh ph\u01b0\u01a1ng \u00e1n",
+            "label": "Trình phương án",
             "required_permission": "ext.house_numbering.edit"
           },
           {
             "id": "approve_proposal",
-            "label": "Duy\u1ec7t ph\u01b0\u01a1ng \u00e1n",
+            "label": "Duyệt phương án",
             "required_permission": "ext.house_numbering.approve"
           }
         ],
@@ -6112,14 +6112,14 @@
           {
             "id": "house_numbering_workspace",
             "slot": "project_route",
-            "label": "S\u1ed1 nh\u00e0",
+            "label": "Số nhà",
             "route_suffix": "/extensions/house_numbering",
             "required_permission": "ext.house_numbering.read"
           },
           {
             "id": "house_numbering_selected_feature",
             "slot": "project_tool",
-            "label": "\u2192 S\u1ed1 nh\u00e0: \u0111\u1ed1i t\u01b0\u1ee3ng \u0111ang ch\u1ecdn",
+            "label": "→ Số nhà: đối tượng đang chọn",
             "route_suffix": "/extensions/house_numbering",
             "required_permission": "ext.house_numbering.read"
           }
@@ -8463,7 +8463,7 @@
       "category": "unit",
       "test_count": 1,
       "test_ids": [
-        "modules/house_numbering/frontend/tree.test.ts::groups points \u1ea4p \u2192 \u0110\u01b0\u1eddng \u2192 H\u1ebbm with counts and pending"
+        "modules/house_numbering/frontend/tree.test.ts::groups points Ấp → Đường → Hẻm with counts and pending"
       ]
     },
     {

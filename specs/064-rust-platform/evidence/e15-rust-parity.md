@@ -3,12 +3,15 @@
 Branch `064-e15-rust-native` (off `064-convergence`). Owner decision 2026-11-26 moves the
 E15 control plane to Rust; FastAPI stays the oracle and rollback path for routes not yet
 accepted. Per-route status lives in `contracts/engines/e15.json` (`rust_status`,
-`rust_note`): 49 native, 6 retained Python engines, 17 pending.
+`rust_note`): 57 native, 6 retained Python engines, 9 pending.
 
 ## Layout (Principle I)
 - Pure rules: `modules/house_numbering/rust/src/domain.rs` (number parse/format,
   `suggest_number`, `locate_on_route`, reconciliation class, certificate match) and
-  `planning.rs` (batch route plan, numbering audit, street-tree collisions).
+  `planning.rs` (batch route plan, numbering audit, street-tree collisions),
+  `assignment.rs` (Unicode road/alley normalization, `RouteIndex` matching, candidate
+  scoring, unlinked-building audit, cluster correction) and `recovery.rs` (alias catalog and
+  prefix-tree recovery queues).
 - Storage: `crates/ovg-storage/src/house_numbering/` (hierarchy, buildings, proposals,
   field, records, numbering). No dependency on the module crate; module rules are passed in
   as closures where storage needs them (reconciliation class, tree collisions).
@@ -36,6 +39,16 @@ timestamps, sha256 tokens), status codes and, for downloads, bytes plus content 
 The PostGIS parity job also runs the existing `e15_house_numbering_reads.py` and
 `e15_house_numbering_writes.py`.
 
+## Building assignment
+The eight `building-assignment/*` routes (audit, preview/apply, catalog and prefix recovery,
+correction preview/apply) are native. Parity seeds each runtime's own lines, points and
+survey attributes at a separate x offset with side-tagged road names, and checks success
+paths, preview→apply with token, stale tokens (409), Pydantic and domain 422s, viewer 403
+and CSRF. Preview tokens, cluster keys and recovery group ids use Python's JSON encodings,
+so a preview from either runtime should be accepted by the other's apply (by construction;
+not asserted cross-runtime in parity). Known shortcut:
+`normalize` uses `to_lowercase` (+ß) instead of a full `casefold` table.
+
 ## Retained Python engines (thin adapters behind the same module scope)
 Proposal packets (PDF/XLSX/QR), progress workbook, document issue/batch rendering, export
 encoding (CSV/GeoJSON/DXF/Shapefile) and multipart evidence import. Rust already serves the
@@ -44,6 +57,5 @@ retained adapters.
 
 ## Pending
 Route-tree import (preview/apply/stage-geometry), address verification and verified links,
-building assignment with catalog/prefix recovery and cluster correction,
 and the service-credential integration lookup (needs E14's
 `ProjectRead::begin_service`). These stay on FastAPI until ported with parity.
