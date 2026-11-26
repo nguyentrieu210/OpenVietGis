@@ -4,6 +4,7 @@ replay, commit receipts, desktop commands and the managed SSE stream (FastAPI or
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
@@ -318,6 +319,8 @@ def compare_managed_events(pair, owner, fixture, base, session_id, csrf, human, 
     try:
         same_headers("R029 events stream headers", streams)
         same_frame("R029 events retry frame", streams, "retry: 3000\n\n")
+        # Both servers send `retry` before LISTEN is live; let the listeners attach.
+        time.sleep(1)
         notify("spatial_change")
         same_frame("R029 events spatial_change", streams,
                    'event: spatial_change\ndata: {"kind": "spatial_change"}\n\n')
