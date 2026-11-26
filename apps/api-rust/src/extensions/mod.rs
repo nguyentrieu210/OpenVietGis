@@ -244,11 +244,9 @@ pub(crate) enum ExtensionError {
 }
 
 impl ExtensionError {
+    /// Extension storage errors are FastAPI `PlatformDomainError`s: always the `{code, message}` envelope.
     pub(crate) fn from_catalog_app(error: AppError) -> Self {
-        match error {
-            AppError::Validation { .. } => Self::Domain(error),
-            other => Self::Access(CatalogError::Application(other)),
-        }
+        Self::Domain(error)
     }
 
     pub(crate) fn from_edit_error(error: EditError) -> Self {
