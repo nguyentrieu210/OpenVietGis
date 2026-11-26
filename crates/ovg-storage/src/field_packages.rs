@@ -95,6 +95,92 @@ pub async fn revoke_package(
     wire(&row)
 }
 
+#[derive(Debug, Clone)]
+pub struct PackageDownload {
+    pub id: Uuid,
+    pub storage_key: String,
+    pub sha256: String,
+}
+
+pub async fn download_info(
+    edit: &mut ProjectRead<'_>,
+    actor_id: Uuid,
+    package_id: Uuid,
+) -> Result<PackageDownload, AppError> {
+    let row = sqlx::query(
+        "SELECT id, storage_key, sha256, expires_at, revoked_at, created_by_actor_id,
+                (layer_pins->0->>'layer_id')::uuid AS layer_id,
+                (layer_pins->0->>'source_id')::uuid AS source_id
+         FROM field.offline_packages
+         WHERE organization_id = $1 AND project_id = $2 AND id = $3",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(package_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| AppError::not_found("offline package not found"))?;
+
+    if row
+        .try_get::<Uuid, _>("created_by_actor_id")
+        .map_err(db_error)?
+        != actor_id
+    {
+        return Err(AppError::not_found("offline package not found"));
+    }
+    if row
+        .try_get::<Option<DateTime<Utc>>, _>("revoked_at")
+        .map_err(db_error)?
+        .is_some()
+    {
+        return Err(AppError::Forbidden {
+            code: "PACKAGE_REVOKED",
+            message: "offline package has been revoked".to_owned(),
+        });
+    }
+    if row
+        .try_get::<DateTime<Utc>, _>("expires_at")
+        .map_err(db_error)?
+        <= Utc::now()
+    {
+        return Err(AppError::Forbidden {
+            code: "PACKAGE_EXPIRED",
+            message: "offline package has expired".to_owned(),
+        });
+    }
+
+    let layer_id = row.try_get::<Uuid, _>("layer_id").map_err(db_error)?;
+    let source_id = row.try_get::<Uuid, _>("source_id").map_err(db_error)?;
+    let available = sqlx::query_scalar::<_, i32>(
+        "SELECT 1 FROM spatial.layers l
+         JOIN spatial.data_sources s
+           ON s.organization_id = l.organization_id
+          AND s.project_id = l.project_id
+          AND s.id = l.source_id
+         WHERE l.organization_id = $1 AND l.project_id = $2
+           AND l.id = $3 AND s.id = $4
+           AND l.lifecycle = 'active' AND s.lifecycle = 'active'
+           AND s.validation_state = 'ready'",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(layer_id)
+    .bind(source_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    if available.is_none() {
+        return Err(AppError::forbidden("packaged layer no longer available"));
+    }
+
+    Ok(PackageDownload {
+        id: row.try_get("id").map_err(db_error)?,
+        storage_key: row.try_get("storage_key").map_err(db_error)?,
+        sha256: row.try_get("sha256").map_err(db_error)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

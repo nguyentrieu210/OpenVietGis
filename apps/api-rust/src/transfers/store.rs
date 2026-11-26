@@ -16,7 +16,7 @@ use crate::AppState;
 
 const CHUNK: usize = 64 * 1024;
 
-pub(super) struct Store {
+pub(crate) struct Store {
     root: PathBuf,
 }
 
@@ -37,7 +37,7 @@ fn valid_key(key: &str) -> bool {
 }
 
 impl Store {
-    pub(super) fn new(state: &AppState) -> Self {
+    pub(crate) fn new(state: &AppState) -> Self {
         Self {
             root: state.config.artifact_store_dir.clone(),
         }
@@ -81,7 +81,7 @@ impl Store {
     }
 
     /// Open an object after verifying its SHA-256 in bounded chunks.
-    pub(super) async fn open_verified(
+    pub(crate) async fn open_verified(
         &self,
         key: &str,
         sha256: &str,
@@ -187,7 +187,7 @@ impl Staged {
 }
 
 /// Bounded chunked body for an opened artifact.
-pub(super) fn file_stream(file: File) -> impl Stream<Item = std::io::Result<Bytes>> + Send {
+pub(crate) fn file_stream(file: File) -> impl Stream<Item = std::io::Result<Bytes>> + Send {
     futures_util::stream::unfold(Some(file), |state| async move {
         let mut file = state?;
         let mut buffer = vec![0_u8; CHUNK];
