@@ -342,10 +342,10 @@ pub(crate) async fn authenticate_actor(
         .map_err(|error| Failure::Identity(Box::new(error)))
 }
 
-type Authenticated = (Actor, HeaderMap, Option<Value>);
+pub(crate) type Authenticated = (Actor, HeaderMap, Option<Value>);
 
 /// FastAPI decodes a JSON body before dependencies run, then authenticates.
-async fn authenticate_json(
+pub(crate) async fn authenticate_json(
     state: &AppState,
     request: Request,
     organization: &str,
@@ -383,7 +383,7 @@ fn json_content_type(headers: &HeaderMap) -> bool {
 }
 
 /// Project guard; skipped (like the oracle) when the path IDs are not UUIDs.
-async fn open<'a>(
+pub(crate) async fn open<'a>(
     state: &'a AppState,
     session: &Actor,
     organization: &str,
@@ -418,7 +418,11 @@ async fn open<'a>(
     Ok(Some(scope))
 }
 
-fn require_csrf(state: &AppState, session: &Actor, headers: &HeaderMap) -> Result<(), Failure> {
+pub(crate) fn require_csrf(
+    state: &AppState,
+    session: &Actor,
+    headers: &HeaderMap,
+) -> Result<(), Failure> {
     let Actor::Human(session) = session else {
         return Ok(());
     };
@@ -426,7 +430,7 @@ fn require_csrf(state: &AppState, session: &Actor, headers: &HeaderMap) -> Resul
         .map_err(|error| Failure::Identity(Box::new(error)))
 }
 
-fn decode<T: DeserializeOwned>(body: Option<Value>) -> Result<T, Failure> {
+pub(crate) fn decode<T: DeserializeOwned>(body: Option<Value>) -> Result<T, Failure> {
     body.and_then(|value| serde_json::from_value(value).ok())
         .ok_or(Failure::Edit(EditError::InvalidRequest))
 }

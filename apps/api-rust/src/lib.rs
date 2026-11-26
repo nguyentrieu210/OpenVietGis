@@ -12,6 +12,7 @@ pub(crate) mod extensions;
 pub(crate) mod field_offline;
 pub(crate) mod house_numbering;
 pub(crate) mod identity;
+pub(crate) mod managed_sync;
 pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
