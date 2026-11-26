@@ -98,17 +98,13 @@ pub async fn list_rules(read: &mut ProjectRead<'_>) -> Result<Value, AppError> {
     let items = rows
         .iter()
         .map(|row| {
-            let mut wire = row.try_get::<Value, _>("wire").map_err(db_error)?;
+            let wire = row.try_get::<Value, _>("wire").map_err(db_error)?;
             let distance = row
                 .try_get::<String, _>("max_distance_m")
                 .map_err(db_error)?;
-            let object = wire
-                .as_object_mut()
-                .ok_or_else(|| AppError::internal("house-numbering rule row must be an object"))?;
             // FastAPI preserves SQLAlchemy Decimal as its scale-preserving
             // string wire form for this untyped module response.
-            object.insert("max_distance_m".to_owned(), Value::String(distance));
-            Ok(wire)
+            rule_wire(wire, distance)
         })
         .collect::<Result<Vec<_>, AppError>>()?;
     Ok(json!({ "items": items }))
@@ -213,6 +209,237 @@ pub async fn list_buildings(
          ORDER BY b.created_at, b.id"
     };
     json_rows(read, sql, route_id).await
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AuditActor<'a> {
+    pub id: Uuid,
+    pub display_name: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RuleCreateInput<'a> {
+    pub version: &'a str,
+    pub status: &'a str,
+    pub authority_ref: Option<&'a str>,
+    pub left_odd: bool,
+    pub suffix_style: &'a str,
+    pub max_distance_m: f64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AreaCreateInput<'a> {
+    pub name: &'a str,
+    pub kind: &'a str,
+    pub parent_id: Option<Uuid>,
+    pub source_id: Option<Uuid>,
+    pub feature_id: Option<&'a str>,
+}
+
+async fn append_audit(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    action: &str,
+    resource_type: &str,
+    resource_id: Uuid,
+    metadata: Value,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO audit.audit_events (
+            id, organization_id, actor_type, actor_id, actor_display_snapshot,
+            action, resource_type, resource_id, outcome, metadata, created_at
+         ) VALUES ($1,$2,'human',$3,$4,$5,$6,$7,'success',$8,$9)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(edit.organization_id())
+    .bind(actor.id)
+    .bind(actor.display_name)
+    .bind(action)
+    .bind(resource_type)
+    .bind(resource_id)
+    .bind(metadata)
+    .bind(chrono::Utc::now())
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    Ok(())
+}
+
+async fn validate_area_feature(
+    edit: &mut ProjectRead<'_>,
+    source_id: Uuid,
+    feature_id: &str,
+) -> Result<(), AppError> {
+    let row = sqlx::query(
+        "SELECT ds.stored_crs, ds.lifecycle, ds.validation_state,
+                ST_SRID(rf.geometry) AS srid,
+                ST_GeometryType(rf.geometry) AS geometry_type
+         FROM spatial.data_sources ds
+         JOIN spatial.reference_features rf
+           ON rf.organization_id = ds.organization_id
+          AND rf.project_id = ds.project_id
+          AND rf.source_id = ds.id
+         WHERE ds.organization_id = $1
+           AND ds.project_id = $2
+           AND ds.id = $3
+           AND rf.feature_id = $4
+           AND rf.geometry_state = 'present'",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(source_id)
+    .bind(feature_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| AppError::not_found("linked spatial feature not found or not usable"))?;
+
+    let lifecycle: String = row.try_get("lifecycle").map_err(db_error)?;
+    let validation_state: String = row.try_get("validation_state").map_err(db_error)?;
+    if lifecycle != "active" || validation_state != "ready" {
+        return Err(AppError::validation(
+            "SOURCE_NOT_READY",
+            "linked spatial source is not ready",
+        ));
+    }
+    let geometry_type: String = row.try_get("geometry_type").map_err(db_error)?;
+    if geometry_type != "ST_Polygon" {
+        return Err(AppError::validation(
+            "GEOMETRY_TYPE_MISMATCH",
+            format!("linked feature geometry {geometry_type:?} is not valid for this entity"),
+        ));
+    }
+    let srid = row
+        .try_get::<Option<i32>, _>("srid")
+        .map_err(db_error)?
+        .or(row
+            .try_get::<Option<i32>, _>("stored_crs")
+            .map_err(db_error)?)
+        .unwrap_or(0);
+    if srid <= 0 {
+        return Err(AppError::validation(
+            "MISSING_CRS",
+            "linked geometry has no explicit CRS",
+        ));
+    }
+    Ok(())
+}
+
+fn rule_wire(mut wire: Value, distance: String) -> Result<Value, AppError> {
+    let object = wire
+        .as_object_mut()
+        .ok_or_else(|| AppError::internal("house-numbering rule row must be an object"))?;
+    object.insert("max_distance_m".to_owned(), Value::String(distance));
+    Ok(wire)
+}
+
+pub async fn create_rule(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    input: RuleCreateInput<'_>,
+) -> Result<Value, AppError> {
+    let row = sqlx::query(
+        "WITH inserted AS (
+           INSERT INTO house_numbering.rules (
+             id, organization_id, project_id, version, status, authority_ref,
+             left_odd, suffix_style, max_distance_m, sealed, revision,
+             created_by_actor_id, updated_by_actor_id, created_at, updated_at
+           ) VALUES (
+             $1,$2,$3,$4,$5,$6,$7,$8,$9,true,1,$10,$10,$11,$11
+           )
+           RETURNING *
+         )
+         SELECT to_jsonb(inserted) - 'max_distance_m' AS wire,
+                max_distance_m::text AS max_distance_m,
+                id
+         FROM inserted",
+    )
+    .bind(Uuid::new_v4())
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(input.version)
+    .bind(input.status)
+    .bind(input.authority_ref)
+    .bind(input.left_odd)
+    .bind(input.suffix_style)
+    .bind(input.max_distance_m)
+    .bind(actor.id)
+    .bind(chrono::Utc::now())
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+
+    let id: Uuid = row.try_get("id").map_err(db_error)?;
+    let wire = rule_wire(
+        row.try_get::<Value, _>("wire").map_err(db_error)?,
+        row.try_get::<String, _>("max_distance_m")
+            .map_err(db_error)?,
+    )?;
+    append_audit(
+        edit,
+        actor,
+        "house_numbering.rule.create",
+        "house_numbering_rule",
+        id,
+        json!({ "version": input.version }),
+    )
+    .await?;
+    Ok(wire)
+}
+
+pub async fn create_area(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    input: AreaCreateInput<'_>,
+) -> Result<Value, AppError> {
+    if input.source_id.is_none() != input.feature_id.is_none() {
+        return Err(AppError::validation(
+            "VALIDATION_ERROR",
+            "area spatial source and feature must be supplied together",
+        ));
+    }
+    if let (Some(source_id), Some(feature_id)) = (input.source_id, input.feature_id) {
+        validate_area_feature(edit, source_id, feature_id).await?;
+    }
+
+    let row = sqlx::query(
+        "WITH inserted AS (
+           INSERT INTO house_numbering.areas (
+             id, organization_id, project_id, name, kind, parent_id,
+             linked_source_id, linked_feature_id, revision,
+             created_by_actor_id, updated_by_actor_id, created_at, updated_at
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,1,$9,$9,$10,$10)
+           RETURNING *
+         )
+         SELECT to_jsonb(inserted) AS wire, id, name
+         FROM inserted",
+    )
+    .bind(Uuid::new_v4())
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(input.name.trim())
+    .bind(input.kind)
+    .bind(input.parent_id)
+    .bind(input.source_id)
+    .bind(input.feature_id)
+    .bind(actor.id)
+    .bind(chrono::Utc::now())
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+
+    let id: Uuid = row.try_get("id").map_err(db_error)?;
+    let persisted_name: String = row.try_get("name").map_err(db_error)?;
+    append_audit(
+        edit,
+        actor,
+        "house_numbering.area.create",
+        "house_numbering_area",
+        id,
+        json!({ "name": persisted_name }),
+    )
+    .await?;
+    row.try_get::<Value, _>("wire").map_err(db_error)
 }
 
 #[cfg(test)]
