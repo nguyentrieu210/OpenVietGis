@@ -14,12 +14,14 @@ use crate::catalog::ProjectRead;
 mod buildings;
 mod field;
 mod hierarchy;
+mod numbering;
 mod proposals;
 mod records;
 
 pub use buildings::*;
 pub use field::*;
 pub use hierarchy::*;
+pub use numbering::*;
 pub use proposals::*;
 pub use records::*;
 

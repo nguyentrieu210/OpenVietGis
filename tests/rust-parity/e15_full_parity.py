@@ -30,6 +30,7 @@ import run as parity
 API = "/api/v1"
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
+HEX_RE = re.compile(r"[0-9a-f]{64}")
 SIDES = ("o", "r")
 PASSED: list[str] = []
 
@@ -49,7 +50,7 @@ def norm(value, extra: dict[str, str] | None = None):
     if isinstance(value, str):
         for old, new in (extra or {}).items():
             value = value.replace(old, new)
-        value = UUID_RE.sub("<uuid>", value)
+        value = UUID_RE.sub("<uuid>", HEX_RE.sub("<sha256>", value))
         return TS_RE.sub("<ts>", value)
     return value
 
@@ -1127,6 +1128,32 @@ def batch_field(ctx: Ctx) -> None:
         ]
 
     sync("E15 survey sync", first, status=200)
+    # Replays written by either runtime must recognize each other's fingerprints.
+    import hashlib
+
+    for side in SIDES:
+        d = ctx.data[side]
+        semantic = {
+            "building_id": d["b2"]["id"],
+            "condition": "house",
+            "x": 41,
+            "y": 10,
+            "crs_code": 3857,
+            "gps_accuracy_m": 5,
+            "photo_artifact_ids": [],
+            "recorded_by_actor_id": owner,
+        }
+        expected = hashlib.sha256(
+            json.dumps(semantic, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        ).hexdigest()
+        with psycopg.connect(ctx.owner_url) as conn:
+            stored = conn.execute(
+                "SELECT payload_fingerprint FROM house_numbering.surveys WHERE client_uuid=%s",
+                (d["c1"],),
+            ).fetchone()[0]
+        req(stored == expected, f"survey fingerprint mismatch on {side}: {stored} != {expected}")
+    PASSED.append("E15 survey payload fingerprint")
+    print("PASS E15 survey payload fingerprint", flush=True)
     sync("E15 survey sync replay", first, status=200)
     sync(
         "E15 survey sync payload conflict",
@@ -1622,6 +1649,185 @@ def batch_records(ctx: Ctx) -> None:
     )
 
 
+def batch_numbering(ctx: Ctx) -> None:
+    for side in SIDES:
+        d = ctx.data[side]
+        d["nlines"] = seed_source(
+            ctx.owner_url, ctx.fx, "LineString", {"line-n": "LINESTRING(0 200,200 200)"}
+        )
+        d["npoints"] = seed_source(
+            ctx.owner_url,
+            ctx.fx,
+            "Point",
+            {
+                "n-1": "POINT(20 190)",
+                "n-2": "POINT(40 210)",
+                "n-3": "POINT(60 190)",
+                "n-4": "POINT(80 210)",
+                "n-5": "POINT(100 400)",
+            },
+        )
+    o, r = ctx.pair(
+        "E15 numbering rule",
+        "POST",
+        "/rules",
+        status=201,
+        body=lambda d: {
+            "version": f"num@{d['s']}",
+            "status": "authoritative",
+            "authority_ref": "QD-9",
+            "max_distance_m": 50,
+        },
+    )
+    ctx.keep("nrule", o, r)
+    o, r = ctx.pair(
+        "E15 numbering route",
+        "POST",
+        "/routes",
+        status=201,
+        body=lambda d: {"name": "Đường Số", "source_id": d["nlines"], "feature_id": "line-n"},
+    )
+    ctx.keep("nroute", o, r)
+    for i in range(1, 6):
+        o, r = ctx.pair(
+            f"E15 numbering building {i}",
+            "POST",
+            "/buildings",
+            status=201,
+            body=lambda d, i=i: {
+                "route_id": d["nroute"]["id"],
+                "source_id": d["npoints"],
+                "feature_id": f"n-{i}",
+                "eligibility": "eligible",
+            },
+        )
+        ctx.keep(f"n{i}", o, r)
+
+    def inspect(d, **over):
+        body = {
+            "x": 20,
+            "y": 190,
+            "crs_code": 3857,
+            "route_id": d["nroute"]["id"],
+            "rule_id": d["nrule"]["id"],
+            "existing_building_id": d["n1"]["id"],
+        }
+        body.update(over)
+        return body
+
+    ctx.pair("E15 inspect empty route side", "POST", "/inspect", headers=ctx.h, body=inspect)
+    ctx.pair(
+        "E15 inspect transformed point",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, x=0.0005, y=0.0016, crs_code=4326, existing_building_id=None),
+    )
+    ctx.pair(
+        "E15 inspect ambiguous side",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, x=50, y=200, existing_building_id=None),
+    )
+    ctx.pair(
+        "E15 inspect missing route",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, route_id=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 inspect missing rule",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, rule_id=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 inspect building off route",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, existing_building_id=d["b2"]["id"]),
+    )
+    ctx.pair(
+        "E15 inspect bad crs",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, crs_code=0),
+    )
+
+    def preview(d, **over):
+        body = {
+            "building_ids": [d[f"n{i}"]["id"] for i in range(1, 6)],
+            "rule_id": d["nrule"]["id"],
+            "operation_id": d.setdefault("op_preview", str(uuid4())),
+        }
+        body.update(over)
+        return body
+
+    ctx.pair(
+        "E15 preview duplicate buildings",
+        "POST",
+        "/previews",
+        body=lambda d: preview(d, building_ids=[d["n1"]["id"], d["n1"]["id"]]),
+    )
+    ctx.pair(
+        "E15 preview missing building",
+        "POST",
+        "/previews",
+        body=lambda d: preview(d, building_ids=[str(uuid4())]),
+    )
+    ctx.pair(
+        "E15 preview missing rule",
+        "POST",
+        "/previews",
+        body=lambda d: preview(d, rule_id=str(uuid4())),
+    )
+    o, r = ctx.pair("E15 preview numbering", "POST", "/previews", status=201, body=preview)
+    ctx.keep("preview", o, r)
+    ctx.pair("E15 preview same operation", "POST", "/previews", body=preview)
+    ctx.pair(
+        "E15 preview protected building",
+        "POST",
+        "/previews",
+        status=201,
+        body=lambda d: preview(d, building_ids=[d["b5"]["id"]], operation_id=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 apply preview",
+        "POST",
+        lambda d: f"/previews/{d['preview']['id']}/apply",
+        status=200,
+    )
+    ctx.pair("E15 apply preview replay", "POST", lambda d: f"/previews/{d['preview']['id']}/apply")
+    ctx.pair("E15 apply preview missing", "POST", f"/previews/{uuid4()}/apply")
+    ctx.pair("E15 inspect existing number", "POST", "/inspect", headers=ctx.h, body=inspect)
+    ctx.pair(
+        "E15 inspect between anchors",
+        "POST",
+        "/inspect",
+        headers=ctx.h,
+        body=lambda d: inspect(d, x=30, y=190, existing_building_id=None),
+    )
+    ctx.pair(
+        "E15 preview already numbered",
+        "POST",
+        "/previews",
+        status=201,
+        body=lambda d: preview(d, operation_id=str(uuid4())),
+    )
+    ctx.pair(
+        "E15 numbering targets after apply",
+        "GET",
+        "/numbering-targets",
+        headers=ctx.h,
+        params=lambda d: {"route_id": d["nroute"]["id"]},
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -1672,6 +1878,7 @@ def main() -> int:
                     batch_proposals(ctx)
                     batch_field(ctx)
                     batch_records(ctx)
+                    batch_numbering(ctx)
             finally:
                 get_engine().dispose()
 

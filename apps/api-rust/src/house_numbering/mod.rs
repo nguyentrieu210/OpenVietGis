@@ -3,6 +3,7 @@
 mod buildings;
 mod field;
 mod hierarchy;
+mod numbering;
 mod proposals;
 mod records;
 
@@ -47,6 +48,7 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(proposals::router())
         .merge(field::router())
         .merge(records::router())
+        .merge(numbering::router())
 }
 
 #[derive(Debug, Deserialize)]

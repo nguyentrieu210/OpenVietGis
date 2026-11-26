@@ -3,6 +3,7 @@
 pub mod domain;
 pub mod module;
 pub mod numbering;
+pub mod planning;
 pub mod prefix;
 
 pub use module::HouseNumberingModule;
