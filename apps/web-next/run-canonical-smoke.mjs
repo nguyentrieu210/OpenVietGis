@@ -19,11 +19,10 @@ try {
  }
 } finally {
  const http=server.httpServer;
- await new Promise((resolve,reject)=>{
-  http.close(err=>err&&err.code!=="ERR_SERVER_NOT_RUNNING"?reject(err):resolve());
-  // Browser smoke can leave keep-alive sockets behind after the child exits.
-  // Drain them after close() stops accepting new connections so Node never
-  // terminates an unsettled top-level await with exit code 13.
-  http.closeAllConnections?.();
- });
+ // The browser children are already closed here. Do not await Node's close
+ // callback: upgraded/keep-alive preview sockets can keep that callback pending
+ // after all smoke assertions have passed, which makes ESM exit with code 13.
+ http.close();
+ http.closeAllConnections?.();
+ http.unref();
 }
