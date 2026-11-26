@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::catalog::ProjectRead;
 
 use super::validation::validate_contributions;
-use super::{db_error, iso};
+use super::{db_error, iso, iso_z};
 
 pub async fn list_contributions(read: &mut ProjectRead<'_>) -> Result<Vec<Value>, AppError> {
     let rows = sqlx::query(
@@ -159,7 +159,7 @@ pub async fn list_events(
             "resource_type": row.try_get::<String, _>("resource_type").map_err(db_error)?,
             "resource_id": row.try_get::<Uuid, _>("resource_id").map_err(db_error)?,
             "revision_ref": row.try_get::<Option<String>, _>("revision_ref").map_err(db_error)?,
-            "created_at": iso(row.try_get::<DateTime<Utc>, _>("created_at").map_err(db_error)?),
+            "created_at": iso_z(row.try_get::<DateTime<Utc>, _>("created_at").map_err(db_error)?),
         }));
     }
 

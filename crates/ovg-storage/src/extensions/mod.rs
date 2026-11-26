@@ -40,6 +40,12 @@ pub(crate) fn db_error(error: sqlx::Error) -> AppError {
     AppError::internal("extension database operation failed")
 }
 
+/// FastAPI (Pydantic) serializes some timestamps as UTC `Z`, e.g. `2026-11-26T10:24:09.331155Z`.
+#[must_use]
+pub fn iso_z(value: DateTime<Utc>) -> String {
+    iso(value).replacen("+00:00", "Z", 1)
+}
+
 #[must_use]
 pub fn iso(value: DateTime<Utc>) -> String {
     let format = if value.timestamp_subsec_micros() == 0 {
