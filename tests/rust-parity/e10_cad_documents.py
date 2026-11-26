@@ -54,6 +54,7 @@ def seed_version(owner_url: str, fixture: dict, doc_id, *, version: int, created
         )
 
 
+@parity.case
 def compare_response(label: str, expected, actual):
     require(
         expected.status_code == actual.status_code,
