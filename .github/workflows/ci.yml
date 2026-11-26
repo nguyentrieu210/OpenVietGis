@@ -170,6 +170,17 @@ jobs:
         if: ${{ !inputs.browser_only }}
         run: pnpm validate
 
+      - name: Upload Playwright diagnostics when root validation fails
+        if: ${{ failure() && !inputs.browser_only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-validation-playwright-${{ github.run_id }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Validate Engine-First editor and cache regression
         if: ${{ !inputs.browser_only }}
         run: bash tools/validate_engine_first.sh
