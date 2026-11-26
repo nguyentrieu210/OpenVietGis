@@ -6,6 +6,7 @@ const parentOrigin=new URL(testUrl).origin;
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
+ await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={organization_id:org,project_id:pid,id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
@@ -53,7 +54,7 @@ try{
  const modes=page.getByRole("group",{name:"Không gian làm việc"});
  await modes.waitFor({timeout:30000});
  await page.locator("#ovg-3d-height option").filter({hasText:"Buildings · height_m"}).waitFor({state:"attached",timeout:20000}).catch(async e=>{console.error("PAGE:",(await page.locator("body").innerText()).slice(0,3000),"ERRORS:",errors);throw e});
- await page.getByRole("button",{name:"Bảng thuộc tính",exact:true}).click({noWaitAfter:true});
+ await page.getByRole("button",{name:/^Bảng thuộc tính/}).first().click({noWaitAfter:true});
  await page.locator(".live-table-row").first().click({noWaitAfter:true});
  await page.locator(".ovg-map-3d-options").evaluate(e=>e.open=true);await page.getByLabel("Chiều cao 3D (m)").selectOption(JSON.stringify(["layer1","height_m"]));
  await page.getByRole("group",{name:"Chế độ bản đồ"}).getByRole("button",{name:"Địa cầu",exact:true}).click({noWaitAfter:true});
