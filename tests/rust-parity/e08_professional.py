@@ -277,7 +277,7 @@ def main() -> int:
                         "feature_ids": ["poly-000001"],
                     }
                     neg_geom_cases = [
-                        ("move_batch zero vector", csrf, {"operation": "move_batch", "primary": pts, "dx": 0, "dy": 0}),
+                        ("move_batch zero vector 422", csrf, {"operation": "move_batch", "primary": pts, "dx": 0, "dy": 0}),
                         ("stale content_revision 409", csrf, {"operation": "move_batch", "primary": pts | {"content_revision": "0" * 64}, "dx": 10}),
                         ("read-only reference fixture 403", csrf, {"operation": "copy", "primary": ref_sel, "dx": 10}),
                         ("scoped allowed single CAD 200", surveyor_csrf, {"operation": "copy", "primary": line_a, "dx": 10}),
