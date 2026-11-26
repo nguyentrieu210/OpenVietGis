@@ -21,3 +21,17 @@
 .ovg-ai-copilot button:disabled{opacity:.55;cursor:wait}.ovg-ai-copilot button:focus-visible,.ovg-ai-copilot input:focus-visible{outline:3px solid #499dee;outline-offset:2px}
 .ovg-ai-copilot [data-ai=footer]{border-top:1px solid #e4ebe7;padding:12px 18px 16px;color:#527063;font-size:12px}.ovg-ai-copilot [data-ai=footer] p{margin:4px 0}.ovg-ai-copilot code{word-break:break-all;color:#1d5971}
 @media(max-width:600px){.ovg-ai-copilot [data-ai=panel]{right:8px;max-width:calc(100vw - 16px);top:72px;max-height:calc(100dvh - 90px)}}
+/* Live activity while an AI session is connected: pulsing frame over the workspace + command log. */
+.ovg-ai-copilot [data-ai=activity]{position:fixed;inset:0;z-index:1100;pointer-events:none}
+.ovg-ai-copilot [data-ai=frame]{position:absolute;inset:4px;border:3px solid #1fd59a;border-radius:10px;box-shadow:inset 0 0 18px #1fd59a55;animation:ovg-ai-pulse 2.4s ease-in-out infinite}
+.ovg-ai-copilot [data-ai=activity][data-busy=true] [data-ai=frame]{border-color:#ffb020;box-shadow:inset 0 0 28px #ffb02088;animation-duration:.8s}
+.ovg-ai-copilot [data-ai=feed]{position:absolute;left:50%;top:clamp(64px,12vh,120px);transform:translateX(-50%);width:min(520px,calc(100vw - 32px));max-height:40vh;overflow:auto;pointer-events:auto;background:#0d2530e8;color:#e6f6f0;border:1px solid #1fd59a88;border-radius:12px;padding:10px 12px;font:12px/1.4 system-ui;box-shadow:0 10px 40px #0008}
+.ovg-ai-copilot [data-ai=feed] strong{display:block;font-size:13px;color:#9ff5d3;margin-bottom:4px}
+.ovg-ai-copilot [data-ai=log]{list-style:none;margin:0;padding:0}
+.ovg-ai-copilot [data-ai=log] li{display:grid;grid-template-columns:auto 1fr auto;gap:2px 8px;padding:5px 0;border-top:1px solid #ffffff1a}
+.ovg-ai-copilot [data-ai=log] [data-ai=when]{color:#8fb3aa;font-variant-numeric:tabular-nums}.ovg-ai-copilot [data-ai=log] em{font-style:normal;font-weight:700}
+.ovg-ai-copilot [data-ai=log] [data-ai=args]{grid-column:1/-1;color:#b9d0ca;font-size:11px;overflow-wrap:anywhere;background:none;padding:0}
+.ovg-ai-copilot [data-ai=log] li[data-kind=run] em,.ovg-ai-copilot [data-ai=log] li[data-kind=wait] em{color:#ffc857}.ovg-ai-copilot [data-ai=log] li[data-kind=done] em{color:#5ee3a8}.ovg-ai-copilot [data-ai=log] li[data-kind=fail] em,.ovg-ai-copilot [data-ai=log] li[data-kind=deny] em{color:#ff8a8a}
+.ovg-ai-copilot [data-ai=log]:empty::after{content:"Đang chờ lệnh từ AI…";color:#8fb3aa}
+@keyframes ovg-ai-pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.ovg-ai-copilot [data-ai=frame]{animation:none}}

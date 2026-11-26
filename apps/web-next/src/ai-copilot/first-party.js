@@ -3,9 +3,10 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
   // Explicit session consent is limited to these read-only / temporary commands.
   // All downloads, persisted writes, administration and unknown tools are reviewed individually.
   const SESSION_SAFE=new Set(["map_view","map_selection","map_navigate","gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_raster_layers","gis_processing_job","gis_models","gis_layouts","gis_plugins","gis_plugin_records"]);
+  const NAMES={map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON",gis_raster_layers:"Đọc lớp raster",gis_raster_process:"GHI DỮ LIỆU: xử lý raster",gis_raster_report:"Báo cáo raster",gis_raster_download:"Tải GeoTIFF",gis_processing_run:"GHI DỮ LIỆU: chạy xử lý vector",gis_processing_job:"Đọc trạng thái processing",gis_models:"Đọc mô hình xử lý",gis_model_save:"GHI DỮ LIỆU: lưu mô hình",gis_model_run:"GHI DỮ LIỆU: chạy toàn bộ mô hình",gis_layouts:"Đọc layout",gis_layout_save:"GHI DỮ LIỆU: lưu layout",gis_layout_export:"Xuất layout PDF/PNG/JSON",gis_plugins:"Đọc danh mục plugin",gis_plugin_activate:"QUẢN TRỊ: bật plugin",gis_plugin_disable:"QUẢN TRỊ: tắt plugin",gis_plugin_records:"Đọc bản ghi plugin",gis_plugin_create:"GHI DỮ LIỆU: tạo bản ghi plugin",gis_plugin_update:"GHI DỮ LIỆU: sửa bản ghi plugin"};
   const node=document.createElement("section");
   node.className="ovg-ai-copilot";
-  node.innerHTML='<button type="button" data-ai="toggle"><span aria-hidden="true">✦</span> AI Copilot</button><div data-ai="panel" hidden><header data-ai="header"><div><span data-ai="eyebrow">OPENVIETGIS · AI WORKSPACE</span><h2>Trợ lý bản đồ AI</h2><p>Điều khiển và phân tích GIS bằng ngôn ngữ tự nhiên.</p></div><button type="button" data-ai="dismiss" aria-label="Thu gọn AI Copilot">×</button></header><div data-ai="connection"><p data-ai="status" role="status">Chưa kết nối</p><button type="button" data-ai="connect">Kết nối AI</button><button type="button" data-ai="close" hidden>Ngắt kết nối</button></div><div data-ai="consent" hidden><label><input type="checkbox" data-ai="auto"> <strong>Luôn cho phép lệnh an toàn trong phiên</strong></label><p>Đọc dữ liệu, phân tích xem trước, di chuyển bản đồ và chọn đối tượng. Có thể tắt bất cứ lúc nào. Tạo, sửa, xóa, xuất dữ liệu và quản trị luôn hỏi riêng.</p></div><div data-ai="review" hidden role="region" aria-label="Xác nhận lệnh AI"><span data-ai="risk"></span><h3 data-ai="command"></h3><p data-ai="explain"></p><details data-ai="detailbox" hidden><summary>Thông số và đối tượng liên quan</summary><pre data-ai="details"></pre></details><div data-ai="actions"><button type="button" data-ai="always" hidden>Luôn cho phép trong phiên</button><button type="button" data-ai="accept">Cho phép lần này</button><button type="button" data-ai="deny">Từ chối</button></div></div><footer data-ai="footer"><strong>Kết nối ChatGPT / Claude</strong><p>Đăng nhập cùng tài khoản GIS, chọn dự án rồi kết nối. Phiên có hiệu lực tối đa 15 phút.</p><code data-ai="endpoint"></code></footer></div>';
+  node.innerHTML='<button type="button" data-ai="toggle"><span aria-hidden="true">✦</span> AI Copilot</button><div data-ai="panel" hidden><header data-ai="header"><div><span data-ai="eyebrow">OPENVIETGIS · AI WORKSPACE</span><h2>Trợ lý bản đồ AI</h2><p>Điều khiển và phân tích GIS bằng ngôn ngữ tự nhiên.</p></div><button type="button" data-ai="dismiss" aria-label="Thu gọn AI Copilot">×</button></header><div data-ai="connection"><p data-ai="status" role="status">Chưa kết nối</p><button type="button" data-ai="connect">Kết nối AI</button><button type="button" data-ai="close" hidden>Ngắt kết nối</button></div><div data-ai="consent" hidden><label><input type="checkbox" data-ai="auto"> <strong>Luôn cho phép lệnh an toàn trong phiên</strong></label><p>Đọc dữ liệu, phân tích xem trước, di chuyển bản đồ và chọn đối tượng. Có thể tắt bất cứ lúc nào. Tạo, sửa, xóa, xuất dữ liệu và quản trị luôn hỏi riêng.</p></div><div data-ai="review" hidden role="region" aria-label="Xác nhận lệnh AI"><span data-ai="risk"></span><h3 data-ai="command"></h3><p data-ai="explain"></p><details data-ai="detailbox" hidden><summary>Thông số và đối tượng liên quan</summary><pre data-ai="details"></pre></details><div data-ai="actions"><button type="button" data-ai="always" hidden>Luôn cho phép trong phiên</button><button type="button" data-ai="accept">Cho phép lần này</button><button type="button" data-ai="deny">Từ chối</button></div></div><footer data-ai="footer"><strong>Kết nối ChatGPT / Claude</strong><p>Đăng nhập cùng tài khoản GIS, chọn dự án rồi kết nối. Phiên có hiệu lực tối đa 15 phút.</p><code data-ai="endpoint"></code></footer></div><div data-ai="activity" hidden><div data-ai="frame" aria-hidden="true"></div><div data-ai="feed"><strong><span aria-hidden="true">✦</span> AI đang làm việc trên bản đồ</strong><ol data-ai="log" role="log" aria-live="polite" aria-label="Lệnh AI"></ol></div></div>';
   host.append(node);
   const get=name=>node.querySelector('[data-ai="'+name+'"]');
   get("endpoint").textContent=location.origin+"/mcp";
@@ -15,13 +16,29 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     get("auto").checked=autoAllowed;
   }
   const status=t=>{get("status").textContent=t;};
+  // One row per command id, newest first; the frame pulses harder while a command waits or runs.
+  function track(c,state,kind){
+    const log=get("log");
+    let row=log.querySelector('[data-id="'+CSS.escape(String(c.id))+'"]');
+    if(!row){
+      row=document.createElement("li");row.dataset.id=String(c.id);
+      row.innerHTML='<span data-ai="when"></span><b data-ai="what"></b><em data-ai="state"></em><code data-ai="args"></code>';
+      row.querySelector('[data-ai="when"]').textContent=new Date().toLocaleTimeString("vi-VN");
+      row.querySelector('[data-ai="what"]').textContent=NAMES[c.method]||c.method;
+      const args=JSON.stringify(c.params??{});
+      row.querySelector('[data-ai="args"]').textContent=args==="{}"?"":args.length>160?args.slice(0,160)+"…":args;
+      log.prepend(row);
+      while(log.children.length>8)log.lastElementChild.remove();
+    }
+    row.querySelector('[data-ai="state"]').textContent=state;row.dataset.kind=kind;
+    get("activity").dataset.busy=String(!!log.querySelector('[data-kind="run"],[data-kind="wait"]'));
+  }
   const show=(k,flag)=>{get(k).hidden=!flag;};
   const setReview=(cmd)=>{
     command=cmd;show("review",!!cmd);
     if(cmd){
       show("panel",true);
-      const names={map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON",gis_raster_layers:"Đọc lớp raster",gis_raster_process:"GHI DỮ LIỆU: xử lý raster",gis_raster_report:"Báo cáo raster",gis_raster_download:"Tải GeoTIFF",gis_processing_run:"GHI DỮ LIỆU: chạy xử lý vector",gis_processing_job:"Đọc trạng thái processing",gis_models:"Đọc mô hình xử lý",gis_model_save:"GHI DỮ LIỆU: lưu mô hình",gis_model_run:"GHI DỮ LIỆU: chạy toàn bộ mô hình",gis_layouts:"Đọc layout",gis_layout_save:"GHI DỮ LIỆU: lưu layout",gis_layout_export:"Xuất layout PDF/PNG/JSON",gis_plugins:"Đọc danh mục plugin",gis_plugin_activate:"QUẢN TRỊ: bật plugin",gis_plugin_disable:"QUẢN TRỊ: tắt plugin",gis_plugin_records:"Đọc bản ghi plugin",gis_plugin_create:"GHI DỮ LIỆU: tạo bản ghi plugin",gis_plugin_update:"GHI DỮ LIỆU: sửa bản ghi plugin"};
-      get("command").textContent=names[cmd.method]||"Lệnh không hỗ trợ";
+      get("command").textContent=NAMES[cmd.method]||"Lệnh không hỗ trợ";
       const safe=SESSION_SAFE.has(cmd.method);
       get("risk").textContent=safe?"LỆNH AN TOÀN · KHÔNG GHI DỮ LIỆU":"CẦN XÁC NHẬN RIÊNG";
       get("risk").dataset.safe=String(safe);
@@ -43,6 +60,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     return r.json();
   }
   function reset(message){
+    show("activity",false);get("log").replaceChildren();
     ++epoch;active=null;setAutomatic(false);setReview(null);show("connect",true);show("close",false);show("consent",false);
     get("connect").disabled=false;status(message);
   }
@@ -58,7 +76,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
       const s=await req("",null,{organization_id:organizationId,project_id:projectId,...(typeof getBridge()?.workspace==="function"?{workspace_version:2}:{})});
       if(disposed){void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});return}
       active=s;++epoch;setAutomatic(false);show("connect",false);show("close",true);show("consent",true);
-      status("Đã kết nối phiên này · 15 phút");
+      status("Đã kết nối phiên này · 15 phút");show("activity",true);get("activity").dataset.busy="false";
     }catch(e){if(!disposed)reset(e.message)}
   }
   async function tick(){
@@ -69,7 +87,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
       const path="/"+s.session_id+(command||submitting?"/ping":"/poll");
       const data=await req(path,s,{});
       if(active!==s||e!==epoch||disposed)return;
-      if(command&&performance.now()>=command.deadline)setReview(null);
+      if(command&&performance.now()>=command.deadline){if(!submitting)track(command,"Hết hạn","fail");setReview(null);}
       if(data.command&&!command&&!submitting){
         const c=data.command;
         const basic=["map_view","map_selection","map_navigate"].includes(c.method);
@@ -77,9 +95,9 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
         if((basic||full)&&c.expires_in>2){
           const next={...c,deadline:performance.now()+c.expires_in*1000};
           if(autoAllowed&&SESSION_SAFE.has(c.method)){
-            command=next;
+            command=next;track(next,"Tự động duyệt","run");
             void respond(true,true);
-          }else setReview(next);
+          }else{track(next,"Chờ bạn duyệt","wait");setReview(next);}
         }
       }
     }catch{if(active===s)reset("Phiên hết hạn hoặc quyền GIS đã thay đổi")}
@@ -91,6 +109,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     if(automated&&(!autoAllowed||!SESSION_SAFE.has(c.method)))return;
     submitting=true;get("accept").disabled=true;get("deny").disabled=true;get("always").disabled=true;
     let ok=false,result=null;
+    track(c,approve?"Đang thực hiện…":"Từ chối",approve?"run":"deny");
     try{
       if(approve){
         // Fresh server authorization immediately before using the host map bridge.
@@ -112,6 +131,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
         ok=true;
       }
     }catch{}
+    if(approve)track(c,ok?"Xong":"Lỗi / hết hạn",ok?"done":"fail");
     try{
       if(active!==s||disposed||e!==epoch)return;
       await req("/"+s.session_id+"/commands/"+c.id+"/ack",s,{ok,result});
