@@ -80,6 +80,7 @@ def seed_job(owner_url: str, fixture: dict, *, status: str, label: str):
     return job_id
 
 
+@parity.case
 def compare_response(label: str, expected, actual, *, normalize=None):
     require(expected.status_code == actual.status_code, f"{label}: status {expected.status_code} != {actual.status_code}")
     ebody = expected.json()

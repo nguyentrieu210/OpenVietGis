@@ -98,6 +98,7 @@ def seed_cartography(owner_url: str, fixture: dict):
     return str(layer_id), str(layout_new), str(layout_old)
 
 
+@parity.case
 def compare_response(label: str, expected, actual) -> dict:
     require(
         expected.status_code == actual.status_code,
