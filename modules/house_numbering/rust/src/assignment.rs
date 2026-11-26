@@ -681,7 +681,7 @@ pub fn audit_classify(
         let mapped = row["alley_mapped"] == true;
         let (matched, reason) = index.match_route(raw_road, raw_alley, &code, mapped);
         let legacy: &[&Value] = if !code.is_empty() && index.coded(&code).is_empty() {
-            pending.get(&code).map_or(&[], Vec::as_slice)
+            pending.get(&code).map(Vec::as_slice).unwrap_or_default()
         } else {
             &[]
         };

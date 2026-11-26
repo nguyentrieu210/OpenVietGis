@@ -1910,6 +1910,509 @@ def batch_photos(ctx: Ctx) -> None:
     )
 
 
+def ordered(body):
+    """Sort lists whose order breaks ties on generated ids (after normalization)."""
+    if isinstance(body, list):
+        return [ordered(v) for v in body]
+    if not isinstance(body, dict):
+        return body
+    out = {k: ordered(v) for k, v in body.items()}
+    for key in ("items", "existing", "clusters"):
+        if isinstance(out.get(key), list):
+            out[key] = sorted(out[key], key=lambda x: json.dumps(x, sort_keys=True))
+    return out
+
+
+def batch_building_assignment(ctx: Ctx) -> None:
+    """Building-assignment family: each side owns its geometry (offset x) and road names."""
+    from modules.house_numbering.catalog_recovery import digest
+    from modules.house_numbering.cluster_correction import cluster_key
+
+    viewer = make_member(ctx.owner_url, ctx.fx, "viewer", "HN Assignment Viewer")
+    keys = {"Qxo": "Qx", "Qxr": "Qx", "qxo": "qx", "qxr": "qx"}
+
+    def made(side: str, path: str, body: dict) -> dict:
+        resp = ctx.call(side, "POST", path, json=body)
+        req(resp.status_code == 201, f"{path}: {resp.text}")
+        return resp.json()
+
+    for side in SIDES:
+        d = ctx.data[side]
+        x, t = (100000 if side == "o" else 200000), f"Qx{side}"
+
+        def pt(dx, dy, x=x):
+            return f"POINT({x + dx} {dy})"
+
+        def ln(*points, x=x):
+            return "LINESTRING(" + ",".join(f"{x + a} {b}" for a, b in points) + ")"
+
+        def source(family, features, attributes=None):
+            return seed_source(ctx.owner_url, ctx.fx, family, features, attributes)
+
+        def buildings(section, src, attrs, extra=None, side=side, d=d):
+            for fid, a in attrs.items():
+                body = {"source_id": src, "feature_id": fid, **(extra or {}).get(fid, {})}
+                d[f"{section}_{fid}"] = made(side, "/buildings", body)["id"]
+                key = cluster_key(a.get("ten_duong"), a.get("hem"), a.get("tuyen_id"))
+                keys[key] = f"<cluster-{section}-{fid}>"
+
+        # A: preview/apply and audit (mirrors test_building_assignment_api).
+        a_lines = source(
+            "LineString",
+            {
+                "main": ln((0, 0), (100, 0)),
+                "branch": ln((50, 0), (50, 80)),
+                "pending": ln((0, 50), (100, 50)),
+            },
+            {
+                "pending": {
+                    "route_code": f"legacy-{t}",
+                    "review_reason": "parent_required;invalid_prefix",
+                    "parent_code": "missing",
+                    "ten": "Hẻm 77",
+                }
+            },
+        )
+        main = made(
+            side,
+            "/routes",
+            {
+                "name": f"Đường Nguyễn Văn Linh {t}",
+                "source_id": a_lines,
+                "feature_id": "main",
+                "status": "confirmed",
+            },
+        )
+        alley = made(
+            side,
+            "/routes",
+            {
+                "name": "Hẻm 155",
+                "route_type": "alley",
+                "parent_route_id": main["id"],
+                "prefix": "155",
+                "source_id": a_lines,
+                "feature_id": "branch",
+            },
+        )
+        d["a_main"], d["a_alley"] = main["id"], alley["id"]
+        nvl = f"Nguyễn Văn Linh {t}"
+        a_attrs = {
+            "b1": {"ten_duong": f"Nguyen Van Linh {t}", "hem": "155"},
+            "b2": {"ten_duong": nvl, "hem": ""},
+            "b3": {},
+            "b4": {"ten_duong": nvl, "hem": "155"},
+            "b5": {"ten_duong": nvl, "hem": "77", "tuyen_id": f"legacy-{t}"},
+            "b6": {"ten_duong": nvl, "hem": ""},
+        }
+        d["a_pts"] = source(
+            "Point",
+            {
+                "b1": pt(55, 2),
+                "b2": pt(20, 3),
+                "b3": pt(54, 5),
+                "b4": pt(22, 4),
+                "b5": pt(50, 52),
+                "b6": pt(30, 5),
+            },
+            a_attrs,
+        )
+        buildings("a", d["a_pts"], a_attrs, {"b4": {"route_id": main["id"]}})
+
+        # C: survey-code conflict correction (mirrors test_cluster_correction).
+        c_lines = source(
+            "LineString", {"old": ln((0, 600), (100, 600)), "new": ln((0, 500), (100, 500))}
+        )
+        old = made(
+            side, "/routes", {"name": f"Đường Sai {t}", "source_id": c_lines, "feature_id": "old"}
+        )
+        new = made(
+            side, "/routes", {"name": f"Đường Đúng {t}", "source_id": c_lines, "feature_id": "new"}
+        )
+        d["c_old"], d["c_new"] = old["id"], new["id"]
+        c_attr = {"ten_duong": f"Đường Đúng {t}", "hem": "", "tuyen_id": old["id"]}
+        c_attrs = {fid: c_attr for fid in ("near1", "near2", "far", "ineligible")}
+        d["c_pts"] = source(
+            "Point",
+            {
+                "near1": pt(20, 503),
+                "near2": pt(20, 508),
+                "far": pt(20, 600),
+                "ineligible": pt(20, 504),
+            },
+            c_attrs,
+        )
+        buildings(
+            "c",
+            d["c_pts"],
+            c_attrs,
+            {"ineligible": {"eligibility": "ineligible", "ineligibility_reason": "fixture"}},
+        )
+        d["c_ids"] = [d[f"c_{fid}"] for fid in c_attrs]
+        d["cluster"] = cluster_key(c_attr["ten_duong"], "", old["id"])
+
+        # D: reviewed alias catalog (mirrors test_catalog_recovery).
+        d_lines = source(
+            "LineString",
+            {"old9": ln((0, 1000), (100, 1000)), "pending77": ln((20, 1000), (20, 1050))},
+            {
+                "old9": {"ten": f"Đường số 9 {t}"},
+                "pending77": {
+                    "ten": f"Đường số 9 Ấp 21 {t} hẻm 77",
+                    "prefix": "77",
+                    "route_type": "alley",
+                    "route_code": f"legacy_77_{t}",
+                    "review_reason": "parent_required",
+                },
+            },
+        )
+        old9 = made(
+            side,
+            "/routes",
+            {"name": f"Đường số 9 {t}", "source_id": d_lines, "feature_id": "old9"},
+        )["id"]
+        d_attrs = {
+            fid: {"ten_duong": f"Đường số 9 Ấp 21 {t}", "hem": hem, "tuyen_id": code}
+            for fid, hem, code in (
+                ("a", "", old9),
+                ("b", "", old9),
+                ("far", "", old9),
+                ("wrong_prefix", "77", old9),
+                ("nocode", "", ""),
+            )
+        }
+        d["d_pts"] = source(
+            "Point",
+            {
+                "a": pt(20, 1003),
+                "b": pt(20, 1008),
+                "far": pt(20, 1100),
+                "wrong_prefix": pt(20, 1004),
+                "nocode": pt(20, 1005),
+            },
+            d_attrs,
+        )
+        buildings("d", d["d_pts"], d_attrs, {fid: {"eligibility": "eligible"} for fid in d_attrs})
+        d["d_ids"] = [d[f"d_{fid}"] for fid in d_attrs]
+        keys[digest([old9, f"so 9 ap 21 qx{side}", "", old9])[:32]] = "<catalog-group>"
+
+        # E: prefix tree recovery (mirrors test_prefix_recovery).
+        e_lines = source(
+            "LineString",
+            {
+                "root": ln((0, 2000), (100, 2000)),
+                "other": ln((0, 2200), (100, 2200)),
+                "parent": ln((20, 2000), (20, 2050)),
+            },
+            {
+                "root": {"ten": f"Đường A {t}"},
+                "other": {"ten": f"Đường A {t}"},
+                "parent": {"ten": f"Đường A {t} hẻm 12"},
+            },
+        )
+        root = made(
+            side, "/routes", {"name": f"Đường A {t}", "source_id": e_lines, "feature_id": "root"}
+        )["id"]
+        made(side, "/routes", {"name": f"Đường A {t}", "source_id": e_lines, "feature_id": "other"})
+        made(
+            side,
+            "/routes",
+            {
+                "name": f"Đường A {t} hẻm 12",
+                "route_type": "alley",
+                "parent_route_id": root,
+                "prefix": "12",
+                "source_id": e_lines,
+                "feature_id": "parent",
+            },
+        )
+        branches = {"a": "12/3", "b": "12/3", "c": "12/8/9", "d": "???", "e": "12/4", "f": "12/99"}
+        e_attrs = {
+            fid: {"ten_duong": f"Đường A {t}", "hem": b, "tuyen_id": root}
+            for fid, b in branches.items()
+        }
+        d["e_pts"] = source(
+            "Point",
+            {
+                "a": pt(22, 2035),
+                "b": pt(95, 2150),
+                "c": pt(50, 2050),
+                "d": pt(20, 2002),
+                "e": pt(35, 2038),
+                "f": pt(20, 2003),
+            },
+            e_attrs,
+        )
+        buildings("e", d["e_pts"], e_attrs, {fid: {"eligibility": "eligible"} for fid in e_attrs})
+        segments = {
+            "seg1": (((20, 2035), (30, 2035)), "12/3"),
+            "seg2": (((30, 2035), (40, 2035)), "12/3"),
+            "gap": (((50, 2050), (70, 2050)), "12/8/9"),
+            "branch_a": (((20, 2040), (30, 2040)), "12/4"),
+            "branch_b": (((50, 2045), (60, 2045)), "12/4"),
+        }
+        source(
+            "LineString",
+            {fid: ln(*points) for fid, (points, _) in segments.items()},
+            {
+                fid: {
+                    "ten": f"Đường A {t} hẻm {b}",
+                    "prefix": b,
+                    "route_type": "alley",
+                    "route_code": f"{fid}-{t}",
+                    "review_reason": "parent_required",
+                }
+                for fid, (_, b) in segments.items()
+            },
+        )
+        for b in ("12/3", "12/8/9", "12/4", "12/99"):
+            keys[digest([f"a qx{side}", b])[:32]] = f"<prefix-{b}>"
+
+    def case(label, path, body, *, headers=None, keep=None, status=None, view=ordered):
+        o, r = ctx.pair(
+            label,
+            "POST",
+            "/building-assignment" + path,
+            body=body,
+            headers=headers,
+            extra=keys,
+            view=view,
+            status=status,
+        )
+        if keep:
+            ctx.keep(keep, o, r)
+
+    # A: reviewable preview → apply, then the audit queue.
+    plan = {"limit": 100, "max_distance_m": 80}
+
+    def apply(d, **kw):
+        return {
+            **plan,
+            "source_id": d["a_pts"],
+            "preview_token": d["a_plan"]["preview_token"],
+            "assignments": {d["a_b1"]: d["a_alley"], d["a_b2"]: d["a_main"]},
+            **kw,
+        }
+
+    def audit(d, **kw):
+        return {"source_id": d["a_pts"], "limit": 100, **kw}
+
+    def strict(d):
+        return {"building_ids": [d["a_b6"]], "strict": True, "limit": 100}
+
+    def strict_apply(d, rid):
+        token = d["a_strict"]["preview_token"]
+        return {**strict(d), "preview_token": token, "assignments": {d["a_b6"]: d[rid]}}
+
+    case(
+        "E15 assignment preview",
+        "/preview",
+        lambda d: {**plan, "source_id": d["a_pts"]},
+        keep="a_plan",
+        status=200,
+    )
+    case(
+        "E15 assignment preview page",
+        "/preview",
+        lambda d: {"source_id": d["a_pts"], "limit": 2},
+        view=lambda b: {"n": len(b["items"]), "next": b["next_after_id"]},
+    )
+    case("E15 assignment preview viewer", "/preview", plan, headers=viewer["csrf"])
+    case("E15 assignment preview without CSRF", "/preview", plan, headers=ctx.h)
+    case("E15 assignment preview invalid limit", "/preview", {"limit": 0})
+    case("E15 assignment preview unknown mapping key", "/preview", {"mapping": {"street": "x"}})
+    case("E15 assignment preview extra field", "/preview", {"foo": 1})
+    case(
+        "E15 assignment preview duplicate batch",
+        "/preview",
+        lambda d: {"building_ids": [d["a_b5"], d["a_b5"]], "limit": 100},
+    )
+    case(
+        "E15 assignment preview batch after_id",
+        "/preview",
+        lambda d: {"building_ids": [d["a_b5"]], "after_id": d["a_b5"]},
+    )
+    case("E15 assignment apply stale token", "/apply", lambda d: apply(d, preview_token="0" * 64))
+    case("E15 assignment apply bad token pattern", "/apply", lambda d: apply(d, preview_token="x"))
+    case(
+        "E15 assignment apply unproposed route",
+        "/apply",
+        lambda d: apply(d, assignments={d["a_b1"]: str(uuid4())}),
+    )
+    case("E15 assignment apply viewer", "/apply", apply, headers=viewer["csrf"])
+    case("E15 assignment apply", "/apply", apply, status=200)
+    case(
+        "E15 assignment preview linked batch",
+        "/preview",
+        lambda d: {"building_ids": [d["a_b1"]], "limit": 100},
+    )
+    case(
+        "E15 assignment audit parent missing",
+        "/audit",
+        lambda d: audit(d, group="parent_missing"),
+        keep="a_audit",
+        status=200,
+    )
+    case(
+        "E15 assignment audit cluster",
+        "/audit",
+        lambda d: audit(d, group="parent_missing", cluster=d["a_audit"]["clusters"][0]["key"]),
+    )
+    case("E15 assignment audit ready", "/audit", lambda d: audit(d, group="ready"))
+    case(
+        "E15 assignment audit missing page",
+        "/audit",
+        lambda d: audit(d, group="address_missing", limit=1),
+    )
+    case("E15 assignment audit project", "/audit", {})
+    case("E15 assignment audit viewer", "/audit", audit, headers=viewer["csrf"], status=200)
+    case("E15 assignment audit invalid group", "/audit", {"group": "bogus"})
+    case("E15 assignment audit invalid cluster", "/audit", {"cluster": "XYZ"})
+    case("E15 assignment strict preview", "/preview", strict, keep="a_strict", status=200)
+    case(
+        "E15 assignment strict apply other route",
+        "/apply",
+        lambda d: strict_apply(d, "a_alley"),
+    )
+    case(
+        "E15 assignment strict apply",
+        "/apply",
+        lambda d: strict_apply(d, "a_main"),
+        status=200,
+    )
+    case("E15 assignment audit after apply", "/audit", audit)
+
+    # C: explicit correction of a survey-code conflict cluster.
+    def fix(d, **kw):
+        return {"cluster": d["cluster"], "building_ids": d["c_ids"], "max_distance_m": 35, **kw}
+
+    def confirm(d, **kw):
+        return {
+            **fix(d),
+            "route_id": d["c_new"],
+            "selected_ids": [d["c_near1"], d["c_near2"]],
+            "reason": "Đã kiểm tra đúng đường thực tế",
+            "preview_token": d["c_plan"]["preview_token"],
+            **kw,
+        }
+
+    def conflicts(d, **kw):
+        return {"source_id": d["c_pts"], "group": "address_conflict", "cluster": d["cluster"], **kw}
+
+    case("E15 correction audit", "/audit", lambda d: conflicts(d, limit=100), status=200)
+    case("E15 correction preview", "/correction/preview", fix, keep="c_plan", status=200)
+    case(
+        "E15 correction preview stale cluster",
+        "/correction/preview",
+        lambda d: fix(d, cluster="0" * 24),
+    )
+    case(
+        "E15 correction preview over limit",
+        "/correction/preview",
+        lambda d: fix(d, max_distance_m=80),
+    )
+    case(
+        "E15 correction preview duplicate ids",
+        "/correction/preview",
+        lambda d: fix(d, building_ids=[d["c_near1"], d["c_near1"]]),
+    )
+    case("E15 correction preview viewer", "/correction/preview", fix, headers=viewer["csrf"])
+    case(
+        "E15 correction apply original route",
+        "/correction/apply",
+        lambda d: confirm(d, route_id=d["c_old"]),
+    )
+    case(
+        "E15 correction apply far house",
+        "/correction/apply",
+        lambda d: confirm(d, selected_ids=[d["c_far"]]),
+    )
+    case(
+        "E15 correction apply ineligible house",
+        "/correction/apply",
+        lambda d: confirm(d, selected_ids=[d["c_ineligible"]]),
+    )
+    case(
+        "E15 correction apply stale token",
+        "/correction/apply",
+        lambda d: confirm(d, preview_token="0" * 64),
+    )
+    case(
+        "E15 correction apply blank reason",
+        "/correction/apply",
+        lambda d: confirm(d, reason="         x"),
+    )
+    case(
+        "E15 correction apply missing route",
+        "/correction/apply",
+        lambda d: confirm(d, route_id=str(uuid4())),
+    )
+    case("E15 correction apply", "/correction/apply", confirm, status=200)
+    case("E15 correction apply repeated", "/correction/apply", confirm)
+    case("E15 correction audit after", "/audit", conflicts)
+
+    # D: reviewed aliases are code-scoped and stale-safe.
+    def pick(d, token=None, reason="Đã xác minh tên đường tại Ấp 21"):
+        group = d["d_plan"]["items"][0]
+        return {
+            "source_id": d["d_pts"],
+            "selections": {group["id"]: token or group["token"]},
+            "reason": reason,
+        }
+
+    case(
+        "E15 catalog preview",
+        "/catalog-recovery/preview",
+        lambda d: {"source_id": d["d_pts"]},
+        keep="d_plan",
+        status=200,
+    )
+    case(
+        "E15 catalog preview search",
+        "/catalog-recovery/preview",
+        lambda d: {"source_id": d["d_pts"], "search": "Ấp 21", "limit": 1},
+    )
+    case("E15 catalog preview bad limit", "/catalog-recovery/preview", {"limit": 101})
+    case(
+        "E15 catalog apply stale token",
+        "/catalog-recovery/apply",
+        lambda d: pick(d, token="0" * 64),
+    )
+    case(
+        "E15 catalog apply blank reason",
+        "/catalog-recovery/apply",
+        lambda d: pick(d, reason="         x"),
+    )
+    case(
+        "E15 catalog apply short reason",
+        "/catalog-recovery/apply",
+        lambda d: pick(d, reason="short"),
+    )
+    case("E15 catalog apply viewer", "/catalog-recovery/apply", pick, headers=viewer["csrf"])
+    case("E15 catalog apply", "/catalog-recovery/apply", pick, status=200)
+    case("E15 catalog apply repeated", "/catalog-recovery/apply", pick)
+    case(
+        "E15 catalog strict preview after alias",
+        "/preview",
+        lambda d: {"building_ids": d["d_ids"], "strict": True, "limit": 100},
+        status=200,
+    )
+
+    # E: prefix tree recovery queue (read-only).
+    case(
+        "E15 prefix recovery preview",
+        "/prefix-recovery/preview",
+        lambda d: {"source_id": d["e_pts"]},
+        status=200,
+    )
+    case(
+        "E15 prefix recovery search",
+        "/prefix-recovery/preview",
+        lambda d: {"source_id": d["e_pts"], "search": "12/3", "limit": 1},
+    )
+    case("E15 prefix recovery bad offset", "/prefix-recovery/preview", {"offset": -1})
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -1965,6 +2468,7 @@ def main() -> int:
                     batch_records(ctx)
                     batch_numbering(ctx)
                     batch_geometry(ctx)
+                    batch_building_assignment(ctx)
             finally:
                 get_engine().dispose()
 

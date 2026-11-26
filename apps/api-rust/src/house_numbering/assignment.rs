@@ -306,7 +306,7 @@ fn preview_args(
     body_limit: i64,
     max_distance: f64,
     mapping: &HashMap<String, String>,
-    building_ids: Option<&Vec<Uuid>>,
+    building_ids: Option<&[Uuid]>,
 ) -> HnResult<Mapping> {
     if !(1..=500).contains(&body_limit)
         || !in_range(max_distance, 5.0, 500.0)
@@ -400,7 +400,7 @@ async fn preview(
         body.limit,
         body.max_distance_m,
         &body.mapping,
-        body.building_ids.as_ref(),
+        body.building_ids.as_deref(),
     )?;
     let args = PreviewArgs {
         source_id: body.source_id,
@@ -431,7 +431,7 @@ async fn apply(
         body.limit,
         body.max_distance_m,
         &body.mapping,
-        body.building_ids.as_ref(),
+        body.building_ids.as_deref(),
     )?;
     if !hex(&body.preview_token, 64) || body.assignments.is_empty() || body.assignments.len() > 500
     {
@@ -655,7 +655,7 @@ async fn catalog_apply(
         };
         let mut keys: HashSet<(String, String, String)> = aliases.iter().map(key_of).collect();
         for g in groups {
-            if !keys.insert(key_of(*g)) {
+            if !keys.insert(key_of(g)) {
                 return Err(stale_alias("Tên đối chiếu đã tồn tại").into());
             }
             aliases.push(json!({
