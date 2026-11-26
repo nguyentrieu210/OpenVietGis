@@ -1,6 +1,6 @@
 //! E14 marketplace publisher & submission review storage over canonical RLS tables.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Value};
 use sqlx::{Postgres, Row, Transaction};
@@ -9,6 +9,16 @@ use uuid::Uuid;
 use crate::DbPool;
 
 use super::{db_error, iso};
+
+/// FastAPI serializes submission timestamps as UTC `Z` (e.g. `2026-11-26T10:24:09.331155Z`).
+fn iso_z(value: DateTime<Utc>) -> String {
+    let format = if value.timestamp_subsec_micros() == 0 {
+        SecondsFormat::Secs
+    } else {
+        SecondsFormat::Micros
+    };
+    value.to_rfc3339_opts(format, true)
+}
 
 pub const DEVELOPER_QUOTA: i64 = 30;
 
@@ -57,8 +67,8 @@ impl SubmissionRow {
             "signature": self.signature,
             "status": self.status,
             "review_note": self.review_note,
-            "reviewed_at": self.reviewed_at.map(iso),
-            "created_at": iso(self.created_at),
+            "reviewed_at": self.reviewed_at.map(iso_z),
+            "created_at": iso_z(self.created_at),
             "publisher_name": self.publisher_name,
             "public_key": self.public_key,
             "own": self.owner_user_id == viewer_uid,
