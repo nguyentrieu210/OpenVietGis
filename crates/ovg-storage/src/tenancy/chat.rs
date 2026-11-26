@@ -1011,7 +1011,7 @@ impl TenantTx {
             .map(|(id, name)| (fold(&name), id, name))
             .filter(|(folded, _, _)| folded.contains(&needle))
             .collect();
-        found.sort_by(|a, b| (&a.0, a.1.to_string()).cmp(&(&b.0, b.1.to_string())));
+        found.sort_by_cached_key(|(folded, id, _)| (folded.clone(), id.to_string()));
         let items: Vec<Value> = found
             .into_iter()
             .take(50)
@@ -1054,7 +1054,7 @@ impl TenantTx {
             .filter_map(|id| known.get(id).map(|name| (id, name)))
             .map(|(id, name)| (fold(name), json!({"user_id": id, "display_name": name})))
             .collect();
-        items.sort_by(|a, b| a.0.cmp(&b.0));
+        items.sort_by_cached_key(|(folded, _)| folded.clone());
         let side = |direction: &str, key: &str| -> Result<Vec<Value>, EditError> {
             let mut out = Vec::new();
             for request in &requests {

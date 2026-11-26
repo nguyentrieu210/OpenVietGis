@@ -104,7 +104,7 @@ fn human<'a>(actor: &Actor, scope: Option<EditScope<'a>>) -> Result<EditScope<'a
     Ok(scope)
 }
 
-fn path_scope<'a>(scope: Option<EditScope<'a>>) -> Result<EditScope<'a>, Failure> {
+fn path_scope(scope: Option<EditScope<'_>>) -> Result<EditScope<'_>, Failure> {
     scope.ok_or_else(invalid)
 }
 
