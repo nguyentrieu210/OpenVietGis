@@ -890,7 +890,7 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
                     "Catalog history exposed internal foreign keys")
 
     suite.get("E02 populated catalog history", changes_path, token=a, check=catalog_evidence)
-    first_change = sorted(change_ids)[0]
+    first_change = min(change_ids)
     suite.get(
         "E02 catalog continuation", changes_path, token=a,
         params={"limit": 1, "after_id": first_change},

@@ -1,16 +1,15 @@
 """Exercise the hybrid Nginx dispatch against two local recording upstreams."""
 
 import http.client
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
-from pathlib import Path
 import socket
 import subprocess
 import tempfile
-from threading import Thread
 import time
 from contextlib import ExitStack, contextmanager
-
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import Thread
 
 CONFIG = Path(__file__).resolve().parents[2] / "infra/rust-platform/hybrid-gateway.conf"
 ORG = "27ac050e-e443-480e-bdc5-b36bcab9403d"

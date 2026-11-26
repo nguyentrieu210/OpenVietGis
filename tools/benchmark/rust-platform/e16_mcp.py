@@ -1,13 +1,14 @@
 """Isolated baseline/candidate benchmark; no live service or real credentials."""
 import argparse
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import json
-from pathlib import Path
 import resource
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
 
 def percentile(samples, p):
     samples = sorted(samples)
@@ -43,12 +44,12 @@ def worker(source, count):
     rows=[]
     for name, fn in (("signed_token",auth),("request_json",request),("relay_lifecycle",cycle)):
         for concurrency in (1,4):
-            def sample(_):
+            def sample(_, operation=fn):
                 t=time.perf_counter_ns()
                 try:
-                    fn()
+                    operation()
                     return (time.perf_counter_ns()-t)/1e6,False
-                except Exception:
+                except Exception:  # noqa: BLE001 -- benchmark counts all tool failures
                     return (time.perf_counter_ns()-t)/1e6,True
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 results=list(pool.map(sample, range(count)))

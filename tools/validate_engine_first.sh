@@ -38,4 +38,4 @@ node apps/web-next/cad-editor-georef-smoke.mjs
 node apps/web-next/cad-spatial-linkage-smoke.mjs
 node apps/web-next/cesium-tiles-smoke.mjs
 unset VITE_OVG_CAD_RELAY_ORIGIN
-pnpm --filter @openvietgis/web-next exec vite build --base /rewrite/
+pnpm --filter @openvietgis/web-next build

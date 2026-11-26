@@ -31,6 +31,7 @@ SOURCE_DB="openvietgis_test"
 TARGET_CONTAINER="dev-postgres-test-1"
 TARGET_DB=""
 DB_USER="openvietgis"
+BACKUP_DIR="/tmp/ovg-064-staging-backups"
 DRY_RUN=0
 EVIDENCE_OUT=""
 
@@ -46,6 +47,7 @@ Options:
   --target-container NAME     Isolated target container (default: dev-postgres-test-1)
   --target-db NAME            Isolated rehearsal DB (MUST match ^ovg_rehearsal_[a-z0-9_]+$)
   --db-user NAME              PostgreSQL admin role (default: openvietgis)
+  --backup-dir PATH           Backup workspace passed to staging-backup-restore.sh
   --evidence-out FILE         Optional file path to write rehearsal report
   --dry-run                   Verify rollback anchors and run backup/restore dry-run without mutating
   -h, --help                  Show this help message
@@ -61,6 +63,7 @@ while [[ $# -gt 0 ]]; do
     --target-container) TARGET_CONTAINER="$2"; shift 2 ;;
     --target-db) TARGET_DB="$2"; shift 2 ;;
     --db-user) DB_USER="$2"; shift 2 ;;
+    --backup-dir) BACKUP_DIR="$2"; shift 2 ;;
     --evidence-out) EVIDENCE_OUT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -105,6 +108,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     --source-db "$SOURCE_DB" \
     --target-container "$TARGET_CONTAINER" \
     --target-db "$TARGET_DB" \
+    --backup-dir "$BACKUP_DIR" \
     --source-user "$DB_USER" \
     --target-user "$DB_USER" \
     --dry-run
@@ -131,6 +135,7 @@ log "Step 2/5: Provisioning isolated rehearsal DB '${TARGET_DB}'..."
   --source-db "$SOURCE_DB" \
   --target-container "$TARGET_CONTAINER" \
   --target-db "$TARGET_DB" \
+  --backup-dir "$BACKUP_DIR" \
   --source-user "$DB_USER" \
   --target-user "$DB_USER" \
   --keep-target-db

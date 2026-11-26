@@ -1,7 +1,7 @@
 name: E15 retained Python module
 on:
   push:
-    branches: ["064-e15", "064-clients-completion", "064-integration", "064-rust-platform"]
+    branches: ["064-e15", "064-clients-completion", "064-integration", "064-finalize", "064-rust-platform"]
   pull_request:
     paths:
       - "modules/house_numbering/**"

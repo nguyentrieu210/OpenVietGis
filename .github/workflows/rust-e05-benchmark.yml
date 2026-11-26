@@ -9,6 +9,7 @@ on:
       - "064-data-engines-completion"
       - "064-integration"
       - "064-convergence"
+      - "064-finalize"
       - "064-rust-platform"
     paths:
       - "apps/api-rust/src/map_render.rs"

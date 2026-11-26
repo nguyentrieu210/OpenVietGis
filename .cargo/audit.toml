@@ -1,0 +1,18 @@
+# Spec 064 temporary maintenance triage.
+# RUSTSEC-2026-0543 marks chrono unmaintained; it is not a vulnerability advisory.
+# No safe chrono upgrade exists. The Rust candidate still uses chrono through SQLx
+# timestamptz codecs and wire-exact parity helpers. Owner approval is required before
+# merging this exception to main; target expiry: 2026-12-10.
+[advisories]
+informational_warnings = ["unmaintained"]
+severity_threshold = "low"
+
+[output]
+deny = []
+format = "terminal"
+quiet = false
+show_tree = true
+
+[yanked]
+enabled = true
+update_index = true

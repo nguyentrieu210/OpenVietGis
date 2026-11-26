@@ -33,9 +33,10 @@ class ParityDatabaseTests(unittest.TestCase):
     def test_invalid_admin_port_is_rejected_before_connecting(self, connect):
         admin_url = baseline.DEFAULT_ADMIN_PG_URL.replace(":54330/", ":5432/")
 
-        with self.assertRaisesRegex(RuntimeError, "dedicated loopback PostGIS"):
-            with database(admin_url):
-                self.fail("connected to a non-test database")
+        with self.assertRaisesRegex(RuntimeError, "dedicated loopback PostGIS"), database(
+            admin_url
+        ):
+            self.fail("connected to a non-test database")
 
         connect.assert_not_called()
 

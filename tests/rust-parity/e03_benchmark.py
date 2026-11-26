@@ -17,7 +17,6 @@ from pathlib import Path
 
 import httpx
 import psycopg
-
 import run as parity
 
 baseline = parity.baseline

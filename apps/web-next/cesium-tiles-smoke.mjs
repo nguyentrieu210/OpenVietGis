@@ -6,12 +6,13 @@ const raw=Buffer.from(JSON.stringify(doc)),js=(raw.length+3)&~3,bs=(bin.length+3
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1380,height:900}}),errors=[],external=[],requests=[];
+ await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  let restricted=false;
  const org="fixture-org",pid="fixture-project",id="tileset-fixture",region=[-.00003,-.00003,.00003,.00003,-1,50],transform=[0,1,0,0,0,0,1,0,1,0,0,0,6378137,0,0,1];
  const record={id,name:"Native Cesium tiles",byte_size:1000,tile_count:2,created_at:"2026-01-01"};
  const manifest={asset:{version:"1.1"},geometricError:20,root:{boundingVolume:{region},geometricError:10,refine:"REPLACE",transform,content:{uri:"coarse.glb"},children:[{boundingVolume:{region},geometricError:0,content:{uri:"detail.glb"}}]}};
  page.on("pageerror",e=>errors.push(e.message));page.on("console",m=>{if(m.type()==="warning"&&m.text().includes("Cesium tile failed"))console.log(m.text().slice(0,400))});
- await page.route("**/*",route=>{const url=new URL(route.request().url());if(url.hostname==="tile.openstreetmap.org")return route.fulfill({status:404,body:""});if(url.hostname!=="127.0.0.1"){external.push(url.hostname);return route.abort()}return route.continue()});
+ await page.route("**/*",route=>{const url=new URL(route.request().url());if(url.hostname==="tile.openstreetmap.org"||/^mt[0-3]\.google\.com$/.test(url.hostname))return route.fulfill({status:404,body:""});if(url.hostname!=="127.0.0.1"){external.push(url.hostname);return route.abort()}return route.continue()});
  await page.route("**/api/v1/**",async route=>{
   const path=new URL(route.request().url()).pathname;let body;
   if(path.endsWith("/me"))body={id:"fixture",display_name:"Tiles Test",status:"active"};

@@ -871,6 +871,8 @@ _SOURCE_OPERATIONS = frozenset(
     {
         CatalogOperation.REGISTER_SOURCE,
         CatalogOperation.IMPORT_SOURCE,
+        CatalogOperation.EDIT_FEATURES,
+        CatalogOperation.PROCESSING_PUBLISH,
         CatalogOperation.UPDATE_SOURCE,
         CatalogOperation.UPDATE_SCHEMA,
         CatalogOperation.CORRECT_SOURCE_CRS,

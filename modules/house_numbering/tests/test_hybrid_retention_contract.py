@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 
 from fastapi.routing import APIRoute, iter_route_contexts
-
 from openvietgis_api.main import create_app
 
 ROOT = Path(__file__).resolve().parents[3]
