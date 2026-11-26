@@ -19,6 +19,7 @@ pub mod rls;
 pub mod spatial_transform;
 pub mod tenancy;
 pub mod three_d;
+pub mod tilesets;
 pub mod transfers;
 pub mod viewport;
 

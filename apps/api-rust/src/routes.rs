@@ -29,6 +29,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .merge(crate::cartography::router())
         .merge(crate::tenancy::router())
         .merge(crate::three_d::router())
+        .merge(crate::tilesets::router())
         .merge(crate::editing::router())
         .merge(crate::extensions::router())
         .merge(crate::house_numbering::router())
