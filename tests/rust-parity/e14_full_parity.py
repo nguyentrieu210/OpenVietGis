@@ -368,6 +368,8 @@ def main() -> int:
                             json=generic_manifest("demo_rust"),
                             headers=owner_csrf,
                         ),
+                        # each side duplicates its own key; only the key in the message differs
+                        lambda b: {**b, "message": b["message"].replace("demo_rust", "demo_oracle")},
                     )
                     compare(
                         "E14 list org manifests",
