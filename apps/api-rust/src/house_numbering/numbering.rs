@@ -534,8 +534,7 @@ async fn apply_preview(
     let (org, project) = scope_ids(&params)?;
     let preview_id = path_id(&params, "preview_id")?;
     let mut edit = module_edit(&state, &auth, org, project).await?;
-    let tree_conflict = |parents: &HashMap<String, Option<String>>,
-                         rows: &[(String, String, Option<String>, bool)]| {
+    let tree_conflict = |parents: &store::RouteParents, rows: &[store::TreeOccupant]| {
         let occupants: Vec<Occupant> = rows
             .iter()
             .map(|(route_id, number_text, building_id, proposal)| Occupant {

@@ -59,6 +59,10 @@ pub(super) fn router() -> Router<AppState> {
             &format!("{BASE}/buildings/{{building_id}}/private-households"),
             get(read_private),
         )
+        .route(
+            &format!("{BASE}/geometry-reviews"),
+            get(list_geometry_reviews),
+        )
         .route(&format!("{BASE}/search"), get(search))
 }
 
@@ -415,6 +419,29 @@ async fn search(
         },
     )
     .await?;
+    read.commit().await?;
+    Ok(Json(result))
+}
+
+async fn list_geometry_reviews(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path(params): Path<HashMap<String, String>>,
+    Query(query): Query<HashMap<String, String>>,
+) -> HnResult<Json<Value>> {
+    let (org, project) = scope_ids(&params)?;
+    let offset = query_int(&query, "offset", 0, i64::MIN, i64::MAX)?;
+    let limit = query_int(&query, "limit", 100, i64::MIN, i64::MAX)?;
+    // The route checks the page window before opening the module scope.
+    if offset < 0 || !(1..=100).contains(&limit) {
+        return Err(ovg_core::AppError::validation(
+            "INVALID_GEOMETRY_REVIEW",
+            "Lô hình học không hợp lệ",
+        )
+        .into());
+    }
+    let mut read = module_read(&state, &auth, org, project).await?;
+    let result = store::list_geometry_reviews(&mut read, offset, limit).await?;
     read.commit().await?;
     Ok(Json(result))
 }

@@ -13,6 +13,15 @@ use super::hierarchy::get_route;
 use super::{append_audit, db_error, wire, AuditActor};
 use crate::catalog::ProjectRead;
 
+/// Street-tree parent of every route (`None` for a root street).
+pub type RouteParents = HashMap<String, Option<String>>;
+/// `(route_id, number_text, building_id, is_proposal)` occupant of a full number.
+pub type TreeOccupant = (String, String, Option<String>, bool);
+/// `(route_id, number_text, building_id)` of an active stored number.
+pub type ExistingOccupant = (String, String, Option<String>);
+/// Module rule: does a proposal collide with another route of the same street tree?
+pub type TreeConflict = dyn Fn(&RouteParents, &[TreeOccupant]) -> bool + Sync;
+
 /// Python `json.dumps(value, sort_keys=True)` (default separators, ASCII-escaped).
 pub fn py_json_dumps(value: &Value) -> String {
     fn string(out: &mut String, text: &str) {
@@ -360,13 +369,7 @@ pub async fn numbering_targets_for(
 pub async fn tree_occupancy(
     edit: &mut ProjectRead<'_>,
     numbers: &[String],
-) -> Result<
-    (
-        HashMap<String, Option<String>>,
-        Vec<(String, String, Option<String>)>,
-    ),
-    AppError,
-> {
+) -> Result<(RouteParents, Vec<ExistingOccupant>), AppError> {
     let parents_rows = sqlx::query(
         "SELECT id,parent_route_id FROM house_numbering.routes
          WHERE organization_id=$1 AND project_id=$2",
@@ -485,8 +488,7 @@ pub async fn apply_preview(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
     preview_id: Uuid,
-    tree_conflict: &(dyn Fn(&HashMap<String, Option<String>>, &[(String, String, Option<String>, bool)]) -> bool
-          + Sync),
+    tree_conflict: &TreeConflict,
 ) -> Result<Value, AppError> {
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
         .bind(format!(
@@ -599,7 +601,7 @@ pub async fn apply_preview(
         numbers.sort();
         numbers.dedup();
         let (parents, existing) = tree_occupancy(edit, &numbers).await?;
-        let mut occupants: Vec<(String, String, Option<String>, bool)> = existing
+        let mut occupants: Vec<TreeOccupant> = existing
             .into_iter()
             .map(|(route, number, building)| (route, number, building, false))
             .collect();

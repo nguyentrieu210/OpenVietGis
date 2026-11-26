@@ -1828,6 +1828,38 @@ def batch_numbering(ctx: Ctx) -> None:
     )
 
 
+def batch_geometry(ctx: Ctx) -> None:
+    with psycopg.connect(ctx.owner_url) as conn:
+        for code, reason in (("GR-1", "lưu hình học tuyến 1"), ("GR-2", "lưu hình học tuyến 2")):
+            conn.execute(
+                """
+                INSERT INTO house_numbering.geometry_reviews (
+                    id, organization_id, project_id, route_code, snapshot, snapshot_token,
+                    reason, created_by_actor_id, updated_by_actor_id
+                ) VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s)
+                """,
+                (
+                    uuid4(),
+                    ctx.fx["org_a_id"],
+                    ctx.fx["project_a_id"],
+                    code,
+                    json.dumps({"name": f"Hẻm {code}", "route_type": "alley"}),
+                    "d" * 64,
+                    reason,
+                    ctx.fx["user_a_id"],
+                    ctx.fx["user_a_id"],
+                ),
+            )
+    for label, params in (
+        ("E15 list geometry reviews", {}),
+        ("E15 list geometry reviews page", {"limit": 1, "offset": 1}),
+        ("E15 list geometry reviews bad limit", {"limit": 0}),
+        ("E15 list geometry reviews bad offset", {"offset": -1}),
+        ("E15 list geometry reviews non-integer", {"limit": "x"}),
+    ):
+        ctx.pair(label, "GET", "/geometry-reviews", headers=ctx.h, params=params)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -1879,6 +1911,7 @@ def main() -> int:
                     batch_field(ctx)
                     batch_records(ctx)
                     batch_numbering(ctx)
+                    batch_geometry(ctx)
             finally:
                 get_engine().dispose()
 

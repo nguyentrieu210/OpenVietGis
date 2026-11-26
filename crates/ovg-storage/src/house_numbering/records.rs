@@ -896,3 +896,49 @@ pub async fn download_export(
     .await?;
     Ok((artifact, private))
 }
+
+/// Port of `list_geometry_reviews` (staged geometry candidates and promotion state).
+pub async fn list_geometry_reviews(
+    read: &mut ProjectRead<'_>,
+    offset: i64,
+    limit: i64,
+) -> Result<Value, AppError> {
+    let rows = sqlx::query(
+        "SELECT jsonb_build_object(
+            'id',g.id,'route_code',g.route_code,'snapshot',g.snapshot,'reason',g.reason,
+            'revision',g.revision,'created_at',g.created_at,'updated_at',g.updated_at,
+            'promoted_route_id',(SELECT r.id FROM house_numbering.routes r
+                WHERE (r.organization_id,r.project_id)=(g.organization_id,g.project_id)
+                  AND r.source_label='route-tree-import:'||g.route_code
+                  AND r.name=g.snapshot->>'name' AND r.route_type=g.snapshot->>'route_type'
+                  AND r.parent_route_id::text=g.snapshot->>'parent_id'
+                  AND r.prefix=g.snapshot->>'resolved_prefix'
+                  AND r.linked_source_id::text=g.snapshot->>'source_id'
+                  AND r.linked_feature_id=g.snapshot->>'feature_id'
+                  AND r.direction_state=g.snapshot->>'direction_state'
+                  AND COALESCE(r.segments,'[]'::jsonb)=COALESCE(g.snapshot->'segments','[]'::jsonb)
+                ORDER BY r.id LIMIT 1)) AS wire
+         FROM house_numbering.geometry_reviews g
+         WHERE g.organization_id=$1 AND g.project_id=$2
+         ORDER BY g.updated_at DESC,g.id LIMIT $3 OFFSET $4",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(limit + 1)
+    .bind(offset)
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+    let has_more = i64::try_from(rows.len()).unwrap_or(i64::MAX) > limit;
+    let mut items = Vec::new();
+    for row in rows.iter().take(usize::try_from(limit).unwrap_or(0)) {
+        let mut item = wire_py(row)?;
+        let promoted = !item["promoted_route_id"].is_null();
+        item["status"] = json!(if promoted { "promoted" } else { "pending" });
+        items.push(item);
+    }
+    Ok(json!({
+        "items": items,
+        "next_offset": if has_more { json!(offset + limit) } else { Value::Null },
+    }))
+}

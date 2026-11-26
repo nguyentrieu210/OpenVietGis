@@ -35,7 +35,7 @@ pub(crate) fn py_repr(value: &str) -> String {
     out
 }
 
-pub(crate) async fn get_rule(edit: &mut ProjectRead<'_>, rule_id: Uuid) -> Result<Value, AppError> {
+pub async fn get_rule(edit: &mut ProjectRead<'_>, rule_id: Uuid) -> Result<Value, AppError> {
     let row = sqlx::query(
         "SELECT to_jsonb(r) - 'max_distance_m' AS wire, r.max_distance_m::float8 AS max_distance
          FROM house_numbering.rules r
