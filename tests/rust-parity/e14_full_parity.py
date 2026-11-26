@@ -135,6 +135,7 @@ def same_side(body: object) -> object:
     return json.loads(text)
 
 
+@parity.case
 def compare(label: str, e, a, norm=lambda x: x, *, check_cache: bool = False):
     req(
         e.status_code == a.status_code,

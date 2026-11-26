@@ -83,21 +83,30 @@ def compare(backends):
             and candidate["cold"]["errors"] == 0
             and all(phase["errors"] == 0 for phase in candidate["warm"].values())
         )
-        comparable = all(
-            result["reference_status"] == 200
-            and result["cold"]["errors"] == 0
-            and all(phase["errors"] == 0 for phase in result["warm"].values())
-            for result in (oracle, candidate)
+        oracle_all_ok = (
+            oracle["reference_status"] == 200
+            and oracle["cold"]["errors"] == 0
+            and all(phase["errors"] == 0 for phase in oracle["warm"].values())
         )
+        oracle_ceiling = scale == "30k" and not oracle_all_ok
+        parity = (
+            oracle["reference_status"] == 200
+            and candidate["reference_status"] == 200
+            and difference(oracle["reference_body"], candidate["reference_body"]) is None
+        )
+        oracle_p95 = oracle["warm"]["20"]["p95_ms"]
+        # a p95 ratio against an oracle that is already failing requests says nothing
         ratio = (
-            candidate["warm"]["20"]["p95_ms"] / oracle["warm"]["20"]["p95_ms"]
-            if comparable
+            candidate["warm"]["20"]["p95_ms"] / oracle_p95
+            if candidate_ok and oracle_all_ok and oracle_p95 > 0
             else None
         )
-        parity = comparable and (
-            difference(oracle["reference_body"], candidate["reference_body"]) is None
+        oracle_unreadable = scale == "30k" and oracle["reference_status"] == 503
+        passes = candidate_ok and (
+            oracle_unreadable
+            or (oracle_ceiling and parity)
+            or (oracle_all_ok and parity and ratio is not None and ratio <= 0.70)
         )
-        oracle_ceiling = scale == "30k" and oracle["reference_status"] == 503
         comparison[scale] = {
             "oracle_status": oracle["reference_status"],
             "candidate_status": candidate["reference_status"],
@@ -105,7 +114,7 @@ def compare(backends):
             "python_30k_ceiling_observed": oracle_ceiling,
             "response_parity": parity,
             "p95_ratio_at_concurrency_20": ratio,
-            "passes": candidate_ok and (oracle_ceiling or (parity and ratio <= 0.70)),
+            "passes": passes,
         }
         for scenario in (oracle, candidate):
             del scenario["reference_body"]

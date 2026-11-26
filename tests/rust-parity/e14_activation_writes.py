@@ -53,6 +53,7 @@ def norm_act(body,*,revision=False):
     if revision and "revision" in out: out["revision"]="<revision>"
     return out
 
+@parity.case
 def compare(label,e,a,norm=lambda x:x):
     req(e.status_code==a.status_code,f"{label}: {e.status_code}!={a.status_code}; {e.text}/{a.text}")
     eb=norm(e.json());ab=norm(a.json())

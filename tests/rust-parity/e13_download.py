@@ -118,6 +118,7 @@ def seed_package(
     return str(package_id), payload, digest
 
 
+@parity.case
 def compare_json(label: str, expected, actual) -> None:
     require(
         expected.status_code == actual.status_code,

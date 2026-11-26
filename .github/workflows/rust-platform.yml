@@ -48,6 +48,8 @@ env:
 jobs:
   check-and-test:
     name: Format, Clippy, Tests & Architecture Isolation
+    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -113,6 +115,8 @@ jobs:
 
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
+    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -196,6 +200,18 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e14-full-parity.log
 
+      - name: Run E06 cartography parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e06_cartography.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e06-cartography.log
+          uv run --project apps/api python tests/rust-parity/e06_cartography_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e06-cartography-writes.log
+
       - name: Record PostGIS version
         if: always()
         run: |
@@ -214,6 +230,8 @@ jobs:
 
   security-audit:
     name: Cargo Audit
+    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
+    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

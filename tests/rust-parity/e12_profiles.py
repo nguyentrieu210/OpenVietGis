@@ -24,6 +24,7 @@ API="/api/v1"
 def req(c,d):
     if not c: raise AssertionError(d)
 
+@parity.case
 def compare(label,e,a):
     req(e.status_code==a.status_code,f"{label}: {e.status_code}!={a.status_code}; {e.text} / {a.text}")
     req(parity.difference(e.json(),a.json()) is None,f"{label}: {e.json()} != {a.json()}")

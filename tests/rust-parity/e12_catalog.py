@@ -90,6 +90,7 @@ def set_project_role(owner_url: str, fixture: dict, role: str, *, scoped: bool) 
             )
 
 
+@parity.case
 def compare_response(label: str, expected, actual, *, require_no_store: bool = True):
     require(
         expected.status_code == actual.status_code,
