@@ -30,7 +30,7 @@ import run as parity
 API = "/api/v1"
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 TS_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?")
-HEX_RE = re.compile(r"[0-9a-f]{64}")
+HEX_RE = re.compile(r"[0-9a-f]{64}")
 SIDES = ("o", "r")
 PASSED: list[str] = []
 
