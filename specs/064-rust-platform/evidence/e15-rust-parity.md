@@ -3,7 +3,7 @@
 Branch `064-e15-rust-native` (off `064-convergence`). Owner decision 2026-11-26 moves the
 E15 control plane to Rust; FastAPI stays the oracle and rollback path for routes not yet
 accepted. Per-route status lives in `contracts/engines/e15.json` (`rust_status`,
-`rust_note`): 48 native, 6 retained Python engines, 18 pending.
+`rust_note`): 49 native, 6 retained Python engines, 17 pending.
 
 ## Layout (Principle I)
 - Pure rules: `modules/house_numbering/rust/src/domain.rs` (number parse/format,
@@ -44,6 +44,6 @@ retained adapters.
 
 ## Pending
 Route-tree import (preview/apply/stage-geometry), address verification and verified links,
-building assignment with catalog/prefix recovery and cluster correction, survey photo upload
-(multipart) and the service-credential integration lookup (needs E14's
+building assignment with catalog/prefix recovery and cluster correction,
+and the service-credential integration lookup (needs E14's
 `ProjectRead::begin_service`). These stay on FastAPI until ported with parity.

@@ -44,7 +44,7 @@ def norm(value, extra: dict[str, str] | None = None):
     """Replace generated identifiers and clocks so oracle and Rust bodies compare."""
     extra = {"@o": "", "@r": "", **(extra or {})}
     if isinstance(value, dict):
-        return {k: norm(v, extra) for k, v in value.items()}
+        return {UUID_RE.sub("<uuid>", k): norm(v, extra) for k, v in value.items()}
     if isinstance(value, list):
         return [norm(v, extra) for v in value]
     if isinstance(value, str):
@@ -1860,6 +1860,39 @@ def batch_geometry(ctx: Ctx) -> None:
         ctx.pair(label, "GET", "/geometry-reviews", headers=ctx.h, params=params)
 
 
+def batch_photos(ctx: Ctx) -> None:
+    jpeg = b"\xff\xd8\xff\xe0" + b"parity-photo" * 8
+
+    def upload(label, files, data=None):
+        resp = {
+            side: ctx.call(side, "POST", "/survey/photos", files=files, data=data) for side in SIDES
+        }
+        compare(label, resp["o"], resp["r"])
+        return resp
+
+    resp = upload("E15 upload survey photo", {"file": ("p.jpg", jpeg, "image/jpeg")})
+    photos = {side: resp[side].json()["id"] for side in SIDES}
+    upload("E15 upload survey photo wrong type", {"file": ("p.txt", b"hello", "text/plain")})
+    upload("E15 upload survey photo empty", {"file": ("p.png", b"", "image/png")})
+    upload("E15 upload survey photo missing file", {"other": ("p.jpg", jpeg, "image/jpeg")})
+    # Each runtime must accept a photo stored by the other one.
+    ctx.pair(
+        "E15 survey sync with cross-runtime photo",
+        "POST",
+        "/survey/sync",
+        status=200,
+        body=lambda d: {
+            "operations": [
+                {
+                    "client_uuid": d.setdefault("c_photo", str(uuid4())),
+                    "condition": "house",
+                    "photo_artifact_ids": [photos["r" if d["s"] == "o" else "o"]],
+                }
+            ]
+        },
+    )
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--candidate", type=Path, required=True)
@@ -1909,6 +1942,7 @@ def main() -> int:
                     batch_buildings(ctx)
                     batch_proposals(ctx)
                     batch_field(ctx)
+                    batch_photos(ctx)
                     batch_records(ctx)
                     batch_numbering(ctx)
                     batch_geometry(ctx)

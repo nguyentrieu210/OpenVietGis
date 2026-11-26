@@ -32,9 +32,9 @@
       "approved_retire": 0
     },
     "rust_route_status": {
-      "native": 48,
+      "native": 49,
       "retain": 6,
-      "pending": 18
+      "pending": 17
     }
   },
   "auth_and_tenant_boundaries": {
@@ -5767,8 +5767,9 @@
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
       ],
-      "rust_status": "pending",
-      "rust_note": "Multipart photo ingestion into the module artifact store; Rust has no multipart stack yet (sync already validates stored photos)."
+      "rust_status": "native",
+      "rust_note": "Multipart photo ingestion into the module artifact store; Rust has no multipart stack yet (sync already validates stored photos).",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [

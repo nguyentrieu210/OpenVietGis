@@ -927,3 +927,71 @@ pub async fn revoke_signoff(
     .await?;
     Ok(result)
 }
+
+/// Port of `HouseNumberingSurveyService.upload_photo` over the module artifact store.
+pub async fn upload_photo(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    root: &Path,
+    content_type: &str,
+    data: &[u8],
+) -> Result<Value, AppError> {
+    let ext = match content_type {
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        _ => {
+            return Err(AppError::validation(
+                "PHOTO_TYPE",
+                "survey photo must be JPEG or PNG",
+            ))
+        }
+    };
+    if data.is_empty() || data.len() > 15 * 1024 * 1024 {
+        return Err(AppError::validation(
+            "PHOTO_SIZE",
+            "survey photo size is invalid",
+        ));
+    }
+    let artifact_id = Uuid::new_v4();
+    let filename = format!("survey-photo.{ext}");
+    let storage_key = format!(
+        "extensions/{}/{}/house-numbering-survey-photos/{artifact_id}/{filename}",
+        edit.organization_id(),
+        edit.project_id()
+    );
+    let target = root.join(&storage_key);
+    let digest = format!("{:x}", Sha256::digest(data));
+    let meta = json!({
+        "id": artifact_id.to_string(),
+        "filename": filename,
+        "content_type": content_type,
+        "byte_size": data.len(),
+        "sha256": digest,
+        "storage_key": storage_key,
+    });
+    let write = || -> std::io::Result<()> {
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&target, data)?;
+        let mut meta_path = target.clone().into_os_string();
+        meta_path.push(".json");
+        std::fs::write(meta_path, super::numbering::py_json_dumps(&meta))
+    };
+    write().map_err(|error| AppError::internal(format!("survey photo write failed: {error}")))?;
+    append_audit(
+        edit,
+        actor,
+        "house_numbering.survey.photo_upload",
+        "house_numbering_photo",
+        artifact_id,
+        json!({ "sha256": digest, "byte_size": data.len() }),
+    )
+    .await?;
+    Ok(json!({
+        "id": artifact_id.to_string(),
+        "content_type": content_type,
+        "byte_size": data.len(),
+        "sha256": digest,
+    }))
+}

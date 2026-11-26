@@ -3,8 +3,9 @@
 use std::collections::HashMap;
 
 use axum::body::Bytes;
+use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use ovg_storage::house_numbering as store;
@@ -36,6 +37,10 @@ pub(super) fn router() -> Router<AppState> {
             post(review_survey),
         )
         .route(&format!("{BASE}/survey/sync"), post(sync_surveys))
+        .route(
+            &format!("{BASE}/survey/photos"),
+            post(upload_photo).layer(DefaultBodyLimit::max(PHOTO_BODY_LIMIT)),
+        )
         .route(&format!("{BASE}/progress"), get(progress))
         .route(
             &format!("{BASE}/survey-signoffs"),
@@ -333,4 +338,83 @@ async fn revoke_signoff(
     let result = store::revoke_signoff(&mut edit, audit_actor(&auth), signoff_id, reason).await?;
     edit.commit().await?;
     Ok(Json(result))
+}
+
+/// Room for the 15 MiB photo limit plus multipart framing.
+const PHOTO_BODY_LIMIT: usize = 16 * 1024 * 1024;
+
+/// Minimal `multipart/form-data` reader: `(content_type, bytes)` of the `file` part.
+fn multipart_file(headers: &HeaderMap, body: &[u8]) -> Option<(String, Vec<u8>)> {
+    let content_type = headers.get(header::CONTENT_TYPE)?.to_str().ok()?;
+    let boundary = content_type.split(';').find_map(|part| {
+        let (key, value) = part.trim().split_once('=')?;
+        key.trim()
+            .eq_ignore_ascii_case("boundary")
+            .then(|| value.trim().trim_matches('"').to_owned())
+    })?;
+    let delimiter = format!("--{boundary}").into_bytes();
+    let find = |haystack: &[u8], needle: &[u8], from: usize| {
+        haystack
+            .get(from..)?
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .map(|index| index + from)
+    };
+    let mut cursor = find(body, &delimiter, 0)? + delimiter.len();
+    loop {
+        if body.get(cursor..cursor + 2) == Some(&b"--"[..]) {
+            return None;
+        }
+        let head_start = find(body, b"\r\n", cursor)? + 2;
+        let head_end = find(body, b"\r\n\r\n", head_start)?;
+        let head = std::str::from_utf8(&body[head_start..head_end]).ok()?;
+        let data_start = head_end + 4;
+        let mut closing = b"\r\n".to_vec();
+        closing.extend_from_slice(&delimiter);
+        let data_end = find(body, &closing, data_start)?;
+        let mut name = None;
+        let mut part_type = None;
+        for line in head.split("\r\n") {
+            let (key, value) = line.split_once(':')?;
+            if key.trim().eq_ignore_ascii_case("content-disposition") {
+                name = value.split(';').find_map(|item| {
+                    let (k, v) = item.trim().split_once('=')?;
+                    (k.trim() == "name").then(|| v.trim().trim_matches('"').to_owned())
+                });
+            } else if key.trim().eq_ignore_ascii_case("content-type") {
+                part_type = Some(value.trim().to_owned());
+            }
+        }
+        if name.as_deref() == Some("file") {
+            return Some((
+                part_type.unwrap_or_else(|| "application/octet-stream".to_owned()),
+                body[data_start..data_end].to_vec(),
+            ));
+        }
+        cursor = data_end + closing.len();
+    }
+}
+
+async fn upload_photo(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    headers: HeaderMap,
+    Path(params): Path<HashMap<String, String>>,
+    body: Bytes,
+) -> HnResult<(StatusCode, Json<Value>)> {
+    csrf(&state, &auth, &headers)?;
+    let (org, project) = scope_ids(&params)?;
+    let (content_type, data) =
+        multipart_file(&headers, &body).ok_or(HouseNumberingError::InvalidRequest)?;
+    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let result = store::upload_photo(
+        &mut edit,
+        audit_actor(&auth),
+        &state.config.artifact_store_dir,
+        &content_type,
+        &data,
+    )
+    .await?;
+    edit.commit().await?;
+    Ok((StatusCode::CREATED, Json(result)))
 }
