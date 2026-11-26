@@ -889,6 +889,19 @@ impl TenantTx {
         outcome: &str,
         metadata: Value,
     ) -> Result<(), AppError> {
+        let event = (action, resource_type, resource_id, outcome);
+        self.audit_at(organization_id, event, metadata, Utc::now())
+            .await
+    }
+
+    /// [`Self::audit`] at a caller-chosen time (one clock for a change and its audit row).
+    async fn audit_at(
+        &mut self,
+        organization_id: Uuid,
+        (action, resource_type, resource_id, outcome): (&str, &str, Option<Uuid>, &str),
+        metadata: Value,
+        at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
         if self.organization_id != Some(organization_id) {
             return Err(AppError::internal("audit requires the verified tenant"));
         }
@@ -907,7 +920,7 @@ impl TenantTx {
         .bind(resource_id)
         .bind(outcome)
         .bind(metadata)
-        .bind(Utc::now())
+        .bind(at)
         .execute(&mut *self.tx)
         .await
         .map_err(db_error)?;
@@ -1439,6 +1452,7 @@ impl TenantTx {
         max_storage_mb: i32,
         features_enabled: &[String],
     ) -> Result<Value, AppError> {
+        let now = Utc::now();
         let row: EntitlementRow = sqlx::query_as(&format!(
             "INSERT INTO ops.organization_entitlements (
                  organization_id, deployment_profile, plan_tier, max_projects,
@@ -1461,16 +1475,18 @@ impl TenantTx {
         .bind(max_storage_mb)
         .bind(json!(features_enabled))
         .bind(self.actor_id)
-        .bind(Utc::now())
+        .bind(now)
         .fetch_one(&mut *self.tx)
         .await
         .map_err(db_error)?;
-        self.audit(
+        self.audit_at(
             organization_id,
-            "ops.entitlement.configure",
-            "organization_entitlement",
-            Some(organization_id),
-            "success",
+            (
+                "ops.entitlement.configure",
+                "organization_entitlement",
+                Some(organization_id),
+                "success",
+            ),
             json!({
                 "deployment_profile": deployment_profile,
                 "plan_tier": plan_tier,
@@ -1479,6 +1495,7 @@ impl TenantTx {
                 "requested_features": features_enabled,
                 "enforcement": "metadata_only",
             }),
+            now,
         )
         .await?;
         Ok(entitlement_wire(row))

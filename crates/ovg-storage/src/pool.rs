@@ -7,7 +7,7 @@ use std::time::Duration;
 use ovg_core::AppError;
 use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
+use sqlx::{Connection, PgConnection, PgPool};
 use tokio::sync::watch;
 
 const VERIFY_RUNTIME_ROLE_SQL: &str = "SELECT
@@ -112,9 +112,7 @@ impl DbPool {
             .after_connect(move |connection, _| {
                 let role_rejected = Arc::clone(&role_rejected);
                 Box::pin(async move {
-                    let valid: bool = sqlx::query_scalar(VERIFY_RUNTIME_ROLE_SQL)
-                        .fetch_one(connection)
-                        .await?;
+                    let valid = runtime_role_valid(connection).await?;
                     role_rejected.send_replace(!valid);
                     if !valid {
                         return Err(sqlx::Error::Protocol(
@@ -137,6 +135,25 @@ impl DbPool {
         &self,
         query: impl Future<Output = Result<T, sqlx::Error>>,
     ) -> Result<T, sqlx::Error> {
+        let rejected_before = *self.role_rejected.borrow();
+        if rejected_before {
+            // One direct attempt (no sqlx retry loop) so readiness recovers once the role is fixed.
+            let options = self.inner.connect_options();
+            let attempt = async {
+                let mut connection = PgConnection::connect_with(&options).await?;
+                let valid = runtime_role_valid(&mut connection).await;
+                let _ = connection.close().await;
+                valid
+            };
+            let timeout = Duration::from_secs(self.config.acquire_timeout_secs.max(1));
+            let valid = tokio::time::timeout(timeout, attempt)
+                .await
+                .map_err(|_| sqlx::Error::PoolTimedOut)??;
+            self.role_rejected.send_replace(!valid);
+            if !valid {
+                return Err(sqlx::Error::PoolTimedOut);
+            }
+        }
         let mut rejected = self.role_rejected.subscribe();
         tokio::select! {
             result = query => result,
@@ -188,6 +205,12 @@ impl DbPool {
             postgis_version,
         })
     }
+}
+
+async fn runtime_role_valid(connection: &mut PgConnection) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar(VERIFY_RUNTIME_ROLE_SQL)
+        .fetch_one(connection)
+        .await
 }
 
 #[cfg(test)]

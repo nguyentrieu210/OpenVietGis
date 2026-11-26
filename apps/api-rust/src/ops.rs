@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -283,22 +283,24 @@ impl EntitlementRequest {
             Some(Value::String(value)) => Ok(value.clone()),
             Some(_) => Err(invalid()),
         };
-        // shortcut: JSON integers and integral floats only; Pydantic lax mode also
-        // coerces numeric strings, add that if a client ever sends one.
-        let int = |key: &str, default: i32, min: i32| match body.get(key) {
-            None => Ok(default),
-            Some(Value::Number(number)) => number
-                .as_i64()
-                .or_else(|| {
+        // Pydantic v2 lax int: integral numbers, booleans and integer strings, then bounds.
+        let int = |key: &str, default: i32, min: i32| {
+            let value = match body.get(key) {
+                None => return Ok(default),
+                Some(Value::Bool(flag)) => Some(i64::from(*flag)),
+                Some(Value::Number(number)) => number.as_i64().or_else(|| {
                     number
                         .as_f64()
                         .filter(|value| value.fract() == 0.0 && value.abs() < 1e15)
                         .map(|value| value as i64)
-                })
+                }),
+                Some(Value::String(text)) => lax_int(text),
+                Some(_) => None,
+            };
+            value
                 .and_then(|value| i32::try_from(value).ok())
                 .filter(|value| *value >= min)
-                .ok_or_else(invalid),
-            Some(_) => Err(invalid()),
+                .ok_or_else(invalid)
         };
         let features_enabled = match body.get("features_enabled") {
             None => DEFAULT_REQUESTED_FEATURES.map(str::to_owned).to_vec(),
@@ -339,15 +341,56 @@ impl EntitlementRequest {
     }
 }
 
+/// pydantic-core `str_as_int`: trimmed integer text, optionally with an all-zero fraction.
+fn lax_int(text: &str) -> Option<i64> {
+    let text = text.trim();
+    let whole = match text.split_once('.') {
+        Some((whole, fraction)) if fraction.bytes().all(|digit| digit == b'0') => whole,
+        Some(_) => return None,
+        None => text,
+    };
+    whole.parse().ok()
+}
+
+/// FastAPI decodes the body as JSON for no Content-Type, `application/json` or
+/// `application/*+json` (parameters ignored); other bodies fail model validation.
+fn json_content_type(headers: &HeaderMap) -> bool {
+    let Some(value) = headers.get(header::CONTENT_TYPE) else {
+        return true;
+    };
+    let Ok(value) = value.to_str() else {
+        return false;
+    };
+    let media = value.split(';').next().unwrap_or_default().trim();
+    if media.is_empty() {
+        return value.is_empty();
+    }
+    media
+        .to_ascii_lowercase()
+        .split_once('/')
+        .is_some_and(|(main, sub)| {
+            main == "application" && (sub == "json" || sub.ends_with("+json"))
+        })
+}
+
 async fn put_entitlement(
     State(state): State<AppState>,
-    session: HumanSession,
+    session: Result<HumanSession, IdentityError>,
     headers: HeaderMap,
     Path(organization_id): Path<String>,
     body: Bytes,
 ) -> Result<Json<Value>, OpsError> {
+    // FastAPI decodes a JSON body before it resolves authentication dependencies.
+    let json = json_content_type(&headers);
+    if json && !body.is_empty() && serde_json::from_slice::<Value>(&body).is_err() {
+        return Err(TenancyError::InvalidRequest.into());
+    }
+    let session = session?;
     require_csrf(&state, &session, &headers)?;
     let organization_id = uuid(&organization_id)?;
+    if !json {
+        return Err(TenancyError::InvalidRequest.into());
+    }
     let request = EntitlementRequest::parse(&body)?;
     let mut tx = begin(&state, &session).await?;
     tx.member_scope(organization_id).await?;
@@ -387,6 +430,41 @@ mod tests {
             required,
             ["R001", "R002", "R003", "R004", "R005", "R006", "R007", "R011", "R015"]
         );
+    }
+
+    #[test]
+    fn lax_integers_follow_pydantic() {
+        for (text, expected) in [
+            ("5", Some(5)),
+            (" 6 ", Some(6)),
+            ("+7", Some(7)),
+            ("8.00", Some(8)),
+        ] {
+            assert_eq!(lax_int(text), expected, "{text}");
+        }
+        for text in ["", "5.5", "five", "1e3"] {
+            assert_eq!(lax_int(text), None, "{text}");
+        }
+        let parsed =
+            EntitlementRequest::parse(br#"{"max_projects": true, "max_storage_mb": "128"}"#)
+                .ok()
+                .unwrap();
+        assert_eq!((parsed.max_projects, parsed.max_storage_mb), (1, 128));
+        assert!(EntitlementRequest::parse(br#"{"max_storage_mb": true}"#).is_err());
+    }
+
+    #[test]
+    fn json_content_types_match_fastapi() {
+        let with = |value: &str| {
+            let mut headers = HeaderMap::new();
+            headers.insert(header::CONTENT_TYPE, value.parse().unwrap());
+            json_content_type(&headers)
+        };
+        assert!(json_content_type(&HeaderMap::new()));
+        assert!(with("application/json; charset=utf-8"));
+        assert!(with("Application/Merge-Patch+JSON"));
+        assert!(!with("text/plain"));
+        assert!(!with("application/x-www-form-urlencoded"));
     }
 
     #[test]

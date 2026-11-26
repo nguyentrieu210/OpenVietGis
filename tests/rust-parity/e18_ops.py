@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 import psycopg
+from psycopg import sql
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
@@ -80,12 +81,15 @@ def stamped(body):
 
 
 def run_cases(oracle, rust, owner_url, fixture, surveyor):
-    def both(method, path, *, token=None, csrf=None, body=None):
+    def both(method, path, *, token=None, csrf=None, body=None, raw=None, content_type=None):
         headers = parity.session_headers(token)
         if csrf is not None:
             headers["x-openvietgis-csrf"] = csrf
+        if content_type is not None:
+            headers["content-type"] = content_type
         return tuple(
-            client.request(method, path, headers=headers, json=body) for client in (oracle, rust)
+            client.request(method, path, headers=headers, json=body, content=raw)
+            for client in (oracle, rust)
         )
 
     owner, csrf = fixture["session_a_token"], fixture["csrf_a_token"]
@@ -133,6 +137,9 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
         ("non-string feature", {"features_enabled": [1]}),
         ("too many features", {"features_enabled": ["R001"] * 16}),
         ("null profile", {"deployment_profile": None}),
+        ("boolean storage quota below minimum", {"max_storage_mb": True}),
+        ("fractional quota string", {"max_projects": "5.5"}),
+        ("non-numeric quota string", {"max_projects": "five"}),
     ):
         compare(
             f"E18 entitlement put {label} 422",
@@ -161,6 +168,48 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
             422,
         )
 
+    # FastAPI decodes a JSON body before authentication; other content types fail afterwards.
+    malformed = {"raw": b'{"plan_tier": ', "content_type": "application/json"}
+    compare(
+        "E18 entitlement put malformed JSON anonymous 422",
+        *both("PUT", entitlement, **malformed),
+        422,
+    )
+    compare(
+        "E18 entitlement put malformed JSON without CSRF 422",
+        *both("PUT", entitlement, token=owner, **malformed),
+        422,
+    )
+    text_body = {"raw": b"{}", "content_type": "text/plain"}
+    compare(
+        "E18 entitlement put text/plain anonymous 401",
+        *both("PUT", entitlement, **text_body),
+        401,
+    )
+    compare(
+        "E18 entitlement put text/plain body 422",
+        *both("PUT", entitlement, token=owner, csrf=csrf, **text_body),
+        422,
+    )
+
+    upserts = 0
+    for label, kwargs in (
+        ("integer string quota", {"body": {"max_projects": "5"}}),
+        ("padded integer string quota", {"body": {"max_projects": " 6 "}}),
+        ("boolean quota", {"body": {"max_projects": True}}),
+        (
+            "merge-patch+json content type",
+            {"raw": b'{"max_projects": 4}', "content_type": "application/merge-patch+json"},
+        ),
+    ):
+        compare(
+            f"E18 entitlement upsert {label}",
+            *both("PUT", entitlement, token=owner, csrf=csrf, **kwargs),
+            200,
+            normalize=stamped,
+        )
+        upserts += 1
+
     configured = {
         "deployment_profile": "enterprise_private",
         "plan_tier": "enterprise",
@@ -174,6 +223,7 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
         200,
         normalize=stamped,
     )
+    upserts += 1
     compare("E18 entitlement stored record", *both("GET", entitlement, token=owner), 200)
     with psycopg.connect(owner_url) as conn:
         rows = conn.execute(
@@ -186,8 +236,9 @@ def run_cases(oracle, rust, owner_url, fixture, surveyor):
         ).fetchall()
         check(
             "E18 entitlement audit events match",
-            len(rows) == 2 and rows[0] == rows[1],
-            f"expected two identical audit events, got {rows}",
+            # One FastAPI then one Rust write per upsert case.
+            len(rows) == 2 * upserts and rows[0::2] == rows[1::2],
+            f"expected {upserts} identical audit pairs, got {rows}",
         )
         conn.execute(
             "UPDATE org.organizations SET status = 'suspended' WHERE id = %s",
@@ -227,6 +278,40 @@ def check_privileged_role(binary, owner_url, work):
             )
 
 
+def check_role_recovery(binary, admin_url, runtime_url, work):
+    """Readiness refuses a runtime role that gains a privilege, then recovers once it is dropped."""
+    role = sql.Identifier(baseline.DEFAULT_RUNTIME_USER)
+
+    def alter(privilege):
+        with psycopg.connect(admin_url, autocommit=True) as admin:
+            admin.execute(sql.SQL("ALTER ROLE {} " + privilege).format(role))
+
+    def timed(rust, path):
+        started = time.monotonic()
+        response = rust.get(path)
+        return response, time.monotonic() - started
+
+    alter("CREATEDB")
+    try:
+        with parity.rust_client(binary, runtime_url, work, ready_status=503) as rust:
+            response, elapsed = timed(rust, f"{API}/health/ready")
+            check(
+                "E18 runtime role with CREATEDB refused fast 503",
+                response.status_code == 503 and elapsed < 1.5,
+                f"status {response.status_code} after {elapsed:.2f}s",
+            )
+            alter("NOCREATEDB")
+            for path in (f"{API}/health/ready", f"{API}/ops/health/ready"):
+                response, elapsed = timed(rust, path)
+                check(
+                    f"E18 readiness recovers after the role is fixed {path}",
+                    response.status_code == 200 and elapsed < 1.5,
+                    f"status {response.status_code} after {elapsed:.2f}s",
+                )
+    finally:
+        alter("NOCREATEDB")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidate", type=Path, required=True)
@@ -263,6 +348,7 @@ def main() -> int:
             finally:
                 get_engine().dispose()
             check_privileged_role(binary, owner_url, work)
+            check_role_recovery(binary, admin_url, runtime_url, work)
 
     print("E18 ops parity done", flush=True)
     return 0
