@@ -167,7 +167,7 @@ fn bad_request(message: &str) -> TenancyError {
     detail(StatusCode::BAD_REQUEST, message)
 }
 
-async fn begin(state: &AppState, session: &HumanSession) -> Result<TenantTx> {
+pub(crate) async fn begin(state: &AppState, session: &HumanSession) -> Result<TenantTx> {
     let pool = state.db_pool.as_ref().ok_or_else(|| {
         AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable")
     })?;
@@ -180,7 +180,7 @@ async fn begin(state: &AppState, session: &HumanSession) -> Result<TenantTx> {
     .await?)
 }
 
-fn uuid(value: &str) -> Result<Uuid> {
+pub(crate) fn uuid(value: &str) -> Result<Uuid> {
     Uuid::parse_str(value).map_err(|_| TenancyError::InvalidRequest)
 }
 

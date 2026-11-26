@@ -42,11 +42,13 @@ def seed_layer(owner,f,label,created):
           (f["org_a_id"],f["project_a_id"],rid,png))
     return str(rid),cog,png
 
+@parity.case
 def compare_json(label,e,a):
     req(e.status_code==a.status_code,f"{label}: {e.status_code}!={a.status_code}; {e.text}/{a.text}")
     req(parity.difference(e.json(),a.json()) is None,f"{label}: {e.json()} != {a.json()}")
     print("PASS",label,flush=True)
 
+@parity.case
 def compare_bytes(label,e,a,body=None):
     req(e.status_code==a.status_code,f"{label}: {e.status_code}!={a.status_code}; {e.text}/{a.text}")
     req(e.content==a.content,f"{label}: bytes differ")

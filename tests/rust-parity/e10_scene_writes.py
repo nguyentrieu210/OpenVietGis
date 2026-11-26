@@ -34,6 +34,7 @@ def norm_open(body):
     if "scene" in out:
         out["scene"]=norm_scene(out["scene"])
     return out
+@parity.case
 def compare(label,e,a,norm=lambda x:x,headers=False):
     req(e.status_code==a.status_code,f"{label}: {e.status_code}!={a.status_code}; {e.text}/{a.text}")
     eb=norm(e.json());ab=norm(a.json())

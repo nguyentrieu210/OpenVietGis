@@ -68,6 +68,7 @@ def seed_raster(owner_url: str, fixture: dict, *, label: str, created: datetime,
     return rid
 
 
+@parity.case
 def compare_response(label: str, expected, actual):
     require(
         expected.status_code == actual.status_code,

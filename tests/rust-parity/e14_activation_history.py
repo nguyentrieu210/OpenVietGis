@@ -186,6 +186,7 @@ def seed_overflow(owner_url: str, fixture: dict, manifest_id):
     return aid
 
 
+@parity.case
 def compare_response(label: str, expected, actual):
     require(
         expected.status_code == actual.status_code,
