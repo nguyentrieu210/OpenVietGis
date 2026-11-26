@@ -176,6 +176,69 @@ def seed_activities(oracle, owner, fixture, headers):
     require(comment.status_code == 201, f"fixture review comment failed: {comment.text}")
 
 
+@parity.case
+def walk(label, client, path, headers, full):
+    seen, cursor = [], None
+    while True:
+        params = {"limit": 1} | ({"cursor": cursor} if cursor else {})
+        response = client.get(path, headers=headers, params=params)
+        require(response.status_code == 200, f"status {response.status_code}: {response.text}")
+        body = response.json()
+        seen += [item["id"] for item in body["items"]]
+        cursor = body["next_cursor"]
+        if not cursor:
+            break
+    require(seen == [item["id"] for item in full["items"]], "paged walk differs from page one")
+    print(f"PASS {label}", flush=True)
+
+
+def service_bearers(oracle, fixture, csrf_headers):
+    """A project-reader machine credential and one whose principal holds no grant."""
+    org = f"/api/v1/organizations/{fixture['org_a_id']}"
+    bearers = []
+    for name, role in (("E11 reader", "viewer"), ("E11 no grant", None)):
+        principal = oracle.post(f"{org}/service-principals", headers=csrf_headers,
+                                json={"name": name})
+        require(principal.status_code == 201, f"service principal: {principal.text}")
+        pid = principal.json()["id"]
+        if role:
+            grant = oracle.post(
+                f"{org}/grants", headers=csrf_headers,
+                json={"subject_kind": "service_principal", "subject_id": pid,
+                      "scope_kind": "project", "project_id": fixture["project_a_id"],
+                      "role": role},
+            )
+            require(grant.status_code == 201, f"service grant: {grant.text}")
+        credential = oracle.post(f"{org}/service-principals/{pid}/credentials",
+                                 headers=csrf_headers, json={"name": name})
+        require(credential.status_code == 201, f"service credential: {credential.text}")
+        bearers.append({"authorization": f"Bearer {credential.json()['secret']}"})
+    return bearers
+
+
+def compare_service_activities(pair, fixture, bearers):
+    reader, ungranted = bearers
+    path = f"{project_path(fixture['org_a_id'], fixture['project_a_id'])}"
+    path += "/collaboration/activities"
+    check("E11 activities service reader first page", pair, path, 200, headers=reader,
+          normalize=first_page)
+    full = pair.oracle.get(path, headers=reader).json()
+    for name, client in (("FastAPI", pair.oracle), ("Rust", pair.rust)):
+        body = client.get(path, headers=reader, params={"limit": 2}).json()
+        check(f"E11 activities service continues {name} cursor", pair, path, 200,
+              headers=reader, params={"limit": 2, "cursor": body["next_cursor"]})
+        walk(f"E11 activities service keyset walk on {name}", client, path, reader, full)
+        # A cursor binds the credential: a human session cannot continue it.
+        check(f"E11 activities 422 service cursor replayed by human ({name})", pair, path,
+              422, headers=session_headers(fixture["session_a_token"]),
+              params={"cursor": body["next_cursor"]})
+    check("E11 activities 403 service principal without grant", pair, path, 403,
+          headers=ungranted)
+    check("E11 activities 401 invalid bearer does not fall back to cookie", pair, path, 401,
+          headers=session_headers(fixture["session_a_token"])
+          | {"authorization": "Bearer unavailable"})
+
+
 def compare_activities(pair, fixture, scoped_token):
     a = session_headers(fixture["session_a_token"])
     base = project_path(fixture["org_a_id"], fixture["project_a_id"])
@@ -183,7 +246,8 @@ def compare_activities(pair, fixture, scoped_token):
     foreign = project_path(fixture["org_b_id"], fixture["project_b_id"])
     foreign += "/collaboration/activities"
 
-    full, _ = check("E11 activities first page", pair, path, 200, headers=a, normalize=first_page)
+    check("E11 activities first page", pair, path, 200, headers=a, normalize=first_page)
+    full = pair.oracle.get(path, headers=a).json()
     kinds = {item["event_kind"] for item in full["items"]}
     require(
         {"changeset.committed", "changeset.reverted", "review.requested"} <= kinds,
@@ -202,17 +266,7 @@ def compare_activities(pair, fixture, scoped_token):
               params={"limit": 2, "cursor": body["next_cursor"]})
 
     for name, client in (("FastAPI", pair.oracle), ("Rust", pair.rust)):
-        seen, cursor = [], None
-        while True:
-            params = {"limit": 1} | ({"cursor": cursor} if cursor else {})
-            body = client.get(path, headers=a, params=params).json()
-            seen += [item["id"] for item in body["items"]]
-            cursor = body["next_cursor"]
-            if not cursor:
-                break
-        require(seen == [item["id"] for item in full["items"]],
-                f"{name} paged walk differs from the first page")
-    print("PASS E11 activities full keyset walk on both servers", flush=True)
+        walk(f"E11 activities full keyset walk on {name}", client, path, a, full)
 
     scope = hashlib.sha256(
         f"human|{fixture['user_a_id']}|None|{fixture['org_a_id']}|{fixture['project_a_id']}"
@@ -304,7 +358,7 @@ def same_frame(label, streams, wanted, timeout=10):
     print(f"PASS {label}", flush=True)
 
 
-def compare_events(pair, owner, fixture, scoped_token, csrf_headers):
+def compare_events(pair, owner, fixture, scoped_token, csrf_headers, bearers):
     a = session_headers(fixture["session_a_token"])
     org, project = fixture["org_a_id"], fixture["project_a_id"]
     path = f"{project_path(org, project)}/collaboration/events"
@@ -313,6 +367,10 @@ def compare_events(pair, owner, fixture, scoped_token, csrf_headers):
     check("E11 events 401 invalid bearer", pair, path, 401,
           headers={"authorization": "Bearer unavailable"})
     check("E11 events 404 foreign project", pair, foreign, 404, headers=a)
+    check("E11 events 403 service principal", pair, path, 403, headers=bearers[0])
+    check("E11 events 422 service principal malformed project id", pair,
+          f"{project_path(org, 'not-a-uuid')}/collaboration/events", 422,
+          headers=bearers[0], normalize=validation_shape)
     check("E11 events 403 GIS-scoped member", pair, path, 403,
           headers=session_headers(scoped_token))
     check("E11 events 422 malformed project id", pair,
@@ -410,7 +468,9 @@ def main():
             )
             seed_activities(oracle, owner, fixture, csrf_headers)
             compare_activities(pair, fixture, scoped_token)
-            compare_events(pair, owner, fixture, scoped_token, csrf_headers)
+            bearers = service_bearers(oracle, fixture, csrf_headers)
+            compare_service_activities(pair, fixture, bearers)
+            compare_events(pair, owner, fixture, scoped_token, csrf_headers, bearers)
     print("E11 realtime parity finished", flush=True)
 
 

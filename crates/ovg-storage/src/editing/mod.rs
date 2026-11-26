@@ -26,6 +26,7 @@ use domain::{
 };
 pub use domain::{snap, EditError, EditOperation, OpType};
 
+use crate::collaboration::{self, Activity, ActivityPosition};
 use crate::{DbPool, TenantTransaction};
 
 /// Route behavior of FastAPI `project_access_guard` for a scoped (GIS ACL) account.
@@ -471,6 +472,30 @@ impl<'a> EditScope<'a> {
             .await
             .map_err(db_error)?;
         Ok(())
+    }
+
+    /// Authenticated actor and credential that bind an activity cursor.
+    pub fn actor(&self) -> (Uuid, Option<Uuid>) {
+        (self.actor_id, self.credential_id)
+    }
+
+    /// R011 activity page after `authorize(Read)`; `Ok(None)` for an invisible boundary.
+    pub async fn list_activities(
+        &mut self,
+        cutoff: DateTime<Utc>,
+        after: Option<ActivityPosition>,
+        limit: i64,
+    ) -> Result<Option<Vec<Activity>>, EditError> {
+        let organization = self.tx.organization_id();
+        let project = self.project_id;
+        let tx = self.tx.tx_mut();
+        let page = collaboration::list_activities(tx, organization, project, cutoff, after, limit);
+        page.await.map_err(|error| EditError::Platform {
+            status: error.status_code(),
+            code: error.code(),
+            message: error.to_string(),
+            details: None,
+        })
     }
 
     pub async fn commit(self) -> Result<(), EditError> {

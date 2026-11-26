@@ -1,33 +1,26 @@
-//! E11 project collaboration: activity history paging and commit-delivered SSE invalidations.
+//! E11 commit-delivered SSE invalidations for project chat, tasks, locks and edits
+//! (`team_realtime.events`). Activity history paging lives with editing scopes.
 
 use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::body::Body;
-use axum::extract::rejection::{PathRejection, QueryRejection};
-use axum::extract::{Path, Query, State};
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::extract::{Path, Request, State};
+use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use chrono::{Timelike, Utc};
-use ovg_core::{ActorContext, ActorType, AppError, TenantScope};
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
-use ovg_storage::collaboration::{self, ActivityPosition, ChangeListener};
-use ovg_sync::activity_cursor::{
-    ActivityCursor, ActivityCursorScope, ActivityStream, CURSOR_MAX_LENGTH,
-};
-use serde::Deserialize;
+use ovg_storage::collaboration::ChangeListener;
 use serde_json::{json, Value};
 use tokio::sync::{mpsc, Semaphore};
 use tokio::time::Instant;
 use uuid::Uuid;
 
 use crate::catalog::{project_read, CatalogError};
-use crate::identity::HumanSession;
+use crate::editing::{authenticate_actor, Actor};
 use crate::AppState;
 
-const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/collaboration";
 const CHANNEL: &str = "ovg_team_collaboration";
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(15);
 const READY: &str = "retry: 3000\nevent: ready\ndata: {}\n\n";
@@ -42,137 +35,10 @@ const LOCK_CHANGE: &str = "event: lock_change\ndata: {}\n\n";
 static LISTENERS: Semaphore = Semaphore::const_new(40);
 
 pub(crate) fn router() -> Router<AppState> {
-    Router::new()
-        .route(&format!("{BASE}/activities"), get(activities))
-        .route(&format!("{BASE}/events"), get(events))
-}
-
-enum Failure {
-    Access(CatalogError),
-    /// `PlatformDomainError` envelope: `{"code", "message"}`.
-    Domain(AppError),
-}
-
-impl From<CatalogError> for Failure {
-    fn from(error: CatalogError) -> Self {
-        Self::Access(error)
-    }
-}
-
-impl IntoResponse for Failure {
-    fn into_response(self) -> Response {
-        match self {
-            Self::Access(error) => error.into_response(),
-            Self::Domain(AppError::Internal { internal_detail }) => {
-                tracing::error!(detail = %internal_detail, "collaboration request failed");
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
-            }
-            Self::Domain(error) => (
-                StatusCode::from_u16(error.status_code())
-                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                Json(json!({"code": error.code(), "message": error.to_string()})),
-            )
-                .into_response(),
-        }
-    }
-}
-
-#[derive(Deserialize)]
-struct ActivityQuery {
-    limit: Option<i64>,
-    cursor: Option<String>,
-}
-
-async fn activities(
-    auth: HumanSession,
-    State(state): State<AppState>,
-    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
-    query: Result<Query<ActivityQuery>, QueryRejection>,
-) -> Result<Response, Failure> {
-    let Path((organization, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
-    let mut read = project_read(
-        &state,
-        &auth,
-        organization,
-        project,
-        ProjectReadPolicy::Unrestricted,
+    Router::new().route(
+        "/organizations/{organization_id}/projects/{project_id}/collaboration/events",
+        get(events),
     )
-    .await?;
-    let Query(query) = query.map_err(|_| CatalogError::InvalidRequest)?;
-    let limit = query.limit.unwrap_or(50);
-    let cursor_chars = query.cursor.as_deref().map(|token| token.chars().count());
-    if !(1..=200).contains(&limit)
-        || cursor_chars == Some(0)
-        || cursor_chars > Some(CURSOR_MAX_LENGTH)
-    {
-        return Err(CatalogError::InvalidRequest.into());
-    }
-
-    // Python datetimes carry microseconds; the cursor and SQL comparisons use the same.
-    let now = Utc::now();
-    let now = now
-        .with_nanosecond(now.nanosecond() / 1_000 * 1_000)
-        .unwrap_or(now);
-    let scope = ActivityCursorScope::from(&TenantScope {
-        organization_id: organization,
-        workspace_id: None,
-        project_id: Some(project),
-        actor: ActorContext {
-            actor_type: ActorType::Human,
-            actor_id: auth.actor_id(),
-            credential_id: None,
-            email: None,
-        },
-        permissions: Vec::new(),
-    });
-    let position = query
-        .cursor
-        .map(|token| ActivityCursor::decode(&token, &scope, now))
-        .transpose()
-        .map_err(Failure::Domain)?;
-    let cutoff = position.map_or(now, |cursor| cursor.cutoff);
-    let after = position.map(|cursor| ActivityPosition {
-        created_at: cursor.created_at,
-        stream: cursor.stream as i32,
-        id: cursor.id,
-    });
-    let page = collaboration::list_activities(&mut read, cutoff, after, limit).await;
-    let Some(mut rows) = page.map_err(Failure::Domain)? else {
-        return Err(Failure::Domain(AppError::validation(
-            "INVALID_ACTIVITY_CURSOR",
-            "activity continuation unavailable; refresh the activity list",
-        )));
-    };
-    read.commit().await.map_err(Failure::Domain)?;
-
-    let has_more = rows.len() as i64 > limit;
-    rows.truncate(limit as usize);
-    let mut next_cursor = None;
-    if let Some(last) = rows.last().filter(|_| has_more) {
-        let stream = if last.position.stream == 1 {
-            ActivityStream::Edit
-        } else {
-            ActivityStream::Review
-        };
-        let cursor = ActivityCursor {
-            cutoff,
-            created_at: last.position.created_at,
-            stream,
-            id: last.position.id,
-        };
-        next_cursor = Some(cursor.encode(&scope).map_err(Failure::Domain)?);
-    }
-    let items: Vec<Value> = rows.into_iter().map(|row| row.wire).collect();
-    let body = json!({
-        "items": items,
-        "cutoff": collaboration::isoformat(cutoff),
-        "next_cursor": next_cursor,
-    });
-    let mut response = Json(body).into_response();
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    Ok(response)
 }
 
 #[derive(Clone, Copy)]
@@ -184,11 +50,23 @@ struct StreamScope {
 }
 
 async fn events(
-    auth: HumanSession,
     State(state): State<AppState>,
-    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
-) -> Result<Response, Failure> {
-    let Path((organization, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    Path((organization, project)): Path<(String, String)>,
+    request: Request,
+) -> Result<Response, Response> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization)
+        .await
+        .map_err(IntoResponse::into_response)?;
+    let ids = Uuid::parse_str(&organization).ok();
+    let ids = ids.zip(Uuid::parse_str(&project).ok());
+    let Some((organization, project)) = ids else {
+        return Err(CatalogError::InvalidRequest.into_response());
+    };
+    let Actor::Human(auth) = actor else {
+        let detail = json!({"detail": "Human project member required"});
+        return Err((StatusCode::FORBIDDEN, Json(detail)).into_response());
+    };
     let read = project_read(
         &state,
         &auth,
@@ -196,8 +74,11 @@ async fn events(
         project,
         ProjectReadPolicy::Unrestricted,
     )
-    .await?;
-    read.commit().await.map_err(Failure::Domain)?;
+    .await
+    .map_err(IntoResponse::into_response)?;
+    read.commit()
+        .await
+        .map_err(|error| CatalogError::Application(error).into_response())?;
     let scope = StreamScope {
         organization,
         project,

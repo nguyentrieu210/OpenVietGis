@@ -6,10 +6,9 @@ use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Value};
 use sqlx::postgres::{PgListener, PgPoolOptions};
-use sqlx::Row;
+use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
-use crate::catalog::ProjectRead;
 use crate::DbPool;
 
 const EDIT_ACTIVITY: &str = "
@@ -67,13 +66,13 @@ pub struct Activity {
 /// Rows at or before `cutoff`, newest first, at most `limit + 1` (lookahead).
 /// `Ok(None)` means the continuation boundary is not visible in the current scope.
 pub async fn list_activities(
-    read: &mut ProjectRead<'_>,
+    tx: &mut Transaction<'_, Postgres>,
+    organization: Uuid,
+    project: Uuid,
     cutoff: DateTime<Utc>,
     after: Option<ActivityPosition>,
     limit: i64,
 ) -> Result<Option<Vec<Activity>>, AppError> {
-    let (organization, project) = (read.organization_id(), read.project_id());
-    let tx = read.transaction();
     sqlx::query("SELECT set_config('statement_timeout','2000ms',true)")
         .execute(&mut **tx)
         .await
