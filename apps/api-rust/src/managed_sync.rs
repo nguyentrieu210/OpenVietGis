@@ -190,9 +190,7 @@ async fn create_session(
         mode,
         expires_in_hours: hours,
     };
-    if !matches!(new.mode.as_str(), "managed" | "legacy_snapshot")
-        || !(1..=720).contains(&hours)
-    {
+    if !matches!(new.mode.as_str(), "managed" | "legacy_snapshot") || !(1..=720).contains(&hours) {
         return Err(invalid());
     }
     let Some(mut scope) = scope else {
@@ -449,7 +447,7 @@ async fn events(
         organization: organization.to_string(),
         project: project.to_string(),
     };
-    tokio::spawn(pump(state, sender, feed));
+    tokio::spawn(pump(state.clone(), sender, feed));
     let frames = futures_util::stream::unfold(receiver, |mut receiver| async move {
         let frame = receiver.recv().await?;
         Some((Ok::<_, Infallible>(frame), receiver))
@@ -479,7 +477,10 @@ impl ManagedFeed {
             return false;
         };
         scope.authorize(Permission::Read).await.is_ok()
-            && scope.active_session(self.session_id, false, true).await.is_ok()
+            && scope
+                .active_session(self.session_id, false, true)
+                .await
+                .is_ok()
             && scope.commit().await.is_ok()
     }
 }

@@ -431,7 +431,10 @@ impl<'a> EditScope<'a> {
             .ok_or_else(|| EditError::detail(404, "organization not found"))?;
         if !granted {
             let name = permission.name();
-            return Err(EditError::detail(403, format!("missing permission: {name}")));
+            return Err(EditError::detail(
+                403,
+                format!("missing permission: {name}"),
+            ));
         }
         if permission != Permission::Read && status != "active" {
             return Err(EditError::Spatial(

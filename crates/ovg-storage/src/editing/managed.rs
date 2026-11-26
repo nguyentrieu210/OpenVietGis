@@ -397,7 +397,10 @@ impl EditScope<'_> {
         let row = self.session_row(session_id).await?;
         if !self.owns(&row)? || bump_epoch {
             if !self.granted(Permission::Manage).await? {
-                return Err(EditError::detail(403, "Project manage permission required."));
+                return Err(EditError::detail(
+                    403,
+                    "Project manage permission required.",
+                ));
             }
             self.authorize(Permission::Manage).await?;
         }
@@ -705,11 +708,7 @@ impl EditScope<'_> {
             };
             let event_revision: Option<String> = get(event, "content_revision")?;
             if layers.len() > 16 || event_revision.as_deref() != Some(layer_revision.as_str()) {
-                return Ok(reset(
-                    "source_revision_or_alias_limit",
-                    last_cursor,
-                    epoch,
-                ));
+                return Ok(reset("source_revision_or_alias_limit", last_cursor, epoch));
             }
             let changesets = group
                 .iter()
@@ -824,7 +823,10 @@ impl EditScope<'_> {
             ));
         }
         if request.operation_id.starts_with("field-sync-") {
-            return Err(EditError::detail(422, "Reserved internal operation_id prefix."));
+            return Err(EditError::detail(
+                422,
+                "Reserved internal operation_id prefix.",
+            ));
         }
         let changeset = self.commit_changeset(source_id, request).await?;
         let (organization, project) = self.ids();
@@ -879,9 +881,7 @@ impl EditScope<'_> {
         .fetch_optional(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?
-        .ok_or_else(|| {
-            EditError::detail(404, "Commit receipt not found for this operation_id.")
-        })?;
+        .ok_or_else(|| EditError::detail(404, "Commit receipt not found for this operation_id."))?;
         receipt_wire(&row)
     }
 
