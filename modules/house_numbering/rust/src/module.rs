@@ -2,8 +2,7 @@
 
 use ovg_core::AppError;
 use ovg_module_sdk::{
-    ModuleCapability, ModuleCommandRequest, ModuleCommandResult, ModuleCommandSpec,
-    ModuleExecutionContext, ModuleManifest, OvgModule,
+    ModuleCommandRequest, ModuleCommandResult, ModuleExecutionContext, ModuleManifest, OvgModule,
 };
 use serde_json::json;
 
@@ -14,68 +13,8 @@ pub struct HouseNumberingModule;
 
 impl OvgModule for HouseNumberingModule {
     fn manifest(&self) -> ModuleManifest {
-        ModuleManifest {
-            extension_key: "house_numbering".to_string(),
-            version: "2.0.0".to_string(),
-            api_compatibility: "1.x".to_string(),
-            display_name: "Quản lý và đánh số nhà".to_string(),
-            description: "Official project-scoped house numbering workflow: registry, inspection, numbering, approval, reconciliation, field work and handover.".to_string(),
-            permissions: vec![
-                "ext.house_numbering.read".to_string(),
-                "ext.house_numbering.edit".to_string(),
-                "ext.house_numbering.assign".to_string(),
-                "ext.house_numbering.approve".to_string(),
-                "ext.house_numbering.survey".to_string(),
-                "ext.house_numbering.private_read".to_string(),
-                "ext.house_numbering.export_sensitive".to_string(),
-                "ext.house_numbering.manage".to_string(),
-            ],
-            commands: vec![
-                ModuleCommandSpec {
-                    id: "inspect_location".to_string(),
-                    label: "Kiểm tra vị trí".to_string(),
-                    required_permission: "ext.house_numbering.read".to_string(),
-                },
-                ModuleCommandSpec {
-                    id: "preview_numbering".to_string(),
-                    label: "Xem trước đánh số".to_string(),
-                    required_permission: "ext.house_numbering.assign".to_string(),
-                },
-                ModuleCommandSpec {
-                    id: "apply_numbering".to_string(),
-                    label: "Áp dụng số đề xuất".to_string(),
-                    required_permission: "ext.house_numbering.assign".to_string(),
-                },
-                ModuleCommandSpec {
-                    id: "submit_proposal".to_string(),
-                    label: "Trình phương án".to_string(),
-                    required_permission: "ext.house_numbering.edit".to_string(),
-                },
-                ModuleCommandSpec {
-                    id: "approve_proposal".to_string(),
-                    label: "Duyệt phương án".to_string(),
-                    required_permission: "ext.house_numbering.approve".to_string(),
-                },
-            ],
-            capabilities: [
-                "area_tree",
-                "spatial_house_registry",
-                "source_import",
-                "location_inspection",
-                "numbering_rules",
-                "bulk_numbering",
-                "source_reconciliation",
-                "approval_workflow",
-                "field_survey",
-                "progress_tracking",
-                "inspection_documents",
-                "search_and_handover",
-                "protected_household_data",
-            ]
-            .into_iter()
-            .map(|c| ModuleCapability(c.to_string()))
-            .collect(),
-        }
+        serde_json::from_str(include_str!("../../manifest.json"))
+            .expect("shipped house-numbering manifest must satisfy Rust SDK schema")
     }
 
     fn execute_command(
@@ -116,6 +55,15 @@ mod tests {
     use ovg_core::{ActorContext, ActorType, Permission, TenantScope};
     use ovg_module_sdk::ModuleRegistry;
     use uuid::Uuid;
+
+    #[test]
+    fn rust_manifest_is_exactly_the_shipped_official_manifest() {
+        let rust_manifest = serde_json::to_value(HouseNumberingModule.manifest()).unwrap();
+        let shipped: serde_json::Value =
+            serde_json::from_str(include_str!("../../manifest.json")).unwrap();
+        assert_eq!(rust_manifest, shipped);
+        HouseNumberingModule.manifest().validate().unwrap();
+    }
 
     #[test]
     fn registers_with_sdk_and_executes_preview_numbering() {

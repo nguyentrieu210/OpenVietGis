@@ -7,7 +7,7 @@
 //! uploads and confirmations answer `FORMAT_NOT_MIGRATED`.
 
 mod codec;
-mod store;
+pub(crate) mod store;
 
 use std::collections::HashMap;
 

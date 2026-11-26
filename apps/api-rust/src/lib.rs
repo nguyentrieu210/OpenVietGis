@@ -1,20 +1,30 @@
 //! OpenVietGIS Rust modular monolith HTTP server library.
 
+pub(crate) mod cad_bridge;
+pub mod cartography;
 pub(crate) mod catalog;
 pub mod config;
 pub mod connectors;
 pub(crate) mod editing;
 pub mod error;
+pub(crate) mod extensions;
+pub(crate) mod field_offline;
+pub(crate) mod house_numbering;
 pub(crate) mod identity;
 pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
+pub(crate) mod processing;
+pub(crate) mod processing_models;
 pub(crate) mod queries;
+pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;
 pub mod state;
 pub(crate) mod tenancy;
+pub(crate) mod three_d;
+pub(crate) mod tilesets;
 pub(crate) mod transfers;
 
 use axum::http::{header, HeaderName, HeaderValue, Method};
