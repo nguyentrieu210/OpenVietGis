@@ -107,6 +107,7 @@ def seed_job(
     return job_id
 
 
+@parity.case
 def compare_response(label: str, expected, actual, *, normalize=None):
     require(
         expected.status_code == actual.status_code,

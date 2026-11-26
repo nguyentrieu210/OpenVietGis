@@ -37,6 +37,7 @@ def approx_equal(a, b, tol=1e-7) -> bool:
     return type(a) is type(b) and a == b
 
 
+@parity.case
 def compare_json(label: str, expected, actual, *, tol=None):
     require(
         expected.status_code == actual.status_code,

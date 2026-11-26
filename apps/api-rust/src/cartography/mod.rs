@@ -1,25 +1,32 @@
-//! E06 renderer-neutral cartography control plane.
+//! E06 renderer-neutral cartography control plane and print export service.
 //!
-//! MapLibre/QGIS/renderer engines stay below this boundary. Rust owns validation
-//! of portable style/layout contracts and canonical project persistence.
+//! Owns portable style/layout contracts, Layout Designer CRUD, revision-pinned
+//! print preview/export manifests, and deterministic PNG/PDF print output.
+
+mod designer;
+mod renderer;
 
 use std::collections::{BTreeMap, HashSet};
 
+use axum::body::Body;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
+use chrono::Utc;
 use ovg_core::AppError;
-use ovg_storage::cartography as cartography_store;
-use ovg_storage::catalog::ProjectReadPolicy;
-use serde::Deserialize;
+use ovg_storage::cartography::{self as cartography_store, print_revision_fingerprint};
+use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
+use ovg_storage::transfers::TransferError;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::catalog::{project_read, CatalogError};
 use crate::identity::{require_csrf, HumanSession};
+use crate::transfers::store::Store;
 use crate::AppState;
 
 const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/cartography";
@@ -34,7 +41,20 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{BASE}/layouts"),
             get(list_layouts).post(create_layout),
         )
+        .route(
+            &format!("{BASE}/layouts/{{layout_id}}/exports/preview"),
+            post(preview_layout_export),
+        )
+        .route(
+            &format!("{BASE}/layouts/{{layout_id}}/exports"),
+            post(export_layout),
+        )
         .route(&format!("{BASE}/exports"), get(list_exports))
+        .route(
+            &format!("{BASE}/exports/{{export_id}}/download"),
+            get(download_export),
+        )
+        .merge(designer::router())
 }
 
 async fn get_layer_style(
@@ -169,8 +189,8 @@ async fn upsert_layer_style(
     Ok(Json(result))
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-enum PaperSize {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub(crate) enum PaperSize {
     A4,
     A3,
     A2,
@@ -179,7 +199,7 @@ enum PaperSize {
 }
 
 impl PaperSize {
-    const fn wire(self) -> &'static str {
+    pub(crate) const fn wire(self) -> &'static str {
         match self {
             Self::A4 => "A4",
             Self::A3 => "A3",
@@ -188,20 +208,68 @@ impl PaperSize {
             Self::A0 => "A0",
         }
     }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, AppError> {
+        match value {
+            "A4" => Ok(Self::A4),
+            "A3" => Ok(Self::A3),
+            "A2" => Ok(Self::A2),
+            "A1" => Ok(Self::A1),
+            "A0" => Ok(Self::A0),
+            _ => Err(AppError::validation(
+                "INVALID_PAPER_SIZE",
+                format!("unsupported paper size {value:?}"),
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum Orientation {
+pub(crate) enum Orientation {
     Portrait,
     Landscape,
 }
 
 impl Orientation {
-    const fn wire(self) -> &'static str {
+    pub(crate) const fn wire(self) -> &'static str {
         match self {
             Self::Portrait => "portrait",
             Self::Landscape => "landscape",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, AppError> {
+        match value {
+            "portrait" => Ok(Self::Portrait),
+            "landscape" => Ok(Self::Landscape),
+            _ => Err(AppError::validation(
+                "INVALID_ORIENTATION",
+                format!("unsupported orientation {value:?}"),
+            )),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum PrintFormat {
+    Png,
+    Pdf,
+}
+
+impl PrintFormat {
+    pub(crate) const fn wire(self) -> &'static str {
+        match self {
+            Self::Png => "png",
+            Self::Pdf => "pdf",
+        }
+    }
+
+    pub(crate) const fn media_type(self) -> &'static str {
+        match self {
+            Self::Png => "image/png",
+            Self::Pdf => "application/pdf",
         }
     }
 }
@@ -224,6 +292,14 @@ fn default_attribution() -> String {
 
 const fn yes() -> bool {
     true
+}
+
+const fn default_print_format() -> PrintFormat {
+    PrintFormat::Png
+}
+
+const fn default_dpi() -> i32 {
+    150
 }
 
 #[derive(Debug, Deserialize)]
@@ -297,6 +373,390 @@ async fn create_layout(
     .map_err(CartographyError::Domain)?;
     edit.commit().await.map_err(CartographyError::Domain)?;
     Ok((StatusCode::CREATED, Json(result)))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PreviewLayoutExportRequest {
+    #[serde(default = "default_print_format")]
+    output_format: PrintFormat,
+    #[serde(default = "default_dpi")]
+    dpi: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExportLayoutRequest {
+    #[serde(default = "default_print_format")]
+    output_format: PrintFormat,
+    #[serde(default = "default_dpi")]
+    dpi: i32,
+    expected_revision_fingerprint: String,
+}
+
+struct PreparedSnapshot {
+    snapshot: cartography_store::PrintSnapshotData,
+    paper_size: PaperSize,
+    orientation: Orientation,
+    dpi: u16,
+    use_extent: BTreeMap<String, f64>,
+    frame: renderer::PrintFrameMetrics,
+    manifest: Value,
+    revision_fingerprint: String,
+}
+
+async fn prepare_print_manifest(
+    read: &mut ProjectRead<'_>,
+    layout_id: Uuid,
+    output_format: PrintFormat,
+    dpi: i32,
+) -> Result<PreparedSnapshot, AppError> {
+    if !matches!(dpi, 150 | 300) {
+        return Err(AppError::validation(
+            "INVALID_DPI",
+            "dpi must be 150 or 300",
+        ));
+    }
+    let dpi_u16 = u16::try_from(dpi).expect("validated dpi");
+
+    let snapshot = cartography_store::prepare_print_snapshot(read, layout_id).await?;
+    let paper_size = PaperSize::parse(&snapshot.layout.paper_size)?;
+    let orientation = Orientation::parse(&snapshot.layout.orientation)?;
+
+    let use_extent = if let Some(extent) = &snapshot.layout.extent {
+        validate_print_extent(extent, snapshot.layout.crs_code)?;
+        extent.clone()
+    } else if let Some([mut min_x, mut min_y, mut max_x, mut max_y]) = snapshot.data_bounds {
+        let minimum_span = if matches!(snapshot.layout.crs_code, 4326 | 4756) {
+            0.00001
+        } else {
+            1.0
+        };
+        if min_x == max_x {
+            min_x -= minimum_span / 2.0;
+            max_x += minimum_span / 2.0;
+        }
+        if min_y == max_y {
+            min_y -= minimum_span / 2.0;
+            max_y += minimum_span / 2.0;
+        }
+        BTreeMap::from([
+            ("min_x".to_owned(), min_x),
+            ("min_y".to_owned(), min_y),
+            ("max_x".to_owned(), max_x),
+            ("max_y".to_owned(), max_y),
+        ])
+    } else {
+        return Err(AppError::validation(
+            "EMPTY_PRINT_EXTENT",
+            "layout has no spatial extent; supply an explicit extent",
+        ));
+    };
+
+    let frame = renderer::describe_print_frame(
+        paper_size,
+        orientation,
+        dpi_u16,
+        snapshot.layout.crs_code,
+        snapshot.layout.show_legend,
+        &use_extent,
+    )?;
+
+    let layout_revision = json!({
+        "id": snapshot.layout.id,
+        "name": snapshot.layout.name,
+        "title": snapshot.layout.title,
+        "paper_size": snapshot.layout.paper_size,
+        "orientation": snapshot.layout.orientation,
+        "crs_code": snapshot.layout.crs_code,
+        "attribution": snapshot.layout.attribution,
+        "show_north_arrow": snapshot.layout.show_north_arrow,
+        "show_scale_bar": snapshot.layout.show_scale_bar,
+        "show_legend": snapshot.layout.show_legend,
+        "layer_ids": snapshot.layout.layer_ids,
+        "extent": snapshot.layout.extent,
+        "updated_at": cartography_store::iso(snapshot.layout.updated_at),
+    });
+
+    let manifest_layers: Vec<Value> = snapshot
+        .layers
+        .iter()
+        .map(|layer| {
+            json!({
+                "layer_id": layer.id,
+                "layer_revision": layer.layer_revision,
+                "source_id": layer.source_id,
+                "content_revision": layer.content_revision,
+                "schema_revision": layer.schema_revision,
+                "source_crs": layer.source_crs,
+                "transformation_operation": layer.transformation_operation,
+                "style_revision": layer.style_revision,
+                "style_id": layer.style_id,
+                "style_fingerprint": layer.style_fingerprint,
+            })
+        })
+        .collect();
+
+    let manifest = json!({
+        "organization_id": read.organization_id(),
+        "project_id": read.project_id(),
+        "layout_id": snapshot.layout.id,
+        "layout_revision": print_revision_fingerprint(&layout_revision),
+        "layout": layout_revision,
+        "crs_code": snapshot.layout.crs_code,
+        "paper_size": snapshot.layout.paper_size,
+        "orientation": snapshot.layout.orientation,
+        "dpi": dpi,
+        "output_format": output_format.wire(),
+        "extent": use_extent,
+        "effective_extent": frame.effective_extent,
+        "pixel_width": frame.width,
+        "pixel_height": frame.height,
+        "scale_denominator": frame.scale_denominator,
+        "scale_accuracy_note": frame.scale_accuracy_note,
+        "renderer_profile": {
+            "id": "rust-print-v1",
+            "engine": "openvietgis-cartography",
+            "font": "Noto Sans Regular 10px",
+        },
+        "layers": manifest_layers,
+    });
+    let revision_fingerprint = print_revision_fingerprint(&manifest);
+    Ok(PreparedSnapshot {
+        snapshot,
+        paper_size,
+        orientation,
+        dpi: dpi_u16,
+        use_extent,
+        frame,
+        manifest,
+        revision_fingerprint,
+    })
+}
+
+async fn preview_layout_export(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, project_id, layout_id)): Path<(Uuid, Uuid, Uuid)>,
+    body: Result<Json<PreviewLayoutExportRequest>, JsonRejection>,
+) -> Result<Json<Value>, CartographyError> {
+    let Json(body) = body.map_err(|_| CartographyError::InvalidRequest)?;
+    require_csrf(&state, &auth, &headers)
+        .map_err(|error| CartographyError::Access(CatalogError::Identity(error)))?;
+
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(CartographyError::Access)?;
+
+    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi)
+        .await
+        .map_err(CartographyError::Domain)?;
+    read.commit().await.map_err(CartographyError::Domain)?;
+    Ok(Json(json!({
+        "revision_manifest": prepared.manifest,
+        "revision_fingerprint": prepared.revision_fingerprint,
+    })))
+}
+
+async fn export_layout(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, project_id, layout_id)): Path<(Uuid, Uuid, Uuid)>,
+    body: Result<Json<ExportLayoutRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<Value>), CartographyError> {
+    let Json(body) = body.map_err(|_| CartographyError::InvalidRequest)?;
+    if !is_hex64(&body.expected_revision_fingerprint) {
+        return Err(CartographyError::InvalidRequest);
+    }
+    require_csrf(&state, &auth, &headers)
+        .map_err(|error| CartographyError::Access(CatalogError::Identity(error)))?;
+
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(CartographyError::Access)?;
+
+    let prepared = prepare_print_manifest(&mut read, layout_id, body.output_format, body.dpi)
+        .await
+        .map_err(CartographyError::Domain)?;
+
+    if prepared.revision_fingerprint != body.expected_revision_fingerprint {
+        return Err(CartographyError::Domain(AppError::conflict(
+            "STALE_PRINT_REVISION",
+            "print inputs changed since preview; preview again before confirming",
+        )));
+    }
+
+    // Rendering is CPU-bound: keep it off the async workers. The read transaction stays
+    // open (as in Python) so the export row is inserted under the same revision locks.
+    let output_format = body.output_format;
+    let (prepared, rendered) = tokio::task::spawn_blocking(move || {
+        let rendered = renderer::render_print_map(
+            &prepared.snapshot.layout.title,
+            prepared.paper_size,
+            prepared.orientation,
+            prepared.dpi,
+            output_format,
+            prepared.snapshot.layout.crs_code,
+            &prepared.snapshot.layout.attribution,
+            prepared.snapshot.layout.show_north_arrow,
+            prepared.snapshot.layout.show_scale_bar,
+            prepared.snapshot.layout.show_legend,
+            &prepared.use_extent,
+            &prepared.snapshot.layers,
+        );
+        (prepared, rendered)
+    })
+    .await
+    .map_err(|error| CartographyError::Domain(AppError::internal(error.to_string())))?;
+    let rendered = rendered.map_err(CartographyError::Domain)?;
+
+    let export_id = Uuid::new_v4();
+    let storage_key = format!(
+        "cartography/{organization_id}/{project_id}/{export_id}.{}",
+        body.output_format.wire()
+    );
+    let store = Store::new(&state);
+    let (sha256_hex, byte_size) = store
+        .put(&storage_key, &rendered.bytes)
+        .await
+        .map_err(CartographyError::from_transfer)?;
+
+    let verified = store.read_verified(&storage_key, &sha256_hex).await;
+    match verified {
+        Ok(stored)
+            if stored.len() as i64 == byte_size
+                && stored.as_slice() == rendered.bytes.as_slice() => {}
+        Ok(_) => {
+            store.delete(&storage_key).await;
+            return Err(CartographyError::Domain(AppError::validation(
+                "PRINT_ARTIFACT_INTEGRITY",
+                "print object failed integrity verification",
+            )));
+        }
+        Err(error) => {
+            store.delete(&storage_key).await;
+            return Err(CartographyError::from_transfer(error));
+        }
+    }
+
+    let now = Utc::now();
+    let mut manifest = prepared.manifest;
+    if let Some(obj) = manifest.as_object_mut() {
+        obj.insert(
+            "revision_fingerprint".to_owned(),
+            Value::String(prepared.revision_fingerprint),
+        );
+        obj.insert(
+            "exported_at".to_owned(),
+            Value::String(cartography_store::iso(now)),
+        );
+    }
+
+    let inserted = cartography_store::insert_print_export(
+        &mut read,
+        cartography_store::PrintExportInsert {
+            id: export_id,
+            layout_id,
+            output_format: body.output_format.wire().to_owned(),
+            dpi: body.dpi,
+            scale_denominator: prepared.frame.scale_denominator,
+            scale_accuracy_note: prepared.frame.scale_accuracy_note,
+            revision_manifest: manifest,
+            storage_key: storage_key.clone(),
+            sha256: sha256_hex,
+            byte_size,
+            created_by_actor_id: auth.actor_id(),
+            created_at: now,
+        },
+    )
+    .await;
+
+    let record = match inserted {
+        Ok(record) => match read.commit().await {
+            Ok(()) => record,
+            Err(error) => {
+                store.delete(&storage_key).await;
+                return Err(CartographyError::Domain(error));
+            }
+        },
+        Err(error) => {
+            store.delete(&storage_key).await;
+            return Err(CartographyError::Domain(error));
+        }
+    };
+    Ok((StatusCode::CREATED, Json(record)))
+}
+
+async fn download_export(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path((organization_id, project_id, export_id)): Path<(Uuid, Uuid, Uuid)>,
+) -> Result<Response, CartographyError> {
+    let mut read = project_read(
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await
+    .map_err(CartographyError::Access)?;
+
+    let meta = cartography_store::get_print_export(&mut read, export_id)
+        .await
+        .map_err(CartographyError::Domain)?;
+    read.commit().await.map_err(CartographyError::Domain)?;
+
+    let data = Store::new(&state)
+        .read_verified(&meta.storage_key, &meta.sha256)
+        .await
+        .map_err(CartographyError::from_transfer)?;
+
+    let media_type = if meta.output_format == "png" {
+        PrintFormat::Png.media_type()
+    } else {
+        PrintFormat::Pdf.media_type()
+    };
+    let mut response = Response::new(Body::from(data));
+    let headers = response.headers_mut();
+    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(media_type));
+    let disposition = format!(
+        "attachment; filename=\"map-{}.{}\"",
+        meta.id, meta.output_format
+    );
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_str(&disposition).map_err(|_| {
+            CartographyError::Domain(AppError::internal("invalid content disposition"))
+        })?,
+    );
+    headers.insert(
+        "x-content-sha256",
+        HeaderValue::from_str(&meta.sha256)
+            .map_err(|_| CartographyError::Domain(AppError::internal("invalid sha256 header")))?,
+    );
+    Ok(response)
+}
+
+fn is_hex64(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn normalized_text(value: &str, max_chars: usize, fallback: &str) -> String {
@@ -396,13 +856,18 @@ fn python_truthy(value: &Value) -> bool {
     }
 }
 
-fn pythonish_str(value: &Value) -> String {
+pub(crate) fn pythonish_str(value: &Value) -> String {
     match value {
         Value::Null => "None".to_owned(),
         Value::Bool(true) => "True".to_owned(),
         Value::Bool(false) => "False".to_owned(),
         Value::String(text) => text.clone(),
-        Value::Number(number) => number.to_string(),
+        Value::Number(number) if number.is_i64() || number.is_u64() => number.to_string(),
+        Value::Number(number) => {
+            let mut out = String::new();
+            cartography_store::push_py_float(&mut out, number.as_f64().unwrap_or(0.0));
+            out
+        }
         Value::Array(items) => {
             let body = items
                 .iter()
@@ -641,44 +1106,41 @@ pub fn validate_single_style(
     Ok(())
 }
 
-#[cfg(test)]
-fn paper_dimensions_px(
-    paper_size: PaperSize,
-    orientation: Orientation,
-    dpi: u16,
-) -> Result<(u32, u32), AppError> {
-    if !matches!(dpi, 150 | 300) {
-        return Err(AppError::validation(
-            "INVALID_DPI",
-            "dpi must be 150 or 300",
-        ));
-    }
-    if matches!(paper_size, PaperSize::A0 | PaperSize::A1 | PaperSize::A2) && dpi != 150 {
-        return Err(AppError::validation(
-            "INVALID_DPI",
-            "Large paper formats require 150 dpi",
-        ));
-    }
-
-    let (mut mm_w, mut mm_h) = match paper_size {
-        PaperSize::A4 => (210.0_f64, 297.0_f64),
-        PaperSize::A3 => (297.0, 420.0),
-        PaperSize::A2 => (420.0, 594.0),
-        PaperSize::A1 => (594.0, 841.0),
-        PaperSize::A0 => (841.0, 1189.0),
-    };
-    if orientation == Orientation::Landscape {
-        std::mem::swap(&mut mm_w, &mut mm_h);
-    }
-    let px_w = ((mm_w / 25.4) * f64::from(dpi)).round() as u32;
-    let px_h = ((mm_h / 25.4) * f64::from(dpi)).round() as u32;
-    Ok((px_w, px_h))
-}
-
 enum CartographyError {
     InvalidRequest,
     Access(CatalogError),
     Domain(AppError),
+    Coded(StatusCode, &'static str, String),
+    Detail(StatusCode, String),
+}
+
+impl CartographyError {
+    fn from_transfer(error: TransferError) -> Self {
+        match error {
+            TransferError::Coded {
+                status,
+                code,
+                message,
+            } => Self::Coded(
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                code,
+                message,
+            ),
+            TransferError::Detail { status, detail } => Self::Detail(
+                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                detail,
+            ),
+            TransferError::ReadOnly => Self::Access(CatalogError::Spatial(
+                StatusCode::CONFLICT,
+                "PROJECT_NOT_WRITABLE",
+                "The project is read-only.".to_owned(),
+            )),
+            TransferError::InvalidRequest => Self::InvalidRequest,
+            TransferError::Internal(internal_detail) => {
+                Self::Domain(AppError::internal(internal_detail))
+            }
+        }
+    }
 }
 
 impl IntoResponse for CartographyError {
@@ -686,6 +1148,12 @@ impl IntoResponse for CartographyError {
         match self {
             Self::InvalidRequest => CatalogError::InvalidRequest.into_response(),
             Self::Access(error) => error.into_response(),
+            Self::Coded(status, code, message) => {
+                (status, Json(json!({ "code": code, "message": message }))).into_response()
+            }
+            Self::Detail(status, detail) => {
+                (status, Json(json!({ "detail": detail }))).into_response()
+            }
             Self::Domain(AppError::Internal { internal_detail }) => {
                 tracing::error!(detail = %internal_detail, "cartography request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
@@ -702,20 +1170,6 @@ impl IntoResponse for CartographyError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn print_dimensions_match_python_physical_page_contract() {
-        assert_eq!(
-            paper_dimensions_px(PaperSize::A4, Orientation::Portrait, 300).unwrap(),
-            (2480, 3508)
-        );
-        assert_eq!(
-            paper_dimensions_px(PaperSize::A4, Orientation::Landscape, 300).unwrap(),
-            (3508, 2480)
-        );
-        assert!(paper_dimensions_px(PaperSize::A2, Orientation::Portrait, 300).is_err());
-        assert!(paper_dimensions_px(PaperSize::A0, Orientation::Portrait, 150).is_ok());
-    }
 
     #[test]
     fn all_style_modes_match_reference_normalization() {
@@ -771,5 +1225,20 @@ mod tests {
         let mut invalid = valid.clone();
         invalid.insert("max_x".to_owned(), 181.0);
         assert!(validate_print_extent(&invalid, 4326).is_err());
+    }
+
+    #[test]
+    fn transfer_detail_errors_keep_their_status() {
+        for status in [403, 404, 409] {
+            let error = CartographyError::from_transfer(TransferError::detail(status, "x"));
+            assert_eq!(error.into_response().status().as_u16(), status);
+        }
+    }
+
+    #[test]
+    fn pythonish_str_formats_floats_like_python() {
+        assert_eq!(pythonish_str(&json!(1.0)), "1.0");
+        assert_eq!(pythonish_str(&json!(1e-5)), "1e-05");
+        assert_eq!(pythonish_str(&json!(3)), "3");
     }
 }

@@ -36,6 +36,7 @@ def normalize_model(body: dict) -> dict:
     return out
 
 
+@parity.case
 def compare(label: str, expected, actual, normalize=lambda x: x):
     require(
         expected.status_code == actual.status_code,
