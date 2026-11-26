@@ -16,6 +16,7 @@ pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
 pub(crate) mod processing;
+pub(crate) mod processing_models;
 pub(crate) mod queries;
 pub mod raster_policy;
 pub mod routes;

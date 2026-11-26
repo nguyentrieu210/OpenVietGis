@@ -12,6 +12,7 @@ pub mod identity;
 pub mod integration_hub;
 pub mod pool;
 pub mod processing_jobs;
+pub mod processing_models;
 pub mod queries;
 pub mod raster;
 pub mod rls;
