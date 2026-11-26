@@ -333,3 +333,22 @@ Differential parity on isolated real PostGIS passed:
 - editor allowed area creation
 - missing linked spatial feature
 - source/feature pair validation
+
+### E06 cartography write control
+
+Rust now additionally owns PUT layer style, POST layout creation and GET export catalog.
+Style normalization covers single, categorical and range contracts, including default
+colors, generated legends, source-field validation and revision-incrementing upserts.
+Layout creation preserves supported CRS, A0-A4, orientation, bounded unique layer
+sets, active-ready layer checks, print extent validation and Python trimming/default
+semantics. Rendering and PDF/PNG byte generation remain below the Rust control plane.
+Differential parity on isolated real PostGIS passed all 11 write/read cases.
+
+### E08 reusable processing models
+
+Rust now owns GET/POST/PUT/DELETE processing/models. The model control plane validates
+bounded DAGs, duplicate/missing/cyclic step references, vector/raster port separation,
+input cardinality, vector algorithm parameters through ovg-processing, raster band,
+resample and calculator parameters, project quota, optimistic revision and audit append.
+Differential parity on isolated real PostGIS passed 13 cases including create/list/update,
+stale update/delete, delete, audit, cycle rejection, blank name, tenant/CSRF and quota 50.
