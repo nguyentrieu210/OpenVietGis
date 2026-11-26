@@ -181,6 +181,14 @@ jobs:
           uv run --project apps/api python tests/rust-parity/e07_transfers.py \
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e07-transfers.log
+      - name: Run E18 ops parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e18_ops.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e18-ops.log
 
       - name: Run E06 cartography parity
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}

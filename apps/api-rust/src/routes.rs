@@ -46,6 +46,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .merge(crate::org_chat::router())
         .merge(crate::presence::router())
         .merge(crate::spatial_replay::router())
+        .merge(crate::ops::router())
 }
 
 async fn health_summary(State(state): State<AppState>) -> Json<Value> {
@@ -126,11 +127,15 @@ async fn ops_health_live() -> Json<Value> {
     }))
 }
 
-/// Prometheus text exposition endpoint matching Python `GET /api/v1/ops/metrics`.
+/// Prometheus text exposition matching Python `GET /api/v1/ops/metrics`.
 async fn ops_metrics(State(state): State<AppState>) -> impl IntoResponse {
-    let body = state
-        .metrics
-        .render_prometheus(state.modules.len(), state.jobs.in_flight_count());
+    // FastAPI lines first (scrape parity), then the Rust process counters.
+    let mut body = crate::ops::prometheus_metrics(&state).await;
+    body.push_str(
+        &state
+            .metrics
+            .render_prometheus(state.modules.len(), state.jobs.in_flight_count()),
+    );
     (
         StatusCode::OK,
         [(

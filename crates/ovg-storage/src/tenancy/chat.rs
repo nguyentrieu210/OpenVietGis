@@ -11,6 +11,7 @@ use ovg_core::AppError;
 use serde_json::{json, Map, Value};
 use sqlx::postgres::PgRow;
 use sqlx::Row;
+use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::char::canonical_combining_class;
 use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
@@ -90,7 +91,8 @@ pub fn decode_image(data_url: &str) -> Result<(String, Vec<u8>), EditError> {
 /// Python `org_chat.fold`: casefold, `đ` to `d`, then strip combining marks.
 pub fn fold(value: &str) -> String {
     value
-        .to_lowercase()
+        .case_fold()
+        .collect::<String>()
         .replace('đ', "d")
         .nfd()
         .filter(|c| canonical_combining_class(*c) == 0)
@@ -1275,5 +1277,8 @@ mod tests {
         assert_eq!(fold("Đặng Thị Ánh"), "dang thi anh");
         assert_eq!(fold("Nguyễn Văn Đức"), "nguyen van duc");
         assert!(fold("Phạm Hồng").contains(&fold("hong")));
+        // Python str.casefold expands sharp S and normalizes final sigma.
+        assert_eq!(fold("Straße ẞ"), "strasse ss");
+        assert_eq!(fold("ΟΣ ος"), "οσ οσ");
     }
 }

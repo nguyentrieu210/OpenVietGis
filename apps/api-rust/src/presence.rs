@@ -39,9 +39,9 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(3);
 const ACCEPT_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const REAUTHORIZE_EVERY: Duration = Duration::from_secs(5);
 const MIN_INTERVAL: Duration = Duration::from_millis(80);
-// shortcut: frames above 64 KiB close with 1008 (the Python route rejects >2048 chars
-// only after reading up to its 16 MiB default); raise if clients need larger frames.
-const MAX_FRAME: usize = 64 * 1024;
+// Match the ASGI WebSocket receive ceiling; presence itself applies the stricter
+// 2048-character policy only after a complete text message has been reassembled.
+const MAX_FRAME: usize = 16 * 1024 * 1024;
 const POLICY: u16 = 1008;
 
 struct Peer {
@@ -591,7 +591,18 @@ mod tests {
 
     fn masked(first: u8, payload: &[u8]) -> Vec<u8> {
         let mask = [1u8, 2, 3, 4];
-        let mut frame = vec![first, 0x80 | payload.len() as u8];
+        let mut frame = vec![first];
+        match payload.len() {
+            length @ 0..=125 => frame.push(0x80 | length as u8),
+            length @ 126..=0xffff => {
+                frame.push(0x80 | 126);
+                frame.extend_from_slice(&(length as u16).to_be_bytes());
+            }
+            length => {
+                frame.push(0x80 | 127);
+                frame.extend_from_slice(&(length as u64).to_be_bytes());
+            }
+        }
         frame.extend_from_slice(&mask);
         frame.extend(payload.iter().enumerate().map(|(i, b)| b ^ mask[i % 4]));
         frame
@@ -619,6 +630,19 @@ mod tests {
             reader.buffer.extend(frame);
             assert_eq!(reader.next(), Err(1002));
         }
+    }
+
+    #[test]
+    fn reader_accepts_extended_frames_before_presence_policy() {
+        let payload = vec![b'x'; 70 * 1024];
+        let mut reader = Reader::default();
+        reader.buffer.extend(masked(0x81, &payload));
+        let Some(Frame::Text(text)) = reader.next().unwrap() else {
+            panic!("expected text frame");
+        };
+        assert_eq!(text.len(), payload.len());
+        // Transport accepts it; the application-level presence validator rejects it.
+        assert!(update(&Value::Null, &Value::Null, &text).is_none());
     }
 
     #[test]
