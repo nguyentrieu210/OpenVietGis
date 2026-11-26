@@ -50,7 +50,7 @@ def database(admin_url):
             "Parity requires the loopback development PostGIS admin endpoint."
         )
 
-    name = f"openvietgis_parity_test_{uuid4().hex}"
+    name = f"openvietgis_bench_parity_test_{uuid4().hex}"
     owner_url = parsed._replace(path=f"/{name}").geturl()
     host = parsed.netloc.rsplit("@", 1)[-1]
     runtime_url = parsed._replace(
