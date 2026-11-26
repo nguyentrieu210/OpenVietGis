@@ -4,6 +4,7 @@ pub mod catalog;
 pub mod identity;
 pub mod pool;
 pub mod rls;
+pub mod spatial_transform;
 
 pub use pool::{DbHealth, DbPool, DbPoolConfig};
 pub use rls::{validate_extension_key, TenantGucBindings, TenantTransaction};

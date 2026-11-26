@@ -34,6 +34,8 @@ MAP_ENGINE_ADAPTER = MAP_UI_ROOT + "maplibre-engine.ts"
 RENDERER_OWNERS = {
     MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
+    # E17 owner decision retains the canonical LiveApp MapLibre shell.
+    "apps/web-next/src/LiveApp.tsx",
     # SurveyTerrain owns the native MapLibre DEM interaction.
     "apps/web-next/src/SurveyTerrain.tsx",
     "packages/spatial-workspace/src/maplibre3d.ts",
@@ -53,6 +55,13 @@ RENDERER_MANIFESTS = {
 EDITING_ENGINE_OWNERS = {
     "apps/web-next/package.json",
     "apps/web-next/src/TerraDraftValidation.ts",
+}
+# Hybrid Spec 064 explicitly retains these existing vertical/connector owners.
+# Keep this path-specific so a marker appearing elsewhere is still rejected.
+RETAINED_MARKER_OWNERS = {
+    "geoserver": {"apps/web-next/src/DsmPanes.tsx"},
+    "house-number": {"apps/api-rust/Cargo.toml"},
+    "house_number": {"apps/web-next/src/AppMarket.tsx"},
 }
 # These two existing R022 references are not renderer imports: a UI label
 # and an internal type-only contract. Remove only the exact allowed text.
@@ -91,6 +100,8 @@ def find_scope_violations(root: Path = ROOT) -> list[str]:
             for reference in RENDERER_NON_API_REFERENCES.get(relative, ()):
                 content = content.replace(reference, "")
             for marker, label in FORBIDDEN_MARKERS.items():
+                if relative in RETAINED_MARKER_OWNERS.get(marker, set()):
+                    continue
                 if marker in {"terra-draw", "terradraw"} and relative in EDITING_ENGINE_OWNERS:
                     continue
                 if marker == "maplibre":

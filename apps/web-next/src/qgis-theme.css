@@ -323,10 +323,14 @@
 .qgis-studio header.top .ovg-workspace-switch button[aria-pressed=true],.qgis-studio header.top .ovg-workspace-switch button.active,.qgis-studio header.top .ovg-workspace-switch button[aria-selected=true]{background:#1f6fb8!important;color:#fff!important;box-shadow:0 1px 3px #0005!important}
 
 /* CAD drawing bar lives in the header next to GIS | CAD */
-.qgis-studio header.top .ovg-cad-inline-toolbar{order:3;display:flex;align-items:center;gap:6px;min-width:0;max-width:46vw;padding:0;background:none!important;border:0!important;color:#dfe8ee}
-.qgis-studio header.top .ovg-cad-inline-toolbar input{height:26px;min-width:140px;max-width:220px;padding:2px 8px;border:1px solid #ffffff33!important;border-radius:5px;background:#ffffff14!important;color:#fff!important;font-size:12.5px}
-.qgis-studio header.top .ovg-cad-inline-toolbar button{height:28px;min-height:0!important;padding:0 10px!important;background:linear-gradient(180deg,#ffffff1f,#ffffff0d)!important;border:1px solid #ffffff2b!important;color:#eef4f8!important;border-radius:6px!important;font-size:12px}
+.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .ovg-workspace-picker{flex:0 1 auto!important;min-width:0!important;max-width:220px}
+.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .top-integration-hub-btn,.qgis-studio header.top:has(.ovg-cad-inline-toolbar) .ovg-header-tools{display:none!important}
+.qgis-studio header.top .ovg-cad-inline-toolbar{order:3;flex:1 1 0;display:flex;flex-wrap:nowrap;align-items:center;gap:6px;min-width:0;max-width:none;overflow:hidden;padding:0;background:none!important;border:0!important;color:#dfe8ee}
+.qgis-studio header.top .ovg-cad-inline-toolbar input{flex:0 1 150px;height:26px;min-width:60px;max-width:200px;padding:2px 8px;border:1px solid #ffffff33!important;border-radius:5px;background:#ffffff14!important;color:#fff!important;font-size:12.5px}
+.qgis-studio header.top .ovg-cad-inline-toolbar strong{flex:0 1 auto;min-width:40px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio header.top .ovg-cad-inline-toolbar button{flex:none;white-space:nowrap;height:28px;min-height:0!important;padding:0 10px!important;background:linear-gradient(180deg,#ffffff1f,#ffffff0d)!important;border:1px solid #ffffff2b!important;color:#eef4f8!important;border-radius:6px!important;font-size:12px}
 .qgis-studio header.top .ovg-cad-inline-toolbar button:disabled{opacity:.45}
+.qgis-studio header.top .ovg-cad-inline-toolbar .ovg-cad-status{flex:1 1 40px;min-width:0}
 .qgis-studio header.top .ovg-cad-inline-toolbar span,.qgis-studio header.top .ovg-cad-inline-toolbar small{color:#b9c7d1;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ovg-cad-toolbar-slot:empty{display:none}
 

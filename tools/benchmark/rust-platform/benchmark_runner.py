@@ -16,6 +16,7 @@ import math
 import os
 import platform
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -57,19 +58,47 @@ DEFAULT_CSRF_SECRET = "openvietgis-bench-csrf-secret-064"
 DEFAULT_BOOTSTRAP_SECRET = "openvietgis-bench-bootstrap-secret-064"
 
 
+def assert_safe_admin_url(db_url: str) -> None:
+    parsed = urlparse(db_url)
+    if (
+        parsed.scheme != "postgresql"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port != 54330
+        or parsed.path != "/postgres"
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError("Benchmark admin must use dedicated loopback PostGIS port 54330")
+
+
 def assert_safe_bench_db(db_url: str) -> str:
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/")
-    host = (parsed.hostname or "").lower()
-    if host not in ("127.0.0.1", "localhost", "::1"):
-        raise RuntimeError(f"Refusing benchmark database on non-loopback host: {host!r}")
-    if db_name in ("openvietgis_live", "openvietgis", "postgres", "template0", "template1"):
-        raise RuntimeError(f"Refusing unsafe benchmark target database: {db_name!r}")
-    if "bench" not in db_name and "test" not in db_name:
-        raise RuntimeError(
-            f"Benchmark database name must contain 'bench' or 'test', got: {db_name!r}"
-        )
+    if (
+        parsed.scheme != "postgresql"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port != 54330
+        or parsed.query
+        or parsed.fragment
+        or not re.fullmatch(r"openvietgis_bench_[a-z0-9_]{1,44}", db_name)
+    ):
+        raise RuntimeError("Refusing non-isolated benchmark database")
     return db_name
+
+
+def assert_safe_http_target(url: str) -> None:
+    parsed = urlparse(url)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.port not in range(18890, 19000)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise RuntimeError("Benchmark target must be an isolated loopback HTTP port 18890–18999")
 
 
 def det_uuid(seed: int, key: str) -> UUID:
@@ -95,8 +124,8 @@ def percentile(sorted_vals: list[float], p: float) -> float:
     if len(sorted_vals) == 1:
         return sorted_vals[0]
     rank = (p / 100.0) * (len(sorted_vals) - 1)
-    lo = int(math.floor(rank))
-    hi = int(math.ceil(rank))
+    lo = math.floor(rank)
+    hi = math.ceil(rank)
     if lo == hi:
         return sorted_vals[lo]
     frac = rank - lo
@@ -817,8 +846,9 @@ def collect_environment_metadata(db_url: str, target_url: str, label: str) -> di
         git_branch = subprocess.check_output(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=REPO_ROOT, text=True
         ).strip()
-    except Exception:
-        pass
+    except (OSError, subprocess.SubprocessError):
+        git_sha = "unknown"
+        git_branch = "unknown"
 
     cpu_model = "unknown"
     try:
@@ -843,13 +873,12 @@ def collect_environment_metadata(db_url: str, target_url: str, label: str) -> di
     pg_version = "unknown"
     postgis_version = "unknown"
     try:
-        with psycopg.connect(db_url) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                pg_version = cur.fetchone()[0]
-                cur.execute("SELECT postgis_full_version()")
-                postgis_version = cur.fetchone()[0]
-    except Exception as exc:
+        with psycopg.connect(db_url) as conn, conn.cursor() as cur:
+            cur.execute("SELECT version()")
+            pg_version = cur.fetchone()[0]
+            cur.execute("SELECT postgis_full_version()")
+            postgis_version = cur.fetchone()[0]
+    except psycopg.Error as exc:
         pg_version = f"error: {exc}"
 
     return {
@@ -905,7 +934,7 @@ async def run_load_step(
                             f"  [warn] unexpected status={resp.status_code} body={resp.text[:200]}",
                             flush=True,
                         )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 -- benchmark records all request failures
                 elapsed_ms = (time.perf_counter_ns() - t0) / 1_000_000.0
                 latencies.append(elapsed_ms)
                 errors += 1
@@ -1103,17 +1132,22 @@ async def run_edit_and_conflict_benchmark(
                 wave_rev = current_rev
 
                 async def _contend(
-                    slot: int, wave_idx: int = w, base_rev: str = wave_rev
+                    slot: int,
+                    wave_idx: int = w,
+                    base_rev: str = wave_rev,
+                    concurrency_value: int = c,
                 ) -> tuple[int, float, str | None]:
                     nonlocal seq_counter
                     seq_counter += 1
-                    fid = f"bench-c{c}-w{wave_idx}-s{slot}-{seq_counter}"
+                    fid = f"bench-c{concurrency_value}-w{wave_idx}-s{slot}-{seq_counter}"
                     t0 = time.perf_counter_ns()
                     resp = await client.post(
                         cs_url,
                         headers=csrf_headers,
                         json={
-                            "operation_id": f"bench-c{c}-{wave_idx}-{slot}-{uuid4().hex[:8]}",
+                            "operation_id": (
+                                f"bench-c{concurrency_value}-{wave_idx}-{slot}-{uuid4().hex[:8]}"
+                            ),
                             "base_content_revision": base_rev,
                             "summary": f"Contended wave {wave_idx} slot {slot}",
                             "operations": [
@@ -1128,7 +1162,7 @@ async def run_edit_and_conflict_benchmark(
                                         ],
                                     },
                                     "properties": {
-                                        "code": f"C{c}-{wave_idx}-{slot}",
+                                        "code": f"C{concurrency_value}-{wave_idx}-{slot}",
                                         "ward": "HN-03",
                                         "metric_val": slot,
                                         "active": True,
@@ -1615,22 +1649,22 @@ def render_markdown_report(report: dict[str, Any]) -> str:
 
 
 def create_temp_bench_db(admin_pg_url: str, db_name: str) -> str:
+    assert_safe_admin_url(admin_pg_url)
     assert_safe_bench_db(f"postgresql://127.0.0.1:54330/{db_name}")
-    with psycopg.connect(admin_pg_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
-            cur.execute(
-                f'CREATE DATABASE "{db_name}" TEMPLATE template_postgis OWNER openvietgis'
-            )
+    with psycopg.connect(admin_pg_url, autocommit=True) as conn, conn.cursor() as cur:
+        # CREATE fails on collision; never drop a pre-existing database.
+        cur.execute(
+            f'CREATE DATABASE "{db_name}" TEMPLATE template_postgis OWNER openvietgis'
+        )
     parsed = urlparse(admin_pg_url)
     return parsed._replace(path=f"/{db_name}").geturl()
 
 
 def drop_temp_bench_db(admin_pg_url: str, db_name: str) -> None:
+    assert_safe_admin_url(admin_pg_url)
     assert_safe_bench_db(f"postgresql://127.0.0.1:54330/{db_name}")
-    with psycopg.connect(admin_pg_url, autocommit=True) as conn:
-        with conn.cursor() as cur:
-            cur.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
+    with psycopg.connect(admin_pg_url, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
 
 
 def run_alembic_upgrade(owner_db_url: str, runtime_db_url: str) -> None:
@@ -1661,7 +1695,7 @@ def wait_for_ready(base_url: str, timeout_s: float = 30.0) -> None:
             if r.status_code == 200:
                 return
             last_err = f"status={r.status_code} body={r.text[:120]}"
-        except Exception as exc:
+        except httpx.HTTPError as exc:
             last_err = str(exc)
         time.sleep(0.25)
     raise RuntimeError(f"Server at {base_url} did not become ready within {timeout_s}s: {last_err}")
@@ -1676,7 +1710,7 @@ def main() -> int:
     parser.add_argument("--spawn-python-isolated", action="store_true")
     parser.add_argument("--port", type=int, default=18899)
     parser.add_argument("--admin-pg-url", default=DEFAULT_ADMIN_PG_URL)
-    parser.add_argument("--db-name", default=DEFAULT_BENCH_DB_NAME)
+    parser.add_argument("--db-name", default=f"{DEFAULT_BENCH_DB_NAME}_{uuid4().hex[:12]}")
     parser.add_argument("--db-url", default=None)
     parser.add_argument("--server-pid", type=int, default=None)
     parser.add_argument("--seed", type=int, default=20261125)
@@ -1699,6 +1733,19 @@ def main() -> int:
 
     if not args.spawn_python_isolated and not args.target_url:
         raise SystemExit("Provide either --spawn-python-isolated or --target-url")
+
+    if args.spawn_python_isolated:
+        assert_safe_admin_url(args.admin_pg_url)
+        assert_safe_http_target(f"http://127.0.0.1:{args.port}")
+    else:
+        assert_safe_http_target(args.target_url)
+        if not args.db_url:
+            raise SystemExit("--db-url is required to verify isolated benchmark database")
+        assert_safe_bench_db(args.db_url)
+    if not concurrencies or min(concurrencies) < 1 or max(concurrencies) > 64:
+        raise SystemExit("Concurrency must be between 1 and 64")
+    if args.requests_per_level < 1 or args.cold_requests < 1:
+        raise SystemExit("Request counts must be positive")
 
     uvicorn_proc: subprocess.Popen[Any] | None = None
     uvicorn_log_fh: Any = None
@@ -1748,7 +1795,8 @@ def main() -> int:
             target_url = f"http://127.0.0.1:{args.port}"
             print(f"[setup] starting isolated uvicorn on {target_url} ...", flush=True)
             uvicorn_log_path = os.path.join(temp_artifact_dir, "uvicorn.log")
-            uvicorn_log_fh = open(uvicorn_log_path, "wb")
+            # The handle intentionally spans the child-process lifetime and closes in finally.
+            uvicorn_log_fh = open(uvicorn_log_path, "wb")  # noqa: SIM115
             uvicorn_proc = subprocess.Popen(
                 [
                     str(uvicorn_bin),
@@ -1852,8 +1900,8 @@ def main() -> int:
         if uvicorn_log_fh is not None:
             try:
                 uvicorn_log_fh.close()
-            except Exception:
-                pass
+            except OSError as exc:
+                print(f"[cleanup] WARNING: failed to close uvicorn log: {exc}", file=sys.stderr)
         if temp_artifact_dir and os.path.isdir(temp_artifact_dir):
             shutil.rmtree(temp_artifact_dir, ignore_errors=True)
         if created_temp_db:
@@ -1861,7 +1909,7 @@ def main() -> int:
             try:
                 drop_temp_bench_db(args.admin_pg_url, args.db_name)
                 print("[cleanup] temp database dropped cleanly.", flush=True)
-            except Exception as exc:
+            except (psycopg.Error, RuntimeError) as exc:
                 print(f"[cleanup] WARNING: failed to drop temp DB: {exc}", file=sys.stderr)
 
 

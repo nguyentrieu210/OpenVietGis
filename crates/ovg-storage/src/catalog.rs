@@ -15,6 +15,9 @@ use uuid::Uuid;
 
 use crate::{DbPool, TenantTransaction};
 
+mod features;
+pub use features::FeatureRequest;
+
 #[derive(Clone, Copy)]
 pub enum ProjectReadPolicy {
     LayerAcl,

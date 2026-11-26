@@ -1,0 +1,9 @@
+# E17 retained canonical frontend: agent 16
+
+Decision: owner hybrid decision `6a448a7` retains React/MapLibre/Cesium and existing public API. Do not introduce a new WASM engine, desktop package, or remove legacy routes without measured benefit and explicit retirement approval. Frozen reference: `3e78ac142acfc050ec22d30da5c44ad0e6b8459a`; takeover base `1a5cb7b40a8a0c8117b8aa56c1522e35d01a5b3b`. The four UI/SDK source trees and lockfile have no changes between these refs (git diff exit 0).
+
+- T01: existing operation inventory `e17-inventory.md` and `contracts/engines/e17.json` (111 commands, 89 paths, 199 mapped test files); classification is not runtime acceptance.
+- T02: shared baseline/candidate fixture `tests/e17/contract.mjs` (route identity and compatibility, malformed encoding and prototype aliases, keyboard commands, revision pins, render IDs); existing `spatial-cache-smoke.mjs`, `workspace-access-smoke.mjs`, `single-frontend-route-smoke.mjs` and `tests/e2e/tenant-core.spec.ts` cover additional permission/consumer scenarios. Synthetic tests do not prove backend authorization.
+- T03: retain source unchanged by owner decision; integration with E01/E02/E03/E05/E11 hybrid API remains to be verified. Do not mark done before green integration.
+- T04: `.github/workflows/e17-web-parity.yml` records raw cold/warm JavaScript measurements using the same fixtures, p50/p95/p99, peak RSS and errors; not browser startup, real API latency, GPU memory or production throughput. No numbers claimed until CI artifact exists. CI-only builds and tests per handoff; no VPS builds.
+- T05: CI candidate unit tests, build and loopback synthetic browser smoke are necessary but insufficient for independent real hybrid API acceptance. Require tenant-denial/revocation, visual/responsive/accessibility, real mixed backend and rollback verification; security/license review remains open. No deploy, no legacy removal; revert the E17 evidence/CI commit if needed.
