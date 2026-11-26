@@ -1860,7 +1860,17 @@ def batch_geometry(ctx: Ctx) -> None:
                     ctx.fx["org_a_id"],
                     ctx.fx["project_a_id"],
                     code,
-                    json.dumps({"name": f"Hẻm {code}", "route_type": "alley"}),
+                    # Well-formed refs: route-import previews read every staged snapshot.
+                    json.dumps(
+                        {
+                            "name": f"Hẻm {code}",
+                            "route_type": "alley",
+                            "code": code,
+                            "source_id": "00000000-0000-4000-8000-0000000000aa",
+                            "feature_id": code,
+                            "content_revision": "e" * 64,
+                        }
+                    ),
                     "d" * 64,
                     reason,
                     ctx.fx["user_a_id"],

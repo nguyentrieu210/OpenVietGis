@@ -82,24 +82,33 @@ pub fn identity(row: &Map<String, Value>) -> String {
     ]))
 }
 
-/// `refs`: every staged source segment with its captured revision.
-pub fn refs(snapshot: &Map<String, Value>) -> Vec<Value> {
+/// `refs`: every staged source segment with its captured revision. A malformed
+/// snapshot fails like Python's `KeyError`/strict `zip` (500).
+pub fn refs(snapshot: &Map<String, Value>) -> Result<Vec<Value>, AppError> {
+    let need = |key: &str| {
+        snapshot
+            .get(key)
+            .cloned()
+            .ok_or_else(|| AppError::internal(format!("staged snapshot lacks {key}")))
+    };
     let segments = match snapshot.get("segments") {
         Some(Value::Array(items)) if !items.is_empty() => items.clone(),
         _ => vec![json!({
-            "source_id": snapshot.get("source_id"),
-            "feature_id": snapshot.get("feature_id"),
-            "code": snapshot.get("code"),
+            "source_id": need("source_id")?,
+            "feature_id": need("feature_id")?,
+            "code": need("code")?,
         })],
     };
     let revisions = match snapshot.get("segment_revisions") {
         Some(Value::Array(items)) if !items.is_empty() => items.clone(),
-        _ => vec![snapshot
-            .get("content_revision")
-            .cloned()
-            .unwrap_or(Value::Null)],
+        _ => vec![need("content_revision")?],
     };
-    segments
+    if segments.len() != revisions.len() {
+        return Err(AppError::internal(
+            "staged snapshot segment revisions differ",
+        ));
+    }
+    Ok(segments
         .into_iter()
         .zip(revisions)
         .map(|(mut s, rev)| {
@@ -108,7 +117,7 @@ pub fn refs(snapshot: &Map<String, Value>) -> Vec<Value> {
             }
             s
         })
-        .collect()
+        .collect())
 }
 
 pub fn review_kind(road: &str, branch: &str, root: &str, full: &str) -> &'static str {
@@ -164,16 +173,22 @@ pub fn report_scope(snapshot: &Map<String, Value>) -> Result<ReportScope, AppErr
     }
     codes.sort();
     codes.dedup();
+    // Python indexes these keys directly: a malformed snapshot is a 500.
     let evidence = snapshot
         .get("parent_evidence")
+        .filter(|e| e.is_object())
         .cloned()
-        .unwrap_or(Value::Null);
+        .ok_or_else(|| AppError::internal("staged snapshot lacks parent evidence"))?;
+    let parent = snapshot
+        .get("parent_id")
+        .cloned()
+        .ok_or_else(|| AppError::internal("staged snapshot lacks parent_id"))?;
     Ok(ReportScope {
         root,
         full: full.to_lowercase(),
-        refs: Value::Array(refs(snapshot)),
+        refs: Value::Array(refs(snapshot)?),
         codes,
-        parent: snapshot.get("parent_id").cloned().unwrap_or(Value::Null),
+        parent,
         parent_revision: evidence["revision"].clone(),
         parent_geometry: evidence["geometry_revision"].clone(),
     })
@@ -286,7 +301,10 @@ pub fn report_items(snapshot: &Map<String, Value>, scope: &ReportScope, rows: &[
 
 /// Mark candidate rows whose source segments another staged route already owns;
 /// returns `route code → row index` of the non-existing candidates.
-pub fn stage_overlaps(rows: &mut [Map<String, Value>], stages: &[Value]) -> HashMap<String, usize> {
+pub fn stage_overlaps(
+    rows: &mut [Map<String, Value>],
+    stages: &[Value],
+) -> Result<HashMap<String, usize>, AppError> {
     let mut candidates = HashMap::new();
     for (i, r) in rows.iter().enumerate() {
         if !truthy(r.get("existing_id")) {
@@ -294,14 +312,14 @@ pub fn stage_overlaps(rows: &mut [Map<String, Value>], stages: &[Value]) -> Hash
         }
     }
     if candidates.is_empty() {
-        return candidates;
+        return Ok(candidates);
     }
     let mut owners: HashMap<(String, String), Vec<String>> = HashMap::new();
     for stage in stages {
-        let Some(snapshot) = stage["snapshot"].as_object() else {
-            continue;
-        };
-        for r in refs(snapshot) {
+        let snapshot = stage["snapshot"]
+            .as_object()
+            .ok_or_else(|| AppError::internal("staged snapshot is not an object"))?;
+        for r in refs(snapshot)? {
             owners
                 .entry((text(&r["source_id"]), text(&r["feature_id"])))
                 .or_default()
@@ -328,7 +346,7 @@ pub fn stage_overlaps(rows: &mut [Map<String, Value>], stages: &[Value]) -> Hash
             row.insert("state".into(), json!("error"));
         }
     }
-    candidates
+    Ok(candidates)
 }
 
 /// A staged snapshot still matches its planned row.
@@ -1333,7 +1351,7 @@ mod tests {
         let snap =
             obj(json!({"source_id": "s", "feature_id": "f", "code": "c", "content_revision": "r"}));
         assert_eq!(
-            refs(&snap),
+            refs(&snap).unwrap(),
             vec![json!({"source_id": "s", "feature_id": "f", "code": "c", "revision": "r"})]
         );
     }

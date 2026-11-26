@@ -294,7 +294,7 @@ async fn apply_staged(read: &mut ProjectRead<'_>, rows: &mut [Row]) -> Result<()
         return Ok(());
     }
     let stages = store::geometry_stages(read).await?;
-    let candidates = review::stage_overlaps(rows, &stages);
+    let candidates = review::stage_overlaps(rows, &stages)?;
     for stage in &stages {
         let Some(&i) = candidates.get(&py_str(&stage["route_code"])) else {
             continue;
@@ -1113,7 +1113,7 @@ async fn links_apply(
         snapshot.get("parent_id").and_then(Value::as_str),
     )
     .await?;
-    let mut links: BTreeSet<(String, String)> = review::refs(&snapshot)
+    let mut links: BTreeSet<(String, String)> = review::refs(&snapshot)?
         .iter()
         .map(|x| (py_str(&x["source_id"]), py_str(&x["feature_id"])))
         .collect();
