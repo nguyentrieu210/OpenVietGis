@@ -270,14 +270,19 @@ impl ProjectRead<'_> {
                 && east >= 180.0
                 && south <= -WEB_MERCATOR_MAX_LATITUDE
                 && north >= WEB_MERCATOR_MAX_LATITUDE);
+        let extent_in_display_domain = snapshot.extent.is_some_and(|[_, min_y, _, max_y]| {
+            min_y >= -WEB_MERCATOR_MAX_LATITUDE && max_y <= WEB_MERCATOR_MAX_LATITUDE
+        });
         let covers_source_extent = !self.gis_scoped
             && snapshot.extent.is_some_and(|[min_x, min_y, max_x, max_y]| {
                 west <= min_x && east >= max_x && south <= min_y && north >= max_y
             });
         // When a tile spans the world or the entire source extent, scanning the
         // global GIST index would visit every layer in the DB and sort up to 1M
-        // rows; `_ST_Intersects` keeps exact geometry checks while scanning the
-        // primary key in `feature_id COLLATE "C"` order and stopping at LIMIT.
+        // rows. When the source's extent lies within the Web Mercator display
+        // domain, materialize the first LIMIT rows in PK order first so
+        // PostgreSQL never estimates low spatial/SRID selectivity and falls back
+        // to a Parallel Seq Scan + Sort on 1M rows.
         let area_expr = if covers_world {
             format!(
                 "ST_MakeEnvelope(-180, {:?}, 180, {:?}, 4326)",
@@ -295,26 +300,49 @@ impl ProjectRead<'_> {
                 -max_m, -max_m
             )
         };
-        let spatial_pred = if covers_world || covers_source_extent {
-            "_ST_Intersects(f.geometry, bounds.area)"
+        let candidate_cte = if !self.gis_scoped
+            && extent_in_display_domain
+            && (covers_world || covers_source_extent)
+        {
+            "page AS MATERIALIZED (
+                SELECT f.feature_id, f.geometry, ST_NPoints(f.geometry) AS positions
+                FROM spatial.reference_features AS f
+                WHERE f.organization_id = $1 AND f.project_id = $2 AND f.source_id = $3
+                    AND f.geometry_state = 'present'
+                    AND f.content_revision = $10 AND f.schema_revision = $11
+                ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
+            ), candidate AS MATERIALIZED (
+                SELECT p.feature_id, p.geometry, p.positions
+                FROM page AS p CROSS JOIN bounds
+                WHERE ST_SRID(p.geometry) = 4326
+                    AND _ST_Intersects(p.geometry, bounds.area)
+            )"
+            .to_owned()
         } else {
-            "f.geometry && bounds.area AND ST_Intersects(f.geometry, bounds.area)"
+            let spatial_pred = if covers_world || covers_source_extent {
+                "_ST_Intersects(f.geometry, bounds.area)"
+            } else {
+                "f.geometry && bounds.area AND ST_Intersects(f.geometry, bounds.area)"
+            };
+            format!(
+                "candidate AS MATERIALIZED (
+                    SELECT f.feature_id, f.geometry, ST_NPoints(f.geometry) AS positions
+                    FROM spatial.reference_features AS f CROSS JOIN bounds
+                    WHERE f.organization_id = $1 AND f.project_id = $2 AND f.source_id = $3
+                        AND f.geometry_state = 'present'
+                        AND f.content_revision = $10 AND f.schema_revision = $11
+                        AND ST_SRID(f.geometry) = 4326
+                        AND {spatial_pred}
+                    ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
+                )"
+            )
         };
         // Bound vertex work before projection and encoding, not only after serialization.
         let sql = format!(
             "WITH bounds AS (
                 SELECT ST_TileEnvelope($4, $5, $6) AS tile,
                     {area_expr} AS area
-            ), candidate AS MATERIALIZED (
-                SELECT f.feature_id, f.geometry, ST_NPoints(f.geometry) AS positions
-                FROM spatial.reference_features AS f CROSS JOIN bounds
-                WHERE f.organization_id = $1 AND f.project_id = $2 AND f.source_id = $3
-                    AND f.geometry_state = 'present'
-                    AND f.content_revision = $10 AND f.schema_revision = $11
-                    AND ST_SRID(f.geometry) = 4326
-                    AND {spatial_pred}
-                ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
-            ), ranked AS (
+            ), {candidate_cte}, ranked AS (
                 SELECT feature_id, geometry,
                     row_number() OVER (ORDER BY feature_id COLLATE \"C\") AS ordinal,
                     sum(positions) OVER (ORDER BY feature_id COLLATE \"C\"
