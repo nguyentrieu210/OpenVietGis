@@ -142,6 +142,27 @@ impl JobExecutor {
     where
         F: FnOnce(CancellationToken) -> Result<Value, String> + Send + 'static,
     {
+        self.submit_with_id(
+            JobId::new(),
+            organization_id,
+            job_type,
+            timeout_override,
+            work,
+        )
+    }
+
+    /// Submit a bounded CPU job using an explicit caller-provided [`JobId`].
+    pub fn submit_with_id<F>(
+        &self,
+        job_id: JobId,
+        organization_id: Uuid,
+        job_type: impl Into<String>,
+        timeout_override: Option<Duration>,
+        work: F,
+    ) -> Result<(JobId, tokio::task::JoinHandle<JobRecord>), AppError>
+    where
+        F: FnOnce(CancellationToken) -> Result<Value, String> + Send + 'static,
+    {
         // Enforce hard queue depth bound before spawning anything.
         let prev = self.inner.queued_and_running.fetch_add(1, Ordering::SeqCst);
         if prev >= self.inner.max_queue_depth {
@@ -149,8 +170,7 @@ impl JobExecutor {
             return Err(AppError::rate_limited(Some(1)));
         }
 
-        let record = JobRecord::new_queued(organization_id, job_type);
-        let job_id = record.id;
+        let record = JobRecord::new_queued_with_id(job_id, organization_id, job_type);
         let token = CancellationToken::new();
 
         {

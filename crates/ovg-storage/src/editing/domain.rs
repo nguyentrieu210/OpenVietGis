@@ -271,7 +271,7 @@ pub fn typed_attributes(
     Ok(out)
 }
 
-fn canonical_attribute(field: &FieldDef, value: &Value) -> Result<Value, &'static str> {
+pub fn canonical_attribute(field: &FieldDef, value: &Value) -> Result<Value, &'static str> {
     if value.is_null() {
         return if field.nullable {
             Ok(Value::Null)
@@ -500,7 +500,8 @@ pub fn content_revision(source_id: Uuid, base: &str, fingerprint: Vec<Value>) ->
     }))
 }
 
-fn sha256_py_json(value: &Value) -> String {
+#[must_use]
+pub fn sha256_py_json(value: &Value) -> String {
     let mut text = String::new();
     py_json(value, &mut text);
     format!("{:x}", Sha256::digest(text.as_bytes()))
