@@ -71,7 +71,7 @@ impl Store {
         })
     }
 
-    pub(super) async fn put(&self, key: &str, data: &[u8]) -> Result<(String, i64), TransferError> {
+    pub(crate) async fn put(&self, key: &str, data: &[u8]) -> Result<(String, i64), TransferError> {
         let mut staged = self.stage(key).await?;
         if let Err(error) = staged.write(data).await {
             staged.abort().await;
@@ -123,7 +123,7 @@ impl Store {
     }
 
     /// Whole-object read for bounded (<= 25 MiB) source assets.
-    pub(super) async fn read_verified(
+    pub(crate) async fn read_verified(
         &self,
         key: &str,
         sha256: &str,
@@ -141,7 +141,7 @@ impl Store {
         Ok(data)
     }
 
-    pub(super) async fn delete(&self, key: &str) {
+    pub(crate) async fn delete(&self, key: &str) {
         if let Ok(path) = self.path(key) {
             let _ = tokio::fs::remove_file(path).await;
         }
