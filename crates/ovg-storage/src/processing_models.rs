@@ -112,7 +112,16 @@ pub async fn create_model(
 ) -> Result<Value, ModelStoreError> {
     let org = edit.organization_id();
     let proj = edit.project_id();
-    create_model_tx(edit.transaction(), org, proj, "human", actor_id, actor_display, input).await
+    create_model_tx(
+        edit.transaction(),
+        org,
+        proj,
+        "human",
+        actor_id,
+        actor_display,
+        input,
+    )
+    .await
 }
 
 pub async fn create_model_scoped(

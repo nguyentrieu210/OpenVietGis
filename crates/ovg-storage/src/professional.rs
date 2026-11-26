@@ -143,7 +143,10 @@ async fn pinned(
     let content_revision: String = src_row.try_get("content_revision").map_err(db_err)?;
     let schema_revision: String = src_row.try_get("schema_revision").map_err(db_err)?;
     if (content_revision.as_str(), schema_revision.as_str())
-        != (spec.content_revision.as_str(), spec.schema_revision.as_str())
+        != (
+            spec.content_revision.as_str(),
+            spec.schema_revision.as_str(),
+        )
     {
         return Err(EditError::detail(409, "Source revision changed; reload"));
     }
@@ -187,7 +190,7 @@ async fn pinned(
     })
 }
 
-pub const fn is_cad_op(op: &str) -> bool {
+pub fn is_cad_op(op: &str) -> bool {
     matches!(
         op,
         "move_batch"
@@ -251,17 +254,14 @@ fn fillet_points(
     let q = (b[0] + v.0 * tangent, b[1] + v.1 * tangent);
     let start = (p.1 - center.1).atan2(p.0 - center.0);
     let end = (q.1 - center.1).atan2(q.0 - center.0);
-    let delta =
-        (end - start + std::f64::consts::PI).rem_euclid(2.0 * std::f64::consts::PI) - std::f64::consts::PI;
+    let delta = (end - start + std::f64::consts::PI).rem_euclid(2.0 * std::f64::consts::PI)
+        - std::f64::consts::PI;
     let count = ((delta.abs() / (std::f64::consts::PI / 36.0)).ceil() as usize).max(4);
     let mut out = Vec::with_capacity(points.len() + count);
     out.extend_from_slice(&points[..index]);
     for i in 0..=count {
         let ang = start + delta * (i as f64) / (count as f64);
-        out.push([
-            center.0 + radius * ang.cos(),
-            center.1 + radius * ang.sin(),
-        ]);
+        out.push([center.0 + radius * ang.cos(), center.1 + radius * ang.sin()]);
     }
     out.extend_from_slice(&points[index + 1..]);
     Ok(out)
@@ -410,7 +410,10 @@ pub async fn geometry_preview(
             .await
             .map_err(op_err)?;
         if qrows.len() != req.primary.feature_ids.len() {
-            return Err(EditError::detail(422, "Invalid or unsupported batch extent"));
+            return Err(EditError::detail(
+                422,
+                "Invalid or unsupported batch extent",
+            ));
         }
         let mut items = Vec::with_capacity(qrows.len());
         for qr in &qrows {
@@ -423,12 +426,14 @@ pub async fn geometry_preview(
                 .map_err(op_err)?
                 .unwrap_or(i32::MAX);
             if !valid || n > 4096 {
-                return Err(EditError::detail(422, "Invalid or unsupported batch extent"));
+                return Err(EditError::detail(
+                    422,
+                    "Invalid or unsupported batch extent",
+                ));
             }
             let geo_str: String = qr.try_get("geo").map_err(op_err)?;
-            let g: Value = serde_json::from_str(&geo_str).map_err(|_| {
-                EditError::detail(422, "Batch move result cannot be stored")
-            })?;
+            let g: Value = serde_json::from_str(&geo_str)
+                .map_err(|_| EditError::detail(422, "Batch move result cannot be stored"))?;
             if g.get("type").and_then(Value::as_str) != Some(src.geometry_family.as_str()) {
                 return Err(EditError::detail(
                     422,

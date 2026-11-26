@@ -242,8 +242,9 @@ async fn execute_job_bounded(
         format!("processing.{}", inputs.algorithm_id),
         None,
         move |token| {
-            let outcome =
-                processing_jobs::validate_and_hash_cpu(&inputs_for_worker, &|| token.is_cancelled());
+            let outcome = processing_jobs::validate_and_hash_cpu(&inputs_for_worker, &|| {
+                token.is_cancelled()
+            });
             let ok = outcome.is_ok();
             *cpu_slot_worker.lock().expect("cpu slot mutex poisoned") = Some(outcome);
             if ok {

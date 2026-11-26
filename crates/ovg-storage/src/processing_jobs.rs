@@ -215,7 +215,10 @@ pub async fn get_job_scoped(scope: &mut EditScope<'_>, job_id: Uuid) -> Result<V
     row_wire_edit(&row)
 }
 
-pub async fn cancel_job_scoped(scope: &mut EditScope<'_>, job_id: Uuid) -> Result<Value, EditError> {
+pub async fn cancel_job_scoped(
+    scope: &mut EditScope<'_>,
+    job_id: Uuid,
+) -> Result<Value, EditError> {
     let org = scope.organization_id();
     let proj = scope.project_id();
     let row = sqlx::query(
@@ -346,20 +349,16 @@ async fn validate_pinned_source(
         .get(format!("{prefix}_layer_id"))
         .and_then(Value::as_str)
         .ok_or_else(|| {
-            EditError::conflict(
-                "STALE_INPUT_PIN",
-                "job input is no longer active and ready",
-            )
+            EditError::conflict("STALE_INPUT_PIN", "job input is no longer active and ready")
         })?;
     let layer_id = Uuid::parse_str(layer_id_str).map_err(|_| {
-        EditError::conflict(
-            "STALE_INPUT_PIN",
-            "job input is no longer active and ready",
-        )
+        EditError::conflict("STALE_INPUT_PIN", "job input is no longer active and ready")
     })?;
     let source = match resolve_layer(tx, org_id, project_id, layer_id).await {
         Ok(src) => src,
-        Err(EditError::Platform { status: 404 | 422, .. }) => {
+        Err(EditError::Platform {
+            status: 404 | 422, ..
+        }) => {
             return Err(EditError::conflict(
                 "STALE_INPUT_PIN",
                 "job input is no longer active and ready",
@@ -527,8 +526,7 @@ pub async fn submit_job(
                 "clip requires overlay_layer_id",
             ));
         };
-        let overlay_source =
-            resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
+        let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
         if overlay_source.geometry_family != "Polygon" {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",
@@ -705,7 +703,10 @@ fn web_transform_expr(
         "ST_TransformPipeline"
     };
     Ok((
-        format!("{fn_name}({expression}, '{}', {target_srid})", step.pipeline),
+        format!(
+            "{fn_name}({expression}, '{}', {target_srid})",
+            step.pipeline
+        ),
         step.pipeline,
         target_srid,
     ))
@@ -955,11 +956,8 @@ async fn prepare_inside_savepoint(
                 )
                 .await?;
                 let (proj_rf, _, _) = web_transform_expr("rf.geometry", input_srid, 3857)?;
-                let (inv_expr, _, _) = web_transform_expr(
-                    &format!("ST_Buffer({proj_rf}, $4, $5)"),
-                    3857,
-                    input_srid,
-                )?;
+                let (inv_expr, _, _) =
+                    web_transform_expr(&format!("ST_Buffer({proj_rf}, $4, $5)"), 3857, input_srid)?;
                 inv_expr
             } else {
                 "ST_Buffer(rf.geometry, $4, $5)".to_owned()
@@ -1019,8 +1017,14 @@ async fn prepare_inside_savepoint(
                         "buffer_meters": dist_str,
                     }),
                     srid: qr.try_get("srid").map_err(edit_db_error)?,
-                    total_count: qr.try_get::<Option<i64>, _>("total_count").map_err(edit_db_error)?.unwrap_or(0),
-                    total_positions: qr.try_get::<Option<i64>, _>("total_positions").map_err(edit_db_error)?.unwrap_or(0),
+                    total_count: qr
+                        .try_get::<Option<i64>, _>("total_count")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
+                    total_positions: qr
+                        .try_get::<Option<i64>, _>("total_positions")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
                     wkb: qr.try_get("wkb").map_err(edit_db_error)?,
                 });
             }
@@ -1105,8 +1109,14 @@ async fn prepare_inside_savepoint(
                     feature_id: format!("clip_{}", idx + 1),
                     attributes: json!({ "source_feature_id": src_fid }),
                     srid: qr.try_get("srid").map_err(edit_db_error)?,
-                    total_count: qr.try_get::<Option<i64>, _>("total_count").map_err(edit_db_error)?.unwrap_or(0),
-                    total_positions: qr.try_get::<Option<i64>, _>("total_positions").map_err(edit_db_error)?.unwrap_or(0),
+                    total_count: qr
+                        .try_get::<Option<i64>, _>("total_count")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
+                    total_positions: qr
+                        .try_get::<Option<i64>, _>("total_positions")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
                     wkb: qr.try_get("wkb").map_err(edit_db_error)?,
                 });
             }
@@ -1203,7 +1213,12 @@ async fn prepare_inside_savepoint(
             })?;
 
             output_fields = vec![
-                ("group_value".into(), "Group Value".into(), "text".into(), true),
+                (
+                    "group_value".into(),
+                    "Group Value".into(),
+                    "text".into(),
+                    true,
+                ),
                 (
                     "merged_count".into(),
                     "Merged Feature Count".into(),
@@ -1221,8 +1236,14 @@ async fn prepare_inside_savepoint(
                         "merged_count": merged_count,
                     }),
                     srid: qr.try_get("srid").map_err(edit_db_error)?,
-                    total_count: qr.try_get::<Option<i64>, _>("total_count").map_err(edit_db_error)?.unwrap_or(0),
-                    total_positions: qr.try_get::<Option<i64>, _>("total_positions").map_err(edit_db_error)?.unwrap_or(0),
+                    total_count: qr
+                        .try_get::<Option<i64>, _>("total_count")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
+                    total_positions: qr
+                        .try_get::<Option<i64>, _>("total_positions")
+                        .map_err(edit_db_error)?
+                        .unwrap_or(0),
                     wkb: qr.try_get("wkb").map_err(edit_db_error)?,
                 });
             }
@@ -1313,7 +1334,10 @@ pub fn validate_and_hash_cpu(
 
     for raw in &inputs.raw_rows {
         if is_cancelled() {
-            return Err(EditError::conflict("CANCELLED", "job cancelled during execution"));
+            return Err(EditError::conflict(
+                "CANCELLED",
+                "job cancelled during execution",
+            ));
         }
         if raw.total_count > MAX_PROCESSING_FEATURES
             || raw.total_positions > MAX_PROCESSING_POSITIONS
@@ -1335,16 +1359,21 @@ pub fn validate_and_hash_cpu(
                 "invalid derived output geometry",
             ));
         }
-        let geometry = validate_ready_wkb(wkb, &inputs.output_family, inputs.input_srid)
-            .map_err(|_| {
+        let geometry =
+            validate_ready_wkb(wkb, &inputs.output_family, inputs.input_srid).map_err(|_| {
                 EditError::validation("INVALID_DERIVED_OUTPUT", "invalid derived output geometry")
             })?;
 
         let raw_obj = raw.attributes.as_object().ok_or_else(|| {
-            EditError::validation("INVALID_DERIVED_OUTPUT", "invalid derived output attributes")
+            EditError::validation(
+                "INVALID_DERIVED_OUTPUT",
+                "invalid derived output attributes",
+            )
         })?;
         if raw_obj.len() != expected_keys.len()
-            || raw_obj.keys().any(|k| !expected_keys.contains_key(k.as_str()))
+            || raw_obj
+                .keys()
+                .any(|k| !expected_keys.contains_key(k.as_str()))
         {
             return Err(EditError::validation(
                 "INVALID_DERIVED_OUTPUT",
@@ -1381,8 +1410,7 @@ pub fn validate_and_hash_cpu(
         "refs": inputs.input_refs,
         "params": inputs.parameters,
     }));
-    let schema_rev =
-        schema_revision_digest(&schema_fields, &inputs.output_family, "XY", "known");
+    let schema_rev = schema_revision_digest(&schema_fields, &inputs.output_family, "XY", "known");
     let content_rev = content_revision_digest(
         &pin_inputs,
         &schema_fields,
@@ -1410,8 +1438,9 @@ pub async fn publish_execution(
     inputs: &ExecutionInputs,
     output: &CpuValidatedOutput,
 ) -> Result<Value, EditError> {
+    let actor = scope_actor(scope);
     let mut sp = scope.tx_mut().begin().await.map_err(edit_db_error)?;
-    let result = publish_inside_savepoint(&mut sp, scope_actor(scope), inputs, output).await;
+    let result = publish_inside_savepoint(&mut sp, actor, inputs, output).await;
     match result {
         Ok(wire) => {
             sp.commit().await.map_err(edit_db_error)?;

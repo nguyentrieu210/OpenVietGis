@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """E08 professional GIS tools differential parity (/pro/geometry, /pro/topology, /pro/schema, /pro/tiles)."""
 
 from __future__ import annotations

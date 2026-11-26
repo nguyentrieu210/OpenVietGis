@@ -294,8 +294,16 @@ mod tests {
 
     #[test]
     fn validates_ready_geojson_and_normalizes_negative_zero() {
-        let pt = validate_ready_geojson(&json!({"type": "Point", "coordinates": [-0.0, 21.0]}), Some("Point"), 4326).unwrap();
-        assert_eq!(pt["coordinates"][0].as_f64().unwrap().to_bits(), 0.0_f64.to_bits());
+        let pt = validate_ready_geojson(
+            &json!({"type": "Point", "coordinates": [-0.0, 21.0]}),
+            Some("Point"),
+            4326,
+        )
+        .unwrap();
+        assert_eq!(
+            pt["coordinates"][0].as_f64().unwrap().to_bits(),
+            0.0_f64.to_bits()
+        );
 
         assert!(validate_ready_geojson(
             &json!({"type": "Point", "coordinates": [181.0, 21.0]}),

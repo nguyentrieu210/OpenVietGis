@@ -16,7 +16,9 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::catalog::CatalogError;
-use crate::edit_auth::{authenticate_actor, authenticate_json, decode, open, require_csrf, Failure};
+use crate::edit_auth::{
+    authenticate_actor, authenticate_json, decode, open, require_csrf, Failure,
+};
 use crate::AppState;
 
 const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/processing/models";

@@ -15,7 +15,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::edit_auth::{authenticate_actor, authenticate_json, decode, open, require_csrf, Failure};
+use crate::edit_auth::{
+    authenticate_actor, authenticate_json, decode, open, require_csrf, Failure,
+};
 use crate::AppState;
 
 const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/pro";
@@ -113,7 +115,14 @@ async fn geometry_preview(
     request: Request,
 ) -> Result<Json<Value>, Failure> {
     let (actor, headers, body) = authenticate_json(&state, request, &organization).await?;
-    let scope = open(&state, &actor, &organization, &project, Guard::ScopedAllowed).await?;
+    let scope = open(
+        &state,
+        &actor,
+        &organization,
+        &project,
+        Guard::ScopedAllowed,
+    )
+    .await?;
     require_csrf(&state, &actor, &headers)?;
     let body: GeometryBody = decode(body)?;
     if !matches!(
