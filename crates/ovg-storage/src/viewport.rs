@@ -4,11 +4,14 @@
 //! caller's RLS-scoped `ProjectRead` transaction. SQL is built from fixed code
 //! constants only; every request value is bound.
 
+use std::io::Write as _;
+
 use ovg_core::crs::{
     reference_coordinate_wire, reference_transformation, FixtureRequirement, TransformationProfile,
-    WEB_MERCATOR_MAX_LATITUDE,
+    WEB_MERCATOR_MAX_COORDINATE_METRE, WEB_MERCATOR_MAX_LATITUDE,
 };
 use ovg_core::AppError;
+use serde::Serialize;
 use serde_json::{json, Value};
 use sqlx::postgres::PgArguments;
 use sqlx::query::Query;
@@ -90,6 +93,7 @@ struct Snapshot {
     native_srid: i32,
     geometry_type: String,
     expected_count: Option<i64>,
+    extent: Option<[f64; 4]>,
     transformation: Option<&'static TransformationProfile>,
 }
 
@@ -101,6 +105,30 @@ impl ProjectRead<'_> {
         bounds: ViewportBounds,
         limit: i64,
     ) -> Result<Value, AppError> {
+        let (context, features) = self.viewport_rows(layer_id, pins, bounds, limit).await?;
+        build_viewport_response(context, &features, limit)
+    }
+
+    /// Pre-serialized UTF-8 JSON bytes for the viewport response, avoiding
+    /// intermediate `Value` coordinate allocations and redundant encoding passes.
+    pub async fn viewport_json(
+        &mut self,
+        layer_id: Uuid,
+        pins: &ReadPins<'_>,
+        bounds: ViewportBounds,
+        limit: i64,
+    ) -> Result<Vec<u8>, AppError> {
+        let (context, features) = self.viewport_rows(layer_id, pins, bounds, limit).await?;
+        build_viewport_json_bytes(&context, &features, limit)
+    }
+
+    async fn viewport_rows(
+        &mut self,
+        layer_id: Uuid,
+        pins: &ReadPins<'_>,
+        bounds: ViewportBounds,
+        limit: i64,
+    ) -> Result<(Value, Vec<RenderRow>), AppError> {
         if !(1..=MAX_VIEWPORT_FEATURES).contains(&limit) {
             return Err(AppError::internal("viewport feature limit outside bounds"));
         }
@@ -165,7 +193,7 @@ impl ProjectRead<'_> {
                 });
             }
         }
-        build_viewport_response(snapshot.context, &features, limit)
+        Ok((snapshot.context, features))
     }
 
     pub async fn display_extent(
@@ -236,13 +264,47 @@ impl ProjectRead<'_> {
             // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
             return Err(unsupported_transformation());
         }
+        let (west, south, east, north) = tile_geographic_bounds(z, x, y);
+        let covers_world = z == 0
+            || (west <= -180.0
+                && east >= 180.0
+                && south <= -WEB_MERCATOR_MAX_LATITUDE
+                && north >= WEB_MERCATOR_MAX_LATITUDE);
+        let covers_source_extent = !self.gis_scoped
+            && snapshot.extent.is_some_and(|[min_x, min_y, max_x, max_y]| {
+                west <= min_x && east >= max_x && south <= min_y && north >= max_y
+            });
+        // When a tile spans the world or the entire source extent, scanning the
+        // global GIST index would visit every layer in the DB and sort up to 1M
+        // rows; `_ST_Intersects` keeps exact geometry checks while scanning the
+        // primary key in `feature_id COLLATE "C"` order and stopping at LIMIT.
+        let area_expr = if covers_world {
+            format!(
+                "ST_MakeEnvelope(-180, {:?}, 180, {:?}, 4326)",
+                -WEB_MERCATOR_MAX_LATITUDE, WEB_MERCATOR_MAX_LATITUDE
+            )
+        } else {
+            let max_m = WEB_MERCATOR_MAX_COORDINATE_METRE;
+            format!(
+                "ST_InverseTransformPipeline(
+                    ST_Intersection(
+                        ST_TileEnvelope($4, $5, $6, margin => $7),
+                        ST_MakeEnvelope({:?}, {:?}, {max_m:?}, {max_m:?}, 3857)
+                    ), '{WEB_MERCATOR_PIPELINE}', 4326
+                )",
+                -max_m, -max_m
+            )
+        };
+        let spatial_pred = if covers_world || covers_source_extent {
+            "_ST_Intersects(f.geometry, bounds.area)"
+        } else {
+            "f.geometry && bounds.area AND ST_Intersects(f.geometry, bounds.area)"
+        };
         // Bound vertex work before projection and encoding, not only after serialization.
         let sql = format!(
             "WITH bounds AS (
                 SELECT ST_TileEnvelope($4, $5, $6) AS tile,
-                    ST_InverseTransformPipeline(
-                        ST_TileEnvelope($4, $5, $6, margin => $7), '{WEB_MERCATOR_PIPELINE}', 4326
-                    ) AS area
+                    {area_expr} AS area
             ), candidate AS MATERIALIZED (
                 SELECT f.feature_id, f.geometry, ST_NPoints(f.geometry) AS positions
                 FROM spatial.reference_features AS f CROSS JOIN bounds
@@ -250,8 +312,7 @@ impl ProjectRead<'_> {
                     AND f.geometry_state = 'present'
                     AND f.content_revision = $10 AND f.schema_revision = $11
                     AND ST_SRID(f.geometry) = 4326
-                    AND f.geometry && bounds.area
-                    AND ST_Intersects(f.geometry, bounds.area)
+                    AND {spatial_pred}
                 ORDER BY f.feature_id COLLATE \"C\" LIMIT $12
             ), ranked AS (
                 SELECT feature_id, geometry,
@@ -313,19 +374,17 @@ impl ProjectRead<'_> {
         pins: &ReadPins<'_>,
         read: RenderRead,
     ) -> Result<Snapshot, AppError> {
-        sqlx::query("SELECT set_config('statement_timeout', $1, true)")
-            .bind(MAP_STATEMENT_TIMEOUT)
-            .execute(&mut **self.tx.tx_mut())
-            .await
-            .map_err(unavailable)?;
         let source_id: Uuid = sqlx::query_scalar(
-            "SELECT source_id FROM spatial.layers
-             WHERE organization_id = $1 AND project_id = $2 AND id = $3 AND lifecycle = 'active'
-             FOR SHARE",
+            "SELECT l.source_id
+             FROM spatial.layers AS l
+             WHERE l.organization_id = $1 AND l.project_id = $2 AND l.id = $3 AND l.lifecycle = 'active'
+               AND set_config('statement_timeout', $4, true) IS NOT NULL
+             FOR SHARE OF l",
         )
         .bind(self.tx.organization_id())
         .bind(self.project_id)
         .bind(layer_id)
+        .bind(MAP_STATEMENT_TIMEOUT)
         .fetch_optional(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?
@@ -383,6 +442,14 @@ impl ProjectRead<'_> {
             // ported; fail closed like an unverified fixture until the fixture registry is native.
             return Err(out_of_area());
         }
+        let extent = source["extent"].as_object().and_then(|e| {
+            Some([
+                e.get("min_x")?.as_f64()?,
+                e.get("min_y")?.as_f64()?,
+                e.get("max_x")?.as_f64()?,
+                e.get("max_y")?.as_f64()?,
+            ])
+        });
         Ok(Snapshot {
             context: json!({
                 "organization_id": self.tx.organization_id(),
@@ -400,6 +467,7 @@ impl ProjectRead<'_> {
                 .map_err(|_| AppError::internal("native CRS code out of range"))?,
             geometry_type: format!("ST_{geometry_family}"),
             expected_count,
+            extent,
             transformation,
         })
     }
@@ -546,10 +614,32 @@ struct RenderRow {
     wkb: Option<Vec<u8>>,
 }
 
+fn tile_geographic_bounds(z: u32, x: u32, y: u32) -> (f64, f64, f64, f64) {
+    let n = f64::from(1_u32 << z);
+    let margin = f64::from(TILE_BUFFER) / f64::from(TILE_EXTENT);
+    let x_min = ((f64::from(x) - margin) / n).clamp(0.0, 1.0);
+    let x_max = ((f64::from(x) + 1.0 + margin) / n).clamp(0.0, 1.0);
+    let y_min = ((f64::from(y) - margin) / n).clamp(0.0, 1.0);
+    let y_max = ((f64::from(y) + 1.0 + margin) / n).clamp(0.0, 1.0);
+    let west = x_min * 360.0 - 180.0;
+    let east = x_max * 360.0 - 180.0;
+    let merc_to_lat = |ty: f64| {
+        let rad = std::f64::consts::PI * (1.0 - 2.0 * ty);
+        rad.sinh().atan().to_degrees()
+    };
+    let north = merc_to_lat(y_min).clamp(-WEB_MERCATOR_MAX_LATITUDE, WEB_MERCATOR_MAX_LATITUDE);
+    let south = merc_to_lat(y_max).clamp(-WEB_MERCATOR_MAX_LATITUDE, WEB_MERCATOR_MAX_LATITUDE);
+    (west, south, east, north)
+}
+
 fn json_size(value: &Value) -> Result<usize, AppError> {
     serde_json::to_vec(value)
         .map(|bytes| bytes.len())
         .map_err(|_| AppError::internal("viewport serialization failed"))
+}
+
+fn serialization_failed() -> AppError {
+    AppError::internal("viewport serialization failed")
 }
 
 /// Port of `domains/maps/viewport.py::build_viewport_response`: a stable
@@ -619,6 +709,133 @@ fn build_viewport_response(
     Ok(result)
 }
 
+/// Stream-encode the viewport response into a single UTF-8 JSON buffer, matching
+/// `build_viewport_response` bounds and schema without per-vertex `Value` trees
+/// or repeated `serde_json::to_vec` size probes.
+fn build_viewport_json_bytes(
+    context: &Value,
+    features: &[RenderRow],
+    limit: i64,
+) -> Result<Vec<u8>, AppError> {
+    let reference =
+        serde_json::to_vec(&context["response_crs"]).map_err(|_| serialization_failed())?;
+    let context_bytes = serde_json::to_vec(context).map_err(|_| serialization_failed())?;
+    let overhead = json_size(&json!({
+        "context": context,
+        "items": [],
+        "complete": false,
+        "limitation": "position_limit"
+    }))?;
+    let mut items_buf = Vec::with_capacity(64 * 1024);
+    let mut item_scratch = Vec::with_capacity(1024);
+    let mut limitation: Option<&str> = None;
+    let (mut positions, mut item_count) = (0_i64, 0_i64);
+    let mut previous: Option<&str> = None;
+
+    for feature in features {
+        if previous.is_some_and(|id| feature.feature_id.as_str() <= id) {
+            return Err(AppError::internal("viewport order must be strictly stable"));
+        }
+        previous = Some(feature.feature_id.as_str());
+        if item_count == limit {
+            limitation = Some("feature_limit");
+            break;
+        }
+        let count = i64::from(feature.positions);
+        if count < 1 || positions + count > MAX_VIEWPORT_POSITIONS {
+            limitation = Some("position_limit");
+            break;
+        }
+        let wkb = feature.wkb.as_deref().ok_or_else(|| {
+            AppError::internal("bounded geometry marker has inconsistent positions")
+        })?;
+        let geom = decode_display_geometry(wkb, count).ok_or_else(|| {
+            AppError::internal("geometry cannot be presented in map display domain")
+        })?;
+
+        item_scratch.clear();
+        item_scratch.extend_from_slice(br#"{"feature_id":"#);
+        serde_json::to_writer(&mut item_scratch, &feature.feature_id)
+            .map_err(|_| serialization_failed())?;
+        item_scratch.extend_from_slice(br#","geometry":{"coordinate_reference":"#);
+        item_scratch.extend_from_slice(&reference);
+        item_scratch.extend_from_slice(br#","coordinates":"#);
+        serde_json::to_writer(&mut item_scratch, &geom).map_err(|_| serialization_failed())?;
+        item_scratch.extend_from_slice(br#","type":""#);
+        item_scratch.extend_from_slice(geom.kind().as_bytes());
+        item_scratch.extend_from_slice(br#""}}"#);
+
+        let comma = usize::from(item_count > 0);
+        if overhead + items_buf.len() + comma + item_scratch.len() > MAX_VIEWPORT_BYTES {
+            limitation = Some("byte_limit");
+            break;
+        }
+        if comma == 1 {
+            items_buf.push(b',');
+        }
+        items_buf.extend_from_slice(&item_scratch);
+        positions += count;
+        item_count += 1;
+    }
+
+    let complete_str = if limitation.is_none() {
+        "true"
+    } else {
+        "false"
+    };
+    let limitation_json = match limitation {
+        Some(lim) => serde_json::to_string(lim).map_err(|_| serialization_failed())?,
+        None => "null".to_owned(),
+    };
+    let mut out = Vec::with_capacity(
+        64 + context_bytes.len() + items_buf.len() + complete_str.len() + limitation_json.len(),
+    );
+    write!(out, r#"{{"complete":{complete_str},"context":"#).map_err(|_| serialization_failed())?;
+    out.extend_from_slice(&context_bytes);
+    out.extend_from_slice(br#","items":["#);
+    out.extend_from_slice(&items_buf);
+    write!(out, r#"],"limitation":{limitation_json}}}"#).map_err(|_| serialization_failed())?;
+
+    if out.len() > MAX_VIEWPORT_BYTES {
+        return Err(read_unavailable());
+    }
+    Ok(out)
+}
+
+enum DecodedGeometry {
+    Point([f64; 2]),
+    LineString(Vec<[f64; 2]>),
+    Polygon(Vec<Vec<[f64; 2]>>),
+}
+
+impl DecodedGeometry {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Point(_) => "Point",
+            Self::LineString(_) => "LineString",
+            Self::Polygon(_) => "Polygon",
+        }
+    }
+
+    fn into_value(self) -> Value {
+        match self {
+            Self::Point(pt) => json!(pt),
+            Self::LineString(line) => json!(line),
+            Self::Polygon(rings) => json!(rings),
+        }
+    }
+}
+
+impl Serialize for DecodedGeometry {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Point(pt) => pt.serialize(serializer),
+            Self::LineString(line) => line.serialize(serializer),
+            Self::Polygon(rings) => rings.serialize(serializer),
+        }
+    }
+}
+
 struct WkbReader<'a> {
     bytes: &'a [u8],
     offset: usize,
@@ -664,9 +881,7 @@ impl<'a> WkbReader<'a> {
     }
 }
 
-/// Decode little-endian 2D OGC WKB (Point, LineString, Polygon) without
-/// rounding, like `_read_native_wkb`, and require the exact position count.
-fn decode_display_wkb(wkb: &[u8], expected_positions: i64) -> Option<(&'static str, Value)> {
+fn decode_display_geometry(wkb: &[u8], expected_positions: i64) -> Option<DecodedGeometry> {
     let mut reader = WkbReader {
         bytes: wkb,
         offset: 0,
@@ -675,36 +890,46 @@ fn decode_display_wkb(wkb: &[u8], expected_positions: i64) -> Option<(&'static s
     if reader.take(1)?[0] != 1 {
         return None;
     }
-    let (kind, parts) = match reader.word()? {
-        1 => ("Point", vec![reader.part(1)?]),
+    let (geom, total) = match reader.word()? {
+        1 => {
+            let part = reader.part(1)?;
+            (DecodedGeometry::Point(part[0]), 1_usize)
+        }
         2 => {
             let count = reader.word()?;
-            ("LineString", vec![reader.part(count)?])
+            let part = reader.part(count)?;
+            let total = part.len();
+            (DecodedGeometry::LineString(part), total)
         }
         3 => {
             let rings = reader.word()?;
             if !(1..=1024).contains(&rings) {
                 return None;
             }
-            let mut parts = Vec::new();
+            let mut parts = Vec::with_capacity(usize::try_from(rings).ok()?);
+            let mut total = 0_usize;
             for _ in 0..rings {
                 let count = reader.word()?;
-                parts.push(reader.part(count)?);
+                let part = reader.part(count)?;
+                total += part.len();
+                parts.push(part);
             }
-            ("Polygon", parts)
+            (DecodedGeometry::Polygon(parts), total)
         }
         _ => return None,
     };
-    let total: usize = parts.iter().map(Vec::len).sum();
     if reader.offset != wkb.len() || i64::try_from(total).ok()? != expected_positions {
         return None;
     }
-    let coordinates = match kind {
-        "Point" => json!(parts[0][0]),
-        "LineString" => json!(parts[0]),
-        _ => json!(parts),
-    };
-    Some((kind, coordinates))
+    Some(geom)
+}
+
+/// Decode little-endian 2D OGC WKB (Point, LineString, Polygon) without
+/// rounding, like `_read_native_wkb`, and require the exact position count.
+fn decode_display_wkb(wkb: &[u8], expected_positions: i64) -> Option<(&'static str, Value)> {
+    let geom = decode_display_geometry(wkb, expected_positions)?;
+    let kind = geom.kind();
+    Some((kind, geom.into_value()))
 }
 
 #[cfg(test)]
@@ -813,5 +1038,25 @@ mod tests {
 
         let unordered = [row("b", point(1.0, 1.0), 1), row("a", point(1.0, 1.0), 1)];
         assert!(build_viewport_response(context(), &unordered, 10).is_err());
+    }
+
+    #[test]
+    fn viewport_json_bytes_matches_value_response_and_tile_bounds() {
+        let ring = [[105.0, 20.0], [106.0, 20.0], [106.0, 21.0], [105.0, 20.0]];
+        let rows = [
+            row("a", point(105.123456, 20.654321), 1),
+            row("b", polygon(&ring), 4),
+        ];
+        for limit in [1, 2] {
+            let expected = build_viewport_response(context(), &rows, limit).unwrap();
+            let raw = build_viewport_json_bytes(&context(), &rows, limit).unwrap();
+            let parsed: Value = serde_json::from_slice(&raw).unwrap();
+            assert_eq!(parsed, expected);
+            assert_eq!(raw.len(), json_size(&expected).unwrap());
+        }
+        let (w, s, e, n) = tile_geographic_bounds(0, 0, 0);
+        assert_eq!((w, e), (-180.0, 180.0));
+        assert!((n - WEB_MERCATOR_MAX_LATITUDE).abs() < 1e-9);
+        assert!((s + WEB_MERCATOR_MAX_LATITUDE).abs() < 1e-9);
     }
 }
