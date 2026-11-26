@@ -1,4 +1,9 @@
-//! E15 Rust-native read-side for the official House Numbering module.
+//! E15 Rust-native control plane for the official House Numbering module.
+
+mod buildings;
+mod hierarchy;
+
+use std::collections::HashMap;
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -10,6 +15,7 @@ use ovg_module_sdk::ModuleManifest;
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
 use ovg_storage::house_numbering;
 use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -18,14 +24,23 @@ use crate::catalog::{project_read, CatalogError};
 use crate::identity::{require_csrf, HumanSession};
 use crate::AppState;
 
-const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/modules/house-numbering";
+pub(super) const BASE: &str =
+    "/organizations/{organization_id}/projects/{project_id}/modules/house-numbering";
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{BASE}/rules"), get(list_rules).post(create_rule))
         .route(&format!("{BASE}/areas"), get(list_areas).post(create_area))
-        .route(&format!("{BASE}/routes"), get(list_routes))
-        .route(&format!("{BASE}/buildings"), get(list_buildings))
+        .route(
+            &format!("{BASE}/routes"),
+            get(list_routes).post(hierarchy::create_route),
+        )
+        .route(
+            &format!("{BASE}/buildings"),
+            get(list_buildings).post(buildings::create_building),
+        )
+        .merge(hierarchy::router())
+        .merge(buildings::router())
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,7 +139,7 @@ async fn module_scope<'a>(
     Ok(read)
 }
 
-async fn module_read<'a>(
+pub(super) async fn module_read<'a>(
     state: &'a AppState,
     auth: &HumanSession,
     organization_id: Uuid,
@@ -140,7 +155,7 @@ async fn module_read<'a>(
     .await
 }
 
-async fn module_edit<'a>(
+pub(super) async fn module_edit<'a>(
     state: &'a AppState,
     auth: &HumanSession,
     organization_id: Uuid,
@@ -301,7 +316,7 @@ async fn list_buildings(
     Ok(Json(result))
 }
 
-enum HouseNumberingError {
+pub(super) enum HouseNumberingError {
     InvalidRequest,
     Permission(&'static str),
     Access(CatalogError),
@@ -335,4 +350,86 @@ impl IntoResponse for HouseNumberingError {
             }
         }
     }
+}
+
+impl From<AppError> for HouseNumberingError {
+    fn from(error: AppError) -> Self {
+        Self::Domain(error)
+    }
+}
+
+impl From<CatalogError> for HouseNumberingError {
+    fn from(error: CatalogError) -> Self {
+        Self::Access(error)
+    }
+}
+
+pub(super) type HnResult<T> = Result<T, HouseNumberingError>;
+
+pub(super) fn csrf(state: &AppState, auth: &HumanSession, headers: &HeaderMap) -> HnResult<()> {
+    require_csrf(state, auth, headers)
+        .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))
+}
+
+/// FastAPI validates path UUIDs together with the body (422 after auth).
+pub(super) fn path_id(params: &HashMap<String, String>, key: &str) -> HnResult<Uuid> {
+    params
+        .get(key)
+        .and_then(|value| Uuid::parse_str(value).ok())
+        .ok_or(HouseNumberingError::InvalidRequest)
+}
+
+pub(super) fn scope_ids(params: &HashMap<String, String>) -> HnResult<(Uuid, Uuid)> {
+    Ok((
+        path_id(params, "organization_id")?,
+        path_id(params, "project_id")?,
+    ))
+}
+
+pub(super) fn decode<T: DeserializeOwned>(body: &[u8]) -> HnResult<T> {
+    serde_json::from_slice(body).map_err(|_| HouseNumberingError::InvalidRequest)
+}
+
+/// Pydantic `str` length constraints count Unicode code points.
+pub(super) fn text_len(value: &str, min: usize, max: usize) -> bool {
+    let count = value.chars().count();
+    count >= min && count <= max
+}
+
+pub(super) fn opt_text_len(value: Option<&str>, max: usize) -> bool {
+    value.is_none_or(|value| value.chars().count() <= max)
+}
+
+/// Pydantic `PositiveInt` from a query string.
+pub(super) fn query_positive(query: &HashMap<String, String>, key: &str) -> HnResult<i64> {
+    query
+        .get(key)
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0)
+        .ok_or(HouseNumberingError::InvalidRequest)
+}
+
+pub(super) fn audit_actor(auth: &HumanSession) -> house_numbering::AuditActor<'_> {
+    house_numbering::AuditActor {
+        id: auth.actor_id(),
+        display_name: auth.display_name(),
+    }
+}
+
+pub(super) async fn module_manage<'a>(
+    state: &'a AppState,
+    auth: &HumanSession,
+    organization_id: Uuid,
+    project_id: Uuid,
+) -> HnResult<ProjectRead<'a>> {
+    let mut edit = module_edit(state, auth, organization_id, project_id).await?;
+    let level = integration_hub::catalog_context(&mut edit, auth.actor_id())
+        .await?
+        .level;
+    if level != EffectiveProjectLevel::Manage {
+        return Err(HouseNumberingError::Permission(
+            "missing permission: project.manage",
+        ));
+    }
+    Ok(edit)
 }

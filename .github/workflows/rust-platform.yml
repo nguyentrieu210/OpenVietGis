@@ -178,6 +178,21 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e07-transfers.log
 
+      - name: Run E15 house numbering parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e15_house_numbering_reads.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-reads.log
+          uv run --project apps/api python tests/rust-parity/e15_house_numbering_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-writes.log
+          uv run --project apps/api python tests/rust-parity/e15_full_parity.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-full-parity.log
+
       - name: Record PostGIS version
         if: always()
         run: |

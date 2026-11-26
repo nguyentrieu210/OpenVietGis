@@ -11,7 +11,24 @@ use uuid::Uuid;
 
 use crate::catalog::ProjectRead;
 
-fn db_error(error: sqlx::Error) -> AppError {
+mod buildings;
+mod hierarchy;
+
+pub use buildings::*;
+pub use hierarchy::*;
+
+/// Read the `wire` jsonb column that every module query projects.
+pub(crate) fn wire(row: &sqlx::postgres::PgRow) -> Result<Value, AppError> {
+    row.try_get::<Value, _>("wire").map_err(db_error)
+}
+
+pub(crate) fn db_error(error: sqlx::Error) -> AppError {
+    // SQLSTATE OV409 is a module lock guard; Core renders it as 409 DATA_LOCKED.
+    if let sqlx::Error::Database(db) = &error {
+        if db.code().as_deref() == Some("OV409") {
+            return AppError::conflict("DATA_LOCKED", db.message().to_owned());
+        }
+    }
     tracing::error!(%error, "house-numbering database operation failed");
     AppError::internal("house-numbering database operation failed")
 }
@@ -236,7 +253,7 @@ pub struct AreaCreateInput<'a> {
     pub feature_id: Option<&'a str>,
 }
 
-async fn append_audit(
+pub(crate) async fn append_audit(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
     action: &str,
@@ -265,11 +282,12 @@ async fn append_audit(
     Ok(())
 }
 
-async fn validate_area_feature(
+pub(crate) async fn spatial_feature(
     edit: &mut ProjectRead<'_>,
     source_id: Uuid,
     feature_id: &str,
-) -> Result<(), AppError> {
+    expected: &[&str],
+) -> Result<i32, AppError> {
     let row = sqlx::query(
         "SELECT ds.stored_crs, ds.lifecycle, ds.validation_state,
                 ST_SRID(rf.geometry) AS srid,
@@ -303,18 +321,20 @@ async fn validate_area_feature(
         ));
     }
     let geometry_type: String = row.try_get("geometry_type").map_err(db_error)?;
-    if geometry_type != "ST_Polygon" {
+    if !expected.contains(&geometry_type.as_str()) {
         return Err(AppError::validation(
             "GEOMETRY_TYPE_MISMATCH",
-            format!("linked feature geometry {geometry_type:?} is not valid for this entity"),
+            format!("linked feature geometry '{geometry_type}' is not valid for this entity"),
         ));
     }
     let srid = row
         .try_get::<Option<i32>, _>("srid")
         .map_err(db_error)?
+        .filter(|srid| *srid != 0)
         .or(row
             .try_get::<Option<i32>, _>("stored_crs")
-            .map_err(db_error)?)
+            .map_err(db_error)?
+            .filter(|srid| *srid != 0))
         .unwrap_or(0);
     if srid <= 0 {
         return Err(AppError::validation(
@@ -322,7 +342,7 @@ async fn validate_area_feature(
             "linked geometry has no explicit CRS",
         ));
     }
-    Ok(())
+    Ok(srid)
 }
 
 fn rule_wire(mut wire: Value, distance: String) -> Result<Value, AppError> {
@@ -399,7 +419,7 @@ pub async fn create_area(
         ));
     }
     if let (Some(source_id), Some(feature_id)) = (input.source_id, input.feature_id) {
-        validate_area_feature(edit, source_id, feature_id).await?;
+        spatial_feature(edit, source_id, feature_id, &["ST_Polygon"]).await?;
     }
 
     let row = sqlx::query(
