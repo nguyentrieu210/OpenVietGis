@@ -5,7 +5,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Value};
-use sqlx::postgres::{PgListener, PgPoolOptions};
+use sqlx::postgres::{PgListener, PgPool, PgPoolOptions};
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
@@ -156,7 +156,10 @@ pub async fn list_activities(
 }
 
 /// One dedicated LISTEN connection outside the request pool, like the Python stream.
-pub struct ChangeListener(PgListener);
+pub struct ChangeListener {
+    listener: PgListener,
+    pool: PgPool,
+}
 
 impl ChangeListener {
     pub async fn connect(pool: &DbPool, channel: &str) -> Result<Self, AppError> {
@@ -167,16 +170,27 @@ impl ChangeListener {
             .connect_with(options)
             .await
             .map_err(listener_error)?;
-        let mut listener = PgListener::connect_with(&dedicated)
-            .await
-            .map_err(listener_error)?;
-        listener.listen(channel).await.map_err(listener_error)?;
-        Ok(Self(listener))
+        let listener = match PgListener::connect_with(&dedicated).await {
+            Ok(listener) => listener,
+            Err(error) => {
+                dedicated.close().await;
+                return Err(listener_error(error));
+            }
+        };
+        let mut this = Self {
+            listener,
+            pool: dedicated,
+        };
+        if let Err(error) = this.listener.listen(channel).await {
+            this.close().await;
+            return Err(listener_error(error));
+        }
+        Ok(this)
     }
 
     /// Next notification payload; an error once the connection is lost.
     pub async fn next(&mut self) -> Result<String, AppError> {
-        match self.0.try_recv().await {
+        match self.listener.try_recv().await {
             Ok(Some(notice)) => Ok(notice.payload().to_owned()),
             Ok(None) => Err(AppError::service_unavailable(
                 "LISTENER_UNAVAILABLE",
@@ -184,6 +198,12 @@ impl ChangeListener {
             )),
             Err(error) => Err(listener_error(error)),
         }
+    }
+
+    /// Close the dedicated connection now; a dropped pool is only reaped later.
+    pub async fn close(self) {
+        drop(self.listener);
+        self.pool.close().await;
     }
 }
 

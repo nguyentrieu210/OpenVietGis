@@ -532,6 +532,16 @@ async fn pump(state: AppState, sender: mpsc::Sender<String>, feed: ManagedFeed) 
     let Ok(mut listener) = ChangeListener::connect(pool, "ovg_team_collaboration").await else {
         return;
     };
+    wake(&state, &sender, &feed, &mut listener).await;
+    listener.close().await;
+}
+
+async fn wake(
+    state: &AppState,
+    sender: &mpsc::Sender<String>,
+    feed: &ManagedFeed,
+    listener: &mut ChangeListener,
+) {
     let mut last_heartbeat = Instant::now();
     loop {
         let mut notice = None;
@@ -548,7 +558,7 @@ async fn pump(state: AppState, sender: mpsc::Sender<String>, feed: ManagedFeed) 
             }
         }
         if let Some(frame) = notice {
-            if !feed.still_valid(&state).await {
+            if !feed.still_valid(state).await {
                 let _ = sender.send(SESSION_REVOKED.to_owned()).await;
                 return;
             }
@@ -560,7 +570,7 @@ async fn pump(state: AppState, sender: mpsc::Sender<String>, feed: ManagedFeed) 
             }
         }
         if last_heartbeat.elapsed() >= Duration::from_secs(15) {
-            if !feed.still_valid(&state).await {
+            if !feed.still_valid(state).await {
                 let _ = sender.send(SESSION_REVOKED.to_owned()).await;
                 return;
             }

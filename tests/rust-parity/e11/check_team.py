@@ -31,7 +31,7 @@ from run import (
 MINTED = ("id", "created_at", "updated_at", "expires_at", "decided_at")
 
 
-def editor_member(owner, oracle, fixture, csrf):
+def editor_member(owner, oracle, fixture, csrf, name="Biên tập viên"):
     """An unrestricted project editor with its own session and CSRF token."""
     uid, lid, sid, mid = uuid4(), uuid4(), uuid4(), uuid4()
     token, digest, csrf_token = baseline.make_session_and_csrf(sid, baseline.DEFAULT_CSRF_SECRET)
@@ -39,15 +39,15 @@ def editor_member(owner, oracle, fixture, csrf):
         conn.execute(
             """INSERT INTO identity.users (id, display_name, email_snapshot, status,
                created_at, updated_at)
-               VALUES (%s, 'Biên tập viên', 'editor@example.test', 'active', now(), now())""",
-            (uid,),
+               VALUES (%s, %s, 'editor@example.test', 'active', now(), now())""",
+            (uid, name),
         )
         conn.execute(
             """INSERT INTO identity.identity_links (id, user_id, issuer, subject,
                email_snapshot, email_verified, display_name_snapshot, created_at)
                VALUES (%s, %s, 'https://parity-issuer.example', %s, 'editor@example.test',
-                       true, 'Biên tập viên', now())""",
-            (lid, uid, f"editor-{uid}"),
+                       true, %s, now())""",
+            (lid, uid, f"editor-{uid}", name),
         )
         conn.execute(
             """INSERT INTO identity.web_sessions (id, user_id, identity_link_id, secret_hash,

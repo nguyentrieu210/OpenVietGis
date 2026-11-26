@@ -278,6 +278,17 @@ async fn listen(
     let Ok(mut listener) = ChangeListener::connect(pool, feed.channel()).await else {
         return Some(UNAVAILABLE);
     };
+    let last = deliver(state, sender, feed, &mut listener).await;
+    listener.close().await;
+    last
+}
+
+async fn deliver(
+    state: &AppState,
+    sender: &mpsc::Sender<String>,
+    feed: &Feed,
+    listener: &mut ChangeListener,
+) -> Option<&'static str> {
     if feed.allowed(state).await.is_none() {
         return Some(REVOKED);
     }

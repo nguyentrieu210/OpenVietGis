@@ -299,7 +299,7 @@ def main():
                 user,
             )
             editor = editor_member(owner, oracle, fixture, csrf)
-            editor2 = editor_member(owner, oracle, fixture, csrf)
+            editor2 = editor_member(owner, oracle, fixture, csrf, name="Trần Đức Anh")
             bearers = service_bearers(oracle, fixture, csrf)
             rooms = compare_rooms(pair, fixture, a, csrf, editor, editor2, user, bearers)
             compare_messages(pair, fixture, a, csrf, editor, rooms)

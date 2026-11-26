@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import psycopg
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
@@ -26,6 +28,20 @@ from run import (
 
 CAP = 40
 UNAVAILABLE = "event: unavailable\ndata: {}\n\n"
+
+
+def settle(owner, limit=25, timeout=90):
+    """Wait until earlier streams have closed their database connections."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with psycopg.connect(owner) as conn:
+            count = conn.execute(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname=current_database()"
+            ).fetchone()[0]
+        if count <= limit:
+            return
+        time.sleep(1)
+    print(f"WARN {count} database connections still open", flush=True)
 
 
 @parity.case
@@ -75,15 +91,13 @@ def main():
         }
         with fastapi_server(work) as oracle, rust_client(binary, runtime, work) as rust:
             _, editor, _ = editor_member(owner, oracle, fixture, csrf)
-            # Rust releases a slot on disconnect; FastAPI only at its next 15 s wake-up,
-            # so Rust goes first and FastAPI's families are spaced to free connections.
-            for family, path in paths.items():
-                listener_cap(f"E11 Rust {family} stream 41 is unavailable", rust, path, editor)
-            for index, (family, path) in enumerate(paths.items()):
-                if index:
-                    time.sleep(20)
-                listener_cap(f"E11 FastAPI {family} stream 41 is unavailable", oracle, path,
-                             editor)
+            # FastAPI frees a slot only at its next 15 s wake-up: wait for each family
+            # to release its connections so the test never hits max_connections.
+            for name, client in (("Rust", rust), ("FastAPI", oracle)):
+                for family, path in paths.items():
+                    settle(owner)
+                    listener_cap(f"E11 {name} {family} stream 41 is unavailable", client, path,
+                                 editor)
     print("E11 listener cap parity finished", flush=True)
 
 
