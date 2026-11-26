@@ -21,6 +21,8 @@ try{
   else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={operation_id:payload.operation_id};}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
+  else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Synthetic buffer",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Synthetic clip",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Synthetic dissolve",required_inputs:["input_layer"],parameters_schema:{}}]};
+  else if(p.endsWith("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/extensions/activations")&&method==="GET")body={items:active?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]:[]};
   else if(p.endsWith("/extensions/activations")&&method==="POST"){active=true;body={id:"activation",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}}
   else if(p.endsWith("/extensions/manifests"))body={items:[{id:"manifest",extension_key:"house_numbering",version:"2.0.0",api_compatibility:"1.x",enabled:true}]};
