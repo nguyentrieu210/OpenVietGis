@@ -176,7 +176,7 @@ jobs:
         run: |
           for f in dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json; do
             echo "== $f"
-            sed -n '40,50p;75,85p;123,133p' "$f" | sed -E 's/([:=][[:space:]]*\?"?)[A-Za-z0-9._~+/%=-]{8,}/***/g' | cut -c1-200
+            sed -n '40,50p;75,85p;123,133p' "$f" | sed -E 's/([:=][[:space:]]*[\\"]*)[A-Za-z0-9._~+/%=-]{8,}/\1***/g' | cut -c1-200
           done
 
       - name: Upload Playwright diagnostics when root validation fails
