@@ -2,17 +2,22 @@
 """E12 adapter profile differential parity on real isolated PostGIS."""
 
 from __future__ import annotations
-import argparse, os, sys, tempfile
+
+import argparse
+import os
+import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+
 import psycopg
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/"tests"/"rust-parity"))
 sys.path.insert(0,str(ROOT/"tools"/"benchmark"/"rust-platform"))
-import run as parity
 import benchmark_runner as baseline
+import run as parity
 from e12_catalog import set_project_role
 
 API="/api/v1"

@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 
-import run as parity
 import benchmark_runner as baseline
+import run as parity
 
 API = "/api/v1"
 
@@ -143,7 +143,7 @@ def compare(label: str, expected, actual, normalize=lambda x: x):
     )
     try:
         ebody, abody = normalize(expected.json()), normalize(actual.json())
-    except Exception:
+    except ValueError:
         require(expected.text == actual.text, f"{label}: text mismatch")
         return None
     mismatch = parity.difference(ebody, abody)

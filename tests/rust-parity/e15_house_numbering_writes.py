@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import tempfile
@@ -18,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 
-import run as parity
 import benchmark_runner as baseline
+import run as parity
 
 API = "/api/v1"
 
@@ -37,7 +36,7 @@ def compare(label: str, expected, actual, normalize=lambda x: x) -> None:
     )
     try:
         ebody, abody = normalize(expected.json()), normalize(actual.json())
-    except Exception:
+    except ValueError:
         require(expected.text == actual.text, f"{label}: text mismatch")
     else:
         mismatch = parity.difference(ebody, abody)
@@ -130,7 +129,9 @@ def main() -> int:
             parity.configure_python(owner_url, runtime_url, artifacts)
             baseline.run_alembic_upgrade(owner_url, runtime_url)
 
-            from modules.house_numbering.migrate import upgrade as upgrade_house_numbering
+            from modules.house_numbering.migrate import (
+                upgrade as upgrade_house_numbering,
+            )
             upgrade_house_numbering()
 
             fixture = baseline.seed_benchmark_database(

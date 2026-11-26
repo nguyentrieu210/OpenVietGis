@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 
-import run as parity
 import benchmark_runner as baseline
+import run as parity
 
 API = "/api/v1"
 
@@ -236,7 +236,9 @@ def main() -> int:
             baseline.run_alembic_upgrade(owner_url, runtime_url)
 
             # House Numbering owns an independent Alembic version table.
-            from modules.house_numbering.migrate import upgrade as upgrade_house_numbering
+            from modules.house_numbering.migrate import (
+                upgrade as upgrade_house_numbering,
+            )
             upgrade_house_numbering()
 
             fixture = baseline.seed_benchmark_database(

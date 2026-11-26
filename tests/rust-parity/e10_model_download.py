@@ -2,16 +2,23 @@
 """E10 3D model binary download parity."""
 
 from __future__ import annotations
-import argparse, hashlib, os, sys, tempfile
+
+import argparse
+import hashlib
+import os
+import sys
+import tempfile
 from pathlib import Path
 from uuid import uuid4
+
 import psycopg
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/"tests"/"rust-parity"))
 sys.path.insert(0,str(ROOT/"tools"/"benchmark"/"rust-platform"))
-import run as parity
 import benchmark_runner as baseline
+import run as parity
+
 API="/api/v1"
 
 def req(c,d):

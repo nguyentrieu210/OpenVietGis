@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "rust-parity"))
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 
-import run as parity
 import benchmark_runner as baseline
+import run as parity
 
 API = "/api/v1"
 
@@ -173,17 +173,16 @@ def seed_overflow(owner_url: str, fixture: dict, manifest_id):
                 base + timedelta(microseconds=i),
             )
         )
-    with psycopg.connect(owner_url) as conn:
-        with conn.cursor() as cur:
-            cur.executemany(
-                """
+    with psycopg.connect(owner_url) as conn, conn.cursor() as cur:
+        cur.executemany(
+            """
                 INSERT INTO extensions.activation_events (
                     id, organization_id, project_id, activation_id, event,
                     previous_manifest_id, manifest_id, status, actor_id, occurred_at
                 ) VALUES (%s,%s,%s,%s,%s,%s,%s,'active',%s,%s)
                 """,
-                rows,
-            )
+            rows,
+        )
     return aid
 
 
