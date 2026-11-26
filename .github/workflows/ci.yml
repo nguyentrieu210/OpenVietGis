@@ -91,7 +91,8 @@ jobs:
           pytest apps/api/tests/integration/identity/test_live_keycloak_oidc.py --show-capture=no
 
   validate:
-    runs-on: ubuntu-latest
+    # Visual baselines were recorded on Ubuntu 24.04; pin font/render stack.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
