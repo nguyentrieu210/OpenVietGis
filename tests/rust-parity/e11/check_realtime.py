@@ -154,9 +154,9 @@ def commit_changes(oracle, owner, fixture, headers, count):
 
 def seed_activities(oracle, owner, fixture, headers):
     base = project_path(fixture["org_a_id"], fixture["project_a_id"])
-    first, _ = commit_changes(oracle, owner, fixture, headers, 2)
+    _, latest = commit_changes(oracle, owner, fixture, headers, 2)
     reverted = oracle.post(
-        f"{base}/changesets/{first['id']}/revert",
+        f"{base}/changesets/{latest['id']}/revert",
         headers=headers,
         json={"operation_id": f"e11-revert-{uuid4()}"},
     )

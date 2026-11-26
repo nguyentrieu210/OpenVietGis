@@ -110,7 +110,9 @@ async fn activities(
 
     // Python datetimes carry microseconds; the cursor and SQL comparisons use the same.
     let now = Utc::now();
-    let now = now.with_nanosecond(now.nanosecond() / 1_000 * 1_000).unwrap_or(now);
+    let now = now
+        .with_nanosecond(now.nanosecond() / 1_000 * 1_000)
+        .unwrap_or(now);
     let scope = ActivityCursorScope::from(&TenantScope {
         organization_id: organization,
         workspace_id: None,
@@ -334,12 +336,21 @@ mod tests {
             json!({"o": o, "p": p, "a": a, "b": b, "kind": kind}).to_string()
         };
         let cases = [
-            (event(Value::Null, Value::Null, json!("spatial_change")), Some(SPATIAL_CHANGE)),
-            (event(json!(other), json!(me), json!("lock_change")), Some(LOCK_CHANGE)),
+            (
+                event(Value::Null, Value::Null, json!("spatial_change")),
+                Some(SPATIAL_CHANGE),
+            ),
+            (
+                event(json!(other), json!(me), json!("lock_change")),
+                Some(LOCK_CHANGE),
+            ),
             (event(json!(me), Value::Null, json!(5)), Some(CHANGE)),
             (event(json!(other), json!(other), json!("chat")), None),
             (json!({"o": o, "p": p}).to_string(), None),
-            (json!({"o": o, "p": other, "a": null, "b": null}).to_string(), None),
+            (
+                json!({"o": o, "p": other, "a": null, "b": null}).to_string(),
+                None,
+            ),
             ("[1]".to_owned(), None),
             ("not json".to_owned(), None),
             // The recipient key is read only for addressed events.
