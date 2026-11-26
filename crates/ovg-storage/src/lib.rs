@@ -18,6 +18,7 @@ pub mod raster;
 pub mod rls;
 pub mod spatial_transform;
 pub mod tenancy;
+pub mod three_d;
 pub mod transfers;
 pub mod viewport;
 

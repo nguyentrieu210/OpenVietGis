@@ -23,6 +23,7 @@ pub mod routes;
 pub(crate) mod spatial_replay;
 pub mod state;
 pub(crate) mod tenancy;
+pub(crate) mod three_d;
 pub(crate) mod transfers;
 
 use axum::http::{header, HeaderName, HeaderValue, Method};
