@@ -6,6 +6,7 @@ const raw=Buffer.from(JSON.stringify(doc)),js=(raw.length+3)&~3,bs=(bin.length+3
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1380,height:900}}),errors=[],external=[],requests=[];
+ await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  let restricted=false;
  const org="fixture-org",pid="fixture-project",id="tileset-fixture",region=[-.00003,-.00003,.00003,.00003,-1,50],transform=[0,1,0,0,0,0,1,0,1,0,0,0,6378137,0,0,1];
  const record={id,name:"Native Cesium tiles",byte_size:1000,tile_count:2,created_at:"2026-01-01"};
