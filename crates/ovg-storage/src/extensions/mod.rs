@@ -779,6 +779,7 @@ async fn activation_event(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn append_project_audit(
     edit: &mut ProjectRead<'_>,
     actor_id: Uuid,

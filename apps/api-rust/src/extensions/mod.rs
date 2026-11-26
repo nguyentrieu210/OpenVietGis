@@ -262,7 +262,7 @@ impl ExtensionError {
             EditError::Spatial(status, code, detail) => Self::Access(CatalogError::Spatial(
                 StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                 code,
-                detail,
+                detail.into(),
             )),
             EditError::Platform {
                 status,
