@@ -1818,6 +1818,8 @@ def batch_numbering(ctx: Ctx) -> None:
         "/previews",
         status=201,
         body=lambda d: preview(d, operation_id=str(uuid4())),
+        # Warning order follows each side's random building UUIDs (primary-key scan).
+        view=lambda b: {**b, "warnings": sorted(b["warnings"])},
     )
     ctx.pair(
         "E15 numbering targets after apply",
@@ -1908,7 +1910,9 @@ def main() -> int:
             art.mkdir()
             parity.configure_python(owner_url, runtime_url, art)
             baseline.run_alembic_upgrade(owner_url, runtime_url)
-            from modules.house_numbering.migrate import upgrade as upgrade_house_numbering
+            from modules.house_numbering.migrate import (
+                upgrade as upgrade_house_numbering,
+            )
 
             upgrade_house_numbering()
             fx = baseline.seed_benchmark_database(
