@@ -68,7 +68,7 @@ try{
  await page.locator('.ovg-cad-actions input[type="file"]:enabled').waitFor();
  await page.getByLabel("Thêm bản vẽ").setInputFiles({name:"building.dxf",mimeType:"application/octet-stream",buffer:Buffer.from("0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")});
 
- await page.locator("#ovg-cad-toolbar-slot").getByText("Sẵn sàng",{exact:true}).waitFor();
+ await page.locator(".ovg-cad-inline-toolbar").getByText("Sẵn sàng",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Lưu",exact:true}).click({noWaitAfter:true});
  await page.getByText("Đã lưu phiên bản 2.",{exact:false}).waitFor();
  await page.frameLocator('iframe[title^="OpenCAD Studio"]').locator("body[data-saved=yes]").waitFor();
