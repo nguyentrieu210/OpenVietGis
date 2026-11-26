@@ -82,9 +82,18 @@ async fn viewport(
     let bounds = ViewportBounds::new(query.west, query.south, query.east, query.north)
         .ok_or(RenderError::InvalidRequest)?;
     let mut read = project_read(&state, &auth, organization_id, project_id).await?;
-    let body = read.viewport(layer_id, &pins, bounds, query.limit).await?;
+    let body = read
+        .viewport_json(layer_id, &pins, bounds, query.limit)
+        .await?;
     read.commit().await?;
-    Ok(no_store(body))
+    Ok((
+        [
+            (header::CACHE_CONTROL, "no-store"),
+            (header::CONTENT_TYPE, "application/json"),
+        ],
+        body,
+    )
+        .into_response())
 }
 
 async fn display_extent(
