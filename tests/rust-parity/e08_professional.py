@@ -288,7 +288,7 @@ def main() -> int:
                         )
 
                     # 2. All 6 /pro/topology checks!
-                    # Also insert one invalid geometry row directly via owner_url into a temporary manual layer to test "invalid"
+                    # Also insert one invalid geometry row (geometry_state 'invalid': the table CHECK rejects an invalid 'present' geometry) directly via owner_url into a temporary manual layer to test "invalid"
                     inv_layer = make_layer(oracle, project_root, csrf, "Polygon", [], "Invalid Poly")
                     with psycopg.connect(owner_url) as conn:
                         conn.execute(
@@ -299,7 +299,7 @@ def main() -> int:
                             ) VALUES (
                                 %s, %s, %s, 'bowtie_1', '{"nm": "bad"}'::jsonb,
                                 ST_GeomFromText('POLYGON((0 0, 1 1, 1 0, 0 1, 0 0))', 4326),
-                                'present', %s, %s
+                                'invalid', %s, %s
                             )
                             """,
                             (
