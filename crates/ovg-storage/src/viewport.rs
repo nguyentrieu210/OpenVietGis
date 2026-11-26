@@ -270,8 +270,11 @@ impl ProjectRead<'_> {
                 && east >= 180.0
                 && south <= -WEB_MERCATOR_MAX_LATITUDE
                 && north >= WEB_MERCATOR_MAX_LATITUDE);
-        let extent_in_display_domain = snapshot.extent.is_some_and(|[_, min_y, _, max_y]| {
-            min_y >= -WEB_MERCATOR_MAX_LATITUDE && max_y <= WEB_MERCATOR_MAX_LATITUDE
+        let extent_in_display_domain = snapshot.extent.is_some_and(|[x0, y0, x1, y1]| {
+            x0 >= -180.0
+                && x1 <= 180.0
+                && y0 >= -WEB_MERCATOR_MAX_LATITUDE
+                && y1 <= WEB_MERCATOR_MAX_LATITUDE
         });
         let covers_source_extent = !self.gis_scoped
             && snapshot.extent.is_some_and(|[min_x, min_y, max_x, max_y]| {
@@ -402,17 +405,21 @@ impl ProjectRead<'_> {
         pins: &ReadPins<'_>,
         read: RenderRead,
     ) -> Result<Snapshot, AppError> {
+        // Its own statement: a GUC set inside a query only applies to later statements.
+        sqlx::query("SELECT set_config('statement_timeout', $1, true)")
+            .bind(MAP_STATEMENT_TIMEOUT)
+            .execute(&mut **self.tx.tx_mut())
+            .await
+            .map_err(unavailable)?;
         let source_id: Uuid = sqlx::query_scalar(
             "SELECT l.source_id
              FROM spatial.layers AS l
              WHERE l.organization_id = $1 AND l.project_id = $2 AND l.id = $3 AND l.lifecycle = 'active'
-               AND set_config('statement_timeout', $4, true) IS NOT NULL
              FOR SHARE OF l",
         )
         .bind(self.tx.organization_id())
         .bind(self.project_id)
         .bind(layer_id)
-        .bind(MAP_STATEMENT_TIMEOUT)
         .fetch_optional(&mut **self.tx.tx_mut())
         .await
         .map_err(db_error)?

@@ -123,55 +123,62 @@ impl<'a> ProjectRead<'a> {
 
         // The GIS restrictors are installed for the dedicated runtime role.
         // Refuse to serve data on an administrator or a role that bypasses RLS.
-        // Combine role/RLS, acl_internal clear, session, and membership checks
-        // into one round-trip while preserving exact fail-closed ordering.
-        let (safe_role, _cleared, current_session, member): (bool, bool, bool, bool) =
-            sqlx::query_as(
-                "SELECT
-                     current_user = 'openvietgis_runtime'
-                         AND row_security_active('spatial.layers'::regclass)
-                         AND row_security_active('spatial.data_sources'::regclass)
-                         AND row_security_active('spatial.source_fields'::regclass)
-                         AND row_security_active('spatial.reference_features'::regclass),
-                     set_config('openvietgis.acl_internal', '', true) IS NOT NULL,
-                     EXISTS (
-                         SELECT 1
-                         FROM identity.web_sessions AS s
-                         JOIN identity.users AS u ON u.id = s.user_id
-                         JOIN identity.identity_links AS l
-                           ON l.id = s.identity_link_id AND l.user_id = u.id
-                         WHERE s.id = $1 AND u.id = $2 AND u.status = 'active'
-                           AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
-                     ),
-                     EXISTS (
-                         SELECT 1 FROM org.organization_memberships
-                         WHERE organization_id = $3 AND user_id = $2 AND status = 'active'
-                     )",
-            )
-            .bind(session_id)
-            .bind(actor_id)
-            .bind(organization_id)
-            .fetch_one(&mut **tx.tx_mut())
-            .await
-            .map_err(db_error)?;
+        let safe_role: bool = sqlx::query_scalar(
+            "SELECT current_user = 'openvietgis_runtime'
+                 AND row_security_active('spatial.layers'::regclass)
+                 AND row_security_active('spatial.data_sources'::regclass)
+                 AND row_security_active('spatial.source_fields'::regclass)
+                 AND row_security_active('spatial.reference_features'::regclass)",
+        )
+        .fetch_one(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
         if !safe_role {
             return Err(AppError::internal(
                 "catalog requires the PostGIS runtime RLS role",
             ));
         }
+        tx.clear_project_context().await?;
+
+        let current_session: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                 SELECT 1
+                 FROM identity.web_sessions AS s
+                 JOIN identity.users AS u ON u.id = s.user_id
+                 JOIN identity.identity_links AS l ON l.id = s.identity_link_id AND l.user_id = u.id
+                 WHERE s.id = $1 AND u.id = $2 AND u.status = 'active'
+                   AND s.revoked_at IS NULL AND s.expires_at > clock_timestamp()
+             )",
+        )
+        .bind(session_id)
+        .bind(actor_id)
+        .fetch_one(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
         if !current_session {
             return Err(AppError::unauthorized("authentication required"));
         }
+
+        // Verify membership before touching the organization row. The check is
+        // repeated under the org -> project locks to serialize grant revocation.
+        let member: bool = sqlx::query_scalar(
+            "SELECT EXISTS (
+                 SELECT 1 FROM org.organization_memberships
+                 WHERE organization_id = $1 AND user_id = $2 AND status = 'active'
+             )",
+        )
+        .bind(organization_id)
+        .bind(actor_id)
+        .fetch_one(&mut **tx.tx_mut())
+        .await
+        .map_err(db_error)?;
         if !member {
             return Err(AppError::not_found("organization not found"));
         }
 
-        let org_sql = format!(
-            "SELECT status, gis_access.scoped($1, $2) FROM org.organizations WHERE id = $1 {lock}"
-        );
-        let (org_status, gis_scoped): (String, bool) = sqlx::query_as(&org_sql)
+        let org_sql = format!("SELECT status FROM org.organizations WHERE id = $1 {lock}");
+        let org_status: String = sqlx::query_scalar(&org_sql)
             .bind(organization_id)
-            .bind(project_id)
             .fetch_optional(&mut **tx.tx_mut())
             .await
             .map_err(db_error)?
@@ -188,6 +195,12 @@ impl<'a> ProjectRead<'a> {
             .await
             .map_err(db_error)?;
 
+        let gis_scoped = sqlx::query_scalar::<_, bool>("SELECT gis_access.scoped($1, $2)")
+            .bind(organization_id)
+            .bind(project_id)
+            .fetch_one(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
         if gis_scoped && !matches!(policy, ProjectReadPolicy::LayerAcl) {
             return Err(AppError::forbidden(
                 "Thao tác chưa được cấp quyền trong phạm vi GIS",
@@ -209,20 +222,18 @@ impl<'a> ProjectRead<'a> {
             )
         };
         let permission_sql = format!(
-            "SELECT CASE WHEN (
-                 m.role IN ('owner', 'admin') OR EXISTS (
-                     SELECT 1 FROM org.resource_grants AS g
-                     WHERE g.organization_id = m.organization_id
-                       AND g.membership_id = m.id AND g.subject_kind = 'membership'
-                       AND g.revoked_at IS NULL
-                       AND g.role IN ({roles})
-                       AND (
-                           g.scope_kind = 'organization'
-                           OR (g.scope_kind = 'workspace' AND g.workspace_id = $3)
-                           OR (g.scope_kind = 'project' AND g.project_id = $4)
-                       )
-                 )
-             ) THEN set_config('openvietgis.project_id', $5, true) IS NOT NULL ELSE false END
+            "SELECT m.role IN ('owner', 'admin') OR EXISTS (
+                 SELECT 1 FROM org.resource_grants AS g
+                 WHERE g.organization_id = m.organization_id
+                   AND g.membership_id = m.id AND g.subject_kind = 'membership'
+                   AND g.revoked_at IS NULL
+                   AND g.role IN ({roles})
+                   AND (
+                       g.scope_kind = 'organization'
+                       OR (g.scope_kind = 'workspace' AND g.workspace_id = $3)
+                       OR (g.scope_kind = 'project' AND g.project_id = $4)
+                   )
+             )
              FROM org.organization_memberships AS m
              WHERE m.organization_id = $1 AND m.user_id = $2 AND m.status = 'active'"
         );
@@ -231,7 +242,6 @@ impl<'a> ProjectRead<'a> {
             .bind(actor_id)
             .bind(workspace_id)
             .bind(project_id)
-            .bind(project_id.to_string())
             .fetch_optional(&mut **tx.tx_mut())
             .await
             .map_err(db_error)?
@@ -248,6 +258,11 @@ impl<'a> ProjectRead<'a> {
             ));
         }
 
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(project_id.to_string())
+            .execute(&mut **tx.tx_mut())
+            .await
+            .map_err(db_error)?;
         Ok(Self {
             tx,
             project_id,

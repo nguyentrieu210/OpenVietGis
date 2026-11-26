@@ -95,20 +95,17 @@ def compare(backends):
             and difference(oracle["reference_body"], candidate["reference_body"]) is None
         )
         oracle_p95 = oracle["warm"]["20"]["p95_ms"]
+        # a p95 ratio against an oracle that is already failing requests says nothing
         ratio = (
             candidate["warm"]["20"]["p95_ms"] / oracle_p95
-            if candidate_ok and (oracle_all_ok or oracle_ceiling) and oracle_p95 > 0
+            if candidate_ok and oracle_all_ok and oracle_p95 > 0
             else None
         )
         oracle_unreadable = scale == "30k" and oracle["reference_status"] == 503
         passes = candidate_ok and (
             oracle_unreadable
-            or (
-                (oracle_all_ok or oracle_ceiling)
-                and parity
-                and ratio is not None
-                and ratio <= 0.70
-            )
+            or (oracle_ceiling and parity)
+            or (oracle_all_ok and parity and ratio is not None and ratio <= 0.70)
         )
         comparison[scale] = {
             "oracle_status": oracle["reference_status"],
