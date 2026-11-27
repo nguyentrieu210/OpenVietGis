@@ -148,7 +148,7 @@ impl Drop for Scratch {
     }
 }
 
-fn worker_nonroot() -> bool {
+pub(crate) fn worker_nonroot() -> bool {
     // Production image runs UID 10001. Fail closed rather than launch a codec
     // as root if an operator overrides that security boundary.
     std::fs::read_to_string("/proc/self/status")
@@ -233,7 +233,7 @@ async fn worker(
             .get("error")
             .and_then(Value::as_str)
             .unwrap_or("Raster processing failed")
-            .replace(&scratch.0.to_string_lossy().to_string(), "<raster>");
+            .replace(scratch.0.to_string_lossy().as_ref(), "<raster>");
         return Err(invalid(message.chars().take(300).collect::<String>()));
     }
     if !value.is_object() {
@@ -487,7 +487,7 @@ fn sentinel_valid(scene: &str, baseline: &str) -> bool {
     let scene_ok = scene.len() <= 100
         && ["S2A_MSIL2A_", "S2B_MSIL2A_", "S2C_MSIL2A_", "S2D_MSIL2A_"]
             .iter()
-            .any(|prefix| scene.strip_prefix(prefix).is_some_and(|suffix| {
+            .any(|prefix| scene.strip_prefix(*prefix).is_some_and(|suffix| {
                 !suffix.is_empty()
                     && suffix.bytes().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
             }));

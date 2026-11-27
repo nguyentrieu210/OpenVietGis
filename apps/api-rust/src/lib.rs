@@ -34,6 +34,7 @@ pub(crate) mod org_chat;
 pub(crate) mod presence;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
+mod provider_worker;
 pub(crate) mod professional;
 pub(crate) mod queries;
 mod raster_compute;

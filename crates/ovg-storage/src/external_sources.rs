@@ -473,6 +473,36 @@ pub async fn list_connections(read: &mut ProjectRead<'_>) -> Result<Value, AppEr
     Ok(json!({"items": items}))
 }
 
+/// Internal provider proof input only. Never expose the stored endpoint or
+/// allowlist secret reference to a client or pass any actual credential to a worker.
+pub async fn provider_context(
+    read: &mut ProjectRead<'_>,
+    connection_id: Uuid,
+) -> Result<Value, AppError> {
+    let row = sqlx::query(
+        "SELECT to_jsonb(c) AS connection,
+                (to_jsonb(a) - 'secret_ref_name') ||
+                jsonb_build_object('secret_ref_name',
+                    CASE WHEN a.secret_ref_name IS NULL OR a.secret_ref_name = ''
+                         THEN NULL ELSE 'credentialed' END) AS allowlist
+         FROM external_sources.connections c
+         JOIN external_sources.allowlisted_hosts a
+           ON a.organization_id=c.organization_id AND a.id=c.allowlist_id
+         WHERE c.organization_id=$1 AND c.project_id=$2 AND c.id=$3
+         FOR SHARE OF c,a",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(connection_id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| AppError::not_found("external connection not found"))?;
+    let connection: Value = row.try_get("connection").map_err(db_error)?;
+    let allowlist: Value = row.try_get("allowlist").map_err(db_error)?;
+    Ok(json!({"connection": connection, "allowlist": allowlist}))
+}
+
 pub async fn update_lifecycle(
     edit: &mut ProjectRead<'_>,
     connection_id: Uuid,
