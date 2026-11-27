@@ -34,6 +34,7 @@ impl From<Error> for Failure{
         Error::CommandUnavailable=>Self::new(409,"Command unavailable"),
         Error::TokenExpired=>Self::new(401,"OAuth token expired"),
         Error::Version=>Self::new(409,"Update the workspace to use this tool"),
+        Error::ModeMismatch=>Self::new(409,"Tool not available in the active workspace mode; call gis_workspaces"),
     }}
 }
 impl IntoResponse for Failure{
@@ -134,7 +135,7 @@ async fn open(State(app):State<App>,h:HeaderMap,body:Bytes)->Result<Response,Fai
     let org=uuid(&v["organization_id"])?;let project=uuid(&v["project_id"])?;
     let version=v.get("workspace_version").and_then(Value::as_u64).filter(|v|*v==1||*v==2).unwrap_or(0) as u8;
     let owner=identity(&app,&cookie,org,project).await?;
-    let result=app.store()?.open(owner,version,app.now())?;
+    let mut store=app.store()?;let mode=v.get("workspace_mode").and_then(Value::as_str).unwrap_or("gis");if !["gis","cad","3d"].contains(&mode){return Err(Failure::new(422,"Invalid workspace mode"))}let result=store.open(owner.clone(),version,app.now())?;store.set_mode(result.session_id,&result.browser_token,&owner,mode,app.now())?;
     Ok(respond(201,json!(result)))
 }
 async fn browser_identity(app:&App,h:&HeaderMap,id:Uuid)->Result<(Owner,String),Failure>{
@@ -145,8 +146,9 @@ async fn browser_identity(app:&App,h:&HeaderMap,id:Uuid)->Result<(Owner,String),
     Ok((fresh,token))
 }
 async fn browser_action(State(app):State<App>,Path((id,action)):Path<(Uuid,String)>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
-    let _=parse(&body,&h)?;let(owner,token)=browser_identity(&app,&h,id).await?;
+    let v=parse(&body,&h)?;let(owner,token)=browser_identity(&app,&h,id).await?;
     let now=app.now();let mut s=app.store()?;
+    if let Some(mode)=v.get("workspace_mode").and_then(Value::as_str){s.set_mode(id,&token,&owner,mode,now)?;}
     let r=match action.as_str(){
         "ping"=>{s.ping(id,&token,&owner,now)?;json!({"alive":true})},
         "poll"=>{let c=s.poll(id,&token,&owner,now)?;json!({"command":c.map(|c|json!({"id":c.id,"method":c.method,"params":c.params,"expires_in":c.expires_at_ms.saturating_sub(now) as f64/1000.0}))})},
@@ -157,6 +159,7 @@ async fn browser_action(State(app):State<App>,Path((id,action)):Path<(Uuid,Strin
 async fn browser_command(State(app):State<App>,Path((id,cid,action)):Path<(Uuid,Uuid,String)>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
     let v=parse(&body,&h)?;let(owner,token)=browser_identity(&app,&h,id).await?;
     let now=app.now();let mut s=app.store()?;
+    if let Some(mode)=v.get("workspace_mode").and_then(Value::as_str){s.set_mode(id,&token,&owner,mode,now)?;}
     let r=match action.as_str(){
         "prepare"=>json!({"authorized":true,"expires_in":s.prepare(id,&token,&owner,cid,now)? as f64/1000.0}),
         "ack"=>{let ok=v["ok"].as_bool().ok_or(Failure::new(422,"Invalid acknowledgement"))?;s.ack(id,&token,&owner,cid,ok,v["result"].clone(),now)?;json!({"accepted":true})},
