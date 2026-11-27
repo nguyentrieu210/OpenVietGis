@@ -138,6 +138,119 @@ pub async fn file(read: &mut ProjectRead<'_>, layer_id: Uuid) -> Result<Option<V
     .map_err(db_error)
 }
 
+/// Return the project quota inside the current authorized transaction.
+pub async fn quota(read: &mut ProjectRead<'_>) -> Result<(i64, i64), AppError> {
+    sqlx::query_as(
+        "SELECT count(*)::bigint, COALESCE(sum(byte_size), 0)::bigint
+         FROM raster.layers WHERE organization_id=$1 AND project_id=$2",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .fetch_one(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub async fn metadata(
+    read: &mut ProjectRead<'_>,
+    id: Uuid,
+) -> Result<Option<(String, Value)>, AppError> {
+    sqlx::query_as(
+        "SELECT name, metadata FROM raster.layers
+         WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(id)
+    .fetch_optional(&mut **read.transaction())
+    .await
+    .map_err(db_error)
+}
+
+pub struct RasterTile {
+    pub z: i32,
+    pub x: i32,
+    pub y: i32,
+    pub png: Vec<u8>,
+}
+
+pub struct NewRaster {
+    pub name: String,
+    pub metadata: Value,
+    pub cog: Vec<u8>,
+    pub tiles: Vec<RasterTile>,
+    pub actor_id: Uuid,
+    pub actor_display: String,
+}
+
+/// Caller holds the unrestricted project write guard. Layer, tile pyramid and
+/// audit event commit atomically; no unverified worker output is published.
+pub async fn insert_layer(
+    edit: &mut ProjectRead<'_>,
+    input: NewRaster,
+) -> Result<Value, AppError> {
+    let id = Uuid::new_v4();
+    let organization_id = edit.organization_id();
+    let project_id = edit.project_id();
+    let byte_size = i64::try_from(
+        input.cog.len() + input.tiles.iter().map(|tile| tile.png.len()).sum::<usize>(),
+    )
+    .map_err(|_| AppError::internal("raster byte size overflow"))?;
+    let count = input.tiles.len();
+    let method = input.metadata.get("method").cloned().unwrap_or(Value::Null);
+    let row = sqlx::query(
+        "INSERT INTO raster.layers(organization_id,project_id,id,name,metadata,cog,byte_size)
+         VALUES($1,$2,$3,$4,$5,$6,$7)
+         RETURNING id,name,metadata,byte_size,created_at",
+    )
+    .bind(organization_id)
+    .bind(project_id)
+    .bind(id)
+    .bind(&input.name)
+    .bind(&input.metadata)
+    .bind(input.cog)
+    .bind(byte_size)
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    for tile in input.tiles {
+        sqlx::query(
+            "INSERT INTO raster.tiles(organization_id,project_id,layer_id,z,x,y,png)
+             VALUES($1,$2,$3,$4,$5,$6,$7)",
+        )
+        .bind(organization_id)
+        .bind(project_id)
+        .bind(id)
+        .bind(tile.z)
+        .bind(tile.x)
+        .bind(tile.y)
+        .bind(tile.png)
+        .execute(&mut **edit.transaction())
+        .await
+        .map_err(db_error)?;
+    }
+    sqlx::query(
+        "INSERT INTO audit.audit_events (
+            id,organization_id,actor_type,actor_id,actor_display_snapshot,
+            action,resource_type,resource_id,outcome,metadata,created_at)
+         VALUES ($1,$2,'human',$3,$4,'raster.layer.create',
+                 'raster_layer',$5,'success',$6,$7)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(organization_id)
+    .bind(input.actor_id)
+    .bind(input.actor_display)
+    .bind(id)
+    .bind(serde_json::json!({
+        "name": input.name, "method": method, "tiles": count, "byte_size": byte_size
+    }))
+    .bind(Utc::now())
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    wire(&row)
+}
+
 pub async fn delete_layer(
     edit: &mut ProjectRead<'_>,
     actor_id: Uuid,

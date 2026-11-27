@@ -2,12 +2,15 @@ FROM rust:1.85.1-slim-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
 COPY apps/api-rust apps/api-rust
+COPY apps/api/openvietgis_api/adapters/formats/raster_worker.py apps/api/openvietgis_api/adapters/formats/raster_worker.py
+COPY apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py
+COPY apps/api/openvietgis_api/adapters/formats/terrain_worker.py apps/api/openvietgis_api/adapters/formats/terrain_worker.py
 COPY crates crates
 COPY modules/house_numbering/rust modules/house_numbering/rust
 RUN cargo build --locked --release --no-default-features -p openvietgis-api-rust
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 python3-gdal python3-numpy \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts

@@ -36,6 +36,7 @@ pub(crate) mod processing;
 pub(crate) mod processing_models;
 pub(crate) mod professional;
 pub(crate) mod queries;
+mod raster_compute;
 pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;

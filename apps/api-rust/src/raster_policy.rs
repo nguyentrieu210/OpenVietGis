@@ -23,6 +23,7 @@ const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/raste
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
+        .merge(crate::raster_compute::router())
         .route(&format!("{BASE}/layers"), get(list_raster_layers))
         .route(
             &format!("{BASE}/layers/{{layer_id}}"),
