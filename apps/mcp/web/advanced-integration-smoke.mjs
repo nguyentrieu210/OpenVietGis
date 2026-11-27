@@ -1,7 +1,7 @@
 import {createRequire} from "node:module";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
-const require=createRequire("/opt/openvietgis/package.json"),{chromium}=require("@playwright/test");
+const require=createRequire(new URL("../../../package.json",import.meta.url)),{chromium}=require("@playwright/test");
 const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4192/rewrite/?live=1",origin=new URL(url).origin;
 const id=n=>"00000000-0000-4000-8000-"+String(n).padStart(12,"0");
 const org=id(1),pid=id(2),rid=id(3),model=id(4),layout=id(5),step=id(6),run=id(7),manifest=id(8),item=id(9),out=id(10);

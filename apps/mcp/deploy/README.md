@@ -23,23 +23,9 @@
    dedicated Keycloak client. Existing GIS login and API stay untouched.
 
 ## Frontend integration for web-next
-In apps/web-next/src/LiveApp.tsx import:
-    import {mountAiCopilot} from "../../mcp/web/first-party.js";
-    import "../../mcp/web/first-party.css";
 
-Inside LiveStudio, use the existing partnerBridge reference. Render a span with an element ref
-in live-map-top, only when data.restricted===false and project.read is present. Use a React effect:
-    const aiHost=useRef<HTMLSpanElement>(null);
-    const canConnectAi=data.restricted===false&&data.permissions.includes("project.read");
-    useEffect(()=>{
-      if(!canConnectAi||!aiHost.current)return;
-      return mountAiCopilot(aiHost.current,{
-        organizationId:org,projectId:pid,getBridge:()=>partnerBridge.current
-      });
-    },[canConnectAi,org,pid,partnerBridge]);
-
-Add {canConnectAi&&<span ref={aiHost}/>} beside the existing map search form.
-This needs a clean baseline because web-next/LiveApp.tsx is currently an untracked active file
-in the main worktree; do not overwrite the other ongoing edits. The existing map bridge guards
-busy/editor state, restricted data, visible selection and CRS. This widget unmounts on project
-change, drops session and requests fresh permission before an approved operation.
+The canonical panel is already integrated in `apps/web-next/src/AiCopilotPanel.tsx`.
+Its implementation lives in `apps/web-next/src/ai-copilot/`; use this source for
+changes and smoke tests rather than creating a second copy under `apps/mcp/web/`.
+The legacy scoped hotfix utility and browser checks remain for controlled recovery
+and verification. Normal releases build the canonical frontend.
