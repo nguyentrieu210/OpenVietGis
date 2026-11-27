@@ -1,20 +1,20 @@
 import {uiConfirm} from "./ui-dialog";
-import {TerrainEngineering} from "./TerrainEngineering";
+
 import React,{useEffect,useRef,useState,useMemo,useCallback,type FormEvent,type ReactNode} from "react";
 import * as ml from "./map-surface";
 import type {FeatureCollection,Geometry,Position} from "geojson";
-import {renameSpatialLayer,ApiError,projectApiPath,getCurrentUser,listIdentityProviders,loadCsrfToken,logout,listMyOrganizations,listProjects,createOrganization,createProject,updateProject,updateOrganization,listOrganizationMembers,listSpatialLayers,readSpatialFeatures,listSpatialSources,createSpatialLayer,retireSpatialLayer,listProjectActivations,registerOfficialExtension,listExtensionManifests,activateProjectExtension,commitChangeset,getEffectivePermissions,uploadImportAsset,inspectImportAsset,confirmImport,type ImportInspectionResponse,type CurrentUser,type MyOrganization,type Project,type SpatialLayer,type SpatialFeature,type SpatialFeatureDetail,type SpatialSource,type IdentityProviderSummary} from "@openvietgis/client-sdk";
+import {renameSpatialLayer,ApiError,projectApiPath,loadCsrfToken,listMyOrganizations,listProjects,createOrganization,createProject,updateProject,updateOrganization,listOrganizationMembers,listSpatialLayers,readSpatialFeatures,listSpatialSources,createSpatialLayer,retireSpatialLayer,listProjectActivations,registerOfficialExtension,listExtensionManifests,activateProjectExtension,commitChangeset,getEffectivePermissions,uploadImportAsset,inspectImportAsset,confirmImport,type ImportInspectionResponse,type CurrentUser,type MyOrganization,type Project,type SpatialLayer,type SpatialFeature,type SpatialFeatureDetail,type SpatialSource} from "@openvietgis/client-sdk";
 import "./live.css";
 import {CoreCommandBar,CoreRibbon} from "./CoreCommandBar";
 import {SpatialWorkspace} from "./SpatialWorkspace";
 import type {SourceFeatureRef} from "./TileFeaturePanel";
 import {ProcessingToolbox} from "./ProcessingToolbox";
-import {ProcessingModeler} from "./ProcessingModeler";
-import {RasterWorkbench,type RasterMethod} from "./RasterWorkbench";
+
+import type {RasterMethod} from "./RasterWorkbench";
 import {RasterReportWorkbench} from "./RasterReportWorkbench";
-import {SentinelWorkbench} from "./SentinelWorkbench";
+
 import {useProjectRaster} from "./ProjectRaster";
-import {SurveyWorkbench} from "./SurveyWorkbench";
+
 import {CoreWorkbench} from "./CoreWorkbench";
 import {useAdvancedEditor} from "./AdvancedEditor";
 import {useProfessionalTools} from "./ProfessionalTools";
@@ -66,39 +66,29 @@ import type {ScopeDraft} from "./AccessRules";
 import "./team-access.css";
 import "./workspace-picker.css";
 import "./header-status.css";
-import {Landing,appPath} from "./Landing";
-import {readInvitation,InviteAccept,InviteTeam,clearInvitation} from "./InviteFlow";
-import {captureHouseQrFocus,readHouseQrFocus,clearHouseQrFocus} from "./HouseQrLink";
+import {appPath} from "./Landing";
+import {InviteTeam} from "./InviteFlow";
+import {readHouseQrFocus,clearHouseQrFocus} from "./HouseQrLink";
 import {initialWorkspaceRoute} from "./route-compat";
-import {observeOnlineActor} from "./workbenches/features/offline/offline-store";
 import {apiClient as client} from "./workbenches/app/api";
-const msg=(e:unknown)=>e instanceof ApiError?e.status===401?"Phiên đăng nhập đã hết hạn.":e.status===403?"Bạn không có quyền thực hiện thao tác này.":e.status===409?"Dữ liệu đã thay đổi hoặc có xung đột. Hãy kiểm tra lại.":"API trả về HTTP "+e.status:e instanceof Error?e.message:"Không thể thực hiện thao tác.";
+// Optional panels are fetched only on invocation; keep the active workspace mounted.
+function lazyPanel<P extends object>(load:()=>Promise<{default:React.ComponentType<P>}>){
+ const Panel=React.lazy(load);
+ return function DeferredPanel(props:P){return <React.Suspense fallback={<p role="status" className="panel live-loading">Đang mở công cụ…</p>}><Panel {...props}/></React.Suspense>};
+}
+const TerrainEngineering=lazyPanel<React.ComponentProps<typeof import("./TerrainEngineering").TerrainEngineering>>(()=>import("./TerrainEngineering").then(m=>({default:m.TerrainEngineering})));
+const ProcessingModeler=lazyPanel<React.ComponentProps<typeof import("./ProcessingModeler").ProcessingModeler>>(()=>import("./ProcessingModeler").then(m=>({default:m.ProcessingModeler})));
+const SentinelWorkbench=lazyPanel<React.ComponentProps<typeof import("./SentinelWorkbench").SentinelWorkbench>>(()=>import("./SentinelWorkbench").then(m=>({default:m.SentinelWorkbench})));
+const SurveyWorkbench=lazyPanel<React.ComponentProps<typeof import("./SurveyWorkbench").SurveyWorkbench>>(()=>import("./SurveyWorkbench").then(m=>({default:m.SurveyWorkbench})));
+const RasterWorkbench=lazyPanel<React.ComponentProps<typeof import("./RasterWorkbench").RasterWorkbench>>(()=>import("./RasterWorkbench").then(m=>({default:m.RasterWorkbench})));
+import {msg} from "./api-error-message";
 const slug=(name:string)=>name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40)+"-"+crypto.randomUUID().slice(0,6);
 const colors=["#7253cc","#2879d2","#24a48c","#e6a13b","#cc6a96","#72a6a2"];
 const empty:FeatureCollection={type:"FeatureCollection",features:[]};
 
-export function LiveApp(){
- useEffect(()=>{captureHouseQrFocus(location.search)},[]);
- const [invitation,setInvitation]=useState(readInvitation),[preferredOrg,setPreferredOrg]=useState(initialWorkspaceRoute.org),[preferredProject,setPreferredProject]=useState(initialWorkspaceRoute.project);
- const [user,setUser]=useState<CurrentUser|null>(null),[providers,setProviders]=useState<IdentityProviderSummary[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState("");
- const [workspace,setWorkspace]=useState(()=>location.pathname!=="/");
- const enter=useCallback(()=>{history.replaceState(null,"",appPath);setWorkspace(true)},[]);
- const goHome=useCallback(()=>{history.replaceState(null,"",appPath.startsWith("/devui/")?appPath:"/");setWorkspace(false)},[]);
- const sessionGeneration=useRef(0),signingOut=useRef(false);
- const refresh=useCallback(async()=>{if(signingOut.current)return false;const generation=sessionGeneration.current;try{const who=await getCurrentUser(client);if(generation!==sessionGeneration.current||signingOut.current)return false;observeOnlineActor(who.status==="active"?who.id:null);setUser(who);setError("");return true}catch(e){if(generation!==sessionGeneration.current||signingOut.current)return false;if(e instanceof ApiError&&[401,403].includes(e.status))observeOnlineActor(null);setUser(null);client.setCsrfToken(undefined);if(!(e instanceof ApiError&&e.status===401))setError(msg(e));return false}finally{if(generation===sessionGeneration.current&&!signingOut.current)setLoading(false)}},[]);
- const onAuth=useCallback(async()=>{if(signingOut.current)return false;const generation=sessionGeneration.current;try{const who=await getCurrentUser(client);if(generation!==sessionGeneration.current||signingOut.current)return false;observeOnlineActor(who.status==="active"?who.id:null);setUser(who);setError("");enter();return true}catch(e){if(generation===sessionGeneration.current&&!(e instanceof ApiError&&e.status===401))setError(msg(e));return false}},[enter]);
- const signOut=async()=>{if(signingOut.current)return;signingOut.current=true;sessionGeneration.current++;try{await loadCsrfToken(client);await logout(client);observeOnlineActor(null);await clearSpatialCache(user!.id);client.setCsrfToken(undefined);setUser(null);window.location.replace("/")}catch(e){signingOut.current=false;throw e}};
- useEffect(()=>{void refresh();listIdentityProviders(client).then(setProviders).catch(e=>setError(msg(e)));const check=()=>void refresh();window.addEventListener("focus",check);return()=>window.removeEventListener("focus",check)},[refresh]);
- useEffect(()=>{const handleInviteLink=()=>{const params=new URLSearchParams(location.hash.slice(1));if(params.has("secret")||params.has("invitation_id"))setInvitation(readInvitation())};window.addEventListener("hashchange",handleInviteLink);return()=>window.removeEventListener("hashchange",handleInviteLink)},[]);
- useEffect(()=>{if(user&&workspace&&!invitation&&location.pathname!==appPath)history.replaceState(null,"",appPath)},[user,workspace,invitation]);
- if(loading)return <div className="auth-complete"><Brand/><p>Đang kiểm tra phiên…</p></div>;
- if(!user||!workspace&&!invitation)return <Landing provider={providers[0]?.id} error={error} invitation={!!invitation} authenticated={!!user} onAuth={onAuth} onWorkspace={enter} onDismissInvitation={()=>{clearInvitation();setInvitation(null)}}/>;
- if(invitation)return <InviteAccept client={client} user={user} invite={invitation} onDone={(id,pid)=>{setPreferredOrg(id);setPreferredProject(pid??"");setInvitation(null);enter()}} onCancel={()=>setInvitation(null)} onSignOut={signOut}/>;
- return <Tenant key={user.id+preferredOrg} user={user} preferredOrg={preferredOrg} preferredProject={preferredProject} signOut={signOut} expire={()=>{observeOnlineActor(null);void clearSpatialCache(user.id);setUser(null);client.setCsrfToken(undefined);goHome()}}/>;
-}
 function readResume(key:string):string{try{return localStorage.getItem(key)??""}catch{return ""}}
 function writeResume(key:string,value:string){try{if(value)localStorage.setItem(key,value)}catch{/* storage unavailable */}}
-function Tenant({user,expire,preferredOrg,preferredProject,signOut}:{user:CurrentUser;expire:()=>void;preferredOrg:string;preferredProject:string;signOut:()=>Promise<void>}){
+export function Tenant({user,expire,preferredOrg,preferredProject,signOut}:{user:CurrentUser;expire:()=>void;preferredOrg:string;preferredProject:string;signOut:()=>Promise<void>}){
  const [orgs,setOrgs]=useState<MyOrganization[]>([]),[projects,setProjects]=useState<Project[]>([]),[org,setOrg]=useState(""),[project,setProject]=useState(""),[dialog,setDialog]=useState<"org"|"project"|"team"|"developer"|"integrations"|"delete-project"|"delete-org"|null>(null),[name,setName]=useState(""),[members,setMembers]=useState<Awaited<ReturnType<typeof listOrganizationMembers>>>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const fail=(e:unknown)=>{if(e instanceof ApiError&&e.status===401)expire();setError(msg(e))};
  // First load: one loading screen instead of an empty org/project picker.

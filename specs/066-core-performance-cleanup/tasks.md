@@ -1,5 +1,5 @@
 # Tasks — 066
-All tasks pending. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
+Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
 
 ## W1 audit
 - [ ] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
@@ -23,7 +23,7 @@ All tasks pending. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/
 - [ ] T015 [P0] Split shell and engine mounts, preserve 065 UX — paths: `apps/web-next/src/LiveApp.tsx; SpatialWorkspace.tsx; map-surface.ts`. Acceptance: No eager other engine requests; screenshot/route tests.
 - [ ] T016 [P0] Scope bootstrap and protected-query dedup, cancellation, session epochs — paths: `apps/web-next/src/workbenches/app; SessionBoundary.tsx`. Acceptance: No stale cross-project response; request counts recorded.
 - [ ] T017 [P0] Restore CAD route and dirty state accurately — paths: `apps/web-next/src/CadTool.tsx; LayoutDesigner.tsx`. Acceptance: Untouched document no warning; changed draft recovered.
-- [ ] T018 [P1] Analyze bundles, split optional workbench/styles/assets, prefetch selectively — paths: `apps/web-next/vite.config.ts; package.json; style.css`. Acceptance: Measured compressed JS and waterfall improvement.
+- [x] T018 [P1] Analyze bundles, split optional workbench/styles/assets, prefetch selectively — paths: `apps/web-next/vite.config.ts; package.json; style.css`. Acceptance: Measured compressed JS and waterfall improvement.
 - [ ] T019 [P1] Lifecycle cleanup of listeners, workers, map and render loops — paths: `apps/web-next/src; packages/spatial-workspace`. Acceptance: Repeated module switch soak: no unbounded memory growth.
 
 ## W4 cache

@@ -33,6 +33,7 @@ const server = createServer(async (req,res)=>{
   const path = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
   if (req.method==="GET") {
     if(path==="/api/v1/me") return send(res,200,{id:"actor1",display_name:"Fixture",status:"active",email_snapshot:null});
+    if(path==="/api/v1/auth/providers") return send(res,200,[]);
     if(path===project+"/layers") return send(res,200,{items:[]});
     if(path===project+"/field/packages") return send(res,200,{items:[metadata]});
     if(path===project+"/field/packages/p1/download") return send(res,200,gpkg,"application/geopackage+sqlite3");
@@ -48,7 +49,7 @@ const server = createServer(async (req,res)=>{
     if(submissions.length===1) return send(res,503,{code:"ACK_LOST"});
     return send(res,201,{id:"receipt1",status:"applied",applied_changeset_ids:["cs1"],conflicts:[]});
   }
-  const name = files.get(path) ?? (/^\/offline-field\/[^/]+\/[^/]+\/?$/.test(path) ? "index.html" : null);
+  const name = files.get(path) ?? ((path==="/" || path==="/app" || /^\/offline-field\/[^/]+\/[^/]+\/?$/.test(path)) ? "index.html" : null);
   if (!name || req.method !== "GET") return send(res,path.startsWith("/api/") ? 503 : 404,{fixture:"No API forwarding"});
   try { return send(res,200,await readFile(join(root,name)),mime[extname(name)]??"application/octet-stream"); }
   catch { return send(res,404,{fixture:"static missing"}); }

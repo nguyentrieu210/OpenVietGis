@@ -1,5 +1,5 @@
 # Feature Specification: 066 Core Architecture, Cleanup & Performance
-Status: specified / planned; implementation not started. Date: 2026-11-27.
+Status: implementation in progress; slice 01 verified locally; no release certification. Date: 2026-11-27.
 Parent roadmap: v1.0 (030), R001/R015 cross-cutting; dependencies R002–R014, 062 single frontend, 064 Rust platform, 065 QGIS UX (coordinate after merge).
 Baseline source snapshot: 5bfc83826161acd83b98a925e85690cebde53ae1. This is a source inventory, not a production runtime certification.
 
