@@ -1,0 +1,500 @@
+//! Numbering proposals: creation, queue, detail and the approval state machine.
+
+use ovg_core::AppError;
+use serde_json::{json, Value};
+use sqlx::Row;
+use uuid::Uuid;
+
+use super::hierarchy::get_route;
+use super::{append_audit, db_error, wire, wire_py, AuditActor};
+use crate::catalog::ProjectRead;
+
+/// Python `repr(str)` for messages that embed raw numbers.
+pub(crate) fn py_repr(value: &str) -> String {
+    let quote = if value.contains('\'') && !value.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push(quote);
+    for ch in value.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
+pub async fn get_rule(edit: &mut ProjectRead<'_>, rule_id: Uuid) -> Result<Value, AppError> {
+    let row = sqlx::query(
+        "SELECT to_jsonb(r) - 'max_distance_m' AS wire, r.max_distance_m::float8 AS max_distance
+         FROM house_numbering.rules r
+         WHERE r.organization_id=$1 AND r.project_id=$2 AND r.id=$3",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(rule_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?
+    .ok_or_else(|| AppError::not_found("numbering rule not found"))?;
+    let mut value = wire(&row)?;
+    value["max_distance_m"] = json!(row.try_get::<f64, _>("max_distance").map_err(db_error)?);
+    Ok(value)
+}
+
+pub async fn create_proposal(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    scope_kind: &str,
+    scope_id: Uuid,
+    rule_id: Uuid,
+    building_ids: &[Uuid],
+) -> Result<Value, AppError> {
+    if scope_kind == "route" {
+        get_route(edit, scope_id, false).await?;
+    } else {
+        let area = sqlx::query(
+            "SELECT 1 AS hit FROM house_numbering.areas
+             WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+        )
+        .bind(edit.organization_id())
+        .bind(edit.project_id())
+        .bind(scope_id)
+        .fetch_optional(&mut **edit.transaction())
+        .await
+        .map_err(db_error)?;
+        if area.is_none() {
+            return Err(AppError::validation(
+                "VALIDATION_ERROR",
+                "proposal area does not exist",
+            ));
+        }
+    }
+    get_rule(edit, rule_id).await?;
+    let mut numbers: Vec<(Uuid, Uuid, String)> = Vec::new();
+    for building_id in building_ids {
+        let row = sqlx::query(
+            "SELECT id, building_id, number_text, kind FROM house_numbering.address_numbers
+             WHERE organization_id=$1 AND project_id=$2 AND building_id=$3
+               AND retired_at IS NULL AND kind IN ('proposed','submitted','approved')
+             ORDER BY CASE kind WHEN 'approved' THEN 1 WHEN 'submitted' THEN 2 ELSE 3 END
+             LIMIT 1",
+        )
+        .bind(edit.organization_id())
+        .bind(edit.project_id())
+        .bind(building_id)
+        .fetch_optional(&mut **edit.transaction())
+        .await
+        .map_err(db_error)?;
+        let Some(row) = row else {
+            return Err(missing_proposed());
+        };
+        if row.try_get::<String, _>("kind").map_err(db_error)? != "proposed" {
+            return Err(missing_proposed());
+        }
+        numbers.push((
+            row.try_get("id").map_err(db_error)?,
+            row.try_get("building_id").map_err(db_error)?,
+            row.try_get("number_text").map_err(db_error)?,
+        ));
+    }
+    let now = chrono::Utc::now();
+    let proposal_id = Uuid::new_v4();
+    let proposal = sqlx::query(
+        "WITH inserted AS (
+            INSERT INTO house_numbering.proposals (
+                id,organization_id,project_id,scope_kind,scope_id,rule_id,status,revision,
+                created_by_actor_id,updated_by_actor_id,created_at,updated_at
+            ) VALUES ($1,$2,$3,$4,$5,$6,'draft',1,$7,$7,$8,$8)
+            RETURNING *
+         )
+         SELECT to_jsonb(inserted) AS wire FROM inserted",
+    )
+    .bind(proposal_id)
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(scope_kind)
+    .bind(scope_id)
+    .bind(rule_id)
+    .bind(actor.id)
+    .bind(now)
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    let proposal = wire(&proposal)?;
+    let mut items = Vec::new();
+    for (number_id, building_id, number_text) in &numbers {
+        let row = sqlx::query(
+            "WITH inserted AS (
+                INSERT INTO house_numbering.proposal_items (
+                    id,organization_id,project_id,proposal_id,building_id,proposed_number,
+                    source_number_id,created_at
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                RETURNING *
+             )
+             SELECT to_jsonb(inserted) AS wire FROM inserted",
+        )
+        .bind(Uuid::new_v4())
+        .bind(edit.organization_id())
+        .bind(edit.project_id())
+        .bind(proposal_id)
+        .bind(building_id)
+        .bind(number_text)
+        .bind(number_id)
+        .bind(now)
+        .fetch_one(&mut **edit.transaction())
+        .await
+        .map_err(db_error)?;
+        items.push(wire(&row)?);
+    }
+    append_audit(
+        edit,
+        actor,
+        "house_numbering.proposal.create",
+        "house_numbering_proposal",
+        proposal_id,
+        json!({ "items": items.len() }),
+    )
+    .await?;
+    Ok(json!({ "proposal": proposal, "items": items }))
+}
+
+fn missing_proposed() -> AppError {
+    AppError::conflict(
+        "MISSING_PROPOSED_NUMBER",
+        "every proposal item needs a proposed number",
+    )
+}
+
+async fn load_proposal(
+    edit: &mut ProjectRead<'_>,
+    proposal_id: Uuid,
+    for_update: bool,
+) -> Result<(Value, Vec<Value>), AppError> {
+    let sql = if for_update {
+        "SELECT to_jsonb(p) || jsonb_build_object('rule_status',r.status,'authority_ref',r.authority_ref) AS wire
+         FROM house_numbering.proposals p
+         JOIN house_numbering.rules r
+           ON r.organization_id=p.organization_id AND r.project_id=p.project_id AND r.id=p.rule_id
+         WHERE p.organization_id=$1 AND p.project_id=$2 AND p.id=$3 FOR UPDATE"
+    } else {
+        "SELECT to_jsonb(p) || jsonb_build_object('rule_status',r.status,'authority_ref',r.authority_ref) AS wire
+         FROM house_numbering.proposals p
+         JOIN house_numbering.rules r
+           ON r.organization_id=p.organization_id AND r.project_id=p.project_id AND r.id=p.rule_id
+         WHERE p.organization_id=$1 AND p.project_id=$2 AND p.id=$3"
+    };
+    let proposal = sqlx::query(sql)
+        .bind(edit.organization_id())
+        .bind(edit.project_id())
+        .bind(proposal_id)
+        .fetch_optional(&mut **edit.transaction())
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| AppError::not_found("proposal not found"))?;
+    let proposal = wire(&proposal)?;
+    let rows = sqlx::query(
+        "SELECT to_jsonb(i) || jsonb_build_object(
+            'eligibility',b.eligibility,'number_kind',n.kind,'route_id',n.route_id) AS wire
+         FROM house_numbering.proposal_items i
+         JOIN house_numbering.buildings b
+           ON b.organization_id=i.organization_id AND b.project_id=i.project_id AND b.id=i.building_id
+         LEFT JOIN house_numbering.address_numbers n
+           ON n.organization_id=i.organization_id AND n.project_id=i.project_id AND n.id=i.source_number_id
+         WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+         ORDER BY i.created_at,i.id",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(proposal_id)
+    .fetch_all(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    let items = rows.iter().map(wire).collect::<Result<Vec<_>, _>>()?;
+    Ok((proposal, items))
+}
+
+pub async fn get_proposal(
+    read: &mut ProjectRead<'_>,
+    proposal_id: Uuid,
+) -> Result<Value, AppError> {
+    let (proposal, items) = load_proposal(read, proposal_id, false).await?;
+    Ok(json!({ "proposal": proposal, "items": items }))
+}
+
+pub async fn list_proposals(
+    read: &mut ProjectRead<'_>,
+    status: Option<&str>,
+    offset: i64,
+    limit: i64,
+) -> Result<Value, AppError> {
+    let rows = sqlx::query(
+        "SELECT jsonb_build_object(
+            'id',p.id,'scope_kind',p.scope_kind,'scope_id',p.scope_id,'status',p.status,
+            'revision',p.revision,'rule_id',p.rule_id,'created_at',p.created_at,
+            'updated_at',p.updated_at,'submitted_at',p.submitted_at,'decided_at',p.decided_at,
+            'decision_comment',p.decision_comment,'rule_version',r.version,'rule_status',r.status,
+            'authority_ref',r.authority_ref,
+            'item_count',(SELECT count(*) FROM house_numbering.proposal_items i
+               WHERE i.organization_id=p.organization_id AND i.project_id=p.project_id
+                 AND i.proposal_id=p.id)) AS wire
+         FROM house_numbering.proposals p JOIN house_numbering.rules r
+           ON (r.organization_id,r.project_id,r.id)=(p.organization_id,p.project_id,p.rule_id)
+         WHERE p.organization_id=$1 AND p.project_id=$2 AND ($3::text IS NULL OR p.status=$3::text)
+         ORDER BY p.updated_at DESC,p.id LIMIT $4 OFFSET $5",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .bind(status)
+    .bind(limit + 1)
+    .bind(offset)
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+    let has_more = i64::try_from(rows.len()).unwrap_or(i64::MAX) > limit;
+    let items = rows
+        .iter()
+        .take(usize::try_from(limit).unwrap_or(0))
+        .map(wire_py)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(json!({
+        "items": items,
+        "next_offset": if has_more { json!(offset + limit) } else { Value::Null },
+    }))
+}
+
+async fn move_numbers(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    proposal_id: Uuid,
+    from: &str,
+    to: &str,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "UPDATE house_numbering.address_numbers n SET kind=$5,revision=revision+1,
+             updated_by_actor_id=$6,updated_at=$7
+         FROM house_numbering.proposal_items i
+         WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+           AND n.organization_id=i.organization_id AND n.project_id=i.project_id
+           AND n.id=i.source_number_id AND n.kind=$4",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(proposal_id)
+    .bind(from)
+    .bind(to)
+    .bind(actor.id)
+    .bind(now)
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    Ok(())
+}
+
+fn blank(comment: Option<&str>) -> bool {
+    comment.is_none_or(|value| value.trim().is_empty())
+}
+
+fn invalid_items(items: &[Value], kind: &str) -> bool {
+    items.iter().any(|item| {
+        item["eligibility"].as_str() == Some("ineligible")
+            || item["number_kind"].as_str() != Some(kind)
+    })
+}
+
+pub async fn transition_proposal(
+    edit: &mut ProjectRead<'_>,
+    actor: AuditActor<'_>,
+    proposal_id: Uuid,
+    expected_revision: i64,
+    action: &str,
+    comment: Option<&str>,
+    reviewer: bool,
+) -> Result<Value, AppError> {
+    let (proposal, items) = load_proposal(edit, proposal_id, true).await?;
+    if proposal["revision"].as_i64() != Some(expected_revision) {
+        return Err(AppError::conflict(
+            "STALE_PROPOSAL",
+            "proposal revision is stale",
+        ));
+    }
+    let state = proposal["status"].as_str().unwrap_or_default().to_owned();
+    let now = chrono::Utc::now();
+    let invalid_item = || {
+        AppError::conflict(
+            "INVALID_PROPOSAL_ITEM",
+            "proposal contains ineligible or stale items",
+        )
+    };
+    let (new_state, submitted_at, keep_submitted, decided_at): (
+        &str,
+        Option<chrono::DateTime<chrono::Utc>>,
+        bool,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ) = match (action, state.as_str(), reviewer) {
+        ("submit", "draft", _) => {
+            if invalid_items(&items, "proposed") {
+                return Err(invalid_item());
+            }
+            let mut route_ids: Vec<Uuid> = items
+                .iter()
+                .filter_map(|item| item["route_id"].as_str())
+                .filter_map(|value| Uuid::parse_str(value).ok())
+                .collect();
+            route_ids.sort();
+            route_ids.dedup();
+            if !route_ids.is_empty() {
+                sqlx::query(
+                    "SELECT id FROM house_numbering.routes
+                         WHERE organization_id=$1 AND project_id=$2 AND id = ANY($3)
+                         ORDER BY id FOR UPDATE",
+                )
+                .bind(edit.organization_id())
+                .bind(edit.project_id())
+                .bind(&route_ids)
+                .fetch_all(&mut **edit.transaction())
+                .await
+                .map_err(db_error)?;
+            }
+            let duplicate = sqlx::query(
+                "SELECT n.number_text
+                     FROM house_numbering.proposal_items i
+                     JOIN house_numbering.address_numbers n
+                       ON n.organization_id=i.organization_id AND n.project_id=i.project_id
+                      AND n.id=i.source_number_id
+                     WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+                     GROUP BY n.route_id,n.number_text
+                     HAVING count(*) > 1
+                     LIMIT 1",
+            )
+            .bind(edit.organization_id())
+            .bind(edit.project_id())
+            .bind(proposal_id)
+            .fetch_optional(&mut **edit.transaction())
+            .await
+            .map_err(db_error)?;
+            let occupied = sqlx::query(
+                "SELECT n.number_text
+                     FROM house_numbering.proposal_items i
+                     JOIN house_numbering.address_numbers n
+                       ON n.organization_id=i.organization_id AND n.project_id=i.project_id
+                      AND n.id=i.source_number_id
+                     JOIN house_numbering.address_numbers existing
+                       ON existing.organization_id=n.organization_id
+                      AND existing.project_id=n.project_id
+                      AND existing.route_id=n.route_id
+                      AND existing.number_text=n.number_text
+                      AND existing.id<>n.id
+                      AND existing.retired_at IS NULL
+                      AND existing.kind IN ('submitted','approved','reserved')
+                     WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+                     LIMIT 1",
+            )
+            .bind(edit.organization_id())
+            .bind(edit.project_id())
+            .bind(proposal_id)
+            .fetch_optional(&mut **edit.transaction())
+            .await
+            .map_err(db_error)?;
+            if let Some(row) = duplicate.or(occupied) {
+                let number: String = row.try_get("number_text").map_err(db_error)?;
+                return Err(AppError::conflict(
+                    "NUMBER_OCCUPIED",
+                    format!(
+                        "number {} is already occupied on this route",
+                        py_repr(&number)
+                    ),
+                ));
+            }
+            move_numbers(edit, actor, proposal_id, "proposed", "submitted", now).await?;
+            ("submitted", Some(now), false, None)
+        }
+        ("withdraw", "submitted", false) => {
+            if blank(comment) {
+                return Err(AppError::validation(
+                    "VALIDATION_ERROR",
+                    "withdrawal requires a reason",
+                ));
+            }
+            move_numbers(edit, actor, proposal_id, "submitted", "proposed", now).await?;
+            ("draft", None, false, Some(now))
+        }
+        ("reject", "submitted", true) => {
+            if blank(comment) {
+                return Err(AppError::validation(
+                    "VALIDATION_ERROR",
+                    "rejection requires a reason",
+                ));
+            }
+            move_numbers(edit, actor, proposal_id, "submitted", "proposed", now).await?;
+            ("draft", None, false, Some(now))
+        }
+        ("approve", "submitted", true) => {
+            if proposal["rule_status"].as_str() != Some("authoritative")
+                || proposal["authority_ref"].as_str().is_none_or(str::is_empty)
+            {
+                return Err(AppError::conflict(
+                    "RULE_NOT_AUTHORITATIVE",
+                    "approval requires authoritative rule",
+                ));
+            }
+            if invalid_items(&items, "submitted") {
+                return Err(invalid_item());
+            }
+            move_numbers(edit, actor, proposal_id, "submitted", "approved", now).await?;
+            ("approved", None, true, Some(now))
+        }
+        _ => {
+            return Err(AppError::conflict(
+                "INVALID_PROPOSAL_TRANSITION",
+                "invalid proposal transition",
+            ))
+        }
+    };
+    let row = sqlx::query(
+        "WITH updated AS (
+            UPDATE house_numbering.proposals
+            SET status=$4,decision_comment=$5,revision=revision+1,updated_by_actor_id=$6,
+                submitted_at=CASE WHEN $10 THEN submitted_at ELSE $7 END,decided_at=$8,updated_at=$9
+            WHERE organization_id=$1 AND project_id=$2 AND id=$3
+            RETURNING *
+         )
+         SELECT to_jsonb(updated) AS wire FROM updated",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(proposal_id)
+    .bind(new_state)
+    .bind(comment)
+    .bind(actor.id)
+    .bind(submitted_at)
+    .bind(decided_at)
+    .bind(now)
+    .bind(keep_submitted)
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    let result = wire(&row)?;
+    append_audit(
+        edit,
+        actor,
+        &format!("house_numbering.proposal.{action}"),
+        "house_numbering_proposal",
+        proposal_id,
+        json!({ "state": new_state }),
+    )
+    .await?;
+    Ok(result)
+}

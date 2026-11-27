@@ -959,6 +959,8 @@ dependencies = [
  "ovg-module-sdk",
  "serde",
  "serde_json",
+ "sha2",
+ "unicode-normalization",
  "uuid",
 ]
 

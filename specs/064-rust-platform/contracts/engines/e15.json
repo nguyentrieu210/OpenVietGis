@@ -30,6 +30,11 @@
       "retain": 34,
       "replace": 0,
       "approved_retire": 0
+    },
+    "rust_route_status": {
+      "native": 57,
+      "retain": 6,
+      "pending": 9
     }
   },
   "auth_and_tenant_boundaries": {
@@ -119,7 +124,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -200,7 +207,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -282,7 +291,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -364,7 +375,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -442,7 +455,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -523,7 +538,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -605,7 +622,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -686,7 +705,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -767,7 +788,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -848,7 +871,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -929,7 +954,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1010,7 +1037,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1091,7 +1120,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1172,7 +1203,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1253,7 +1286,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1333,7 +1368,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1414,7 +1451,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1495,7 +1534,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1577,7 +1618,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1659,7 +1702,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1738,7 +1783,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1820,7 +1867,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1899,7 +1948,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -1981,7 +2032,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -2062,7 +2115,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -2089,7 +2144,7 @@
       ],
       "response_model": "dict",
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -2143,7 +2198,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Renders inspection/certificate DOCX/PDF templates with the Python document engine; Rust serves history and downloads."
     },
     {
       "methods": [
@@ -2170,7 +2227,7 @@
       ],
       "response_model": "dict",
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -2224,7 +2281,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Same Python document renderer as single issue, batched."
     },
     {
       "methods": [
@@ -2303,7 +2362,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -2330,7 +2391,7 @@
       ],
       "response_model": "dict",
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -2384,7 +2445,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Encodes CSV/GeoJSON/DXF/Shapefile ZIP with ezdxf and pyshp; Rust serves the stored artifact downloads."
     },
     {
       "methods": [
@@ -2463,7 +2526,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -2544,7 +2609,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -2626,7 +2693,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native address verification report/listing; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2708,7 +2777,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native batch address verification write path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2791,7 +2862,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native single address verification write path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2873,7 +2946,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native verified-link preview/apply planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -2955,7 +3030,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native verified-link preview/apply planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -3033,7 +3110,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3066,7 +3145,7 @@
       ],
       "response_model": "dict",
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -3120,7 +3199,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Multipart CSV/XLSX/DXF evidence parsing with the Python importer stack; Rust lists import batches."
     },
     {
       "methods": [
@@ -3200,7 +3281,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3281,7 +3364,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native approved-address integration projection with scoped service credentials via ProjectRead::begin_service; differential bearer/revocation parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -3363,7 +3448,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3444,7 +3531,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3524,7 +3613,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3605,7 +3696,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3683,7 +3776,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3708,7 +3803,7 @@
       "body_params": [],
       "response_model": null,
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -3761,7 +3856,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Builds the progress workbook with openpyxl; the JSON progress summary is Rust-native."
     },
     {
       "methods": [
@@ -3843,7 +3940,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -3924,7 +4023,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4003,7 +4104,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4033,7 +4136,7 @@
       "body_params": [],
       "response_model": null,
       "transport": "HTTP",
-      "classification": "migrate",
+      "classification": "retain",
       "auth_boundary": {
         "tenant_scope": "organization+project",
         "project_access_guard": true,
@@ -4086,7 +4189,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "retain",
+      "rust_note": "Renders decision/appendix/plate PDFs and the register XLSX with Pillow, qrcode and openpyxl; authorization stays in the shared module scope."
     },
     {
       "methods": [
@@ -4168,7 +4273,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4249,7 +4356,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4331,7 +4440,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4410,7 +4521,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4491,7 +4604,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4572,7 +4687,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native route-tree import apply path with preview-token and recovery semantics; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4653,7 +4770,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native route-tree import preview/recovery/topology planner; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4734,7 +4853,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Rust-native staged geometry review path; differential parity covered in e15_full_parity.py."
     },
     {
       "methods": [
@@ -4812,7 +4933,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4893,7 +5016,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -4973,7 +5098,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5055,7 +5182,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5133,7 +5262,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5214,7 +5345,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5299,7 +5432,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5379,7 +5514,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5462,7 +5599,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5544,7 +5683,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5625,7 +5766,10 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_note": "Multipart photo ingestion into the module artifact store; Rust has no multipart stack yet (sync already validates stored photos).",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5706,7 +5850,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5786,7 +5932,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     },
     {
       "methods": [
@@ -5868,7 +6016,9 @@
         "tests/e2e/house-numbering.spec.ts",
         "tests/modules/test_house_numbering_domain.py",
         "tests/modules/test_reference_modules.py"
-      ]
+      ],
+      "rust_status": "native",
+      "rust_parity": "tests/rust-parity/e15_full_parity.py"
     }
   ],
   "realtime_contracts": [],

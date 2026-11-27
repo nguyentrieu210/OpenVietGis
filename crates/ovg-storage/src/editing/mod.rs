@@ -100,6 +100,23 @@ pub struct ServiceAuth {
     credential_id: Uuid,
 }
 
+impl ServiceAuth {
+    #[must_use]
+    pub fn organization_id(&self) -> Uuid {
+        self.organization_id
+    }
+
+    #[must_use]
+    pub fn principal_id(&self) -> Uuid {
+        self.principal_id
+    }
+
+    #[must_use]
+    pub fn credential_id(&self) -> Uuid {
+        self.credential_id
+    }
+}
+
 fn invalid_credential() -> EditError {
     EditError::detail(401, "invalid service credential")
 }
