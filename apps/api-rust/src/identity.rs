@@ -785,7 +785,8 @@ async fn begin_login(
     let meta = oidc_worker::discover(&provider_cfg.issuer)
         .await
         .map_err(|err| match err {
-            OidcWorkerError::InvalidResponse(_) => {
+            OidcWorkerError::InvalidResponse(reason) => {
+                tracing::warn!(%reason, "OIDC discovery failed");
                 IdentityError::Http(StatusCode::BAD_GATEWAY, "identity provider unavailable")
             }
             OidcWorkerError::Internal(msg) => IdentityError::from(AppError::internal(msg)),
@@ -940,7 +941,8 @@ async fn complete_login(
     .await
     {
         Ok(claims) => claims,
-        Err(OidcWorkerError::InvalidResponse(_)) => {
+        Err(OidcWorkerError::InvalidResponse(reason)) => {
+            tracing::warn!(%reason, "OIDC exchange failed");
             return Ok(json_error_with_clear(
                 StatusCode::BAD_REQUEST,
                 "invalid OIDC response",

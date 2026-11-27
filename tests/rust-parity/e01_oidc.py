@@ -405,7 +405,7 @@ def main() -> int:
     parser.add_argument("--candidate", required=True)
     args = parser.parse_args()
     binary = Path(args.candidate).resolve()
-    admin_url = os.environ.get("OPENVIETGIS_PARITY_ADMIN_URL", baseline.DEFAULT_ADMIN_PG_URL)
+    admin_url = os.environ.get("OVG_PARITY_PG_ADMIN_URL", baseline.DEFAULT_ADMIN_PG_URL)
 
     with MockOidcIdp().running() as idp:
         providers_json = json.dumps(
@@ -429,6 +429,7 @@ def main() -> int:
             artifacts.mkdir()
             with parity.database(admin_url) as (owner_url, runtime_url):
                 parity.configure_python(owner_url, runtime_url, artifacts)
+                baseline.run_alembic_upgrade(owner_url, runtime_url)
                 os.environ["OPENVIETGIS_OIDC_PROVIDERS"] = providers_json
                 os.environ["OPENVIETGIS_WEB_BASE_URL"] = "http://127.0.0.1:5173"
                 os.environ["OPENVIETGIS_API_PUBLIC_BASE_URL"] = "http://127.0.0.1:8000"
@@ -440,9 +441,14 @@ def main() -> int:
                 from openvietgis_api.main import app
 
                 get_settings.cache_clear()
-                seeded_o = parity.seed(owner_url)
+                seeded_o = baseline.seed_benchmark_database(
+                    owner_url,
+                    seed=20261127,
+                    scales=["1k"],
+                    csrf_secret=baseline.DEFAULT_CSRF_SECRET,
+                )
                 seeded_other = {
-                    "user_id": seeded_o["user_b_id"],
+                    "user_id": str(seeded_o["user_b_id"]),
                     "token": seeded_o["session_b_token"],
                 }
 
