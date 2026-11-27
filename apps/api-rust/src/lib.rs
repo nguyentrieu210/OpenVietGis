@@ -6,11 +6,20 @@ pub(crate) mod catalog;
 pub(crate) mod collaboration;
 pub mod config;
 pub mod connectors;
+pub(crate) mod edit_auth;
 pub(crate) mod editing;
 pub mod error;
 pub(crate) mod extensions;
 pub(crate) mod field_offline;
+#[cfg(feature = "house-numbering")]
 pub(crate) mod house_numbering;
+/// Without the official module compiled in, Core mounts no house-numbering routes.
+#[cfg(not(feature = "house-numbering"))]
+pub(crate) mod house_numbering {
+    pub(crate) fn router() -> axum::Router<crate::AppState> {
+        axum::Router::new()
+    }
+}
 pub(crate) mod identity;
 pub(crate) mod managed_sync;
 pub(crate) mod map_render;
@@ -21,6 +30,7 @@ pub(crate) mod org_chat;
 pub(crate) mod presence;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
+pub(crate) mod professional;
 pub(crate) mod queries;
 pub mod raster_policy;
 pub mod routes;

@@ -36,12 +36,12 @@ use crate::{DbPool, TenantTransaction};
 pub enum Guard {
     /// GET: `FOR SHARE` locks; scoped accounts denied.
     Read,
+    /// GET in `SAFE_GET`: `FOR SHARE` locks; scoped accounts continue.
+    ReadScopedAllowed,
     /// POST in `SAFE_POST`: `FOR UPDATE` locks; scoped accounts continue.
     ScopedAllowed,
     /// Other POST: `FOR UPDATE` locks; scoped accounts denied.
     ScopedDenied,
-    /// GET in `SAFE_GET`: `FOR SHARE` locks; scoped accounts continue.
-    ReadScopedAllowed,
 }
 
 impl Guard {
@@ -138,6 +138,23 @@ pub struct ServiceAuth {
     organization_id: Uuid,
     principal_id: Uuid,
     credential_id: Uuid,
+}
+
+impl ServiceAuth {
+    #[must_use]
+    pub fn organization_id(&self) -> Uuid {
+        self.organization_id
+    }
+
+    #[must_use]
+    pub fn principal_id(&self) -> Uuid {
+        self.principal_id
+    }
+
+    #[must_use]
+    pub fn credential_id(&self) -> Uuid {
+        self.credential_id
+    }
 }
 
 fn invalid_credential() -> EditError {
@@ -404,6 +421,54 @@ impl<'a> EditScope<'a> {
             organization_status,
             project,
         })
+    }
+
+    #[must_use]
+    pub fn actor_kind(&self) -> &'static str {
+        self.actor_type()
+    }
+
+    #[must_use]
+    pub fn organization_id(&self) -> Uuid {
+        self.tx.organization_id()
+    }
+
+    #[must_use]
+    pub fn project_id(&self) -> Uuid {
+        self.project_id
+    }
+
+    #[must_use]
+    pub fn actor_id(&self) -> Uuid {
+        self.actor_id
+    }
+
+    #[must_use]
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    #[must_use]
+    pub fn credential_id(&self) -> Option<Uuid> {
+        self.credential_id
+    }
+
+    #[must_use]
+    pub fn is_scoped(&self) -> bool {
+        self.scoped
+    }
+
+    pub fn tx_mut(&mut self) -> &mut sqlx::Transaction<'a, sqlx::Postgres> {
+        self.tx.tx_mut()
+    }
+
+    pub async fn rebind_project_context(&mut self) -> Result<(), EditError> {
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(self.project_id.to_string())
+            .execute(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        Ok(())
     }
 
     fn actor_type(&self) -> &'static str {
