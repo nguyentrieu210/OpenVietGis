@@ -15,6 +15,11 @@ sha2 = "0.10"
 subtle = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 thiserror = "2"
+regex = "1"
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+jsonwebtoken = { version = "9.3", default-features = false }
 
 [profile.dev]
 debug = 0
