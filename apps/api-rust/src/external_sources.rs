@@ -1,11 +1,12 @@
 //! E12 authenticated external-source metadata and cache lifecycle.
 
 use axum::extract::{Path, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use ovg_storage::catalog::ProjectReadPolicy;
-use ovg_storage::external_sources;
+use ovg_storage::external_sources::{self, AllowlistInput, ConnectionInput};
+use ovg_core::AppError;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -20,14 +21,66 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(
             "/organizations/{organization_id}/external-sources/allowlist",
-            get(list_allowlist),
+            get(list_allowlist).post(register_allowlist),
         )
-        .route(BASE, get(list_connections))
+        .route(BASE, get(list_connections).post(create_connection))
         .route(
             &format!("{BASE}/{{connection_id}}/invalidate-cache"),
             post(invalidate_cache),
         )
         .route(&format!("{BASE}/{{connection_id}}/revoke"), post(revoke))
+}
+
+fn domain_error(error: AppError) -> CatalogError {
+    match error {
+        AppError::Validation { code, message, .. } =>
+            CatalogError::Spatial(StatusCode::UNPROCESSABLE_ENTITY, code, message),
+        AppError::Forbidden { code, message } =>
+            CatalogError::Spatial(StatusCode::FORBIDDEN, code, message),
+        AppError::Conflict { code, message, .. } =>
+            CatalogError::Spatial(StatusCode::CONFLICT, code, message),
+        error => CatalogError::Application(error),
+    }
+}
+
+async fn register_allowlist(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    headers: HeaderMap,
+    Path(organization_id): Path<Uuid>,
+    Json(input): Json<AllowlistInput>,
+) -> Result<(StatusCode, Json<Value>), CatalogError> {
+    require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
+    let pool = state.db_pool.as_ref().ok_or_else(|| {
+        CatalogError::Application(AppError::service_unavailable(
+            "DATABASE_UNAVAILABLE", "database unavailable",
+        ))
+    })?;
+    let mut tx = ovg_storage::tenancy::TenantTx::begin(
+        pool, auth.actor_id(), auth.session_id(), auth.display_name(),
+    ).await.map_err(domain_error)?;
+    let result = external_sources::register_allowlist(
+        &mut tx, organization_id, auth.actor_id(), input,
+    ).await.map_err(domain_error)?;
+    tx.commit().await.map_err(domain_error)?;
+    Ok((StatusCode::CREATED, Json(result)))
+}
+
+async fn create_connection(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    headers: HeaderMap,
+    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+    Json(input): Json<ConnectionInput>,
+) -> Result<(StatusCode, Json<Value>), CatalogError> {
+    require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
+    let mut edit = project_read(
+        &state, &auth, organization_id, project_id, ProjectReadPolicy::UnrestrictedEdit,
+    ).await?;
+    let result = external_sources::create_connection(&mut edit, auth.actor_id(), input)
+        .await.map_err(domain_error)?;
+    edit.commit().await.map_err(domain_error)?;
+    Ok((StatusCode::CREATED, Json(result)))
 }
 
 async fn list_allowlist(
