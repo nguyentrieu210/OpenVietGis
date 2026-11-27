@@ -132,7 +132,11 @@ def main():
                 ("GET", "/api/v1/auth/oidc/keycloak/start", "python", 200),
                 ("POST", f"{P}/imports/upload", "python", 200),
                 ("GET", f"{P}/cartography/layouts", "python", 200),
-                ("GET", f"{P}/processing/algorithms", "python", 200),
+                ("GET", f"{P}/processing/algorithms", "rust", 200),
+                ("POST", f"{P}/processing/jobs", "rust", 200),
+                ("PUT", f"{P}/processing/models/{LAYER}", "rust", 200),
+                ("DELETE", f"{P}/processing/models/{LAYER}", "rust", 200),
+                ("POST", f"{P}/pro/geometry", "rust", 200),
                 ("GET", f"{P}/modules/house-numbering", "python", 200),
                 ("GET", f"{P}/integration/events", "python", 200),
                 ("GET", "/api/v1/health/live", "python", 200),
@@ -146,6 +150,10 @@ def main():
                 ("PUT", f"/api/v1/organizations/{ORG}/ops/entitlement", "rust", 200),
                 ("POST", f"/api/v1/organizations/{ORG}/ops/entitlement", "python", 200),
             ]
+            status, backend, _ = request(
+                port, "GET", f"{P}/processing/algorithms", authorization="Bearer fixture"
+            )
+            assert (status, backend) == (200, "rust")
             for method, target, expected, expected_status in cases:
                 sent = "{}" if method in ("POST", "PUT") else None
                 status, backend, raw = request(port, method, target, sent)

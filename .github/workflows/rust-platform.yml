@@ -192,32 +192,18 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e18-ops.log
 
-      - name: Run E08 processing jobs parity
+      - name: Run E08 Rust-only HTTP and PostGIS regression tests
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
         run: |
           set -o pipefail
           mkdir -p dist/parity
-          uv run --project apps/api python tests/rust-parity/e08_jobs.py \
-            --candidate target/debug/openvietgis-api-rust \
-            2>&1 | tee dist/parity/e08-jobs.log
-
-      - name: Run E08 processing models parity
-        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
-        run: |
-          set -o pipefail
-          mkdir -p dist/parity
-          uv run --project apps/api python tests/rust-parity/e08_processing_models.py \
-            --candidate target/debug/openvietgis-api-rust \
-            2>&1 | tee dist/parity/e08-models.log
-
-      - name: Run E08 professional GIS parity
-        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
-        run: |
-          set -o pipefail
-          mkdir -p dist/parity
-          uv run --project apps/api python tests/rust-parity/e08_professional.py \
-            --candidate target/debug/openvietgis-api-rust \
-            2>&1 | tee dist/parity/e08-professional.log
+          uv run --project apps/api python -m tools.run_with_test_database \
+            pytest apps/api/tests/integration/m2/test_processing_integrity.py \
+            apps/api/tests/integration/spatial/test_processing_models.py \
+            apps/api/tests/integration/spatial/test_professional.py \
+            apps/api/tests/integration/m2/test_crs_consumer_guards.py \
+            apps/api/tests/integration/m2/test_r006_r009_real.py \
+            2>&1 | tee dist/parity/e08-native.log
 
       - name: Run E02 catalog write parity
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}

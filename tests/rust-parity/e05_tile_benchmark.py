@@ -19,7 +19,7 @@ TILE_SCALES = ("30k", "100k", "1m")
 TILE_FEATURE_LIMIT = 10_000
 TILE_BYTE_LIMIT = 4 * 1024 * 1024
 # The deterministic fixture has points in this Hanoi tile at all three scales.
-# At z=17 the FastAPI professional tile route serves individual points.
+# At z=17 the native professional tile route serves individual points.
 LOCAL_TILE = "17/104075/57711"
 MVT_TYPE = "application/vnd.mapbox-vector-tile"
 
@@ -109,13 +109,13 @@ def successful(entry):
 def compare(backends):
     comparison = {}
     for scale in TILE_SCALES:
-        oracle = backends["python"]["scenarios"][scale]
+        professional = backends["professional"]["scenarios"][scale]
         candidate = backends["rust"]["scenarios"][scale]
-        oracle_ok = successful(oracle)
+        professional_ok = successful(professional)
         rust_ok = successful(candidate)
-        # Rust selects from the tile plus buffer. FastAPI prefilters to the
+        # Rust selects from the tile plus buffer. The professional route prefilters to the
         # tile envelope before encoding, so its local IDs must be included.
-        expected_local_ids = oracle.pop("local_ids") <= candidate.pop("local_ids")
+        expected_local_ids = professional.pop("local_ids") <= candidate.pop("local_ids")
         local = candidate["local_tile"]
         world = candidate["world_tile"]
         bounded = (
@@ -128,18 +128,18 @@ def compare(backends):
         )
         viewport_cap = scale == "30k" or candidate["json_viewport_status"] == 422
         comparison[scale] = {
-            "python_local_success": oracle_ok,
+            "professional_local_success": professional_ok,
             "rust_local_success": rust_ok,
-            "rust_local_includes_oracle_ids": expected_local_ids,
+            "bounded_tile_includes_professional_ids": expected_local_ids,
             "bounded_world_tile": bounded,
             "oversized_json_viewport_rejected": viewport_cap if scale != "30k" else None,
             "local_mvt_p95_ratio_at_concurrency_20": (
-                candidate["warm"]["20"]["p95_ms"] / oracle["warm"]["20"]["p95_ms"]
-                if oracle_ok and rust_ok
+                candidate["warm"]["20"]["p95_ms"] / professional["warm"]["20"]["p95_ms"]
+                if professional_ok and rust_ok
                 else None
             ),
             "passes": (
-                oracle_ok
+                professional_ok
                 and rust_ok
                 and expected_local_ids
                 and local["complete"] == "true"
@@ -175,8 +175,8 @@ def main():
             )
             verify_database_role(runtime)
             backends = {}
-            for kind in ("python", "rust"):
-                with server(binary, runtime, work, kind) as (url, pid):
+            with server(binary, runtime, work, "rust") as (url, pid):
+                for kind in ("professional", "rust"):
                     backends[kind] = asyncio.run(
                         measure_tiles(url, fixture, pid, kind, args.requests)
                     )
@@ -189,9 +189,9 @@ def main():
         "local_tile": LOCAL_TILE,
         "local_requests_per_concurrency": args.requests,
         "method": (
-            "Same pinned point sources and tile address. FastAPI professional MVT and native "
+            "Same pinned point sources and tile address. Native professional MVT and bounded "
             "Rust MVT have different buffer selection and output metadata. Ratios characterize "
-            "these tile routes and are not the SC-003 JSON viewport target. The single Rust "
+            "these native tile routes, not a historical Python speedup or the SC-003 JSON viewport target. The single Rust "
             "world tile per scale exercises the cap. Shared DB and OS caches are not cleared."
         ),
         "backends": backends,

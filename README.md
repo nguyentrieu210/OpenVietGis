@@ -194,6 +194,13 @@ FastAPI tại `apps/api` vẫn phục vụ migration, kiểm thử tương đư�
 triển khai cũ. Xem [Spec 064](specs/064-rust-platform/spec.md) và
 [engine scope](specs/064-rust-platform/engine-scope.md) trước khi loại bỏ backend cũ.
 
+E08 (processing jobs, processing models, professional GIS) is implemented only
+by Rust. The legacy development server needs `OPENVIETGIS_E08_RUST_URL=http://127.0.0.1:8080`
+and a Rust API process using the same restricted runtime database and session secrets.
+Build `cargo build --locked -p openvietgis-api-rust` before running the integration/browser
+validation commands; their test launcher starts Rust automatically. The old E08 Python
+implementation and differential-only suites have been retired from this source tree.
+
 ### OIDC development profile
 
 ```bash

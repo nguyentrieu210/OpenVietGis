@@ -22,14 +22,17 @@ dependency readiness is not a release capability gate. See the exact-candidate
   real secrets, commit secret environment files, or copy them into backups.
   Use distinct unpredictable session, CSRF, bootstrap and database credentials.
 - Required variables: `POSTGRES_PASSWORD`, `RUNTIME_DB_PASSWORD`,
-  `RUNTIME_DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SESSION_SECRET`,
+  `RUNTIME_DATABASE_URL`, `RUST_RUNTIME_DATABASE_URL`, `MIGRATION_DATABASE_URL`, `SESSION_SECRET`,
   `CSRF_SECRET`, `BOOTSTRAP_SECRET`, `PUBLIC_HTTPS_ORIGIN`,
   `OIDC_PROVIDERS_JSON`. Optional: `POSTGRES_USER`, `POSTGRES_DB`,
   `HTTP_PORT`. Database URLs are explicit SQLAlchemy
   `postgresql+psycopg` URIs to the same database at host `postgres`,
   with correctly URL-encoded passwords matching the corresponding role.
   Do not include query overrides. The API receives the restricted runtime URL
-  only; the separate migration service receives the owner URL, applies Core
+  only. Set the Rust URL to the same restricted role/database using a SQLx
+  `postgresql://` URI. E08 processing/professional endpoints run exclusively in
+  Rust; the remaining legacy HTTP server forwards those requests without implementing them.
+  The separate migration service receives the owner URL, applies Core
   and official module migrations, and must finish successfully before the API
   starts. Runtime role verification remains active. The API image runs as UID
   10001; writable artifact storage is separate from source.
@@ -43,7 +46,7 @@ dependency readiness is not a release capability gate. See the exact-candidate
   asset paths return 404 when absent; Vite .mjs workers have a JavaScript MIME
   type; SSE buffering is disabled and WebSocket upgrade is forwarded. The
   separate CAD relay and remote MCP service are not provisioned or enabled
-  by this four-service fixture.
+  by this fixture.
 - Configure an independent HTTPS OIDC provider and approved issuer/client
   settings, including the exact application redirect and trusted TLS chain.
   This fixture deliberately does not deploy or claim to configure Keycloak.

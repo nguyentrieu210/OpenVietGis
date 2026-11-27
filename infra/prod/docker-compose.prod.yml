@@ -62,7 +62,9 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      OPENVIETGIS_E08_RUST_URL: http://api-rust:8080
     volumes:
       - artifacts:/var/lib/openvietgis/artifacts
     healthcheck:
@@ -71,6 +73,28 @@ services:
       timeout: 5s
       retries: 5
 
+  api-rust:
+    build:
+      context: ../..
+      dockerfile: infra/rust-platform/Dockerfile.api-rust
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *app-environment
+      OPENVIETGIS_BIND_ADDR: 0.0.0.0:8080
+      OPENVIETGIS_DATABASE_URL: ${RUST_RUNTIME_DATABASE_URL:?set RUST_RUNTIME_DATABASE_URL}
+      OPENVIETGIS_DB_MAX_CONNECTIONS: "8"
+      OVG_CORS_ORIGINS: ${PUBLIC_HTTPS_ORIGIN:?set PUBLIC_HTTPS_ORIGIN}
+    volumes:
+      - artifacts:/var/lib/openvietgis/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/ops/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
   web:
     build:
       context: ../..
@@ -78,6 +102,8 @@ services:
     restart: unless-stopped
     depends_on:
       api:
+        condition: service_healthy
+      api-rust:
         condition: service_healthy
     ports:
       - "127.0.0.1:${HTTP_PORT:-8080}:80"

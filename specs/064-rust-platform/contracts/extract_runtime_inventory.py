@@ -45,6 +45,11 @@ os.environ.setdefault(
 
 ROOT = Path(__file__).resolve().parents[3]
 API_DIR = ROOT / "apps" / "api"
+if not (API_DIR / "openvietgis_api/domains/processing/domain.py").is_file():
+    raise SystemExit(
+        "Historical FastAPI inventory extractor: E08 has been retired. "
+        "The frozen baseline inventory.json is retained as migration evidence."
+    )
 SPEC_DIR = ROOT / "specs" / "064-rust-platform"
 CONTRACTS_DIR = SPEC_DIR / "contracts"
 ENGINES_CONTRACTS_DIR = CONTRACTS_DIR / "engines"
