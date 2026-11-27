@@ -62,6 +62,16 @@ try{
  await locator.getByText(/Tọa độ ngoài phạm vi/).waitFor();assert.equal(await locator.locator(".live-search-result").count(),0);
  await locator.getByRole("button",{name:"Đóng",exact:true}).click();
  console.log("PASS synthetic Chromium: scoped layer locator and explicit XY validation");
+ await page.keyboard.press("Control+k");await command.fill("LAYER");await command.press("Enter");
+ const properties=page.getByRole("dialog",{name:/Thuộc tính layer/});await properties.waitFor();
+ await properties.getByRole("tab",{name:"Nhãn",exact:true}).click();
+ await properties.getByLabel("Kiểu nhãn",{exact:true}).selectOption("expression");
+ const expression=properties.getByLabel("Biểu thức nhãn",{exact:true});
+ await expression.fill("{missing|upper}");await properties.getByText("Trường không tồn tại: missing",{exact:true}).waitFor();
+ const apply=properties.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"});assert.equal(await apply.isEnabled(),false);
+ await expression.fill("{height_m|round:1}");assert.equal(await apply.isEnabled(),true);
+ await properties.getByRole("button",{name:"Hủy",exact:true}).click();await properties.waitFor({state:"detached"});
+ console.log("PASS synthetic Chromium: expression validation and cancel");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
 }finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

@@ -15,3 +15,13 @@ test("equal and quantile breaks, class lookup and colour ramp", () => {
   assert.equal(gradColor(0, v), "#000000"); assert.equal(gradColor(1, v), "#ffffff"); assert.equal(gradColor(-1, v), "#bdbdbd");
   assert.equal(zoomScale(0), "1:591.657.550");
 });
+
+import {numeric,validBreaks,gradKey} from "./src/graduated.ts";
+test("graduated nulls, precise legend keys and persisted breaks",()=>{
+ for(const x of [null,"", " ",true,[],{},Infinity,"0x10"])assert.equal(numeric(x),null);
+ assert.equal(numeric(" 15,5 "),15.5);
+ assert.equal(validBreaks([1,1]),true);
+ for(const b of [[1,0],[0,1,1],[0,Infinity],[]])assert.equal(validBreaks(b),false);
+ const v={gradBreaks:[0,0.00001,0.00002]};
+ assert.notEqual(gradKey(0,v),gradKey(0.000015,v));
+});

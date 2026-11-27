@@ -13,3 +13,10 @@ test("label expression functions", () => {
   assert.equal(evalLabel("{dt|round:0|suffix: m²}", a), "1235 m²");
   assert.equal(evalLabel("{so_nha|unknown}", a), "15");
 });
+
+import {validateLabel} from "./src/label-expr.ts";
+test("validate typed template syntax and prevent inherited attribute lookup",()=>{
+ assert.equal(validateLabel("{name|upper} {area|round:2}",["name","area"]),null);
+ for(const x of ["{unknown}","{name|script}","{name|round:7}","{name|upper:a}","{name|prefix}","{name","{{name}}"])assert.notEqual(validateLabel(x,["name"]),null);
+ assert.equal(evalLabel("{constructor}",{}),"");
+});

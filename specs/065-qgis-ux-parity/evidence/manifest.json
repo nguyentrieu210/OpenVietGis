@@ -168,9 +168,12 @@
     {
       "id": "STYLE-02",
       "task": "T032",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/graduated.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "STYLE-03",
@@ -182,23 +185,32 @@
     {
       "id": "STYLE-04",
       "task": "T034",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/label-expr.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "STYLE-05",
       "task": "T035",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/label-expr.ts",
+        "apps/web-next/label-expr.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; template language, not full QGIS expression AST"
     },
     {
       "id": "STYLE-06",
       "task": "T036",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/style-io.ts",
+        "apps/web-next/style-io.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; limited symbol subset, not lossless arbitrary QML/SLD"
     },
     {
       "id": "STYLE-07",
