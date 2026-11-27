@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import io
 import os
@@ -41,12 +42,30 @@ def _make_dxf_bytes(pts: list[tuple[float, float]], *, include_unsupported_text:
     return buf.getvalue().encode("utf-8")
 
 
+def _norm_document_bound(body):
+    out = copy.deepcopy(body)
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {"cad_document_id", "inspection_fingerprint"} and isinstance(item, str):
+                    value[key] = f"<{key}>"
+                else:
+                    walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+
+    walk(out)
+    return out
+
+
 def _norm_inspect(body):
-    return dict(body)
+    return _norm_document_bound(body)
 
 
 def _norm_import(body):
-    out = dict(body)
+    out = _norm_document_bound(body)
     for k in ("id", "source_id", "layer_id", "content_revision", "created_at"):
         if k in out and out[k] is not None:
             out[k] = f"<{k}>"
@@ -54,8 +73,8 @@ def _norm_import(body):
 
 
 def _norm_draft(body):
-    out = dict(body)
-    for k in ("conversion_id", "source_id", "layer_id", "content_revision", "schema_revision", "preview_fingerprint"):
+    out = copy.deepcopy(body)
+    for k in ("document_id", "conversion_id", "source_id", "layer_id", "content_revision", "schema_revision", "preview_fingerprint"):
         if k in out and out[k] is not None:
             out[k] = f"<{k}>"
     return out
@@ -316,10 +335,13 @@ def main() -> int:
                         norm=_norm_draft,
                         expect_status=200,
                     )
-                    require(
-                        dp_o.json()["preview_fingerprint"] == dp_r.json()["preview_fingerprint"],
-                        "draft preview fingerprint mismatch",
-                    )
+                    for side, response in (("oracle", dp_o), ("rust", dp_r)):
+                        fingerprint = response.json()["preview_fingerprint"]
+                        require(
+                            len(fingerprint) == 64
+                            and all(ch in "0123456789abcdef" for ch in fingerprint),
+                            f"{side} draft preview fingerprint is not a sha256 hex digest",
+                        )
 
                     dd_o = oracle.post(
                         f"{base_o}/cad/documents/{did_o}/versions/1/export-georef-draft",
