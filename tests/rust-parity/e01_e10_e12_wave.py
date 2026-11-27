@@ -15,6 +15,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -316,6 +317,21 @@ def check_remaining_native_boundaries(
         norm=norm_value,
         expect_status=200,
     )
+    # Credentialed sources must never reach the outbound transport.
+    for client, path, cid in ((oracle, po, io_id), (rust, pr, ir_id)):
+        preview = client.post(f"{path}/{cid}/preview", headers=csrf_a)
+        require(
+            preview.status_code == 403 and preview.json().get("code") == "PROVIDER_DISABLED",
+            f"credentialed provider not denied: {preview.status_code} {preview.text}",
+        )
+        viewport = client.post(
+            f"{path}/{cid}/viewport", headers=csrf_a,
+            json={"crs": 3857, "bbox": [0, 0, 10, 10], "width": 128, "height": 128},
+        )
+        require(
+            viewport.status_code == 403 and viewport.json().get("code") == "PROVIDER_DISABLED",
+            "credentialed viewport not denied",
+        )
     for action in ("invalidate-cache", "revoke"):
         compare(
             f"E12 external connection {action}",
@@ -372,6 +388,78 @@ def check_remaining_native_boundaries(
     )
     require(rust.get(snapshot_path, headers=h_a).status_code == 403, "revoked snapshot accepted")
     print("PASS E01 avatar / E12 external metadata / E13 snapshot boundaries", flush=True)
+
+
+def check_raster_compute(oracle, rust, base_o, base_r, h_a, csrf_a):
+    """Generate a real GeoTIFF with the same system GDAL used by both workers."""
+    with tempfile.TemporaryDirectory(prefix="ovg-raster-parity-") as directory:
+        path = Path(directory) / "fixture.tif"
+        subprocess.run(
+            [
+                "/usr/bin/python3", "-c",
+                """
+import sys
+import numpy as np
+from osgeo import gdal, osr
+ds = gdal.GetDriverByName("GTiff").Create(sys.argv[1], 8, 8, 1, gdal.GDT_Float32)
+srs = osr.SpatialReference()
+srs.ImportFromEPSG(3857)
+ds.SetProjection(srs.ExportToWkt())
+ds.SetGeoTransform((11872000, 10, 0, 1190000, 0, -10))
+ds.GetRasterBand(1).WriteArray(np.arange(64, dtype=np.float32).reshape(8, 8) + 50)
+ds = None
+""",
+                str(path),
+            ],
+            check=True,
+            timeout=15,
+        )
+        fixture = path.read_bytes()
+
+    outputs = []
+    for client, base in ((oracle, base_o), (rust, base_r)):
+        raster = f"{base}/raster"
+        upload = {"file": ("fixture.tif", fixture, "image/tiff")}
+        analysis = client.post(
+            f"{raster}/analyze", headers=csrf_a, files=upload, data={"method": "band"},
+            timeout=90,
+        )
+        require(analysis.status_code == 200, f"raster analyze: {analysis.status_code} {analysis.text[:500]}")
+        info = analysis.json()
+        require(info["persisted"] is False and info["width"] == 8, "raster analysis contract")
+        require(base64.b64decode(info["tiff"])[:4] in (b"II*\x00", b"MM\x00*"), "invalid analysis TIFF")
+        stored = client.post(
+            f"{raster}/layers", headers=csrf_a, files=upload,
+            data={"method": "band", "name": "Raster parity DEM"}, timeout=90,
+        )
+        require(stored.status_code == 201, f"raster store: {stored.status_code} {stored.text[:500]}")
+        layer = stored.json()
+        layer_id = layer["id"]
+        require(layer["tile_count"] > 0, "tile pyramid missing")
+        file = client.get(f"{raster}/layers/{layer_id}/file", headers=h_a)
+        require(file.status_code == 200 and file.content[:4] in (b"II*\x00", b"MM\x00*"), "stored COG")
+        terrain = client.post(
+            f"{raster}/layers/{layer_id}/terrain-preview", headers=csrf_a,
+            json={
+                "elevation_unit": "metre", "vertical_reference": "local",
+                "reference_label": "Synthetic parity fixture", "acknowledge_dem": True,
+            },
+            timeout=90,
+        )
+        require(terrain.status_code == 200, f"DEM preview: {terrain.status_code} {terrain.text[:500]}")
+        report = client.post(
+            f"{raster}/reports", headers=csrf_a,
+            data={"method": "contour", "source_id": layer_id, "interval": "10"},
+            timeout=90,
+        )
+        require(report.status_code == 200, f"raster report: {report.status_code} {report.text[:500]}")
+        outputs.append((info["stats"], layer["stats"], norm_value(terrain.json()), report.json()))
+        require(
+            client.delete(f"{raster}/layers/{layer_id}", headers=csrf_a).status_code == 204,
+            "raster cleanup failed",
+        )
+    require(outputs[0] == outputs[1], "raster analysis/DEM/report parity mismatch")
+    print("PASS E09 real GeoTIFF analysis, persistence, DEM and contour report", flush=True)
 
 
 def main() -> int:
@@ -471,6 +559,7 @@ def main() -> int:
                     check_remaining_native_boundaries(
                         oracle, rust, org_id, base_o, base_r, lid_o, h_a, csrf_a, h_b
                     )
+                    check_raster_compute(oracle, rust, base_o, base_r, h_a, csrf_a)
 
                     # ------------------------------------------------------------------
                     # 2. E10: Model Vault writes (2 routes)

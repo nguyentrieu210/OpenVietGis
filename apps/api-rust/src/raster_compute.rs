@@ -13,6 +13,7 @@ use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
 use ovg_storage::raster::{self, NewRaster, RasterTile};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path as FsPath, PathBuf};
 use std::process::Stdio;
@@ -270,16 +271,32 @@ async fn read_output(path: &FsPath, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-struct Form<'a>(HashMap<String, (bool, &'a [u8])>);
+struct Form<'a>(HashMap<String, (bool, Cow<'a, [u8]>)>);
 
 impl<'a> Form<'a> {
     fn parse(content_type: &str, bytes: &'a [u8]) -> Result<Self> {
         let mut result = HashMap::new();
-        for (name, filename, content) in
-            multipart_parts(content_type, bytes).ok_or(ComputeError::InvalidRequest)?
-        {
-            if result.insert(name, (filename.is_some(), content)).is_some() {
-                return Err(ComputeError::InvalidRequest);
+        if content_type.split(';').next().is_some_and(|kind| {
+            kind.trim().eq_ignore_ascii_case("application/x-www-form-urlencoded")
+        }) {
+            for (name, value) in url::form_urlencoded::parse(bytes) {
+                if result
+                    .insert(name.into_owned(), (false, Cow::Owned(value.into_owned().into_bytes())))
+                    .is_some()
+                {
+                    return Err(ComputeError::InvalidRequest);
+                }
+            }
+        } else {
+            for (name, filename, content) in
+                multipart_parts(content_type, bytes).ok_or(ComputeError::InvalidRequest)?
+            {
+                if result
+                    .insert(name, (filename.is_some(), Cow::Borrowed(content)))
+                    .is_some()
+                {
+                    return Err(ComputeError::InvalidRequest);
+                }
             }
         }
         if result.len() > 24 {
@@ -288,15 +305,15 @@ impl<'a> Form<'a> {
         Ok(Self(result))
     }
 
-    fn file(&self, name: &str) -> Result<Option<&'a [u8]>> {
+    fn file(&self, name: &str) -> Result<Option<&[u8]>> {
         match self.0.get(name) {
-            Some((true, data)) => Ok(Some(data)),
+            Some((true, data)) => Ok(Some(data.as_ref())),
             Some((false, _)) => Err(ComputeError::InvalidRequest),
             None => Ok(None),
         }
     }
 
-    fn text(&self, name: &str) -> Result<Option<&'a str>> {
+    fn text(&self, name: &str) -> Result<Option<&str>> {
         match self.0.get(name) {
             Some((false, data)) => std::str::from_utf8(data)
                 .map(Some)
@@ -306,7 +323,7 @@ impl<'a> Form<'a> {
         }
     }
 
-    fn required(&self, name: &str) -> Result<&'a str> {
+    fn required(&self, name: &str) -> Result<&str> {
         self.text(name)?.ok_or(ComputeError::InvalidRequest)
     }
 
