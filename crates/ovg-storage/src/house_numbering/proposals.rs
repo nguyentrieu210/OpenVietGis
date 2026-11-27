@@ -450,6 +450,13 @@ pub async fn transition_proposal(
                     "approval requires authoritative rule",
                 ));
             }
+            // Draft proposals may include unresolved buildings; approval must not.
+            if items.iter().any(|item| item["eligibility"].as_str() != Some("eligible")) {
+                return Err(AppError::conflict(
+                    "BUILDING_ELIGIBILITY_UNVERIFIED",
+                    "approval requires every building to be explicitly eligible",
+                ));
+            }
             if invalid_items(&items, "submitted") {
                 return Err(invalid_item());
             }

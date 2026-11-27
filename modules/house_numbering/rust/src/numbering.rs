@@ -45,6 +45,12 @@ pub fn generate_street_numbers(rule: &NumberingRule) -> Result<Vec<NumberingProp
             "start_number >= 1, step >= 1, and 1 <= count <= 10000 are required",
         ));
     }
+    if rule.step % 2 != 0 {
+        return Err(AppError::validation(
+            "PARITY_MISMATCH",
+            "numbering step must preserve side parity",
+        ));
+    }
     match rule.side {
         HouseSide::LeftOdd if rule.start_number % 2 == 0 => {
             return Err(AppError::validation(
@@ -118,6 +124,21 @@ mod tests {
         assert_eq!(proposals[0].house_number, "12/3A/1");
         assert_eq!(proposals[1].house_number, "12/3A/3");
         assert_eq!(proposals[2].full_address, "12/3A/5 Đường Trần Hưng Đạo");
+    }
+
+    #[test]
+    fn rejects_odd_step_on_both_sides() {
+        for (side, start_number) in [(HouseSide::LeftOdd, 1), (HouseSide::RightEven, 2)] {
+            let err = generate_street_numbers(&NumberingRule {
+                street_name: "Đường A".to_string(),
+                alley_prefix: None,
+                side,
+                start_number,
+                step: 1,
+                count: 3,
+            }).unwrap_err();
+            assert_eq!(err.code(), "PARITY_MISMATCH");
+        }
     }
 
     #[test]
