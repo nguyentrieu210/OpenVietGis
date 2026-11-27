@@ -1,9 +1,9 @@
 import {createRequire} from "node:module";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-const require=createRequire((process.env.OVG_SOURCE_ROOT||"/opt/openvietgis")+"/package.json");
+const require=createRequire(process.env.OVG_SOURCE_ROOT ? process.env.OVG_SOURCE_ROOT+"/package.json" : new URL("../../../package.json",import.meta.url));
 const {chromium}=require("@playwright/test");
-const script=readFileSync(new URL("./first-party.js",import.meta.url),"utf8");
+const script=readFileSync(new URL("../../web-next/src/ai-copilot/first-party.js",import.meta.url),"utf8");
 const origin="https://openvietgis.cloud";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
 try{
