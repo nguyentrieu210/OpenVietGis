@@ -302,7 +302,7 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
         assert_eq!(init["result"]["protocolVersion"],"2025-11-25");
         let listed:Value=post_rpc(&client,&url,&valid,"tools/list",json!({})).await.json().await.unwrap();
-        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(),37);
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(),39);
         let denied=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":Uuid::new_v4(),"workspace_version":2})).await;
         assert_eq!(denied.status(),403);
         let a:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_a,"workspace_version":2})).await.json().await.unwrap();
