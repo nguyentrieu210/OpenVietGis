@@ -1,15 +1,15 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
+import {normalizeCommand as normalize,searchCommands,resolveCommand} from "./command-search";
 export type CoreCommand={alias:string;label:string;group:string;hint?:string;disabled?:boolean;disabledReason?:string;run:(args:string)=>void|Promise<void>};
-const normalize=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toUpperCase();
 const aliases:Record<string,string>={L:"LINE",PL:"POLYGON",PO:"POINT",M:"MOVE",CO:"COPY",CP:"COPY",O:"OFFSET",RO:"ROTATE",SC:"SCALE",S:"STRETCH",TR:"TRIM",EX:"EXTEND",F:"FILLET",E:"ERASE",DI:"DIST",AA:"AREA",P:"PAN",Z:"ZOOM",U:"UNDO",OS:"OSNAP",QSELECT:"SELRECT",RE:"RELOAD"};
 type Host={commands:CoreCommand[];cancel:()=>string;activePrompt?:string;finishActive:()=>string|undefined;inputActive:(value:string)=>string|undefined;shortcut:(key:"F3"|"F8")=>string|undefined};
 const editable=(t:HTMLElement|null)=>!!t&&(t.isContentEditable||["INPUT","TEXTAREA","SELECT"].includes(t.tagName)||!!t.closest('[contenteditable="true"]'));
 export function CoreCommandBar(host:Host){
  const [value,setValue]=useState(""),[history,setHistory]=useState<string[]>([]),[log,setLog]=useState<string[]>([]),[status,setStatus]=useState("Sẵn sàng"),[focused,setFocused]=useState(false),[help,setHelp]=useState(false),[showHistory,setShowHistory]=useState(false),[cursor,setCursor]=useState(-1),[highlight,setHighlight]=useState(-1),[pending,setPending]=useState<"ZOOM"|"PAN"|null>(null);
  const ref=useRef<HTMLInputElement>(null),root=useRef<HTMLDivElement>(null),epoch=useRef(0),last=useRef(""),running=useRef(false);
- const prefix=normalize(value.trim().split(/\s/)[0]??"");
- const matches=useMemo(()=>{const candidates=host.commands.filter(c=>help||prefix&&(normalize(c.alias).startsWith(prefix)||normalize(c.label).includes(prefix)||Object.entries(aliases).some(([a,b])=>b===c.alias&&a.startsWith(prefix))));return candidates.sort((a,b)=>Number(!!a.disabled)-Number(!!b.disabled)||Number(normalize(b.alias)===prefix||aliases[prefix]===b.alias)-Number(normalize(a.alias)===prefix||aliases[prefix]===a.alias)).slice(0,help?host.commands.length:8)},[host.commands,prefix,help]);
+ const query=value.trim();
+ const matches=useMemo(()=>searchCommands(host.commands,help?"":query,aliases,help?host.commands.length:8),[host.commands,query,help]);
  const report=(line:string)=>{setStatus(line);setLog(l=>[...l,line].slice(-80))};
  const focus=()=>{if(!document.querySelector('[aria-modal="true"]'))ref.current?.focus({preventScroll:true});else requestAnimationFrame(()=>{if(!document.querySelector('[aria-modal="true"]'))ref.current?.focus({preventScroll:true})})};
  const clear=()=>{setValue("");setHelp(false);setHighlight(-1);setCursor(-1);setPending(null)};
@@ -28,7 +28,7 @@ export function CoreCommandBar(host:Host){
   if(alias==="HELP"||alias==="?"){clear();setHelp(true);setFocused(true);report("Danh sách lệnh · bấm Tab để điền");focus();return}
   if(alias==="ZOOM"&&rest.length&&["E","I","O","L","S"].includes(normalize(rest[0]))){void execute("Z"+normalize(rest[0]));return}
   if((alias==="ZOOM"||alias==="PAN")&&!rest.length){setPending(alias);setValue("");setHelp(false);report(alias==="ZOOM"?"Zoom [E toàn bộ / I / O / L / S / mức zoom]":"Nhập kinh độ,vĩ độ");focus();return}
-  const command=host.commands.find(c=>normalize(c.alias)===alias)??(!rest.length&&matches.length===1?matches[0]:undefined);
+  const command=resolveCommand(host.commands,token,aliases);
   // Not a command: one box like the QGIS locator, so search features instead.
   if(!command){setPending(null);clear();report("Tìm: "+text);window.dispatchEvent(new CustomEvent("ovg:search",{detail:text}));return}
   if(command.disabled){report(command.alias+" · "+commandDisabledReason(command));setPending(null);return}
@@ -42,7 +42,9 @@ export function CoreCommandBar(host:Host){
   if(e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
   const t=e.target as HTMLElement|null,own=t===ref.current,modal=!!document.querySelector('[aria-modal="true"]'),otherForm=editable(t)&&!own,button=!!t?.closest("button,a,[role=button]");
   if(e.key==="Escape"){if(modal||otherForm)return;e.preventDefault();latest.current.escape();return}
-  if(modal||otherForm||e.altKey)return;
+  if(modal||e.altKey)return;
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="k"){e.preventDefault();e.stopPropagation();latest.current.focus();return}
+  if(otherForm)return;
   if((e.ctrlKey||e.metaKey)&&(!own||!ref.current?.value)&&["z","y"].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();void latest.current.execute(e.key.toLowerCase()==="y"||e.shiftKey?"REDO":"UNDO");return}
   if(e.ctrlKey||e.metaKey)return;
   if(e.key==="F2"){e.preventDefault();e.stopPropagation();setShowHistory(v=>!v);setHelp(false);return}
@@ -57,14 +59,14 @@ export function CoreCommandBar(host:Host){
  // Right-click no longer repeats the last command (AutoCAD habit): in QGIS it opens context menus / finishes digitizing.
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
- const open=focused&&(help||!!prefix&&!value.includes(" ")&&!pending)&&matches.length>0;
- const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Enter · gõ lệnh hoặc tên đối tượng…":status);
+ const open=focused&&(help||!!query&&!pending)&&matches.length>0;
+ const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Ctrl+K / Enter · gõ lệnh hoặc tên đối tượng…":status);
  return <div className="core-command" ref={root}>
  <form onSubmit={e=>{e.preventDefault();void execute(value)}}><span className="core-command-prompt" aria-hidden="true">⌘</span>
- <input ref={ref} aria-label="Dòng lệnh GIS" autoComplete="off" spellCheck={false} placeholder={placeholder} value={value} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setValue(e.target.value);setFocused(true);setCursor(-1);setHighlight(-1);setHelp(false)}} onKeyDown={e=>{
+ <input ref={ref} aria-label="Dòng lệnh GIS" autoComplete="off" spellCheck={false} placeholder={placeholder} aria-keyshortcuts="Control+K Meta+K" value={value} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setValue(e.target.value);setFocused(true);setCursor(-1);setHighlight(-1);setHelp(false)}} onKeyDown={e=>{
   if(e.key==="Tab"&&open){e.preventDefault();const c=matches[Math.max(0,highlight)];if(c){setValue(c.alias);setHelp(false);setHighlight(-1)}}
   else if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();if(open&&value.trim()&&cursor<0){setHighlight(i=>e.key==="ArrowDown"?(i+1)%matches.length:(i<=0?matches.length-1:i-1))}else{const i=e.key==="ArrowUp"?Math.min(history.length-1,cursor+1):Math.max(-1,cursor-1);setCursor(i);setValue(i<0?"":history[i]);setHelp(false);setHighlight(-1)}}
-  else if(e.key==="Enter"&&open&&highlight>=0){e.preventDefault();void execute(matches[highlight].alias)}
+  else if(e.key==="Enter"&&open&&highlight>=0&&matches[highlight]){e.preventDefault();void execute(matches[highlight].alias,true)}
 
  }}/>
  <button type="submit" aria-label="Thực thi lệnh" title="Thực thi · Enter">↵</button><button type="button" aria-label="Lịch sử lệnh (F2)" title="Lịch sử lệnh · F2" aria-expanded={showHistory} onClick={()=>{setShowHistory(v=>!v);setHelp(false)}}>≡</button>
@@ -72,7 +74,7 @@ export function CoreCommandBar(host:Host){
  </form>
  <div className="core-command-status" hidden={status==="Sẵn sàng"&&!host.activePrompt}><small role="status">{status}</small></div>
  {showHistory&&<div className="core-command-history" aria-label="Lịch sử lệnh"><header><b>Lịch sử lệnh</b><button onClick={()=>setShowHistory(false)} aria-label="Đóng lịch sử lệnh">×</button></header>{log.length?log.map((l,i)=><div key={i}>{l}</div>):<p>Chưa có lệnh.</p>}</div>}
- {open&&!showHistory&&<div className="core-command-list" role="listbox" aria-label="Lệnh khả dụng">{matches.map((c,i)=><button type="button" key={c.alias} data-highlight={i===highlight} disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onMouseDown={e=>e.preventDefault()} onClick={()=>void execute(c.alias)}><code>{c.alias}</code><span>{c.label}<small>{c.group}{c.disabled?" · "+commandDisabledReason(c):c.hint?" · "+c.hint:""}</small></span></button>)}</div>}
+ {open&&!showHistory&&<div className="core-command-list" role="listbox" aria-label="Lệnh khả dụng">{matches.map((c,i)=><button type="button" key={c.alias} data-highlight={i===highlight} disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onMouseDown={e=>e.preventDefault()} onClick={()=>void execute(c.alias,true)}><code>{c.alias}</code><span>{c.label}<small>{c.group}{c.disabled?" · "+commandDisabledReason(c):c.hint?" · "+c.hint:""}</small></span></button>)}</div>}
  </div>
 }
 // Menus ordered like QGIS (Project, Edit, View, Layer, Settings, Plugins, Vector, Raster, …, Processing); unknown commands keep their own group.
@@ -92,7 +94,7 @@ export function CoreRibbon({commands,enabled=true}:{commands:CoreCommand[];enabl
  const close=(restore=false)=>{setGroup("");setQuery("");if(restore)trigger.current?.focus({preventScroll:true})};
  useEffect(()=>{if(!enabled){setGroup("");setQuery("")}else if(group)search.current?.focus({preventScroll:true})},[group,enabled]);
  useEffect(()=>{const outside=(e:PointerEvent)=>{if(!root.current?.contains(e.target as Node)&&!menu.current?.contains(e.target as Node))close()};const key=(e:KeyboardEvent)=>{if(e.key==="Escape"&&menu.current){e.stopImmediatePropagation();e.preventDefault();close(true)}};const resize=()=>close();document.addEventListener("pointerdown",outside);window.addEventListener("keydown",key,true);window.addEventListener("resize",resize);return()=>{document.removeEventListener("pointerdown",outside);window.removeEventListener("keydown",key,true);window.removeEventListener("resize",resize)}},[]);
- const items=commands.filter(c=>(group==="Tìm lệnh"||c.group===group)&&(!query||normalize(c.alias+" "+c.label+" "+(c.hint??"")).includes(normalize(query))));
+ const items=commands.filter(c=>(group==="Tìm lệnh"||c.group===group)&&(!query||searchCommands([c],query,aliases,1).length>0));
  const open=(e:React.MouseEvent<HTMLButtonElement>,g:string)=>{if(!enabled)return;if(group===g){close(true);return}trigger.current=e.currentTarget;const r=e.currentTarget.getBoundingClientRect();setPos({x:Math.max(8,Math.min(r.left,innerWidth-Math.min(370,innerWidth-16)-8)),y:r.bottom+5});setQuery("");setGroup(g)};
  return <div className="core-ribbon" ref={root}><div className="core-ribbon-group core-ribbon-search-trigger"><button type="button" aria-expanded={group==="Tìm lệnh"} onClick={e=>open(e,"Tìm lệnh")}><span aria-hidden="true">⌕ </span>Tìm công cụ</button></div>{groups.map(g=><div key={g} className="core-ribbon-group"><button type="button" className={group===g?"active":""} aria-expanded={group===g} onClick={e=>open(e,g)}>{g}</button></div>)}{enabled&&group&&createPortal(<div ref={menu} className={"core-ribbon-menu core-ribbon-menu-fixed"+(group==="Tìm lệnh"?"":" is-dropdown")} style={{left:pos.x,top:pos.y,maxHeight:Math.max(160,innerHeight-pos.y-12)}} role="region" aria-label={"Menu "+group}><header><div><strong>{group}</strong><small>{menuTopics[group]??"Tìm nhanh mọi công cụ GIS Core"}</small></div><button aria-label="Đóng menu" onClick={()=>close(true)}>×</button></header><div className="core-menu-search"><input ref={search} aria-label="Tìm công cụ" placeholder="Tìm chức năng hoặc mã lệnh…" value={query} onChange={e=>setQuery(e.target.value)} /><small>{items.length} lệnh · {items.filter(c=>!c.disabled).length} khả dụng</small></div><div className="core-menu-items">{items.map(c=><button key={c.group+c.alias} type="button" disabled={c.disabled} title={c.disabled?commandDisabledReason(c):c.hint} onClick={()=>{close();window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:c.alias}))}}><span className="core-menu-command"><b>{c.label}</b>{(c.hint||group==="Tìm lệnh")&&<small>{c.hint??c.group}</small>}</span><code>{c.alias}</code></button>)}{!items.length&&<p>Không tìm thấy công cụ.</p>}</div></div>,document.body)}</div>
 }
