@@ -27,7 +27,7 @@ COPY apps/api/openvietgis_api/adapters/http/external_provider_transport.py apps/
 RUN cargo build --locked --release --no-default-features -p openvietgis-api-rust
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 python3-gdal python3-numpy python3-pil \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts

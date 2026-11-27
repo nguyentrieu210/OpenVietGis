@@ -2,7 +2,7 @@
 
 use axum::body::Bytes;
 use axum::extract::{rejection::PathRejection, FromRequestParts, Path, State};
-use axum::http::{header, request::Parts, HeaderMap, StatusCode};
+use axum::http::{header, request::Parts, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -10,18 +10,20 @@ use base64::{
     engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
     Engine,
 };
+use chrono::Utc;
 use hmac::{Hmac, Mac};
 use ovg_core::AppError;
 use ovg_storage::identity::{
-    self, IdentityLink, OrganizationMembership, OrganizationProfile, SessionAuthenticationError,
-    UserProfile, VerifiedSession,
+    self, ExternalIdentityClaims, IdentityLink, OidcIdentityError, OrganizationMembership,
+    OrganizationProfile, SessionAuthenticationError, UserProfile, VerifiedSession,
 };
 use ovg_storage::{tenancy::TenantTx, DbPool};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::oidc_worker::{self, OidcWorkerError};
 use crate::{ApiError, AppState};
 
 pub(crate) struct HumanSession {
@@ -118,36 +120,42 @@ impl FromRequestParts<AppState> for HumanSession {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let unauthorized = |detail| IdentityError::Http(StatusCode::UNAUTHORIZED, detail);
-
-        // The reference API gives bearer credentials precedence. These self routes
-        // require a browser identity, so a bearer header must not fall back to a cookie.
-        if parts
-            .headers
-            .get(header::AUTHORIZATION)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.get(..7))
-            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bearer "))
-        {
-            return Err(unauthorized("invalid service credential"));
-        }
-
-        let token = session_cookie(&parts.headers, &state.config.session_cookie_name)
-            .ok_or_else(|| unauthorized("authentication required"))?;
-        let verified = identity::authenticate_session(database(state)?, token)
-            .await
-            .map_err(|error| match error {
-                SessionAuthenticationError::Invalid => unauthorized("invalid session"),
-                SessionAuthenticationError::Revoked => unauthorized("session revoked"),
-                SessionAuthenticationError::Expired => unauthorized("session expired"),
-                SessionAuthenticationError::Database(error) => error.into(),
-            })?;
-
-        Ok(Self {
-            verified,
-            token: token.to_owned(),
-        })
+        authenticate_cookie_session(state, &parts.headers).await
     }
+}
+
+async fn authenticate_cookie_session(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<HumanSession, IdentityError> {
+    let unauthorized = |detail| IdentityError::Http(StatusCode::UNAUTHORIZED, detail);
+
+    // The reference API gives bearer credentials precedence. These self routes
+    // require a browser identity, so a bearer header must not fall back to a cookie.
+    if headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.get(..7))
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("bearer "))
+    {
+        return Err(unauthorized("invalid service credential"));
+    }
+
+    let token = session_cookie(headers, &state.config.session_cookie_name)
+        .ok_or_else(|| unauthorized("authentication required"))?;
+    let verified = identity::authenticate_session(database(state)?, token)
+        .await
+        .map_err(|error| match error {
+            SessionAuthenticationError::Invalid => unauthorized("invalid session"),
+            SessionAuthenticationError::Revoked => unauthorized("session revoked"),
+            SessionAuthenticationError::Expired => unauthorized("session expired"),
+            SessionAuthenticationError::Database(error) => error.into(),
+        })?;
+
+    Ok(HumanSession {
+        verified,
+        token: token.to_owned(),
+    })
 }
 
 fn session_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str) -> Option<&'a str> {
@@ -185,6 +193,8 @@ pub(crate) fn router() -> Router<AppState> {
             "/me/avatar",
             get(get_my_avatar).put(put_avatar).delete(delete_avatar),
         )
+        .route("/auth/login/{provider}", get(begin_login))
+        .route("/auth/callback/{provider}", get(complete_login))
         .route("/auth/csrf", get(get_csrf))
 }
 
@@ -578,6 +588,481 @@ fn make_csrf_token(session_token: &str, secret: &str) -> Result<String, AppError
     Ok(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
 }
 
+const OIDC_TX_COOKIE_NAME: &str = "ovg_oidc_tx";
+const OIDC_TX_TTL_SECONDS: i64 = 600;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct OidcTransaction {
+    state: String,
+    provider: String,
+    mode: String,
+    return_to: String,
+    #[serde(default)]
+    action: Option<String>,
+    #[serde(default)]
+    user_id: Option<String>,
+    #[serde(default)]
+    session_id: Option<String>,
+    nonce: String,
+    code_verifier: String,
+    redirect_uri: String,
+    token_endpoint: String,
+    jwks_uri: String,
+    exp: i64,
+}
+
+fn safe_return_to(value: Option<&str>) -> &str {
+    match value {
+        Some(v)
+            if v.starts_with('/')
+                && !v.starts_with("//")
+                && !v.contains("://")
+                && !v.bytes().any(|b| b < 0x20 || b == 0x7f) =>
+        {
+            v
+        }
+        _ => "/",
+    }
+}
+
+fn format_cookie(name: &str, value: &str, max_age: i64, secure: bool) -> String {
+    let mut out = format!("{name}={value}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}");
+    if secure {
+        out.push_str("; Secure");
+    }
+    out
+}
+
+fn redirect_response(location: &str, cookies: &[String]) -> Result<Response, IdentityError> {
+    let header_loc = HeaderValue::from_str(location)
+        .map_err(|_| AppError::internal("invalid redirect location"))?;
+    let mut response = (StatusCode::FOUND, [(header::LOCATION, header_loc)]).into_response();
+    for cookie in cookies {
+        let header_val = HeaderValue::from_str(cookie)
+            .map_err(|_| AppError::internal("invalid cookie header"))?;
+        response
+            .headers_mut()
+            .append(header::SET_COOKIE, header_val);
+    }
+    Ok(response)
+}
+
+fn json_error_with_clear(status: StatusCode, detail: &str, clear_cookie: &str) -> Response {
+    let mut response = (status, Json(json!({ "detail": detail }))).into_response();
+    if let Ok(header_val) = HeaderValue::from_str(clear_cookie) {
+        response
+            .headers_mut()
+            .append(header::SET_COOKIE, header_val);
+    }
+    response
+}
+
+fn oidc_tx_secret(state: &AppState) -> Result<&str, AppError> {
+    state
+        .config
+        .session_secret
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            AppError::service_unavailable("AUTH_UNAVAILABLE", "OIDC session unavailable")
+        })
+}
+
+fn sign_oidc_transaction(tx: &OidcTransaction, secret: &str) -> Result<String, AppError> {
+    let payload = serde_json::to_vec(tx)
+        .map_err(|err| AppError::internal(format!("serialize OIDC transaction: {err}")))?;
+    let payload_b64 = URL_SAFE_NO_PAD.encode(payload);
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
+        .map_err(|_| AppError::internal("OIDC transaction HMAC could not be initialized"))?;
+    mac.update(payload_b64.as_bytes());
+    let sig_b64 = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    Ok(format!("v1.{payload_b64}.{sig_b64}"))
+}
+
+fn verify_oidc_transaction(raw: &str, secret: &str, now_ts: i64) -> Option<OidcTransaction> {
+    let rest = raw.strip_prefix("v1.")?;
+    let (payload_b64, sig_b64) = rest.split_once('.')?;
+    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).ok()?;
+    mac.update(payload_b64.as_bytes());
+    let expected_sig = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    if !constant_time_eq(expected_sig.as_bytes(), sig_b64.as_bytes()) {
+        return None;
+    }
+    let payload = URL_SAFE_NO_PAD.decode(payload_b64).ok()?;
+    let tx: OidcTransaction = serde_json::from_slice(&payload).ok()?;
+    if tx.exp < now_ts {
+        return None;
+    }
+    Some(tx)
+}
+
+async fn begin_login(
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+    uri: Uri,
+    headers: HeaderMap,
+) -> Result<Response, IdentityError> {
+    let mut mode: Option<String> = None;
+    let mut return_to_raw: Option<String> = None;
+    let mut prompt: Option<String> = None;
+    let mut action: Option<String> = None;
+    for (k, v) in url::form_urlencoded::parse(uri.query().unwrap_or("").as_bytes()) {
+        match k.as_ref() {
+            "mode" => mode = Some(v.into_owned()),
+            "return_to" => return_to_raw = Some(v.into_owned()),
+            "prompt" => prompt = Some(v.into_owned()),
+            "action" => action = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+
+    let mode = mode.unwrap_or_else(|| "login".to_string());
+    if !matches!(mode.as_str(), "login" | "link") {
+        return Err(IdentityError::InvalidPayload);
+    }
+    if let Some(ref p) = prompt {
+        if p != "login" {
+            return Err(IdentityError::InvalidPayload);
+        }
+    }
+    if let Some(ref a) = action {
+        if a != "password" {
+            return Err(IdentityError::InvalidPayload);
+        }
+    }
+
+    let mut return_to = safe_return_to(return_to_raw.as_deref()).to_string();
+    let mut tx_user_id: Option<String> = None;
+    let mut tx_session_id: Option<String> = None;
+
+    if mode == "link" {
+        let header_eq = |name: &str, expected: &str| {
+            headers
+                .get(name)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|v| v == expected)
+        };
+        if !header_eq("sec-fetch-site", "same-origin")
+            || !header_eq("sec-fetch-mode", "navigate")
+            || !header_eq("sec-fetch-user", "?1")
+        {
+            return Err(IdentityError::Http(
+                StatusCode::FORBIDDEN,
+                "explicit identity link intent required",
+            ));
+        }
+        let session = authenticate_cookie_session(&state, &headers).await?;
+        tx_user_id = Some(session.actor_id().to_string());
+        tx_session_id = Some(session.session_id().to_string());
+    }
+
+    if action.as_deref() == Some("password") {
+        if provider != "keycloak" || mode != "login" {
+            return Err(IdentityError::Http(
+                StatusCode::BAD_REQUEST,
+                "invalid account action",
+            ));
+        }
+        let session = authenticate_cookie_session(&state, &headers).await?;
+        tx_user_id = Some(session.actor_id().to_string());
+        tx_session_id = Some(session.session_id().to_string());
+        return_to = "/app".to_string();
+    }
+
+    let Some(provider_cfg) = state
+        .config
+        .oidc_providers
+        .get(&provider)
+        .filter(|cfg| !cfg.client_id.trim().is_empty())
+    else {
+        return Err(IdentityError::Http(
+            StatusCode::BAD_REQUEST,
+            "unknown identity provider",
+        ));
+    };
+
+    let secret = oidc_tx_secret(&state)?;
+    let meta = oidc_worker::discover(&provider_cfg.issuer)
+        .await
+        .map_err(|err| match err {
+            OidcWorkerError::InvalidResponse(reason) => {
+                tracing::warn!(%reason, "OIDC discovery failed");
+                IdentityError::Http(StatusCode::BAD_GATEWAY, "identity provider unavailable")
+            }
+            OidcWorkerError::Internal(msg) => IdentityError::from(AppError::internal(msg)),
+        })?;
+
+    let oauth_state = identity::random_urlsafe_token(32)?;
+    let nonce = identity::random_urlsafe_token(32)?;
+    let code_verifier = identity::random_urlsafe_token(48)?;
+    let code_challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(code_verifier.as_bytes()));
+    let redirect_uri = format!(
+        "{}/api/v1/auth/callback/{provider}",
+        state.config.api_public_base_url.trim_end_matches('/')
+    );
+
+    let mut auth_url = url::Url::parse(&meta.authorization_endpoint)
+        .map_err(|_| AppError::internal("invalid provider authorization_endpoint"))?;
+    {
+        let mut qp = auth_url.query_pairs_mut();
+        qp.append_pair("response_type", "code");
+        qp.append_pair("client_id", &provider_cfg.client_id);
+        qp.append_pair("redirect_uri", &redirect_uri);
+        qp.append_pair("scope", "openid email profile");
+        qp.append_pair("state", &oauth_state);
+        qp.append_pair("nonce", &nonce);
+        qp.append_pair("code_challenge", &code_challenge);
+        qp.append_pair("code_challenge_method", "S256");
+        if prompt.as_deref() == Some("login") && mode == "login" {
+            qp.append_pair("prompt", "login");
+        }
+        if action.as_deref() == Some("password") && provider == "keycloak" {
+            qp.append_pair("kc_action", "UPDATE_PASSWORD");
+        }
+    }
+
+    let tx = OidcTransaction {
+        state: oauth_state,
+        provider,
+        mode,
+        return_to,
+        action,
+        user_id: tx_user_id,
+        session_id: tx_session_id,
+        nonce,
+        code_verifier,
+        redirect_uri,
+        token_endpoint: meta.token_endpoint,
+        jwks_uri: meta.jwks_uri,
+        exp: Utc::now().timestamp() + OIDC_TX_TTL_SECONDS,
+    };
+    let signed_tx = sign_oidc_transaction(&tx, secret)?;
+    let tx_cookie = format_cookie(
+        OIDC_TX_COOKIE_NAME,
+        &signed_tx,
+        OIDC_TX_TTL_SECONDS,
+        state.config.session_cookie_secure,
+    );
+    redirect_response(auth_url.as_str(), &[tx_cookie])
+}
+
+async fn complete_login(
+    State(state): State<AppState>,
+    Path(provider): Path<String>,
+    uri: Uri,
+    headers: HeaderMap,
+) -> Result<Response, IdentityError> {
+    let mut states: Vec<String> = Vec::new();
+    let mut code: Option<String> = None;
+    let mut oauth_error: Option<String> = None;
+    let mut kc_action_status: Option<String> = None;
+    for (k, v) in url::form_urlencoded::parse(uri.query().unwrap_or("").as_bytes()) {
+        match k.as_ref() {
+            "state" => states.push(v.into_owned()),
+            "code" => code = Some(v.into_owned()),
+            "error" => oauth_error = Some(v.into_owned()),
+            "kc_action_status" => kc_action_status = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+
+    let secret = oidc_tx_secret(&state)?;
+    let now_ts = Utc::now().timestamp();
+    let tx = session_cookie(&headers, OIDC_TX_COOKIE_NAME)
+        .and_then(|raw| verify_oidc_transaction(raw, secret, now_ts));
+    let Some(tx) = tx.filter(|tx| {
+        states.len() == 1
+            && constant_time_eq(tx.state.as_bytes(), states[0].as_bytes())
+            && tx.provider == provider
+            && matches!(tx.mode.as_str(), "login" | "link")
+    }) else {
+        return Err(IdentityError::Http(
+            StatusCode::BAD_REQUEST,
+            "invalid OIDC transaction",
+        ));
+    };
+
+    let clear_tx_cookie = format_cookie(
+        OIDC_TX_COOKIE_NAME,
+        "",
+        0,
+        state.config.session_cookie_secure,
+    );
+    let web_base = state.config.web_base_url.trim_end_matches('/');
+
+    if oauth_error.as_deref() == Some("access_denied") && tx.mode == "login" {
+        let path = if tx.action.as_deref() == Some("password") {
+            "/app?auth_complete=1&password_result=cancelled"
+        } else {
+            "/?auth_cancelled=1"
+        };
+        return redirect_response(&format!("{web_base}{path}"), &[clear_tx_cookie]);
+    }
+    if oauth_error.is_some() {
+        return Ok(json_error_with_clear(
+            StatusCode::BAD_REQUEST,
+            "invalid OIDC response",
+            &clear_tx_cookie,
+        ));
+    }
+
+    let Some(provider_cfg) = state
+        .config
+        .oidc_providers
+        .get(&provider)
+        .filter(|cfg| !cfg.client_id.trim().is_empty())
+    else {
+        return Ok(json_error_with_clear(
+            StatusCode::BAD_REQUEST,
+            "unknown identity provider",
+            &clear_tx_cookie,
+        ));
+    };
+
+    let Some(code) = code.filter(|c| !c.is_empty()) else {
+        return Ok(json_error_with_clear(
+            StatusCode::BAD_REQUEST,
+            "invalid OIDC response",
+            &clear_tx_cookie,
+        ));
+    };
+
+    let worker_claims = match oidc_worker::exchange_and_verify(
+        &code,
+        &tx.redirect_uri,
+        &tx.code_verifier,
+        &provider_cfg.client_id,
+        provider_cfg.client_secret.as_deref(),
+        &tx.token_endpoint,
+        &tx.jwks_uri,
+        &provider_cfg.issuer,
+        &tx.nonce,
+    )
+    .await
+    {
+        Ok(claims) => claims,
+        Err(OidcWorkerError::InvalidResponse(reason)) => {
+            tracing::warn!(%reason, "OIDC exchange failed");
+            return Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                "invalid OIDC response",
+                &clear_tx_cookie,
+            ));
+        }
+        Err(OidcWorkerError::Internal(msg)) => return Err(AppError::internal(msg).into()),
+    };
+
+    let claims = ExternalIdentityClaims {
+        issuer: worker_claims.issuer,
+        subject: worker_claims.subject,
+        display_name: worker_claims.display_name,
+        email: worker_claims.email,
+        email_verified: worker_claims.email_verified,
+    };
+    let db = database(&state)?;
+
+    if tx.action.as_deref() == Some("password") {
+        let same = match authenticate_cookie_session(&state, &headers).await {
+            Ok(session) => {
+                let user_matches = tx
+                    .user_id
+                    .as_deref()
+                    .is_some_and(|u| u == session.actor_id().to_string());
+                let session_matches = tx
+                    .session_id
+                    .as_deref()
+                    .is_some_and(|s| s == session.session_id().to_string());
+                if user_matches && session_matches {
+                    identity::verify_password_action_identity(db, session.actor_id(), &claims)
+                        .await?
+                } else {
+                    false
+                }
+            }
+            Err(_) => false,
+        };
+        let outcome = match (same, kc_action_status.as_deref()) {
+            (true, Some("success")) => "success",
+            (true, Some("cancelled")) => "cancelled",
+            _ => "unconfirmed",
+        };
+        return redirect_response(
+            &format!("{web_base}/app?auth_complete=1&password_result={outcome}"),
+            &[clear_tx_cookie],
+        );
+    }
+
+    if tx.mode == "link" {
+        let Ok(session) = authenticate_cookie_session(&state, &headers).await else {
+            return Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                "link session no longer valid",
+                &clear_tx_cookie,
+            ));
+        };
+        if tx.user_id.as_deref() != Some(&session.actor_id().to_string())
+            || tx.session_id.as_deref() != Some(&session.session_id().to_string())
+        {
+            return Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                "link session changed",
+                &clear_tx_cookie,
+            ));
+        }
+        return match identity::complete_oidc_link(
+            db,
+            session.actor_id(),
+            session.session_id(),
+            &claims,
+        )
+        .await
+        {
+            Ok(_) => {
+                let dest = format!("{web_base}{}", safe_return_to(Some(&tx.return_to)));
+                redirect_response(&dest, &[clear_tx_cookie])
+            }
+            Err(OidcIdentityError::InvalidLinkSession(msg))
+            | Err(OidcIdentityError::Conflict(msg)) => Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                msg,
+                &clear_tx_cookie,
+            )),
+            Err(OidcIdentityError::LinkConflict) => Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                "external identity cannot be linked",
+                &clear_tx_cookie,
+            )),
+            Err(OidcIdentityError::Storage(err)) => Err(err.into()),
+        };
+    }
+
+    match identity::complete_oidc_login(db, &claims, state.config.session_ttl_seconds).await {
+        Ok(login) => {
+            let dest = format!("{web_base}{}", safe_return_to(Some(&tx.return_to)));
+            let session_cookie = format_cookie(
+                &state.config.session_cookie_name,
+                &login.session_token,
+                state.config.session_ttl_seconds,
+                state.config.session_cookie_secure,
+            );
+            redirect_response(&dest, &[clear_tx_cookie, session_cookie])
+        }
+        Err(OidcIdentityError::Conflict(msg)) => Ok(json_error_with_clear(
+            StatusCode::BAD_REQUEST,
+            msg,
+            &clear_tx_cookie,
+        )),
+        Err(OidcIdentityError::LinkConflict | OidcIdentityError::InvalidLinkSession(_)) => {
+            Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                "invalid OIDC transaction",
+                &clear_tx_cookie,
+            ))
+        }
+        Err(OidcIdentityError::Storage(err)) => Err(err.into()),
+    }
+}
+
 fn database(state: &AppState) -> Result<&DbPool, AppError> {
     state.db_pool.as_ref().ok_or_else(|| {
         AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable")
@@ -642,5 +1127,32 @@ mod tests {
         );
         assert_eq!(session_cookie(&headers, "custom_session"), Some("actual"));
         assert_eq!(session_cookie(&headers, "missing"), None);
+    }
+
+    #[test]
+    fn signs_and_verifies_oidc_transactions() {
+        let tx = OidcTransaction {
+            state: "st".to_string(),
+            provider: "keycloak".to_string(),
+            mode: "login".to_string(),
+            return_to: "/app".to_string(),
+            action: None,
+            user_id: None,
+            session_id: None,
+            nonce: "nn".to_string(),
+            code_verifier: "cv".to_string(),
+            redirect_uri: "http://127.0.0.1:8000/api/v1/auth/callback/keycloak".to_string(),
+            token_endpoint: "http://127.0.0.1:9000/token".to_string(),
+            jwks_uri: "http://127.0.0.1:9000/jwks".to_string(),
+            exp: 2000,
+        };
+        let signed = sign_oidc_transaction(&tx, "secret-key").unwrap();
+        let verified = verify_oidc_transaction(&signed, "secret-key", 1500).unwrap();
+        assert_eq!(verified.state, "st");
+        assert!(verify_oidc_transaction(&signed, "secret-key", 2001).is_none());
+        assert!(verify_oidc_transaction(&signed, "wrong-key", 1500).is_none());
+        assert_eq!(safe_return_to(Some("/app?ok=1")), "/app?ok=1");
+        assert_eq!(safe_return_to(Some("//evil.example")), "/");
+        assert_eq!(safe_return_to(Some("https://evil.example")), "/");
     }
 }

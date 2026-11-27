@@ -300,6 +300,15 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e13-field-offline.log
 
+      - name: Run E01 OIDC parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e01_oidc.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e01-oidc.log
+
       - name: Record PostGIS version
         if: always()
         run: |
