@@ -88,6 +88,10 @@ export interface ProcessingJob {
   feature_count: number | null;
   created_at: string;
   completed_at: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  input_refs?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }
 
 export interface LayerStyle {

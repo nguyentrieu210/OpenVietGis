@@ -14,8 +14,8 @@ try{
  await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
- const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
- const saved=[],edits=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
+ const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
+ const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -30,6 +30,9 @@ try{
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer"}],next_after_id:null};
+  else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
+  else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
+  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1)return route.fulfill({status:503,json:{}});body={id:"job-test",operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
   else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
   else if(p.endsWith("/features"))body={context:{source_id:p.includes("layer2")?"source2":"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
@@ -131,6 +134,22 @@ try{
  await sketch.getByRole("button",{name:"Hủy vẽ",exact:true}).click();
  await sketch.waitFor({state:"detached"});
  console.log("PASS synthetic Chromium: exact spherical segment constraints");
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");
+ const processing=page.getByTestId("processing-workbench");await processing.waitFor();
+ const inputLayer=processing.getByLabel("Lớp đầu vào",{exact:true});
+ await inputLayer.selectOption("layer1");
+ await processing.getByRole("button",{name:"Chạy tác vụ",exact:true}).click();
+ await processing.getByRole("button",{name:"Xác minh / gửi lại tác vụ",exact:true}).waitFor();
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ await processing.waitFor({state:"detached"});
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");
+ await processing.waitFor();
+ await processing.getByRole("button",{name:"Xác minh / gửi lại tác vụ",exact:true}).click();
+ await processing.getByText(/ID job-test/).waitFor();
+ assert.equal(processingRequests.length,2);assert.deepEqual(processingRequests[0],processingRequests[1]);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ console.log("PASS synthetic Chromium: processing request survives workbench close with exact operation ID");
+
 
 
 
