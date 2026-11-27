@@ -845,6 +845,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
+name = "jpeg-decoder"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
+
+[[package]]
 name = "js-sys"
 version = "0.3.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -999,10 +1005,12 @@ dependencies = [
  "crc32fast",
  "ed25519-dalek",
  "futures-util",
+ "hex",
  "hmac",
  "http",
  "hyper",
  "hyper-util",
+ "jpeg-decoder",
  "miniz_oxide",
  "ovg-core",
  "ovg-module-house-numbering",
@@ -1020,6 +1028,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 
@@ -1101,6 +1110,7 @@ dependencies = [
  "tracing",
  "unicode-casefold",
  "unicode-normalization",
+ "url",
  "uuid",
 ]
 

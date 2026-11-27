@@ -11,7 +11,9 @@ pub(crate) mod edit_auth;
 pub(crate) mod editing;
 pub mod error;
 pub(crate) mod extensions;
+pub(crate) mod external_sources;
 pub(crate) mod field_offline;
+pub(crate) mod gis_access;
 #[cfg(feature = "house-numbering")]
 pub(crate) mod house_numbering;
 /// Without the official module compiled in, Core mounts no house-numbering routes.
@@ -22,6 +24,7 @@ pub(crate) mod house_numbering {
     }
 }
 pub(crate) mod identity;
+mod invitation_mail;
 pub(crate) mod managed_sync;
 pub(crate) mod map_render;
 pub mod metrics;
@@ -32,7 +35,9 @@ pub(crate) mod presence;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
 pub(crate) mod professional;
+mod provider_worker;
 pub(crate) mod queries;
+mod raster_compute;
 pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;
@@ -41,6 +46,7 @@ pub(crate) mod team;
 pub(crate) mod tenancy;
 pub(crate) mod three_d;
 pub(crate) mod tilesets;
+pub(crate) mod tilesets_codec;
 pub(crate) mod transfers;
 
 use axum::http::{header, HeaderName, HeaderValue, Method};

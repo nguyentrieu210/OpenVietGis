@@ -196,6 +196,10 @@ impl TenantTx {
         Ok(this)
     }
 
+    pub fn tx_mut(&mut self) -> &mut Transaction<'static, Postgres> {
+        &mut self.tx
+    }
+
     pub async fn commit(self) -> Result<(), AppError> {
         self.tx.commit().await.map_err(db_error)
     }
@@ -314,6 +318,38 @@ impl TenantTx {
             .fetch_one(&mut *self.tx)
             .await
             .map_err(db_error)
+    }
+
+    /// Bind the verified project for RLS-protected GIS administration.
+    /// Call only after the caller's organization and project grants are verified.
+    pub async fn bind_admin_project(
+        &mut self,
+        organization_id: Uuid,
+        project_id: Uuid,
+        write: bool,
+    ) -> Result<(), AppError> {
+        if self.organization_id != Some(organization_id) {
+            return Err(AppError::not_found("organization not found"));
+        }
+        let lock = if write { "FOR UPDATE" } else { "FOR SHARE" };
+        let status: String = sqlx::query_scalar(&format!(
+            "SELECT status FROM workspace.projects WHERE organization_id=$1 AND id=$2 {lock}"
+        ))
+        .bind(organization_id)
+        .bind(project_id)
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| AppError::not_found("project not found"))?;
+        if status != "active" {
+            return Err(AppError::forbidden("project is not active"));
+        }
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(project_id.to_string())
+            .execute(&mut *self.tx)
+            .await
+            .map_err(db_error)?;
+        Ok(())
     }
 
     pub async fn organization(
@@ -440,6 +476,75 @@ impl TenantTx {
         .await
         .map_err(db_error)?;
         Ok(initialized == Some(true))
+    }
+
+    pub async fn bootstrap_initialize(
+        &mut self,
+        name: &str,
+        slug: &str,
+    ) -> Result<(Uuid, Uuid), AppError> {
+        let initialized: Option<Option<DateTime<Utc>>> = sqlx::query_scalar(
+            "SELECT initialized_at FROM platform.installation_state
+             WHERE singleton_key = 'installation' FOR UPDATE",
+        )
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        if initialized.flatten().is_some() {
+            return Err(AppError::conflict(
+                "INSTALLATION_ALREADY_INITIALIZED",
+                "installation already initialized",
+            ));
+        }
+        let cleaned_name = name.trim();
+        if cleaned_name.is_empty() {
+            return Err(AppError::bad_request("organization name is required"));
+        }
+        let cleaned_slug = slug.trim().to_ascii_lowercase();
+        let valid_slug = !cleaned_slug.is_empty()
+            && !cleaned_slug.starts_with('-')
+            && !cleaned_slug.ends_with('-')
+            && !cleaned_slug.contains("--")
+            && cleaned_slug
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+        if !valid_slug {
+            return Err(AppError::bad_request("invalid organization slug"));
+        }
+        let (org, owner) = self
+            .create_organization(cleaned_name, &cleaned_slug)
+            .await?;
+        let now = Utc::now();
+        let updated = sqlx::query(
+            "UPDATE platform.installation_state
+             SET initialized_at = $1,
+                 initial_organization_id = $2,
+                 initialized_by_user_id = $3,
+                 updated_at = $1
+             WHERE singleton_key = 'installation' AND initialized_at IS NULL",
+        )
+        .bind(now)
+        .bind(org.id)
+        .bind(self.actor_id)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        if updated.rows_affected() != 1 {
+            return Err(AppError::conflict(
+                "INSTALLATION_ALREADY_INITIALIZED",
+                "installation already initialized",
+            ));
+        }
+        self.audit(
+            org.id,
+            "installation.bootstrap.initialize",
+            "organization",
+            Some(org.id),
+            "success",
+            json!({ "owner_membership_id": owner.id.to_string() }),
+        )
+        .await?;
+        Ok((org.id, owner.id))
     }
 
     pub async fn create_organization(
@@ -1421,6 +1526,20 @@ impl TenantTx {
                 .execute(&mut *self.tx).await.map_err(db_error)?;
         }
         Ok(result)
+    }
+
+    pub async fn put_avatar(&mut self, data_url: &str) -> Result<(), AppError> {
+        sqlx::query(
+            "INSERT INTO identity.user_avatars (user_id,data_url) VALUES ($1,$2)
+             ON CONFLICT (user_id) DO UPDATE
+             SET data_url=excluded.data_url, updated_at=now()",
+        )
+        .bind(self.actor_id)
+        .bind(data_url)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        Ok(())
     }
 
     pub async fn delete_avatar(&mut self) -> Result<(), AppError> {

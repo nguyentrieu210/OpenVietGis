@@ -24,6 +24,7 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{BASE}/adapters/{{adapter_key}}"),
             get(read_adapter_profile),
         )
+        .merge(super::bindings::router())
 }
 
 fn permission(level: EffectiveProjectLevel) -> PermissionLevel {

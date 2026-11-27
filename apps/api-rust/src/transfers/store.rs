@@ -80,6 +80,12 @@ impl Store {
         staged.finish().await
     }
 
+    pub(crate) async fn delete(&self, key: &str) {
+        if let Ok(path) = self.path(key) {
+            let _ = tokio::fs::remove_file(path).await;
+        }
+    }
+
     /// Open an object after verifying its SHA-256 in bounded chunks.
     pub(crate) async fn open_verified(
         &self,
@@ -140,12 +146,6 @@ impl Store {
         }
         Ok(data)
     }
-
-    pub(crate) async fn delete(&self, key: &str) {
-        if let Ok(path) = self.path(key) {
-            let _ = tokio::fs::remove_file(path).await;
-        }
-    }
 }
 
 pub(super) struct Staged {
@@ -202,12 +202,14 @@ pub(crate) fn file_stream(file: File) -> impl Stream<Item = std::io::Result<Byte
     })
 }
 
-/// Extract the `file` part of a `multipart/form-data` body: (filename, content).
-/// Returns `None` for anything that is not a well-formed upload with that part.
-pub(super) fn multipart_file<'a>(
+pub(crate) type MultipartPart<'a> = (String, Option<&'a str>, &'a [u8]);
+
+/// Extract all parts `(name, filename, content)` of a `multipart/form-data` body.
+/// Returns `None` for malformed multipart payloads or invalid headers.
+pub(crate) fn multipart_parts<'a>(
     content_type: &str,
     body: &'a [u8],
-) -> Option<(Option<&'a str>, &'a [u8])> {
+) -> Option<Vec<MultipartPart<'a>>> {
     let (mime, params) = content_type.split_once(';')?;
     if !mime.trim().eq_ignore_ascii_case("multipart/form-data") {
         return None;
@@ -228,8 +230,12 @@ pub(super) fn multipart_file<'a>(
     let mut position = body
         .strip_prefix(delimiter.as_bytes())
         .map(|_| delimiter.len())?;
+    let mut parts = Vec::new();
     loop {
         let rest = body.get(position..)?;
+        if rest == b"--" || rest.starts_with(b"--\r\n") {
+            return Some(parts);
+        }
         if !rest.starts_with(b"\r\n") {
             return None;
         }
@@ -238,30 +244,49 @@ pub(super) fn multipart_file<'a>(
         let headers = std::str::from_utf8(&body[position..header_end]).ok()?;
         let content_start = header_end + 4;
         let mut search = content_start;
-        let content_end = loop {
+        let (content_end, is_final) = loop {
             let at = find(body, separator.as_bytes(), search)?;
             let suffix = body.get(at + separator.len()..)?;
-            if suffix.starts_with(b"\r\n") || suffix == b"--" || suffix.starts_with(b"--\r\n") {
-                break at;
+            if suffix.starts_with(b"\r\n") {
+                break (at, false);
+            }
+            if suffix == b"--" || suffix.starts_with(b"--\r\n") {
+                break (at, true);
             }
             search = at + 1;
         };
-        if let Some(filename) = file_part(headers) {
-            return Some((filename, &body[content_start..content_end]));
+        if let Some((name, filename)) = parse_disposition(headers) {
+            parts.push((name, filename, &body[content_start..content_end]));
+        }
+        if is_final {
+            return Some(parts);
         }
         position = content_end + separator.len();
     }
 }
 
-/// `Some(filename)` when the part is `name="file"` with a filename parameter.
-fn file_part(headers: &str) -> Option<Option<&str>> {
+/// Extract the `file` part of a `multipart/form-data` body: (filename, content).
+/// Returns `None` for anything that is not a well-formed upload with that part.
+pub(super) fn multipart_file<'a>(
+    content_type: &str,
+    body: &'a [u8],
+) -> Option<(Option<&'a str>, &'a [u8])> {
+    multipart_parts(content_type, body)?
+        .into_iter()
+        .find_map(|(name, filename, content)| {
+            // Starlette treats a part without a filename as a plain form field, not a file.
+            (name == "file" && filename.is_some()).then_some((filename, content))
+        })
+}
+
+fn parse_disposition(headers: &str) -> Option<(String, Option<&str>)> {
     let disposition = headers.split("\r\n").find_map(|line| {
         let (name, value) = line.split_once(':')?;
         name.trim()
             .eq_ignore_ascii_case("content-disposition")
             .then_some(value)
     })?;
-    let mut is_file = false;
+    let mut part_name = None;
     let mut filename = None;
     for item in disposition.split(';').skip(1) {
         let Some((key, value)) = item.split_once('=') else {
@@ -269,13 +294,12 @@ fn file_part(headers: &str) -> Option<Option<&str>> {
         };
         let value = value.trim().trim_matches('"');
         match key.trim().to_ascii_lowercase().as_str() {
-            "name" => is_file = value == "file",
+            "name" => part_name = Some(value.to_owned()),
             "filename" => filename = Some(value),
             _ => {}
         }
     }
-    // Starlette treats a part without a filename as a plain form field, not a file.
-    (is_file && filename.is_some()).then_some(filename)
+    Some((part_name?, filename))
 }
 
 fn find(haystack: &[u8], needle: &[u8], from: usize) -> Option<usize> {

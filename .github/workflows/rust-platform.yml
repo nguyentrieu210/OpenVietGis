@@ -48,8 +48,6 @@ env:
 jobs:
   check-and-test:
     name: Format, Clippy, Tests & Architecture Isolation
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -64,6 +62,9 @@ jobs:
 
       - name: Cache Cargo registry and target
         uses: Swatinem/rust-cache@v2
+
+      - name: Install SQLite and GDAL format engines
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
 
       - name: Verify formatting
         run: cargo fmt --all -- --check
@@ -115,8 +116,6 @@ jobs:
 
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -148,6 +147,9 @@ jobs:
       # Same PostGIS image, port 54330, template_postgis and openvietgis_runtime role as the Python CI.
       - name: Start dedicated PostGIS test database
         run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+
+      - name: Install SQLite and GDAL format engines
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
 
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
@@ -271,6 +273,24 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e15-full-parity.log
 
+      - name: Run E05 3D tilesets parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e05_tilesets.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e05-tilesets.log
+
+      - name: Run E01/E10/E12 Mega-Wave parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e01_e10_e12_wave.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e01-e10-e12-wave.log
+
       - name: Record PostGIS version
         if: always()
         run: |
@@ -289,8 +309,6 @@ jobs:
 
   security-audit:
     name: Cargo Audit
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

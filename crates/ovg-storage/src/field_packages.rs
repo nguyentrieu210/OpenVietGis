@@ -100,6 +100,7 @@ pub struct PackageDownload {
     pub id: Uuid,
     pub storage_key: String,
     pub sha256: String,
+    pub snapshot_sha256: Option<String>,
 }
 
 pub async fn download_info(
@@ -109,6 +110,7 @@ pub async fn download_info(
 ) -> Result<PackageDownload, AppError> {
     let row = sqlx::query(
         "SELECT id, storage_key, sha256, expires_at, revoked_at, created_by_actor_id,
+                layer_pins->0->>'snapshot_sha256' AS snapshot_sha256,
                 (layer_pins->0->>'layer_id')::uuid AS layer_id,
                 (layer_pins->0->>'source_id')::uuid AS source_id
          FROM field.offline_packages
@@ -178,6 +180,7 @@ pub async fn download_info(
         id: row.try_get("id").map_err(db_error)?,
         storage_key: row.try_get("storage_key").map_err(db_error)?,
         sha256: row.try_get("sha256").map_err(db_error)?,
+        snapshot_sha256: row.try_get("snapshot_sha256").map_err(db_error)?,
     })
 }
 

@@ -1,4 +1,5 @@
 //! E12 candidate policy primitives. No outbound I/O or authorization granted.
+pub mod bindings;
 pub mod catalog;
 pub mod http;
 pub mod profile;

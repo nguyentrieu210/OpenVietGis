@@ -1,6 +1,6 @@
 //! E10 3D model vault and saved-scene read control plane.
 
-use axum::body::Body;
+use axum::body::{to_bytes, Body};
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
@@ -9,13 +9,16 @@ use axum::routing::get;
 use axum::{Json, Router};
 use ovg_core::AppError;
 use ovg_storage::catalog::ProjectReadPolicy;
-use ovg_storage::three_d;
+use ovg_storage::three_d::{self, CreateModelArgs, ModelPlacementInput, ModelStoreError};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::catalog::{project_read, CatalogError};
 use crate::identity::{require_csrf, HumanSession};
+use crate::tilesets::sha256_hex;
+use crate::tilesets_codec::{validate_model_asset, CodecError, MAX_GLB_BYTES};
+use crate::transfers::store::multipart_parts;
 use crate::AppState;
 
 const MODELS: &str = "/organizations/{organization_id}/projects/{project_id}/3d/models";
@@ -23,10 +26,10 @@ const SCENES: &str = "/organizations/{organization_id}/projects/{project_id}/3d/
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
-        .route(MODELS, get(list_models))
+        .route(MODELS, get(list_models).post(create_model))
         .route(
             &format!("{MODELS}/{{model_id}}/placements"),
-            get(model_history),
+            get(model_history).post(revise_model),
         )
         .route(
             &format!("{MODELS}/{{model_id}}/download"),
@@ -433,11 +436,212 @@ async fn scene_history(
     v.map(|v| (headers(), Json(v)))
         .ok_or(ThreeDError::NotFound("Scene not found"))
 }
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlacementRequest {
+    source_id: Uuid,
+    feature_id: String,
+    scale: f64,
+    rotation_deg: f64,
+    offset_m: f64,
+    #[serde(default)]
+    dem_id: Option<Uuid>,
+    #[serde(default = "default_local")]
+    vertical_reference: String,
+    #[serde(default)]
+    reference_label: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RevisePlacementRequest {
+    source_id: Uuid,
+    feature_id: String,
+    scale: f64,
+    rotation_deg: f64,
+    offset_m: f64,
+    #[serde(default)]
+    dem_id: Option<Uuid>,
+    #[serde(default = "default_local")]
+    vertical_reference: String,
+    #[serde(default)]
+    reference_label: String,
+    expected_version: i32,
+}
+
+fn default_local() -> String {
+    "local".to_owned()
+}
+
+fn validate_placement(req: PlacementRequest) -> Result<ModelPlacementInput, ThreeDError> {
+    if req.feature_id.is_empty()
+        || req.feature_id.chars().count() > 200
+        || !req.scale.is_finite()
+        || !(0.01..=100.0).contains(&req.scale)
+        || !req.rotation_deg.is_finite()
+        || !(-360.0..=360.0).contains(&req.rotation_deg)
+        || !req.offset_m.is_finite()
+        || !(-1000.0..=1000.0).contains(&req.offset_m)
+        || !matches!(
+            req.vertical_reference.as_str(),
+            "local" | "orthometric" | "ellipsoidal"
+        )
+        || req.reference_label.chars().count() > 120
+    {
+        return Err(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid placement",
+        ));
+    }
+    let reference_label = req.reference_label.trim().to_owned();
+    if req.dem_id.is_some() && reference_label.is_empty() {
+        return Err(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "DEM vertical reference required",
+        ));
+    }
+    if req.dem_id.is_none() && (!reference_label.is_empty() || req.vertical_reference != "local") {
+        return Err(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Flat placement requires local zero reference",
+        ));
+    }
+    Ok(ModelPlacementInput {
+        source_id: req.source_id,
+        feature_id: req.feature_id,
+        scale: req.scale,
+        rotation_deg: req.rotation_deg,
+        offset_m: req.offset_m,
+        dem_id: req.dem_id,
+        vertical_reference: req.vertical_reference,
+        reference_label,
+    })
+}
+
+async fn create_model(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    request_headers: HeaderMap,
+    Path((o, p)): Path<(Uuid, Uuid)>,
+    body: Body,
+) -> Result<(StatusCode, Json<Value>), ThreeDError> {
+    require_csrf(&state, &auth, &request_headers)
+        .map_err(|e| ThreeDError::Access(CatalogError::Identity(e)))?;
+    let mut edit = project_read(&state, &auth, o, p, ProjectReadPolicy::UnrestrictedEdit)
+        .await
+        .map_err(ThreeDError::Access)?;
+
+    let bytes = to_bytes(body, MAX_GLB_BYTES + 256 * 1024)
+        .await
+        .map_err(|_| ThreeDError::Detail(StatusCode::PAYLOAD_TOO_LARGE, "Model size limit"))?;
+    let content_type = request_headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let parts = multipart_parts(content_type, &bytes).ok_or(ThreeDError::Detail(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Invalid placement",
+    ))?;
+    let raw_placement = parts
+        .iter()
+        .find_map(|(name, filename, data)| {
+            (name == "placement" && filename.is_none())
+                .then(|| std::str::from_utf8(data).ok())
+                .flatten()
+        })
+        .ok_or(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid placement",
+        ))?;
+    if raw_placement.chars().count() > 4096 {
+        return Err(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid placement",
+        ));
+    }
+    let req: PlacementRequest = serde_json::from_str(raw_placement)
+        .map_err(|_| ThreeDError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Invalid placement"))?;
+    let placement = validate_placement(req)?;
+
+    let (filename, payload) = parts
+        .iter()
+        .find_map(|(name, filename, data)| {
+            (name == "file" && filename.is_some()).then_some((filename.unwrap_or(""), *data))
+        })
+        .ok_or(ThreeDError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid model filename",
+        ))?;
+    let fmt = validate_model_asset(filename, payload).map_err(ThreeDError::Codec)?;
+    let digest = sha256_hex(payload);
+
+    let created = three_d::create_model(
+        &mut edit,
+        CreateModelArgs {
+            actor_id: auth.actor_id(),
+            actor_display: auth.display_name(),
+            filename,
+            format: fmt,
+            sha256: &digest,
+            payload,
+            placement: &placement,
+        },
+    )
+    .await
+    .map_err(ThreeDError::ModelStore)?;
+    edit.commit().await.map_err(ThreeDError::Domain)?;
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+async fn revise_model(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    request_headers: HeaderMap,
+    Path((o, p, model_id)): Path<(Uuid, Uuid, Uuid)>,
+    body: Result<Json<RevisePlacementRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<Value>), ThreeDError> {
+    require_csrf(&state, &auth, &request_headers)
+        .map_err(|e| ThreeDError::Access(CatalogError::Identity(e)))?;
+    let mut edit = project_read(&state, &auth, o, p, ProjectReadPolicy::UnrestrictedEdit)
+        .await
+        .map_err(ThreeDError::Access)?;
+    let Json(req) = body.map_err(|_| ThreeDError::InvalidRequest)?;
+    if !(1..=50).contains(&req.expected_version) {
+        return Err(ThreeDError::InvalidRequest);
+    }
+    let expected = req.expected_version;
+    let placement = validate_placement(PlacementRequest {
+        source_id: req.source_id,
+        feature_id: req.feature_id,
+        scale: req.scale,
+        rotation_deg: req.rotation_deg,
+        offset_m: req.offset_m,
+        dem_id: req.dem_id,
+        vertical_reference: req.vertical_reference,
+        reference_label: req.reference_label,
+    })?;
+    let revised = three_d::revise_model(
+        &mut edit,
+        auth.actor_id(),
+        auth.display_name(),
+        model_id,
+        expected,
+        &placement,
+    )
+    .await
+    .map_err(ThreeDError::ModelStore)?;
+    edit.commit().await.map_err(ThreeDError::Domain)?;
+    Ok((StatusCode::CREATED, Json(revised)))
+}
+
 enum ThreeDError {
     InvalidRequest,
     Access(CatalogError),
     Domain(AppError),
     SceneStore(three_d::SceneStoreError),
+    ModelStore(ModelStoreError),
+    Codec(CodecError),
+    Detail(StatusCode, &'static str),
     NotFound(&'static str),
 }
 impl IntoResponse for ThreeDError {
@@ -445,6 +649,18 @@ impl IntoResponse for ThreeDError {
         match self {
             Self::InvalidRequest => CatalogError::InvalidRequest.into_response(),
             Self::Access(e) => e.into_response(),
+            Self::Detail(status, d) => (status, Json(json!({ "detail": d }))).into_response(),
+            Self::Codec(c) => (c.status, Json(json!({ "detail": c.detail }))).into_response(),
+            Self::ModelStore(error) => match error {
+                ModelStoreError::Database => {
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+                }
+                ModelStoreError::Detail(code, msg) => {
+                    let st =
+                        StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                    (st, Json(json!({ "detail": msg }))).into_response()
+                }
+            },
             Self::SceneStore(error) => match error {
                 three_d::SceneStoreError::Database => {
                     (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()

@@ -503,6 +503,309 @@ pub async fn open_scene(
     Ok(Some(json!({"scene":scene,"models":models})))
 }
 
+#[derive(Debug)]
+pub enum ModelStoreError {
+    Detail(u16, &'static str),
+    Database,
+}
+
+fn model_db(error: sqlx::Error) -> ModelStoreError {
+    tracing::error!(%error, "model vault database operation failed");
+    ModelStoreError::Database
+}
+
+pub struct ModelPlacementInput {
+    pub source_id: Uuid,
+    pub feature_id: String,
+    pub scale: f64,
+    pub rotation_deg: f64,
+    pub offset_m: f64,
+    pub dem_id: Option<Uuid>,
+    pub vertical_reference: String,
+    pub reference_label: String,
+}
+
+pub struct CreateModelArgs<'a> {
+    pub actor_id: Uuid,
+    pub actor_display: &'a str,
+    pub filename: &'a str,
+    pub format: &'a str,
+    pub sha256: &'a str,
+    pub payload: &'a [u8],
+    pub placement: &'a ModelPlacementInput,
+}
+
+async fn resolve_model_profile(
+    edit: &mut ProjectRead<'_>,
+    placement: &ModelPlacementInput,
+) -> Result<Value, ModelStoreError> {
+    let row = sqlx::query(
+        "SELECT s.content_revision,
+                ST_XMin(g) AS xmin, ST_XMax(g) AS xmax,
+                ST_YMin(g) AS ymin, ST_YMax(g) AS ymax
+         FROM spatial.reference_features f
+         JOIN spatial.data_sources s
+           ON s.organization_id = f.organization_id
+          AND s.project_id = f.project_id
+          AND s.id = f.source_id
+         CROSS JOIN LATERAL (
+           SELECT CASE ST_SRID(f.geometry)
+             WHEN 4326 THEN f.geometry
+             WHEN 3857 THEN ST_Transform(f.geometry, 4326)
+             ELSE NULL
+           END AS g
+         ) q
+         WHERE f.organization_id = $1 AND f.project_id = $2
+           AND f.source_id = $3 AND f.feature_id = $4
+           AND s.lifecycle = 'active' AND s.validation_state = 'ready'
+           AND f.content_revision = s.content_revision
+           AND g IS NOT NULL AND NOT ST_IsEmpty(g)
+           AND EXISTS (
+             SELECT 1 FROM spatial.layers l
+             WHERE l.organization_id = f.organization_id
+               AND l.project_id = f.project_id
+               AND l.source_id = f.source_id
+               AND l.lifecycle = 'active'
+           )",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(placement.source_id)
+    .bind(&placement.feature_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?
+    .ok_or(ModelStoreError::Detail(
+        422,
+        "Live reference feature with EPSG:4326 or EPSG:3857 required",
+    ))?;
+
+    let content_revision: String = row.try_get("content_revision").map_err(model_db)?;
+    let west: f64 = row.try_get("xmin").map_err(model_db)?;
+    let east: f64 = row.try_get("xmax").map_err(model_db)?;
+    let south: f64 = row.try_get("ymin").map_err(model_db)?;
+    let north: f64 = row.try_get("ymax").map_err(model_db)?;
+
+    if !((-180.0..=180.0).contains(&west)
+        && (-180.0..=180.0).contains(&east)
+        && west <= east
+        && east - west <= 180.0
+        && (-85.0..=85.0).contains(&south)
+        && (-85.0..=85.0).contains(&north)
+        && south <= north)
+    {
+        return Err(ModelStoreError::Detail(422, "Unsupported feature extent"));
+    }
+
+    if let Some(dem_id) = placement.dem_id {
+        let meta = sqlx::query_scalar::<_, Value>(
+            "SELECT metadata FROM raster.layers
+             WHERE organization_id = $1 AND project_id = $2 AND id = $3",
+        )
+        .bind(edit.organization_id())
+        .bind(edit.project_id())
+        .bind(dem_id)
+        .fetch_optional(&mut **edit.transaction())
+        .await
+        .map_err(model_db)?;
+        let eligible = meta.as_ref().is_some_and(|m| {
+            m.get("method").and_then(Value::as_str) == Some("band")
+                && m.get("output_bands").and_then(Value::as_i64).unwrap_or(1) == 1
+        });
+        if !eligible {
+            return Err(ModelStoreError::Detail(422, "DEM not found or ineligible"));
+        }
+    }
+
+    Ok(json!({
+        "source_id": placement.source_id.to_string(),
+        "feature_id": placement.feature_id,
+        "scale": placement.scale,
+        "rotation_deg": placement.rotation_deg,
+        "offset_m": placement.offset_m,
+        "dem_id": placement.dem_id.map(|id| id.to_string()),
+        "vertical_reference": placement.vertical_reference,
+        "reference_label": placement.reference_label,
+        "longitude": (west + east) / 2.0,
+        "latitude": (south + north) / 2.0,
+        "crs_code": 4326,
+        "source_revision": content_revision,
+        "altitude_mode": if placement.dem_id.is_some() { "relative-dem" } else { "relative-flat" },
+    }))
+}
+
+async fn write_model_placement(
+    edit: &mut ProjectRead<'_>,
+    actor_id: Uuid,
+    actor_display: &str,
+    model_id: Uuid,
+    version: i32,
+    profile: &Value,
+) -> Result<Value, ModelStoreError> {
+    sqlx::query(
+        "INSERT INTO spatial.model_placements
+         (organization_id, project_id, model_id, version, profile, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(model_id)
+    .bind(version)
+    .bind(profile)
+    .bind(actor_id)
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+
+    sqlx::query(
+        "INSERT INTO audit.audit_events (
+            id, organization_id, actor_type, actor_id, actor_display_snapshot,
+            action, resource_type, resource_id, outcome, metadata, created_at
+         ) VALUES ($1, $2, 'human', $3, $4, '3d.model.placement.save', 'model_asset', $5, 'success', $6, $7)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(edit.organization_id())
+    .bind(actor_id)
+    .bind(actor_display)
+    .bind(model_id)
+    .bind(json!({ "version": version, "profile": profile }))
+    .bind(Utc::now())
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+
+    let row = sqlx::query(
+        "SELECT a.id,a.filename,a.format,a.sha256,a.byte_size,p.version,p.profile,p.created_at
+         FROM spatial.model_assets a
+         JOIN spatial.model_placements p
+           ON p.organization_id=a.organization_id
+          AND p.project_id=a.project_id
+          AND p.model_id=a.id
+         WHERE a.organization_id=$1 AND a.project_id=$2
+           AND a.id=$3 AND p.version=$4",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(model_id)
+    .bind(version)
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+    model(&row).map_err(|_| ModelStoreError::Database)
+}
+
+pub async fn create_model(
+    edit: &mut ProjectRead<'_>,
+    args: CreateModelArgs<'_>,
+) -> Result<Value, ModelStoreError> {
+    let lock_key = format!("model-vault:{}", edit.project_id());
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&lock_key)
+        .execute(&mut **edit.transaction())
+        .await
+        .map_err(model_db)?;
+
+    let quota_row = sqlx::query(
+        "SELECT count(*)::bigint AS count, coalesce(sum(byte_size), 0)::bigint AS total
+         FROM spatial.model_assets WHERE organization_id=$1 AND project_id=$2",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+    let count: i64 = quota_row.try_get("count").map_err(model_db)?;
+    let total: i64 = quota_row.try_get("total").map_err(model_db)?;
+    if count >= 100 || total + args.payload.len() as i64 > 100 * 1024 * 1024 {
+        return Err(ModelStoreError::Detail(413, "Project model quota exceeded"));
+    }
+
+    let profile = resolve_model_profile(edit, args.placement).await?;
+    let model_id = Uuid::new_v4();
+    let byte_size = i32::try_from(args.payload.len()).map_err(|_| ModelStoreError::Database)?;
+
+    sqlx::query(
+        "INSERT INTO spatial.model_assets
+         (organization_id, project_id, id, filename, format, sha256, byte_size, payload, actor_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(model_id)
+    .bind(args.filename)
+    .bind(args.format)
+    .bind(args.sha256)
+    .bind(byte_size)
+    .bind(args.payload)
+    .bind(args.actor_id)
+    .execute(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+
+    write_model_placement(
+        edit,
+        args.actor_id,
+        args.actor_display,
+        model_id,
+        1,
+        &profile,
+    )
+    .await
+}
+
+pub async fn revise_model(
+    edit: &mut ProjectRead<'_>,
+    actor_id: Uuid,
+    actor_display: &str,
+    model_id: Uuid,
+    expected_version: i32,
+    placement: &ModelPlacementInput,
+) -> Result<Value, ModelStoreError> {
+    let lock_key = format!("model-vault:{}", edit.project_id());
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&lock_key)
+        .execute(&mut **edit.transaction())
+        .await
+        .map_err(model_db)?;
+
+    let current = sqlx::query_scalar::<_, Option<i32>>(
+        "SELECT max(p.version)
+         FROM spatial.model_assets a
+         JOIN spatial.model_placements p
+           ON p.organization_id=a.organization_id
+          AND p.project_id=a.project_id
+          AND p.model_id=a.id
+         WHERE a.organization_id=$1 AND a.project_id=$2 AND a.id=$3",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(model_id)
+    .fetch_one(&mut **edit.transaction())
+    .await
+    .map_err(model_db)?;
+
+    let Some(current_ver) = current else {
+        return Err(ModelStoreError::Detail(404, "Model not found"));
+    };
+    if current_ver != expected_version {
+        return Err(ModelStoreError::Detail(409, "Placement changed; reload"));
+    }
+    if expected_version >= 50 {
+        return Err(ModelStoreError::Detail(413, "Placement history limit"));
+    }
+
+    let profile = resolve_model_profile(edit, placement).await?;
+    write_model_placement(
+        edit,
+        actor_id,
+        actor_display,
+        model_id,
+        expected_version + 1,
+        &profile,
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
