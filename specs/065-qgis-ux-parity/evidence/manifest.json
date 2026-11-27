@@ -635,12 +635,15 @@
     {
       "id": "OUTPUT-04",
       "task": "T078",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayoutDesigner.tsx",
-        "apps/web-next/src/LayoutRender.ts"
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/src/layout-atlas.ts",
+        "apps/web-next/src/layout-atlas.test.ts",
+        "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "No authenticated atlas generation and authorization evidence; layout sources are candidates only."
+      "blocker": "Bounded client Atlas (8 features, 2 map frames, 150 DPI) and synthetic browser two-page PDF/stale revision tests pass; no authenticated API, large-source streaming, server-side immutable render snapshot or paired QGIS acceptance."
     },
     {
       "id": "OUTPUT-05",
@@ -652,7 +655,7 @@
         "apps/web-next/src/LayoutRender.ts",
         "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Actual browser PDF/PNG/SVG files verified dimensions/metadata; PDF flattened, SVG map embedded raster; no paired visual comparison."
+      "blocker": "Actual synthetic browser PDF/PNG/SVG and multi-page Atlas files verified; PDF flattened, SVG map embedded raster; no paired QGIS visual comparison or authenticated export."
     },
     {
       "id": "OUTPUT-06",

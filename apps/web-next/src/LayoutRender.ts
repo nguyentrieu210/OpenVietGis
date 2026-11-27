@@ -50,12 +50,20 @@ export async function pngFromCanvas(canvas:HTMLCanvasElement,dpi:number):Promise
  for(let off=8;off+12<=png.length;){const len=view.getUint32(off),end=off+12+len;if(end>png.length)throw Error("PNG không hợp lệ");const kind=String.fromCharCode(...png.subarray(off+4,off+8));if(kind!=="pHYs")chunks.push(png.slice(off,end));if(kind==="IHDR")chunks.push(phys);off=end}
  return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"image/png"});
 }
-export async function pdfFromCanvas(canvas:HTMLCanvasElement,wmm:number,hmm:number):Promise<Blob>{
- const jpeg=new Uint8Array(await (await canvasBlob(canvas,"image/jpeg",.96)).arrayBuffer()),w=(wmm*72/25.4).toFixed(4),h=(hmm*72/25.4).toFixed(4),enc=new TextEncoder(),chunks:Uint8Array[]=[],offsets=[0];let offset=0;
+export type PdfImagePage={jpeg:Uint8Array;width:number;height:number};
+export async function pdfImagePage(canvas:HTMLCanvasElement):Promise<PdfImagePage>{return {jpeg:new Uint8Array(await (await canvasBlob(canvas,"image/jpeg",.96)).arrayBuffer()),width:canvas.width,height:canvas.height}}
+export function pdfFromPages(pages:PdfImagePage[],wmm:number,hmm:number):Blob{
+ if(!pages.length||pages.length>8||!Number.isFinite(wmm)||!Number.isFinite(hmm)||wmm<=0||hmm<=0||pages.some(p=>!p.jpeg.length||p.width<1||p.height<1))throw Error("Trang PDF không hợp lệ");
+ const w=(wmm*72/25.4).toFixed(4),h=(hmm*72/25.4).toFixed(4),enc=new TextEncoder(),chunks:Uint8Array[]=[],offsets=[0];let offset=0;
  const push=(chunk:string|Uint8Array)=>{const a=typeof chunk==="string"?enc.encode(chunk):chunk;chunks.push(a);offset+=a.byteLength};
  const obj=(id:number,body:string)=>{offsets[id]=offset;push(id+" 0 obj\n"+body+"\nendobj\n")};
- push("%PDF-1.4\n");obj(1,"<< /Type /Catalog /Pages 2 0 R >>");obj(2,"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");obj(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+w+" "+h+"] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>");
- offsets[4]=offset;push("4 0 obj\n<< /Type /XObject /Subtype /Image /Width "+canvas.width+" /Height "+canvas.height+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpeg.length+" >>\nstream\n");push(jpeg);push("\nendstream\nendobj\n");
- const stream="q\n"+w+" 0 0 "+h+" 0 0 cm\n/Im0 Do\nQ\n";obj(5,"<< /Length "+enc.encode(stream).length+" >>\nstream\n"+stream+"endstream");const xref=offset;push("xref\n0 6\n0000000000 65535 f \n");for(let i=1;i<=5;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");push("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n");return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"application/pdf"})
+ push("%PDF-1.4\n");obj(1,"<< /Type /Catalog /Pages 2 0 R >>");obj(2,"<< /Type /Pages /Kids ["+pages.map((_,i)=>(3+i*3)+" 0 R").join(" ")+"] /Count "+pages.length+" >>");
+ for(const [i,page] of pages.entries()){
+ const id=3+i*3;obj(id,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+w+" "+h+"] /Resources << /XObject << /Im0 "+(id+1)+" 0 R >> >> /Contents "+(id+2)+" 0 R >>");
+ offsets[id+1]=offset;push((id+1)+" 0 obj\n<< /Type /XObject /Subtype /Image /Width "+page.width+" /Height "+page.height+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+page.jpeg.length+" >>\nstream\n");push(page.jpeg);push("\nendstream\nendobj\n");
+ const stream="q\n"+w+" 0 0 "+h+" 0 0 cm\n/Im0 Do\nQ\n";obj(id+2,"<< /Length "+enc.encode(stream).length+" >>\nstream\n"+stream+"endstream");
+ }
+ const count=3+pages.length*3,xref=offset;push("xref\n0 "+count+"\n0000000000 65535 f \n");for(let i=1;i<count;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");push("trailer\n<< /Size "+count+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n");return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"application/pdf"})
 }
+export async function pdfFromCanvas(canvas:HTMLCanvasElement,wmm:number,hmm:number):Promise<Blob>{return pdfFromPages([await pdfImagePage(canvas)],wmm,hmm)}
 export function saveBlob(blob:Blob,name:string){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
