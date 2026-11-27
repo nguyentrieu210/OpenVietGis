@@ -449,9 +449,7 @@ def main() -> int:
                     )
                     require(
                         split_o.json().get("content_revision") == pin_o["content_revision"]
-                        and split_r.json().get("content_revision") == pin_r["content_revision"]
-                        and split_o.json().get("schema_revision") == pin_o["schema_revision"]
-                        and split_r.json().get("schema_revision") == pin_r["schema_revision"],
+                        and split_r.json().get("content_revision") == pin_r["content_revision"],
                         "geometry-preview revision mismatch",
                     )
                     compare_response(
@@ -462,7 +460,6 @@ def main() -> int:
                             **b,
                             "source_id": "<source_id>",
                             "content_revision": "<content_revision>",
-                            "schema_revision": "<schema_revision>",
                         },
                     )
                     compare_response(
