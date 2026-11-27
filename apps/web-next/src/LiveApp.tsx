@@ -140,7 +140,7 @@ function ProjectStudio({org,project,expire,accountId,openAccess,openIntegrations
 }
 import {getBasemap,findSentinelScene,sentinelTiles} from "./Basemaps";
 import {incrementalLayerRows,parallelBounded,isPermissionError} from "./SpatialIncremental";
-import {renderDiff} from "./SpatialSyncCore";
+import {renderDiff,createCoalescedWake} from "./SpatialSyncCore";
 import {SpatialPerformance} from "./SpatialPerformance";
 import {cacheAuthorized,cacheMatches,cacheScopeMatches,restoreRows,readCache,writeCache,clearSpatialCache} from "./SpatialCache";
 const style:ml.StyleSpecification={version:8,sources:{basemap:{type:"raster",tiles:["https://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"],tileSize:256,maxzoom:20,attribution:'© Google'},core:{type:"geojson",data:empty},"edit-vertices":{type:"geojson",data:empty}},layers:[{id:"bg",type:"background",paint:{"background-color":"#e9eff3"}},{id:"basemap",type:"raster",source:"basemap",paint:{"raster-opacity":.85}},{id:"polygon",type:"fill",source:"core",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":["case",["get","selected"],"#ffe600",["get","color"]],"fill-opacity":["case",["get","selected"],.42,["get","opacity"]]}},{id:"boundary",type:"line",source:"core",filter:["==",["geometry-type"],"Polygon"],paint:{"line-color":["case",["get","selected"],"#ffd400",["get","color"]],"line-width":["case",["get","selected"],["+",["get","strokeWidth"],2.5],["get","strokeWidth"]]}},{id:"line",type:"line",source:"core",filter:["==",["geometry-type"],"LineString"],layout:{"line-cap":"round","line-join":"round"},paint:{"line-color":["case",["get","selected"],"#ffd400",["get","color"]],"line-width":["case",["get","selected"],["+",["get","width"],3],["get","width"]]}},{id:"point",type:"circle",source:"core",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":["case",["get","selected"],"#ffd400",["get","color"]],"circle-radius":["interpolate",["linear"],["zoom"],10,["case",["get","selected"],8,["*",["get","radius"],0.4]],16,["case",["get","selected"],10,["get","radius"]],20,["case",["get","selected"],12,["+",["get","radius"],2]]],"circle-stroke-color":["case",["get","selected"],"#1f2a30","#ffffff"],"circle-stroke-width":["case",["get","selected"],1.6,0.7]}},
@@ -320,16 +320,12 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
  useProfessionalTiles({client,org,pid,map,ready,enabled:performance,layers:toolkit.ordered,hidden,styleFor:toolkit.styleFor,blocked:()=>!!draftRef.current||!!toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current||mouseModeRef.current==="pan",onRow:r=>{setData(d=>({...d,rows:[...d.rows.filter(x=>x.key!==r.key),r]}));setSelected(r.key);toolkit.setLayerId(r.layer.id)},notify:setNotice,fail});
   useEffect(()=>{
     if(!org||!pid||!gisStarted)return;
-    let timer:number|undefined,stopped=false,inFlight=false,pending=false;
-    const schedule=(delay=250)=>{
-      pending=true;
-      if(stopped||timer!==undefined)return;
-      timer=window.setTimeout(()=>{timer=undefined;void sync()},delay);
-    };
+    let stopped=false;
+    let wake:ReturnType<typeof createCoalescedWake>;
+    const schedule=(delay=250)=>wake.trigger(delay);
     const sync=async()=>{
-      if(stopped||!pending||inFlight)return;
+      if(stopped)return;
       if(tileDataRef.current.loading||running.current||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current){schedule(500);return;}
-      pending=false;inFlight=true;
       const measurement=perf.current.start("sync");let succeeded=false;
       const active=()=>!stopped&&alive.current;
       try{
@@ -384,8 +380,9 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
           if(isPermissionError(e)){invalidateProjectAccess(client);publishProjectAccessInvalidation(cacheScope);void clearSpatialCache(accountId,cacheScope);setData(fresh());setFullReload(x=>x+1);}
           else {setNotice("Đang chờ đồng bộ lại…");schedule(2000);}
         }
-      }finally{if(!stopped)measurement.finish(succeeded);inFlight=false;if(pending&&timer===undefined&&!stopped)schedule();}
+      }finally{if(!stopped)measurement.finish(succeeded);}
     };
+    wake=createCoalescedWake(sync,{set:(callback,delay)=>window.setTimeout(callback,delay),clear:timer=>window.clearTimeout(timer as number)});
     const trigger=()=>schedule();
     syncRequest.current=trigger;
     const es=new EventSource(client.url(projectApiPath(org,pid)+"/integration-hub/events"),{withCredentials:true});
@@ -394,7 +391,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
     const fallback=window.setInterval(()=>{if(tileDataRef.current.data.restricted===false)trigger()},15000);
     const onFocus=()=>{if(tileDataRef.current.data.restricted===false)trigger()};
     window.addEventListener("focus",onFocus);
-    return()=>{stopped=true;es.close();window.clearInterval(fallback);window.removeEventListener("focus",onFocus);if(timer!==undefined)window.clearTimeout(timer);syncRequest.current=()=>{};};
+    return()=>{stopped=true;wake.stop();es.close();window.clearInterval(fallback);window.removeEventListener("focus",onFocus);syncRequest.current=()=>{};};
   },[org,pid,performance,gisStarted]);
  const [toolbox,setToolbox]=useState(false),[special,setSpecial]=useState<RasterMethod|"survey"|"zonal"|"contour"|"sentinel"|"modeler"|"terrain-engineering"|null>(null),[rasterBusy,setRasterBusy]=useState(false);
  const raster=useProjectRaster({client,org,pid,map,ready,allowed:gisStarted&&!data.restricted&&data.permissions.includes("project.read"),canWrite:gisStarted&&!data.restricted&&data.permissions.includes("project.edit"),storageKey:workspaceKey,notify:setNotice});

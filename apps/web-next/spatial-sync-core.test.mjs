@@ -45,3 +45,24 @@ test('render property fast path preserves serialized comparison semantics',async
     assert.equal(renderDiff([prev],[next]).update.length,JSON.stringify(a)===JSON.stringify(b)?0:1);
   }
 });
+
+test('realtime wakeups coalesce, preserve one pending rerun and stop cleanly',async()=>{
+  const {createCoalescedWake}=await import('./src/SpatialSyncCore.ts');
+  const callbacks=[];let runs=0,release;
+  const gate=createCoalescedWake(async()=>{
+    runs++;
+    if(runs===1)await new Promise(r=>{release=r});
+  },{set:(cb)=>{callbacks.push(cb);return cb},clear:t=>{const i=callbacks.indexOf(t);if(i>=0)callbacks.splice(i,1)}});
+  for(let i=0;i<50;i++)gate.trigger();
+  assert.equal(callbacks.length,1);
+  callbacks.shift()();await new Promise(r=>setTimeout(r,0));
+  assert.equal(runs,1);assert.equal(gate.isRunning(),true);
+  for(let i=0;i<50;i++)gate.trigger();
+  assert.equal(callbacks.length,0);
+  release();await new Promise(r=>setTimeout(r,0));
+  assert.equal(callbacks.length,1);
+  callbacks.shift()();await new Promise(r=>setTimeout(r,0));
+  assert.equal(runs,2);assert.equal(gate.isRunning(),false);
+  gate.trigger();assert.equal(callbacks.length,1);gate.stop();assert.equal(callbacks.length,0);
+  gate.trigger();assert.equal(callbacks.length,0);
+});

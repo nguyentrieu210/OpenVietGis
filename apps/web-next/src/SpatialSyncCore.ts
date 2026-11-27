@@ -50,3 +50,37 @@ export function renderDiff<T extends RenderFeature>(before:readonly T[],after:re
   }
   return {remove,add,update};
 }
+
+export type WakeTimer = ReturnType<typeof setTimeout>;
+/**
+ * Coalesce arbitrary realtime/focus/reconnect wakeups into at most one active
+ * sync plus one pending rerun. The callback may request a delayed retry by
+ * calling trigger again while it is running.
+ */
+export function createCoalescedWake(
+  run:()=>Promise<void>,
+  timers:{
+    set:(callback:()=>void,delay:number)=>WakeTimer;
+    clear:(timer:WakeTimer)=>void;
+  }={set:(callback,delay)=>setTimeout(callback,delay),clear:timer=>clearTimeout(timer)}
+){
+  let stopped=false,running=false,pending=false,timer:WakeTimer|undefined;
+  const drain=async()=>{
+    if(stopped||running||!pending)return;
+    pending=false;running=true;
+    try{await run()}finally{
+      running=false;
+      if(pending&&!stopped&&timer===undefined)trigger();
+    }
+  };
+  const trigger=(delay=250)=>{
+    pending=true;
+    if(stopped||running||timer!==undefined)return;
+    timer=timers.set(()=>{timer=undefined;void drain()},Math.max(0,delay));
+  };
+  const stop=()=>{
+    stopped=true;pending=false;
+    if(timer!==undefined){timers.clear(timer);timer=undefined}
+  };
+  return {trigger,stop,isRunning:()=>running};
+}

@@ -1,13 +1,13 @@
 # Tasks — 066
-Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md and evidence/implementation-09.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
+Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
 
 ## W1 audit
-- [ ] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
-- [ ] T002 [P0] Inventory all tracked paths, sizes, imports, Cargo/pnpm dependency graph — paths: `apps; crates; packages; modules; integrations`. Acceptance: Machine-readable inventory with consumers and owners.
-- [ ] T003 [P0] Map API routes, tool schemas, runtime profiles, migrations and tests — paths: `apps/api-rust/src/routes.rs; apps/api; apps/mcp-rust; apps/mcp`. Acceptance: Every active contract mapped; unknowns explicit.
+- [x] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
+- [x] T002 [P0] Inventory all tracked paths, sizes, imports, Cargo/pnpm dependency graph — paths: `apps; crates; packages; modules; integrations`. Acceptance: Machine-readable inventory with consumers and owners.
+- [x] T003 [P0] Map API routes, tool schemas, runtime profiles, migrations and tests — paths: `apps/api-rust/src/routes.rs; apps/api; apps/mcp-rust; apps/mcp`. Acceptance: Every active contract mapped; unknowns explicit.
 - [ ] T004 [P0] Inventory dev/build/CI scripts, required checks, duplicate jobs — paths: `package.json; pnpm-workspace.yaml; Cargo.toml; .github/workflows`. Acceptance: Complete command/status matrix.
-- [ ] T005 [P0] Measure cold/warm browser, API, GIS/CAD/3D, resources/build baseline — paths: `tools/benchmark; tests/e17; tests/rust-parity`. Acceptance: Raw baseline with profile and SHA.
-- [ ] T006 [P0] Read-only runtime/image/worktree/cache inventory and rollback map — paths: `infra/prod; infra/rust-platform; VPS /opt`. Acceptance: Active ownership and retention recorded.
+- [x] T005 [P0] Measure cold/warm browser, API, GIS/CAD/3D, resources/build baseline — paths: `tools/benchmark; tests/e17; tests/rust-parity`. Acceptance: Raw baseline with profile and SHA.
+- [x] T006 [P0] Read-only runtime/image/worktree/cache inventory and rollback map — paths: `infra/prod; infra/rust-platform; VPS /opt`. Acceptance: Active ownership and retention recorded.
 
 ## W2 cleanup
 - [ ] T007 [P0] Finish 062 parity; retire old SPA only after offline/route coverage — paths: `apps/web; apps/web-next; pnpm-workspace.yaml`. Acceptance: Canonical build independent of old app; route matrix PASS.
@@ -46,7 +46,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 
 ## W6 sync
 - [ ] T034 [P0] Ordered delta/resume/dedup/backpressure — paths: `crates/ovg-sync; apps/api-rust/src/managed_sync.rs; presence.rs`. Acceptance: Reconnect, gaps, concurrent edits, persistence PASS.
-- [ ] T035 [P0] Scope subscriptions and preserve offline outbox — paths: `apps/web-next/src/SpatialSyncCore.ts; LivePresence.tsx; offline-store.ts`. Acceptance: No full reload on normal reconnect; draft preserved.
+- [x] T035 [P0] Scope subscriptions and preserve offline outbox — paths: `apps/web-next/src/SpatialSyncCore.ts; LivePresence.tsx; offline-store.ts`. Acceptance: No full reload on normal reconnect; draft preserved.
 - [ ] T036 [P1] Batch/cancel bounded tool results and QGIS sync — paths: `apps/mcp-rust; integrations/qgis_plugin; packages/client-sdk`. Acceptance: Real protocol tests, no schema break.
 - [ ] T037 [P0] Revocation and cache invalidation across sessions — paths: `apps/api-rust/src/tenancy.rs; middleware.rs; apps/web-next/src/workbenches/app`. Acceptance: No unauthorized stale response across tabs.
 
