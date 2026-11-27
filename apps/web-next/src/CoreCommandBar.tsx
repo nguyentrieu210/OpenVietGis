@@ -61,7 +61,7 @@ export function CoreCommandBar(host:Host){
  useEffect(()=>{if(highlight>=0)root.current?.querySelector('[data-highlight="true"]')?.scrollIntoView({block:"nearest"})},[highlight]);
  useEffect(()=>{const out=(e:PointerEvent)=>{if(root.current&&!root.current.contains(e.target as Node)){setFocused(false);setHelp(false);setShowHistory(false)}};document.addEventListener("pointerdown",out);return()=>document.removeEventListener("pointerdown",out)},[]);
  const open=focused&&(help||!!query&&!pending)&&matches.length>0;
- const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Ctrl+K / Enter · gõ lệnh hoặc tên đối tượng…":status);
+ const placeholder=pending==="ZOOM"?"Zoom: E / I / O / L / S / mức zoom":pending==="PAN"?"Kinh độ,vĩ độ":host.activePrompt??(status==="Sẵn sàng"?"Ctrl+K · lệnh, layer: tên, xy: kinh độ,vĩ độ…":status);
  return <div className="core-command" ref={root}>
  <form onSubmit={e=>{e.preventDefault();void execute(value)}}><span className="core-command-prompt" aria-hidden="true">⌘</span>
  <input ref={ref} aria-label="Dòng lệnh GIS" autoComplete="off" spellCheck={false} placeholder={placeholder} aria-keyshortcuts="Control+K Meta+K" value={value} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} onChange={e=>{setValue(e.target.value);setFocused(true);setCursor(-1);setHighlight(-1);setHelp(false)}} onKeyDown={e=>{

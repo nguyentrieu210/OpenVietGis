@@ -3,8 +3,10 @@ import {fileURLToPath} from "node:url";
 import {dirname} from "node:path";
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
-const server=await preview({root:dirname(fileURLToPath(import.meta.url)),preview:{host:"127.0.0.1",port:0,strictPort:true}});
-const address=server.httpServer.address();
+const server=process.env.OVG_TEST_URL?null:await preview({root:dirname(fileURLToPath(import.meta.url)),preview:{host:"127.0.0.1",port:0,strictPort:true}});
+const address=server?.httpServer.address();
+const testUrl=process.env.OVG_TEST_URL??"http://127.0.0.1:"+address.port+"/app";
+if(new URL(testUrl).hostname!=="127.0.0.1")throw Error("Synthetic fixture must stay on loopback");
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
@@ -37,7 +39,7 @@ try{
   else body={items:[],next_after_id:null};
   return route.fulfill({json:body});
  });
- await page.goto("http://127.0.0.1:"+address.port+"/app",{waitUntil:"domcontentloaded"});
+ await page.goto(testUrl,{waitUntil:"domcontentloaded"});
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
@@ -50,6 +52,16 @@ try{
  await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});assert.equal(await command.evaluate(e=>e===document.activeElement),true);
  await command.fill("a");await command.press("Space");assert.equal(await command.inputValue(),"a ");
  assert.equal(await page.evaluate(()=>document.body.dataset.ovgSpacePan??""),"");
+ await command.fill("layer: Second layer");await command.press("Enter");
+ const locator=page.getByRole("dialog",{name:"Kết quả tra cứu"});await locator.waitFor();
+ await locator.getByRole("button",{name:/Second layer · Layer/}).click();await locator.waitFor({state:"detached"});
+ assert.ok(await second.evaluate(e=>e.closest("[data-layer-id]").classList.contains("active")));
+ await page.keyboard.press("Control+k");await command.fill("xy: 106.5, 10.6");await command.press("Enter");
+ await locator.getByRole("button",{name:/106.5, 10.6 · EPSG:4326/}).click();await locator.waitFor({state:"detached"});
+ await page.keyboard.press("Control+k");await command.fill("xy: 10.6,106.5");await command.press("Enter");
+ await locator.getByText(/Tọa độ ngoài phạm vi/).waitFor();assert.equal(await locator.locator(".live-search-result").count(),0);
+ await locator.getByRole("button",{name:"Đóng",exact:true}).click();
+ console.log("PASS synthetic Chromium: scoped layer locator and explicit XY validation");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
-}finally{await browser.close();server.httpServer.close();server.httpServer.closeAllConnections?.();server.httpServer.unref()}
+}finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

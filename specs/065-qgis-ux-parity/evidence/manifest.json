@@ -22,18 +22,21 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/command-search.test.mjs",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/locator.ts",
+        "apps/web-next/src/locator.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features"
     },
     {
       "id": "SHELL-04",
       "task": "T012",
       "status": "partial",
       "candidate_paths": [
-        "apps/web-next/src/QgisWorkspace.tsx"
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/locator.test.ts"
       ],
-      "blocker": "QGIS paired fixture and authenticated acceptance not executed"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "SHELL-05",
@@ -43,7 +46,8 @@
         "apps/web-next/src/hotkeys.ts",
         "apps/web-next/workspace-preferences.test.mjs",
         "apps/web-next/src/CoreCommandBar.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/QgisWorkspace.tsx"
       ],
       "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
