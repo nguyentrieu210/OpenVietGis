@@ -1,0 +1,2 @@
+# Evidence report
+Status: NOT RUN. Source audit pinned to 5bfc83826161acd83b98a925e85690cebde53ae1; no timing numbers, resource measurements, load tests or production verification have been performed. Attach raw machine-readable samples, trace, CI URL and exact candidate SHA for each SC. Record baseline, candidate, delta, sample count, environment, result and exceptions. Do not mark implementation complete until evidence is reviewed.
