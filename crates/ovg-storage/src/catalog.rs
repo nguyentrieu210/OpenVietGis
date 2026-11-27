@@ -16,9 +16,12 @@ use uuid::Uuid;
 use crate::{DbPool, TenantTransaction};
 
 mod features;
+mod fixtures;
 mod map_write;
+mod write;
 pub use features::FeatureRequest;
 pub use map_write::MapSaveIntent;
+pub use write::{GeometryPreviewInput, ManualFieldInput, DETAIL_CODE};
 
 #[derive(Clone, Copy)]
 pub enum ProjectReadPolicy {
