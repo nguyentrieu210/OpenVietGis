@@ -189,8 +189,7 @@ impl Store {
     pub fn ack(&mut self,id:Uuid,token:&str,owner:&Owner,cid:Uuid,ok:bool,result:Value,now:u64)->Result<(),Error> {
         let s=self.browser(id,token,owner,now)?;s.last_seen=now;Self::expire(s,now);
         let c=s.command.as_mut().filter(|c|c.id==cid&&c.state==CommandState::Claimed).ok_or(Error::CommandUnavailable)?;
-        if ok { tools::validate_result(&c.method,&result)?; }
-        c.result=if ok{Some(result)}else{None};c.state=if ok{CommandState::Done}else{CommandState::Denied};Ok(())
+        c.result=if ok{Some(tools::clean_result(&c.method,&result)?)}else{None};c.state=if ok{CommandState::Done}else{CommandState::Denied};Ok(())
     }
     /// Receipt retries return the terminal result only to the original OAuth
     /// subject and workspace; a command ticket can never target another tab.
