@@ -612,6 +612,13 @@ impl<'a> EditScope<'a> {
             .map_err(|e| EditError::Internal(e.to_string()))
     }
 
+    pub async fn rollback(self) -> Result<(), EditError> {
+        self.tx
+            .rollback()
+            .await
+            .map_err(|e| EditError::Internal(e.to_string()))
+    }
+
     pub async fn list_changesets(
         &mut self,
         source_id: Uuid,
