@@ -1,0 +1,3034 @@
+{
+  "engine_id": "E10",
+  "slug": "e10",
+  "title": "CAD, 3D, model and scene",
+  "parent_refs": [
+    "R012",
+    "R037"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e10-cad-3d.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Existing CAD/WASM and Cesium retained; Rust API/CAD backend behind explicit contracts and adapters.",
+  "summary": {
+    "http_routes": 30,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 18,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 24,
+    "test_files": 33,
+    "test_ids": 84,
+    "classification_breakdown": {
+      "migrate": 12,
+      "retain": 12,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "organization+project": 30
+    },
+    "routes_with_project_access_guard": 30,
+    "routes_with_csrf_enforcement": 17,
+    "core_permissions_referenced": [
+      "PROJECT_EDIT",
+      "PROJECT_READ"
+    ],
+    "extension_permissions_referenced": []
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/conversions",
+      "handler": "list_cad_conversions",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 181,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/export",
+      "handler": "export_cad_dxf",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 154,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ExportDxfRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/import",
+      "handler": "import_cad_file",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 119,
+      "status_code": 201,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "units:CadUnit",
+        "crs_code:int",
+        "layer_name:str",
+        "curve_tolerance_m:float | None",
+        "acknowledge_loss:bool",
+        "expected_sha256:str | None",
+        "expected_inspection_fingerprint:str | None"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/inspect",
+      "handler": "inspect_cad_file",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 96,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "units:CadUnit",
+        "crs_code:int",
+        "curve_tolerance_m:float | None"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/intersection",
+      "handler": "cogo_intersection",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 220,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CogoIntersectionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/offset",
+      "handler": "cogo_offset",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 233,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CogoOffsetRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/snap",
+      "handler": "cogo_snap",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 248,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CogoSnapRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/traverse",
+      "handler": "cogo_traverse",
+      "module": "openvietgis_api.adapters.http.cad",
+      "short_module": "cad",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "line": 203,
+      "status_code": 200,
+      "tags": [
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CogoTraverseRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents",
+      "handler": "list_documents",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 191,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents",
+      "handler": "create_document",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 209,
+      "status_code": 201,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/links",
+      "handler": "feature_cad_links",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 372,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "source_id",
+        "feature_id"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions",
+      "handler": "list_versions",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 235,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions",
+      "handler": "append_version",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 221,
+      "status_code": 201,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "expected_version:int"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/download",
+      "handler": "download_version",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 260,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/export-georef-draft",
+      "handler": "export_georef_draft",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 560,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:GeorefDraftRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/import-georef",
+      "handler": "import_georef",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 484,
+      "status_code": 201,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:GeorefImportRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/inspect-georef",
+      "handler": "inspect_georef",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 461,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:GeorefRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/links",
+      "handler": "cad_feature_links",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 385,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [
+        "handle"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/documents/{document_id}/versions/{version}/preview-native-import",
+      "handler": "preview_native_import",
+      "module": "openvietgis_api.adapters.http.cad_documents",
+      "short_module": "cad_documents",
+      "source_file": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "line": 765,
+      "status_code": 200,
+      "tags": [
+        "cad-documents"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "document_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:NativeImportDraftRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/models",
+      "handler": "list_models",
+      "module": "openvietgis_api.adapters.http.model_vault",
+      "short_module": "model_vault",
+      "source_file": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "line": 230,
+      "status_code": 200,
+      "tags": [
+        "model-vault"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/models",
+      "handler": "create_model",
+      "module": "openvietgis_api.adapters.http.model_vault",
+      "short_module": "model_vault",
+      "source_file": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "line": 243,
+      "status_code": 201,
+      "tags": [
+        "model-vault"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "file:UploadFile",
+        "placement:str"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/models/{model_id}/download",
+      "handler": "download",
+      "module": "openvietgis_api.adapters.http.model_vault",
+      "short_module": "model_vault",
+      "source_file": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "line": 333,
+      "status_code": 200,
+      "tags": [
+        "model-vault"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "model_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/models/{model_id}/placements",
+      "handler": "history",
+      "module": "openvietgis_api.adapters.http.model_vault",
+      "short_module": "model_vault",
+      "source_file": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "line": 316,
+      "status_code": 200,
+      "tags": [
+        "model-vault"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "model_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/models/{model_id}/placements",
+      "handler": "revise_model",
+      "module": "openvietgis_api.adapters.http.model_vault",
+      "short_module": "model_vault",
+      "source_file": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "line": 290,
+      "status_code": 201,
+      "tags": [
+        "model-vault"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "model_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:Revise"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/scenes",
+      "handler": "list_scenes",
+      "module": "openvietgis_api.adapters.http.saved_scenes",
+      "short_module": "saved_scenes",
+      "source_file": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "line": 221,
+      "status_code": 200,
+      "tags": [
+        "saved-3d-scenes"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/scenes",
+      "handler": "create_scene",
+      "module": "openvietgis_api.adapters.http.saved_scenes",
+      "short_module": "saved_scenes",
+      "source_file": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "line": 234,
+      "status_code": 201,
+      "tags": [
+        "saved-3d-scenes"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:SceneProfile"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/scenes/{scene_id}/versions",
+      "handler": "history",
+      "module": "openvietgis_api.adapters.http.saved_scenes",
+      "short_module": "saved_scenes",
+      "source_file": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "line": 266,
+      "status_code": 200,
+      "tags": [
+        "saved-3d-scenes"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "scene_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/scenes/{scene_id}/versions",
+      "handler": "revise_scene",
+      "module": "openvietgis_api.adapters.http.saved_scenes",
+      "short_module": "saved_scenes",
+      "source_file": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "line": 246,
+      "status_code": 201,
+      "tags": [
+        "saved-3d-scenes"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "scene_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:Revise"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/3d/scenes/{scene_id}/versions/{version}",
+      "handler": "open_scene",
+      "module": "openvietgis_api.adapters.http.saved_scenes",
+      "short_module": "saved_scenes",
+      "source_file": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "line": 283,
+      "status_code": 200,
+      "tags": [
+        "saved-3d-scenes"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "scene_id",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integrations/v8i/capabilities",
+      "handler": "read_v8i_capabilities",
+      "module": "openvietgis_api.adapters.http.v8i_bridge",
+      "short_module": "v8i_bridge",
+      "source_file": "apps/api/openvietgis_api/adapters/http/v8i_bridge.py",
+      "line": 61,
+      "status_code": 200,
+      "tags": [
+        "integrations",
+        "cad"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py",
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+        "apps/api/tests/integration/spatial/test_cad_documents.py",
+        "apps/api/tests/integration/spatial/test_cad_georef.py",
+        "apps/api/tests/integration/spatial/test_model_vault.py",
+        "apps/api/tests/integration/spatial/test_saved_scenes.py",
+        "apps/api/tests/unit/test_cogo_bounds.py",
+        "apps/api/tests/unit/test_dxf_integrity.py",
+        "apps/api/tests/unit/test_r048_native_delta.py",
+        "apps/api/tests/unit/test_v8i_capabilities.py",
+        "infra/cad-relay/tests/fixture.dxf",
+        "infra/cad-relay/tests/index.html",
+        "infra/cad-relay/tests/smoke.cjs",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/3d.ts",
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/cad.ts",
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/multi-scene.ts",
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/scene.ts",
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+        "packages/spatial-workspace/tests/browser/tiles.ts",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+        "packages/spatial-workspace/tests/tileset.test.mjs"
+      ]
+    }
+  ],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "cad_adapters": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/cad/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/adapters/cad/dxf_codec.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "parse_dxf_2d",
+            "line": 132,
+            "async": false
+          },
+          {
+            "name": "write_dxf_2d",
+            "line": 386,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/adapters/cad/native_delta.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "cad_to_gis_preview",
+            "line": 88,
+            "async": false
+          },
+          {
+            "name": "gis_to_cad_preview",
+            "line": 140,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ],
+    "microstation_v8i_bridge": {
+      "classification": "retain",
+      "modules": [
+        {
+          "file": "integrations/microstation-v8i-bridge/bridge.py",
+          "classes": [],
+          "functions": [
+            {
+              "name": "read_snapshot",
+              "line": 21,
+              "async": false
+            },
+            {
+              "name": "main",
+              "line": 29,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/microstation-v8i-bridge/bridge_contract.py",
+          "classes": [
+            {
+              "name": "ContractError",
+              "line": 24,
+              "bases": [
+                "ValueError"
+              ],
+              "methods": []
+            }
+          ],
+          "functions": [
+            {
+              "name": "validate_snapshot",
+              "line": 92,
+              "async": false
+            },
+            {
+              "name": "stable_digest",
+              "line": 145,
+              "async": false
+            },
+            {
+              "name": "diff_snapshots",
+              "line": 152,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "integrations/microstation-v8i-bridge/windows_com.py",
+          "classes": [
+            {
+              "name": "V8iProbeError",
+              "line": 18,
+              "bases": [
+                "RuntimeError"
+              ],
+              "methods": []
+            }
+          ],
+          "functions": [
+            {
+              "name": "probe_running_v8i",
+              "line": 43,
+              "async": false
+            },
+            {
+              "name": "scan_model_preview",
+              "line": 95,
+              "async": false
+            },
+            {
+              "name": "scan_running_v8i",
+              "line": 174,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        }
+      ],
+      "fixtures": [
+        "integrations/microstation-v8i-bridge/fixtures/sample-snapshot-v2.json",
+        "integrations/microstation-v8i-bridge/fixtures/sample-snapshot.json"
+      ],
+      "notes": "Windows COM bridge retained; contract schemas validated by bridge_contract.py and v8i_bridge API route."
+    },
+    "spatial_workspace_3d_cad_modules": [
+      {
+        "file": "packages/spatial-workspace/src/cad-editor.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/cad-embed.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/cad-georeference.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/cesium3d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/footprint3d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/gltf.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/maplibre3d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/mesh-layer.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/mesh-picking.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/renderer3d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/tiles3d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "packages/spatial-workspace/src/tileset.ts",
+        "classification": "retain"
+      }
+    ],
+    "cad_relay_assets": [
+      {
+        "file": "infra/cad-relay/relay.css",
+        "classification": "retain"
+      },
+      {
+        "file": "infra/cad-relay/relay.html",
+        "classification": "retain"
+      },
+      {
+        "file": "infra/cad-relay/relay.js",
+        "classification": "retain"
+      },
+      {
+        "file": "infra/cad-relay/release.sha256",
+        "classification": "retain"
+      },
+      {
+        "file": "infra/cad-relay/serve-test.py",
+        "classification": "retain"
+      },
+      {
+        "file": "infra/cad-relay/stage-test.py",
+        "classification": "retain"
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/cad/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/cad/dxf_codec.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/cad/native_delta.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/cad.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/cad_documents.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/model_vault.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/saved_scenes.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/v8i_bridge.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/cad_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/cad/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/cad/domain.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/cad/georeference.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "infra/cad-relay/relay.css",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/relay.html",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/relay.js",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/release.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/serve-test.py",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/stage-test.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/README.md",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/bridge.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/bridge_contract.py",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/fixtures/sample-snapshot-v2.json",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/fixtures/sample-snapshot.json",
+      "classification": "retain"
+    },
+    {
+      "path": "integrations/microstation-v8i-bridge/windows_com.py",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/tests/integration/m3/test_cogo_authorization.py",
+      "category": "integration",
+      "test_count": 3,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r025_v8i_capabilities.py::test_v8i_capabilities_project_isolation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_cad_documents.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_cad_documents.py::test_cad_versions_are_private_and_immutable"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_cad_georef.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_cad_georef.py::test_version_pinned_georeference"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_model_vault.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_model_vault.py::test_model_vault"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_saved_scenes.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_saved_scenes.py::test_saved_scene"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_cogo_bounds.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/api/tests/unit/test_cogo_bounds.py::test_cardinal_bearings",
+        "apps/api/tests/unit/test_cogo_bounds.py::test_intersection_offset_and_deterministic_snap",
+        "apps/api/tests/unit/test_cogo_bounds.py::test_invalid_controls_fail_before_output"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_dxf_integrity.py",
+      "category": "unit",
+      "test_count": 15,
+      "test_ids": [
+        "apps/api/tests/unit/test_dxf_integrity.py::test_dxf_declares_length_units",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_unsupported_topology_is_not_silently_omitted",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_declared_import_units_mismatch",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_bulged_polyline_is_not_silently_straightened",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_nonstandard_ocs_is_not_silently_misplaced",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_bulge_signed_arc_tolerance_and_independent_roundtrip",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_closed_two_bulges_and_last_edge_make_circle",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_arc_crosses_zero_degrees_and_explicit_units",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_circle_accuracy_and_position_limit",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_curve_tolerance_must_be_finite_positive_and_bounded",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_no_silent_projection_or_ambiguous_bulge",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_entity_inventory_accounts_for_exclusions",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_supported_dxf_version_matrix",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_old_dxf_profile_rejected",
+        "apps/api/tests/unit/test_dxf_integrity.py::test_export_rejects_non_xy_instead_of_truncating_z"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_r048_native_delta.py",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/api/tests/unit/test_r048_native_delta.py::test_bidirectional_native_proposal_preserves_handle_and_unrelated_entity",
+        "apps/api/tests/unit/test_r048_native_delta.py::test_order_is_not_identity",
+        "apps/api/tests/unit/test_r048_native_delta.py::test_unsafe_native_changes_rejected",
+        "apps/api/tests/unit/test_r048_native_delta.py::test_revision_and_mapping_checks",
+        "apps/api/tests/unit/test_r048_native_delta.py::test_no_line_to_polyline_or_polygon_hole_conversion",
+        "apps/api/tests/unit/test_r048_native_delta.py::test_geometry_proposals_converge_under_replay"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_v8i_capabilities.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/unit/test_v8i_capabilities.py::test_v8i_capabilities_fail_closed"
+      ]
+    },
+    {
+      "file": "infra/cad-relay/tests/fixture.dxf",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "infra/cad-relay/tests/index.html",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "infra/cad-relay/tests/smoke.cjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "infra/cad-relay/tests/smoke.cjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py",
+      "category": "unit",
+      "test_count": 15,
+      "test_ids": [
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_validate_explicit_crs_and_projected_coordinates",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_stable_digest_independent_of_element_and_property_order",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_missing_crs_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_implicit_crs_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_unrecognized_fields_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_duplicate_element_id_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_open_polygon_ring_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_unreadable_geometry_type_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_properties_non_scalar_rejected",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_different_drawing_or_crs_refused",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_unsupported_cad_entities_block_diff",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_preview_delta_never_applies_delete",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_no_change",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_cli_validate",
+        "integrations/microstation-v8i-bridge/tests/test_bridge_contract.py::SnapshotContractTests::test_cli_probe_fails_safely_off_windows"
+      ]
+    },
+    {
+      "file": "integrations/microstation-v8i-bridge/tests/test_windows_scan.py",
+      "category": "unit",
+      "test_count": 8,
+      "test_ids": [
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_extract_line_shape_skip_text",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_reject_unknown_dlong_identifier",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_stable_id_must_be_unique",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_known_but_malformed_geometry_aborts",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_scanner_limit_never_returns_partial",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_missing_crs_aborts",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_empty_model_is_not_parcel_success",
+        "integrations/microstation-v8i-bridge/tests/test_windows_scan.py::SafeScanContract::test_unsupported_entities_block_complete_delta"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/3d.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/3d.ts::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-draft.tsx",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-draft.tsx::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-selection.tsx",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-selection.tsx::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad.ts::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/multi-scene.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/multi-scene.ts::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/scene.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/scene.ts::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/tiles.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/tiles.ts::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::millimetre CAD rotation and translation with verified residual",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::missing/degree CRS rejected",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::wrong unit and collinear points rejected",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::inconsistent control points and insufficient count rejected"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/footprint3d.test.mjs",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::explicit base and height form actual top, identity retained",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::missing or invalid heights/duplicate ids rejected",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::non-4326 or unspecified vertical reference rejected",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::unclosed polygon and geographic out of range rejected"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs::triangle hit uses nearest projected depth independent of winding",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs::scene budget bounded on count and aggregate triangles"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/tileset.test.mjs",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/spatial-workspace/tests/tileset.test.mjs::region bounds, REPLACE refinement, capped deterministic selection",
+        "packages/spatial-workspace/tests/tileset.test.mjs::explicit ECEF transform, glTF y-up and WGS84 ellipsoid control points",
+        "packages/spatial-workspace/tests/tileset.test.mjs::reject unsupported URI, refinement and nested bounds"
+      ]
+    }
+  ]
+}

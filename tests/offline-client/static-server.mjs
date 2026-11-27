@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join, extname } from "node:path";
-const root = fileURLToPath(new URL("../../apps/web/dist/", import.meta.url));
+const root = fileURLToPath(new URL("../../apps/web-next/dist/", import.meta.url));
 const files = new Map([["/index.html","index.html"],["/offline-shell-sw.js","offline-shell-sw.js"]]);
 for (const name of await readdir(join(root,"assets"))) files.set("/assets/"+name, join("assets",name));
 const mime = {".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".png":"image/png",".svg":"image/svg+xml"};

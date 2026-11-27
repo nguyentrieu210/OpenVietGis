@@ -1,0 +1,11 @@
+# Research and decision log (provisional)
+- Axum/Tokio vs Actix: Axum selected for Tower ecosystem and async composition; no universal benchmark winner. Compare workload on actual PostGIS. https://github.com/tokio-rs/axum and https://tokio.rs/
+- Rayon for bounded CPU work, not blocking Tokio worker threads. https://github.com/rayon-rs/rayon
+- PostGIS remains authoritative for persistence and spatial SQL; GEOS/GDAL/PROJ retained for native geometry/format/CRS behavior. https://postgis.net/ https://libgeos.org/ https://gdal.org/ https://proj.org/
+- GeoRust portable algorithms, optional GeoArrow for columnar workloads; compare against existing semantics. https://georust.org/ https://github.com/geoarrow/geoarrow-rs
+- Martin for tiles, never directly expose private tenant tables; authorization gateway and revocation tests mandatory. https://github.com/maplibre/martin
+- RustGIS/GeoLibre reuse is an investigation, not a dependency decision; inspect actual repository, version, license, NOTICE, transitive dependencies, maintenance, API and differential tests before reuse. No source copied.
+- SedonaDB/DataFusion, Wasmtime and wgpu are optional; require measured gain, memory budget and security review. No assumption of full native/WASM equivalence; GDAL/GEOS/PROJ browser support is not assumed.
+- Existing React/MapLibre/Cesium and QGIS Python bridge preserved; avoid unnecessary rewrite.
+- Baseline 3e78ac1; GitHub main 1aa8dcb at inspection, 13 commits ahead locally. Spec 063 dirty work excluded. VPS disk 93%, near-full swap; isolated build host needed or operator-approved resource remediation.
+- External dependency/version/security review and actual benchmarks remain open tasks; links are research starting points, not completed verification.

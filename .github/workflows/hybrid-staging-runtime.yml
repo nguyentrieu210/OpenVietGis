@@ -1,0 +1,68 @@
+name: Hybrid Staging Runtime
+
+on:
+  push:
+    branches: ["064-convergence", "064-integration"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "infra/rust-platform/**"
+      - "apps/api/**"
+      - ".github/workflows/hybrid-staging-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OVG_API_RUST_IMAGE: ovg-064-api-rust:qualification
+      OVG_API_PYTHON_IMAGE: ovg-064-api-python:qualification
+      OVG_STAGING_POSTGIS_IMAGE: ovg-064-postgis:qualification
+      STAGING_POSTGRES_PASSWORD: disposable-migration-password
+      STAGING_RUNTIME_PASSWORD: disposable-runtime-password
+      STAGING_MIGRATION_DATABASE_URL: postgresql+psycopg://openvietgis:disposable-migration-password@postgres-staging:5432/ovg_staging_064
+      STAGING_RUNTIME_DATABASE_URL: postgresql+psycopg://openvietgis_runtime:disposable-runtime-password@postgres-staging:5432/ovg_staging_064
+      STAGING_RUST_DATABASE_URL: postgresql://openvietgis_runtime:disposable-runtime-password@postgres-staging:5432/ovg_staging_064
+      STAGING_SESSION_SECRET: fixture-session-secret-disposable-qualification
+      STAGING_CSRF_SECRET: fixture-csrf-secret-disposable-qualification
+      STAGING_BOOTSTRAP_SECRET: fixture-bootstrap-secret-disposable-qualification
+      STAGING_WEB_ORIGIN: https://staging.example.invalid
+      STAGING_OIDC_PROVIDERS_JSON: '{"keycloak":{"issuer":"https://identity.example.invalid","client_id":"fixture","display_name":"Fixture provider"}}'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Compose configuration
+        run: docker compose -f infra/rust-platform/docker-compose.hybrid.yml config --quiet
+      - name: Build both backends and the staging database image
+        run: |
+          docker build -f infra/rust-platform/Dockerfile.api-rust -t "$OVG_API_RUST_IMAGE" .
+          docker build -f infra/prod/Dockerfile.api -t "$OVG_API_PYTHON_IMAGE" .
+          docker build -f infra/rust-platform/Dockerfile.postgis-staging -t "$OVG_STAGING_POSTGIS_IMAGE" .
+      - name: Migrate and start hybrid staging
+        run: docker compose -f infra/rust-platform/docker-compose.hybrid.yml up -d --wait --wait-timeout 180
+      - name: Exercise real HTTP traffic through the hybrid gateway
+        run: |
+          python3 - <<'PY'
+          import json
+          from urllib.request import urlopen
+
+          def get(path):
+              with urlopen("http://127.0.0.1:18064" + path, timeout=5) as response:
+                  return json.load(response)
+
+          ready = get("/api/v1/health/ready")
+          assert ready["status"] == "ready", ready
+          bootstrap = get("/api/v1/bootstrap/status")
+          assert bootstrap["initialized"] is False, bootstrap
+          PY
+      - name: Capture staging failure logs
+        if: failure()
+        run: docker compose -f infra/rust-platform/docker-compose.hybrid.yml logs --no-color --tail=200
+      - name: Stop disposable staging
+        if: always()
+        run: docker compose -f infra/rust-platform/docker-compose.hybrid.yml down -v

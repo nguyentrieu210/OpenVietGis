@@ -1,0 +1,1441 @@
+{
+  "engine_id": "E16",
+  "slug": "e16",
+  "title": "AI and MCP",
+  "parent_refs": [
+    "R041",
+    "R021"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e16-ai-mcp.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Migrate MCP server, OAuth verifier, and live bridge internals behind existing MCP/OAuth/ai-copilot contracts; retain browser copilot actions and partner plugin.",
+  "summary": {
+    "http_routes": 0,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 44,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 30,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 35,
+    "test_files": 10,
+    "test_ids": 29,
+    "classification_breakdown": {
+      "migrate": 24,
+      "retain": 11,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {},
+    "routes_with_project_access_guard": 0,
+    "routes_with_csrf_enforcement": 0,
+    "core_permissions_referenced": [],
+    "extension_permissions_referenced": [],
+    "mcp_oauth_scopes": [
+      "gis:live"
+    ],
+    "mcp_required_jwt_claims": [
+      "iss",
+      "sub",
+      "aud",
+      "exp",
+      "iat",
+      "azp",
+      "scope"
+    ],
+    "mutation_consent": "All mutating live/remote workspace tools require explicit browser GIS user approval + current revision pins + idempotent operation UUID."
+  },
+  "http_routes": [],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "mcp_tools": [
+      {
+        "name": "gis_get_project",
+        "server": "local_readonly",
+        "transport": "stdio",
+        "auth_mode": "scoped_gis_service_credential",
+        "source_file": "apps/mcp/server.py",
+        "line": 16,
+        "read_only": true,
+        "destructive": false,
+        "open_world": true,
+        "parameters": [],
+        "description": "Read metadata for the configured OpenVietGIS project.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_get_saved_map",
+        "server": "local_readonly",
+        "transport": "stdio",
+        "auth_mode": "scoped_gis_service_credential",
+        "source_file": "apps/mcp/server.py",
+        "line": 22,
+        "read_only": true,
+        "destructive": false,
+        "open_world": true,
+        "parameters": [],
+        "description": "Read the project's saved map configuration; not the live browser viewport.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_list_layers",
+        "server": "local_readonly",
+        "transport": "stdio",
+        "auth_mode": "scoped_gis_service_credential",
+        "source_file": "apps/mcp/server.py",
+        "line": 28,
+        "read_only": true,
+        "destructive": false,
+        "open_world": true,
+        "parameters": [
+          "limit",
+          "after_id"
+        ],
+        "description": "List readable layers in the configured project, with pagination.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_get_layer",
+        "server": "local_readonly",
+        "transport": "stdio",
+        "auth_mode": "scoped_gis_service_credential",
+        "source_file": "apps/mcp/server.py",
+        "line": 34,
+        "read_only": true,
+        "destructive": false,
+        "open_world": true,
+        "parameters": [
+          "layer_id"
+        ],
+        "description": "Get layer metadata, source revision and capabilities for a readable layer.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_list_features",
+        "server": "local_readonly",
+        "transport": "stdio",
+        "auth_mode": "scoped_gis_service_credential",
+        "source_file": "apps/mcp/server.py",
+        "line": 40,
+        "read_only": true,
+        "destructive": false,
+        "open_world": true,
+        "parameters": [
+          "layer_id",
+          "content_revision",
+          "schema_revision",
+          "limit",
+          "after_feature_id",
+          "include_geometry"
+        ],
+        "description": "Read a pinned page of features. Get current revision pins with gis_get_layer first.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_view",
+        "server": "live_bridge_stdio",
+        "transport": "stdio",
+        "auth_mode": "paired_browser_session_token",
+        "source_file": "apps/mcp/live_server.py",
+        "line": 16,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [],
+        "description": "Read the current map viewport after explicit approval in GIS.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_selection",
+        "server": "live_bridge_stdio",
+        "transport": "stdio",
+        "auth_mode": "paired_browser_session_token",
+        "source_file": "apps/mcp/live_server.py",
+        "line": 22,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [],
+        "description": "Read only the currently selected geometry, WGS84, after explicit GIS approval.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_navigate",
+        "server": "live_bridge_stdio",
+        "transport": "stdio",
+        "auth_mode": "paired_browser_session_token",
+        "source_file": "apps/mcp/live_server.py",
+        "line": 28,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [
+          "longitude",
+          "latitude",
+          "zoom"
+        ],
+        "description": "Move only the live map camera. Requires GIS user approval and does not persist data.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_view",
+        "server": "remote_oauth_http",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 86,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [],
+        "description": "Read the connected live GIS viewport after user approval.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_selection",
+        "server": "remote_oauth_http",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 94,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [],
+        "description": "Read the current selected geometry, WGS84, after GIS user approval.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_live_navigate",
+        "server": "remote_oauth_http",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 102,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [
+          "longitude",
+          "latitude",
+          "zoom"
+        ],
+        "description": "Move the connected live camera with approval. No persistent changes.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_operation_status",
+        "server": "remote_oauth_http",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 119,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "parameters": [
+          "operation_ticket"
+        ],
+        "description": "Read state/result of an advanced operation ticket. Most recent terminal receipt can be read again in the same live workspace. Never resubmit a timed-out write without inspecting GIS.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_create_layer",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 155,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "ManualLayer",
+        "parameters": [
+          "operation_id",
+          "name",
+          "geometry_family",
+          "fields"
+        ],
+        "description": "Create an editable WGS84 vector layer with attribute schema; stable operation UUID.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_schema",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 156,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Schema",
+        "parameters": [
+          "primary",
+          "action",
+          "field_id",
+          "name",
+          "type"
+        ],
+        "description": "Add or rename a field on a pinned source.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_export",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 157,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Export",
+        "parameters": [
+          "format"
+        ],
+        "description": "Export a pinned layer as GeoJSON to the user's browser downloads.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_layers",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 158,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Layers",
+        "parameters": [
+          "limit",
+          "after_id"
+        ],
+        "description": "List active project layers, schemas, capabilities and revision pins. Start here.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_features",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 159,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Features",
+        "parameters": [
+          "limit",
+          "after_feature_id",
+          "include_geometry"
+        ],
+        "description": "Page features and attributes from a pinned layer; WGS84 geometry. Small pages for large geometry.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_query",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 160,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Query",
+        "parameters": [
+          "attribute_filter",
+          "spatial_filter",
+          "sort_field",
+          "sort_direction",
+          "limit",
+          "offset"
+        ],
+        "description": "Filter by typed attribute AST (e.g. {op: eq, field: name, value: A}) or spatial predicate with WGS84 geometry; no raw SQL.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_feature",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 161,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Feature",
+        "parameters": [
+          "feature_id"
+        ],
+        "description": "Read one feature with current content/schema pins.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_geometry_preview",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 162,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Preview",
+        "parameters": [
+          "operation",
+          "primary",
+          "secondary",
+          "distance",
+          "dx",
+          "dy",
+          "angle",
+          "factor",
+          "vertex"
+        ],
+        "description": "PostGIS CAD and analysis preview: move, copy, offset, rotate, scale, stretch, extend, trim, fillet, intersection, union, difference, centroid, hull, simplify, nearest, spatial join. No persistence. Use gis_changeset to commit reviewed output.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_topology",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 163,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Topology",
+        "parameters": [
+          "check",
+          "primary",
+          "secondary"
+        ],
+        "description": "Find duplicates, invalid geometry, overlaps, dangles, outside or gaps. No persistence.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_overlay",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 164,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Overlay",
+        "parameters": [
+          "title",
+          "geometries"
+        ],
+        "description": "Draw temporary WGS84 geometry on the live map; no persistent editing.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_layer_visibility",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 165,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Visibility",
+        "parameters": [
+          "layer_id",
+          "visible"
+        ],
+        "description": "Show or hide a project layer in the current workspace.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_select",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 166,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Select",
+        "parameters": [
+          "feature_ids"
+        ],
+        "description": "Select loaded, visible objects by layer and pinned feature IDs.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_changeset",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 167,
+        "read_only": false,
+        "destructive": true,
+        "open_world": false,
+        "input_model": "Changeset",
+        "parameters": [
+          "operation_id",
+          "summary",
+          "operations"
+        ],
+        "description": "Atomically create, update or delete up to 100 features on one editable layer. WGS84 geometry; properties replace the full attribute map. Use current pins and a stable unique operation UUID. Requires explicit GIS approval.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_revert",
+        "server": "remote_oauth_http (full_tools)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/workspace_tools.py",
+        "line": 170,
+        "read_only": false,
+        "destructive": true,
+        "open_world": false,
+        "input_model": "Revert",
+        "parameters": [
+          "changeset_id",
+          "operation_id",
+          "summary"
+        ],
+        "description": "Revert a specific GIS changeset using a new operation UUID. Requires explicit GIS approval and server authorization.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_raster_layers",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 164,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Empty",
+        "parameters": [],
+        "long_timeout_seconds": null,
+        "description": "List project raster layers and metadata.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_raster_process",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 165,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Raster",
+        "parameters": [
+          "method",
+          "name",
+          "source_id",
+          "second_id",
+          "third_id",
+          "band_a",
+          "band_b",
+          "band_c",
+          "formula",
+          "clip_geojson",
+          "factor",
+          "resampling"
+        ],
+        "long_timeout_seconds": 150,
+        "description": "Create a raster result from saved project rasters: NDVI/NDWI/NDBI, band, DEM, clip, RGB, mosaic, calculator, resample etc. Returns operation ticket.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_raster_report",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 166,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "RasterReport",
+        "parameters": [
+          "method",
+          "source_id",
+          "band",
+          "zones",
+          "interval"
+        ],
+        "long_timeout_seconds": 150,
+        "description": "Compute zonal statistics or contour from an existing raster. Returns operation ticket.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_raster_download",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 167,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "RasterId",
+        "parameters": [
+          "layer_id"
+        ],
+        "long_timeout_seconds": 150,
+        "description": "Download authorized project GeoTIFF in browser.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_processing_run",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 168,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Proc",
+        "parameters": [
+          "algorithm_id",
+          "input_layer_id",
+          "overlay_layer_id",
+          "output_name",
+          "operation_id",
+          "parameters"
+        ],
+        "long_timeout_seconds": 150,
+        "description": "Run Buffer, Clip or Dissolve with existing vector processing engine. Creates output layer; returns operation ticket.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_processing_job",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 169,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Job",
+        "parameters": [
+          "job_id"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Read durable vector processing job status and output layer.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_models",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 170,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Empty",
+        "parameters": [],
+        "long_timeout_seconds": null,
+        "description": "List saved Processing Modeler graphs.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_model_save",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 171,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "ModelSave",
+        "parameters": [
+          "graph"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Create or update revision-pinned Processing Modeler graph (up to 12 steps).",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_model_run",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 172,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "ModelRun",
+        "parameters": [
+          "model_id",
+          "revision",
+          "run_id"
+        ],
+        "long_timeout_seconds": 840,
+        "description": "Run saved graph at exact revision, producing independent output layers; returns operation ticket, partial outputs possible.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_layouts",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 173,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Empty",
+        "parameters": [],
+        "long_timeout_seconds": null,
+        "description": "List saved cartography Layout Designer documents.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_layout_save",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 174,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "LayoutSave",
+        "parameters": [
+          "document"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Create/update revision-pinned print layout: A0–A4, map frames, text, legend, scale, north, grid.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_layout_export",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 175,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "LayoutExport",
+        "parameters": [
+          "layout_id",
+          "revision",
+          "format"
+        ],
+        "long_timeout_seconds": 180,
+        "description": "Render and download saved layout at exact revision as PDF, PNG or JSON. Returns operation ticket.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugins",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 176,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "Empty",
+        "parameters": [],
+        "long_timeout_seconds": null,
+        "description": "List project activations and organization registered extension manifests and entity schemas.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugin_activate",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 177,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "PluginActivate",
+        "parameters": [
+          "manifest_id"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Activate an existing registered extension on this project; requires project management permission.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugin_disable",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 178,
+        "read_only": false,
+        "destructive": true,
+        "open_world": false,
+        "input_model": "Plugin",
+        "parameters": [
+          "extension_key"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Disable project's active extension; requires project management permission.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugin_records",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 179,
+        "read_only": true,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "PluginRecords",
+        "parameters": [
+          "entity_name"
+        ],
+        "long_timeout_seconds": null,
+        "description": "List authorized extension records, optionally by entity.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugin_create",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 180,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "PluginCreate",
+        "parameters": [
+          "entity_name",
+          "payload",
+          "operation_id",
+          "linked_layer_id",
+          "linked_feature_id",
+          "expected_link_context"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Create a record through the active extension schema using idempotent operation UUID.",
+        "classification": "migrate"
+      },
+      {
+        "name": "gis_plugin_update",
+        "server": "remote_oauth_http (full_tools/advanced)",
+        "transport": "streamable_http",
+        "auth_mode": "oauth_bearer_gis_live+browser_consent",
+        "source_file": "apps/mcp/advanced_tools.py",
+        "line": 181,
+        "read_only": false,
+        "destructive": false,
+        "open_world": false,
+        "input_model": "PluginUpdate",
+        "parameters": [
+          "record_id",
+          "expected_revision",
+          "expected_manifest_id",
+          "payload",
+          "operation_id",
+          "expected_link_context"
+        ],
+        "long_timeout_seconds": null,
+        "description": "Update extension record with expected revision and manifest, existing schema and permissions.",
+        "classification": "migrate"
+      }
+    ],
+    "unique_tool_names": [
+      "gis_changeset",
+      "gis_create_layer",
+      "gis_export",
+      "gis_feature",
+      "gis_features",
+      "gis_geometry_preview",
+      "gis_get_layer",
+      "gis_get_project",
+      "gis_get_saved_map",
+      "gis_layer_visibility",
+      "gis_layers",
+      "gis_layout_export",
+      "gis_layout_save",
+      "gis_layouts",
+      "gis_list_features",
+      "gis_list_layers",
+      "gis_live_navigate",
+      "gis_live_selection",
+      "gis_live_view",
+      "gis_model_run",
+      "gis_model_save",
+      "gis_models",
+      "gis_operation_status",
+      "gis_overlay",
+      "gis_plugin_activate",
+      "gis_plugin_create",
+      "gis_plugin_disable",
+      "gis_plugin_records",
+      "gis_plugin_update",
+      "gis_plugins",
+      "gis_processing_job",
+      "gis_processing_run",
+      "gis_query",
+      "gis_raster_download",
+      "gis_raster_layers",
+      "gis_raster_process",
+      "gis_raster_report",
+      "gis_revert",
+      "gis_schema",
+      "gis_select",
+      "gis_topology"
+    ],
+    "oauth_contract": {
+      "source_file": "apps/mcp/remote_oauth.py",
+      "classification": "migrate",
+      "required_scopes": [
+        "gis:live"
+      ],
+      "required_jwt_claims": [
+        "iss",
+        "sub",
+        "aud",
+        "exp",
+        "iat",
+        "azp",
+        "scope"
+      ],
+      "verifier_class": "KeycloakVerifier",
+      "config_class": "OidcConfig",
+      "deploy_templates": [
+        "apps/mcp/deploy/README.md",
+        "apps/mcp/deploy/keycloak-chatgpt-client.example.json",
+        "apps/mcp/deploy/keycloak-client.example.json",
+        "apps/mcp/deploy/keycloak-scope.example.json",
+        "apps/mcp/deploy/nginx.locations.example.conf",
+        "apps/mcp/deploy/remote.env.example",
+        "apps/mcp/deploy/verify-keycloak-token.py"
+      ]
+    },
+    "http_endpoints": [
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/index.html",
+        "handler": "plugin",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 98,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/plugin.js",
+        "handler": "script",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 98,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/style.css",
+        "handler": "style",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 98,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/sdk.js",
+        "handler": "sdk",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 99,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/config",
+        "handler": "config",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 99,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions",
+        "handler": "create",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 100,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions/{sid}/poll",
+        "handler": "poll",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 101,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions/{sid}/ping",
+        "handler": "ping",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 102,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions/{sid}/commands",
+        "handler": "submit",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 103,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions/{sid}/commands/{cid}/ack",
+        "handler": "ack",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 104,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "GET"
+        ],
+        "path": "/v1/sessions/{sid}/commands/{cid}/result",
+        "handler": "result",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 105,
+        "classification": "migrate"
+      },
+      {
+        "component": "live_bridge_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/v1/sessions/{sid}/close",
+        "handler": "close",
+        "source_file": "apps/mcp/bridge_http.py",
+        "line": 106,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions",
+        "handler": "open_session",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 217,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions/{sid}/poll",
+        "handler": "poll",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 218,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions/{sid}/ping",
+        "handler": "ping",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 219,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions/{sid}/commands/{cid}/prepare",
+        "handler": "prepare",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 220,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions/{sid}/commands/{cid}/ack",
+        "handler": "ack",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 225,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_copilot_http",
+        "methods": [
+          "POST"
+        ],
+        "path": "/ai-copilot/sessions/{sid}/close",
+        "handler": "close",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 228,
+        "classification": "migrate"
+      },
+      {
+        "component": "remote_oauth_mcp_streamable_http",
+        "methods": [
+          "GET",
+          "POST",
+          "DELETE"
+        ],
+        "path": "/mcp",
+        "handler": "mcp.streamable_http_app",
+        "source_file": "apps/mcp/remote_server.py",
+        "line": 1,
+        "classification": "migrate"
+      }
+    ],
+    "browser_and_plugin_assets": [
+      {
+        "file": "apps/mcp/plugin/index.html",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/plugin/partner-manifest.example.json",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/plugin/plugin.js",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/plugin/style.css",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/advanced-actions.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/build-consent-hotfix.mjs",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/first-party.css",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/first-party.d.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/first-party.js",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/layout-export.ts",
+        "classification": "retain"
+      },
+      {
+        "file": "apps/mcp/web/workspace-actions.ts",
+        "classification": "retain"
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "apps/mcp/README.md",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/advanced_tools.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/bridge_client.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/bridge_http.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/README.md",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/keycloak-chatgpt-client.example.json",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/keycloak-client.example.json",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/keycloak-scope.example.json",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/nginx.locations.example.conf",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/remote.env.example",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/deploy/verify-keycloak-token.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/gis_client.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/gis_engineering_policy.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/live_bridge.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/live_probe.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/live_server.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/plugin/index.html",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/plugin/partner-manifest.example.json",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/plugin/plugin.js",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/plugin/style.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/pyproject.toml",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/remote_oauth.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/remote_server.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/remote_workspace.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/server.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/uv.lock",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/verify_live_contract.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/mcp/web/advanced-actions.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/build-consent-hotfix.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/first-party.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/first-party.d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/first-party.js",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/layout-export.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/web/workspace-actions.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/mcp/workspace_tools.py",
+      "classification": "migrate"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/mcp/deploy/real-keycloak-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/mcp/deploy/real-keycloak-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/mcp/live-browser-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/mcp/live-browser-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/mcp/test_advanced_tools.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/mcp/test_advanced_tools.py::test_raster_and_layout_model_validation",
+        "apps/mcp/test_advanced_tools.py::test_long_task_tickets_bound_to_subject_and_version",
+        "apps/mcp/test_advanced_tools.py::test_long_expiry_and_denial"
+      ]
+    },
+    {
+      "file": "apps/mcp/test_live_bridge.py",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/mcp/test_live_bridge.py::test_roles_and_lifecycle",
+        "apps/mcp/test_live_bridge.py::test_isolation_validation_and_expiry",
+        "apps/mcp/test_live_bridge.py::test_selection_sanitization",
+        "apps/mcp/test_live_bridge.py::test_http_browser_and_ai",
+        "apps/mcp/test_live_bridge.py::test_bridge_client_and_mcp",
+        "apps/mcp/test_live_bridge.py::test_live_stdio_discovery"
+      ]
+    },
+    {
+      "file": "apps/mcp/test_mcp.py",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/mcp/test_mcp.py::test_project_scope_and_token",
+        "apps/mcp/test_mcp.py::test_feature_pins_and_crs",
+        "apps/mcp/test_mcp.py::test_api_failure_closed",
+        "apps/mcp/test_mcp.py::test_invalid_arguments_and_config",
+        "apps/mcp/test_mcp.py::test_response_bound",
+        "apps/mcp/test_mcp.py::test_protocol_discovery_and_call",
+        "apps/mcp/test_mcp.py::test_stdio_discovery"
+      ]
+    },
+    {
+      "file": "apps/mcp/test_remote.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/mcp/test_remote.py::test_reject_wrong_claims",
+        "apps/mcp/test_remote.py::test_reject_invalid_signature_and_accept",
+        "apps/mcp/test_remote.py::test_same_origin_identity_and_restricted_scope",
+        "apps/mcp/test_remote.py::test_disconnected_workspace_returns_actionable_result",
+        "apps/mcp/test_remote.py::test_remote_http_mcp_and_workspace"
+      ]
+    },
+    {
+      "file": "apps/mcp/test_workspace_tools.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/mcp/test_workspace_tools.py::test_changeset_validation_and_legacy_isolation",
+        "apps/mcp/test_workspace_tools.py::test_old_browser_cannot_receive_workspace_mutations",
+        "apps/mcp/test_workspace_tools.py::test_full_tool_discovery_and_approved_changeset_relay"
+      ]
+    },
+    {
+      "file": "apps/mcp/verify_live_contract.py",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/mcp/verify_live_contract.py::script_main"
+      ]
+    },
+    {
+      "file": "apps/mcp/web/advanced-integration-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/mcp/web/advanced-integration-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/mcp/web/browser-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/mcp/web/browser-smoke.mjs::smoke_entrypoint"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+# Spec 064 Martin Tile Server Configuration (T004 / FR-003 / FR-006)
+#
+# CRITICAL SECURITY POLICY:
+# 1. `auto_publish: false` — Martin MUST NEVER auto-discover or publish raw private tenant
+#    tables (such as `spatial.reference_features`, `house_numbering.*`, `gis_access.*`, etc.).
+# 2. Martin runs ONLY on the `staging_internal` Docker network with NO host ports. Every
+#    request must first pass the fail-closed `tile-acl-gateway` -> `api-rust` auth_request gate.
+# 3. Only explicitly allowlisted PostGIS tile functions/views in the dedicated `tiles` schema
+#    are exposed. Each function enforces tenant/project scope (`organization_id`, `project_id`),
+#    applies `SET LOCAL app.current_organization_id`, validates the gateway-issued scope token,
+#    and bounds feature/vertex counts per tile.
+
+listen_addresses: "0.0.0.0:3000"
+base_path: /internal-tiles
+worker_processes: 2
+cache_size_mb: 64
+keep_alive: 30
+
+postgres:
+  # Resolved from DATABASE_URL (openvietgis_runtime — NOSUPERUSER, NOBYPASSRLS)
+  pool_size: 8
+  max_feature_count: 25000
+
+  # MANDATORY: Disable all automatic discovery of tables, views, and functions.
+  auto_publish: false
+
+  # MANDATORY: Zero raw tenant tables published directly.
+  tables: {}
+
+  # ONLY explicitly authorized PostGIS MVT functions (implemented in T011 via additive migration
+  # in the dedicated `tiles` schema) may be published by Martin.
+  functions:
+    authorized_layer_mvt:
+      schema: tiles
+      function: mvt_authorized_layer_features
+      minzoom: 0
+      maxzoom: 22
+      bounds: [102.0, 8.0, 110.0, 24.0]
+      description: >-
+        Authorized vector tiles for spatial.reference_features scoped by gateway-verified
+        organization_id, project_id, layer_id, layer_revision, and RLS policy enforcement.
+
+    authorized_house_routes_mvt:
+      schema: tiles
+      function: mvt_authorized_house_routes
+      minzoom: 10
+      maxzoom: 22
+      bounds: [102.0, 8.0, 110.0, 24.0]
+      description: >-
+        Authorized vector tiles for house_numbering.route_lines view scoped by gateway-verified
+        organization_id, project_id, and house_numbering private access gate.

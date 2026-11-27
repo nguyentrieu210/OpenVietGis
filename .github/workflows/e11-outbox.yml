@@ -1,0 +1,75 @@
+name: E11 Outbox Candidate
+on:
+  push:
+    branches: ["064-**"]
+    paths:
+      - "infra/rust-platform/e11/**"
+      - "apps/api-rust/**"
+      - "crates/ovg-storage/**"
+      - "crates/ovg-sync/**"
+      - "tests/rust-parity/e11/**"
+      - ".github/workflows/e11-outbox.yml"
+  pull_request:
+    paths:
+      - "infra/rust-platform/e11/**"
+      - "apps/api-rust/**"
+      - "crates/ovg-storage/**"
+      - "crates/ovg-sync/**"
+      - "tests/rust-parity/e11/**"
+      - ".github/workflows/e11-outbox.yml"
+permissions:
+  contents: read
+jobs:
+  postgis-outbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-parity
+      CARGO_INCREMENTAL: "0"
+      RUSTFLAGS: "-C debuginfo=0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --project apps/api --frozen
+      - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+      - run: cargo test --locked -p openvietgis-api-rust --features e11-candidate stage_replay_route
+      - run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust --features e11-candidate
+      - run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_outbox.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 activity cursor and SSE parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_realtime.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 managed QGIS sync parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_managed.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 project collaboration REST parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_team.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 organization chat REST parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_org_chat.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 SSE listener cap parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_listener_cap.py \
+            --candidate target/debug/openvietgis-api-rust
+      - name: E11 WebSocket presence parity (FastAPI oracle vs Rust)
+        if: ${{ !cancelled() }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e11/check_presence.py \
+            --candidate target/debug/openvietgis-api-rust

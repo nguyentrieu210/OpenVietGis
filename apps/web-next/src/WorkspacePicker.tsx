@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
+import {useDesktopDialog} from "./studio-ui";
 import {GisIcon} from "./GisIcon";
 type Item={id:string;name:string};
 type Props={orgs:Item[];projects:Item[];org:string;project:string;setOrg:(id:string)=>void;setProject:(id:string)=>void;createOrg:()=>void;createProject:()=>void;permissions:()=>void};
@@ -9,10 +10,11 @@ const hue=(id:string)=>[...id].reduce((h,c)=>(h*31+c.charCodeAt(0))%360,0);
 
 // Spec 058: one "workspace" dialog — organisations on the left, the chosen organisation's projects as cards.
 function WorkspaceDialog({p,close}:{p:Props;close:()=>void}){
- const [q,setQ]=useState(""),[pq,setPq]=useState(""),search=useRef<HTMLInputElement>(null);
- useEffect(()=>{search.current?.focus();const key=(e:KeyboardEvent)=>{if(e.key==="Escape")close()};document.addEventListener("keydown",key);return()=>document.removeEventListener("keydown",key)},[]);
+ const [q,setQ]=useState(""),[pq,setPq]=useState(""),search=useRef<HTMLInputElement>(null),panel=useRef<HTMLDivElement>(null);
+ useDesktopDialog(panel,close);
+ useEffect(()=>{search.current?.focus()},[]);
  const orgs=p.orgs.filter(o=>low(o.name).includes(low(q))),projects=p.projects.filter(x=>low(x.name).includes(low(pq))),current=p.orgs.find(o=>o.id===p.org);
- return createPortal(<div className="qgis-studio ovg-ws-shade" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><div className="ovg-ws" role="dialog" aria-modal="true" aria-label="Tổ chức và dự án">
+ return createPortal(<div className="qgis-studio ovg-ws-shade" onMouseDown={e=>{if(e.target===e.currentTarget)close()}}><div ref={panel} tabIndex={-1} className="ovg-ws" role="dialog" aria-modal="true" aria-label="Tổ chức và dự án">
   <header><b>Tổ chức và dự án</b><button type="button" aria-label="Đóng" onClick={close}>×</button></header>
   <div className="ovg-ws-body">
    <nav className="ovg-ws-orgs" aria-label="Tổ chức"><div className="ovg-ws-search"><GisIcon name="search" size={14}/><input ref={search} value={q} onChange={e=>setQ(e.target.value)} placeholder="Tìm tổ chức…" aria-label="Tìm tổ chức"/></div>

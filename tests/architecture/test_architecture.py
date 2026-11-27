@@ -69,14 +69,12 @@ def test_rejects_package_to_app_import(tmp_path: Path) -> None:
     assert any("imports app internals" in v for v in find_violations(tmp_path))
 
 
-def test_legacy_bridge_only(tmp_path: Path) -> None:
+def test_canonical_frontend_rejects_all_legacy_imports(tmp_path: Path) -> None:
     source = 'const X = import("../../web/src/features/X");'
     write_source(tmp_path, "apps/web-next/src/legacy-workbench-bridge.ts", source)
-    assert find_violations(tmp_path) == []
+    assert any("imports retired frontend source" in v for v in find_violations(tmp_path))
     write_source(tmp_path, "apps/web-next/src/bad.ts", source)
-    assert any(
-        "bypasses legacy workbench bridge" in v for v in find_violations(tmp_path)
-    )
+    assert len([v for v in find_violations(tmp_path) if "imports retired frontend source" in v]) == 2
 
 
 def test_reverse_frontend_dependency_rejected(tmp_path: Path) -> None:

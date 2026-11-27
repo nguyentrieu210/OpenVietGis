@@ -1,0 +1,44 @@
+name: E15 retained Python module
+on:
+  push:
+    branches: ["064-e15", "064-clients-completion", "064-integration", "064-finalize", "064-rust-platform"]
+  pull_request:
+    paths:
+      - "modules/house_numbering/**"
+      - "modules/land_asset/**"
+      - "tests/modules/**"
+      - "apps/api/openvietgis_api/main.py"
+      - "apps/api/uv.lock"
+      - "infra/rust-platform/**"
+      - "specs/064-rust-platform/contracts/engines/e15.json"
+      - ".github/workflows/e15-retention.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  python-retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-e15-ci
+      OPENVIETGIS_ENVIRONMENT: test
+      OPENVIETGIS_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_TEST_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_MIGRATION_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_RUNTIME_DATABASE_URL: postgresql+psycopg://openvietgis_runtime:openvietgis-runtime-dev@127.0.0.1:54330/openvietgis_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --project apps/api --frozen
+      - name: Start isolated PostGIS
+        run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+      - name: Verify retained routes, business rules, tenant controls and coexistence
+        run: >-
+          uv run --project apps/api python -m tools.run_with_test_database
+          pytest --import-mode=importlib modules/house_numbering/tests tests/modules --show-capture=no
+      - name: Stop isolated database
+        if: always()
+        run: docker compose -f infra/dev/compose.yaml down -v

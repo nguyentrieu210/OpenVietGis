@@ -10,6 +10,7 @@ type Events={
  onSaving(saving:boolean):void;
  onSave(bytes:ArrayBuffer,format:CadFormat):Promise<void>;
  onError(message:string):void;
+ onStage?(stage:"engine"|"drawing"):void;
  onSelection?(handle:string|null):void;
 };
 const max=25*1024*1024;
@@ -34,7 +35,7 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
  let resolveReady:(handle:CadEditorHandle)=>void,rejectReady:(error:Error)=>void;
  const promise=new Promise<CadEditorHandle>((resolve,reject)=>{resolveReady=resolve;rejectReady=reject});
  const send=(type:string,data:Record<string,unknown>={},transfer:Transferable[]=[])=>frame.contentWindow?.postMessage({source:"ovg-cad-host",channel,type,...data},origin,transfer);
- const timer=setTimeout(()=>fail("CAD editor did not open in time"),120000);
+ const timer=setTimeout(()=>fail(ready?"Quá thời gian mở bản vẽ CAD.":"Quá thời gian khởi tạo engine CAD (120 giây)."),120000);
  let saveTimer:ReturnType<typeof setTimeout>|undefined;
  function clearRequest(){requested=false;clearTimeout(saveTimer)}
  function dispose(){if(disposed)return;disposed=true;clearTimeout(timer);clearRequest();signal.removeEventListener("abort",abort);window.removeEventListener("message",receive);frame.remove()}
@@ -58,7 +59,7 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
   if(disposed||e.origin!==origin||e.source!==frame.contentWindow)return;
   const d=e.data;if(!d||d.source!=="ovg-cad-relay"||d.channel!==channel)return;
   if(d.type==="ready"&&!ready&&d.version==="2026.46"&&Array.isArray(d.capabilities)&&caps.every(c=>d.capabilities.includes(c))){
-   ready=true;selectionSupported=d.capabilities.includes("selection");send("open",{name:input.name,readOnly:input.readOnly,buffer:input.bytes},[input.bytes]);
+   ready=true;events.onStage?.("drawing");selectionSupported=d.capabilities.includes("selection");send("open",{name:input.name,readOnly:input.readOnly,buffer:input.bytes},[input.bytes]);
   }else if(d.type==="loaded"&&ready&&!loaded&&d.name===input.name){
    loaded=true;clearTimeout(timer);resolveReady(handle);
   }else if(d.type==="selection"&&loaded&&selectionSupported&&(d.handle===null||isCadHandle(d.handle))){
@@ -77,6 +78,6 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
  }
  frame.addEventListener("load",()=>{if(++loads>1)fail("CAD iframe unexpectedly reloaded")});
  window.addEventListener("message",receive);signal.addEventListener("abort",abort,{once:true});
- frame.src=origin+"/relay.html#"+channel;host.append(frame);
+ frame.src=origin+(location.pathname.startsWith("/devui/")?"/ovg-cad-2bc3537/dev/relay.html":"/relay.html")+"#"+channel;host.append(frame);
  if(signal.aborted)abort();return promise;
 }

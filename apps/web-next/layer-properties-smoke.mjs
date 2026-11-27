@@ -42,7 +42,7 @@ try{
  assert.equal(await dialog.getByRole("tab").count(),7);
  await dialog.getByRole("tab",{name:"Ký hiệu",exact:true}).click();
  await dialog.getByLabel("Kiểu ký hiệu").selectOption("categorized");await dialog.getByLabel("Trường phân loại").selectOption("ten_duong");assert.equal(await dialog.locator(".lp-categories>div").count(),2);await dialog.getByLabel("Màu Đường A").fill("#ff0055");
- await dialog.getByRole("tab",{name:"Nhãn",exact:true}).click();await dialog.getByLabel("Trường hiển thị nhãn").selectOption("name");await dialog.getByLabel("Zoom tối thiểu").fill("0");
+ await dialog.getByRole("tab",{name:"Nhãn",exact:true}).click();await dialog.getByLabel("Kiểu nhãn",{exact:true}).selectOption("field");await dialog.getByLabel("Trường hiển thị nhãn").selectOption("name");await dialog.getByLabel("Zoom tối thiểu").fill("0");
  await dialog.getByRole("tab",{name:"Bộ lọc",exact:true}).click();await dialog.getByLabel("Trường lọc").selectOption("ten_duong");await dialog.getByLabel("Giá trị lọc").fill("Đường A");await dialog.getByText(/50 \/ 100/).waitFor();await dialog.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();
  await page.getByText(/150 đang hiển thị/).waitFor();await page.locator(".qgis-layer-labels span").first().waitFor({timeout:20000});await page.getByRole("button",{name:"Mở ký hiệu Khảo sát số nhà · Phần 01"}).click();assert.equal(await page.locator(".qgis-category-row").count(),2);
  console.log("PASS seven properties tabs, category styling and legend, actual filter and visible labels");

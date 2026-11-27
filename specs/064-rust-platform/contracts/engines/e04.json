@@ -1,0 +1,577 @@
+{
+  "schema_version": "064-engine-contract-v1",
+  "engine_id": "E04",
+  "name": "Queries, expression, attribute table",
+  "parent_references": [
+    "R007"
+  ],
+  "spec_path": "specs/064-rust-platform/engines/e04-query-attributes.md",
+  "architecture_candidate": "PostGIS typed query compiler in Rust (zero arbitrary SQL); bounded AST/timeout/pagination.",
+  "baseline_commit": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "worktree_head": "babcdf9f00578ab336fb4404c90186fa55be9b51",
+  "generated_at": "2026-11-25T17:00:35Z",
+  "ac1_status": "verified_runtime_inventory_complete",
+  "summary": {
+    "http_operations": 4,
+    "websocket_routes": 0,
+    "sse_routes": 0,
+    "streaming_routes": 0,
+    "classifications": {
+      "migrate": 4
+    },
+    "migrations_count": 1,
+    "source_files_count": 4,
+    "test_files_count": 2,
+    "test_case_ids_count": 7
+  },
+  "operations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/query",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{layer_id}/query",
+      "operation_id": "execute_layer_query_api_v1_organizations__organization_id__projects__project_id__layers__layer_id__query_post",
+      "summary": "Execute Layer Query",
+      "tags": [
+        "queries"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "execute_layer_query",
+      "module": "openvietgis_api.adapters.http.queries",
+      "source_file": "apps/api/openvietgis_api/adapters/http/queries.py",
+      "source_line": 68,
+      "engine": "E04",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E04 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/layers/{layer_id}/query",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "execute_layer_query",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "ExecuteQueryRequest"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "layer_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": [
+          "content_revision",
+          "expected_content_revision"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Spatial filters require explicit readable CRS {4326,3857,4756,5899}; no implicit SRID assumption."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 2,
+        "test_files": [
+          "apps/api/tests/integration/m2/test_query_integrity.py",
+          "apps/api/tests/unit/test_query_domain.py"
+        ],
+        "test_id_count": 7,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_approved_web_mercator_filter_transformation",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_spatial_explicit_bounds_reference_scope_and_saved_replay",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_typed_decimal_literal_and_revision_paging",
+          "apps/api/tests/unit/test_query_domain.py::test_drawn_polygon_shape_bounds",
+          "apps/api/tests/unit/test_query_domain.py::test_exact_sql_values_and_literal_wildcards",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_bad_ast",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_invalid_typed_values"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+      "operation_id": "list_saved_queries_api_v1_organizations__organization_id__projects__project_id__saved_queries_get",
+      "summary": "List Saved Queries",
+      "tags": [
+        "queries"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "list_saved_queries",
+      "module": "openvietgis_api.adapters.http.queries",
+      "source_file": "apps/api/openvietgis_api/adapters/http/queries.py",
+      "source_line": 117,
+      "engine": "E04",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E04 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/saved-queries",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "list_saved_queries",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [
+          "layer_id"
+        ],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Spatial filters require explicit readable CRS {4326,3857,4756,5899}; no implicit SRID assumption."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 2,
+        "test_files": [
+          "apps/api/tests/integration/m2/test_query_integrity.py",
+          "apps/api/tests/unit/test_query_domain.py"
+        ],
+        "test_id_count": 7,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_approved_web_mercator_filter_transformation",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_spatial_explicit_bounds_reference_scope_and_saved_replay",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_typed_decimal_literal_and_revision_paging",
+          "apps/api/tests/unit/test_query_domain.py::test_drawn_polygon_shape_bounds",
+          "apps/api/tests/unit/test_query_domain.py::test_exact_sql_values_and_literal_wildcards",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_bad_ast",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_invalid_typed_values"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+      "operation_id": "create_saved_query_api_v1_organizations__organization_id__projects__project_id__saved_queries_post",
+      "summary": "Create Saved Query",
+      "tags": [
+        "queries"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "create_saved_query",
+      "module": "openvietgis_api.adapters.http.queries",
+      "source_file": "apps/api/openvietgis_api/adapters/http/queries.py",
+      "source_line": 94,
+      "engine": "E04",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E04 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/saved-queries",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "create_saved_query",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "CreateSavedQueryRequest"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Spatial filters require explicit readable CRS {4326,3857,4756,5899}; no implicit SRID assumption."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 2,
+        "test_files": [
+          "apps/api/tests/integration/m2/test_query_integrity.py",
+          "apps/api/tests/unit/test_query_domain.py"
+        ],
+        "test_id_count": 7,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_approved_web_mercator_filter_transformation",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_spatial_explicit_bounds_reference_scope_and_saved_replay",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_typed_decimal_literal_and_revision_paging",
+          "apps/api/tests/unit/test_query_domain.py::test_drawn_polygon_shape_bounds",
+          "apps/api/tests/unit/test_query_domain.py::test_exact_sql_values_and_literal_wildcards",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_bad_ast",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_invalid_typed_values"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries/{query_id}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries/{query_id}",
+      "operation_id": "delete_saved_query_api_v1_organizations__organization_id__projects__project_id__saved_queries__query_id__delete",
+      "summary": "Delete Saved Query",
+      "tags": [
+        "queries"
+      ],
+      "transport": "http",
+      "status_code": 204,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "delete_saved_query",
+      "module": "openvietgis_api.adapters.http.queries",
+      "source_file": "apps/api/openvietgis_api/adapters/http/queries.py",
+      "source_line": 131,
+      "engine": "E04",
+      "classification": "migrate",
+      "classification_rationale": "Migrate E04 runtime operation to Rust platform preserving exact HTTP/wire/security contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/saved-queries/{query_id}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "delete_saved_query",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "204": {
+          "content_types": [],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "query_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Spatial filters require explicit readable CRS {4326,3857,4756,5899}; no implicit SRID assumption."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "204",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 2,
+        "test_files": [
+          "apps/api/tests/integration/m2/test_query_integrity.py",
+          "apps/api/tests/unit/test_query_domain.py"
+        ],
+        "test_id_count": 7,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_approved_web_mercator_filter_transformation",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_spatial_explicit_bounds_reference_scope_and_saved_replay",
+          "apps/api/tests/integration/m2/test_query_integrity.py::test_typed_decimal_literal_and_revision_paging",
+          "apps/api/tests/unit/test_query_domain.py::test_drawn_polygon_shape_bounds",
+          "apps/api/tests/unit/test_query_domain.py::test_exact_sql_values_and_literal_wildcards",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_bad_ast",
+          "apps/api/tests/unit/test_query_domain.py::test_reject_invalid_typed_values"
+        ]
+      }
+    }
+  ],
+  "algorithms_and_capabilities": {
+    "source": "apps/api/openvietgis_api/domains/queries/domain.py",
+    "engine": "E04",
+    "spatial_predicates": [
+      "intersects",
+      "within",
+      "contains"
+    ],
+    "bounds": {
+      "max_query_limit": 500,
+      "max_query_offset": 50000,
+      "max_query_features": 50000,
+      "max_query_positions": 1000000,
+      "max_reference_features": 500,
+      "max_reference_positions": 100000,
+      "max_page_positions": 20000,
+      "max_drawn_positions": 2048,
+      "max_ast_depth": 6,
+      "max_ast_nodes": 100,
+      "max_ast_params": 1000,
+      "statement_timeout": "5s"
+    }
+  },
+  "migrations": [
+    {
+      "file": "apps/api/migrations/versions/0010_saved_queries.py",
+      "filename": "0010_saved_queries.py",
+      "scope": "core_api",
+      "revision": "0010_saved_queries",
+      "down_revision": "0009_editing_changesets",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "R007 Attribute & Spatial Query saved definitions with RLS.",
+      "schemas_created": [
+        "queries"
+      ],
+      "tables_touched": [
+        "queries.saved_queries"
+      ],
+      "has_rls_policy": true,
+      "engine": "E04",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    }
+  ],
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/queries.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/query_repository.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/queries/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/queries/domain.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    }
+  ],
+  "cross_engine_dependencies": [
+    {
+      "engine": "E01",
+      "relation": "All tenant/project routes depend on E01 authentication, CSRF, RBAC/ACL, RLS, and project_access_guard."
+    },
+    {
+      "engine": "E02",
+      "relation": "Reads E02 source field types, explicit readable CRS codes, and native PostGIS geometries."
+    }
+  ],
+  "existing_test_suite": [
+    {
+      "path": "apps/api/tests/integration/m2/test_query_integrity.py",
+      "primary_engine": "E04",
+      "secondary_engines": [],
+      "rationale": "Typed query compiler, spatial predicates, or saved query test.",
+      "test_ids": [
+        "apps/api/tests/integration/m2/test_query_integrity.py::test_typed_decimal_literal_and_revision_paging",
+        "apps/api/tests/integration/m2/test_query_integrity.py::test_spatial_explicit_bounds_reference_scope_and_saved_replay",
+        "apps/api/tests/integration/m2/test_query_integrity.py::test_approved_web_mercator_filter_transformation"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_query_domain.py",
+      "primary_engine": "E04",
+      "secondary_engines": [],
+      "rationale": "Typed query compiler, spatial predicates, or saved query test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_query_domain.py::test_reject_invalid_typed_values",
+        "apps/api/tests/unit/test_query_domain.py::test_reject_bad_ast",
+        "apps/api/tests/unit/test_query_domain.py::test_exact_sql_values_and_literal_wildcards",
+        "apps/api/tests/unit/test_query_domain.py::test_drawn_polygon_shape_bounds"
+      ]
+    }
+  ],
+  "edge_cases": [
+    "Zero arbitrary SQL injection: typed AST compiler only, enforcing field types and C-collation text comparisons.",
+    "NULL comparisons must use is_null operator rather than raw null equality.",
+    "AST bounds (depth <= 6, nodes <= 100, params <= 1000), page limit <= 500, offset <= 50,000, and 5s statement timeout must fail safely.",
+    "Drawn spatial filter geometries must declare an explicit readable CRS and stay within MAX_DRAWN_POSITIONS (2048)."
+  ]
+}

@@ -1,0 +1,79 @@
+name: E17 Web parity
+on:
+  push:
+    branches: ["064-**"]
+    paths:
+      - 'apps/web-next/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'tests/e17/**'
+      - 'infra/rust-platform/hybrid-gateway.conf'
+      - 'tests/rust-parity/hybrid_gateway_smoke.py'
+      - '.github/workflows/e17-web-parity.yml'
+  pull_request:
+    paths:
+      - 'apps/web-next/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - 'tests/e17/**'
+      - 'infra/rust-platform/hybrid-gateway.conf'
+      - 'tests/rust-parity/hybrid_gateway_smoke.py'
+      - '.github/workflows/e17-web-parity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frontend:
+    # Keep browser/font rendering deterministic for parity evidence.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '12.21.0'
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: pnpm
+      - name: Frozen baseline, identical fixtures and raw benchmarks
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/e17
+          git worktree add --detach "$RUNNER_TEMP/e17-baseline" 3e78ac142acfc050ec22d30da5c44ad0e6b8459a
+          git diff --stat 3e78ac142acfc050ec22d30da5c44ad0e6b8459a HEAD -- apps/web apps/web-next packages/client-sdk packages/spatial-workspace pnpm-lock.yaml > dist/e17/source-diff.txt
+          git rev-parse HEAD > dist/e17/candidate-sha.txt
+          E17_ROOT="$RUNNER_TEMP/e17-baseline" node --test tests/e17/contract.mjs | tee dist/e17/baseline-contract.log
+          node --test tests/e17/contract.mjs | tee dist/e17/candidate-contract.log
+          node tests/e17/benchmark.mjs "$RUNNER_TEMP/e17-baseline" > dist/e17/baseline-benchmark.json
+          node tests/e17/benchmark.mjs . > dist/e17/candidate-benchmark.json
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Consumer unit tests
+        run: |
+          pnpm --filter @openvietgis/client-sdk test
+          pnpm --filter @openvietgis/spatial-workspace test
+          pnpm --filter @openvietgis/web-next test
+      - name: Build canonical frontend
+        run: pnpm build:web
+      - name: Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Isolated browser consumer smoke
+        run: pnpm validate:canonical-smoke
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e17-web-parity
+          path: dist/e17/
+          if-no-files-found: warn

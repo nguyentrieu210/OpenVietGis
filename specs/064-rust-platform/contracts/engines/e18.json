@@ -1,0 +1,1902 @@
+{
+  "engine_id": "E18",
+  "slug": "e18",
+  "title": "Ops, deployment, backup, performance",
+  "parent_refs": [
+    "R015",
+    "R042",
+    "R043",
+    "R044",
+    "R045",
+    "R047"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e18-ops-release.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Rust modular monolith with bounded resource budgets; replace API deploy/compose manifests while preserving rollback artifacts and retaining backup/release/quality scripts.",
+  "summary": {
+    "http_routes": 8,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 3,
+    "migrations": 0,
+    "infra_and_tools": 69,
+    "source_files": 69,
+    "test_files": 36,
+    "test_ids": 149,
+    "classification_breakdown": {
+      "migrate": 5,
+      "retain": 61,
+      "replace": 3,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "public_or_catalog": 2,
+      "actor_or_platform": 4,
+      "organization": 2
+    },
+    "routes_with_project_access_guard": 0,
+    "routes_with_csrf_enforcement": 1,
+    "core_permissions_referenced": [],
+    "extension_permissions_referenced": []
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/health/live",
+      "handler": "liveness",
+      "module": "openvietgis_api.adapters.http.health",
+      "short_module": "health",
+      "source_file": "apps/api/openvietgis_api/adapters/http/health.py",
+      "line": 11,
+      "status_code": 200,
+      "tags": [],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "public_or_catalog",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": true,
+        "auth_dependencies": [],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/health/ready",
+      "handler": "readiness",
+      "module": "openvietgis_api.adapters.http.health",
+      "short_module": "health",
+      "source_file": "apps/api/openvietgis_api/adapters/http/health.py",
+      "line": 16,
+      "status_code": 200,
+      "tags": [],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "public_or_catalog",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": true,
+        "auth_dependencies": [],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/ops/health/live",
+      "handler": "ops_health_live",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 58,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": true,
+        "auth_dependencies": [],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/ops/health/ready",
+      "handler": "ops_health_ready",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 63,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "get_db_session"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/ops/metrics",
+      "handler": "ops_metrics",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 75,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "get_db_session"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/ops/release-capabilities",
+      "handler": "ops_release_capabilities",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 83,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": true,
+        "auth_dependencies": [],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/ops/entitlement",
+      "handler": "get_org_entitlement",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 88,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/ops/entitlement",
+      "handler": "upsert_org_entitlement",
+      "module": "openvietgis_api.adapters.http.ops",
+      "short_module": "ops",
+      "source_file": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "line": 111,
+      "status_code": 200,
+      "tags": [
+        "operations"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:UpsertEntitlementRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py",
+        "apps/api/tests/integration/test_health.py",
+        "apps/api/tests/integration/test_migrations.py",
+        "apps/api/tests/integration/test_startup_config.py",
+        "apps/api/tests/performance/test_authorization_benchmark.py",
+        "apps/api/tests/performance/test_spatial_benchmark.py",
+        "apps/api/tests/unit/test_config.py",
+        "apps/api/tests/unit/test_ops_release_gate.py",
+        "apps/api/tests/unit/test_reset_safety.py",
+        "tests/architecture/test_architecture.py",
+        "tools/r015_synthetic_drill.py",
+        "tools/tests/test_agent_kit.py",
+        "tools/tests/test_backup_restore.py",
+        "tools/tests/test_canonical_frontend_gate.py",
+        "tools/tests/test_community_qa_fixtures.py",
+        "tools/tests/test_contracts.py",
+        "tools/tests/test_control_kit_audit.py",
+        "tools/tests/test_docs.py",
+        "tools/tests/test_local_candidate_gate.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_package_qgis_plugin.py",
+        "tools/tests/test_product_inventory.py",
+        "tools/tests/test_qgis_connector_simple_ui.py",
+        "tools/tests/test_qgis_desktop_recovery.py",
+        "tools/tests/test_qgis_managed_snapshots.py",
+        "tools/tests/test_recovery_authority.py",
+        "tools/tests/test_release_consolidation.py",
+        "tools/tests/test_release_gate.py",
+        "tools/tests/test_scope.py",
+        "tools/tests/test_secret_surfaces.py",
+        "tools/tests/test_seed_identity_e2e.py",
+        "tools/tests/test_self_host_fixture.py",
+        "tools/tests/test_tenant_timing.py",
+        "tools/tests/test_test_database.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    }
+  ],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "domain_and_persistence": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/persistence/ops_repository.py",
+        "classes": [
+          {
+            "name": "SqlOpsRepository",
+            "line": 52,
+            "bases": [],
+            "methods": [
+              "check_readiness",
+              "render_prometheus_metrics",
+              "get_entitlement",
+              "upsert_entitlement"
+            ]
+          }
+        ],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/ops/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/ops/domain.py",
+        "classes": [
+          {
+            "name": "OrganizationEntitlementRecord",
+            "line": 75,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "release_inventory",
+            "line": 39,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ],
+    "infra_artifacts": [
+      {
+        "file": "infra/cad-relay/relay.css",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/relay.html",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/relay.js",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/release.sha256",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/serve-test.py",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/stage-test.py",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/tests/fixture.dxf",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/tests/index.html",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/cad-relay/tests/smoke.cjs",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/compose.identity.yaml",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/compose.yaml",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/realm-openvietgis.json",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/messages/messages_en.properties",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/messages/messages_vi.properties",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/register.ftl",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis-modal-v3.css",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis.css",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/img/favicon.ico",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/img/ovg-mark.png",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-map.svg",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-mark.svg",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch-modal-v2.js",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch.js",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/keycloak/themes/openvietgis/login/theme.properties",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/dev/postgres/001-runtime-role.sql",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/001-runtime-role.sh",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/Dockerfile.api",
+        "classification": "replace",
+        "notes": "Add Rust API service build/compose/proxy profile; preserve legacy rollback artifacts."
+      },
+      {
+        "file": "infra/prod/Dockerfile.postgres",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/Dockerfile.web",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/README.md",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/docker-compose.prod.yml",
+        "classification": "replace",
+        "notes": "Add Rust API service build/compose/proxy profile; preserve legacy rollback artifacts."
+      },
+      {
+        "file": "infra/prod/nginx.conf",
+        "classification": "replace",
+        "notes": "Add Rust API service build/compose/proxy profile; preserve legacy rollback artifacts."
+      },
+      {
+        "file": "infra/prod/openvietgis-webhook@.service.example",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/postgres/ensure-runtime-role.sh",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      },
+      {
+        "file": "infra/prod/webhook.env.example",
+        "classification": "retain",
+        "notes": "Retained database/Keycloak/dev/CAD-relay/webhook infrastructure."
+      }
+    ],
+    "operational_tools": [
+      {
+        "file": "tools/agent_kit.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "git",
+          "prepare",
+          "describe",
+          "run_agent",
+          "main"
+        ],
+        "classes": [
+          "AgentKitError"
+        ]
+      },
+      {
+        "file": "tools/agent_kit_v8i.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "git",
+          "prepare",
+          "describe",
+          "run_agent",
+          "main"
+        ],
+        "classes": [
+          "AgentKitError"
+        ]
+      },
+      {
+        "file": "tools/backup_restore.py",
+        "category": "backup_and_recovery",
+        "classification": "retain",
+        "functions": [
+          "compute_artifact_manifest",
+          "backup_docker_postgres_and_artifacts",
+          "verify_isolated_restore_docker"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_architecture.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "references_vertical_module_code",
+          "runtime_source",
+          "frontend_boundary_violations",
+          "domain_framework_violations",
+          "find_violations",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_contracts.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "validate_contracts",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_docs.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "find_documentation_issues",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_node_runtime.mjs",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [],
+        "classes": []
+      },
+      {
+        "file": "tools/check_release_gate.py",
+        "category": "release_gate",
+        "classification": "retain",
+        "functions": [
+          "release_gate_failures",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_scope.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "find_scope_violations",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_secret_surfaces.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "scan_text",
+          "scan_artifact",
+          "main"
+        ],
+        "classes": [
+          "Finding",
+          "ArtifactError",
+          "_SafeParser"
+        ]
+      },
+      {
+        "file": "tools/check_self_host_fixture.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "check_origin",
+          "check",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/check_tenant_timing.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "collect",
+          "main"
+        ],
+        "classes": [
+          "TimingEvidenceError"
+        ]
+      },
+      {
+        "file": "tools/configure_keycloak_e2e_redirect.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "configure",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/control_kit_audit.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "sha256",
+          "git",
+          "check_assets",
+          "strip_cloudflare_beacon",
+          "check_index_assets",
+          "audit",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/engine_inventory.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "inventory",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/generate_community_qa_fixtures.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "generate"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/local_candidate_gate.py",
+        "category": "release_gate",
+        "classification": "retain",
+        "functions": [
+          "commands",
+          "local_failures",
+          "run",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/marketplace_release.py",
+        "category": "release_gate",
+        "classification": "retain",
+        "functions": [
+          "read_json",
+          "write_json",
+          "sign",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/migrate_official_modules.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "migrate_official_modules",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/package_qgis_plugin.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "package_qgis_plugin",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/product_inventory.py",
+        "category": "packaging_and_inventory",
+        "classification": "retain",
+        "functions": [
+          "git",
+          "matches",
+          "is_test",
+          "python_candidates",
+          "ui_candidates",
+          "generate",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/r015_extension_oracle.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "fingerprint",
+          "seed",
+          "verify_http",
+          "verify_denied"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/r015_synthetic_drill.py",
+        "category": "quality_security_gate",
+        "classification": "retain",
+        "functions": [
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/recovery_authority.py",
+        "category": "backup_and_recovery",
+        "classification": "retain",
+        "functions": [
+          "safe_human_authority",
+          "reconciliation_sql"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/release_consolidation.py",
+        "category": "release_gate",
+        "classification": "retain",
+        "functions": [
+          "git",
+          "hash_file",
+          "artifact_hashes",
+          "snapshot",
+          "candidate_manifest",
+          "verify_manifest",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/reset_dev.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "assert_safe_target",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/run_with_test_database.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/seed_identity_e2e.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "assert_safe_seed_target",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/smoke_org_chat_sse.py",
+        "category": "smoke_and_benchmark_probe",
+        "classification": "retain",
+        "functions": [
+          "http",
+          "check",
+          "listen"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/smoke_qgis_native.py",
+        "category": "smoke_and_benchmark_probe",
+        "classification": "retain",
+        "functions": [
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/spike_r029_postgres_cursor.py",
+        "category": "smoke_and_benchmark_probe",
+        "classification": "retain",
+        "functions": [
+          "query",
+          "start",
+          "send",
+          "finish",
+          "wait_for",
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/spike_r029_qgis_commit.py",
+        "category": "smoke_and_benchmark_probe",
+        "classification": "retain",
+        "functions": [
+          "main"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/test_database.py",
+        "category": "environment_and_migration",
+        "classification": "retain",
+        "functions": [
+          "assert_safe_test_target",
+          "build_test_environment"
+        ],
+        "classes": []
+      },
+      {
+        "file": "tools/validate_engine_first.sh",
+        "category": "release_gate",
+        "classification": "retain",
+        "functions": [],
+        "classes": []
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/health.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/ops.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/ops_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/ops/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/ops/domain.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "infra/cad-relay/relay.css",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/relay.html",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/relay.js",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/release.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/serve-test.py",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/cad-relay/stage-test.py",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/compose.identity.yaml",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/compose.yaml",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/realm-openvietgis.json",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/messages/messages_en.properties",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/messages/messages_vi.properties",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/register.ftl",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis-modal-v3.css",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/css/openvietgis.css",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/img/favicon.ico",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/img/ovg-mark.png",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-map.svg",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/img/studio-mark.svg",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch-modal-v2.js",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/resources/js/account-switch.js",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/keycloak/themes/openvietgis/login/theme.properties",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/dev/postgres/001-runtime-role.sql",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/001-runtime-role.sh",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/Dockerfile.api",
+      "classification": "replace"
+    },
+    {
+      "path": "infra/prod/Dockerfile.postgres",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/Dockerfile.web",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/README.md",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/docker-compose.prod.yml",
+      "classification": "replace"
+    },
+    {
+      "path": "infra/prod/nginx.conf",
+      "classification": "replace"
+    },
+    {
+      "path": "infra/prod/openvietgis-webhook@.service.example",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/postgres/ensure-runtime-role.sh",
+      "classification": "retain"
+    },
+    {
+      "path": "infra/prod/webhook.env.example",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/__init__.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/agent_kit.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/agent_kit_v8i.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/backup_restore.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_architecture.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_contracts.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_docs.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_node_runtime.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_release_gate.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_scope.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_secret_surfaces.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_self_host_fixture.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/check_tenant_timing.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/configure_keycloak_e2e_redirect.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/control_kit_audit.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/engine_inventory.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/generate_community_qa_fixtures.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/local_candidate_gate.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/marketplace_release.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/migrate_official_modules.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/package_qgis_plugin.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/product_inventory.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/r015_extension_oracle.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/r015_synthetic_drill.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/recovery_authority.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/release_consolidation.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/reset_dev.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/run_with_test_database.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/seed_identity_e2e.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/spike_r029_postgres_cursor.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/spike_r029_qgis_commit.py",
+      "classification": "retain"
+    },
+    {
+      "path": "tools/validate_engine_first.sh",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/tests/integration/m3/test_r015_ops_real.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r015_ops_real.py::test_r014_core_extension_platform_generic_contracts",
+        "apps/api/tests/integration/m3/test_r015_ops_real.py::test_r015_production_ops_health_metrics_and_entitlements"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/test_health.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/test_health.py::test_liveness_and_readiness_use_real_database",
+        "apps/api/tests/integration/test_health.py::test_readiness_reports_database_unavailable"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/test_migrations.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/test_migrations.py::test_migrations_apply_from_zero_to_head",
+        "apps/api/tests/integration/test_migrations.py::test_populated_extension_history_refuses_lossy_downgrade"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/test_startup_config.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/test_startup_config.py::test_application_import_fails_fast_when_required_config_is_missing"
+      ]
+    },
+    {
+      "file": "apps/api/tests/performance/test_authorization_benchmark.py",
+      "category": "performance",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/performance/test_authorization_benchmark.py::test_authorization_p95_dynamic_scope_and_next_request_revocation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/performance/test_spatial_benchmark.py",
+      "category": "performance",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/performance/test_spatial_benchmark.py::test_spatial_http_p95_10k_native_and_transformed"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_config.py",
+      "category": "unit",
+      "test_count": 8,
+      "test_ids": [
+        "apps/api/tests/unit/test_config.py::test_settings_require_security_and_database_configuration",
+        "apps/api/tests/unit/test_config.py::test_settings_reject_unknown_environment",
+        "apps/api/tests/unit/test_config.py::test_settings_reject_empty_database_url",
+        "apps/api/tests/unit/test_config.py::test_runtime_url_must_be_explicit_and_distinct",
+        "apps/api/tests/unit/test_config.py::test_proposed_production_api_has_no_migration_authority",
+        "apps/api/tests/unit/test_config.py::test_proposed_production_migration_is_distinct_and_same_database",
+        "apps/api/tests/unit/test_config.py::test_proposed_production_rejects_unsafe_config",
+        "apps/api/tests/unit/test_config.py::test_proposed_production_rejects_owner_as_runtime"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_ops_release_gate.py",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/api/tests/unit/test_ops_release_gate.py::test_release_inventory_is_not_production_certification",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_readiness_safe_probe_and_metric_certification_counts",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_missing_storage_is_not_created",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_symlink_storage_is_not_probed",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_database_failure_is_sanitized_and_does_not_imply_readiness",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_postgis_failure_not_reported_as_database_loss",
+        "apps/api/tests/unit/test_ops_release_gate.py::test_readiness_http_failure_returns_503"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_reset_safety.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/api/tests/unit/test_reset_safety.py::test_accepts_only_documented_local_reset_databases",
+        "apps/api/tests/unit/test_reset_safety.py::test_rejects_unsafe_targets",
+        "apps/api/tests/unit/test_reset_safety.py::test_reset_rejects_actual_migration_destination_before_alembic",
+        "apps/api/tests/unit/test_reset_safety.py::test_reset_accepts_distinct_credentials_for_same_local_target",
+        "apps/api/tests/unit/test_reset_safety.py::test_reset_refuses_implicit_port_override"
+      ]
+    },
+    {
+      "file": "tests/architecture/test_architecture.py",
+      "category": "architecture",
+      "test_count": 11,
+      "test_ids": [
+        "tests/architecture/test_architecture.py::test_rejects_core_to_vertical_module_dependency",
+        "tests/architecture/test_architecture.py::test_accepts_module_to_public_contract_dependency",
+        "tests/architecture/test_architecture.py::test_core_validation_succeeds_when_modules_directory_is_absent",
+        "tests/architecture/test_architecture.py::test_rejects_domain_to_adapter_dependency",
+        "tests/architecture/test_architecture.py::test_does_not_treat_module_api_urls_or_prose_as_code_dependency",
+        "tests/architecture/test_architecture.py::test_rejects_package_to_app_import",
+        "tests/architecture/test_architecture.py::test_canonical_frontend_rejects_all_legacy_imports",
+        "tests/architecture/test_architecture.py::test_reverse_frontend_dependency_rejected",
+        "tests/architecture/test_architecture.py::test_domain_framework_rejected_but_adapter_allowed",
+        "tests/architecture/test_architecture.py::test_public_sdk_and_test_fixture_allowed",
+        "tests/architecture/test_architecture.py::test_generic_module_glob_requires_discovery_gateway"
+      ]
+    },
+    {
+      "file": "tools/r015_synthetic_drill.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "tools/r015_synthetic_drill.py::script_main"
+      ]
+    },
+    {
+      "file": "tools/tests/test_agent_kit.py",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "tools/tests/test_agent_kit.py::AgentKitTests::test_create_five_isolated_worktrees_and_idempotence",
+        "tools/tests/test_agent_kit.py::AgentKitTests::test_dirty_source_is_rejected",
+        "tools/tests/test_agent_kit.py::AgentKitTests::test_nested_worktree_root_is_rejected",
+        "tools/tests/test_agent_kit.py::AgentKitTests::test_existing_unrelated_path_is_not_overwritten"
+      ]
+    },
+    {
+      "file": "tools/tests/test_backup_restore.py",
+      "category": "unit",
+      "test_count": 10,
+      "test_ids": [
+        "tools/tests/test_backup_restore.py::test_verified_artifact_copy_and_tamper",
+        "tools/tests/test_backup_restore.py::test_reject_symlink_and_traversal",
+        "tools/tests/test_backup_restore.py::test_inventory_includes_immutable_cad_versions",
+        "tools/tests/test_backup_restore.py::test_required_database_reference_cannot_be_missing",
+        "tools/tests/test_backup_restore.py::test_restore_rejects_old_manifest_and_requires_isolation",
+        "tools/tests/test_backup_restore.py::test_backup_requires_consistency_attestation",
+        "tools/tests/test_backup_restore.py::test_completion_marker_is_atomic_and_never_overwritten",
+        "tools/tests/test_backup_restore.py::test_v4_restore_preflight_fails_before_creation",
+        "tools/tests/test_backup_restore.py::test_private_independent_key_required",
+        "tools/tests/test_backup_restore.py::test_authenticated_manifest_roundtrip_and_exact_dump_bytes"
+      ]
+    },
+    {
+      "file": "tools/tests/test_canonical_frontend_gate.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_canonical_frontend_gate.py::test_ci_validation_builds_canonical_production_frontend",
+        "tools/tests/test_canonical_frontend_gate.py::test_canonical_frontend_has_build_script",
+        "tools/tests/test_canonical_frontend_gate.py::test_ci_runs_built_workspace_and_mcp_regression"
+      ]
+    },
+    {
+      "file": "tools/tests/test_community_qa_fixtures.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_community_qa_fixtures.py::test_community_qa_fixtures_manifest_and_checksums",
+        "tools/tests/test_community_qa_fixtures.py::test_community_qa_geojson_geometry_families"
+      ]
+    },
+    {
+      "file": "tools/tests/test_contracts.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_contracts.py::test_contract_validation_covers_all_integrated_contracts",
+        "tools/tests/test_contracts.py::test_sdk_generator_covers_all_integrated_contracts"
+      ]
+    },
+    {
+      "file": "tools/tests/test_control_kit_audit.py",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "tools/tests/test_control_kit_audit.py::ControlKitTests::test_release_asset_hashes",
+        "tools/tests/test_control_kit_audit.py::ControlKitTests::test_missing_or_escaping_assets",
+        "tools/tests/test_control_kit_audit.py::ControlKitTests::test_cloudflare_beacon_only_normalization",
+        "tools/tests/test_control_kit_audit.py::ControlKitTests::test_index_asset_references"
+      ]
+    },
+    {
+      "file": "tools/tests/test_docs.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "tools/tests/test_docs.py::test_required_documentation_navigation_is_complete"
+      ]
+    },
+    {
+      "file": "tools/tests/test_local_candidate_gate.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "tools/tests/test_local_candidate_gate.py::test_local_gate_rejects_missing_changed_and_wrong_candidate"
+      ]
+    },
+    {
+      "file": "tools/tests/test_managed_delta_contract.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_managed_delta_contract.py::test_aliases_same_cursor",
+        "tools/tests/test_managed_delta_contract.py::test_reject_bad_envelope",
+        "tools/tests/test_managed_delta_contract.py::test_reset_allows_rewind_without_changes"
+      ]
+    },
+    {
+      "file": "tools/tests/test_managed_snapshot_contract.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_managed_snapshot_contract.py::test_native_projected_coordinates_and_identity_preserved",
+        "tools/tests/test_managed_snapshot_contract.py::test_reject_mixed_snapshot",
+        "tools/tests/test_managed_snapshot_contract.py::test_reject_invalid_initial_page"
+      ]
+    },
+    {
+      "file": "tools/tests/test_package_qgis_plugin.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_package_qgis_plugin.py::test_plugin_zip_installable_deterministic_and_no_secrets",
+        "tools/tests/test_package_qgis_plugin.py::test_plugin_zip_refuses_missing_source_and_unreviewed_metadata"
+      ]
+    },
+    {
+      "file": "tools/tests/test_product_inventory.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "tools/tests/test_product_inventory.py::test_routes",
+        "tools/tests/test_product_inventory.py::test_mcp_decorator_and_wrapper",
+        "tools/tests/test_product_inventory.py::test_mcp_literal_registry",
+        "tools/tests/test_product_inventory.py::test_ui_candidates",
+        "tools/tests/test_product_inventory.py::test_classification"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_connector_simple_ui.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_qgis_connector_simple_ui.py::test_simple_plugin_has_one_primary_open_save_flow",
+        "tools/tests/test_qgis_connector_simple_ui.py::test_simple_plugin_preserves_edit_recovery_guards",
+        "tools/tests/test_qgis_connector_simple_ui.py::test_download_and_version_are_consistent"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_desktop_recovery.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "tools/tests/test_qgis_desktop_recovery.py::test_atomic_draft_and_project_isolation",
+        "tools/tests/test_qgis_desktop_recovery.py::test_three_way_merge_and_conflict",
+        "tools/tests/test_qgis_desktop_recovery.py::test_browser_handoff_state_origin_and_one_time",
+        "tools/tests/test_qgis_desktop_recovery.py::test_callback_does_not_report_success_when_profile_fails",
+        "tools/tests/test_qgis_desktop_recovery.py::test_pending_rebind_only_when_server_revision_and_exact_base_match"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_managed_snapshots.py",
+      "category": "unit",
+      "test_count": 11,
+      "test_ids": [
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_save_does_not_lose_diff",
+        "tools/tests/test_qgis_managed_snapshots.py::test_deletes_are_denied_by_default",
+        "tools/tests/test_qgis_managed_snapshots.py::test_global_cursor_is_not_advanced_by_write_receipt",
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_geometry_wkt_preserves_projected_coordinates",
+        "tools/tests/test_qgis_managed_snapshots.py::test_initial_load_uses_large_pages_and_rejects_revision_change",
+        "tools/tests/test_qgis_managed_snapshots.py::test_platform_error_message_is_not_discarded",
+        "tools/tests/test_qgis_managed_snapshots.py::test_pending_retry_checks_receipt_before_replaying",
+        "tools/tests/test_qgis_managed_snapshots.py::test_required_fields_preflight_preserves_draft_and_allows_valid_point",
+        "tools/tests/test_qgis_managed_snapshots.py::test_sqlite_snapshot_requires_fresh_scope_and_revisions",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_uses_one_authorized_probe_not_full_download",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_changed_cache_uses_delta_and_revalidates"
+      ]
+    },
+    {
+      "file": "tools/tests/test_recovery_authority.py",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "tools/tests/test_recovery_authority.py::test_default_is_deny_all",
+        "tools/tests/test_recovery_authority.py::test_only_unchanged_human_authority_retained",
+        "tools/tests/test_recovery_authority.py::test_changed_or_revoked_scope_does_not_preserve_access",
+        "tools/tests/test_recovery_authority.py::test_missing_or_changed_identity_denied",
+        "tools/tests/test_recovery_authority.py::test_current_only_grant_or_user_not_imported",
+        "tools/tests/test_recovery_authority.py::test_changed_or_missing_gis_policy_quarantines_all",
+        "tools/tests/test_recovery_authority.py::test_duplicate_invalid_ids_fail_closed"
+      ]
+    },
+    {
+      "file": "tools/tests/test_release_consolidation.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "tools/tests/test_release_consolidation.py::test_artifact_set",
+        "tools/tests/test_release_consolidation.py::test_connector_mismatch",
+        "tools/tests/test_release_consolidation.py::test_missing_connector",
+        "tools/tests/test_release_consolidation.py::test_symlink",
+        "tools/tests/test_release_consolidation.py::test_manifest_drift"
+      ]
+    },
+    {
+      "file": "tools/tests/test_release_gate.py",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "tools/tests/test_release_gate.py::test_absent_exact_candidate_acceptance_blocks_release",
+        "tools/tests/test_release_gate.py::test_static_all_true_flags_do_not_pass_release_gate",
+        "tools/tests/test_release_gate.py::test_duplicate_or_missing_ids_cannot_be_certified",
+        "tools/tests/test_release_gate.py::test_candidate_and_scope_mismatch_block_release"
+      ]
+    },
+    {
+      "file": "tools/tests/test_scope.py",
+      "category": "unit",
+      "test_count": 8,
+      "test_ids": [
+        "tools/tests/test_scope.py::test_scope_checker_accepts_product_neutral_runtime",
+        "tools/tests/test_scope.py::test_scope_checker_rejects_gis_or_vertical_runtime_markers",
+        "tools/tests/test_scope.py::test_accepted_renderer_stays_inside_map_engine_adapter",
+        "tools/tests/test_scope.py::test_business_map_ui_cannot_import_renderer_types_or_dynamic_api",
+        "tools/tests/test_scope.py::test_studio_renderer_adapter_is_narrowly_scoped",
+        "tools/tests/test_scope.py::test_3d_adapter_does_not_grant_renderer_access_to_coordinator",
+        "tools/tests/test_scope.py::test_renderer_owner_still_rejects_vertical_dependencies",
+        "tools/tests/test_scope.py::test_r031_adapter_allowlist_is_narrow"
+      ]
+    },
+    {
+      "file": "tools/tests/test_secret_surfaces.py",
+      "category": "unit",
+      "test_count": 11,
+      "test_ids": [
+        "tools/tests/test_secret_surfaces.py::test_detects_synthetic_credential_shapes",
+        "tools/tests/test_secret_surfaces.py::test_exact_canaries_are_found_without_key_names",
+        "tools/tests/test_secret_surfaces.py::test_does_not_flag_hashes_safe_prefixes_or_redacted_values",
+        "tools/tests/test_secret_surfaces.py::test_cli_scans_only_selected_artifacts_and_never_prints_value_or_path",
+        "tools/tests/test_secret_surfaces.py::test_clean_explicit_artifact_does_not_scan_unrelated_data",
+        "tools/tests/test_secret_surfaces.py::test_rejects_unapproved_or_missing_paths",
+        "tools/tests/test_secret_surfaces.py::test_rejects_absolute_path_even_if_it_points_inside_approved_root",
+        "tools/tests/test_secret_surfaces.py::test_rejects_link_into_private_tree",
+        "tools/tests/test_secret_surfaces.py::test_rejects_unreadable_text_encoding",
+        "tools/tests/test_secret_surfaces.py::test_read_error_is_fail_closed_and_never_echoes_exception",
+        "tools/tests/test_secret_surfaces.py::test_cli_rejects_empty_or_invalid_args_without_echo"
+      ]
+    },
+    {
+      "file": "tools/tests/test_seed_identity_e2e.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_seed_identity_e2e.py::test_unsafe_seed_never_connects",
+        "tools/tests/test_seed_identity_e2e.py::test_dedicated_seed_target_allowed"
+      ]
+    },
+    {
+      "file": "tools/tests/test_self_host_fixture.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_self_host_fixture.py::test_fixture_origin_rejects_nonisolated_targets",
+        "tools/tests/test_self_host_fixture.py::test_fixture_origin_normalizes_loopback",
+        "tools/tests/test_self_host_fixture.py::test_fixture_smoke_rejects_octet_stream_module_worker"
+      ]
+    },
+    {
+      "file": "tools/tests/test_tenant_timing.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tools/tests/test_tenant_timing.py::test_collects_exact_passing_measurements",
+        "tools/tests/test_tenant_timing.py::test_rejects_incomplete_or_invalid_evidence"
+      ]
+    },
+    {
+      "file": "tools/tests/test_test_database.py",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "tools/tests/test_test_database.py::test_test_database_does_not_inherit_application_database",
+        "tools/tests/test_test_database.py::test_explicit_dedicated_test_database_takes_precedence",
+        "tools/tests/test_test_database.py::test_runner_applies_core_then_official_module_migrations",
+        "tools/tests/test_test_database.py::test_unsafe_test_target_stops_before_migration_or_child_process"
+      ]
+    },
+    {
+      "file": "tools/tests/test_validate_manifest.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_validate_manifest.py::test_root_validation_manifest_contains_all_mandatory_categories",
+        "tools/tests/test_validate_manifest.py::test_ci_uses_the_dedicated_database_and_reference_identity_fixture",
+        "tools/tests/test_validate_manifest.py::test_backend_ci_is_independent_of_javascript_dependency_install"
+      ]
+    }
+  ]
+}

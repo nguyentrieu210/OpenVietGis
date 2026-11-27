@@ -1,0 +1,1579 @@
+{
+  "schema_version": "064-engine-contract-v1",
+  "engine_id": "E07",
+  "name": "Import/export and interoperability formats",
+  "parent_references": [
+    "R005",
+    "R010"
+  ],
+  "spec_path": "specs/064-rust-platform/engines/e07-formats-transfer.md",
+  "architecture_candidate": "GDAL/PROJ native adapters behind Rust transfer job control plane; retain format-specific metadata & limits.",
+  "baseline_commit": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "worktree_head": "babcdf9f00578ab336fb4404c90186fa55be9b51",
+  "generated_at": "2026-11-25T17:00:35Z",
+  "ac1_status": "verified_runtime_inventory_complete",
+  "summary": {
+    "http_operations": 11,
+    "websocket_routes": 0,
+    "sse_routes": 0,
+    "streaming_routes": 0,
+    "classifications": {
+      "migrate": 7,
+      "replace": 4
+    },
+    "migrations_count": 1,
+    "source_files_count": 14,
+    "test_files_count": 6,
+    "test_case_ids_count": 18
+  },
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{artifact_id}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{artifact_id}",
+      "operation_id": "get_derived_artifact_api_v1_organizations__organization_id__projects__project_id__artifacts__artifact_id__get",
+      "summary": "Get Derived Artifact",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_derived_artifact",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 358,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/artifacts/{artifact_id}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_derived_artifact",
+          "get_settings",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "artifact_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{artifact_id}/download",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{artifact_id}/download",
+      "operation_id": "download_derived_artifact_api_v1_organizations__organization_id__projects__project_id__artifacts__artifact_id__download_get",
+      "summary": "Download Derived Artifact",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "binary",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "download_derived_artifact",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 371,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/artifacts/{artifact_id}/download",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "download_derived_artifact",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "artifact_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/confirm",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/confirm",
+      "operation_id": "confirm_export_api_v1_organizations__organization_id__projects__project_id__exports_confirm_post",
+      "summary": "Confirm Export",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "confirm_export",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 277,
+      "engine": "E07",
+      "classification": "replace",
+      "classification_rationale": "Replace Python vector format codec execution with native GDAL/PROJ adapters behind Rust Axum transfer job state machine.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/exports/confirm",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "confirm_export",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "ExportConfirmBody"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": true,
+        "matched_fields": [
+          "content_revision",
+          "operation_id"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/preview",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/preview",
+      "operation_id": "preview_export_api_v1_organizations__organization_id__projects__project_id__exports_preview_post",
+      "summary": "Preview Export",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "preview_export",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 255,
+      "engine": "E07",
+      "classification": "replace",
+      "classification_rationale": "Replace Python vector format codec execution with native GDAL/PROJ adapters behind Rust Axum transfer job state machine.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/exports/preview",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "preview_export",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "ExportPreviewBody"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": true,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": [
+          "content_revision"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/confirm",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/confirm",
+      "operation_id": "confirm_import_api_v1_organizations__organization_id__projects__project_id__imports_confirm_post",
+      "summary": "Confirm Import",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "confirm_import",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 228,
+      "engine": "E07",
+      "classification": "replace",
+      "classification_rationale": "Replace Python vector format codec execution with native GDAL/PROJ adapters behind Rust Axum transfer job state machine.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/imports/confirm",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "confirm_import",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "ImportConfirmBody"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": true,
+        "matched_fields": [
+          "operation_id"
+        ]
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/inspect",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/inspect",
+      "operation_id": "inspect_import_asset_api_v1_organizations__organization_id__projects__project_id__imports_inspect_post",
+      "summary": "Inspect Import Asset",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "inspect_import_asset",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 206,
+      "engine": "E07",
+      "classification": "replace",
+      "classification_rationale": "Replace Python vector format codec execution with native GDAL/PROJ adapters behind Rust Axum transfer job state machine.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/imports/inspect",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "inspect_import_asset",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "ImportInspectBody"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/upload",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/upload",
+      "operation_id": "upload_import_asset_api_v1_organizations__organization_id__projects__project_id__imports_upload_post",
+      "summary": "Upload Import Asset",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "upload_import_asset",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 172,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/imports/upload",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf",
+          "upload_import_asset"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "multipart/form-data"
+      ],
+      "request_body_schemas": [
+        "Body_upload_import_asset_api_v1_organizations__organization_id__projects__project_id__imports_upload_post"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs",
+      "operation_id": "list_transfer_jobs_api_v1_organizations__organization_id__projects__project_id__jobs_get",
+      "summary": "List Transfer Jobs",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "list_transfer_jobs",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 302,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/jobs",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "list_transfer_jobs",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [
+          "limit"
+        ],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}",
+      "operation_id": "get_transfer_job_api_v1_organizations__organization_id__projects__project_id__jobs__job_id__get",
+      "summary": "Get Transfer Job",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "get_transfer_job",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 315,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/jobs/{job_id}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "get_transfer_job",
+          "project_access_guard"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "job_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}/cancel",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}/cancel",
+      "operation_id": "cancel_transfer_job_api_v1_organizations__organization_id__projects__project_id__jobs__job_id__cancel_post",
+      "summary": "Cancel Transfer Job",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "cancel_transfer_job",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 328,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/jobs/{job_id}/cancel",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "cancel_transfer_job",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "job_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}/retry",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{job_id}/retry",
+      "operation_id": "retry_transfer_job_api_v1_organizations__organization_id__projects__project_id__jobs__job_id__retry_post",
+      "summary": "Retry Transfer Job",
+      "tags": [
+        "transfers"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "retry_transfer_job",
+      "module": "openvietgis_api.adapters.http.transfers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "source_line": 343,
+      "engine": "E07",
+      "classification": "migrate",
+      "classification_rationale": "Migrate transfer upload, durable job control plane, and artifact download to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/jobs/{job_id}/retry",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf",
+          "retry_transfer_job"
+        ],
+        "permission_references": [],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "job_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Explicit source/target CRS in {4326,3857,4756,5899} validated against approved transformation allowlist; explicit encoding allowlist."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "TransferError -> {code, message}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 6,
+        "test_files": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+          "apps/api/tests/integration/transfers/test_transfers_real.py",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+          "apps/api/tests/unit/transfers/test_offline_snapshot.py"
+        ],
+        "test_id_count": 18,
+        "sample_test_ids": [
+          "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance",
+          "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+          "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+          "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation",
+          "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved"
+        ]
+      }
+    }
+  ],
+  "algorithms_and_capabilities": {
+    "source": "apps/api/openvietgis_api/domains/transfers/domain.py",
+    "engine": "E07",
+    "formats": [
+      "geopackage",
+      "geojson",
+      "shapefile_zip"
+    ],
+    "supported_crs_codes": [
+      3857,
+      4326,
+      4756,
+      5899
+    ],
+    "supported_encodings": [
+      "utf-8",
+      "windows-1258",
+      "cp1252",
+      "latin-1"
+    ],
+    "job_kinds": [
+      "import",
+      "export"
+    ],
+    "job_statuses": [
+      "accepted",
+      "queued",
+      "active",
+      "awaiting_confirmation",
+      "cancel_requested",
+      "recoverable_failed",
+      "succeeded",
+      "failed",
+      "denied",
+      "cancelled"
+    ],
+    "limits": {
+      "max_upload_bytes": 26214400,
+      "max_zip_expanded_bytes": 52428800,
+      "max_zip_entries": 64,
+      "max_transfer_features": 50000,
+      "max_transfer_fields": 100,
+      "max_string_len": 4096,
+      "artifact_ttl_hours": 24
+    }
+  },
+  "migrations": [
+    {
+      "file": "apps/api/migrations/versions/0008_import_export.py",
+      "filename": "0008_import_export.py",
+      "scope": "core_api",
+      "revision": "0008_import_export",
+      "down_revision": "0007_map_workspace",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Add R005 import/export durable jobs, immutable source assets, and derived artifacts.",
+      "schemas_created": [
+        "transfers"
+      ],
+      "tables_touched": [
+        "spatial.catalog_changes",
+        "spatial.data_sources",
+        "transfers.",
+        "transfers.derived_artifacts",
+        "transfers.job_attempts",
+        "transfers.jobs",
+        "transfers.source_assets"
+      ],
+      "has_rls_policy": true,
+      "engine": "E07",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    }
+  ],
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/geojson.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/geopackage.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/postgis_sql.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/registry.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/shapefile_zip.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/wkt_crs.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/transfers.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/transfer_repository.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/storage/local_object_store.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "triaged from CROSS_CUTTING_REVIEW: Content-addressed/scoped local artifact object store shared by transfer artifacts (E07), print exports (E06), rasters (E09), CAD/models (E10), and field packages (E13)."
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/__init__.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/domain.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/ports.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/service.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    }
+  ],
+  "cross_engine_dependencies": [
+    {
+      "engine": "E01",
+      "relation": "All tenant/project routes depend on E01 authentication, CSRF, RBAC/ACL, RLS, and project_access_guard."
+    },
+    {
+      "engine": "E02",
+      "relation": "Imports register/populate E02 spatial sources/layers with validated CRS transformations."
+    },
+    {
+      "engine": "E09",
+      "relation": "Raster uploads/GeoTIFFs are handled in E09 while vector GeoJSON/GPKG/Shapefile ZIP live in E07."
+    }
+  ],
+  "existing_test_suite": [
+    {
+      "path": "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py",
+      "primary_engine": "E07",
+      "secondary_engines": [],
+      "rationale": "Import/export format codecs and transfer domain test.",
+      "test_ids": [
+        "apps/api/tests/integration/transfers/test_sc007_repeat_oracle.py::test_r005_sc007_repeated_proposed_gpkg_point_profile"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/transfers/test_transfers_real.py",
+      "primary_engine": "E07",
+      "secondary_engines": [],
+      "rationale": "Import/export format codecs and transfer domain test.",
+      "test_ids": [
+        "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_migration_rls_and_append_only_privileges",
+        "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_import_export_round_trip_gdal_verify_and_idempotency",
+        "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_vn2000_transform_invalid_geometry_and_revoked_download_security",
+        "apps/api/tests/integration/transfers/test_transfers_real.py::test_r005_sc007_10000_feature_import_and_export_performance"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/transfers/test_codecs_and_domain.py",
+      "primary_engine": "E07",
+      "secondary_engines": [],
+      "rationale": "Import/export format codecs and transfer domain test.",
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_detect_format_by_content_not_extension",
+        "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geopackage_round_trip_preserves_null_empty_zero_false",
+        "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_geojson_rejects_legacy_crs_and_mixed_geometries",
+        "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_shapefile_zip_rejects_path_traversal_and_detects_missing_crs_encoding",
+        "apps/api/tests/unit/transfers/test_codecs_and_domain.py::test_export_loss_matrix_and_job_state_machine"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py",
+      "primary_engine": "E07",
+      "secondary_engines": [],
+      "rationale": "Import/export format codecs and transfer domain test.",
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_gpkg_decimal_notation.py::test_decimal_values_never_use_exponent_notation"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py",
+      "primary_engine": "E13",
+      "secondary_engines": [
+        "E07"
+      ],
+      "rationale": "Field offline snapshot/operation namespace test.",
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_internal_operation_id_reserved",
+        "apps/api/tests/unit/transfers/test_offline_core_operation_namespace.py::test_normal_operations_unchanged"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/transfers/test_offline_snapshot.py",
+      "primary_engine": "E13",
+      "secondary_engines": [
+        "E07"
+      ],
+      "rationale": "Field offline snapshot/operation namespace test.",
+      "test_ids": [
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_snapshot_projection_preserves_exact_precision_and_integrity",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_intent_must_use_issued_scope_and_canonical_value",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_identified_operations_are_canonical_and_unique",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_core_feature_identity_has_all_scope_dimensions",
+        "apps/api/tests/unit/transfers/test_offline_snapshot.py::test_invalid_bounds_rejected"
+      ]
+    }
+  ],
+  "edge_cases": [
+    "Malicious ZIP archives (zip bombs > 50 MiB expanded, > 64 entries, path traversal, uploads > 25 MiB) must be rejected.",
+    "Feature count (> 50,000), field count (> 100), and string length (> 4096) limits enforced consistently.",
+    "Unsupported CRS or unapproved CRS transformation edges and unsupported character encodings (outside utf-8/windows-1258/cp1252/latin-1) must fail with structured TransferError.",
+    "GeoPackage decimal notation, shapefile DBF encoding, and round-trip geometry/attribute fidelity.",
+    "Job cancellation, retry state transitions, and 24-hour artifact expiration (READY/EXPIRED/UNAVAILABLE)."
+  ]
+}

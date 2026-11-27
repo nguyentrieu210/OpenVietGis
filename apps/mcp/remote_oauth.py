@@ -52,11 +52,12 @@ class KeycloakVerifier(TokenVerifier):
             if (claims.get("typ")!="Bearer" or claims["azp"] not in self.config.clients
                 or not isinstance(claims["sub"],str) or not claims["sub"]
                 or not isinstance(claims["scope"],str) or SCOPE not in claims["scope"].split()
-                or not isinstance(claims["iat"],int) or claims["exp"]-claims["iat"]>3600):
+                or type(claims["iat"]) is not int or type(claims["exp"]) is not int
+                or claims["exp"] <= claims["iat"] or claims["exp"]-claims["iat"]>3600):
                 return None
             return AccessToken(token=token,client_id=claims["azp"],scopes=[SCOPE],
                 expires_at=int(claims["exp"]),subject=claims["sub"],resource=self.config.resource)
-        except (jwt.PyJWTError,ValueError,TypeError,KeyError,TimeoutError,OSError):
+        except (jwt.PyJWTError,ValueError,TypeError,KeyError,TimeoutError,OSError,OverflowError):
             return None
 
     async def verify_token(self, token):

@@ -1,0 +1,15 @@
+# name|accepted|first|last|pin_etag|pin_total|status|media_type|encoding|location|range|etag|body_len
+first|1|0|9|||206|image/tiff|||bytes 0-9/10|"v1"|10
+eof|1|0|19|||206|image/tiff|||bytes 0-9/10|"v1"|10
+pinned|1|5|9|"v1"|10|206|image/geotiff|identity||bytes 5-9/10|"v1"|5
+changed_version|0|0|9|"v1"|10|206|image/tiff|||bytes 0-9/10|"v2"|10
+changed_size|0|0|9|"v1"|10|206|image/tiff|||bytes 0-9/11|"v1"|10
+weak_tag|0|0|9|||206|image/tiff|||bytes 0-9/10|W/"v1"|10
+unknown_size|0|0|9|||206|image/tiff|||bytes 0-9/*|"v1"|10
+wrong_offset|0|0|9|||206|image/tiff|||bytes 1-9/10|"v1"|9
+ignored_range|0|0|9|||200|image/tiff|||bytes 0-9/10|"v1"|10
+redirect|0|0|9|||206|image/tiff||https://example.org/|bytes 0-9/10|"v1"|10
+compressed|0|0|9|||206|image/tiff|gzip||bytes 0-9/10|"v1"|10
+wrong_media|0|0|9|||206|text/html|||bytes 0-9/10|"v1"|10
+truncated|0|0|9|||206|image/tiff|||bytes 0-9/10|"v1"|9
+oversize|0|0|9|||206|image/tiff|||bytes 0-9/10|"v1"|11

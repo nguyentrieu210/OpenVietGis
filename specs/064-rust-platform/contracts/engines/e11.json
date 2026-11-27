@@ -1,0 +1,4146 @@
+{
+  "engine_id": "E11",
+  "slug": "e11",
+  "title": "Realtime, edit leases, chat, tasks",
+  "parent_refs": [
+    "R011",
+    "R040"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e11-sync-collaboration.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Rust/Tokio, transactional outbox, bounded queues; preserve existing SSE and WebSocket contracts.",
+  "summary": {
+    "http_routes": 57,
+    "sse_endpoints": 3,
+    "websocket_endpoints": 1,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 4,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 11,
+    "test_files": 16,
+    "test_ids": 42,
+    "classification_breakdown": {
+      "migrate": 11,
+      "retain": 0,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "organization+project": 35,
+      "organization": 22
+    },
+    "routes_with_project_access_guard": 35,
+    "routes_with_csrf_enforcement": 31,
+    "core_permissions_referenced": [
+      "PROJECT_EDIT",
+      "PROJECT_MANAGE",
+      "PROJECT_READ"
+    ],
+    "extension_permissions_referenced": [],
+    "websocket_auth": "Human session cookie + strict Origin check + project read scope + 5s revalidation; scoped users rejected.",
+    "sse_auth": "Session/Bearer auth + tenant/project scope + periodic revocation checks (event: revoked)."
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/activities",
+      "handler": "list_activities",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 105,
+      "status_code": 200,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "limit",
+        "cursor"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews",
+      "handler": "list_reviews",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 146,
+      "status_code": 200,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews",
+      "handler": "create_review",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 129,
+      "status_code": 201,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateReviewRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{review_id}/comments",
+      "handler": "list_comments",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 202,
+      "status_code": 200,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "review_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{review_id}/comments",
+      "handler": "add_comment",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 181,
+      "status_code": 201,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "review_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:AddCommentRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{review_id}/decide",
+      "handler": "decide_review",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 161,
+      "status_code": 200,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "review_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:DecideReviewRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{source_id}/conflict-rebase",
+      "handler": "inspect_conflict_rebase",
+      "module": "openvietgis_api.adapters.http.collaboration",
+      "short_module": "collaboration",
+      "source_file": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "line": 215,
+      "status_code": 200,
+      "tags": [
+        "collaboration"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "source_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ConflictRebaseRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/bootstrap",
+      "handler": "bootstrap_managed_layer",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 534,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "layer_id",
+        "session_id",
+        "limit",
+        "offset"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/commits",
+      "handler": "commit_managed_changes",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 945,
+      "status_code": 201,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ManagedCommitRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT",
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/commits/{operation_id}",
+      "handler": "get_managed_commit_receipt",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1019,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "operation_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/delta",
+      "handler": "fetch_managed_delta",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 672,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "session_id",
+        "cursor",
+        "limit"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/desktop-sessions/{session_id}/commands",
+      "handler": "list_desktop_commands",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1232,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "session_id"
+      ],
+      "query_params": [
+        "status"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/desktop-sessions/{session_id}/commands",
+      "handler": "enqueue_desktop_command",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1150,
+      "status_code": 201,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "session_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateDesktopCommandRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_EDIT",
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/desktop-sessions/{session_id}/commands/{command_id}/respond",
+      "handler": "respond_desktop_command",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1257,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "session_id",
+        "command_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:RespondDesktopCommandRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/events",
+      "handler": "stream_managed_events",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1079,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "session_id"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "SSE",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "sse_contract": {
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "heartbeat",
+          "session_revoked"
+        ],
+        "pg_notify_channels": [
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [
+          "cursor"
+        ],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": false
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/sessions",
+      "handler": "list_managed_sessions",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 395,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "list_managed_sessions",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/sessions",
+      "handler": "create_managed_session",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 280,
+      "status_code": 201,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateManagedSessionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "create_managed_session",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/sessions/{session_id}",
+      "handler": "revoke_managed_session",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 461,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "session_id"
+      ],
+      "query_params": [
+        "bump_epoch"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "prepare_project_scope",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf",
+          "revoke_managed_session"
+        ],
+        "permissions": [
+          "PROJECT_MANAGE",
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/sessions/{session_id}",
+      "handler": "get_managed_session",
+      "module": "openvietgis_api.adapters.http.managed_sync",
+      "short_module": "managed_sync",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 433,
+      "status_code": 200,
+      "tags": [
+        "managed-sync"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "session_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_managed_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/attachments/{attachment_id}",
+      "handler": "attachment",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 574,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "attachment_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/contacts",
+      "handler": "contacts",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 789,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/contacts/requests",
+      "handler": "request_contact",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 829,
+      "status_code": 201,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:UserRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/contacts/requests/{request_id}/accept",
+      "handler": "accept",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 883,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "request_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/contacts/requests/{request_id}/decline",
+      "handler": "decline",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 888,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "request_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/contacts/{user_id}",
+      "handler": "remove_contact",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 893,
+      "status_code": 204,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "user_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/events",
+      "handler": "events",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 987,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "SSE",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "sse_contract": {
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "chat",
+          "contacts",
+          "ready",
+          "revoked",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "ovg_chat"
+        ],
+        "cursor_or_replay_params": [
+          "cursor"
+        ],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/messages/{message_id}/pin",
+      "handler": "unpin",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 661,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "message_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/messages/{message_id}/pin",
+      "handler": "pin",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 635,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "message_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/messages/{message_id}/reactions",
+      "handler": "react",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 609,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "message_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ReactionRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/people",
+      "handler": "list_people",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 727,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [
+        "q"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/people/{user_id}/avatar",
+      "handler": "person_avatar",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 775,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "user_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms",
+      "handler": "rooms",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 307,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms",
+      "handler": "create_room",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 315,
+      "status_code": 201,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:RoomRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/direct",
+      "handler": "direct_room",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 343,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:UserRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "PATCH"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}",
+      "handler": "rename_room",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 375,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:RenameRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/members",
+      "handler": "invite",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 393,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:UsersRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "DELETE"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/members/{user_id}",
+      "handler": "remove_member",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 432,
+      "status_code": 204,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id",
+        "user_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/messages",
+      "handler": "messages",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 467,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [
+        "limit",
+        "before"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/messages",
+      "handler": "post_message",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 501,
+      "status_code": 201,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ChatMessageRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/pins",
+      "handler": "pins",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 681,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/chat/rooms/{room_id}/read",
+      "handler": "mark_read",
+      "module": "openvietgis_api.adapters.http.org_chat",
+      "short_module": "org_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 596,
+      "status_code": 200,
+      "tags": [
+        "org-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "room_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/comment-pins",
+      "handler": "comment_pins",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 291,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/comments",
+      "handler": "comments",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 258,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "source_id",
+        "feature_id",
+        "limit"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/comments",
+      "handler": "post_comment",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 315,
+      "status_code": 201,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CommentRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/members",
+      "handler": "members",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 147,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/mentions/{message_id}/read",
+      "handler": "read_mention",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 585,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "message_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/messages",
+      "handler": "messages",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 156,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "limit",
+        "peer"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/messages",
+      "handler": "post_message",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 196,
+      "status_code": 201,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:MessageRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/notifications",
+      "handler": "notifications",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 520,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/notifications/{task_id}/read",
+      "handler": "read_notification",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 561,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "task_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/tasks",
+      "handler": "tasks",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 358,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "mine",
+        "limit"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/tasks",
+      "handler": "create_task",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 385,
+      "status_code": 201,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:TaskRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "PATCH"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/tasks/{task_id}",
+      "handler": "change_task",
+      "module": "openvietgis_api.adapters.http.team_chat",
+      "short_module": "team_chat",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "line": 464,
+      "status_code": 200,
+      "tags": [
+        "team-chat"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "task_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:StatusRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/edit-locks",
+      "handler": "list_leases",
+      "module": "openvietgis_api.adapters.http.team_locks",
+      "short_module": "team_locks",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "line": 26,
+      "status_code": 200,
+      "tags": [
+        "team-locks"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/edit-locks",
+      "handler": "acquire",
+      "module": "openvietgis_api.adapters.http.team_locks",
+      "short_module": "team_locks",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "line": 43,
+      "status_code": 200,
+      "tags": [
+        "team-locks"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:LeaseRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/edit-locks/release",
+      "handler": "release",
+      "module": "openvietgis_api.adapters.http.team_locks",
+      "short_module": "team_locks",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "line": 121,
+      "status_code": 200,
+      "tags": [
+        "team-locks"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:LeaseRequest"
+      ],
+      "response_model": null,
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/events",
+      "handler": "events",
+      "module": "openvietgis_api.adapters.http.team_realtime",
+      "short_module": "team_realtime",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+      "line": 105,
+      "status_code": 200,
+      "tags": [
+        "team-realtime"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": null,
+      "transport": "SSE",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "sse_contract": {
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "ready",
+          "revoked",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "and",
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      },
+      "mapped_test_files": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+        "apps/api/tests/integration/spatial/test_feature_comments.py",
+        "apps/api/tests/integration/spatial/test_org_chat.py",
+        "apps/api/tests/integration/spatial/test_team_chat.py",
+        "apps/api/tests/integration/spatial/test_team_locks.py",
+        "apps/api/tests/integration/spatial/test_team_presence.py",
+        "apps/api/tests/integration/spatial/test_team_realtime.py",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+        "apps/api/tests/unit/test_activity_cursor.py",
+        "apps/web-next/team-collaboration-smoke.mjs",
+        "tools/smoke_org_chat_sse.py",
+        "tools/tests/test_managed_delta_contract.py",
+        "tools/tests/test_managed_snapshot_contract.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ]
+    }
+  ],
+  "realtime_contracts": [
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/events",
+      "handler": "openvietgis_api.adapters.http.managed_sync.stream_managed_events",
+      "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "line": 1079,
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "protocol": "SSE",
+      "media_type": "text/event-stream",
+      "events": [
+        "heartbeat",
+        "session_revoked"
+      ],
+      "pg_notify_channels": [
+        "ovg_team_collaboration"
+      ],
+      "cursor_or_replay_params": [
+        "cursor"
+      ],
+      "headers": {
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+      },
+      "revalidates_access_on_stream": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/chat/events",
+      "handler": "openvietgis_api.adapters.http.org_chat.events",
+      "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "line": 987,
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "org_scope",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "protocol": "SSE",
+      "media_type": "text/event-stream",
+      "events": [
+        "chat",
+        "contacts",
+        "ready",
+        "revoked",
+        "unavailable"
+      ],
+      "pg_notify_channels": [
+        "ovg_chat"
+      ],
+      "cursor_or_replay_params": [
+        "cursor"
+      ],
+      "headers": {
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+      },
+      "revalidates_access_on_stream": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/events",
+      "handler": "openvietgis_api.adapters.http.team_realtime.events",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+      "line": 105,
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "protocol": "SSE",
+      "media_type": "text/event-stream",
+      "events": [
+        "ready",
+        "revoked",
+        "unavailable"
+      ],
+      "pg_notify_channels": [
+        "and",
+        "ovg_team_collaboration"
+      ],
+      "cursor_or_replay_params": [],
+      "headers": {
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
+        "Connection": "keep-alive"
+      },
+      "revalidates_access_on_stream": true
+    },
+    {
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/presence",
+      "handler": "openvietgis_api.adapters.http.team_presence.presence",
+      "source_file": "apps/api/openvietgis_api/adapters/http/team_presence.py",
+      "line": 104,
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "origin_allowed",
+          "_authenticate_human_session",
+          "team_chat.scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "protocol": "WebSocket",
+      "auth_mechanism": "Human session cookie (_authenticate_human_session) + strict Origin match against web_base_url + project read scope + scoped-user rejection",
+      "revalidation_interval_seconds": 5,
+      "max_global_peers": 64,
+      "max_room_peers": 40,
+      "max_message_bytes": 2048,
+      "close_codes": [
+        1003,
+        1008,
+        1013
+      ],
+      "inbound_message_keys": [
+        "cursor",
+        "view"
+      ],
+      "outbound_message_types": [
+        "presence"
+      ]
+    }
+  ],
+  "components_and_operations": {
+    "sse_contracts": [
+      {
+        "method": "GET",
+        "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integration-hub/managed/events",
+        "handler": "openvietgis_api.adapters.http.managed_sync.stream_managed_events",
+        "source_file": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+        "line": 1079,
+        "classification": "migrate",
+        "auth_boundary": {
+          "tenant_scope": "organization+project",
+          "project_access_guard": true,
+          "csrf_enforced": false,
+          "public_or_unauthenticated": false,
+          "auth_dependencies": [
+            "authenticate_request",
+            "get_db_session",
+            "project_access_guard",
+            "project_scope"
+          ],
+          "permissions": [
+            "PROJECT_READ"
+          ],
+          "extension_permissions": []
+        },
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "heartbeat",
+          "session_revoked"
+        ],
+        "pg_notify_channels": [
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [
+          "cursor"
+        ],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": false
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/organizations/{organization_id}/chat/events",
+        "handler": "openvietgis_api.adapters.http.org_chat.events",
+        "source_file": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+        "line": 987,
+        "classification": "migrate",
+        "auth_boundary": {
+          "tenant_scope": "organization",
+          "project_access_guard": false,
+          "csrf_enforced": false,
+          "public_or_unauthenticated": false,
+          "auth_dependencies": [
+            "authenticate_request",
+            "get_db_session",
+            "org_scope",
+            "project_scope"
+          ],
+          "permissions": [],
+          "extension_permissions": []
+        },
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "chat",
+          "contacts",
+          "ready",
+          "revoked",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "ovg_chat"
+        ],
+        "cursor_or_replay_params": [
+          "cursor"
+        ],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      },
+      {
+        "method": "GET",
+        "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/events",
+        "handler": "openvietgis_api.adapters.http.team_realtime.events",
+        "source_file": "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+        "line": 105,
+        "classification": "migrate",
+        "auth_boundary": {
+          "tenant_scope": "organization+project",
+          "project_access_guard": true,
+          "csrf_enforced": false,
+          "public_or_unauthenticated": false,
+          "auth_dependencies": [
+            "authenticate_request",
+            "get_db_session",
+            "project_access_guard",
+            "project_scope"
+          ],
+          "permissions": [],
+          "extension_permissions": []
+        },
+        "protocol": "SSE",
+        "media_type": "text/event-stream",
+        "events": [
+          "ready",
+          "revoked",
+          "unavailable"
+        ],
+        "pg_notify_channels": [
+          "and",
+          "ovg_team_collaboration"
+        ],
+        "cursor_or_replay_params": [],
+        "headers": {
+          "Cache-Control": "no-store, no-transform",
+          "X-Accel-Buffering": "no",
+          "Connection": "keep-alive"
+        },
+        "revalidates_access_on_stream": true
+      }
+    ],
+    "websocket_contracts": [
+      {
+        "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/presence",
+        "handler": "openvietgis_api.adapters.http.team_presence.presence",
+        "source_file": "apps/api/openvietgis_api/adapters/http/team_presence.py",
+        "line": 104,
+        "classification": "migrate",
+        "auth_boundary": {
+          "tenant_scope": "organization+project",
+          "project_access_guard": false,
+          "csrf_enforced": false,
+          "public_or_unauthenticated": false,
+          "auth_dependencies": [
+            "origin_allowed",
+            "_authenticate_human_session",
+            "team_chat.scope"
+          ],
+          "permissions": [
+            "PROJECT_READ"
+          ],
+          "extension_permissions": []
+        },
+        "protocol": "WebSocket",
+        "auth_mechanism": "Human session cookie (_authenticate_human_session) + strict Origin match against web_base_url + project read scope + scoped-user rejection",
+        "revalidation_interval_seconds": 5,
+        "max_global_peers": 64,
+        "max_room_peers": 40,
+        "max_message_bytes": 2048,
+        "close_codes": [
+          1003,
+          1008,
+          1013
+        ],
+        "inbound_message_keys": [
+          "cursor",
+          "view"
+        ],
+        "outbound_message_types": [
+          "presence"
+        ]
+      }
+    ],
+    "domain_and_persistence": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/persistence/collaboration_repository.py",
+        "classes": [
+          {
+            "name": "SqlCollaborationRepository",
+            "line": 140,
+            "bases": [],
+            "methods": [
+              "create_review",
+              "decide_review",
+              "add_comment",
+              "list_reviews",
+              "list_comments",
+              "list_activities",
+              "inspect_conflict_rebase"
+            ]
+          }
+        ],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/collaboration/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/collaboration/activity_cursor.py",
+        "classes": [
+          {
+            "name": "ActivityCursor",
+            "line": 22,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "cursor_scope",
+            "line": 29,
+            "async": false
+          },
+          {
+            "name": "encode_cursor",
+            "line": 53,
+            "async": false
+          },
+          {
+            "name": "decode_cursor",
+            "line": 62,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/collaboration/domain.py",
+        "classes": [
+          {
+            "name": "ReviewStatus",
+            "line": 16,
+            "bases": [
+              "StrEnum"
+            ],
+            "methods": []
+          },
+          {
+            "name": "ActivityRecord",
+            "line": 23,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ChangeReviewRecord",
+            "line": 40,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ReviewCommentRecord",
+            "line": 58,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "validate_rebase_draft",
+            "line": 72,
+            "async": false
+          },
+          {
+            "name": "analyze_draft_conflicts",
+            "line": 95,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/collaboration.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/managed_sync.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/org_chat.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/team_chat.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/team_locks.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/team_presence.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/team_realtime.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/collaboration_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/collaboration/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/collaboration/activity_cursor.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/collaboration/domain.py",
+      "classification": "migrate"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/tests/integration/integration_hub/test_r029_session_auth.py",
+      "category": "integration",
+      "test_count": 4,
+      "test_ids": [
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py::test_managed_qgis_session_preserves_project_scope_and_edit_capability",
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py::test_real_pairing_credential_can_open_only_its_binding",
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py::test_managed_session_actor_isolation_and_epoch_authority",
+        "apps/api/tests/integration/integration_hub/test_r029_session_auth.py::test_scoped_delta_does_not_reveal_hidden_feature_ids"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_collaboration_activity_feed.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_collaboration_activity_feed.py::test_fifty_commits_two_actor_activity_cutoff_and_comment_replay"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_collaboration_revision_chain.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_collaboration_revision_chain.py::test_replay_actor_and_rebase_exact_history"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_feature_comments.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_feature_comments.py::test_feature_comments_mentions_and_assignments"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_org_chat.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_org_chat.py::test_org_chat_rooms_messages_and_contacts",
+        "apps/api/tests/integration/spatial/test_org_chat.py::test_org_chat_sse_filter"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_team_chat.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_team_chat.py::test_team_chat_and_task_isolation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_team_locks.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_team_locks.py::test_feature_leases_enforce_core_writes_and_expire"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_team_presence.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_team_presence.py::test_presence_payload",
+        "apps/api/tests/integration/spatial/test_team_presence.py::test_presence_access_and_broadcast"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/spatial/test_team_realtime.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_team_realtime.py::test_private_messages_conversion_and_notification",
+        "apps/api/tests/integration/spatial/test_team_realtime.py::test_sse_pushes_committed_changes"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_r029_desktop_tool_allowlist_blocks_arbitrary_execution",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_r029_request_models_forbid_extra_fields",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_r029_migration_0041_chains_from_0040",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_managed_client_session_bootstrap_delta_commit_and_commands",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_r029_metadata_writes_use_read_scope_but_gis_commits_require_edit",
+        "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py::test_edit_capability_does_not_clear_authenticated_read_scope"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_activity_cursor.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/unit/test_activity_cursor.py::test_activity_cursor_roundtrip_scope_expiry_and_order",
+        "apps/api/tests/unit/test_activity_cursor.py::test_activity_cursor_invalid_encoding"
+      ]
+    },
+    {
+      "file": "apps/web-next/team-collaboration-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/team-collaboration-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "tools/smoke_org_chat_sse.py",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "tools/smoke_org_chat_sse.py::script_main"
+      ]
+    },
+    {
+      "file": "tools/tests/test_managed_delta_contract.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_managed_delta_contract.py::test_aliases_same_cursor",
+        "tools/tests/test_managed_delta_contract.py::test_reject_bad_envelope",
+        "tools/tests/test_managed_delta_contract.py::test_reset_allows_rewind_without_changes"
+      ]
+    },
+    {
+      "file": "tools/tests/test_managed_snapshot_contract.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_managed_snapshot_contract.py::test_native_projected_coordinates_and_identity_preserved",
+        "tools/tests/test_managed_snapshot_contract.py::test_reject_mixed_snapshot",
+        "tools/tests/test_managed_snapshot_contract.py::test_reject_invalid_initial_page"
+      ]
+    },
+    {
+      "file": "tools/tests/test_qgis_managed_snapshots.py",
+      "category": "unit",
+      "test_count": 11,
+      "test_ids": [
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_save_does_not_lose_diff",
+        "tools/tests/test_qgis_managed_snapshots.py::test_deletes_are_denied_by_default",
+        "tools/tests/test_qgis_managed_snapshots.py::test_global_cursor_is_not_advanced_by_write_receipt",
+        "tools/tests/test_qgis_managed_snapshots.py::test_native_geometry_wkt_preserves_projected_coordinates",
+        "tools/tests/test_qgis_managed_snapshots.py::test_initial_load_uses_large_pages_and_rejects_revision_change",
+        "tools/tests/test_qgis_managed_snapshots.py::test_platform_error_message_is_not_discarded",
+        "tools/tests/test_qgis_managed_snapshots.py::test_pending_retry_checks_receipt_before_replaying",
+        "tools/tests/test_qgis_managed_snapshots.py::test_required_fields_preflight_preserves_draft_and_allows_valid_point",
+        "tools/tests/test_qgis_managed_snapshots.py::test_sqlite_snapshot_requires_fresh_scope_and_revisions",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_uses_one_authorized_probe_not_full_download",
+        "tools/tests/test_qgis_managed_snapshots.py::test_reopen_changed_cache_uses_delta_and_revalidates"
+      ]
+    }
+  ]
+}

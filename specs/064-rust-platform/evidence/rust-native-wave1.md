@@ -1,0 +1,354 @@
+# Rust-native Wave 1 evidence — 2026-11-26
+
+## Decision and base
+
+Wave base: `c40b8e20` (`origin/064-convergence` at wave start).
+
+Scope decision: `0425b7d5` restores the original Rust-native OpenVietGIS
+control-plane boundary. OpenVietGIS-owned API, authorization, lifecycle,
+revision, orchestration, jobs, sync, module and policy logic migrate to Rust.
+PostGIS/GDAL/GEOS/PROJ/MapLibre/Cesium and technically required QGIS/CAD
+adapters remain replaceable engines beneath that control plane.
+
+No production deployment, database migration, route cutover, push or legacy
+retirement was performed by this wave.
+
+## Integrated candidate
+
+Branch: `064-rust-native-wave1`
+
+Integrated lane commits:
+
+- E06/E08: `e53b3bb1`, `b5efcc9b`
+- E09/E10: `a2224081`
+- E12/E13: `f7d304b7`, `26b883b0`
+- E14/E15/E16: `051d8e77`
+
+Delivered in this wave:
+
+- E06: renderer-neutral Rust cartography validation for physical paper/DPI and
+  single-style bounds. Rendering engines remain external.
+- E08: authenticated Rust processing algorithm catalog route reusing the
+  canonical `ovg-processing` registry rather than duplicating metadata.
+- E09: Rust raster request policy for source choice, cross-field operation
+  constraints, Sentinel rules, resampling bounds and GeoTIFF magic.
+- E10: authenticated Rust V8i capability route preserving fail-closed,
+  read-only, not-paired semantics.
+- E12: Rust integration-hub catalog policy for all 12 Python catalog adapters,
+  including permission, declared-operation and executable-operation gates.
+- E13: Rust offline package lifecycle guard; revoked/expired packages cannot be
+  reactivated by replay.
+- E14: Rust module activation compare-and-set policy plus idempotent
+  disable/reactivate revision transitions.
+- E15: checked house-number sequence arithmetic; overflow returns
+  `NUMBERING_OVERFLOW` instead of panicking.
+- E16: Rust MCP submit/result lifecycle policy matching one-command-at-a-time,
+  session expiry, two-second submit rate limit and one-shot terminal result
+  consumption.
+
+## Rust validation
+
+On the integrated candidate, using Rust 1.85.1:
+
+- `cargo fmt --all -- --check`: PASS.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS.
+- `cargo build -p openvietgis-api-rust --no-default-features --locked`: PASS.
+- `ovg-processing`: 8 tests PASS.
+- `ovg-sync`: 8 unit + 3 integration tests PASS.
+- `ovg-module-sdk`: 5 tests PASS.
+- `ovg-module-house-numbering`: 6 tests PASS.
+- New API policy/route tests: E06 2, E08 1, E09 2, E10 1, E12 3: all PASS.
+- Isolated E16 MCP policy compiled with `rustc -D warnings --test`: 3 tests PASS.
+- `git diff --check`: PASS.
+
+A full `cargo test --workspace --locked` reaches the inherited base failure:
+
+`ovg-storage::queries::domain::tests::canonical_json_matches_python_json_dumps`
+
+Observed mismatch is the pre-existing Python-style ASCII JSON escaping expectation
+already owned by the concurrent `064-finalize` worktree. All wave tests and all
+workspace tests executed before that inherited failure passed. This wave did not
+edit `crates/ovg-storage/src/queries/domain.rs` to avoid overlapping ownership.
+
+## Python oracle checks
+
+Using the existing pinned API environment:
+
+- `test_processing_domain.py`
+- `test_cartography_output.py`
+- `test_v8i_capabilities.py`
+- `integration_hub/test_catalog.py`
+
+Result: 45 PASS.
+
+Additional reference suites:
+
+- offline snapshot + offline Core operation namespace
+- E14 manifest parity
+- House Numbering address prefix
+
+Result: 34 PASS.
+
+MCP retained bridge reference:
+
+- `apps/mcp/test_live_bridge.py`
+
+Result: 6 PASS.
+
+## Open gates
+
+Wave 1 is an implementation checkpoint, not engine acceptance or cutover.
+
+Still required:
+
+1. Merge the independently owned E02/finalize and E05 convergence fixes only
+   after their own gates are green.
+2. Add DB-backed Rust repositories and exact HTTP parity for the E06/E08-E16
+   surfaces that are still policy/domain-only.
+3. Exercise real PostGIS tenant/RLS, QGIS/PyQGIS, GDAL raster, CAD/Windows and
+   browser consumers where applicable.
+4. Run cross-runtime differential fixtures, failure/revocation/restart tests,
+   resource benchmarks and rollback rehearsal on the integrated exact SHA.
+5. Keep FastAPI routes as oracle/rollback until each engine-specific acceptance
+   gate is independently green.
+
+## E08 DB-backed vertical slice
+
+After the initial wave checkpoint, E08 progressed from static registry ownership
+to a real RLS-bound PostGIS vertical slice:
+
+- Rust owns GET /processing/jobs, GET /processing/jobs/{job_id}, and
+  POST /processing/jobs/{job_id}/cancel.
+- The SQLx repository reads/writes the canonical processing.jobs table inside
+  the already authorized ProjectRead transaction.
+- Cancel uses FOR UPDATE, preserves JOB_TERMINAL, requires CSRF and
+  project.edit, and commits atomically.
+- Create/retry remain on FastAPI until the geometry publication transaction is
+  ported as one unit; the wave intentionally does not split that transaction.
+
+Real isolated PostGIS differential harness tests/rust-parity/e08_jobs.py passed:
+
+- list jobs;
+- get queued and failed jobs;
+- missing job;
+- foreign-tenant denial;
+- limit bounds 0/201;
+- cancel running job;
+- terminal cancel conflict with exact code/message envelope;
+- missing-CSRF fail-closed.
+
+The harness found and corrected one real Rust HTTP envelope mismatch during
+development (JOB_TERMINAL initially used the catalog detail envelope).
+The final run is green against FastAPI on the same migrated database.
+
+## Wave 2 incremental DB-backed parity
+
+### E06 cartography read side
+
+Commit: `d0a2da69` (integrated checkpoint with E13).
+
+Rust now owns:
+
+- `GET /cartography/layers/{layer_id}/style`
+- `GET /cartography/layouts`
+
+Both read canonical RLS-protected cartography tables inside the same authorized
+project transaction. Differential parity on isolated real PostGIS passed:
+
+- get existing layer style
+- missing style -> `{"style": null}`
+- list layouts
+- foreign-tenant denial
+
+### E08 durable processing jobs
+
+Code commit: `84ae8c96`; evidence follow-up: `42cffe31`.
+
+Rust now owns:
+
+- `GET /processing/jobs`
+- `GET /processing/jobs/{job_id}`
+- `POST /processing/jobs/{job_id}/cancel`
+
+The create/retry paths remain on FastAPI until the complete geometry publication
+transaction is ported atomically. Differential parity on isolated real PostGIS
+passed list/get/missing/foreign-tenant/limit validation/cancel/terminal conflict
+and CSRF fail-closed cases.
+
+### E13 offline package online control
+
+Commit: `d0a2da69`.
+
+Rust now owns:
+
+- `GET /field/packages`
+- `POST /field/packages/{package_id}/revoke`
+
+The list path preserves the Python writable-package policy: `project.edit`,
+creator-only visibility, and online layer/source active-ready revalidation.
+Revoke is idempotent via `COALESCE(revoked_at, now)`. Differential parity on
+isolated real PostGIS passed list/foreign-tenant/revoke/idempotency/missing/CSRF
+cases.
+
+### E09 raster catalog read side
+
+Commit: latest E09 checkpoint on `064-rust-native-wave1`.
+
+Rust now owns `GET /raster/layers` using the canonical RLS-protected raster
+catalog. The Python wire merge order is preserved exactly: metadata may override
+`id` and `name`, while canonical `byte_size` and `created_at` win after
+metadata unpacking. Differential parity on isolated real PostGIS passed:
+
+- raster list order and wire shape
+- metadata key-collision precedence
+- foreign-tenant denial
+
+### E10 CAD document read side
+
+Rust now owns:
+
+- `GET /cad/documents`
+- `GET /cad/documents/{document_id}/versions`
+
+The native DWG/DXF engines and file bytes remain below the Rust control plane.
+The Rust repository reads the canonical RLS-protected immutable CAD version
+ledger and preserves the Python latest-per-document and descending history
+ordering. Differential parity on isolated real PostGIS passed:
+
+- latest document revision selection
+- version history ordering
+- missing-document 404 envelope
+- foreign-tenant denial
+
+### E12 integration-hub catalog
+
+Rust now owns `GET /integration-hub/catalog`.
+
+The route preserves the intentional scoped-GIS behavior (catalog remains
+visible and reports `scoped_access`), derives effective Read/Edit/Manage
+capability from active membership/resource grants inside the authorized
+transaction, emits all 12 adapters with the exact eight-action matrix, and
+sets `Cache-Control: no-store` on successful catalog responses.
+
+Differential parity on isolated real PostGIS passed:
+
+- viewer + `scoped_access=true`
+- editor action matrix
+- manager action matrix
+- exact 12-adapter body/wire contract
+- successful no-store header
+- foreign-tenant denial
+
+### E14 extension activation control plane
+
+Integrated commits:
+
+- `a2fc0b15`: full native module manifest contract parity
+- `c53eeb51`: activation list + official runtime compatibility
+- latest E14 history checkpoint: immutable activation history
+
+Rust now owns:
+
+- `GET /extensions/activations`
+- `GET /extensions/activations/{activation_id}/history`
+
+Differential parity on isolated real PostGIS passed activation-list compatibility,
+runtime-mismatch detection, foreign-tenant denial, history event ordering,
+missing activation, the 1,000-event portable-history limit, and GIS access-guard
+behavior. The global guard intentionally allows scoped users to list activations
+but denies the history route; Rust preserves that distinction.
+
+### E16 MCP session lifecycle
+
+Commit: `fa1b0922`.
+
+The isolated Rust MCP policy now includes a stateful session/command machine for
+heartbeat expiry, one-command-at-a-time admission, the two-second submit guard,
+claim/check/ack/cancel, terminal-result single consumption, command expiry and
+session close. The transport still owns capability-token authentication and
+payload/result sanitization.
+
+Validation:
+
+- Rust policy: 6/6 tests PASS under `rustc -D warnings --test`.
+- Retained Python `BridgeStore`: 6/6 tests PASS.
+
+### E15 House Numbering registry read side
+
+Rust now owns these official-module read surfaces:
+
+- `GET /modules/house-numbering/rules`
+- `GET /modules/house-numbering/areas`
+- `GET /modules/house-numbering/routes`
+- `GET /modules/house-numbering/buildings?route_id=...`
+
+Every request preserves the Python module gate: project.read, global GIS-scope
+fail-closed behavior, active `house_numbering` activation, and exact stored
+manifest compatibility with the shipped Rust runtime contract.
+
+The storage wire uses the module-owned RLS schema directly, preserves added
+route/building fields from later module migrations, route active-building
+counts, and the current-number priority:
+`approved > submitted > proposed > certificate > survey > cad > other`.
+
+A parity mismatch found during implementation established that the untyped
+FastAPI module response serializes SQLAlchemy `Decimal max_distance_m` as a
+scale-preserving string (for example `"200.50"`); Rust now preserves that
+wire exactly rather than coercing it to a float.
+
+Differential parity on isolated real PostGIS passed 10 gates:
+
+- rules / areas / routes / buildings exact bodies
+- route building counts exclude removed buildings
+- current-number priority
+- route-filtered buildings
+- foreign-tenant denial
+- stored official manifest mismatch -> 404
+- GIS-scoped module access -> 403
+
+### E15 House Numbering write control
+
+Rust now additionally owns:
+
+- `POST /modules/house-numbering/rules`
+- `POST /modules/house-numbering/areas`
+
+The rule path preserves the official-module activation gate, CSRF, unrestricted
+GIS access guard, `project.manage` requirement, scale-preserving
+`max_distance_m` wire form, atomic audit append and committed module row.
+
+The area path preserves the corresponding `project.edit` requirement, name
+trimming, optional source/feature pair invariant, active-ready spatial source
+validation, Polygon geometry requirement, explicit CRS requirement, atomic
+audit append and module RLS transaction.
+
+Differential parity on isolated real PostGIS passed:
+
+- owner/manage rule creation
+- rule audit append
+- owner/edit area creation
+- area name trimming and audit append
+- missing-CSRF fail-closed
+- editor denied rule creation
+- editor allowed area creation
+- missing linked spatial feature
+- source/feature pair validation
+
+### E06 cartography write control
+
+Rust now additionally owns PUT layer style, POST layout creation and GET export catalog.
+Style normalization covers single, categorical and range contracts, including default
+colors, generated legends, source-field validation and revision-incrementing upserts.
+Layout creation preserves supported CRS, A0-A4, orientation, bounded unique layer
+sets, active-ready layer checks, print extent validation and Python trimming/default
+semantics. Rendering and PDF/PNG byte generation remain below the Rust control plane.
+Differential parity on isolated real PostGIS passed all 11 write/read cases.
+
+### E08 reusable processing models
+
+Rust now owns GET/POST/PUT/DELETE processing/models. The model control plane validates
+bounded DAGs, duplicate/missing/cyclic step references, vector/raster port separation,
+input cardinality, vector algorithm parameters through ovg-processing, raster band,
+resample and calculator parameters, project quota, optimistic revision and audit append.
+Differential parity on isolated real PostGIS passed 13 cases including create/list/update,
+stale update/delete, delete, audit, cycle rejection, blank name, tenant/CSRF and quota 50.

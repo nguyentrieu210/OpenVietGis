@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
-import {ApiClient,getCurrentUser} from "@openvietgis/client-sdk";
+import {getCurrentUser} from "@openvietgis/client-sdk";
 import {Brand} from "./Brand";
 import "./landing.css";
 import "./qgis-landing.css";
@@ -9,7 +9,7 @@ import "./qgis-motion.css";
 import "./qgis-founders.css";
 import "./qgis-poster-hero.css";
 
-const client=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 // The dev preview (/devui/) keeps its own path so a reload stays on the preview build.
 export const appPath=location.pathname==="/rewrite/copilot.html"?"/rewrite/copilot.html":location.pathname.startsWith("/devui/")?"/devui/":"/app";
 const loginUrl=(provider:string)=>"/api/v1/auth/login/"+encodeURIComponent(provider)+"?return_to="+encodeURIComponent("/app?auth_complete=1")+"&prompt=login";

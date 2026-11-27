@@ -1,0 +1,171 @@
+# Spec 064 Isolated Staging Stack (T004 / FR-003 / FR-006 / FR-011 / SC-005 / SC-006)
+#
+# SECURITY & ISOLATION GUARANTEES:
+# 1. Never conflicts with live VPS1 ports (54330, 54340, 8000, 8019, 18080).
+# 2. `martin` is attached ONLY to `staging_internal` (internal: true) with ZERO host port
+#    bindings. Public or host clients can NEVER bypass tile ACL authorization.
+# 3. Every tile request enters `tile-acl-gateway` (bound to 127.0.0.1:${STAGING_EDGE_PORT:-18064}),
+#    which performs a fail-closed Nginx `auth_request` subrequest to `api-rust` before proxying
+#    to `martin` and keys the tile cache by (org_id, project_id, authz_version, layer_revision).
+# 4. Aggregate app container memory ceiling = 512m + 256m + 128m = 896 MiB <= 1024 MiB (SC-005),
+#    with memswap_limit == mem_limit to prevent silent swap growth.
+
+name: ovg-064-staging
+
+networks:
+  staging_internal:
+    driver: bridge
+    internal: true
+  staging_edge:
+    driver: bridge
+
+volumes:
+  staging_pgdata:
+  staging_artifacts:
+  staging_tile_cache:
+
+services:
+  postgres-staging:
+    # Pinned to the exact PostGIS 18-3.7 image digest verified in baseline.md
+    image: postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262
+    restart: unless-stopped
+    shm_size: 256m
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    cpus: "1.0"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=64
+      - -c
+      - log_min_duration_statement=500
+    environment:
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:-ovg_staging_064}
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:-openvietgis}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:?set STAGING_POSTGRES_PASSWORD}
+      STAGING_RUNTIME_PASSWORD: ${STAGING_RUNTIME_PASSWORD:?set STAGING_RUNTIME_PASSWORD}
+    ports:
+      # Loopback-only staging port for controlled pg_restore / parity harnesses
+      - "127.0.0.1:${STAGING_PG_PORT:-54364}:5432"
+    volumes:
+      - staging_pgdata:/var/lib/postgresql
+      - ./001-staging-runtime-role.sh:/docker-entrypoint-initdb.d/001-staging-runtime-role.sh:ro
+    networks:
+      - staging_internal
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U ${STAGING_POSTGRES_USER:-openvietgis} -d ${STAGING_POSTGRES_DB:-ovg_staging_064}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api-rust:
+    # Built in bounded CI / dedicated build host — NEVER compiled on live VPS1
+    image: ${OVG_API_RUST_IMAGE:-ghcr.io/openvietgis/api-rust:064-staging}
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    mem_limit: 512m
+    memswap_limit: 512m
+    mem_reservation: 128m
+    cpus: "1.0"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    environment:
+      OPENVIETGIS_ENVIRONMENT: staging
+      OPENVIETGIS_BIND_ADDR: "0.0.0.0:8080"
+      # Runtime MUST connect as openvietgis_runtime (NOBYPASSRLS) so PostgreSQL FORCE RLS applies
+      OPENVIETGIS_DATABASE_URL: "postgres://openvietgis_runtime:${STAGING_RUNTIME_PASSWORD:?set STAGING_RUNTIME_PASSWORD}@postgres-staging:5432/${STAGING_POSTGRES_DB:-ovg_staging_064}"
+      OPENVIETGIS_DB_MAX_CONNECTIONS: "16"
+      TOKIO_WORKER_THREADS: "2"
+      OVG_RAYON_THREADS: "2"
+      OPENVIETGIS_APPLICATION_SESSION_SECRET: ${STAGING_SESSION_SECRET:?set STAGING_SESSION_SECRET}
+      OPENVIETGIS_CSRF_SECRET: ${STAGING_CSRF_SECRET:?set STAGING_CSRF_SECRET}
+      OPENVIETGIS_TILE_HMAC_SECRET: ${STAGING_TILE_HMAC_SECRET:?set STAGING_TILE_HMAC_SECRET}
+      OPENVIETGIS_ARTIFACT_STORE_DIR: /var/lib/openvietgis/artifacts
+      RUST_LOG: ${RUST_LOG:-info,ovg=info,sqlx=warn}
+    volumes:
+      - staging_artifacts:/var/lib/openvietgis/artifacts
+    networks:
+      - staging_internal
+      - staging_edge
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/ops/health/ready || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  martin:
+    # Pinned Martin MVT tile server — STRICTLY internal network only, ZERO published host ports
+    image: ghcr.io/maplibre/martin:v0.14.2
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    mem_limit: 256m
+    memswap_limit: 256m
+    mem_reservation: 64m
+    cpus: "0.5"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    command: ["--config", "/config/martin.yaml"]
+    environment:
+      DATABASE_URL: "postgres://openvietgis_runtime:${STAGING_RUNTIME_PASSWORD:?set STAGING_RUNTIME_PASSWORD}@postgres-staging:5432/${STAGING_POSTGRES_DB:-ovg_staging_064}"
+      RUST_LOG: "martin=info"
+    volumes:
+      - ./martin.yaml:/config/martin.yaml:ro
+    networks:
+      # CRITICAL: NEVER attach martin to staging_edge or declare `ports:`
+      - staging_internal
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  tile-acl-gateway:
+    # Fail-closed authorization gateway & scoped tile micro-cache (loopback-only staging ingress)
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    memswap_limit: 128m
+    mem_reservation: 32m
+    cpus: "0.25"
+    depends_on:
+      api-rust:
+        condition: service_healthy
+      martin:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${STAGING_EDGE_PORT:-18064}:8080"
+    volumes:
+      - ./tile-acl-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+      - staging_tile_cache:/var/cache/nginx/tiles
+    networks:
+      - staging_internal
+      - staging_edge
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

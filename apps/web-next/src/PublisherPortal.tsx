@@ -1,12 +1,12 @@
 import {uiConfirm} from "./ui-dialog";
 import {useEffect,useState} from "react";
-import {ApiClient,ApiError,loadCsrfToken,PARTNER_CAPABILITIES,safePartnerUrl,getDeveloperState,registerDeveloperPublisher,submitDeveloperRelease,withdrawDeveloperRelease,listMarketplaceReviews,decideMarketplaceReview,type DeveloperState,type DeveloperSubmission,type PublisherRegistration,type SignedSubmission,type SubmissionStatus,type PartnerCapability} from "@openvietgis/client-sdk";
+import {ApiError,loadCsrfToken,PARTNER_CAPABILITIES,safePartnerUrl,getDeveloperState,registerDeveloperPublisher,submitDeveloperRelease,withdrawDeveloperRelease,listMarketplaceReviews,decideMarketplaceReview,type DeveloperState,type DeveloperSubmission,type PublisherRegistration,type SignedSubmission,type SubmissionStatus,type PartnerCapability} from "@openvietgis/client-sdk";
 import {Brand} from "./Brand";
 import "./publisher-portal.css";
 import signingToolUrl from "../../../packages/plugin-sdk/marketplace_sign.py?url&no-inline";
 import partnerSdkUrl from "../../../packages/plugin-sdk/openvietgis-partner.js?url&no-inline";
 
-const client=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 const labels:Record<SubmissionStatus,string>={pending:"Chờ xét duyệt",approved:"Đã duyệt · Chờ ký catalog",rejected:"Từ chối",withdrawn:"Đã rút"};
 const capabilities:Record<PartnerCapability,string>={host_context:"Ngữ cảnh SDK",host_notice:"Thông báo",map_view:"Đọc vùng nhìn",map_selection:"Hình học đang chọn",map_navigate:"Điều hướng",map_overlay:"Lớp tạm",tool_register:"Thanh công cụ"};
 const errorText=(e:unknown)=>e instanceof ApiError?({401:"Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.",403:"Không có quyền thực hiện hoặc hồ sơ không thuộc tài khoản này.",404:"Không tìm thấy hồ sơ.",409:"Phiên bản hoặc hồ sơ đã tồn tại / đã thay đổi. Làm mới và kiểm tra.",422:"JSON, chữ ký hoặc manifest không hợp lệ. Hãy kiểm tra khóa, namespace và phiên bản."}[e.status]||"API HTTP "+e.status):e instanceof Error?e.message:"Không thể thực hiện.";

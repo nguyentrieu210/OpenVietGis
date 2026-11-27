@@ -1,11 +1,11 @@
 import React,{Suspense,useEffect,useState} from "react";
-import {ApiClient,ApiError,getIntegrationHubAdapterProfile,listAllowlistedHosts,registerAllowlistedHost,listExternalConnections,createExternalConnection,loadCsrfToken,type IntegrationAdapterProfileResponse,type ExternalConnection} from "@openvietgis/client-sdk";
+import {ApiError,getIntegrationHubAdapterProfile,listAllowlistedHosts,registerAllowlistedHost,listExternalConnections,createExternalConnection,loadCsrfToken,type IntegrationAdapterProfileResponse,type ExternalConnection} from "@openvietgis/client-sdk";
 import {BatchExport} from "./IntegrationCatalog";
 import {ImportPanel} from "./LiveApp";
-import {ExternalPreview} from "./legacy-workbench-bridge";
+import {ExternalPreview} from "./workbench-registry";
 
 // Spec 058: QGIS-style tools replacing the legacy Import/Export and External sources pages.
-const client=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 const reloadMap=()=>window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:"RELOAD"}));
 function Tabs<T extends string>({tabs,tab,set}:{tabs:[T,string][];tab:T;set:(t:T)=>void}){return <div className="tool-tabs" role="tablist">{tabs.map(([k,t])=><button key={k} type="button" role="tab" aria-selected={tab===k} className={tab===k?"active":""} onClick={()=>set(k)}>{t}</button>)}</div>}
 

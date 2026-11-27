@@ -1,0 +1,5333 @@
+{
+  "engine_id": "E17",
+  "slug": "e17",
+  "title": "Canonical web, desktop-ready shell",
+  "parent_refs": [
+    "R037",
+    "R038",
+    "R062"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e17-frontend-workspace.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Retain canonical React/MapLibre/Cesium web-next shell, client-sdk, and spatial-workspace; replace legacy apps/web router after parity verification.",
+  "summary": {
+    "http_routes": 0,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 111,
+    "client_sdk_endpoints": 89,
+    "connectors_and_adapters": 85,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 370,
+    "test_files": 199,
+    "test_ids": 438,
+    "classification_breakdown": {
+      "migrate": 0,
+      "retain": 251,
+      "replace": 119,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {},
+    "routes_with_project_access_guard": 0,
+    "routes_with_csrf_enforcement": 0,
+    "core_permissions_referenced": [],
+    "extension_permissions_referenced": [],
+    "frontend_auth_isolation": "SessionBoundary + CSRF header (x-openvietgis-csrf) + tenant/actor-scoped browser query & spatial cache isolation."
+  },
+  "http_routes": [],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "canonical_web_next_routes": [
+      {
+        "route": "/",
+        "mode": "Landing or LiveApp workspace",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/?qgis_connect=1",
+        "mode": "QgisConnectPage",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/?auth_complete=1",
+        "mode": "AuthComplete",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/?marketplace=1",
+        "mode": "MarketplacePage",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/?developer=1",
+        "mode": "PublisherPortal",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/offline-field/:organizationId/:projectId",
+        "mode": "OfflineFieldPage",
+        "source_file": "apps/web-next/src/main.tsx",
+        "classification": "retain"
+      },
+      {
+        "route": "/app/organizations/:organizationId",
+        "mode": "Organization workspace",
+        "source_file": "apps/web-next/src/route-compat.ts",
+        "classification": "retain"
+      },
+      {
+        "route": "/app/organizations/:organizationId/projects/:projectId",
+        "mode": "Project map workbench",
+        "source_file": "apps/web-next/src/route-compat.ts",
+        "classification": "retain"
+      },
+      {
+        "route": "/app/organizations/:organizationId/projects/:projectId/:tool",
+        "mode": "Project tool route (spatial|transfers|editing|queries|processing|cartography|platform-hub|cad|external|collab)",
+        "source_file": "apps/web-next/src/route-compat.ts",
+        "classification": "retain"
+      },
+      {
+        "route": "/app/account",
+        "mode": "Account view (alias: /identity)",
+        "source_file": "apps/web-next/src/route-compat.ts",
+        "classification": "retain"
+      },
+      {
+        "route": "/devui/*",
+        "mode": "Dev prefix compatibility wrapper",
+        "source_file": "apps/web-next/src/route-compat.ts",
+        "classification": "retain"
+      }
+    ],
+    "legacy_web_routes": [
+      {
+        "route": "/",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/landing",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/login",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/offline-field/:organizationId/:projectId",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/app",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/workspaces",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/spatial",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/map",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/transfers",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/editing",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/queries",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/processing",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/cartography",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/platform-hub",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/projects/:projectId/extensions/:extensionKey/*",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "organizations/:organizationId/membership",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "account",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "invitations/accept",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/workspaces",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/spatial",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/map",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/transfers",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/editing",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/queries",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/processing",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/cartography",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/platform-hub",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/projects/:projectId/extensions/:extensionKey/*",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/organizations/:organizationId/membership",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/identity",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      },
+      {
+        "route": "/invitations/accept",
+        "source_file": "apps/web/src/app/router.tsx",
+        "classification": "replace",
+        "notes": "Legacy apps/web shell superseded by canonical apps/web-next per R037/R062; verify redirect parity before approved_retire."
+      }
+    ],
+    "workbenches": {
+      "workbench_titles": {
+        "spatial": "Danh mục, nguồn dữ liệu & CRS",
+        "transfers": "Nhập / xuất dữ liệu GIS",
+        "editing": "Biên tập & lịch sử thay đổi",
+        "queries": "Truy vấn thuộc tính & không gian",
+        "processing": "Phân tích không gian & tác vụ",
+        "buffer": "Vùng đệm (Buffer)",
+        "clip": "Cắt lớp (Clip)",
+        "dissolve": "Gộp vùng (Dissolve)",
+        "cartography": "Ký hiệu, bố cục & in bản đồ",
+        "cad": "CAD / DXF & trắc địa COGO",
+        "external": "Nguồn ngoài & OGC",
+        "collab": "Cộng tác & phê duyệt",
+        "field": "Thực địa & đồng bộ ngoại tuyến",
+        "ops": "Vận hành & khả năng nền tảng"
+      },
+      "lazy_registry_exports": [
+        "Edit",
+        "Query",
+        "Process",
+        "Cartography",
+        "Hub",
+        "Field",
+        "CadImport",
+        "ExternalPreview"
+      ],
+      "classification": "retain"
+    },
+    "workbench_commands": [
+      {
+        "alias": "TERRAIN",
+        "label": "Địa hình kỹ thuật · DEM, TIN, đào đắp, dòng chảy",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "MODELER",
+        "label": "Processing Modeler · xây dựng quy trình GIS",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RASTER",
+        "label": "Phân tích GeoTIFF / raster",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "NDVI",
+        "label": "NDVI · thảm thực vật",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "NDWI",
+        "label": "NDWI · nước mặt",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "NDBI",
+        "label": "NDBI · khu xây dựng",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "HILLSHADE",
+        "label": "Đổ bóng địa hình DEM",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RASTERCALC",
+        "label": "Raster Calculator",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RGB",
+        "label": "Tổ hợp màu RGB / đa phổ",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RASTERCLIP",
+        "label": "Cắt raster theo ranh giới",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CHANGE",
+        "label": "Biến động raster hai thời điểm",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SLOPE",
+        "label": "Độ dốc địa hình",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ASPECT",
+        "label": "Hướng dốc địa hình",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "MOSAIC",
+        "label": "Ghép raster",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RESAMPLE",
+        "label": "Đổi độ phân giải raster",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZONAL",
+        "label": "Thống kê raster theo vùng",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CONTOUR",
+        "label": "Tạo đường đồng mức",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SENTINEL",
+        "label": "Sentinel-2 · tìm ảnh và phân tích đa phổ",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SURVEY",
+        "label": "Trắc địa · tọa độ phẳng VN-2000",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "TOOLBOX",
+        "label": "Hộp công cụ xử lý",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/LiveApp.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ADD",
+        "label": "Thêm dữ liệu",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LA",
+        "label": "Quản lý layer / nguồn / CRS",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LABEL",
+        "label": "Thiết lập nhãn layer",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LAYER",
+        "label": "Thuộc tính layer đang chọn",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "UP",
+        "label": "Đưa layer lên",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DOWN",
+        "label": "Đưa layer xuống",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "HIDE",
+        "label": "Ẩn layer đang chọn",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SHOW",
+        "label": "Hiện tất cả layer",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LAYERS",
+        "label": "Ẩn / hiện bảng layer",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ATTR",
+        "label": "Bảng thuộc tính",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZE",
+        "label": "Zoom toàn bản đồ",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZL",
+        "label": "Zoom layer đang chọn",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZS",
+        "label": "Zoom đối tượng đang chọn",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZI",
+        "label": "Phóng to",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZO",
+        "label": "Thu nhỏ",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ZOOM",
+        "label": "Đặt mức zoom",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "PAN",
+        "label": "Đến tọa độ",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CLR",
+        "label": "Bỏ chọn",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SAVE",
+        "label": "Lưu bản đồ",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "VIEW",
+        "label": "Lưu góc nhìn mặc định",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "HISTORY",
+        "label": "Lịch sử cấu hình bản đồ",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "RELOAD",
+        "label": "Tải lại dữ liệu",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "EDIT",
+        "label": "Bật chỉnh sửa lớp đang chọn",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "MOVE",
+        "label": "Di chuyển điểm đang chọn",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "POINT",
+        "label": "Vẽ điểm",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LINE",
+        "label": "Vẽ tuyến",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "POLYGON",
+        "label": "Vẽ vùng",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ERASE",
+        "label": "Xóa đối tượng (xác nhận)",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "UNDO",
+        "label": "Hoàn tác",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "REDO",
+        "label": "Làm lại",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "EDITHISTORY",
+        "label": "Lịch sử biên tập layer",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DIST",
+        "label": "Đo khoảng cách",
+        "group": "Đo đạc",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "AREA",
+        "label": "Đo diện tích",
+        "group": "Đo đạc",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "END",
+        "label": "Hoàn tất phép đo / bản vẽ",
+        "group": "Đo đạc",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ESC",
+        "label": "Hủy phép đo / bản vẽ",
+        "group": "Đo đạc",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "QUERY",
+        "label": "Truy vấn thuộc tính / không gian",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "BUFFER",
+        "label": "Vùng đệm Buffer",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CLIP",
+        "label": "Cắt lớp Clip",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DISSOLVE",
+        "label": "Gộp vùng Dissolve",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "JOBS",
+        "label": "Tác vụ xử lý / hủy / chạy lại",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DXF",
+        "label": "Nhập / xuất DXF",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "COGO",
+        "label": "Trắc địa COGO",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CRS",
+        "label": "Hệ tọa độ / VN-2000",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "IMPORT",
+        "label": "Nhập dữ liệu vector",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "EXPORT",
+        "label": "Xuất dữ liệu…",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "STYLE",
+        "label": "Ký hiệu / chú giải",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "PLOT",
+        "label": "Bố cục in PDF / PNG",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SNAP",
+        "label": "Bật / tắt snapping",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "WORKSPACE",
+        "label": "Tùy chỉnh workspace",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "BASE",
+        "label": "Bật / tắt bản đồ nền",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "WMS",
+        "label": "Nguồn ngoài WMS / WMTS / COG",
+        "group": "Khác",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "FIELD",
+        "label": "Thực địa / offline",
+        "group": "Khác",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "REVIEW",
+        "label": "Cộng tác / phê duyệt",
+        "group": "Khác",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "PLUGIN",
+        "label": "Quản lý plugin",
+        "group": "Khác",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "OPS",
+        "label": "Trạng thái nền tảng",
+        "group": "Khác",
+        "source_file": "apps/web-next/src/CoreMapTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "NEWLAYER",
+        "label": "Tạo layer rỗng",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/AdvancedEditor.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "VERTEX",
+        "label": "Chỉnh sửa đỉnh",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/AdvancedEditor.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SPLIT",
+        "label": "Cắt đối tượng",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/AdvancedEditor.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "MERGE",
+        "label": "Gộp đối tượng",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/AdvancedEditor.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "BULK",
+        "label": "Sửa thuộc tính hàng loạt",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/AdvancedEditor.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DELSEL",
+        "label": "Xóa các đối tượng đang chọn (một lớp)",
+        "group": "Biên tập",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "TOPOLOGY",
+        "label": "Kiểm tra topology",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SCHEMA",
+        "label": "Thêm / đổi tên trường",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "CALC",
+        "label": "Field Calculator",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "JOIN",
+        "label": "Ghép thuộc tính từ Excel / CSV",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "STATS",
+        "label": "Thống kê theo trường / nhóm",
+        "group": "Layer",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SELRECT",
+        "label": "Chọn vùng chữ nhật",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "SELPOLY",
+        "label": "Chọn theo polygon",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "DESELECT",
+        "label": "Bỏ chọn nhiều đối tượng",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "ORTHO",
+        "label": "Vẽ vuông góc",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "OSNAP",
+        "label": "Bắt đỉnh / cạnh",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "TILES",
+        "label": "Chế độ bản đồ vector tiles",
+        "group": "Bản đồ",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "LAYOUT",
+        "label": "Layout Designer · thiết kế bản đồ in",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "PRINTCLASSIC",
+        "label": "Print Layout · mẫu in cơ bản",
+        "group": "Xuất bản",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "classification": "retain"
+      },
+      {
+        "alias": "MOVESET",
+        "label": "Di chuyển nhiều đối tượng",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "move_batch",
+        "classification": "retain"
+      },
+      {
+        "alias": "COPY",
+        "label": "Sao chép",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "copy",
+        "classification": "retain"
+      },
+      {
+        "alias": "OFFSET",
+        "label": "Đường song song",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "offset",
+        "classification": "retain"
+      },
+      {
+        "alias": "ROTATE",
+        "label": "Xoay quanh trọng tâm",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "rotate",
+        "classification": "retain"
+      },
+      {
+        "alias": "SCALE",
+        "label": "Thay đổi kích thước",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "scale",
+        "classification": "retain"
+      },
+      {
+        "alias": "STRETCH",
+        "label": "Kéo giãn đỉnh tuyến",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "stretch",
+        "classification": "retain"
+      },
+      {
+        "alias": "EXTEND",
+        "label": "Kéo dài đoạn cuối",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "extend",
+        "classification": "retain"
+      },
+      {
+        "alias": "TRIM",
+        "label": "Cắt đoạn thừa",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "trim",
+        "classification": "retain"
+      },
+      {
+        "alias": "FILLET",
+        "label": "Bo góc",
+        "group": "CAD",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "fillet",
+        "classification": "retain"
+      },
+      {
+        "alias": "INTERSECTION",
+        "label": "Giao hình học",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "intersection",
+        "classification": "retain"
+      },
+      {
+        "alias": "UNION",
+        "label": "Hợp hình học",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "union",
+        "classification": "retain"
+      },
+      {
+        "alias": "DIFFERENCE",
+        "label": "Hiệu hình học",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "difference",
+        "classification": "retain"
+      },
+      {
+        "alias": "CENTROID",
+        "label": "Trọng tâm",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "centroid",
+        "classification": "retain"
+      },
+      {
+        "alias": "HULL",
+        "label": "Bao lồi",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "hull",
+        "classification": "retain"
+      },
+      {
+        "alias": "SIMPLIFY",
+        "label": "Đơn giản hình học",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "simplify",
+        "classification": "retain"
+      },
+      {
+        "alias": "NEAREST",
+        "label": "Đối tượng gần nhất",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "nearest",
+        "classification": "retain"
+      },
+      {
+        "alias": "SPJOIN",
+        "label": "Ghép không gian",
+        "group": "Phân tích",
+        "source_file": "apps/web-next/src/ProfessionalTools.tsx",
+        "dynamic_operation": "spatial_join",
+        "classification": "retain"
+      }
+    ],
+    "command_aliases": {
+      "L": "LINE",
+      "PL": "POLYGON",
+      "PO": "POINT",
+      "M": "MOVE",
+      "CO": "COPY",
+      "CP": "COPY",
+      "O": "OFFSET",
+      "RO": "ROTATE",
+      "SC": "SCALE",
+      "S": "STRETCH",
+      "TR": "TRIM",
+      "EX": "EXTEND",
+      "F": "FILLET",
+      "E": "ERASE",
+      "DI": "DIST",
+      "AA": "AREA",
+      "P": "PAN",
+      "Z": "ZOOM",
+      "U": "UNDO",
+      "OS": "OSNAP",
+      "QSELECT": "SELRECT",
+      "RE": "RELOAD"
+    },
+    "hotkeys": [
+      {
+        "combo": "A",
+        "label": "Bàn tay ↔ con trỏ chọn",
+        "action": "@PAN_TOGGLE"
+      },
+      {
+        "combo": "Ctrl+S",
+        "label": "Lưu bản đồ",
+        "action": "SAVE"
+      },
+      {
+        "combo": "Ctrl+L",
+        "label": "Quản lý nguồn dữ liệu",
+        "action": "@DSM"
+      },
+      {
+        "combo": "F6",
+        "label": "Bảng thuộc tính",
+        "action": "ATTR"
+      },
+      {
+        "combo": "F7",
+        "label": "Thuộc tính / ký hiệu lớp",
+        "action": "LAYER"
+      },
+      {
+        "combo": "Ctrl+1",
+        "label": "Ẩn / hiện khung Lớp",
+        "action": "LAYERS"
+      },
+      {
+        "combo": "Ctrl+=",
+        "label": "Phóng to",
+        "action": "ZI"
+      },
+      {
+        "combo": "Ctrl+-",
+        "label": "Thu nhỏ",
+        "action": "ZO"
+      },
+      {
+        "combo": "Ctrl+Shift+F",
+        "label": "Toàn bản đồ",
+        "action": "ZE"
+      },
+      {
+        "combo": "Ctrl+J",
+        "label": "Phóng tới đối tượng đang chọn",
+        "action": "ZS"
+      },
+      {
+        "combo": "Ctrl+Alt+A",
+        "label": "Bỏ chọn tất cả",
+        "action": "DESELECT"
+      },
+      {
+        "combo": "Ctrl+.",
+        "label": "Thêm đối tượng (bật chỉnh sửa)",
+        "action": "EDIT"
+      },
+      {
+        "combo": "Ctrl+Shift+M",
+        "label": "Đo khoảng cách",
+        "action": "DIST"
+      },
+      {
+        "combo": "Ctrl+Shift+J",
+        "label": "Đo diện tích",
+        "action": "AREA"
+      },
+      {
+        "combo": "Delete",
+        "label": "Xóa đối tượng đang chọn",
+        "action": "@DELETE"
+      },
+      {
+        "combo": "Shift+?",
+        "label": "Bảng phím tắt",
+        "action": "@HELP"
+      },
+      {
+        "combo": "/",
+        "label": "Chat nhanh trên bản đồ (hiện cạnh con trỏ)",
+        "action": "@CHAT"
+      },
+      {
+        "combo": "Giữ Space",
+        "label": "Giữ Space và rê chuột để di chuyển bản đồ",
+        "action": ""
+      },
+      {
+        "combo": "Enter",
+        "label": "Vào ô lệnh · hoàn tất khi đang vẽ/đo",
+        "action": ""
+      },
+      {
+        "combo": "Esc",
+        "label": "Hủy thao tác",
+        "action": ""
+      },
+      {
+        "combo": "Ctrl+Z / Ctrl+Shift+Z",
+        "label": "Hoàn tác / làm lại",
+        "action": ""
+      }
+    ],
+    "client_sdk": {
+      "classification": "retain",
+      "modules": [
+        {
+          "file": "packages/client-sdk/src/auth.ts",
+          "exports": [
+            "getCurrentUser",
+            "listIdentityLinks",
+            "listIdentityProviders",
+            "loadCsrfToken",
+            "logout",
+            "unlinkIdentity"
+          ],
+          "api_endpoints": [
+            "/api/v1/auth/csrf",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/providers",
+            "/api/v1/me",
+            "/api/v1/me/identity-links"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/bootstrap.ts",
+          "exports": [
+            "getBootstrapStatus",
+            "initializeInstallation"
+          ],
+          "api_endpoints": [
+            "/api/v1/bootstrap/initialize",
+            "/api/v1/bootstrap/status"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/external-plugins.ts",
+          "exports": [
+            "PARTNER_CAPABILITIES",
+            "installMarketplaceRelease",
+            "listMarketplace",
+            "listPartnerContributions",
+            "partnerPanel",
+            "registerPartnerPlugin",
+            "safePartnerUrl",
+            "savePartnerContributions"
+          ],
+          "api_endpoints": [
+            "/api/v1/marketplace/catalog",
+            "/api/v1/organizations/{param}/extensions/manifests",
+            "/api/v1/organizations/{param}/marketplace/install/{param}/{param}/{param}",
+            "/api/v1/organizations/{param}/projects/{param}/extensions/partner-contributions",
+            "/api/v1/organizations/{param}/projects/{param}/extensions/partner-contributions/{param}"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/health.ts",
+          "exports": [
+            "getLiveness",
+            "getReadiness"
+          ],
+          "api_endpoints": [
+            "/api/v1/health/live",
+            "/api/v1/health/ready"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/http.ts",
+          "exports": [
+            "ApiClient",
+            "ApiError",
+            "projectApiPath"
+          ],
+          "api_endpoints": [
+            "/api/v1/auth/csrf"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/index.ts",
+          "exports": [],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/integration-hub.ts",
+          "exports": [
+            "activateQgisBinding",
+            "buildIntegrationLayerExportPath",
+            "changeQgisBindingDraftLifecycle",
+            "createQgisBindingDraft",
+            "downloadIntegrationLayerExport",
+            "getIntegrationExportScopes",
+            "getIntegrationHubAdapterProfile",
+            "getIntegrationHubCatalog",
+            "issueBindingPairingToken",
+            "listBindingConflicts",
+            "listBindingPairingTokens",
+            "listIntegrationBindingDrafts",
+            "listQgisBindingCandidates",
+            "previewQgisGpkgSync",
+            "pushQgisGpkgSync",
+            "resolveBindingConflict",
+            "revokeBindingPairingToken"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/invitations.ts",
+          "exports": [
+            "acceptInvitation",
+            "createInvitation",
+            "emailInvitation",
+            "revokeInvitation"
+          ],
+          "api_endpoints": [
+            "/api/v1/invitations/accept",
+            "/api/v1/organizations/{param}/invitations",
+            "/api/v1/organizations/{param}/invitations/email",
+            "/api/v1/organizations/{param}/invitations/{param}/revoke"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/managed-sync.ts",
+          "exports": [
+            "listManagedSessions",
+            "revokeManagedSession",
+            "sendDesktopCommand"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/maps.ts",
+          "exports": [
+            "MapApiError",
+            "getMap",
+            "getMapDisplayExtent",
+            "getMapOperation",
+            "getMapViewport",
+            "listMapHistory",
+            "saveMap"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/marketplace-developers.ts",
+          "exports": [
+            "decideMarketplaceReview",
+            "getDeveloperState",
+            "listMarketplaceReviews",
+            "registerDeveloperPublisher",
+            "submitDeveloperRelease",
+            "withdrawDeveloperRelease"
+          ],
+          "api_endpoints": [
+            "/api/v1/me"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/organizations.ts",
+          "exports": [
+            "createOrganization",
+            "createResourceGrant",
+            "getEffectivePermissions",
+            "getOrganization",
+            "listMyOrganizations",
+            "listOrganizationMembers",
+            "listResourceGrants",
+            "revokeResourceGrant",
+            "transferOrganizationOwnership",
+            "updateOrganization",
+            "updateOrganizationMembership"
+          ],
+          "api_endpoints": [
+            "/api/v1/me/organizations",
+            "/api/v1/members",
+            "/api/v1/members/{param}, { method: ",
+            "/api/v1/organizations"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/platform.ts",
+          "exports": [
+            "activateExtension",
+            "activateProjectExtension",
+            "addReviewComment",
+            "cancelProcessingJob",
+            "cogoTraverse",
+            "commitChangeset",
+            "createChangeReview",
+            "createExtensionRecord",
+            "createExternalConnection",
+            "createOfflinePackage",
+            "createPrintLayout",
+            "createProcessingJob",
+            "createSavedQuery",
+            "deactivateExtension",
+            "decideChangeReview",
+            "disableProjectExtension",
+            "executeLayerQuery",
+            "exportExtensionBundle",
+            "exportPrintLayout",
+            "getChangeset",
+            "getExtensionActivationHistory",
+            "getExtensionRecordHistory",
+            "getOpsHealthReady",
+            "getOpsReleaseCapabilities",
+            "getOrgEntitlement",
+            "importExtensionBundle",
+            "importInspectedDxf",
+            "inspectDxf",
+            "listAllowlistedHosts",
+            "listCadConversions",
+            "listChangeReviews",
+            "listChangesets",
+            "listExtensionManifests",
+            "listExtensionRecords",
+            "listExternalConnections",
+            "listOfficialExtensions",
+            "listOfflinePackages",
+            "listPrintExports",
+            "listPrintLayouts",
+            "listProcessingAlgorithms",
+            "listProcessingJobs",
+            "listProjectActivations",
+            "listProjectActivities",
+            "listReviewComments",
+            "listSavedQueries",
+            "offlinePackageDownloadUrl",
+            "previewExternalProvider",
+            "previewExternalProviderViewport",
+            "previewPrintExport",
+            "printExportDownloadUrl",
+            "registerAllowlistedHost",
+            "registerOfficialExtension",
+            "retryProcessingJob",
+            "revertChangeset",
+            "syncOfflineOutbox",
+            "transitionExtension",
+            "updateExtensionRecord",
+            "upsertLayerStyle"
+          ],
+          "api_endpoints": [
+            "/api/v1/ops/health/ready",
+            "/api/v1/ops/release-capabilities",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/conversions",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/import",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/inspect",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/traverse",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/exports",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layers/{param}/style",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts/{param}/exports",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts/{param}/exports/preview",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{param}",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{param}/revert",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{param}/comments",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{param}/decide",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/deactivate",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/history",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/transition",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-export",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-import",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{param}",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{param}/history",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{param}",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{param}/disable",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{param}/preview",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{param}/viewport",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{param}/sync",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{param}/query",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/algorithms",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs/{param}/cancel",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs/{param}/retry",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{param}/changesets",
+            "/api/v1/organizations/{param}/extensions/manifests",
+            "/api/v1/organizations/{param}/extensions/official",
+            "/api/v1/organizations/{param}/extensions/official/{param}/register",
+            "/api/v1/organizations/{param}/external-sources/allowlist",
+            "/api/v1/organizations/{param}/ops/entitlement"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/projects.ts",
+          "exports": [
+            "createProject",
+            "getProject",
+            "listProjects",
+            "updateProject"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/service-principals.ts",
+          "exports": [
+            "createServicePrincipal",
+            "issueServiceCredential",
+            "listServiceCredentials",
+            "listServicePrincipals",
+            "revokeServiceCredential",
+            "revokeServicePrincipal"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/spatial.ts",
+          "exports": [
+            "SpatialApiError",
+            "createSpatialLayer",
+            "getSpatialFeature",
+            "getSpatialLayer",
+            "getSpatialSource",
+            "listSpatialCatalogChanges",
+            "listSpatialCrsProfiles",
+            "listSpatialLayers",
+            "listSpatialSources",
+            "readSpatialFeatures",
+            "registerSpatialSource",
+            "renameSpatialLayer",
+            "retireSpatialLayer",
+            "retireSpatialSource",
+            "updateSpatialSource"
+          ],
+          "api_endpoints": [
+            "/api/v1/organizations/{param}/projects/{param}/spatial/crs-profiles"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/transfers.ts",
+          "exports": [
+            "TransferApiError",
+            "artifactDownloadUrl",
+            "cancelTransferJob",
+            "confirmExport",
+            "confirmImport",
+            "downloadDerivedArtifact",
+            "getDerivedArtifact",
+            "getTransferJob",
+            "inspectImportAsset",
+            "listTransferJobs",
+            "previewExport",
+            "retryTransferJob",
+            "uploadImportAsset"
+          ],
+          "api_endpoints": [
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{param}",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{param}/download",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/confirm",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/preview",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/confirm",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/inspect",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/upload",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}/cancel",
+            "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}/retry"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/client-sdk/src/workspaces.ts",
+          "exports": [
+            "createWorkspace",
+            "listWorkspaces",
+            "updateWorkspace"
+          ],
+          "api_endpoints": [],
+          "classification": "retain"
+        }
+      ],
+      "generated_openapi_clients": [
+        "packages/client-sdk/src/generated/auth-session.ts",
+        "packages/client-sdk/src/generated/import-export.ts",
+        "packages/client-sdk/src/generated/map-workspace.ts",
+        "packages/client-sdk/src/generated/service-admin.ts",
+        "packages/client-sdk/src/generated/spatial-catalog.ts",
+        "packages/client-sdk/src/generated/tenant-core.ts"
+      ],
+      "unique_sdk_api_paths": [
+        "/api/v1/auth/csrf",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/providers",
+        "/api/v1/bootstrap/initialize",
+        "/api/v1/bootstrap/status",
+        "/api/v1/health/live",
+        "/api/v1/health/ready",
+        "/api/v1/invitations/accept",
+        "/api/v1/marketplace/catalog",
+        "/api/v1/me",
+        "/api/v1/me/identity-links",
+        "/api/v1/me/organizations",
+        "/api/v1/members",
+        "/api/v1/members/{param}, { method: ",
+        "/api/v1/ops/health/ready",
+        "/api/v1/ops/release-capabilities",
+        "/api/v1/organizations",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{param}",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/artifacts/{param}/download",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/conversions",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/import",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/inspect",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cad/precision/traverse",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/exports",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layers/{param}/style",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts/{param}/exports",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/cartography/layouts/{param}/exports/preview",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{param}",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/changesets/{param}/revert",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{param}/comments",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/collaboration/reviews/{param}/decide",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/confirm",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/exports/preview",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/deactivate",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/history",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{param}/transition",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-export",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-import",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{param}",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{param}/history",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{param}",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{param}/disable",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{param}/preview",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/external-sources/{param}/viewport",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/field/packages/{param}/sync",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/confirm",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/inspect",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/imports/upload",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}/cancel",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/jobs/{param}/retry",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/layers/{param}/query",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/algorithms",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs/{param}/cancel",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/processing/jobs/{param}/retry",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/saved-queries",
+        "/api/v1/organizations/{organization_id}/projects/{project_id}/sources/{param}/changesets",
+        "/api/v1/organizations/{param}/extensions/manifests",
+        "/api/v1/organizations/{param}/extensions/official",
+        "/api/v1/organizations/{param}/extensions/official/{param}/register",
+        "/api/v1/organizations/{param}/external-sources/allowlist",
+        "/api/v1/organizations/{param}/invitations",
+        "/api/v1/organizations/{param}/invitations/email",
+        "/api/v1/organizations/{param}/invitations/{param}/revoke",
+        "/api/v1/organizations/{param}/marketplace/install/{param}/{param}/{param}",
+        "/api/v1/organizations/{param}/ops/entitlement",
+        "/api/v1/organizations/{param}/projects/{param}/extensions/partner-contributions",
+        "/api/v1/organizations/{param}/projects/{param}/extensions/partner-contributions/{param}",
+        "/api/v1/organizations/{param}/projects/{param}/spatial/crs-profiles"
+      ],
+      "unique_web_next_direct_api_paths": [
+        "/api/v1/auth/login/",
+        "/api/v1/auth/login/keycloak",
+        "/api/v1/invitations/check",
+        "/api/v1/me/avatar",
+        "/api/v1/members",
+        "/api/v1/messages",
+        "/api/v1/organizations/",
+        "/api/v1/organizations/{param}/chat/people/{param}/avatar",
+        "/api/v1/organizations/{param}/projects/{param}/access/mine",
+        "/api/v1/organizations/{param}/projects/{param}/field/packages/{param}",
+        "/api/v1/organizations/{param}/projects/{param}/raster/analyze",
+        "/api/v1/organizations/{param}/projects/{param}/raster/layers/{param}/terrain-preview",
+        "/api/v1/organizations/{param}/projects/{param}{param}",
+        "/api/v1{param}/events"
+      ]
+    },
+    "spatial_workspace": {
+      "classification": "retain",
+      "modules": [
+        {
+          "file": "packages/spatial-workspace/src/ModeSwitch.tsx",
+          "exports": [
+            "SpatialModeSwitch"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/cad-editor.ts",
+          "exports": [
+            "CadEditorHandle",
+            "CadFormat",
+            "cadRelayOrigin",
+            "isCadHandle",
+            "openCadEditor"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/cad-embed.ts",
+          "exports": [
+            "CadReadOnlyInput",
+            "prepareCadReadOnly"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/cad-georeference.ts",
+          "exports": [
+            "ControlPoint",
+            "DrawingUnit",
+            "GeorefInput",
+            "GeorefPreview",
+            "Point2",
+            "fitCadGeoreference",
+            "projectCadPoint"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/cesium3d.ts",
+          "exports": [
+            "LegacyImagery",
+            "ProjectImagery",
+            "loadCesium",
+            "prepareCesium3d",
+            "prepareCesiumTiles3d"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/coordinator.ts",
+          "exports": [
+            "ModeCoordinator",
+            "ModeHost",
+            "PreparedEngine"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/footprint3d.ts",
+          "exports": [
+            "Footprint",
+            "FootprintView",
+            "footprint3d"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/gltf.ts",
+          "exports": [
+            "MODEL_MAX_BYTES",
+            "StaticModel",
+            "parseStaticModel"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/maplibre3d.ts",
+          "exports": [
+            "GeographicCamera",
+            "NamedModel",
+            "SelectableFootprintEngine",
+            "SharedVector",
+            "prepareFootprint3d"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/mesh-layer.ts",
+          "exports": [
+            "InteractiveMeshLayer",
+            "PlacedModel",
+            "SceneMesh",
+            "customMeshLayer",
+            "modelMesh",
+            "terrainMesh"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/mesh-picking.ts",
+          "exports": [
+            "MAX_SCENE_MODELS",
+            "MAX_SCENE_TRIANGLES",
+            "MeshHit",
+            "checkSceneBudget",
+            "meshDepth",
+            "meshHit"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/renderer3d.ts",
+          "exports": [
+            "GeographicCamera",
+            "SelectableFootprintEngine",
+            "load3dMapRuntime"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/session.ts",
+          "exports": [
+            "EditBlockers",
+            "ModeCapability",
+            "ModeLoadRequest",
+            "ModeResult",
+            "ProjectScope",
+            "SpatialMode",
+            "WorkspaceSession",
+            "createSession",
+            "finishMode",
+            "requestMode",
+            "resetScope"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/snap-math.ts",
+          "exports": [
+            "ScreenSnap",
+            "Segment",
+            "SnapKind",
+            "SnapMode",
+            "XY",
+            "findScreenSnap",
+            "snapLabel"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/survey-math.ts",
+          "exports": [
+            "Leg",
+            "XY",
+            "bowditch",
+            "inverse",
+            "polygonMetrics",
+            "traverse",
+            "validPoint"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/terrain-analysis.ts",
+          "exports": [
+            "AnalysisMode",
+            "ElevationPoint",
+            "HydraulicOptions",
+            "analysisFeatures",
+            "buildTIN",
+            "conditionedFlow",
+            "conditionedFlowFeatures",
+            "connectedInundation",
+            "contours",
+            "cutFill",
+            "differenceTerrain",
+            "elevationPoints",
+            "flowD8",
+            "gridGeoTiff",
+            "interpolateTIN",
+            "simulateSurfaceFlow",
+            "surfaceFlowFeatures",
+            "terrainDerivatives"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/terrain.ts",
+          "exports": [
+            "TerrainGrid",
+            "WEB_WORLD",
+            "geographic3857",
+            "project3857",
+            "sampleTerrain",
+            "terrainTriangles",
+            "validateTerrain"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/tiles3d.ts",
+          "exports": [
+            "SelectableTileEngine",
+            "TileHit",
+            "prepareTiles3d",
+            "tileMesh"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/tileset.ts",
+          "exports": [
+            "Region",
+            "TILE_LIMIT",
+            "Tile",
+            "View",
+            "ecefToGeographic",
+            "parseTileset",
+            "selectTiles",
+            "tileVertex"
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/spatial-workspace/src/tin-breaklines.ts",
+          "exports": [
+            "BreaklineEdge",
+            "constrainTIN",
+            "edgeKey"
+          ],
+          "classification": "retain"
+        }
+      ]
+    }
+  },
+  "source_files": [
+    {
+      "path": "apps/web-next/cloud-google-preflight.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/domain-google-preflight.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/index.html",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/org-chat-test-harness.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/package.json",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/author-original.webp",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/author-portrait.webp",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/core-founder-poster-v1.webp",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/donate-qr.png",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/favicon.ico",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/manifest.webmanifest",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/ovg-icon-192.png",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/ovg-icon-512.png",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/brand/ovg-mark.png",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/cad/blank-r2018.dxf",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-2f6cbcc.zip",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-2f6cbcc.zip.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-a2afa72.zip",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-a2afa72.zip.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-f17a7e9.zip",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0-f17a7e9.zip.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0.zip",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/downloads/openvietgis_connector-1.0.0.zip.sha256",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/public/licenses/terra-draw-1.40.0.txt",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/scripts/build-offline-shell.mjs",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/AccessRules.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/AccountMenu.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/AdvancedEditor.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/AiCopilotPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/AppMarket.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/Basemaps.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/Brand.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CadDraftExport.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CadDraftImport.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CadEditorPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CadGeorefPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CadTool.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CatalogManager.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CoreCommandBar.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CoreMapTools.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/CoreWorkbench.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/DeveloperPortal.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/DockLayout.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/DsmPanes.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/EditHistoryDetails.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/EmojiPicker.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ExcelJoin.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ExportDialog.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ExternalPluginHub.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/FeatureInfo.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/GisIcon.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/HouseQrLink.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/IntegrationCatalog.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/InviteFlow.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/Landing.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LandingSwarm.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LandingSwarmStandalone.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LayerProperties.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LayoutDesigner.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LayoutRender.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LiveApp.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/LivePresence.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/MapChat.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/MarketplacePage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ModelVault.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/NativeDemWindow.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/NativeDxfPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/OrgChat.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/PrintDesigner.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ProcessingModeler.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ProcessingToolbox.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ProfessionalTiles.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ProfessionalTools.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ProjectRaster.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/PublisherPortal.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/QgisBindingManager.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/QgisConnectPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/QgisWorkspace.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/RasterReportWorkbench.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/RasterWorkbench.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SavedScenePanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SentinelWorkbench.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SnapMath.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/Spatial3DSettings.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialCache.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialCacheStorage.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialCacheWorker.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialIncremental.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialPerformance.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialSyncCore.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SpatialWorkspace.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/Splitter.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SurveyMath.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SurveyTerrain.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/SurveyWorkbench.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TaskReminder.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TeamAccess.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TeamCollaboration.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TerraDraftValidation.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TerrainEngineering.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TileFeaturePanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TilesetPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/TransferTool.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/WorkspacePicker.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/access-rules.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/advanced-editor.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/advanced-actions.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/first-party.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/first-party.d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/first-party.js",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/layout-export.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ai-copilot/workspace-actions.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/basemap.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/brand.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/core-toolkit.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/crs-display.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/desktop-dialog.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/developer-portal.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/dsm-sources.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/export-formats.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/external-plugin-hub.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/feature-info.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/geom-measure.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/graduated.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/header-status.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/hotkeys.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/integration-catalog.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/label-expr.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/landing.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/layer-properties.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/layer-tree.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/layout-designer.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/live-presence.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/live.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/main.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/map-surface.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/marketplace-page.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/native-dxf.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/official-module-registry.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/org-chat.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/partner-map-bridge.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/processing-modeler.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/processing-toolbox.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/professional.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/project-tasks.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/publisher-portal.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-donate-inline.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-founders.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-home-fidelity.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-landing.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-motion.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-poster-hero.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-theme.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/qgis-workspace.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/raster-workbench.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/route-compat.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/sentinel-month.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/spatial-workspace.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/studio-contract.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/studio-shell.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/studio-ui.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/style-io.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/style.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/survey.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/swarm-landing.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/team-access.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/team-collaboration.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/terrain-flow.worker.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/ui-dialog.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/useFeatureLeases.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbench-contract.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbench-registry.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/app/api.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/app/protected-query.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/app/session/SessionBoundary.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/app/session/return-destination.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/auth/FreshAccount.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/OfflineFieldPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/OfflineMap.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/offline-store.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/offline/offline.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/CadImportPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/CartographyWorkbenchPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/CollaborationWorkbenchPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/EditingWorkbenchPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/ExtensionWorkbenchPanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/ExternalSourcePreview.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/MicroStationBridgePanel.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/NativeGeometryEditor.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/PlatformHubPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/ProjectToolbar.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/QueryWorkbenchPage.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/editing-geometry.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/platform-release-state.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/platform.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/features/platform/query-filters.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workbenches/ui/tokens.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/workspace-picker.css",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/src/zip.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/tsconfig.json",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web-next/vite.config.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "apps/web/index.html",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/package.json",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/App.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/api.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/protected-query.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/query.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/route-contract.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/session/SessionBoundary.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/session/return-destination.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/session/session-state.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/AppNavigation.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/AppShell.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/Breadcrumbs.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/CommandPalette.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/ThemeToggle.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/app-shell.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/command-registry.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/navigation-model.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/app/shell/shell-preference.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/AccountMenu.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/FreshAccount.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/IdentityPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/LoginPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/LoginPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/account-menu-state.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/account-menu.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/account-page.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/auth/auth.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/dashboard/AppDashboard.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/dashboard/dashboard.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/extensions/ActiveModuleLinks.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/extensions/ExtensionModulePage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/extensions/registry.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/extensions/types.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/invitations/InvitationAcceptPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/invitations/InvitationIssuePanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/invitations/invitation.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/landing/LandingPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/AddDataDialog.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/AttributeTable.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/CommandBar.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/FeatureInspector.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/LayerTree.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapActivityRail.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapCommandLine.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapCrsPicker.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapRibbon.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapToolDock.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/MapWorkspace.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/SaveStateIndicator.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/TechnicalDetailsDrawer.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/WorkspaceLayout.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/accessibility-summary.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/add-data.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/commands.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/engine.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/feature-presentation.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/layer-view.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/map-engine-loader.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/map-initialization.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/map.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/maplibre-engine.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/render-frame.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/responsive-mode.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/save-indicator.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/save.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/technical-details.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/unsaved-navigation.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/workspace-layout.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/map/workspace.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/membership/MembershipPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/membership/ResourceScopeFields.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/offline/OfflineFieldPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/offline/OfflineMap.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/offline/offline-store.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/offline/offline.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/organizations/BootstrapPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/organizations/OrganizationHome.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/organizations/organization-home.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/CadImportPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/CartographyWorkbenchPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/CollaborationWorkbenchPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/EditingWorkbenchPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/ExtensionWorkbenchPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/ExternalSourcePreview.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/MicroStationBridgePanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/NativeGeometryEditor.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/PlatformHubPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/ProcessingWorkbenchPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/ProjectToolbar.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/QueryWorkbenchPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/editing-geometry.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/platform-release-state.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/platform.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/platform/query-filters.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/preview/FrontendPreviewPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/preview/frontend-preview.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/projects/ProjectPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/CatalogHistoryPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/CrsRegistryPanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/FeatureInspector.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/SpatialCatalogPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/catalog-history.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/crs-profiles.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/spatial/feature-inspector.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/transfers/ImportExportPage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/transfers/transfers.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/features/workspaces/WorkspacePage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/main.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/global.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/primitives/Button.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/primitives/IconButton.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/primitives/ResizablePanel.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/primitives/StatusMessage.tsx",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/tailwind.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/src/ui/tokens.css",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "classification": "replace"
+    },
+    {
+      "path": "apps/web/vite.config.ts",
+      "classification": "replace"
+    },
+    {
+      "path": "packages/client-sdk/package.json",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/auth.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/bootstrap.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/external-plugins.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/auth-session.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/import-export.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/map-workspace.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/service-admin.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/spatial-catalog.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/generated/tenant-core.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/health.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/http.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/index.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/integration-hub.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/invitations.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/managed-sync.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/maps.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/marketplace-developers.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/organizations.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/platform.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/projects.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/service-principals.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/spatial.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/transfers.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/src/workspaces.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/client-sdk/tsconfig.json",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/package.json",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/ModeSwitch.tsx",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/cad-editor.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/cad-embed.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/cad-georeference.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/cesium3d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/coordinator.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/footprint3d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/gltf.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/maplibre3d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/mesh-layer.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/mesh-picking.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/mode-switch.css",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/renderer3d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/session.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/snap-math.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/survey-math.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/terrain-analysis.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/terrain.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/tiles3d.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/tileset.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/src/tin-breaklines.ts",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/spatial-workspace/tsconfig.json",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/web-next/account-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/account-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/activation-migration-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/activation-migration-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/advanced-editor-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/advanced-editor-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/ai-copilot-integration-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/ai-copilot-integration-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/auth-modal-style-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/auth-modal-style-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/auth-theme-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/auth-theme-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/basemap-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/basemap-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/boundary-nav-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/boundary-nav-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/brand-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/brand-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cad-editor-georef-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cad-editor-georef-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cad-spatial-linkage-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cad-spatial-linkage-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cesium-tiles-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cesium-tiles-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cloud-google-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cloud-google-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cloud-modal-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cloud-modal-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/cloud-public-modal-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/cloud-public-modal-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/command-floating-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/command-floating-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/core-plugin-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/core-plugin-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/core-toolkit-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/core-toolkit-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/crs-display.test.mjs",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web-next/crs-display.test.mjs::UTM 48N: central meridian, meridian arc and symmetry",
+        "apps/web-next/crs-display.test.mjs::Web Mercator origin and geographic pass-through",
+        "apps/web-next/crs-display.test.mjs::VN-2000 TM-3 differs from WGS 84 TM-3 by the datum shift only (tens to a few hundred metres)"
+      ]
+    },
+    {
+      "file": "apps/web-next/desktop-dialog-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/desktop-dialog-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/developer-portal-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/developer-portal-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/domain-switch-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/domain-switch-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/dsm-sources.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/dsm-sources.test.mjs::csv with quotes, semicolons and decimal commas becomes points"
+      ]
+    },
+    {
+      "file": "apps/web-next/earth-navigation-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/earth-navigation-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/earth-orbit-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/earth-orbit-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/export-formats.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/export-formats.test.mjs::writers keep geometry and escape text"
+      ]
+    },
+    {
+      "file": "apps/web-next/external-plugin-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/external-plugin-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/geom-measure.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/geom-measure.test.mjs::1 km x 1 km square near the equator ≈ 1 000 000 m²",
+        "apps/web-next/geom-measure.test.mjs::line length and point"
+      ]
+    },
+    {
+      "file": "apps/web-next/graduated.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/graduated.test.mjs::equal and quantile breaks, class lookup and colour ramp"
+      ]
+    },
+    {
+      "file": "apps/web-next/hotkeys.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/hotkeys.test.mjs::combos map to QGIS-style shortcuts"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-address-batch-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-address-batch-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-address-suggestion-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-address-suggestion-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-address-verification-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-address-verification-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-audit-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-audit-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-batch-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-batch-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-catalog-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-catalog-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-correction-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-correction-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-geometry-review-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-geometry-review-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-numbering-audit-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-numbering-audit-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-prefix-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-prefix-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-proposal-packet-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-proposal-packet-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-qr-navigation-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-qr-navigation-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-recovery-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-recovery-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-survey-review-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-survey-review-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-topology-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-topology-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-verified-link-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-verified-link-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-numbering-workbench-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-numbering-workbench-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/house-qr-link-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/house-qr-link-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/integration-hub-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/integration-hub-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/invite-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/invite-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/label-expr.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/label-expr.test.mjs::label expression functions"
+      ]
+    },
+    {
+      "file": "apps/web-next/landing-google-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/landing-google-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/landing-modal-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/landing-modal-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/landing-swarm-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/landing-swarm-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/landing-v3-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/landing-v3-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/layer-properties-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/layer-properties-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/layer-tree.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/layer-tree.test.mjs::groups nest by path and sit at their first layer's position",
+        "apps/web-next/layer-tree.test.mjs::rename moves sub-groups; ungroup goes one level up"
+      ]
+    },
+    {
+      "file": "apps/web-next/layout-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/layout-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/live-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/live-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/logout-switch-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/logout-switch-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/map-progressive-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/map-progressive-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/model-vault-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/model-vault-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/modeler-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/modeler-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/multi-model-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/multi-model-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/native-dxf-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/native-dxf-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/native-dxf.test.mjs",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web-next/native-dxf.test.mjs::create real R12 line, circle, point and edit coordinates without changing other groups",
+        "apps/web-next/native-dxf.test.mjs::existing imported synthetic CAD is viewable, never silently rewritten",
+        "apps/web-next/native-dxf.test.mjs::unsafe or unsupported drawings fail closed"
+      ]
+    },
+    {
+      "file": "apps/web-next/opencad-production-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/opencad-production-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/org-chat-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/org-chat-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/partner-contributions-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/partner-contributions-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/partner-gis-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/partner-gis-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/partner-platform-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/partner-platform-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/professional-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/professional-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/qgis-workspace-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/qgis-workspace-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/renderer-boundary-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/renderer-boundary-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/run-canonical-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/run-canonical-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/sample-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/sample-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/saved-scene-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/saved-scene-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/single-frontend-processing-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/single-frontend-processing-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/single-frontend-route-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/single-frontend-route-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/snap-math-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/snap-math-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/space-layout-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/space-layout-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/spatial-cache-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/spatial-cache-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/spatial-mode-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/spatial-mode-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/spatial-performance.test.mjs",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/spatial-performance.test.mjs::bounded anonymous timings and percentiles"
+      ]
+    },
+    {
+      "file": "apps/web-next/spatial-sync-core.test.mjs",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web-next/spatial-sync-core.test.mjs::exact revision chain covers missed events in order",
+        "apps/web-next/spatial-sync-core.test.mjs::incomplete, oversized, reverted and cyclic chains require full layer reload",
+        "apps/web-next/spatial-sync-core.test.mjs::initial and incremental reads respect concurrency bound",
+        "apps/web-next/spatial-sync-core.test.mjs::one selection / edit among 35000 points produces one render update"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/route-compat.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/src/route-compat.test.ts::ignores unknown and prototype names",
+        "apps/web-next/src/route-compat.test.ts::rejects malformed encoding"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/app/protected-query-cache.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/src/workbenches/app/protected-query-cache.test.ts::does not expose a warm successful payload while a real mount refetch is unsettled or denied",
+        "apps/web-next/src/workbenches/app/protected-query-cache.test.ts::does not expose warm data during a paused refetch and only restores a new settled payload"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/app/protected-query.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web-next/src/workbenches/app/protected-query.test.ts::renders only a successful, settled read",
+        "apps/web-next/src/workbenches/app/protected-query.test.ts::fails closed even if a result unexpectedly has both an error and success",
+        "apps/web-next/src/workbenches/app/protected-query.test.ts::isolates identity link caches between signed-in actors",
+        "apps/web-next/src/workbenches/app/protected-query.test.ts::always revalidates protected data on remount, focus and reconnect"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/app/session/return-destination.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web-next/src/workbenches/app/session/return-destination.test.ts::accepts an application-relative destination",
+        "apps/web-next/src/workbenches/app/session/return-destination.test.ts::rejects protocol-relative external destinations",
+        "apps/web-next/src/workbenches/app/session/return-destination.test.ts::rejects absolute external destinations"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/features/offline/offline-store.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::requires complete, scope-matched projection and GeoPackage checksums",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::queues a stable group and prohibits intent mutation after attempted submission",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::normalizes decimal precision without floating point coercion",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts::enforces type/nullability"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::preserves original coordinate units through the viewport transform",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::closes a simple ring only on explicit sketch completion and rejects degenerate drafts",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::rejects unsupported dimensions, unclosed rings, and unsupported geometry",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::refuses graphical modification of a polygon with holes rather than silently dropping rings",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::snaps within explicit screen pixel tolerance to an exact vertex",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::projects a segment candidate in screen space but returns native coordinates",
+        "apps/web-next/src/workbenches/features/platform/editing-geometry.test.ts::never snaps an offscreen vertex even within near-edge tolerance"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts::does not assert production acceptance for absent or unverified evidence",
+        "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts::rejects even optimistic enabled/status flags without a pinned verification",
+        "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts::distinguishes unsupported, scope-disabled and unverified capabilities",
+        "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts::does not advertise provider retrieval for configured or revoked connections",
+        "apps/web-next/src/workbenches/features/platform/platform-release-state.test.ts::localizes configured entitlement tiers without inventing a default"
+      ]
+    },
+    {
+      "file": "apps/web-next/src/workbenches/features/platform/query-filters.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/web-next/src/workbenches/features/platform/query-filters.test.ts::composes typed AND/NOT conditions without pagination or pin fields",
+        "apps/web-next/src/workbenches/features/platform/query-filters.test.ts::uses literal empty text, typed null, and OR",
+        "apps/web-next/src/workbenches/features/platform/query-filters.test.ts::canonicalizes exact decimals without conversion through Number",
+        "apps/web-next/src/workbenches/features/platform/query-filters.test.ts::supports an unfiltered query and a reference-layer relation",
+        "apps/web-next/src/workbenches/features/platform/query-filters.test.ts::rejects a partially specified group"
+      ]
+    },
+    {
+      "file": "apps/web-next/style-io.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/style-io.test.mjs::SLD: single, categorized and graduated rules with escaped values",
+        "apps/web-next/style-io.test.mjs::QML: renderer types and category / range lists"
+      ]
+    },
+    {
+      "file": "apps/web-next/survey-math-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/survey-math-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/survey-nav-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/survey-nav-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/survey-terrain-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/survey-terrain-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/team-collaboration-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/team-collaboration-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/terra-draft-validation-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/terra-draft-validation-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/terrain-engineering-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/terrain-engineering-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/terrain-model-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/terrain-model-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/unified-gis-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/unified-gis-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/workspace-access-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/workspace-access-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/workspace-flex-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/workspace-flex-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/workspace-latest-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "apps/web-next/workspace-latest-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "apps/web-next/zip.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web-next/zip.test.mjs::crc32 matches the standard check value",
+        "apps/web-next/zip.test.mjs::zip has readable entries with UTF-8 names and unique file names"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/protected-query-cache.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/app/protected-query-cache.test.ts::does not expose a warm successful payload while a real mount refetch is unsettled or denied",
+        "apps/web/src/app/protected-query-cache.test.ts::does not expose warm data during a paused refetch and only restores a new settled payload"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/protected-query.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web/src/app/protected-query.test.ts::renders only a successful, settled read",
+        "apps/web/src/app/protected-query.test.ts::fails closed even if a result unexpectedly has both an error and success",
+        "apps/web/src/app/protected-query.test.ts::isolates identity link caches between signed-in actors",
+        "apps/web/src/app/protected-query.test.ts::always revalidates protected data on remount, focus and reconnect"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/router.test.tsx",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/app/router.test.tsx::maps organization routes to canonical /app routes",
+        "apps/web/src/app/router.test.tsx::maps every project capability route without losing ids",
+        "apps/web/src/app/router.test.tsx::maps static identity and invitation routes"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/session/SessionBoundary.test.tsx",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/app/session/SessionBoundary.test.tsx::keeps authenticated shell content mounted during background /me revalidation",
+        "apps/web/src/app/session/SessionBoundary.test.tsx::redirects to login with a return destination after confirmed 401"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/session/return-destination.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/app/session/return-destination.test.ts::accepts an application-relative destination",
+        "apps/web/src/app/session/return-destination.test.ts::rejects protocol-relative external destinations",
+        "apps/web/src/app/session/return-destination.test.ts::rejects absolute external destinations"
+      ]
+    },
+    {
+      "file": "apps/web/src/app/session/session-state.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/app/session/session-state.test.ts::keeps a confirmed account while a background check runs",
+        "apps/web/src/app/session/session-state.test.ts::clears the account on confirmed authorization loss",
+        "apps/web/src/app/session/session-state.test.ts::keeps chrome identity after a transient revalidation failure"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/auth/AccountMenu.test.tsx",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/auth/AccountMenu.test.tsx::exposes only safe account display fields",
+        "apps/web/src/features/auth/AccountMenu.test.tsx::represents ambiguous network revalidation without claiming logout"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/dashboard/AppDashboard.test.tsx",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/features/dashboard/AppDashboard.test.tsx::renders human-readable organization and project cards without primary UUID labels",
+        "apps/web/src/features/dashboard/AppDashboard.test.tsx::renders bootstrap gate for an uninitialized installation",
+        "apps/web/src/features/dashboard/AppDashboard.test.tsx::renders a useful no-project empty state"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/FeatureInspector.test.tsx",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/FeatureInspector.test.tsx::shows observed feature response revisions only inside a secondary labeled details surface",
+        "apps/web/src/features/map/FeatureInspector.test.tsx::does not disclose old detail revisions after selection or authorization is lost"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/accessibility-summary.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/features/map/accessibility-summary.test.ts::summarizes project, active layer, visible and selected counts",
+        "apps/web/src/features/map/accessibility-summary.test.ts::handles missing active/focused data without inventing details",
+        "apps/web/src/features/map/accessibility-summary.test.ts::does not expose hidden layer names as the active layer"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/add-data.test.ts",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/web/src/features/map/add-data.test.ts::marks existing references without offering a duplicate add",
+        "apps/web/src/features/map/add-data.test.ts::offers an authorized renderable catalog layer",
+        "apps/web/src/features/map/add-data.test.ts::distinguishes permission denial from unsupported rendering",
+        "apps/web/src/features/map/add-data.test.ts::never uses a closed, pending, paused or denied catalog payload",
+        "apps/web/src/features/map/add-data.test.ts::fails closed on missing, wrong and denied settled metadata without perpetual loading",
+        "apps/web/src/features/map/add-data.test.ts::requires matching outer scope, nested source ownership and exact requested layer ID",
+        "apps/web/src/features/map/add-data.test.ts::only fetches on explicit open and withholds cached data during fresh reopen"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/commands.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web/src/features/map/commands.test.ts::shares execution and availability across every UI entry point",
+        "apps/web/src/features/map/commands.test.ts::separates current permission from technical capability and blocks unknown operations",
+        "apps/web/src/features/map/commands.test.ts::offers only current named layers and permitted access navigation",
+        "apps/web/src/features/map/commands.test.ts::uses one command model for layer zoom, reorder, visibility and remove"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/feature-presentation.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/feature-presentation.test.ts::localizes all spatial geometry enum states and does not invent a known state",
+        "apps/web/src/features/map/feature-presentation.test.ts::distinguishes missing, explicit null, empty and zero without value coercion"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/layer-view.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/web/src/features/map/layer-view.test.ts::distinguishes permission denial from unsupported capability",
+        "apps/web/src/features/map/layer-view.test.ts::does not show stale or invented layer names after a denied or mismatched read",
+        "apps/web/src/features/map/layer-view.test.ts::preserves partial and stale states explicitly",
+        "apps/web/src/features/map/layer-view.test.ts::distinguishes viewport loading and empty from a usable layer",
+        "apps/web/src/features/map/layer-view.test.ts::exposes stable order and non-drag command availability"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/map-engine-loader.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/map-engine-loader.test.ts::does not eagerly request a renderer; concurrent callers share one import",
+        "apps/web/src/features/map/map-engine-loader.test.ts::does not keep a permanently rejected loader promise"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/map-initialization.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/map-initialization.test.ts::suppresses duplicate camera events but not any actual camera component change",
+        "apps/web/src/features/map/map-initialization.test.ts::retains the existing viewport jitter tolerance without guessing initial bounds"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/maplibre-engine.test.ts",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/web/src/features/map/maplibre-engine.test.ts::permits only the local grid and cannot construct remote raster sources even through a direct adapter call",
+        "apps/web/src/features/map/maplibre-engine.test.ts::loads three geometry sources once and leaves an identical settled frame alone",
+        "apps/web/src/features/map/maplibre-engine.test.ts::installs all three sources directly in exact draw order, without redundant moves",
+        "apps/web/src/features/map/maplibre-engine.test.ts::detects in-place changes to untrusted mutable inputs rather than assuming identity is safe",
+        "apps/web/src/features/map/maplibre-engine.test.ts::updates selected/cleared feature paint without reparsing any geometry source",
+        "apps/web/src/features/map/maplibre-engine.test.ts::moves layers, changes style and removes an absent layer without rebuilding unrelated sources",
+        "apps/web/src/features/map/maplibre-engine.test.ts::replaces only a changed geometry, uses a fresh physical handle, then discards every source on clear"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/render-frame.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web/src/features/map/render-frame.test.ts::prepares an exact authorized response once within the same success generation",
+        "apps/web/src/features/map/render-frame.test.ts::does not reuse prior actor/pin context and never returns geometry for a delayed or mismatched response",
+        "apps/web/src/features/map/render-frame.test.ts::copies exact geometry and creates a fresh immutable frame on every new success generation",
+        "apps/web/src/features/map/render-frame.test.ts::copies line and polygon vertices exactly, rejects malformed current geometry without returning a frame"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/responsive-mode.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/responsive-mode.test.ts::uses the accepted desktop/tablet/mobile thresholds",
+        "apps/web/src/features/map/responsive-mode.test.ts::fails safely to mobile for invalid widths"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/save-indicator.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/save-indicator.test.ts::only claims saved after an authoritative committed outcome",
+        "apps/web/src/features/map/save-indicator.test.ts::keeps conflict and unresolved outcomes honest"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/save.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "apps/web/src/features/map/save.test.ts::retains exact operation and intent through ambiguous transport and retries",
+        "apps/web/src/features/map/save.test.ts::never transforms conflicts, denial or known validation failures into a fresh retry"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/technical-details.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/features/map/technical-details.test.ts::exposes only scoped technical facts needed for support/debugging",
+        "apps/web/src/features/map/technical-details.test.ts::distinguishes capability support, permission and availability",
+        "apps/web/src/features/map/technical-details.test.ts::does not invent active-layer metadata when no layer is selected"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/workspace-layout.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "apps/web/src/features/map/workspace-layout.test.ts::normalizes every canonical field and clamps panel dimensions",
+        "apps/web/src/features/map/workspace-layout.test.ts::falls back safely for invalid persisted values",
+        "apps/web/src/features/map/workspace-layout.test.ts::persists only normalized non-sensitive layout data"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/map/workspace.test.ts",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/web/src/features/map/workspace.test.ts::clears previously authorized render buffers while any protected viewport is loading",
+        "apps/web/src/features/map/workspace.test.ts::distinguishes settled invalid outer map scope from active loading and denial",
+        "apps/web/src/features/map/workspace.test.ts::binds selections to actor, tenant, logical layer, source and independent pins",
+        "apps/web/src/features/map/workspace.test.ts::retains selected IDs across pages, caps at100 and toggles without substitution",
+        "apps/web/src/features/map/workspace.test.ts::reorders logical references without changing source objects",
+        "apps/web/src/features/map/workspace.test.ts::uses actual vertices for selected bounds and never invents empty geometry",
+        "apps/web/src/features/map/workspace.test.ts::rejects delayed scope/pin responses and native geometry pretending to be4326"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/offline/offline-store.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web/src/features/offline/offline-store.test.ts::requires complete, scope-matched projection and GeoPackage checksums",
+        "apps/web/src/features/offline/offline-store.test.ts::queues a stable group and prohibits intent mutation after attempted submission",
+        "apps/web/src/features/offline/offline-store.test.ts::normalizes decimal precision without floating point coercion",
+        "apps/web/src/features/offline/offline-store.test.ts::enforces type/nullability"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/platform/editing-geometry.test.ts",
+      "category": "unit",
+      "test_count": 7,
+      "test_ids": [
+        "apps/web/src/features/platform/editing-geometry.test.ts::preserves original coordinate units through the viewport transform",
+        "apps/web/src/features/platform/editing-geometry.test.ts::closes a simple ring only on explicit sketch completion and rejects degenerate drafts",
+        "apps/web/src/features/platform/editing-geometry.test.ts::rejects unsupported dimensions, unclosed rings, and unsupported geometry",
+        "apps/web/src/features/platform/editing-geometry.test.ts::refuses graphical modification of a polygon with holes rather than silently dropping rings",
+        "apps/web/src/features/platform/editing-geometry.test.ts::snaps within explicit screen pixel tolerance to an exact vertex",
+        "apps/web/src/features/platform/editing-geometry.test.ts::projects a segment candidate in screen space but returns native coordinates",
+        "apps/web/src/features/platform/editing-geometry.test.ts::never snaps an offscreen vertex even within near-edge tolerance"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/platform/platform-release-state.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/web/src/features/platform/platform-release-state.test.ts::does not assert production acceptance for absent or unverified evidence",
+        "apps/web/src/features/platform/platform-release-state.test.ts::rejects even optimistic enabled/status flags without a pinned verification",
+        "apps/web/src/features/platform/platform-release-state.test.ts::distinguishes unsupported, scope-disabled and unverified capabilities",
+        "apps/web/src/features/platform/platform-release-state.test.ts::does not advertise provider retrieval for configured or revoked connections",
+        "apps/web/src/features/platform/platform-release-state.test.ts::localizes configured entitlement tiers without inventing a default"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/platform/query-filters.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/web/src/features/platform/query-filters.test.ts::composes typed AND/NOT conditions without pagination or pin fields",
+        "apps/web/src/features/platform/query-filters.test.ts::uses literal empty text, typed null, and OR",
+        "apps/web/src/features/platform/query-filters.test.ts::canonicalizes exact decimals without conversion through Number",
+        "apps/web/src/features/platform/query-filters.test.ts::supports an unfiltered query and a reference-layer relation",
+        "apps/web/src/features/platform/query-filters.test.ts::rejects a partially specified group"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/spatial/catalog-history.test.ts",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/web/src/features/spatial/catalog-history.test.ts::isolates account, organization, project and server continuation under the mutation prefix",
+        "apps/web/src/features/spatial/catalog-history.test.ts::requires current exact Project metadata, permits archived reads and hides deleted scope",
+        "apps/web/src/features/spatial/catalog-history.test.ts::rejects mismatched outer or item scopes, oversized, unordered and invalid continuation pages",
+        "apps/web/src/features/spatial/catalog-history.test.ts::moves only via server continuation, returns to the exact previous cursor",
+        "apps/web/src/features/spatial/catalog-history.test.ts::renders only safe scalars and preserves distinction between null, empty, false, zero and strings",
+        "apps/web/src/features/spatial/catalog-history.test.ts::renders only explicit typed revision fields, never generic object contents"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/spatial/crs-profiles.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/web/src/features/spatial/crs-profiles.test.ts::offers native and direct approved edges only, never definition-only or graph transit",
+        "apps/web/src/features/spatial/crs-profiles.test.ts::isolates discovery cache and checks both Project scope IDs",
+        "apps/web/src/features/spatial/crs-profiles.test.ts::separates transformed cache keys and restarts pagination while retaining stable selection",
+        "apps/web/src/features/spatial/crs-profiles.test.ts::requires exact operation evidence and target axes before exposing transformed data"
+      ]
+    },
+    {
+      "file": "apps/web/src/features/spatial/feature-inspector.test.ts",
+      "category": "unit",
+      "test_count": 8,
+      "test_ids": [
+        "apps/web/src/features/spatial/feature-inspector.test.ts::isolates every protected scope and pin, and separates pages from exact detail IDs",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::uses server continuations with reversible bounded history, never chooses an implicit ID",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::never carries a previous actor, project, Layer or source's selection across scope changes",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::checks the response scope, both pins and native CRS before exposing a payload",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::does not attempt feature reads without current authorized available capability and ready source",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::preserves the lexical values and distinguishes NULL, empty string, zero, and booleans",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::latches detail 404 until explicit metadata retry, not merely a background detail refetch",
+        "apps/web/src/features/spatial/feature-inspector.test.ts::recognizes a stale read as a typed 409, not ordinary missing or unavailable"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/auth-session.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/auth-session.test.ts::loads providers, current user, and organizations",
+        "packages/client-sdk/tests/auth-session.test.ts::loads CSRF then sends it on organization creation",
+        "packages/client-sdk/tests/auth-session.test.ts::reuses the cached CSRF token and refreshes it once after a 403"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/bootstrap.test.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/client-sdk/tests/bootstrap.test.ts::sends authority only in the explicit initialization header with CSRF"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/grants-invitations.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/client-sdk/tests/grants-invitations.test.ts::keeps membership and grant operations explicitly organization scoped",
+        "packages/client-sdk/tests/grants-invitations.test.ts::encodes both permission-context IDs and returns server permission codes",
+        "packages/client-sdk/tests/grants-invitations.test.ts::issues once, sends the secret in a POST body only, and uses CSRF",
+        "packages/client-sdk/tests/grants-invitations.test.ts::does not swallow forbidden mutations, even with bodyless response handling"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/http.test.ts",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "packages/client-sdk/tests/http.test.ts::sends cookies and CSRF on unsafe requests",
+        "packages/client-sdk/tests/http.test.ts::does not add CSRF to safe requests",
+        "packages/client-sdk/tests/http.test.ts::keeps a single configured base for REST and event URLs",
+        "packages/client-sdk/tests/http.test.ts::rejects ambiguous or already-prefixed paths before sending",
+        "packages/client-sdk/tests/http.test.ts::normalizes error envelopes without consuming the original body"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/integration-bindings.test.ts",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/client-sdk/tests/integration-bindings.test.ts::lists project drafts without a write method or bearer token",
+        "packages/client-sdk/tests/integration-bindings.test.ts::fetches project-scoped eligible QGIS fields only",
+        "packages/client-sdk/tests/integration-bindings.test.ts::creates only disabled draft metadata with CSRF, never credentials",
+        "packages/client-sdk/tests/integration-bindings.test.ts::pauses with bound revision, never offers activate"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/integration-hub.test.ts",
+      "category": "unit",
+      "test_count": 12,
+      "test_ids": [
+        "packages/client-sdk/tests/integration-hub.test.ts::fetches project catalog via GET with encoded path parameters and preserves truthful policy fields",
+        "packages/client-sdk/tests/integration-hub.test.ts::fetches adapter profile via GET with encoded adapterKey and preserves sync policy flags and layer metadata",
+        "packages/client-sdk/tests/integration-hub.test.ts::adds repeated commune/hamlet and route scope parameters to an export path",
+        "packages/client-sdk/tests/integration-hub.test.ts::builds URL-encoded read-only layer export paths for qgis, postgis, and autocad dxf",
+        "packages/client-sdk/tests/integration-hub.test.ts::downloads read-only QGIS GeoPackage via GET and parses integrity, CRS, revision, and attributeLoss headers",
+        "packages/client-sdk/tests/integration-hub.test.ts::downloads read-only AutoCAD DXF via GET, exposes attributeLoss=true, and uses .dxf fallback extension",
+        "packages/client-sdk/tests/integration-hub.test.ts::handles RFC 5987 Content-Disposition filenames and falls back safely when header is absent or unsafe",
+        "packages/client-sdk/tests/integration-hub.test.ts::propagates ApiError on 403 forbidden and 422 CRS or format rejection during export",
+        "packages/client-sdk/tests/integration-hub.test.ts::posts multipart FormData to QGIS sync-preview without manual Content-Type and attaches CSRF token",
+        "packages/client-sdk/tests/integration-hub.test.ts::posts multipart FormData to QGIS sync-push, enforces field-sync-* client guard, and propagates 409 conflicts",
+        "packages/client-sdk/tests/integration-hub.test.ts::exports reviewed read-only, controlled sync and disabled draft binding helpers",
+        "packages/client-sdk/tests/integration-hub.test.ts::propagates ApiError on forbidden or missing adapter profile"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/managed-sync.test.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/client-sdk/tests/managed-sync.test.ts::uses one API prefix and correct methods, identifiers, and CSRF"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/maps.test.ts",
+      "category": "unit",
+      "test_count": 8,
+      "test_ids": [
+        "packages/client-sdk/tests/maps.test.ts::uses the mandatory generated wire schemas",
+        "packages/client-sdk/tests/maps.test.ts::encodes each scope/operation component and never writes while reading",
+        "packages/client-sdk/tests/maps.test.ts::sends an exact explicit save intent with PUT and CSRF; returns only the receipt",
+        "packages/client-sdk/tests/maps.test.ts::preserves explicit set/clear/preserve viewpoint choices instead of substituting camera",
+        "packages/client-sdk/tests/maps.test.ts::reconciles the original operation receipt without assuming it is the current map revision",
+        "packages/client-sdk/tests/maps.test.ts::keeps descending history and immutable before/after evidence unchanged",
+        "packages/client-sdk/tests/maps.test.ts::sends explicit pins and display bbox, preserving incomplete render/extent states",
+        "packages/client-sdk/tests/maps.test.ts::does not clamp invalid bounds/limits or silently retry an uncertain save"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/platform.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/platform.test.ts::constructs protected download URLs and invokes R006/R007/R008/R015 endpoints",
+        "packages/client-sdk/tests/platform.test.ts::keeps project scope, active manifest and expected record revision in protected requests",
+        "packages/client-sdk/tests/platform.test.ts::requests scoped preview and submits its exact output settings and digest"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/service-principals.test.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/client-sdk/tests/service-principals.test.ts::keeps management tenant scoped and returns a credential secret once"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/spatial-changes.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/spatial-changes.test.ts::exports the generated wire types and preserves retired resource evidence",
+        "packages/client-sdk/tests/spatial-changes.test.ts::encodes the project scope and only sends explicitly supplied pagination",
+        "packages/client-sdk/tests/spatial-changes.test.ts::preserves a recognized fail-closed spatial error code without retry"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/spatial-crs.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/spatial-crs.test.ts::encodes the Project scope and preserves definition-only profiles and operation evidence",
+        "packages/client-sdk/tests/spatial-crs.test.ts::keeps discovery current permission errors typed",
+        "packages/client-sdk/tests/spatial-crs.test.ts::sends only the explicitly selected response CRS with the original revision pins"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/spatial-features.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/spatial-features.test.ts::requires both pins and uses generated page/detail response types",
+        "packages/client-sdk/tests/spatial-features.test.ts::encodes each scoped ID and cursor; sends both pins and only explicit options",
+        "packages/client-sdk/tests/spatial-features.test.ts::preserves pinned context, exact typed attributes and the omitted geometry property"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/spatial-layers.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/client-sdk/tests/spatial-layers.test.ts::encodes scope, cursor and layer ID; preserves the exact mutation wire shape",
+        "packages/client-sdk/tests/spatial-layers.test.ts::preserves independent stale layer conflict"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/spatial.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/spatial.test.ts::always encodes both scope IDs and the source ID and preserves the cursor",
+        "packages/client-sdk/tests/spatial.test.ts::uses exact mutation shape and existing CSRF transport",
+        "packages/client-sdk/tests/spatial.test.ts::preserves typed spatial conflicts without swallowing R002 authorization errors"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/tenant-foundation.test.ts",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "packages/client-sdk/tests/tenant-foundation.test.ts::checks readiness and creates and reads a real tenant record using explicit IDs"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/transfers.test.ts",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/client-sdk/tests/transfers.test.ts::uploads multipart asset without forcing application/json header",
+        "packages/client-sdk/tests/transfers.test.ts::wraps structured transfer errors with code and detail",
+        "packages/client-sdk/tests/transfers.test.ts::confirms import/export, lists jobs, and downloads verified artifact bytes"
+      ]
+    },
+    {
+      "file": "packages/client-sdk/tests/workspace-project.test.ts",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/client-sdk/tests/workspace-project.test.ts::uses organization-scoped collection paths",
+        "packages/client-sdk/tests/workspace-project.test.ts::preserves omitted-vs-null workspace move semantics"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/3d-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/3d-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-draft-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-selection-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/cad-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/cad-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/generator-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/generator-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/multi-scene-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/scene-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/scene-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/selection-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/selection-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/browser/tiles-smoke.mjs",
+      "category": "smoke",
+      "test_count": 1,
+      "test_ids": [
+        "packages/spatial-workspace/tests/browser/tiles-smoke.mjs::smoke_entrypoint"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::millimetre CAD rotation and translation with verified residual",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::missing/degree CRS rejected",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::wrong unit and collinear points rejected",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs::inconsistent control points and insufficient count rejected"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/coordinator.test.mjs",
+      "category": "unit",
+      "test_count": 9,
+      "test_ids": [
+        "packages/spatial-workspace/tests/coordinator.test.mjs::only prepared selected mode activates; prior engine disposed",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::stale completion is disposed, not activated",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::scope change aborts and disposes previous active engine",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::revocation and edits during loading prevent activation",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::load failure keeps previous mode and allows retry",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::dispose prevents later activation",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::active capability revocation tears down and returns to GIS",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::failed activation disposes candidate and retains previous engine",
+        "packages/spatial-workspace/tests/coordinator.test.mjs::unavailable engine never starts"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/footprint3d.test.mjs",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::explicit base and height form actual top, identity retained",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::missing or invalid heights/duplicate ids rejected",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::non-4326 or unspecified vertical reference rejected",
+        "packages/spatial-workspace/tests/footprint3d.test.mjs::unclosed polygon and geographic out of range rejected"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/mesh-picking.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs::triangle hit uses nearest projected depth independent of winding",
+        "packages/spatial-workspace/tests/mesh-picking.test.mjs::scene budget bounded on count and aggregate triangles"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/session.test.mjs",
+      "category": "unit",
+      "test_count": 11,
+      "test_ids": [
+        "packages/spatial-workspace/tests/session.test.mjs::GIS is default; reject incomplete scope",
+        "packages/spatial-workspace/tests/session.test.mjs::capability denial preserves current mode",
+        "packages/spatial-workspace/tests/session.test.mjs::dirty and saving block request",
+        "packages/spatial-workspace/tests/session.test.mjs::load is requested without activating mode until ready",
+        "packages/spatial-workspace/tests/session.test.mjs::failed load preserves active mode and allows retry",
+        "packages/spatial-workspace/tests/session.test.mjs::authorization revoked before activation fails closed",
+        "packages/spatial-workspace/tests/session.test.mjs::new dirty edit during loading prevents activation",
+        "packages/spatial-workspace/tests/session.test.mjs::rapid requests ignore stale loader completion",
+        "packages/spatial-workspace/tests/session.test.mjs::return to current mode cancels in-flight request",
+        "packages/spatial-workspace/tests/session.test.mjs::scope change clears state and cannot activate old request after round trip",
+        "packages/spatial-workspace/tests/session.test.mjs::same pending request reused; scope input copied"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/shared-math.test.mjs",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/spatial-workspace/tests/shared-math.test.mjs::snap is deterministic, bounded, and handles empty input",
+        "packages/spatial-workspace/tests/shared-math.test.mjs::survey math preserves projected units and rejects invalid coordinates"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/terrain-analysis.test.mjs",
+      "category": "unit",
+      "test_count": 15,
+      "test_ids": [
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::flat reference plane cut/fill, metric area near equator",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::cut-fill crossing triangle integrated, net zero",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::slope and aspect on planar DEM, missing cells remain null",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::D8 strictly downhill, no cycles, accumulation reaches terminal",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::TIN plane recovery, no outside convex hull, long-edge and conflict guards",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::contours, mask, no extrapolation and TIFF nodata tags",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::two-surface volume with explicit grid and datum agreement",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::priority flood fills interior pit and routes flat acyclically",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::connected flood excludes closed interior low cells and nodata",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::TIN forces the requested diagonal and rejects un-noded crossing breaklines",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::TIN splits breaklines at existing aligned vertices and checks elevations",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::dynamic Manning flow conserves volume and spreads rainfall downhill",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::dynamic flow leaves NoData dry and preserves uniform depth on a flat bed",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::breakline insertion scales with contour size, not vertices squared",
+        "packages/spatial-workspace/tests/terrain-analysis.test.mjs::breakline longer than the TIN edge limit leaves a gap instead of failing"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/terrain-model.test.mjs",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/spatial-workspace/tests/terrain-model.test.mjs::terrain validation, negative metres preserved, same triangle interpolation, holes and outside",
+        "packages/spatial-workspace/tests/terrain-model.test.mjs::GLB and self-contained GLTF same transformed indices, material and geometry",
+        "packages/spatial-workspace/tests/terrain-model.test.mjs::GLB corrupt header and unsupported data rejected"
+      ]
+    },
+    {
+      "file": "packages/spatial-workspace/tests/tileset.test.mjs",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/spatial-workspace/tests/tileset.test.mjs::region bounds, REPLACE refinement, capped deterministic selection",
+        "packages/spatial-workspace/tests/tileset.test.mjs::explicit ECEF transform, glTF y-up and WGS84 ellipsoid control points",
+        "packages/spatial-workspace/tests/tileset.test.mjs::reject unsupported URI, refinement and nested bounds"
+      ]
+    },
+    {
+      "file": "tests/e2e/app-shell-accessibility.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 3,
+      "test_ids": [
+        "tests/e2e/app-shell-accessibility.spec.ts::public shell exposes skip navigation and visible keyboard focus",
+        "tests/e2e/app-shell-accessibility.spec.ts::authenticated shell stays within viewport at reference widths",
+        "tests/e2e/app-shell-accessibility.spec.ts::primary account and command controls meet minimum touch target"
+      ]
+    },
+    {
+      "file": "tests/e2e/app-shell-visual.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 3,
+      "test_ids": [
+        "tests/e2e/app-shell-visual.spec.ts::landing visual baseline",
+        "tests/e2e/app-shell-visual.spec.ts::login visual baseline",
+        "tests/e2e/app-shell-visual.spec.ts::authenticated dashboard and account menu visual baselines"
+      ]
+    },
+    {
+      "file": "tests/e2e/app-shell.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 3,
+      "test_ids": [
+        "tests/e2e/app-shell.spec.ts::background /me revalidation keeps authenticated shell mounted",
+        "tests/e2e/app-shell.spec.ts::authenticated shell persists across organization and project navigation",
+        "tests/e2e/app-shell.spec.ts::legacy organization route redirects to canonical /app route"
+      ]
+    },
+    {
+      "file": "tests/e2e/auth-navigation.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 4,
+      "test_ids": [
+        "tests/e2e/auth-navigation.spec.ts::public landing and dedicated login are separate surfaces",
+        "tests/e2e/auth-navigation.spec.ts::protected deep link returns to the intended canonical destination",
+        "tests/e2e/auth-navigation.spec.ts::external return_to is rejected and falls back to /app",
+        "tests/e2e/auth-navigation.spec.ts::sign out from a deep route invalidates the application session"
+      ]
+    },
+    {
+      "file": "tests/e2e/bootstrap-service-identity.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/bootstrap-service-identity.spec.ts::authenticates through OIDC and initializes the first organization exactly once"
+      ]
+    },
+    {
+      "file": "tests/e2e/extension-lifecycle.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/extension-lifecycle.spec.ts::R014 actual browser activates, edits, exports and retains extension history"
+      ]
+    },
+    {
+      "file": "tests/e2e/house-numbering.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/house-numbering.spec.ts::House Numbering official module lifecycle and seven UI journeys"
+      ]
+    },
+    {
+      "file": "tests/e2e/import-export-m1.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/import-export-m1.spec.ts::M1 end-to-end: import GeoJSON, view/select/save in Map Workspace, export fixed-revision GeoPackage and download"
+      ]
+    },
+    {
+      "file": "tests/e2e/invitation-revocation.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/invitation-revocation.spec.ts::recipient-bound invitation grants one project and revocation stops the next protected request"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-large-reference-renderer.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/map-large-reference-renderer.spec.ts::three real 10000-feature reference layers settle and pick a real rendered feature"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-performance.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/map-performance.spec.ts::measures 100 actual map-open and select-to-authorized-inspector trials on the 10000-feature Core profile"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-protected-regression.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 2,
+      "test_ids": [
+        "tests/e2e/map-protected-regression.spec.ts::a delayed detail result cannot replace a new layer selection and reconnect revocation clears a warm catalog",
+        "tests/e2e/map-protected-regression.spec.ts::one mismatched metadata response is concealed without blocking the other authorized references"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-workspace-accessibility.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/map-workspace-accessibility.spec.ts::supports keyboard and textual alternatives across the GIS workspace"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-workspace-responsive.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/map-workspace-responsive.spec.ts::adapts GIS workspace across desktop tablet and mobile reference widths"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-workspace-visual.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 4,
+      "test_ids": [
+        "tests/e2e/map-workspace-visual.spec.ts::empty GIS workspace visual baseline",
+        "tests/e2e/map-workspace-visual.spec.ts::populated GIS workspace visual baseline",
+        "tests/e2e/map-workspace-visual.spec.ts::technical drawer closed and open visual baselines",
+        "tests/e2e/map-workspace-visual.spec.ts::dirty saved and conflict save-state visual baselines"
+      ]
+    },
+    {
+      "file": "tests/e2e/map-workspace.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 8,
+      "test_ids": [
+        "tests/e2e/map-workspace.spec.ts::opens a real empty grid and arranges, renders, selects and saves catalog Layers without changing data",
+        "tests/e2e/map-workspace.spec.ts::technical details drawer returns focus and clears on active-layer scope change",
+        "tests/e2e/map-workspace.spec.ts::preserves the designated camera and reconciles a genuinely committed lost acknowledgement after a later save",
+        "tests/e2e/map-workspace.spec.ts::two real actors receive CAS conflicts and revoked access clears a warm rendered selection",
+        "tests/e2e/map-workspace.spec.ts::a real viewer can preview locally while direct shared mutation stays denied",
+        "tests/e2e/map-workspace.spec.ts::keeps camera and selection stable across panel collapse and keyboard resize",
+        "tests/e2e/map-workspace.spec.ts::warns only for unsaved shared configuration changes",
+        "tests/e2e/map-workspace.spec.ts::keeps technical identifiers secondary and returns focus after closing the drawer"
+      ]
+    },
+    {
+      "file": "tests/e2e/native-editing.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 2,
+      "test_ids": [
+        "tests/e2e/native-editing.spec.ts::native graphical point drawing, visual snap, revision-pinned update/delete/revert and stale draft",
+        "tests/e2e/native-editing.spec.ts::native line and polygon sketches are committed and reread as original CRS geometry"
+      ]
+    },
+    {
+      "file": "tests/e2e/platform-m2-m3.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/platform-m2-m3.spec.ts::M2+M3 end-to-end: R006 Editing, R007 Query, R008 Processing, R009 Cartography, and R010–R015 Hub"
+      ]
+    },
+    {
+      "file": "tests/e2e/protected-identity-membership.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 4,
+      "test_ids": [
+        "tests/e2e/protected-identity-membership.spec.ts::identity links never render a private cached payload during or after a denied refetch",
+        "tests/e2e/protected-identity-membership.spec.ts::unlinking the active identity revalidates the account even when the DELETE succeeds",
+        "tests/e2e/protected-identity-membership.spec.ts::membership administration is unmounted while prior permissions are revalidated",
+        "tests/e2e/protected-identity-membership.spec.ts::invitation acceptance keeps the shell stable during account refetch and preserves login return-to on denial"
+      ]
+    },
+    {
+      "file": "tests/e2e/r013-offline-real.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/r013-offline-real.spec.ts::R013 real OIDC + PostGIS: disconnected durable group, lost server acknowledgment, conflict and revocation"
+      ]
+    },
+    {
+      "file": "tests/e2e/spatial-catalog.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 3,
+      "test_ids": [
+        "tests/e2e/spatial-catalog.spec.ts::registers and inspects stable pinned features, explicit CRS and immutable catalog history",
+        "tests/e2e/spatial-catalog.spec.ts::blocks stale feature payloads until explicit retry and rejects a mismatched Project URL",
+        "tests/e2e/spatial-catalog.spec.ts::removes a warm catalog before a real deleted-Project refetch returns"
+      ]
+    },
+    {
+      "file": "tests/e2e/tenant-core.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 2,
+      "test_ids": [
+        "tests/e2e/tenant-core.spec.ts::logs in, creates organizations, and switches explicit organization context",
+        "tests/e2e/tenant-core.spec.ts::direct tenant URL substitution cannot resolve another organization's project"
+      ]
+    },
+    {
+      "file": "tests/e2e/tenant-foundation.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/tenant-foundation.spec.ts::checks readiness and reloads a persisted real tenant project"
+      ]
+    },
+    {
+      "file": "tools/tests/test_canonical_frontend_gate.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_canonical_frontend_gate.py::test_ci_validation_builds_canonical_production_frontend",
+        "tools/tests/test_canonical_frontend_gate.py::test_canonical_frontend_has_build_script",
+        "tools/tests/test_canonical_frontend_gate.py::test_ci_runs_built_workspace_and_mcp_regression"
+      ]
+    }
+  ]
+}

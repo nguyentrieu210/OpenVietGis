@@ -1,0 +1,54 @@
+name: E06 and E08 FastAPI Retention
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["064-**"]
+    paths:
+      - ".github/workflows/e06-e08-retention.yml"
+      - "apps/api/**"
+      - "infra/dev/**"
+      - "tools/run_with_test_database.py"
+      - "tools/test_database.py"
+  pull_request:
+    paths:
+      - ".github/workflows/e06-e08-retention.yml"
+      - "apps/api/**"
+      - "infra/dev/**"
+      - "tools/run_with_test_database.py"
+      - "tools/test_database.py"
+
+permissions:
+  contents: read
+
+jobs:
+  retained-postgis-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-e06-e08-retention
+      OPENVIETGIS_ENVIRONMENT: test
+      OPENVIETGIS_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_TEST_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_MIGRATION_DATABASE_URL: postgresql+psycopg://openvietgis:openvietgis@127.0.0.1:54330/openvietgis_test
+      OPENVIETGIS_RUNTIME_DATABASE_URL: postgresql+psycopg://openvietgis_runtime:openvietgis-runtime-dev@127.0.0.1:54330/openvietgis_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --project apps/api --frozen
+      - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+      - name: Verify retained styles, print, models, and jobs under the restricted role
+        run: >-
+          uv run --project apps/api python -m tools.run_with_test_database
+          pytest -ra --show-capture=no
+          apps/api/tests/unit/test_cartography_output.py
+          apps/api/tests/unit/test_processing_domain.py
+          apps/api/tests/integration/m2/test_cartography_completeness.py
+          apps/api/tests/integration/m2/test_print_revision_pins.py
+          apps/api/tests/integration/spatial/test_layout_designer.py
+          apps/api/tests/integration/m2/test_processing_integrity.py
+          apps/api/tests/integration/spatial/test_processing_models.py
+          apps/api/tests/integration/spatial/test_professional.py

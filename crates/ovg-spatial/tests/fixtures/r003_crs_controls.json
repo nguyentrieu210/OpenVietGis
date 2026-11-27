@@ -1,0 +1,820 @@
+{
+  "reference": "3e78ac1:apps/api/tests/fixtures/spatial_controls.py",
+  "registry": "3e78ac1:apps/api/openvietgis_api/domains/spatial/crs.py",
+  "profiles": [
+    {
+      "authority": "EPSG",
+      "code": 4326,
+      "name": "WGS 84",
+      "datum": "World Geodetic System 1984 ensemble",
+      "native_axes": [
+        "latitude",
+        "longitude"
+      ],
+      "unit": "degree",
+      "coordinate_order": "xy",
+      "x_axis": "longitude",
+      "y_axis": "latitude",
+      "projection_parameters": {},
+      "area_of_use": "World.",
+      "disposition": "readable"
+    },
+    {
+      "authority": "EPSG",
+      "code": 3857,
+      "name": "WGS 84 / Pseudo-Mercator",
+      "datum": "World Geodetic System 1984 ensemble",
+      "native_axes": [
+        "easting",
+        "northing"
+      ],
+      "unit": "metre",
+      "coordinate_order": "xy",
+      "x_axis": "easting",
+      "y_axis": "northing",
+      "projection_parameters": {
+        "method": "Popular Visualisation Pseudo Mercator (EPSG:1024)",
+        "latitude_of_origin": 0.0,
+        "central_meridian": 0.0,
+        "false_easting": 0.0,
+        "false_northing": 0.0,
+        "sphere_radius": 6378137.0
+      },
+      "area_of_use": "World between 85.06°S and 85.06°N.",
+      "disposition": "readable"
+    },
+    {
+      "authority": "EPSG",
+      "code": 4756,
+      "name": "VN-2000",
+      "datum": "Vietnam 2000",
+      "native_axes": [
+        "latitude",
+        "longitude"
+      ],
+      "unit": "degree",
+      "coordinate_order": "xy",
+      "x_axis": "longitude",
+      "y_axis": "latitude",
+      "projection_parameters": {},
+      "area_of_use": "Vietnam - onshore.",
+      "disposition": "readable"
+    },
+    {
+      "authority": "EPSG",
+      "code": 5899,
+      "name": "VN-2000 / TM-3 107-45",
+      "datum": "Vietnam 2000",
+      "native_axes": [
+        "easting",
+        "northing"
+      ],
+      "unit": "metre",
+      "coordinate_order": "xy",
+      "x_axis": "easting",
+      "y_axis": "northing",
+      "projection_parameters": {
+        "method": "Transverse Mercator (EPSG:9807)",
+        "latitude_of_origin": 0.0,
+        "central_meridian": 107.75,
+        "scale_factor": 0.9999,
+        "false_easting": 500000.0,
+        "false_northing": 0.0
+      },
+      "area_of_use": "Vietnam - Quang Ninh province; Da Nang municipality and Quang Nam province; Ba Ria-Vung Tau, Dong Nai and Lam Dong provinces.",
+      "disposition": "readable"
+    },
+    {
+      "authority": "EPSG",
+      "code": 3405,
+      "name": "VN-2000 / UTM zone 48N",
+      "datum": "Vietnam 2000",
+      "native_axes": [
+        "easting",
+        "northing"
+      ],
+      "unit": "metre",
+      "coordinate_order": "xy",
+      "x_axis": "easting",
+      "y_axis": "northing",
+      "projection_parameters": {
+        "method": "Transverse Mercator (EPSG:9807)",
+        "latitude_of_origin": 0.0,
+        "central_meridian": 105.0,
+        "scale_factor": 0.9996,
+        "false_easting": 500000.0,
+        "false_northing": 0.0
+      },
+      "area_of_use": "Vietnam - onshore west of 108°E.",
+      "disposition": "definition_only"
+    },
+    {
+      "authority": "EPSG",
+      "code": 3406,
+      "name": "VN-2000 / UTM zone 49N",
+      "datum": "Vietnam 2000",
+      "native_axes": [
+        "easting",
+        "northing"
+      ],
+      "unit": "metre",
+      "coordinate_order": "xy",
+      "x_axis": "easting",
+      "y_axis": "northing",
+      "projection_parameters": {
+        "method": "Transverse Mercator (EPSG:9807)",
+        "latitude_of_origin": 0.0,
+        "central_meridian": 111.0,
+        "scale_factor": 0.9996,
+        "false_easting": 500000.0,
+        "false_northing": 0.0
+      },
+      "area_of_use": "Vietnam - onshore east of 108°E.",
+      "disposition": "definition_only"
+    }
+  ],
+  "transformations": [
+    {
+      "source_code": 4326,
+      "target_code": 3857,
+      "operation_id": "epsg-1024-forward",
+      "method": "analytic Pseudo-Mercator",
+      "validated_area": "Longitude [-180, 180]°, latitude [-85.0511287798066, 85.0511287798066]°; projected X/Y [-20037508.342789244, 20037508.342789244] m; 1e-6 m output roundoff only, no input clipping.",
+      "tolerance": 0.001,
+      "tolerance_unit": "metre",
+      "evidence_id": "analytic-webmercator-formula"
+    },
+    {
+      "source_code": 3857,
+      "target_code": 4326,
+      "operation_id": "epsg-1024-inverse",
+      "method": "analytic Pseudo-Mercator inverse",
+      "validated_area": "Longitude [-180, 180]°, latitude [-85.0511287798066, 85.0511287798066]°; projected X/Y [-20037508.342789244, 20037508.342789244] m; 1e-6 m output roundoff only, no input clipping.",
+      "tolerance": 1e-08,
+      "tolerance_unit": "degree",
+      "evidence_id": "analytic-webmercator-formula"
+    },
+    {
+      "source_code": 4756,
+      "target_code": 4326,
+      "operation_id": "epsg-6960-forward",
+      "method": "VN-2000 to WGS 84 (2)",
+      "validated_area": "Trusted Quang Ninh reference fixtures only; longitude [106.88, 108.07]°, latitude [20.70, 21.42]°. Port-water control results, not an official boundary or extension of EPSG:6960 onshore scope. No survey-accuracy claim.",
+      "tolerance": 3.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "circular-50-2025-tt-bxd-quang-ninh"
+    },
+    {
+      "source_code": 4326,
+      "target_code": 4756,
+      "operation_id": "epsg-6960-inverse",
+      "method": "inverse EPSG:6960",
+      "validated_area": "Trusted Quang Ninh reference fixtures only; longitude [106.88, 108.07]°, latitude [20.70, 21.42]°. Port-water control results, not an official boundary or extension of EPSG:6960 onshore scope. No survey-accuracy claim.",
+      "tolerance": 3.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "circular-50-2025-tt-bxd-quang-ninh"
+    },
+    {
+      "source_code": 5899,
+      "target_code": 4756,
+      "operation_id": "epsg-5899-inverse-tm3",
+      "method": "inverse native EPSG TM-3 107-45 projection",
+      "validated_area": "Trusted Quang Ninh anchorage reference fixtures only; longitude [107.15, 107.18]°, latitude [20.70, 20.73]°. Product control rectangle, not an official boundary, extension of EPSG:6960 onshore scope, or survey-accuracy claim.",
+      "tolerance": 1.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "mae-eia-quang-ninh-table-1-4-qh-04"
+    },
+    {
+      "source_code": 4756,
+      "target_code": 5899,
+      "operation_id": "epsg-5899-forward-tm3",
+      "method": "native EPSG TM-3 107-45 projection",
+      "validated_area": "Trusted Quang Ninh anchorage reference fixtures only; longitude [107.15, 107.18]°, latitude [20.70, 20.73]°. Product control rectangle, not an official boundary, extension of EPSG:6960 onshore scope, or survey-accuracy claim.",
+      "tolerance": 1.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "mae-eia-quang-ninh-table-1-4-qh-04"
+    },
+    {
+      "source_code": 5899,
+      "target_code": 4326,
+      "operation_id": "epsg-5899-to-4326-via-6960",
+      "method": "explicit inverse TM-3 then EPSG:6960 approved as one registry edge",
+      "validated_area": "Trusted Quang Ninh anchorage reference fixtures only; longitude [107.15, 107.18]°, latitude [20.70, 20.73]°. Product control rectangle, not an official boundary, extension of EPSG:6960 onshore scope, or survey-accuracy claim.",
+      "tolerance": 1.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "mae-eia-quang-ninh-table-1-4-qh-04"
+    },
+    {
+      "source_code": 4326,
+      "target_code": 5899,
+      "operation_id": "epsg-4326-to-5899-via-6960",
+      "method": "explicit inverse EPSG:6960 then TM-3 approved as one registry edge",
+      "validated_area": "Trusted Quang Ninh anchorage reference fixtures only; longitude [107.15, 107.18]°, latitude [20.70, 20.73]°. Product control rectangle, not an official boundary, extension of EPSG:6960 onshore scope, or survey-accuracy claim.",
+      "tolerance": 1.0,
+      "tolerance_unit": "metre",
+      "evidence_id": "mae-eia-quang-ninh-table-1-4-qh-04"
+    }
+  ],
+  "control_sets": [
+    {
+      "source_code": 4326,
+      "target_code": 3857,
+      "operation_id": "epsg-1024-forward",
+      "tolerance": 0.001,
+      "controls": [
+        {
+          "point_id": "origin",
+          "source_xy": [
+            0.0,
+            0.0
+          ],
+          "expected_xy": [
+            0.0,
+            0.0
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "point-000001",
+          "source_xy": [
+            106.6,
+            10.7
+          ],
+          "expected_xy": [
+            11866657.718562962,
+            1198103.0405602609
+          ],
+          "reference_key": "reference_points_4326"
+        },
+        {
+          "point_id": "vn-grid-upper",
+          "source_xy": [
+            106.6996,
+            10.7294
+          ],
+          "expected_xy": [
+            11877745.139845973,
+            1201433.90685236
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "quang-ninh",
+          "source_xy": [
+            107.157,
+            20.715
+          ],
+          "expected_xy": [
+            11928662.674934816,
+            2357927.6460199775
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "point-004000",
+          "source_xy": [
+            106.699,
+            10.739
+          ],
+          "expected_xy": [
+            11877678.348151496,
+            1202521.6067595126
+          ],
+          "reference_key": "reference_points_4326"
+        },
+        {
+          "point_id": "positive-near-antimeridian",
+          "source_xy": [
+            179.999999,
+            30.0
+          ],
+          "expected_xy": [
+            20037508.23146975,
+            3503549.843504374
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "negative-near-antimeridian",
+          "source_xy": [
+            -179.999999,
+            -30.0
+          ],
+          "expected_xy": [
+            -20037508.23146975,
+            -3503549.8435043744
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "positive-exact-boundary",
+          "source_xy": [
+            180.0,
+            85.0511287798066
+          ],
+          "expected_xy": [
+            20037508.342789244,
+            20037508.342789244
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "negative-exact-boundary",
+          "source_xy": [
+            -180.0,
+            -85.0511287798066
+          ],
+          "expected_xy": [
+            -20037508.342789244,
+            -20037508.342789255
+          ],
+          "reference_key": null
+        }
+      ],
+      "metric": "euclidean_metre"
+    },
+    {
+      "source_code": 3857,
+      "target_code": 4326,
+      "operation_id": "epsg-1024-inverse",
+      "tolerance": 1e-08,
+      "controls": [
+        {
+          "point_id": "origin",
+          "source_xy": [
+            0.0,
+            0.0
+          ],
+          "expected_xy": [
+            0.0,
+            0.0
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "merc-000001",
+          "source_xy": [
+            11866657.718562962,
+            1198103.0405602609
+          ],
+          "expected_xy": [
+            106.6,
+            10.7
+          ],
+          "reference_key": "reference_points_3857"
+        },
+        {
+          "point_id": "merc-000002",
+          "source_xy": [
+            11877745.139845973,
+            1201433.90685236
+          ],
+          "expected_xy": [
+            106.6996,
+            10.729399999999995
+          ],
+          "reference_key": "reference_points_3857"
+        },
+        {
+          "point_id": "merc-000003",
+          "source_xy": [
+            11928662.674934816,
+            2357927.6460199775
+          ],
+          "expected_xy": [
+            107.157,
+            20.714999999999996
+          ],
+          "reference_key": "reference_points_3857"
+        },
+        {
+          "point_id": "vn-grid-last-point",
+          "source_xy": [
+            11877678.348151496,
+            1202521.6067595126
+          ],
+          "expected_xy": [
+            106.699,
+            10.738999999999995
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "positive-near-antimeridian",
+          "source_xy": [
+            20037508.23146975,
+            3503549.843504374
+          ],
+          "expected_xy": [
+            179.999999,
+            29.999999999999986
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "negative-near-antimeridian",
+          "source_xy": [
+            -20037508.23146975,
+            -3503549.8435043744
+          ],
+          "expected_xy": [
+            -179.999999,
+            -29.999999999999993
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "positive-exact-boundary",
+          "source_xy": [
+            20037508.342789244,
+            20037508.342789244
+          ],
+          "expected_xy": [
+            180.00000000000003,
+            85.0511287798066
+          ],
+          "reference_key": null
+        },
+        {
+          "point_id": "negative-exact-boundary",
+          "source_xy": [
+            -20037508.342789244,
+            -20037508.342789244
+          ],
+          "expected_xy": [
+            -180.00000000000003,
+            -85.0511287798066
+          ],
+          "reference_key": null
+        }
+      ],
+      "metric": "max_axis_degree"
+    },
+    {
+      "source_code": 4756,
+      "target_code": 4326,
+      "operation_id": "epsg-6960-forward",
+      "tolerance": 3.0,
+      "controls": [
+        {
+          "point_id": "VH1",
+          "source_xy": [
+            108.01944444444445,
+            21.41111111111111
+          ],
+          "expected_xy": [
+            108.02133333333333,
+            21.41011111111111
+          ],
+          "reference_key": "reference_points_4756"
+        },
+        {
+          "point_id": "VH2",
+          "source_xy": [
+            108.05980555555556,
+            21.414472222222223
+          ],
+          "expected_xy": [
+            108.06169444444444,
+            21.41347222222222
+          ],
+          "reference_key": "reference_points_4756"
+        },
+        {
+          "point_id": "VH10",
+          "source_xy": [
+            107.94611111111111,
+            21.23625
+          ],
+          "expected_xy": [
+            107.948,
+            21.23525
+          ],
+          "reference_key": "reference_points_4756"
+        },
+        {
+          "point_id": "CT1",
+          "source_xy": [
+            107.76133333333334,
+            20.97063888888889
+          ],
+          "expected_xy": [
+            107.76322222222223,
+            20.969638888888888
+          ],
+          "reference_key": "reference_points_4756"
+        },
+        {
+          "point_id": "QY1",
+          "source_xy": [
+            106.8831111111111,
+            20.8355
+          ],
+          "expected_xy": [
+            106.885,
+            20.8345
+          ],
+          "reference_key": "reference_points_4756"
+        }
+      ],
+      "metric": "geodesic_metre"
+    },
+    {
+      "source_code": 4326,
+      "target_code": 4756,
+      "operation_id": "epsg-6960-inverse",
+      "tolerance": 3.0,
+      "controls": [
+        {
+          "point_id": "VH1",
+          "source_xy": [
+            108.02133333333333,
+            21.41011111111111
+          ],
+          "expected_xy": [
+            108.01944444444445,
+            21.41111111111111
+          ],
+          "reference_key": "reference_points_4326_quang_ninh"
+        },
+        {
+          "point_id": "VH2",
+          "source_xy": [
+            108.06169444444444,
+            21.41347222222222
+          ],
+          "expected_xy": [
+            108.05980555555556,
+            21.414472222222223
+          ],
+          "reference_key": "reference_points_4326_quang_ninh"
+        },
+        {
+          "point_id": "VH10",
+          "source_xy": [
+            107.948,
+            21.23525
+          ],
+          "expected_xy": [
+            107.94611111111111,
+            21.23625
+          ],
+          "reference_key": "reference_points_4326_quang_ninh"
+        },
+        {
+          "point_id": "CT1",
+          "source_xy": [
+            107.76322222222223,
+            20.969638888888888
+          ],
+          "expected_xy": [
+            107.76133333333334,
+            20.97063888888889
+          ],
+          "reference_key": "reference_points_4326_quang_ninh"
+        },
+        {
+          "point_id": "QY1",
+          "source_xy": [
+            106.885,
+            20.8345
+          ],
+          "expected_xy": [
+            106.8831111111111,
+            20.8355
+          ],
+          "reference_key": "reference_points_4326_quang_ninh"
+        }
+      ],
+      "metric": "geodesic_metre"
+    },
+    {
+      "source_code": 5899,
+      "target_code": 4756,
+      "operation_id": "epsg-5899-inverse-tm3",
+      "tolerance": 1.0,
+      "controls": [
+        {
+          "point_id": "HVS-QN1",
+          "source_xy": [
+            438442.69,
+            2291039.83
+          ],
+          "expected_xy": [
+            107.15901111111111,
+            20.711691666666667
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN2",
+          "source_xy": [
+            437957.55,
+            2291878.33
+          ],
+          "expected_xy": [
+            107.15432222222222,
+            20.71925
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN3",
+          "source_xy": [
+            438891.96,
+            2292185.83
+          ],
+          "expected_xy": [
+            107.16328333333334,
+            20.722058333333333
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN4",
+          "source_xy": [
+            439365.92,
+            2291378.72
+          ],
+          "expected_xy": [
+            107.16786111111111,
+            20.714783333333333
+          ],
+          "reference_key": "reference_points_5899"
+        }
+      ],
+      "metric": "geodesic_metre"
+    },
+    {
+      "source_code": 4756,
+      "target_code": 5899,
+      "operation_id": "epsg-5899-forward-tm3",
+      "tolerance": 1.0,
+      "controls": [
+        {
+          "point_id": "HVS-QN1",
+          "source_xy": [
+            107.15901111111111,
+            20.711691666666667
+          ],
+          "expected_xy": [
+            438442.69,
+            2291039.83
+          ],
+          "reference_key": "reference_points_4756_hvs"
+        },
+        {
+          "point_id": "HVS-QN2",
+          "source_xy": [
+            107.15432222222222,
+            20.71925
+          ],
+          "expected_xy": [
+            437957.55,
+            2291878.33
+          ],
+          "reference_key": "reference_points_4756_hvs"
+        },
+        {
+          "point_id": "HVS-QN3",
+          "source_xy": [
+            107.16328333333334,
+            20.722058333333333
+          ],
+          "expected_xy": [
+            438891.96,
+            2292185.83
+          ],
+          "reference_key": "reference_points_4756_hvs"
+        },
+        {
+          "point_id": "HVS-QN4",
+          "source_xy": [
+            107.16786111111111,
+            20.714783333333333
+          ],
+          "expected_xy": [
+            439365.92,
+            2291378.72
+          ],
+          "reference_key": "reference_points_4756_hvs"
+        }
+      ],
+      "metric": "euclidean_metre"
+    },
+    {
+      "source_code": 5899,
+      "target_code": 4326,
+      "operation_id": "epsg-5899-to-4326-via-6960",
+      "tolerance": 1.0,
+      "controls": [
+        {
+          "point_id": "HVS-QN1",
+          "source_xy": [
+            438442.69,
+            2291039.83
+          ],
+          "expected_xy": [
+            107.16088611111111,
+            20.71068888888889
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN2",
+          "source_xy": [
+            437957.55,
+            2291878.33
+          ],
+          "expected_xy": [
+            107.15619722222222,
+            20.71824722222222
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN3",
+          "source_xy": [
+            438891.96,
+            2292185.83
+          ],
+          "expected_xy": [
+            107.16515833333334,
+            20.721055555555555
+          ],
+          "reference_key": "reference_points_5899"
+        },
+        {
+          "point_id": "HVS-QN4",
+          "source_xy": [
+            439365.92,
+            2291378.72
+          ],
+          "expected_xy": [
+            107.1697361111111,
+            20.713780555555555
+          ],
+          "reference_key": "reference_points_5899"
+        }
+      ],
+      "metric": "geodesic_metre"
+    },
+    {
+      "source_code": 4326,
+      "target_code": 5899,
+      "operation_id": "epsg-4326-to-5899-via-6960",
+      "tolerance": 1.0,
+      "controls": [
+        {
+          "point_id": "HVS-QN1",
+          "source_xy": [
+            107.16088611111111,
+            20.71068888888889
+          ],
+          "expected_xy": [
+            438442.69,
+            2291039.83
+          ],
+          "reference_key": "reference_points_4326_hvs"
+        },
+        {
+          "point_id": "HVS-QN2",
+          "source_xy": [
+            107.15619722222222,
+            20.71824722222222
+          ],
+          "expected_xy": [
+            437957.55,
+            2291878.33
+          ],
+          "reference_key": "reference_points_4326_hvs"
+        },
+        {
+          "point_id": "HVS-QN3",
+          "source_xy": [
+            107.16515833333334,
+            20.721055555555555
+          ],
+          "expected_xy": [
+            438891.96,
+            2292185.83
+          ],
+          "reference_key": "reference_points_4326_hvs"
+        },
+        {
+          "point_id": "HVS-QN4",
+          "source_xy": [
+            107.1697361111111,
+            20.713780555555555
+          ],
+          "expected_xy": [
+            439365.92,
+            2291378.72
+          ],
+          "reference_key": "reference_points_4326_hvs"
+        }
+      ],
+      "metric": "euclidean_metre"
+    }
+  ]
+}

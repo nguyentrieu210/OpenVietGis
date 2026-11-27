@@ -2,3 +2,19 @@
 # synthetic invitation prefix (inv_12345678), not an invitation credential.
 # No rule, path, real token, or future commit is exempted.
 41530b8071651eec9e6f9f8203aa720877614b31:tools/tests/test_secret_surfaces.py:generic-api-key:69
+
+# Exact historical false positives: deterministic synthetic benchmark layer keys
+# (bench_4326_*, bench_vn2000_3405_1k) and base64-encoded JSON pagination cursor
+# test fixtures (zero secret material) in Spec 064 commits.
+ffb6fb7a9ae25159e7c08b755dba9e80a38f0b38:specs/064-rust-platform/evidence/baseline-benchmark.json:generic-api-key:50
+ffb6fb7a9ae25159e7c08b755dba9e80a38f0b38:specs/064-rust-platform/evidence/baseline-benchmark.json:generic-api-key:69
+ffb6fb7a9ae25159e7c08b755dba9e80a38f0b38:specs/064-rust-platform/evidence/baseline-benchmark.json:generic-api-key:88
+ffb6fb7a9ae25159e7c08b755dba9e80a38f0b38:specs/064-rust-platform/evidence/baseline-benchmark.json:generic-api-key:126
+731d3441ec72f3e1c66513fefe0b54d616f9872b:crates/ovg-sync/tests/fixtures/activity_cursor.json:generic-api-key:15
+731d3441ec72f3e1c66513fefe0b54d616f9872b:crates/ovg-sync/tests/fixtures/activity_cursor.json:generic-api-key:22
+731d3441ec72f3e1c66513fefe0b54d616f9872b:tools/benchmark/rust-platform/benchmark_runner.py:generic-api-key:725
+
+# Exact historical false positive: RFC 6455 section 1.3 standard WebSocket
+# accept-key test vector ("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") in unit test.
+beafc1c20db8709a8dde044675f77a37efba1e20:apps/api-rust/src/presence.rs:generic-api-key:578
+

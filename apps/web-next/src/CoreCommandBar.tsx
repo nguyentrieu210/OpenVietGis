@@ -65,7 +65,7 @@ export function CoreCommandBar(host:Host){
   if(e.key==="Tab"&&open){e.preventDefault();const c=matches[Math.max(0,highlight)];if(c){setValue(c.alias);setHelp(false);setHighlight(-1)}}
   else if(e.key==="ArrowUp"||e.key==="ArrowDown"){e.preventDefault();if(open&&value.trim()&&cursor<0){setHighlight(i=>e.key==="ArrowDown"?(i+1)%matches.length:(i<=0?matches.length-1:i-1))}else{const i=e.key==="ArrowUp"?Math.min(history.length-1,cursor+1):Math.max(-1,cursor-1);setCursor(i);setValue(i<0?"":history[i]);setHelp(false);setHighlight(-1)}}
   else if(e.key==="Enter"&&open&&highlight>=0){e.preventDefault();void execute(matches[highlight].alias)}
-  else if(e.key===" "&&!e.nativeEvent.isComposing&&(value.trim()===""||!value.trim().includes(" ")&&(pending||host.activePrompt||host.commands.some(c=>c.alias===normalize(value)||aliases[normalize(value)]===c.alias)||["HELP","?","ESC"].includes(normalize(value))))){e.preventDefault();void execute(value)}
+
  }}/>
  <button type="submit" aria-label="Thực thi lệnh" title="Thực thi · Enter">↵</button><button type="button" aria-label="Lịch sử lệnh (F2)" title="Lịch sử lệnh · F2" aria-expanded={showHistory} onClick={()=>{setShowHistory(v=>!v);setHelp(false)}}>≡</button>
  <button type="button" aria-label="Danh sách lệnh" title="Danh sách lệnh · HELP" onClick={()=>{setValue("");setHelp(v=>!v);setFocused(true);setShowHistory(false);focus()}}>?</button>

@@ -1,0 +1,31 @@
+name: E16 MCP adapter
+
+on:
+  push:
+    branches: ["064-**"]
+    paths:
+      - 'apps/mcp/**'
+      - '.github/workflows/e16-mcp-retained.yml'
+  pull_request:
+    paths:
+      - 'apps/mcp/**'
+      - '.github/workflows/e16-mcp-retained.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adapter-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+          enable-cache: true
+          cache-dependency-glob: apps/mcp/uv.lock
+      - name: MCP protocol and relay policy contracts
+        working-directory: apps/mcp
+        run: uv run --locked pytest -q

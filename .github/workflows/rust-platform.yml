@@ -1,0 +1,382 @@
+name: Rust Platform CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "dev", "064-rust-platform", "064-**"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "apps/api/**"
+      - "infra/dev/compose.yaml"
+      - "infra/dev/postgres/**"
+      - "crates/**"
+      - "modules/*/rust/**"
+      - ".github/workflows/rust-platform.yml"
+      - "tests/rust-parity/**"
+      - "tools/benchmark/rust-platform/**"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "deny.toml"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "apps/api/**"
+      - "infra/dev/compose.yaml"
+      - "infra/dev/postgres/**"
+      - "crates/**"
+      - "modules/*/rust/**"
+      - ".github/workflows/rust-platform.yml"
+      - "tests/rust-parity/**"
+      - "tools/benchmark/rust-platform/**"
+
+concurrency:
+  group: rust-platform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUSTFLAGS: "-C debuginfo=0"
+
+jobs:
+  check-and-test:
+    name: Format, Clippy, Tests & Architecture Isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install SQLite and GDAL format engines
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Verify architecture isolation (core crates must never depend on modules)
+        run: |
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          meta = json.loads(
+              subprocess.check_output(["cargo", "metadata", "--format-version", "1", "--no-deps", "--locked"])
+          )
+          core_crates = {
+              "ovg-core",
+              "ovg-storage",
+              "ovg-spatial",
+              "ovg-sync",
+              "ovg-processing",
+              "ovg-module-sdk",
+          }
+          violations = []
+          for pkg in meta["packages"]:
+              if pkg["name"] in core_crates:
+                  for dep in pkg["dependencies"]:
+                      dep_name = dep["name"]
+                      dep_path = dep.get("path") or ""
+                      if dep_name.startswith("ovg-module-") and dep_name != "ovg-module-sdk":
+                          violations.append(f"{pkg['name']} depends on vertical module {dep_name}")
+                      if "/modules/" in dep_path.replace("\\", "/"):
+                          violations.append(f"{pkg['name']} depends on path inside modules/: {dep_path}")
+          if violations:
+              print("ARCHITECTURE ISOLATION VIOLATIONS:", file=sys.stderr)
+              for v in violations:
+                  print(f"  - {v}", file=sys.stderr)
+              sys.exit(1)
+          print("Architecture isolation check passed: core crates have zero dependencies on modules/.")
+          PY
+
+      - name: Run Clippy (deny all warnings)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Run workspace tests
+        run: cargo test --locked --workspace
+
+      - name: Verify the core API with no official modules
+        run: cargo test --locked -p openvietgis-api-rust --no-default-features
+
+  postgis-parity:
+    name: PostGIS Parity (FastAPI oracle vs Rust)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      COMPOSE_PROJECT_NAME: openvietgis-parity
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned via rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: parity
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --project apps/api --frozen
+
+      # Same PostGIS image, port 54330, template_postgis and openvietgis_runtime role as the Python CI.
+      - name: Start dedicated PostGIS test database
+        run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+
+      - name: Install SQLite and GDAL format engines
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+
+      - name: Build Rust API candidate
+        run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
+
+      - name: Test parity harness
+        run: uv run --project apps/api python -m unittest discover -s tests/rust-parity -p "test_*.py"
+
+      - name: Run differential parity
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/run.py \
+            --candidate target/debug/openvietgis-api-rust --include-features \
+            2>&1 | tee dist/parity/parity.log
+
+      - name: Run isolated E03 comparative benchmark
+        if: ${{ !cancelled() && github.ref_name == '064-e03' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e03_benchmark.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/parity/e03-benchmark.json \
+            2>&1 | tee dist/parity/e03-benchmark.log
+      # E07 has its own strict gate even if another engine's parity fails.
+      - name: Run E07 transfer parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e07_transfers.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e07-transfers.log
+      - name: Run E18 ops parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e18_ops.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e18-ops.log
+
+      - name: Run E08 processing jobs parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_jobs.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-jobs.log
+
+      - name: Run E08 processing models parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_processing_models.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-models.log
+
+      - name: Run E08 professional GIS parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_professional.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-professional.log
+
+      - name: Run E02 catalog write parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e02_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e02-writes.log
+
+      - name: Run E14 extension, marketplace & partner parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e14_activations.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activations.log
+          uv run --project apps/api python tests/rust-parity/e14_activation_history.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activation-history.log
+          uv run --project apps/api python tests/rust-parity/e14_activation_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-activation-writes.log
+          uv run --project apps/api python tests/rust-parity/e14_full_parity.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e14-full-parity.log
+
+      - name: Run E06 cartography parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e06_cartography.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e06-cartography.log
+          uv run --project apps/api python tests/rust-parity/e06_cartography_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e06-cartography-writes.log
+
+      - name: Run E15 house numbering parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e15_house_numbering_reads.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-reads.log
+          uv run --project apps/api python tests/rust-parity/e15_house_numbering_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-writes.log
+          uv run --project apps/api python tests/rust-parity/e15_full_parity.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e15-full-parity.log
+
+      - name: Run E05 3D tilesets parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e05_tilesets.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e05-tilesets.log
+
+      - name: Run E01/E10/E12 Mega-Wave parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e01_e10_e12_wave.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e01-e10-e12-wave.log
+
+      - name: Run E13 field offline parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e13_field_offline.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e13-field-offline.log
+
+      - name: Run E01 OIDC parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e01_oidc.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e01-oidc.log
+
+      - name: Run E12 adapter transfer parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e12_adapter_transfer.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e12-adapter-transfer.log
+
+      - name: Run E10 CAD/DXF parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e10_cad_dxf.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e10-cad-dxf.log
+
+      - name: Record PostGIS version
+        if: always()
+        run: |
+          mkdir -p dist/parity
+          docker compose -f infra/dev/compose.yaml exec -T postgres-test \
+            psql -U openvietgis -d openvietgis_test -Atc "SELECT version(), PostGIS_Full_Version()" \
+            > dist/parity/postgis-version.txt 2>&1 || true
+
+      - name: Upload parity output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgis-parity
+          path: dist/parity/
+          if-no-files-found: warn
+
+  security-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # cargo-audit needs a newer rustc than the pinned 1.85.1 toolchain.
+      - name: Install stable toolchain for cargo-audit
+        run: rustup toolchain install stable --profile minimal
+
+      # The CLI exits nonzero on vulnerabilities without requiring checks:write.
+      - name: Install pinned cargo-audit
+        run: cargo +stable install cargo-audit --version 0.23.0 --locked
+
+      - name: Run cargo-audit
+        run: |
+          set -o pipefail
+          mkdir -p dist/audit
+          cargo +stable audit --json | tee dist/audit/cargo-audit.json
+
+      - name: Install pinned cargo-deny
+        run: cargo +stable install cargo-deny --version 0.22.1 --locked
+
+      - name: Run cargo-deny
+        run: cargo +stable deny check all
+
+      - name: Upload audit output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit
+          path: dist/audit/
+          if-no-files-found: warn

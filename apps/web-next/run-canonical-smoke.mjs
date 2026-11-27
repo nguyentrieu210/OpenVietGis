@@ -18,5 +18,11 @@ try {
   });
  }
 } finally {
- await new Promise((resolve,reject)=>server.httpServer.close(err=>err?reject(err):resolve()));
+ const http=server.httpServer;
+ // The browser children are already closed here. Do not await Node's close
+ // callback: upgraded/keep-alive preview sockets can keep that callback pending
+ // after all smoke assertions have passed, which makes ESM exit with code 13.
+ http.close();
+ http.closeAllConnections?.();
+ http.unref();
 }

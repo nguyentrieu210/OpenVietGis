@@ -1,9 +1,9 @@
 import {uiConfirm,uiPrompt} from "./ui-dialog";
 import React,{useEffect,useMemo,useState} from "react";
-import {ApiClient,ApiError,listSpatialSources,listSpatialLayers,createSpatialLayer,renameSpatialLayer,retireSpatialLayer,loadCsrfToken,type SpatialSource,type SpatialLayer} from "@openvietgis/client-sdk";
+import {ApiError,listSpatialSources,listSpatialLayers,createSpatialLayer,renameSpatialLayer,retireSpatialLayer,loadCsrfToken,type SpatialSource,type SpatialLayer} from "@openvietgis/client-sdk";
 
 // Spec 058: QGIS-style source & layer manager replacing the legacy developer catalog page.
-const client=new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 const FAMILY:Record<string,string>={Point:"Điểm",LineString:"Đường",Polygon:"Vùng",MultiPoint:"Điểm",MultiLineString:"Đường",MultiPolygon:"Vùng"};
 const STATE:Record<string,string>={ready:"Sẵn sàng",pending:"Đang kiểm tra",failed:"Lỗi",invalid:"Không hợp lệ"};
 const n=(s:string)=>s.normalize("NFD").replace(/\p{M}/gu,"").replace(/đ/gi,"d").toLowerCase();

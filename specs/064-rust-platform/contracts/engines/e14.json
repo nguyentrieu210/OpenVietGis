@@ -1,0 +1,2502 @@
+{
+  "engine_id": "E14",
+  "slug": "e14",
+  "title": "Plugin SDK, marketplace, modules",
+  "parent_refs": [
+    "R014"
+  ],
+  "child_spec": "specs/064-rust-platform/engines/e14-plugin-marketplace.md",
+  "baseline_sha": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "generated_by": "specs/064-rust-platform/contracts/extract_client_module_inventory.py",
+  "ac1_status": "verified",
+  "architecture_candidate": "Rust module SDK and marketplace/extension APIs; optional gated Wasmtime; retain partner JS SDK and webhook tooling.",
+  "summary": {
+    "http_routes": 27,
+    "sse_endpoints": 0,
+    "websocket_endpoints": 0,
+    "mcp_tools": 0,
+    "workbench_commands": 0,
+    "client_sdk_endpoints": 0,
+    "connectors_and_adapters": 12,
+    "migrations": 0,
+    "infra_and_tools": 0,
+    "source_files": 17,
+    "test_files": 26,
+    "test_ids": 39,
+    "classification_breakdown": {
+      "migrate": 12,
+      "retain": 5,
+      "replace": 0,
+      "approved_retire": 0
+    }
+  },
+  "auth_and_tenant_boundaries": {
+    "tenant_scope_counts": {
+      "organization": 5,
+      "organization+project": 15,
+      "public_or_catalog": 1,
+      "actor_or_platform": 6
+    },
+    "routes_with_project_access_guard": 19,
+    "routes_with_csrf_enforcement": 15,
+    "core_permissions_referenced": [
+      "PROJECT_MANAGE",
+      "PROJECT_READ"
+    ],
+    "extension_permissions_referenced": []
+  },
+  "http_routes": [
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/extensions/manifests",
+      "handler": "list_extension_manifests",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 235,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/extensions/manifests",
+      "handler": "register_extension_manifest",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 146,
+      "status_code": 201,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:RegisterManifestRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/extensions/official",
+      "handler": "list_official_extension_catalog",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 175,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/extensions/official/{extension_key}/register",
+      "handler": "register_official_extension_manifest",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 199,
+      "status_code": 201,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "extension_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations",
+      "handler": "list_project_activations",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 294,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations",
+      "handler": "activate_project_extension",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 246,
+      "status_code": 201,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:ActivateExtensionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{activation_id}/deactivate",
+      "handler": "deactivate_project_extension",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 278,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "activation_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{activation_id}/history",
+      "handler": "list_extension_activation_history",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 382,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "activation_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/activations/{activation_id}/transition",
+      "handler": "transition_project_extension",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 361,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "activation_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:TransitionExtensionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/disable",
+      "handler": "disable_project_extension",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 262,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-export",
+      "handler": "export_extension_bundle",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 443,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/portable-import",
+      "handler": "import_extension_bundle",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 460,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:PortableImportRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records",
+      "handler": "list_extension_records",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 345,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key"
+      ],
+      "query_params": [
+        "entity_name"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records",
+      "handler": "create_extension_record",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 321,
+      "status_code": 201,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:CreateExtensionRecordRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{record_id}",
+      "handler": "update_extension_record",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 399,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key",
+        "record_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:UpdateExtensionRecordRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/records/{record_id}/history",
+      "handler": "list_extension_record_history",
+      "module": "openvietgis_api.adapters.http.extensions",
+      "short_module": "extensions",
+      "source_file": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "line": 424,
+      "status_code": 200,
+      "tags": [
+        "extensions"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "extension_key",
+        "record_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/marketplace/catalog",
+      "handler": "marketplace_catalog",
+      "module": "openvietgis_api.adapters.http.marketplace",
+      "short_module": "marketplace",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "line": 29,
+      "status_code": 200,
+      "tags": [
+        "marketplace"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "public_or_catalog",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": true,
+        "auth_dependencies": [],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/marketplace/install/{publisher_id}/{extension_key}/{version}",
+      "handler": "install_marketplace_release",
+      "module": "openvietgis_api.adapters.http.marketplace",
+      "short_module": "marketplace",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "line": 35,
+      "status_code": 201,
+      "tags": [
+        "marketplace"
+      ],
+      "path_params": [
+        "organization_id",
+        "publisher_id",
+        "extension_key",
+        "version"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/developer/marketplace/me",
+      "handler": "my_developer_state",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 144,
+      "status_code": 200,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "my_developer_state"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/developer/marketplace/publisher",
+      "handler": "register_publisher",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 168,
+      "status_code": 201,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:PublisherRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/developer/marketplace/review-queue",
+      "handler": "review_queue",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 301,
+      "status_code": 200,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [],
+      "query_params": [
+        "state",
+        "offset"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/developer/marketplace/review-queue/{submission_id}/decision",
+      "handler": "review",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 333,
+      "status_code": 200,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [
+        "submission_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:DecisionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/developer/marketplace/submissions",
+      "handler": "submit_release",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 213,
+      "status_code": 201,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:SubmissionRequest"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/developer/marketplace/submissions/{submission_id}/withdraw",
+      "handler": "withdraw",
+      "module": "openvietgis_api.adapters.http.marketplace_developers",
+      "short_module": "marketplace_developers",
+      "source_file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "line": 270,
+      "status_code": 200,
+      "tags": [
+        "marketplace-developer"
+      ],
+      "path_params": [
+        "submission_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "actor_or_platform",
+        "project_access_guard": false,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "require_csrf"
+        ],
+        "permissions": [],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/partner-contributions",
+      "handler": "list_contributions",
+      "module": "openvietgis_api.adapters.http.partner_platform",
+      "short_module": "partner_platform",
+      "source_file": "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "line": 57,
+      "status_code": 200,
+      "tags": [
+        "partner-platform"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "PUT"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/extensions/partner-contributions/{manifest_id}",
+      "handler": "save_contributions",
+      "module": "openvietgis_api.adapters.http.partner_platform",
+      "short_module": "partner_platform",
+      "source_file": "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "line": 86,
+      "status_code": 200,
+      "tags": [
+        "partner-platform"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id",
+        "manifest_id"
+      ],
+      "query_params": [],
+      "header_params": [],
+      "body_params": [
+        "body:SaveContributions"
+      ],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": true,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope",
+          "require_csrf"
+        ],
+        "permissions": [
+          "PROJECT_MANAGE"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    },
+    {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/integrations/events",
+      "handler": "list_events",
+      "module": "openvietgis_api.adapters.http.partner_platform",
+      "short_module": "partner_platform",
+      "source_file": "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "line": 138,
+      "status_code": 200,
+      "tags": [
+        "partner-platform"
+      ],
+      "path_params": [
+        "organization_id",
+        "project_id"
+      ],
+      "query_params": [
+        "after",
+        "limit"
+      ],
+      "header_params": [],
+      "body_params": [],
+      "response_model": "dict",
+      "transport": "HTTP",
+      "classification": "migrate",
+      "auth_boundary": {
+        "tenant_scope": "organization+project",
+        "project_access_guard": true,
+        "csrf_enforced": false,
+        "public_or_unauthenticated": false,
+        "auth_dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "project_access_guard",
+          "project_scope"
+        ],
+        "permissions": [
+          "PROJECT_READ"
+        ],
+        "extension_permissions": []
+      },
+      "mapped_test_files": [
+        "apps/api/migrations/versions/0017_extension_platform.py",
+        "apps/api/migrations/versions/0019_extension_history.py",
+        "apps/api/migrations/versions/0027_partner_platform.py",
+        "apps/api/migrations/versions/0028_marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+        "apps/api/openvietgis_api/adapters/http/official_modules.py",
+        "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py",
+        "apps/api/tests/integration/m3/test_partner_platform.py",
+        "apps/api/tests/integration/m3/test_partner_plugin.py",
+        "apps/api/tests/unit/test_extension_history_domain.py",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py",
+        "apps/api/tests/unit/test_official_module_discovery.py",
+        "packages/plugin-sdk/marketplace_sign.py",
+        "packages/plugin-sdk/test_native_webhook_worker.py",
+        "packages/plugin-sdk/test_webhook_relay.py",
+        "tests/e2e/extension-lifecycle.spec.ts",
+        "tests/modules/test_extension_portability.py",
+        "tests/modules/test_reference_modules.py",
+        "tools/marketplace_release.py",
+        "tools/migrate_official_modules.py",
+        "tools/r015_extension_oracle.py",
+        "tools/tests/test_validate_manifest.py"
+      ]
+    }
+  ],
+  "realtime_contracts": [],
+  "components_and_operations": {
+    "official_module_discovery": {
+      "file": "apps/api/openvietgis_api/adapters/http/official_modules.py",
+      "classes": [
+        {
+          "name": "OfficialModuleRuntime",
+          "line": 18,
+          "bases": [],
+          "methods": []
+        }
+      ],
+      "functions": [
+        {
+          "name": "discover_official_module_runtimes",
+          "line": 24,
+          "async": false
+        },
+        {
+          "name": "official_manifest",
+          "line": 70,
+          "async": false
+        }
+      ],
+      "classification": "migrate"
+    },
+    "core_module_sdk": {
+      "file": "apps/api/openvietgis_api/module_sdk.py",
+      "classes": [
+        {
+          "name": "ModuleArtifact",
+          "line": 111,
+          "bases": [],
+          "methods": []
+        }
+      ],
+      "functions": [
+        {
+          "name": "prepare_module_scope",
+          "line": 54,
+          "async": false
+        },
+        {
+          "name": "require_official_activation",
+          "line": 68,
+          "async": false
+        },
+        {
+          "name": "set_extension_private_access",
+          "line": 96,
+          "async": false
+        },
+        {
+          "name": "put_module_artifact",
+          "line": 120,
+          "async": false
+        },
+        {
+          "name": "read_module_artifact",
+          "line": 167,
+          "async": false
+        }
+      ],
+      "classification": "migrate"
+    },
+    "domain_and_persistence": [
+      {
+        "file": "apps/api/openvietgis_api/adapters/persistence/extensions_repository.py",
+        "classes": [
+          {
+            "name": "SqlExtensionsRepository",
+            "line": 111,
+            "bases": [],
+            "methods": [
+              "register_manifest",
+              "list_manifests",
+              "activate_for_project",
+              "deactivate_for_project",
+              "disable_for_project",
+              "list_activations",
+              "transition_version",
+              "activation_history",
+              "create_record",
+              "update_record",
+              "record_history",
+              "export_bundle",
+              "import_bundle",
+              "list_records"
+            ]
+          }
+        ],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/extensions/__init__.py",
+        "classes": [],
+        "functions": [],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/extensions/contributions.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "clean_label",
+            "line": 22,
+            "async": false
+          },
+          {
+            "name": "validate_contributions",
+            "line": 33,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/extensions/domain.py",
+        "classes": [
+          {
+            "name": "ExtensionManifestRecord",
+            "line": 28,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ProjectActivationRecord",
+            "line": 47,
+            "bases": [],
+            "methods": []
+          },
+          {
+            "name": "ExtensionDataRecord",
+            "line": 63,
+            "bases": [],
+            "methods": []
+          }
+        ],
+        "functions": [
+          {
+            "name": "validate_manifest_contract",
+            "line": 82,
+            "async": false
+          },
+          {
+            "name": "validate_record_against_schema",
+            "line": 216,
+            "async": false
+          },
+          {
+            "name": "canonical_bytes",
+            "line": 287,
+            "async": false
+          },
+          {
+            "name": "bundle_digest",
+            "line": 306,
+            "async": false
+          },
+          {
+            "name": "manifest_contract",
+            "line": 310,
+            "async": false
+          },
+          {
+            "name": "matches_official_manifest",
+            "line": 323,
+            "async": false
+          },
+          {
+            "name": "validate_stored_manifest_for_mutation",
+            "line": 341,
+            "async": false
+          },
+          {
+            "name": "verify_transition",
+            "line": 366,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/extensions/external.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "validate_external_manifest",
+            "line": 26,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      },
+      {
+        "file": "apps/api/openvietgis_api/domains/extensions/marketplace.py",
+        "classes": [],
+        "functions": [
+          {
+            "name": "canonical",
+            "line": 32,
+            "async": false
+          },
+          {
+            "name": "verify",
+            "line": 38,
+            "async": false
+          },
+          {
+            "name": "validate_catalog",
+            "line": 43,
+            "async": false
+          },
+          {
+            "name": "load_catalog",
+            "line": 119,
+            "async": false
+          }
+        ],
+        "classification": "migrate"
+      }
+    ],
+    "plugin_sdk": {
+      "classification": "retain",
+      "partner_js_file": "packages/plugin-sdk/openvietgis-partner.js",
+      "partner_js_functions": [],
+      "python_utilities": [
+        {
+          "file": "packages/plugin-sdk/marketplace_sign.py",
+          "classes": [],
+          "functions": [
+            {
+              "name": "canonical",
+              "line": 27,
+              "async": false
+            },
+            {
+              "name": "private_key",
+              "line": 37,
+              "async": false
+            },
+            {
+              "name": "public_key",
+              "line": 44,
+              "async": false
+            },
+            {
+              "name": "signed",
+              "line": 50,
+              "async": false
+            },
+            {
+              "name": "write",
+              "line": 54,
+              "async": false
+            },
+            {
+              "name": "main",
+              "line": 60,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/plugin-sdk/native_webhook_worker.py",
+          "classes": [
+            {
+              "name": "NativeWorker",
+              "line": 62,
+              "bases": [],
+              "methods": [
+                "poll",
+                "flush"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "name": "public_target",
+              "line": 24,
+              "async": false
+            },
+            {
+              "name": "pinned_post",
+              "line": 42,
+              "async": false
+            },
+            {
+              "name": "main",
+              "line": 120,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        },
+        {
+          "file": "packages/plugin-sdk/webhook_relay.py",
+          "classes": [
+            {
+              "name": "NoRedirect",
+              "line": 27,
+              "bases": [
+                "urllib.request.HTTPRedirectHandler"
+              ],
+              "methods": [
+                "redirect_request"
+              ]
+            },
+            {
+              "name": "Relay",
+              "line": 63,
+              "bases": [],
+              "methods": [
+                "poll",
+                "flush"
+              ]
+            }
+          ],
+          "functions": [
+            {
+              "name": "https_url",
+              "line": 35,
+              "async": false
+            },
+            {
+              "name": "signature",
+              "line": 42,
+              "async": false
+            },
+            {
+              "name": "event_body",
+              "line": 46,
+              "async": false
+            },
+            {
+              "name": "main",
+              "line": 132,
+              "async": false
+            }
+          ],
+          "classification": "retain"
+        }
+      ],
+      "examples": [
+        "packages/plugin-sdk/examples/index.html"
+      ]
+    }
+  },
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/extensions.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/official_modules.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/persistence/extensions_repository.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/extensions/__init__.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/extensions/contributions.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/extensions/domain.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/extensions/external.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/extensions/marketplace.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "apps/api/openvietgis_api/module_sdk.py",
+      "classification": "migrate"
+    },
+    {
+      "path": "packages/plugin-sdk/examples/index.html",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/plugin-sdk/marketplace_sign.py",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/plugin-sdk/native_webhook_worker.py",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/plugin-sdk/openvietgis-partner.js",
+      "classification": "retain"
+    },
+    {
+      "path": "packages/plugin-sdk/webhook_relay.py",
+      "classification": "retain"
+    }
+  ],
+  "tests": [
+    {
+      "file": "apps/api/migrations/versions/0017_extension_platform.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/migrations/versions/0019_extension_history.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/migrations/versions/0027_partner_platform.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/migrations/versions/0028_marketplace_developers.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/openvietgis_api/adapters/http/marketplace_developers.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/openvietgis_api/adapters/http/official_modules.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/openvietgis_api/adapters/http/partner_platform.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_extension_lifecycle_security.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_extension_lifecycle_security.py::test_extension_lifecycle_requires_admin_and_project_manage"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_independent_lifecycle.py",
+      "category": "integration",
+      "test_count": 3,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py::test_extension_lifecycle_scope_and_retained_records",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py::test_legacy_manifest_mutation_block_preserves_authorized_retained_data",
+        "apps/api/tests/integration/m3/test_independent_lifecycle.py::test_review_assignee_current_permission_and_immutable_decision"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_marketplace_developer_browser.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_marketplace_developer_browser.py::test_developer_portal_real_browser"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_marketplace_developers.py",
+      "category": "integration",
+      "test_count": 3,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_marketplace_developers.py::test_developer_self_service_and_review",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py::test_cli_publisher_proof",
+        "apps/api/tests/integration/m3/test_marketplace_developers.py::test_standalone_signing_and_safe_catalog_merge"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_partner_platform.py",
+      "category": "integration",
+      "test_count": 2,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_partner_platform.py::test_partner_persistent_and_marketplace",
+        "apps/api/tests/integration/m3/test_partner_platform.py::test_marketplace_cli_roundtrip"
+      ]
+    },
+    {
+      "file": "apps/api/tests/integration/m3/test_partner_plugin.py",
+      "category": "integration",
+      "test_count": 1,
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_partner_plugin.py::test_partner_manifest_security_and_activation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_extension_history_domain.py",
+      "category": "unit",
+      "test_count": 6,
+      "test_ids": [
+        "apps/api/tests/unit/test_extension_history_domain.py::test_schema_typed_nullable_and_finite",
+        "apps/api/tests/unit/test_extension_history_domain.py::test_invalid_portable_attribute",
+        "apps/api/tests/unit/test_extension_history_domain.py::test_canonical_digest_preserves_semantic_numbers_and_unicode",
+        "apps/api/tests/unit/test_extension_history_domain.py::test_metadata_only_version_transition_checks_effective_contract",
+        "apps/api/tests/unit/test_extension_history_domain.py::test_manifest_does_not_accept_executable_or_conflicting_contributions",
+        "apps/api/tests/unit/test_extension_history_domain.py::test_retained_legacy_manifest_requires_revalidation_for_mutation"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_extension_metadata_boundary.py",
+      "category": "unit",
+      "test_count": 5,
+      "test_ids": [
+        "apps/api/tests/unit/test_extension_metadata_boundary.py::test_legacy_metadata_cannot_be_activated",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py::test_invalid_active_manifest_blocks_new_data_mutations",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py::test_legacy_metadata_cannot_transition_to_new_version",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py::test_extension_router_has_only_metadata_and_retained_record_endpoints",
+        "apps/api/tests/unit/test_extension_metadata_boundary.py::test_request_bodies_reject_executable_or_installation_approval_fields"
+      ]
+    },
+    {
+      "file": "apps/api/tests/unit/test_official_module_discovery.py",
+      "category": "unit",
+      "test_count": 4,
+      "test_ids": [
+        "apps/api/tests/unit/test_official_module_discovery.py::test_no_modules_needed",
+        "apps/api/tests/unit/test_official_module_discovery.py::test_manifest_key_mismatch_rejected",
+        "apps/api/tests/unit/test_official_module_discovery.py::test_shipped_modules_discovered",
+        "apps/api/tests/unit/test_official_module_discovery.py::test_unsupported_manifest_fails_before_import"
+      ]
+    },
+    {
+      "file": "packages/plugin-sdk/marketplace_sign.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "packages/plugin-sdk/test_native_webhook_worker.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "packages/plugin-sdk/test_native_webhook_worker.py::NativeWorkerTest::test_checkpoint_queue_retry_order",
+        "packages/plugin-sdk/test_native_webhook_worker.py::NativeWorkerTest::test_deny_nonpublic_or_mixed_dns",
+        "packages/plugin-sdk/test_native_webhook_worker.py::NativeWorkerTest::test_replay"
+      ]
+    },
+    {
+      "file": "packages/plugin-sdk/test_webhook_relay.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "packages/plugin-sdk/test_webhook_relay.py::RelayTest::test_checkpoint_durable_queue_retry_and_redaction",
+        "packages/plugin-sdk/test_webhook_relay.py::RelayTest::test_signature_and_empty_initial_feed"
+      ]
+    },
+    {
+      "file": "tests/e2e/extension-lifecycle.spec.ts",
+      "category": "playwright_e2e",
+      "test_count": 1,
+      "test_ids": [
+        "tests/e2e/extension-lifecycle.spec.ts::R014 actual browser activates, edits, exports and retains extension history"
+      ]
+    },
+    {
+      "file": "tests/modules/test_extension_portability.py",
+      "category": "unit",
+      "test_count": 2,
+      "test_ids": [
+        "tests/modules/test_extension_portability.py::test_linked_house_record_history_disabled_portability_and_scope",
+        "tests/modules/test_extension_portability.py::test_land_asset_atomic_copy_explicit_transition_and_replay"
+      ]
+    },
+    {
+      "file": "tests/modules/test_reference_modules.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "tests/modules/test_reference_modules.py::test_two_independent_reference_modules_validate_core_extension_model"
+      ]
+    },
+    {
+      "file": "tools/marketplace_release.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "tools/migrate_official_modules.py",
+      "category": "unit",
+      "test_count": 0,
+      "test_ids": []
+    },
+    {
+      "file": "tools/r015_extension_oracle.py",
+      "category": "unit",
+      "test_count": 1,
+      "test_ids": [
+        "tools/r015_extension_oracle.py::script_main"
+      ]
+    },
+    {
+      "file": "tools/tests/test_validate_manifest.py",
+      "category": "unit",
+      "test_count": 3,
+      "test_ids": [
+        "tools/tests/test_validate_manifest.py::test_root_validation_manifest_contains_all_mandatory_categories",
+        "tools/tests/test_validate_manifest.py::test_ci_uses_the_dedicated_database_and_reference_identity_fixture",
+        "tools/tests/test_validate_manifest.py::test_backend_ci_is_independent_of_javascript_dependency_install"
+      ]
+    }
+  ]
+}

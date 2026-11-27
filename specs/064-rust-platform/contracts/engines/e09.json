@@ -1,0 +1,1276 @@
+{
+  "schema_version": "064-engine-contract-v1",
+  "engine_id": "E09",
+  "name": "Raster, terrain, survey",
+  "parent_references": [
+    "R008",
+    "R012"
+  ],
+  "spec_path": "specs/064-rust-platform/engines/e09-raster-terrain.md",
+  "architecture_candidate": "GDAL/COG + bounded Rust kernels for raster analysis, tiles, byte-range serving, and terrain preview.",
+  "baseline_commit": "3e78ac142acfc050ec22d30da5c44ad0e6b8459a",
+  "worktree_head": "babcdf9f00578ab336fb4404c90186fa55be9b51",
+  "generated_at": "2026-11-25T17:00:35Z",
+  "ac1_status": "verified_runtime_inventory_complete",
+  "summary": {
+    "http_operations": 8,
+    "websocket_routes": 0,
+    "sse_routes": 0,
+    "streaming_routes": 0,
+    "classifications": {
+      "migrate": 3,
+      "replace": 5
+    },
+    "migrations_count": 1,
+    "source_files_count": 5,
+    "test_files_count": 12,
+    "test_case_ids_count": 23
+  },
+  "operations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/analyze",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/analyze",
+      "operation_id": "analyze_raster_api_v1_organizations__organization_id__projects__project_id__raster_analyze_post",
+      "summary": "Analyze Raster",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "analyze_raster",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 64,
+      "engine": "E09",
+      "classification": "replace",
+      "classification_rationale": "Replace Python raster/terrain compute worker execution with native GDAL/COG + bounded Rust kernels preserving nodata/CRS/quota contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/analyze",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "analyze_raster",
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "multipart/form-data"
+      ],
+      "request_body_schemas": [
+        "Body_analyze_raster_api_v1_organizations__organization_id__projects__project_id__raster_analyze_post"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers",
+      "operation_id": "raster_layers_api_v1_organizations__organization_id__projects__project_id__raster_layers_get",
+      "summary": "Raster Layers",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "http",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "raster_layers",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 217,
+      "engine": "E09",
+      "classification": "migrate",
+      "classification_rationale": "Migrate raster layer catalog, byte-range file serving, and deletion to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "raster_layers"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers",
+      "operation_id": "store_raster_api_v1_organizations__organization_id__projects__project_id__raster_layers_post",
+      "summary": "Store Raster",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "http",
+      "status_code": 201,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "store_raster",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 232,
+      "engine": "E09",
+      "classification": "replace",
+      "classification_rationale": "Replace Python raster/terrain compute worker execution with native GDAL/COG + bounded Rust kernels preserving nodata/CRS/quota contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf",
+          "store_raster"
+        ],
+        "permission_references": [
+          "raster.layer.create",
+          "Permission.PROJECT_EDIT"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "multipart/form-data"
+      ],
+      "request_body_schemas": [
+        "Body_store_raster_api_v1_organizations__organization_id__projects__project_id__raster_layers_post"
+      ],
+      "response_schemas": {
+        "201": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "201",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}",
+      "operation_id": "delete_raster_api_v1_organizations__organization_id__projects__project_id__raster_layers__layer_id__delete",
+      "summary": "Delete Raster",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "http",
+      "status_code": 204,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "delete_raster",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 759,
+      "engine": "E09",
+      "classification": "migrate",
+      "classification_rationale": "Migrate raster layer catalog, byte-range file serving, and deletion to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers/{layer_id}",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "delete_raster",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "raster.layer.delete",
+          "Permission.PROJECT_EDIT"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "204": {
+          "content_types": [],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "layer_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "204",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/file",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/file",
+      "operation_id": "raster_file_api_v1_organizations__organization_id__projects__project_id__raster_layers__layer_id__file_get",
+      "summary": "Raster File",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "binary",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "raster_file",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 698,
+      "engine": "E09",
+      "classification": "migrate",
+      "classification_rationale": "Migrate raster layer catalog, byte-range file serving, and deletion to Rust Axum/SQLx.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers/{layer_id}/file",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "raster_file"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "layer_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/terrain-preview",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/terrain-preview",
+      "operation_id": "terrain_preview_api_v1_organizations__organization_id__projects__project_id__raster_layers__layer_id__terrain_preview_post",
+      "summary": "Terrain Preview",
+      "tags": [
+        "terrain-preview"
+      ],
+      "transport": "binary",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "terrain_preview",
+      "module": "openvietgis_api.adapters.http.terrain",
+      "source_file": "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "source_line": 46,
+      "engine": "E09",
+      "classification": "replace",
+      "classification_rationale": "Replace Python raster/terrain compute worker execution with native GDAL/COG + bounded Rust kernels preserving nodata/CRS/quota contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers/{layer_id}/terrain-preview",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "require_csrf",
+          "terrain_preview"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/json"
+      ],
+      "request_body_schemas": [
+        "TerrainProfile"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "layer_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 9,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/integration/spatial/test_terrain_preview.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 19,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report",
+          "apps/api/tests/integration/spatial/test_terrain_preview.py::test_project_dem_preview",
+          "apps/api/tests/unit/test_cogo_bounds.py::test_cardinal_bearings",
+          "apps/api/tests/unit/test_cogo_bounds.py::test_intersection_offset_and_deterministic_snap",
+          "apps/api/tests/unit/test_cogo_bounds.py::test_invalid_controls_fail_before_output"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png",
+      "operation_id": "raster_tile_api_v1_organizations__organization_id__projects__project_id__raster_layers__layer_id__tiles__z___x___y__png_get",
+      "summary": "Raster Tile",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "binary",
+      "status_code": 200,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "raster_tile",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 671,
+      "engine": "E09",
+      "classification": "replace",
+      "classification_rationale": "Replace Python raster PNG tile serving with Rust/GDAL COG tile gateway preserving scoped ACL and revision caching.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_or_service_token",
+        "is_public": false,
+        "requires_csrf": false,
+        "tenant_scope": "project_resource",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR SHARE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "raster_tile"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [],
+      "request_body_schemas": [],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id",
+          "layer_id",
+          "z",
+          "x",
+          "y"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/reports",
+      "raw_path": "/api/v1/organizations/{organization_id}/projects/{project_id}/raster/reports",
+      "operation_id": "raster_report_api_v1_organizations__organization_id__projects__project_id__raster_reports_post",
+      "summary": "Raster Report",
+      "tags": [
+        "raster-analysis"
+      ],
+      "transport": "http",
+      "status_code": null,
+      "deprecated": false,
+      "include_in_schema": true,
+      "handler": "raster_report",
+      "module": "openvietgis_api.adapters.http.raster",
+      "source_file": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "source_line": 557,
+      "engine": "E09",
+      "classification": "replace",
+      "classification_rationale": "Replace Python raster/terrain compute worker execution with native GDAL/COG + bounded Rust kernels preserving nodata/CRS/quota contract.",
+      "auth_tenant_scope": {
+        "auth_mode": "session_cookie_with_csrf_or_service_token",
+        "is_public": false,
+        "requires_csrf": true,
+        "tenant_scope": "project",
+        "project_access_guard": {
+          "enabled": true,
+          "project_suffix": "/raster/reports",
+          "scoped_human_allowed": false,
+          "pg_lock_mode": "FOR UPDATE"
+        },
+        "dependencies": [
+          "authenticate_request",
+          "get_db_session",
+          "get_settings",
+          "project_access_guard",
+          "raster_report",
+          "require_csrf"
+        ],
+        "permission_references": [
+          "Permission.PROJECT_READ"
+        ],
+        "rls_context_enforced": true
+      },
+      "request_body_content_types": [
+        "application/x-www-form-urlencoded"
+      ],
+      "request_body_schemas": [
+        "Body_raster_report_api_v1_organizations__organization_id__projects__project_id__raster_reports_post"
+      ],
+      "response_schemas": {
+        "200": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": []
+        },
+        "422": {
+          "content_types": [
+            "application/json"
+          ],
+          "schemas": [
+            "HTTPValidationError"
+          ]
+        }
+      },
+      "parameters": {
+        "path": [
+          "organization_id",
+          "project_id"
+        ],
+        "query": [],
+        "header": []
+      },
+      "revision_semantics": {
+        "uses_revision_pin_or_precondition": false,
+        "uses_idempotent_operation_id": false,
+        "matched_fields": []
+      },
+      "crs_semantics": {
+        "crs_sensitive": true,
+        "policy": "Raster/DEM preserves explicit GDAL CRS, nodata, metre elevation_unit, and vertical_reference (local/orthometric/ellipsoidal); web tiles in EPSG:3857."
+      },
+      "error_semantics": {
+        "declared_status_codes": [
+          "200",
+          "422"
+        ],
+        "envelopes": [
+          "422 sanitized validation envelope (no raw input/secret echo)",
+          "PlatformDomainError -> {code, message, details?}",
+          "SQLSTATE OV409 guard -> 409 {code: DATA_LOCKED, message}"
+        ]
+      },
+      "existing_tests": {
+        "test_file_count": 11,
+        "test_files": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py",
+          "apps/api/tests/unit/test_cogo_bounds.py",
+          "apps/api/tests/unit/test_external_raster_provider.py"
+        ],
+        "test_id_count": 22,
+        "sample_test_ids": [
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish",
+          "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+          "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation",
+          "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+          "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline",
+          "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api",
+          "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle",
+          "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations",
+          "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only",
+          "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+        ]
+      }
+    }
+  ],
+  "algorithms_and_capabilities": {
+    "sources": [
+      "apps/api/openvietgis_api/adapters/http/raster.py",
+      "apps/api/openvietgis_api/adapters/http/terrain.py"
+    ],
+    "engine": "E09",
+    "analyze_methods": [
+      "band",
+      "ndvi",
+      "ndwi",
+      "ndbi",
+      "hillshade"
+    ],
+    "store_and_derive_methods": [
+      "band",
+      "ndvi",
+      "ndwi",
+      "ndbi",
+      "hillshade",
+      "calculator",
+      "rgb",
+      "clip",
+      "change",
+      "slope",
+      "aspect",
+      "mosaic",
+      "resample"
+    ],
+    "report_methods": [
+      "zonal",
+      "contour"
+    ],
+    "resampling_methods": [
+      "near",
+      "bilinear"
+    ],
+    "terrain_preview": {
+      "elevation_units": [
+        "metre"
+      ],
+      "vertical_references": [
+        "local",
+        "orthometric",
+        "ellipsoidal"
+      ],
+      "requires_acknowledge_dem": true
+    }
+  },
+  "migrations": [
+    {
+      "file": "apps/api/migrations/versions/0024_raster_layers.py",
+      "filename": "0024_raster_layers.py",
+      "scope": "core_api",
+      "revision": "0024_raster_layers",
+      "down_revision": "0023_gis_access",
+      "branch_labels": null,
+      "depends_on": null,
+      "summary": "Persistent project-scoped raster assets and bounded XYZ tile pyramids.",
+      "schemas_created": [
+        "raster"
+      ],
+      "tables_touched": [
+        "raster.",
+        "raster.layers",
+        "raster.tiles"
+      ],
+      "has_rls_policy": true,
+      "engine": "E09",
+      "classification": "retain",
+      "rationale": "FR-011 preserves data IDs and PostgreSQL schema compatibility; existing migrations are retained."
+    }
+  ],
+  "source_files": [
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/raster_worker.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/terrain_worker.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/raster.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/terrain.py",
+      "role": "source",
+      "classification": "migrate",
+      "source_origin": "static-inventory direct mapping"
+    }
+  ],
+  "cross_engine_dependencies": [
+    {
+      "engine": "E01",
+      "relation": "All tenant/project routes depend on E01 authentication, CSRF, RBAC/ACL, RLS, and project_access_guard."
+    },
+    {
+      "engine": "E02",
+      "relation": "Links raster/terrain products to project/layer catalog and explicit CRS metadata."
+    },
+    {
+      "engine": "E05",
+      "relation": "Raster PNG tiles (/raster/layers/{layer_id}/tiles/{z}/{x}/{y}.png) participate in E05 tile caching/ACL revocation."
+    },
+    {
+      "engine": "E08",
+      "relation": "Provides raster computation operations consumed by E08 processing_models DAGs."
+    }
+  ],
+  "existing_test_suite": [
+    {
+      "path": "apps/api/tests/integration/m3/test_cogo_authorization.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_cogo_preview_requires_live_project_access",
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_requires_explicit_units_and_crs_and_leaves_no_rejected_artifact",
+        "apps/api/tests/integration/m3/test_cogo_authorization.py::test_dxf_inspection_requires_edit_scope_and_does_not_publish"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m3/test_r010_cog_viewport.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_cog_viewport.py::test_r010_cog_viewport_authorization_pixels_and_generation"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m3/test_r010_live_provider.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_live_provider.py::test_r010_provider_preview_real_auth_live_bytes_and_reopen"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m3/test_r010_r013_real.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r010_external_sources_ssrf_and_allowlist",
+        "apps/api/tests/integration/m3/test_r010_r013_real.py::test_r011_r012_r013_collaboration_cad_and_field_offline"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/m3/test_r010_raster_provider.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/m3/test_r010_raster_provider.py::test_r010_raster_profiles_protected_api"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_persistent_raster.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_persistent_raster.py::test_persistent_raster_lifecycle"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_raster_advanced.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_raster_advanced.py::test_advanced_raster_operations"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_raster_analysis.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_raster_analysis.py::test_raster_analysis_is_bounded_and_read_only"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_raster_terrain.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_raster_terrain.py::test_terrain_and_report"
+      ]
+    },
+    {
+      "path": "apps/api/tests/integration/spatial/test_terrain_preview.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/integration/spatial/test_terrain_preview.py::test_project_dem_preview"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_cogo_bounds.py",
+      "primary_engine": "E09",
+      "secondary_engines": [],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_cogo_bounds.py::test_cardinal_bearings",
+        "apps/api/tests/unit/test_cogo_bounds.py::test_intersection_offset_and_deterministic_snap",
+        "apps/api/tests/unit/test_cogo_bounds.py::test_invalid_controls_fail_before_output"
+      ]
+    },
+    {
+      "path": "apps/api/tests/unit/test_external_raster_provider.py",
+      "primary_engine": "E09",
+      "secondary_engines": [
+        "E12"
+      ],
+      "rationale": "Raster analysis, persistent raster, terrain, COG/GeoTIFF, or COGO survey test.",
+      "test_ids": [
+        "apps/api/tests/unit/test_external_raster_provider.py::test_fixed_approved_tile_real_pixel_proof",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tile_policy_valid_and_invalid_coordinates_bounds_origin",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_xyz_metadata_mismatch_never_requests_tile",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_wmts_metadata_wrong_matrix_crs_scale_or_limits_denied",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiled_geotiff_real_range_pixels_and_georeference",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiff_wrong_range_response_and_large_source_denied",
+        "apps/api/tests/unit/test_external_raster_provider.py::test_tiff_bad_crs_georeference_offsets_compression_or_payload_denied"
+      ]
+    }
+  ],
+  "edge_cases": [
+    "Raster upload size limits, storage quota enforcement, and malformed GeoTIFF/COG rejection.",
+    "Explicit nodata propagation, band index bounds (1..16), formula sanitization in raster calculator, and resampling allowlist (near/bilinear).",
+    "Byte-range (HTTP Range / 206) serving on /raster/layers/{layer_id}/file must handle invalid/unsatisfiable ranges safely.",
+    "Terrain preview requires explicit elevation_unit='metre', valid vertical_reference, and acknowledge_dem=True (no survey certification claim)."
+  ]
+}

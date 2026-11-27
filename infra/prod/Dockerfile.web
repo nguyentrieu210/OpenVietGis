@@ -4,7 +4,7 @@ RUN npm install --global pnpm@12.21.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY tools/check_node_runtime.mjs ./tools/check_node_runtime.mjs
 COPY packages ./packages
-COPY apps/web ./apps/web
+COPY apps/web/package.json ./apps/web/package.json
 COPY apps/web-next ./apps/web-next
 COPY modules ./modules
 RUN pnpm validate:runtime && pnpm install --frozen-lockfile && pnpm --filter @openvietgis/web-next build

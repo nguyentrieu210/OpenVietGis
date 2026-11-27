@@ -21,6 +21,7 @@ export const HOTKEYS: Hotkey[] = [
   { combo: "/", label: "Chat nhanh trên bản đồ (hiện cạnh con trỏ)", action: "@CHAT" },
 ];
 export const FIXED_KEYS: Hotkey[] = [
+  { combo: "Giữ Space", label: "Giữ Space và rê chuột để di chuyển bản đồ", action: "" },
   { combo: "Enter", label: "Vào ô lệnh · hoàn tất khi đang vẽ/đo", action: "" },
   { combo: "Esc", label: "Hủy thao tác", action: "" },
   { combo: "Ctrl+Z / Ctrl+Shift+Z", label: "Hoàn tác / làm lại", action: "" },

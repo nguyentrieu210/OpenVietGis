@@ -26,6 +26,9 @@ export function makeConfig(bootstrap = false) {
   const issuer = `http://127.0.0.1:${oidcPort}/realms/openvietgis`;
   return defineConfig({
   testDir: "./tests/e2e",
+  // Reports are scanned as security evidence; a PR diff in report metadata trips that scan
+  // on ordinary code (e.g. `token = ...`). Keep commit info, drop the diff.
+  captureGitInfo: { commit: true, diff: false },
   ...(bootstrap ? { testMatch: "**/bootstrap-service-identity.spec.ts" } :
     { testIgnore: "**/bootstrap-service-identity.spec.ts" }),
   // Real OIDC journeys mutate the same disposable identity/tenant fixture.

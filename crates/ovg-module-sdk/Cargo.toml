@@ -1,0 +1,16 @@
+[package]
+name = "ovg-module-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+ovg-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true

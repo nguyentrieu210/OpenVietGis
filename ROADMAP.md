@@ -266,3 +266,7 @@ Cross-cutting [Spec 046 — Documentation & Governance](specs/046-docs-governanc
 
 
 Cross-cutting [Spec 047 — Stable Acceptance](specs/047-stable-acceptance/spec.md): [scope, evidence and open gates](specs/047-stable-acceptance/AUDIT.md). No automatic live promotion.
+
+Cross-cutting [Spec 064 — Rust-native platform migration](specs/064-rust-platform/spec.md): proposed R031 child; preserve reference behavior, data and contracts, stage Rust core and API, tiles and incremental sync, benchmark and require security/rollback gates. [Plan](specs/064-rust-platform/plan.md) · [Tasks](specs/064-rust-platform/tasks.md) · [ADR-015 (Proposed)](docs/adr/ADR-015-rust-platform.md). Specification only; no implementation or production promotion implied.
+
+Spec 064 engine decomposition: [18 engine scopes](specs/064-rust-platform/engine-scope.md), [90 child tasks](specs/064-rust-platform/engine-tasks.md), [pinned static inventory](specs/064-rust-platform/contracts/static-inventory.json); runtime inventory and parity remain blocking gates.

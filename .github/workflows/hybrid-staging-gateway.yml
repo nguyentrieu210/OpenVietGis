@@ -1,0 +1,29 @@
+name: Hybrid Staging Gateway
+
+on:
+  push:
+    branches: ["064-**"]
+    paths:
+      - "infra/rust-platform/hybrid-gateway.conf"
+      - "tests/rust-parity/hybrid_gateway_smoke.py"
+      - ".github/workflows/hybrid-staging-gateway.yml"
+  pull_request:
+    paths:
+      - "infra/rust-platform/hybrid-gateway.conf"
+      - "tests/rust-parity/hybrid_gateway_smoke.py"
+      - ".github/workflows/hybrid-staging-gateway.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Nginx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends nginx
+      - name: Qualify hybrid routing
+        run: python3 tests/rust-parity/hybrid_gateway_smoke.py

@@ -1,8 +1,8 @@
 import {useEffect, useState} from "react";
-import {ApiClient, ApiError, getCurrentUser, listIdentityProviders, listMyOrganizations, listProjects, listQgisBindingCandidates, listIntegrationBindingDrafts, createQgisBindingDraft, activateQgisBinding, issueBindingPairingToken, loadCsrfToken, type CurrentUser, type IdentityProviderSummary, type MyOrganization, type Project} from "@openvietgis/client-sdk";
+import {ApiError, getCurrentUser, listIdentityProviders, listMyOrganizations, listProjects, listQgisBindingCandidates, listIntegrationBindingDrafts, createQgisBindingDraft, activateQgisBinding, issueBindingPairingToken, loadCsrfToken, type CurrentUser, type IdentityProviderSummary, type MyOrganization, type Project} from "@openvietgis/client-sdk";
 import {Brand} from "./Brand";
 
-const client = new ApiClient({baseUrl:"/api/v1"});
+import {apiClient as client} from "./workbenches/app/api";
 const key = "ovg-qgis-browser-login-v1";
 type Request = {port:number;state:string;expires:number};
 function capture(): Request | null {

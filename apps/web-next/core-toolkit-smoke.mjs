@@ -21,12 +21,16 @@ try{
   else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={operation_id:payload.operation_id};}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
+  else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Synthetic buffer",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Synthetic clip",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Synthetic dissolve",required_inputs:["input_layer"],parameters_schema:{}}]};
+  else if(p.endsWith("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/extensions/activations")&&method==="GET")body={items:active?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]:[]};
   else if(p.endsWith("/extensions/activations")&&method==="POST"){active=true;body={id:"activation",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}}
   else if(p.endsWith("/extensions/manifests"))body={items:[{id:"manifest",extension_key:"house_numbering",version:"2.0.0",api_compatibility:"1.x",enabled:true}]};
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
   else if(p.endsWith("/access/mine"))body={restricted:false};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
+  else if(p.includes("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Vùng đệm",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Cắt lớp",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Gộp vùng",required_inputs:["input_layer"],parameters_schema:{}}]};
+  else if(p.includes("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
   else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
   else return route.fulfill({status:404,json:{}});
@@ -40,12 +44,14 @@ try{
 
  const command=async(t)=>{const input=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await input.fill(t);await input.press("Enter")};
  await command("HELP");assert.ok(await page.locator(".core-command-list button").count()>35);
- await command("DIST 106.7,10.8 106.701,10.8");await page.locator(".core-sketch strong").waitFor();assert.match(await page.locator(".core-sketch strong").innerText(),/109\./);
- await command("END");await page.getByText(/hoàn tất/).first().waitFor();await command("ESC");await page.locator(".core-sketch").waitFor({state:"detached"});
+ await command("DIST 106.7,10.8 106.701,10.8");const sketch=page.locator(".core-sketch");await sketch.waitFor();const distance=sketch.locator(".core-sketch-measure dd").nth(1);await distance.waitFor();assert.match(await distance.innerText(),/^109\.\d{2} m$/);
+ await command("END");await page.getByText("Hoàn tất thao tác",{exact:true}).first().waitFor();await command("ESC");await page.locator(".core-sketch").waitFor({state:"detached"});
  await command("HIDE");await page.getByText(/100 đang hiển thị/).waitFor();await command("SHOW");await page.getByText(/200 đang hiển thị/).waitFor();
  await command("LAYER");await page.getByRole("dialog",{name:/Thuộc tính layer/}).waitFor();await page.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();
  const savedMap=page.waitForResponse(r=>r.request().method()==="PUT"&&new URL(r.url()).pathname.endsWith("/map"));await command("SAVE");const saveResponse=await savedMap;assert.equal(saveResponse.status(),200);assert.equal((await saveResponse.json()).configuration_revision,2);assert.equal(mapSavePayload.expected_revision,1);assert.equal(mapSavePayload.layers.length,2);await page.getByText("Đã lưu bố cục, thứ tự, kiểu và trạng thái layer.",{exact:true}).first().waitFor();
  await command("POINT 106.7,10.8");await command("END");await page.getByRole("dialog",{name:"Tạo đối tượng GIS"}).waitFor();await page.getByRole("dialog",{name:"Tạo đối tượng GIS"}).locator("input").fill("Điểm thử");await page.getByRole("button",{name:"Lưu đối tượng"}).click();await page.getByRole("dialog",{name:"Tạo đối tượng GIS"}).waitFor({state:"detached"});
- for(const cmd of ["LA","IMPORT","EDIT","QUERY","BUFFER","CLIP","DISSOLVE","PLOT","DXF","WMS","FIELD","REVIEW","OPS"]){await command(cmd);await page.locator(".core-workbench").waitFor();await page.locator(".core-workbench-body").waitFor();await page.waitForTimeout(350);if(["BUFFER","CLIP","DISSOLVE"].includes(cmd)){await page.locator("[data-testid=processing-workbench]").waitFor();assert.equal(await page.locator("[data-testid=processing-workbench] select").first().inputValue(),cmd.toLowerCase())}await page.getByRole("button",{name:"Đóng công cụ GIS"}).click();await page.locator(".core-workbench").waitFor({state:"detached"});console.log("PASS panel "+cmd)}
- await page.screenshot({path:"/tmp/ovg-core-toolkit-smoke.png"});assert.equal(errors.length,0,errors.join("\n"));console.log("PASS command, measurement, layer visibility, map save, create feature, all 13 workbench commands");
+ await command("EDIT");await page.getByText(/Đang chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();await command("EDIT");await page.getByText(/Đã thôi chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();console.log("PASS direct edit toggle");
+ await command("PLOT");const layout=page.getByRole("dialog",{name:"Layout Designer"});await layout.waitFor();await page.getByRole("button",{name:"Đóng Layout Designer"}).click();await layout.waitFor({state:"detached"});console.log("PASS layout designer");
+ for(const cmd of ["LA","IMPORT","QUERY","BUFFER","CLIP","DISSOLVE","DXF","WMS","FIELD","REVIEW","OPS"]){await command(cmd);await page.locator(".core-workbench").waitFor();await page.locator(".core-workbench-body").waitFor();await page.waitForTimeout(350);if(["BUFFER","CLIP","DISSOLVE"].includes(cmd)){const titles={BUFFER:"Vùng đệm (Buffer)",CLIP:"Cắt lớp (Clip)",DISSOLVE:"Gộp vùng (Dissolve)"};await page.getByRole("dialog",{name:titles[cmd]}).waitFor();await page.getByTestId("processing-workbench").waitFor()}await page.getByRole("button",{name:"Đóng công cụ GIS"}).click();await page.locator(".core-workbench").waitFor({state:"detached"});console.log("PASS panel "+cmd)}
+ await page.screenshot({path:"/tmp/ovg-core-toolkit-smoke.png"});assert.equal(errors.length,0,errors.join("\n"));console.log("PASS command, measurement, layer visibility, map save, create feature, edit toggle, layout designer, and 11 workbench commands");
 }finally{await browser.close()}
