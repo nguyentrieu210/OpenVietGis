@@ -8,7 +8,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use ovg_core::AppError;
-use ovg_storage::cad_documents::{self, CadDocError, LinkedFilter, SaveCadVersionArgs};
+use ovg_storage::cad_documents::{
+    self, find_existing_georef_conversion, insert_dxf_export_conversion,
+    insert_rejected_dwg_conversion, load_cad_document_version_blob, load_dxf_export_source,
+    load_georef_draft_context, load_native_import_context, publish_cad_import,
+    validate_geojson_ops_postgis, validate_wkts_postgis, CadDocError, LinkedFilter,
+    PublishCadImportArgs, SaveCadVersionArgs,
+};
 use ovg_storage::catalog::ProjectReadPolicy;
 use ovg_storage::editing::{EditError, Guard, Permission};
 use serde::Deserialize;
@@ -16,6 +22,9 @@ use serde_json::{json, Value};
 use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
+use crate::cad_worker::{
+    run_export_georef_draft, run_parse_dxf, run_preview_native_import, run_write_dxf,
+};
 use crate::catalog::{project_read, CatalogError};
 use crate::edit_auth::{
     self, authenticate_actor, authenticate_json, require_csrf as actor_csrf, Failure,
@@ -52,6 +61,25 @@ pub(crate) fn router() -> Router<AppState> {
             get(cad_feature_links),
         )
         .route(&format!("{CAD_BASE}/conversions"), get(list_conversions))
+        .route(&format!("{CAD_BASE}/inspect"), post(inspect_cad_file))
+        .route(&format!("{CAD_BASE}/import"), post(import_cad_file))
+        .route(&format!("{CAD_BASE}/export"), post(export_cad_dxf))
+        .route(
+            &format!("{CAD_DOCS}/{{document_id}}/versions/{{version}}/inspect-georef"),
+            post(inspect_georef),
+        )
+        .route(
+            &format!("{CAD_DOCS}/{{document_id}}/versions/{{version}}/import-georef"),
+            post(import_georef),
+        )
+        .route(
+            &format!("{CAD_DOCS}/{{document_id}}/versions/{{version}}/export-georef-draft"),
+            post(export_georef_draft),
+        )
+        .route(
+            &format!("{CAD_DOCS}/{{document_id}}/versions/{{version}}/preview-native-import"),
+            post(preview_native_import),
+        )
         .route(
             &format!("{CAD_BASE}/precision/traverse"),
             post(cogo_traverse),
@@ -522,6 +550,997 @@ async fn list_conversions(
         .map_err(|_| EditError::Internal("cad conversions query failed".to_owned()))?;
     scope.commit().await?;
     Ok(Json(result))
+}
+
+const MAX_CAD_UPLOAD_BYTES: usize = 25 * 1024 * 1024;
+const CAD_MULTIPART_CAP: usize = MAX_CAD_UPLOAD_BYTES + 256 * 1024;
+
+fn is_hex64(s: &str) -> bool {
+    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn parse_bool_field(raw: &str) -> Result<bool, EditError> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" | "" => Ok(false),
+        _ => Err(EditError::InvalidRequest),
+    }
+}
+
+fn valid_cad_unit(u: &str) -> bool {
+    matches!(u, "meter" | "centimeter" | "millimeter")
+}
+
+async fn read_store_bytes(state: &AppState, key: &str, sha256: &str) -> Result<Vec<u8>, Failure> {
+    let (mut file, _) = Store::new(state)
+        .open_verified(key, sha256)
+        .await
+        .map_err(|_| EditError::detail(409, "CAD artifact integrity failure"))?;
+    let mut payload = Vec::new();
+    file.read_to_end(&mut payload)
+        .await
+        .map_err(|_| EditError::Internal("CAD store read failed".to_owned()))?;
+    Ok(payload)
+}
+
+async fn inspect_cad_file(
+    State(state): State<AppState>,
+    Path((org, proj)): Path<(String, String)>,
+    request: Request,
+) -> Result<Json<Value>, Failure> {
+    let (mut parts, body) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &org).await?;
+    let content_type = parts
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
+    let raw = to_bytes(body, CAD_MULTIPART_CAP)
+        .await
+        .map_err(|_| EditError::validation("CAD_FILE_LIMIT", "CAD upload size unsupported"))?;
+    let Some(mp) = multipart_parts(&content_type, &raw) else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let mut file_info: Option<(String, &[u8])> = None;
+    let mut units = String::new();
+    let mut crs_code_raw = String::new();
+    let mut tol_raw: Option<String> = None;
+    for (k, fn_opt, content) in mp {
+        if k == "file" && fn_opt.is_some() {
+            file_info = Some((fn_opt.unwrap_or("drawing.dxf").to_owned(), content));
+        } else if let Ok(v) = std::str::from_utf8(content) {
+            match k.as_str() {
+                "units" => units = v.to_owned(),
+                "crs_code" => crs_code_raw = v.to_owned(),
+                "curve_tolerance_m" if !v.trim().is_empty() => tol_raw = Some(v.to_owned()),
+                _ => {}
+            }
+        }
+    }
+    let Some((filename, payload)) = file_info else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    if !valid_cad_unit(&units) {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let Ok(crs_code) = crs_code_raw.trim().parse::<i32>() else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let curve_tolerance_m = match tol_raw {
+        Some(t) => Some(
+            t.trim()
+                .parse::<f64>()
+                .map_err(|_| EditError::InvalidRequest)?,
+        ),
+        None => None,
+    };
+
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &parts.headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    if !filename.to_ascii_lowercase().ends_with(".dxf") {
+        return Err(EditError::validation(
+            "CAD_FORMAT_UNSUPPORTED",
+            "only 2D DXF can be inspected; DWG adapter unavailable",
+        )
+        .into());
+    }
+    if !matches!(crs_code, 3857 | 5899) {
+        return Err(EditError::validation(
+            "UNGEOREFERENCED_CAD_REJECTED",
+            "explicit projected CRS required",
+        )
+        .into());
+    }
+    if payload.is_empty() || payload.len() > MAX_CAD_UPLOAD_BYTES {
+        return Err(EditError::validation("CAD_FILE_LIMIT", "CAD upload size unsupported").into());
+    }
+
+    let parsed = run_parse_dxf(
+        payload,
+        json!({
+            "units": units,
+            "crs_code": crs_code,
+            "curve_tolerance_m": curve_tolerance_m,
+        }),
+    )
+    .await?;
+
+    let wkts: Vec<String> = parsed["wkts"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    validate_wkts_postgis(&mut scope, &wkts).await?;
+    scope.rollback().await?;
+
+    let digest = parsed["sha256"].as_str().unwrap_or_default();
+    let mut summary = parsed["entity_summary"].clone();
+    if let Some(obj) = summary.as_object_mut() {
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(digest.to_owned()),
+        );
+        obj.insert("crs_code".to_owned(), Value::from(crs_code));
+    }
+
+    Ok(Json(json!({
+        "sha256": digest,
+        "inspection_fingerprint": parsed["inspection_fingerprint"],
+        "published": false,
+        "geometry_valid": true,
+        "entity_summary": summary,
+        "loss_report": parsed["loss_report"],
+    })))
+}
+
+async fn import_cad_file(
+    State(state): State<AppState>,
+    Path((org, proj)): Path<(String, String)>,
+    request: Request,
+) -> Result<(StatusCode, Json<Value>), Failure> {
+    let (mut parts, body) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &org).await?;
+    let content_type = parts
+        .headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_owned();
+    let raw = to_bytes(body, CAD_MULTIPART_CAP)
+        .await
+        .map_err(|_| EditError::validation("CAD_FILE_LIMIT", "CAD upload exceeds 25 MiB limit"))?;
+    let Some(mp) = multipart_parts(&content_type, &raw) else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let mut file_info: Option<(String, &[u8])> = None;
+    let mut units = String::new();
+    let mut crs_code_raw = String::new();
+    let mut layer_name = "CAD Import".to_owned();
+    let mut tol_raw: Option<String> = None;
+    let mut ack_loss = false;
+    let mut expected_sha256: Option<String> = None;
+    let mut expected_fp: Option<String> = None;
+    for (k, fn_opt, content) in mp {
+        if k == "file" && fn_opt.is_some() {
+            file_info = Some((fn_opt.unwrap_or("drawing.dxf").to_owned(), content));
+        } else if let Ok(v) = std::str::from_utf8(content) {
+            match k.as_str() {
+                "units" => units = v.to_owned(),
+                "crs_code" => crs_code_raw = v.to_owned(),
+                "layer_name" => layer_name = v.to_owned(),
+                "curve_tolerance_m" if !v.trim().is_empty() => tol_raw = Some(v.to_owned()),
+                "acknowledge_loss" => ack_loss = parse_bool_field(v)?,
+                "expected_sha256" if !v.is_empty() => expected_sha256 = Some(v.to_owned()),
+                "expected_inspection_fingerprint" if !v.is_empty() => {
+                    expected_fp = Some(v.to_owned())
+                }
+                _ => {}
+            }
+        }
+    }
+    let Some((filename, payload)) = file_info else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    if !valid_cad_unit(&units) {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let Ok(crs_code) = crs_code_raw.trim().parse::<i32>() else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let curve_tolerance_m = match tol_raw {
+        Some(t) => Some(
+            t.trim()
+                .parse::<f64>()
+                .map_err(|_| EditError::InvalidRequest)?,
+        ),
+        None => None,
+    };
+
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &parts.headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    if !matches!(crs_code, 3857 | 5899) {
+        return Err(EditError::validation(
+            "UNGEOREFERENCED_CAD_REJECTED",
+            "DXF length units require an explicit supported projected CRS (3857 or 5899); geographic degrees are not metres",
+        )
+        .into());
+    }
+    if payload.is_empty() || payload.len() > MAX_CAD_UPLOAD_BYTES {
+        return Err(EditError::validation("CAD_FILE_LIMIT", "CAD upload size unsupported").into());
+    }
+
+    let lower = filename.to_ascii_lowercase();
+    if !lower.ends_with(".dwg") && !lower.ends_with(".dxf") {
+        return Err(
+            EditError::validation("CAD_FORMAT_UNSUPPORTED", "only .dxf is supported").into(),
+        );
+    }
+
+    let conv_id = Uuid::new_v4();
+    let sha256_hex_val = sha256_hex(payload);
+    if let Some(ref exp) = expected_sha256 {
+        if exp != &sha256_hex_val {
+            return Err(EditError::conflict(
+                "CAD_INSPECTION_STALE",
+                "DXF changed after inspection",
+            )
+            .into());
+        }
+    }
+
+    let org_id = scope.organization_id();
+    let proj_id = scope.project_id();
+    let fmt = if lower.ends_with(".dwg") {
+        "dwg"
+    } else {
+        "dxf"
+    };
+    let skey = format!("cad/{org_id}/{proj_id}/{conv_id}.{fmt}");
+
+    if fmt == "dwg" {
+        Store::new(&state)
+            .put(&skey, payload)
+            .await
+            .map_err(|e| EditError::Internal(format!("CAD DWG store failed: {e:?}")))?;
+        let rec_id = insert_rejected_dwg_conversion(
+            &mut scope,
+            conv_id,
+            &filename,
+            &units,
+            crs_code,
+            &skey,
+            &sha256_hex_val,
+            payload.len() as i64,
+        )
+        .await?;
+        scope.commit().await?;
+        return Err(EditError::validation(
+            "DWG_ADAPTER_REQUIRED",
+            "DWG requires a separately licensed adapter; original evidence preserved.",
+        )
+        .with_details(json!({ "conversion_id": rec_id.to_string(), "sha256": sha256_hex_val }))
+        .into());
+    }
+
+    let parsed = run_parse_dxf(
+        payload,
+        json!({
+            "units": units,
+            "crs_code": crs_code,
+            "curve_tolerance_m": curve_tolerance_m,
+        }),
+    )
+    .await?;
+
+    let fingerprint = parsed["inspection_fingerprint"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    if let Some(ref exp) = expected_fp {
+        if exp != &fingerprint {
+            return Err(EditError::conflict(
+                "CAD_INSPECTION_STALE",
+                "DXF inspection profile or drawing changed",
+            )
+            .into());
+        }
+    }
+    let requires_ack = parsed["loss_report"]["requires_acknowledgement"]
+        .as_bool()
+        .unwrap_or(false);
+    let mut summary = parsed["entity_summary"].clone();
+    let mut loss_report = parsed["loss_report"].clone();
+    if requires_ack && (!ack_loss || expected_fp.is_none()) {
+        return Err(EditError::validation(
+            "CAD_LOSS_ACK_REQUIRED",
+            "Inspect the drawing and explicitly acknowledge CAD mapping loss before import",
+        )
+        .with_details(json!({
+            "sha256": sha256_hex_val,
+            "inspection_fingerprint": fingerprint,
+            "entity_summary": summary,
+            "loss_report": loss_report,
+        }))
+        .into());
+    }
+
+    if let Some(obj) = summary.as_object_mut() {
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(sha256_hex_val.clone()),
+        );
+        obj.insert(
+            "inspection_fingerprint".to_owned(),
+            Value::String(fingerprint.clone()),
+        );
+        obj.insert("crs_code".to_owned(), Value::from(crs_code));
+    }
+    if let Some(obj) = loss_report.as_object_mut() {
+        obj.insert("acknowledged".to_owned(), Value::from(ack_loss));
+    }
+
+    let features: Vec<Value> = parsed["features"].as_array().cloned().unwrap_or_default();
+    let family = parsed["family"].as_str().unwrap_or("Point");
+    let schema_rev = parsed["schema_rev"].as_str().unwrap_or_default();
+
+    let conv = publish_cad_import(
+        &mut scope,
+        PublishCadImportArgs {
+            conv_id,
+            filename: &filename,
+            layer_name: &layer_name,
+            units: &units,
+            crs_code,
+            family,
+            sha256: &sha256_hex_val,
+            byte_size: payload.len() as i64,
+            storage_key: &skey,
+            schema_rev,
+            inspection_fingerprint: &fingerprint,
+            entity_summary: summary,
+            loss_report,
+            features: &features,
+            doc_placement: None,
+        },
+    )
+    .await?;
+
+    Store::new(&state)
+        .put(&skey, payload)
+        .await
+        .map_err(|e| EditError::Internal(format!("CAD store put failed: {e:?}")))?;
+    scope.commit().await?;
+    Ok((StatusCode::CREATED, Json(conv)))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ExportDxfBody {
+    layer_id: Uuid,
+    units: String,
+    expected_content_revision: String,
+    #[serde(default)]
+    acknowledge_attribute_loss: bool,
+}
+
+async fn export_cad_dxf(
+    State(state): State<AppState>,
+    Path((org, proj)): Path<(String, String)>,
+    request: Request,
+) -> Result<Response, Failure> {
+    let (actor, headers, maybe_json) = authenticate_json(&state, request, &org).await?;
+    let body: ExportDxfBody = maybe_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or(EditError::InvalidRequest)?;
+    if !valid_cad_unit(&body.units) || !is_hex64(&body.expected_content_revision) {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &headers)?;
+    scope.authorize(Permission::Read).await?;
+
+    let src = load_dxf_export_source(
+        &mut scope,
+        body.layer_id,
+        &body.expected_content_revision,
+        body.acknowledge_attribute_loss,
+    )
+    .await?;
+
+    let (dxf_bytes, dxf_sha, dxf_size) = run_write_dxf(json!({
+        "features": src.features,
+        "layer_name": src.layer_name,
+        "units": body.units,
+    }))
+    .await?;
+
+    let conv_id = Uuid::new_v4();
+    let fname = format!("export-{conv_id}.dxf");
+    let skey = format!(
+        "cad/{}/{}/{fname}",
+        scope.organization_id(),
+        scope.project_id()
+    );
+    Store::new(&state)
+        .put(&skey, &dxf_bytes)
+        .await
+        .map_err(|e| EditError::Internal(format!("CAD export store failed: {e:?}")))?;
+
+    insert_dxf_export_conversion(
+        &mut scope,
+        conv_id,
+        &fname,
+        &body.units,
+        src.stored_crs,
+        &skey,
+        &dxf_sha,
+        dxf_size,
+        src.source_id,
+        body.layer_id,
+        &src.content_revision,
+        src.features.len(),
+    )
+    .await?;
+    scope.commit().await?;
+
+    let mut resp_headers = HeaderMap::new();
+    resp_headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/dxf"),
+    );
+    if let Ok(hv) = HeaderValue::from_str(&format!("attachment; filename=\"{fname}\"")) {
+        resp_headers.insert(header::CONTENT_DISPOSITION, hv);
+    }
+    if let Ok(hv) = HeaderValue::from_str(&dxf_sha) {
+        resp_headers.insert("x-content-sha256", hv);
+    }
+    if let Ok(hv) = HeaderValue::from_str(&conv_id.to_string()) {
+        resp_headers.insert("x-cad-conversion-id", hv);
+    }
+    Ok((StatusCode::OK, resp_headers, dxf_bytes).into_response())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeorefBody {
+    crs_code: i32,
+    #[serde(default)]
+    web_controls: Option<Vec<[[f64; 2]; 2]>>,
+    units: String,
+    controls: Vec<[[f64; 2]; 2]>,
+    tolerance_m: f64,
+    max_scale_deviation: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeorefImportBody {
+    crs_code: i32,
+    #[serde(default)]
+    web_controls: Option<Vec<[[f64; 2]; 2]>>,
+    units: String,
+    controls: Vec<[[f64; 2]; 2]>,
+    tolerance_m: f64,
+    max_scale_deviation: f64,
+    layer_name: String,
+    expected_sha256: String,
+    expected_inspection_fingerprint: String,
+    acknowledge_loss: bool,
+}
+
+fn validate_georef_fields(
+    crs_code: i32,
+    units: &str,
+    controls: &[[[f64; 2]; 2]],
+    web_controls: Option<&Vec<[[f64; 2]; 2]>>,
+    tolerance_m: f64,
+    max_scale_deviation: f64,
+) -> Result<(), EditError> {
+    if !matches!(crs_code, 3857 | 5899)
+        || !valid_cad_unit(units)
+        || !(3..=100).contains(&controls.len())
+        || web_controls.is_some_and(|wc| !(3..=100).contains(&wc.len()))
+        || !tolerance_m.is_finite()
+        || !(1e-6..=1000.0).contains(&tolerance_m)
+        || !max_scale_deviation.is_finite()
+        || !(0.0..=0.2).contains(&max_scale_deviation)
+    {
+        return Err(EditError::InvalidRequest);
+    }
+    Ok(())
+}
+
+async fn inspect_georef(
+    State(state): State<AppState>,
+    Path((org, proj, doc_id_raw, ver_raw)): Path<(String, String, String, String)>,
+    request: Request,
+) -> Result<Json<Value>, Failure> {
+    let (actor, headers, maybe_json) = authenticate_json(&state, request, &org).await?;
+    let body: GeorefBody = maybe_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or(EditError::InvalidRequest)?;
+    validate_georef_fields(
+        body.crs_code,
+        &body.units,
+        &body.controls,
+        body.web_controls.as_ref(),
+        body.tolerance_m,
+        body.max_scale_deviation,
+    )?;
+    let (Ok(document_id), Ok(version)) = (Uuid::parse_str(&doc_id_raw), ver_raw.parse::<i32>())
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    let (_, _, storage_key, sha256) =
+        load_cad_document_version_blob(&mut scope, document_id, version).await?;
+    let payload = read_store_bytes(&state, &storage_key, &sha256).await?;
+    let parsed = run_parse_dxf(
+        &payload,
+        json!({
+            "units": body.units,
+            "crs_code": body.crs_code,
+            "curve_tolerance_m": null,
+            "document_id": document_id.to_string(),
+            "version": version,
+            "georef": {
+                "crs_code": body.crs_code,
+                "units": body.units,
+                "controls": body.controls,
+                "web_controls": body.web_controls,
+                "tolerance_m": body.tolerance_m,
+                "max_scale_deviation": body.max_scale_deviation,
+            }
+        }),
+    )
+    .await?;
+
+    let wkts: Vec<String> = parsed["wkts"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    validate_wkts_postgis(&mut scope, &wkts).await?;
+    scope.rollback().await?;
+
+    let digest = parsed["sha256"].as_str().unwrap_or_default();
+    let placed_crs = parsed["crs_code"].as_i64().unwrap_or(3857);
+    let mut summary = parsed["entity_summary"].clone();
+    if let Some(obj) = summary.as_object_mut() {
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(digest.to_owned()),
+        );
+        obj.insert("crs_code".to_owned(), Value::from(placed_crs));
+    }
+
+    Ok(Json(json!({
+        "sha256": digest,
+        "inspection_fingerprint": parsed["inspection_fingerprint"],
+        "published": false,
+        "geometry_valid": true,
+        "entity_summary": summary,
+        "loss_report": parsed["loss_report"],
+    })))
+}
+
+async fn import_georef(
+    State(state): State<AppState>,
+    Path((org, proj, doc_id_raw, ver_raw)): Path<(String, String, String, String)>,
+    request: Request,
+) -> Result<(StatusCode, Json<Value>), Failure> {
+    let (actor, headers, maybe_json) = authenticate_json(&state, request, &org).await?;
+    let body: GeorefImportBody = maybe_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or(EditError::InvalidRequest)?;
+    validate_georef_fields(
+        body.crs_code,
+        &body.units,
+        &body.controls,
+        body.web_controls.as_ref(),
+        body.tolerance_m,
+        body.max_scale_deviation,
+    )?;
+    let layer_len = body.layer_name.chars().count();
+    if !(1..=200).contains(&layer_len)
+        || !is_hex64(&body.expected_sha256)
+        || !is_hex64(&body.expected_inspection_fingerprint)
+        || !body.acknowledge_loss
+    {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let (Ok(document_id), Ok(version)) = (Uuid::parse_str(&doc_id_raw), ver_raw.parse::<i32>())
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    let (filename, _, storage_key, doc_sha256) =
+        load_cad_document_version_blob(&mut scope, document_id, version).await?;
+    if body.expected_sha256 != doc_sha256 {
+        return Err(
+            EditError::conflict("CAD_INSPECTION_STALE", "DXF changed after inspection").into(),
+        );
+    }
+    let payload = read_store_bytes(&state, &storage_key, &doc_sha256).await?;
+    let parsed = run_parse_dxf(
+        &payload,
+        json!({
+            "units": body.units,
+            "crs_code": body.crs_code,
+            "curve_tolerance_m": null,
+            "document_id": document_id.to_string(),
+            "version": version,
+            "georef": {
+                "crs_code": body.crs_code,
+                "units": body.units,
+                "controls": body.controls,
+                "web_controls": body.web_controls,
+                "tolerance_m": body.tolerance_m,
+                "max_scale_deviation": body.max_scale_deviation,
+            }
+        }),
+    )
+    .await?;
+
+    let fingerprint = parsed["inspection_fingerprint"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    if body.expected_inspection_fingerprint != fingerprint {
+        return Err(EditError::conflict(
+            "CAD_INSPECTION_STALE",
+            "DXF inspection profile or drawing changed",
+        )
+        .into());
+    }
+    if let Some(prior) = find_existing_georef_conversion(&mut scope, &fingerprint).await? {
+        scope.rollback().await?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(json!({
+                "id": prior["id"],
+                "layer_id": prior["layer_id"],
+                "source_id": prior["source_id"],
+                "sha256": prior["sha256"],
+                "content_revision": prior["content_revision"],
+                "entity_summary": prior["entity_summary"],
+                "loss_report": prior["loss_report"],
+            })),
+        ));
+    }
+
+    let placed_crs = parsed["crs_code"].as_i64().unwrap_or(3857) as i32;
+    let schema_rev = parsed["schema_rev"].as_str().unwrap_or_default();
+    let family = parsed["family"].as_str().unwrap_or("Point");
+    let features: Vec<Value> = parsed["features"].as_array().cloned().unwrap_or_default();
+    let mut summary = parsed["entity_summary"].clone();
+    if let Some(obj) = summary.as_object_mut() {
+        obj.insert(
+            "imported_schema_revision".to_owned(),
+            Value::String(schema_rev.to_owned()),
+        );
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(doc_sha256.clone()),
+        );
+        obj.insert(
+            "inspection_fingerprint".to_owned(),
+            Value::String(fingerprint.clone()),
+        );
+        obj.insert("crs_code".to_owned(), Value::from(placed_crs));
+    }
+    let mut loss_report = parsed["loss_report"].clone();
+    if let Some(obj) = loss_report.as_object_mut() {
+        obj.insert("acknowledged".to_owned(), Value::from(true));
+    }
+
+    let conv_id = Uuid::new_v4();
+    let conv_key = format!(
+        "cad/{}/{}/{conv_id}.dxf",
+        scope.organization_id(),
+        scope.project_id()
+    );
+    let rec = publish_cad_import(
+        &mut scope,
+        PublishCadImportArgs {
+            conv_id,
+            filename: &filename,
+            layer_name: &body.layer_name,
+            units: &body.units,
+            crs_code: placed_crs,
+            family,
+            sha256: &doc_sha256,
+            byte_size: payload.len() as i64,
+            storage_key: &conv_key,
+            schema_rev,
+            inspection_fingerprint: &fingerprint,
+            entity_summary: summary,
+            loss_report,
+            features: &features,
+            doc_placement: Some((document_id, version)),
+        },
+    )
+    .await?;
+
+    Store::new(&state)
+        .put(&conv_key, &payload)
+        .await
+        .map_err(|e| EditError::Internal(format!("CAD georef store failed: {e:?}")))?;
+    scope.commit().await?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "id": rec["id"],
+            "layer_id": rec["layer_id"],
+            "source_id": rec["source_id"],
+            "sha256": rec["sha256"],
+            "content_revision": rec["content_revision"],
+            "entity_summary": rec["entity_summary"],
+            "loss_report": rec["loss_report"],
+        })),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GeorefDraftBody {
+    conversion_id: Uuid,
+    expected_document_sha256: String,
+    expected_content_revision: String,
+    expected_schema_revision: String,
+    #[serde(default)]
+    expected_preview_fingerprint: Option<String>,
+    #[serde(default)]
+    acknowledge_loss: bool,
+    #[serde(default = "default_draft_profile")]
+    profile: String,
+}
+
+fn default_draft_profile() -> String {
+    "derived-local-dxf-v1".to_owned()
+}
+
+async fn export_georef_draft(
+    State(state): State<AppState>,
+    Path((org, proj, doc_id_raw, ver_raw)): Path<(String, String, String, String)>,
+    request: Request,
+) -> Result<Response, Failure> {
+    let (actor, headers, maybe_json) = authenticate_json(&state, request, &org).await?;
+    let body: GeorefDraftBody = maybe_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or(EditError::InvalidRequest)?;
+    if !is_hex64(&body.expected_document_sha256)
+        || !is_hex64(&body.expected_content_revision)
+        || !is_hex64(&body.expected_schema_revision)
+        || body
+            .expected_preview_fingerprint
+            .as_deref()
+            .is_some_and(|fp| !is_hex64(fp))
+        || !matches!(
+            body.profile.as_str(),
+            "derived-local-dxf-v1" | "native-xy-dxf-v1"
+        )
+    {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let (Ok(document_id), Ok(version)) = (Uuid::parse_str(&doc_id_raw), ver_raw.parse::<i32>())
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    let ctx = load_georef_draft_context(
+        &mut scope,
+        document_id,
+        version,
+        body.conversion_id,
+        &body.expected_document_sha256,
+        &body.expected_content_revision,
+        &body.expected_schema_revision,
+    )
+    .await?;
+    let original = read_store_bytes(&state, &ctx.storage_key, &ctx.sha256).await?;
+    scope.rollback().await?;
+
+    let (meta, payload) = run_export_georef_draft(
+        &original,
+        json!({
+            "document_id": document_id.to_string(),
+            "version": version,
+            "document_sha256": ctx.sha256,
+            "conversion_id": body.conversion_id.to_string(),
+            "source_id": ctx.source_id.to_string(),
+            "layer_id": ctx.layer_id.to_string(),
+            "content_revision": ctx.content_revision,
+            "schema_revision": ctx.schema_revision,
+            "layer_name": ctx.layer_name,
+            "entity_summary": ctx.entity_summary,
+            "features": ctx.features,
+            "profile": body.profile,
+        }),
+    )
+    .await?;
+
+    let fingerprint = meta["preview_fingerprint"].as_str().unwrap_or_default();
+    if body.expected_preview_fingerprint.is_none() {
+        if body.acknowledge_loss {
+            return Err(EditError::detail(422, "Review preview before acknowledging loss").into());
+        }
+        let mut preview = meta["preview"].clone();
+        if let Some(obj) = preview.as_object_mut() {
+            obj.insert(
+                "preview_fingerprint".to_owned(),
+                Value::String(fingerprint.to_owned()),
+            );
+        }
+        return Ok((
+            StatusCode::OK,
+            [(header::CACHE_CONTROL, "no-store")],
+            Json(preview),
+        )
+            .into_response());
+    }
+    if body.expected_preview_fingerprint.as_deref() != Some(fingerprint) {
+        return Err(EditError::detail(409, "Draft preview changed").into());
+    }
+    if !body.acknowledge_loss {
+        return Err(
+            EditError::detail(422, "Explicit derived DXF loss acknowledgement required").into(),
+        );
+    }
+
+    let payload_sha = meta["payload_sha256"].as_str().unwrap_or_default();
+    let mut resp_headers = HeaderMap::new();
+    resp_headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/dxf"),
+    );
+    if let Ok(hv) = HeaderValue::from_str(&format!(
+        "attachment; filename=\"derived-{document_id}-v{version}.dxf\""
+    )) {
+        resp_headers.insert(header::CONTENT_DISPOSITION, hv);
+    }
+    resp_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    resp_headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    if let Ok(hv) = HeaderValue::from_str(payload_sha) {
+        resp_headers.insert("x-content-sha256", hv);
+    }
+    if let Ok(hv) = HeaderValue::from_str(fingerprint) {
+        resp_headers.insert("x-cad-preview-fingerprint", hv);
+    }
+    Ok((StatusCode::OK, resp_headers, payload).into_response())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeImportBody {
+    conversion_id: Uuid,
+    expected_candidate_sha256: String,
+}
+
+async fn preview_native_import(
+    State(state): State<AppState>,
+    Path((org, proj, doc_id_raw, ver_raw)): Path<(String, String, String, String)>,
+    request: Request,
+) -> Result<Response, Failure> {
+    let (actor, headers, maybe_json) = authenticate_json(&state, request, &org).await?;
+    let body: NativeImportBody = maybe_json
+        .and_then(|v| serde_json::from_value(v).ok())
+        .ok_or(EditError::InvalidRequest)?;
+    if !is_hex64(&body.expected_candidate_sha256) {
+        return Err(EditError::InvalidRequest.into());
+    }
+    let (Ok(document_id), Ok(version)) = (Uuid::parse_str(&doc_id_raw), ver_raw.parse::<i32>())
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    actor_csrf(&state, &actor, &headers)?;
+    scope.authorize(Permission::Edit).await?;
+
+    let ctx = load_native_import_context(
+        &mut scope,
+        document_id,
+        version,
+        body.conversion_id,
+        &body.expected_candidate_sha256,
+    )
+    .await?;
+    let Some(imported_schema) = ctx
+        .entity_summary
+        .get("imported_schema_revision")
+        .and_then(Value::as_str)
+    else {
+        return Err(
+            EditError::detail(422, "CAD conversion lacks an immutable schema revision").into(),
+        );
+    };
+
+    let original = read_store_bytes(&state, &ctx.original_key, &ctx.original_sha).await?;
+    let candidate = read_store_bytes(&state, &ctx.candidate_key, &ctx.candidate_sha).await?;
+
+    let preview = run_preview_native_import(
+        &original,
+        &candidate,
+        json!({
+            "document_id": document_id.to_string(),
+            "version": version,
+            "entity_summary": ctx.entity_summary,
+            "original_sha": ctx.original_sha,
+            "candidate_sha": ctx.candidate_sha,
+            "imported_content_revision": ctx.imported_content_revision,
+            "current_content_revision": ctx.content_revision,
+            "imported_schema_revision": imported_schema,
+            "current_schema_revision": ctx.schema_revision,
+        }),
+    )
+    .await?;
+
+    let ops = preview["operations"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    validate_geojson_ops_postgis(&mut scope, &ops).await?;
+    scope.rollback().await?;
+
+    Ok((
+        StatusCode::OK,
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({
+            "conversion_id": body.conversion_id.to_string(),
+            "source_id": ctx.source_id.to_string(),
+            "candidate_sha256": ctx.candidate_sha,
+            "candidate_version": version + 1,
+            "base_content_revision": ctx.content_revision,
+            "base_schema_revision": ctx.schema_revision,
+            "operations": ops,
+            "published": false,
+        })),
+    )
+        .into_response())
 }
 
 #[derive(Debug, Deserialize)]

@@ -318,6 +318,15 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e12-adapter-transfer.log
 
+      - name: Run E10 CAD/DXF parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e10_cad_dxf.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e10-cad-dxf.log
+
       - name: Record PostGIS version
         if: always()
         run: |
