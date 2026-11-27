@@ -12,12 +12,11 @@ use ovg_core::{lookup_readable_crs, CrsUnit};
 use ovg_storage::editing::domain::{EditOperation, OpType};
 use ovg_storage::editing::{CommitRequest, EditError, Guard, Permission};
 use ovg_storage::integration_hub::{
-    is_source_allowed, load_active_layer_by_id, load_export_features, load_source_fields,
-    load_sync_server_features, record_layer_export_audit, resolve_export_scope,
-    utm_code_for_source, ExportScopeSpec,
+    ascii_fold, is_source_allowed, load_active_layer_by_id, load_export_features,
+    load_source_fields, load_sync_server_features, record_layer_export_audit,
+    resolve_export_scope, utm_code_for_source, ExportScopeSpec,
 };
 use serde_json::{json, Value};
-use unicode_normalization::{char::is_combining_mark, UnicodeNormalization};
 use uuid::Uuid;
 
 use super::catalog::get_adapter;
@@ -71,20 +70,7 @@ fn is_wgs84_utm(code: i32) -> bool {
 }
 
 fn safe_filename_slug(name: &str) -> String {
-    let mut folded = String::with_capacity(name.len());
-    for ch in name.trim().chars() {
-        match ch {
-            'đ' | 'Đ' => folded.push('d'),
-            other => {
-                for d in other.nfkd() {
-                    if !is_combining_mark(d) {
-                        folded.push(d);
-                    }
-                }
-            }
-        }
-    }
-    let lower = folded.to_ascii_lowercase();
+    let lower = ascii_fold(name.trim()).to_ascii_lowercase();
     let mut slug = String::with_capacity(lower.len());
     let mut last_dash = false;
     for ch in lower.chars() {
@@ -173,19 +159,19 @@ async fn export_integration_layer(
     };
     scope.authorize(Permission::Read).await?;
 
-    let scope_filter: Option<ExportScopeSpec> =
-        if !scope_area.is_empty() || !scope_route.is_empty() {
-            if scope_area
-                .iter()
-                .chain(scope_route.iter())
-                .any(|v| v.is_empty() || v.chars().count() > 128)
-            {
-                return Err(EditError::detail(422, "Invalid export scope identifier.").into());
-            }
-            Some(resolve_export_scope(&mut scope, &scope_area, &scope_route, route_distance_m).await?)
-        } else {
-            None
-        };
+    let scope_filter: Option<ExportScopeSpec> = if !scope_area.is_empty() || !scope_route.is_empty()
+    {
+        if scope_area
+            .iter()
+            .chain(scope_route.iter())
+            .any(|v| v.is_empty() || v.chars().count() > 128)
+        {
+            return Err(EditError::detail(422, "Invalid export scope identifier.").into());
+        }
+        Some(resolve_export_scope(&mut scope, &scope_area, &scope_route, route_distance_m).await?)
+    } else {
+        None
+    };
 
     let Some(adapter) = get_adapter(&adapter_key) else {
         return Err(EditError::detail(404, "Integration adapter not found.").into());
@@ -198,9 +184,7 @@ async fn export_integration_layer(
         .into());
     }
     if adapter.key == "autocad" && format != "dxf" {
-        return Err(
-            EditError::detail(422, "AutoCAD adapter supports format=dxf only.").into(),
-        );
+        return Err(EditError::detail(422, "AutoCAD adapter supports format=dxf only.").into());
     }
 
     let Some(layer_row) = load_active_layer_by_id(&mut scope, layer_id).await? else {
@@ -321,11 +305,9 @@ async fn export_integration_layer(
         return Err(EditError::detail(422, "No features in the selected scope.").into());
     }
     if format == "dxf" && (features.is_empty() || features.len() > MAX_DXF_EXPORT_FEATURES) {
-        return Err(EditError::detail(
-            422,
-            "DXF export requires between 1 and 50,000 features.",
-        )
-        .into());
+        return Err(
+            EditError::detail(422, "DXF export requires between 1 and 50,000 features.").into(),
+        );
     }
 
     let mappings_json: Vec<Value> = field_specs
@@ -366,7 +348,12 @@ async fn export_integration_layer(
     .await?;
     scope.commit().await?;
 
-    let filename = format!("{}-{}.{}", safe_filename_slug(&layer_row.name), adapter.key, artifact.ext);
+    let filename = format!(
+        "{}-{}.{}",
+        safe_filename_slug(&layer_row.name),
+        adapter.key,
+        artifact.ext
+    );
     let mut headers = HeaderMap::new();
     let insert_hdr = |headers: &mut HeaderMap, name: HeaderName, val: &str| {
         if let Ok(hv) = HeaderValue::from_str(val) {
@@ -482,10 +469,7 @@ fn parse_sync_multipart<'a>(
         ));
     }
     if file.is_empty() {
-        return Err(EditError::detail(
-            422,
-            "Uploaded GeoPackage file is empty.",
-        ));
+        return Err(EditError::detail(422, "Uploaded GeoPackage file is empty."));
     }
 
     let base_content_revision = fields
@@ -641,9 +625,9 @@ async fn preview_integration_layer_sync(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_owned();
-    let raw = to_bytes(body, MULTIPART_BODY_CAP)
-        .await
-        .map_err(|_| EditError::detail(413, "Uploaded GeoPackage exceeds maximum size of 16 MiB."))?;
+    let raw = to_bytes(body, MULTIPART_BODY_CAP).await.map_err(|_| {
+        EditError::detail(413, "Uploaded GeoPackage exceeds maximum size of 16 MiB.")
+    })?;
     let parsed = parse_sync_multipart(&content_type, &raw, false)?;
     let Ok(layer_id) = Uuid::parse_str(&layer_id_raw) else {
         return Err(EditError::InvalidRequest.into());
@@ -685,8 +669,7 @@ async fn preview_integration_layer_sync(
             })
         })
         .collect();
-    let can_commit =
-        !prepared.stale_revision && (create_count + update_count + delete_count) > 0;
+    let can_commit = !prepared.stale_revision && (create_count + update_count + delete_count) > 0;
 
     Ok((
         StatusCode::OK,
@@ -731,9 +714,9 @@ async fn push_integration_layer_sync(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_owned();
-    let raw = to_bytes(body, MULTIPART_BODY_CAP)
-        .await
-        .map_err(|_| EditError::detail(413, "Uploaded GeoPackage exceeds maximum size of 16 MiB."))?;
+    let raw = to_bytes(body, MULTIPART_BODY_CAP).await.map_err(|_| {
+        EditError::detail(413, "Uploaded GeoPackage exceeds maximum size of 16 MiB.")
+    })?;
     let parsed = parse_sync_multipart(&content_type, &raw, true)?;
     let Ok(layer_id) = Uuid::parse_str(&layer_id_raw) else {
         return Err(EditError::InvalidRequest.into());

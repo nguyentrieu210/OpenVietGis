@@ -196,7 +196,7 @@ fn edit_db_err(error: sqlx::Error) -> EditError {
 }
 
 /// Strip Vietnamese diacritics ("Bình Hưng" -> "Binh Hung") before ASCII folding.
-fn ascii_fold(text: &str) -> String {
+pub fn ascii_fold(text: &str) -> String {
     let mut folded = String::with_capacity(text.len());
     for ch in text.chars() {
         match ch {
@@ -1932,9 +1932,7 @@ pub async fn load_export_features(
                 qb.push("))");
             }
             "spatial" => {
-                qb.push(
-                    " AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry), ",
-                );
+                qb.push(" AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry), ");
                 qb.push_bind(native_crs_code);
                 qb.push(
                     ") FROM (SELECT ST_Transform(geometry, 4326) AS geometry FROM spatial.reference_features WHERE organization_id = ",
@@ -2005,8 +2003,12 @@ pub async fn load_export_features(
         let Some(raw_geom) = raw_geom else {
             continue;
         };
-        let geom_obj: Value = serde_json::from_str(&raw_geom)
-            .map_err(|_| EditError::detail(422, "Layer contains invalid or unsupported feature geometry."))?;
+        let geom_obj: Value = serde_json::from_str(&raw_geom).map_err(|_| {
+            EditError::detail(
+                422,
+                "Layer contains invalid or unsupported feature geometry.",
+            )
+        })?;
         let Some(gtype) = geom_obj.get("type").and_then(Value::as_str) else {
             return Err(EditError::detail(
                 422,
@@ -2080,7 +2082,10 @@ pub async fn load_sync_server_features(
             continue;
         };
         let geom_obj: Value = serde_json::from_str(&raw_geom).map_err(|_| {
-            EditError::detail(422, "Layer contains invalid or unsupported feature geometry.")
+            EditError::detail(
+                422,
+                "Layer contains invalid or unsupported feature geometry.",
+            )
         })?;
         if !geom_obj.is_object() {
             return Err(EditError::detail(

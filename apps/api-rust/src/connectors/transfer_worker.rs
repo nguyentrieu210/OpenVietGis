@@ -474,12 +474,10 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
                     message: format!("create pkg dir: {err}"),
                 })?;
         }
-        tokio::fs::write(&p, b"")
-            .await
-            .map_err(|err| WorkerError {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                message: format!("write pkg init: {err}"),
-            })?;
+        tokio::fs::write(&p, b"").await.map_err(|err| WorkerError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("write pkg init: {err}"),
+        })?;
     }
     for (rel, body) in MODULES {
         let p = work_dir.join(rel);
@@ -548,13 +546,17 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
                 return Ok(val);
             }
             let code = val.get("status").and_then(Value::as_u64).unwrap_or(500);
-            let status = StatusCode::from_u16(code as u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status =
+                StatusCode::from_u16(code as u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             let msg = val
                 .get("message")
                 .and_then(Value::as_str)
                 .unwrap_or("transfer worker failed")
                 .to_owned();
-            return Err(WorkerError { status, message: msg });
+            return Err(WorkerError {
+                status,
+                message: msg,
+            });
         }
     }
 
