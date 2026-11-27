@@ -29,9 +29,10 @@ export function restoreRows(entry:CacheEntry,l:SpatialLayer,color:string):Studio
 
 type Command={kind:"read";scope:CacheScope;layerId:string}|{kind:"write";scope:CacheScope;layer:SpatialLayer;rows:CachedRow[];permissionKey:string}|{kind:"clear";account:string;scope?:CacheScope};
 let worker:Worker|null=null,disabled=false,sequence=0;
+const MAX_PENDING_JOBS=24,JOB_TIMEOUT_MS=15000;
 const jobs=new Map<number,{resolve:(value:unknown)=>void;timer:number}>();
-function resetWorker(){
-  worker?.terminate();worker=null;disabled=true;
+function stopWorker(disable:boolean){
+  worker?.terminate();worker=null;if(disable)disabled=true;
   for(const j of jobs.values()){window.clearTimeout(j.timer);j.resolve(null);}
   jobs.clear();
 }
@@ -41,16 +42,17 @@ function execute(command:Command):Promise<unknown>{
     if(!worker){
       worker=new Worker(new URL("./SpatialCacheWorker.ts",import.meta.url),{type:"module"});
       worker.onmessage=e=>{const j=jobs.get(e.data.id);if(j){jobs.delete(e.data.id);window.clearTimeout(j.timer);j.resolve(e.data.value)}};
-      worker.onerror=resetWorker;
-      worker.onmessageerror=resetWorker;
+      worker.onerror=()=>stopWorker(true);
+      worker.onmessageerror=()=>stopWorker(true);
     }
+    if(jobs.size>=MAX_PENDING_JOBS)return Promise.resolve(null);
     const id=++sequence;
     return new Promise(resolve=>{
-      const timer=window.setTimeout(()=>{jobs.delete(id);resolve(null)},15000);
+      const timer=window.setTimeout(()=>{if(jobs.has(id))stopWorker(false)},JOB_TIMEOUT_MS);
       jobs.set(id,{resolve,timer});
-      try{worker!.postMessage({id,command})}catch{resetWorker()}
+      try{worker!.postMessage({id,command})}catch{stopWorker(true)}
     });
-  }catch{resetWorker();return Promise.resolve(null)}
+  }catch{stopWorker(true);return Promise.resolve(null)}
 }
 export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEntry|null>{
   return await execute({kind:"read",scope,layerId}) as CacheEntry|null;

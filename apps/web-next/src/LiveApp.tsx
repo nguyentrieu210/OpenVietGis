@@ -71,7 +71,8 @@ import {InviteTeam} from "./InviteFlow";
 import {readHouseQrFocus,clearHouseQrFocus} from "./HouseQrLink";
 import {initialWorkspaceRoute} from "./route-compat";
 import {resolveResumeMode} from "./workspace-resume";
-import {projectAccessFlight} from "./project-access-flight";
+import {projectAccessFlight,invalidateProjectAccess} from "./project-access-flight";
+import {publishProjectAccessInvalidation,subscribeProjectAccessInvalidation} from "./project-access-sync";
 import {apiClient as client} from "./workbenches/app/api";
 // Optional panels are fetched only on invocation; keep the active workspace mounted.
 function lazyPanel<P extends object>(load:()=>Promise<{default:React.ComponentType<P>}>){
@@ -122,9 +123,10 @@ import {installed,loadPlugin,compatibleActivation,compatibleRegistration,type Ma
 function ProjectStudio({org,project,expire,accountId,openAccess,openIntegrations}:{org:string;project:Project;expire:()=>void;accountId:string;openAccess?:(scope:ScopeDraft)=>void;openIntegrations:()=>void}){
  const [activations,setActivations]=useState<ExtensionActivation[]>([]),[choice,setChoice]=useState<string|undefined>(undefined),[plugin,setPlugin]=useState<StudioPlugin|null>(null),[loading,setLoading]=useState(true),[pluginReady,setPluginReady]=useState(false),[manager,setManager]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(""),[permissions,setPermissions]=useState<string[]>([]),[scopedProject,setScopedProject]=useState(true);
  const pid=project.id,partnerBridge=useRef<PartnerMapBridge|null>(null),[partnerDocked,setPartnerDocked]=useState(false),[partnerTools,setPartnerTools]=useState<PartnerTool[]>([]),[savedContributions,setSavedContributions]=useState<SavedPartnerContribution[]>([]);
- const moduleGeneration=useRef(0);
- const refreshModules=async()=>{const generation=++moduleGeneration.current;try{const [a,{permissions:p,access}]=await Promise.all([listProjectActivations(client,org,pid),projectAccessFlight(client,{account:accountId,org,project:pid})]);if(generation!==moduleGeneration.current)return;setScopedProject(access.restricted);setActivations(a.items);setPermissions(p.permissions);if(access.restricted||!p.permissions.includes("project.read")){setSavedContributions([]);setPartnerTools([])}else{const saved=await listPartnerContributions(client,org,pid).catch(()=>({items:[]}));if(generation!==moduleGeneration.current)return;setSavedContributions(saved.items.filter(c=>a.items.some(x=>x.manifest_id===c.manifest_id&&x.status==="active")))}setChoice(old=>old===undefined?a.items.find(x=>installed.some(m=>compatibleActivation(m,x)))?.extension_key??"":old&&a.items.some(x=>installed.some(m=>m.extension_key===old&&compatibleActivation(m,x)))?old:"");}catch(e){if(generation===moduleGeneration.current){setSavedContributions([]);setPartnerTools([]);setScopedProject(true);setPermissions([])}throw e}};
+ const moduleGeneration=useRef(0),accessState=useRef<"unknown"|"allowed"|"denied">("unknown");
+ const refreshModules=async(publish=true)=>{const generation=++moduleGeneration.current;try{const [a,{permissions:p,access}]=await Promise.all([listProjectActivations(client,org,pid),projectAccessFlight(client,{account:accountId,org,project:pid})]);if(generation!==moduleGeneration.current)return;const state=access.restricted||!p.permissions.includes("project.read")?"denied":"allowed";if(publish&&accessState.current==="allowed"&&state==="denied")publishProjectAccessInvalidation({account:accountId,org,project:pid});accessState.current=state;setScopedProject(access.restricted);setActivations(a.items);setPermissions(p.permissions);if(access.restricted||!p.permissions.includes("project.read")){setSavedContributions([]);setPartnerTools([])}else{const saved=await listPartnerContributions(client,org,pid).catch(()=>({items:[]}));if(generation!==moduleGeneration.current)return;setSavedContributions(saved.items.filter(c=>a.items.some(x=>x.manifest_id===c.manifest_id&&x.status==="active")))}setChoice(old=>old===undefined?a.items.find(x=>installed.some(m=>compatibleActivation(m,x)))?.extension_key??"":old&&a.items.some(x=>installed.some(m=>m.extension_key===old&&compatibleActivation(m,x)))?old:"");}catch(e){if(generation===moduleGeneration.current){setSavedContributions([]);setPartnerTools([]);setScopedProject(true);setPermissions([])}throw e}};
  useEffect(()=>{let live=true;refreshModules().catch(e=>{if(live){setChoice("");setError(msg(e));if(e instanceof ApiError&&e.status===401)expire()}}).finally(()=>{if(live)setLoading(false)});const timer=window.setInterval(()=>{if(live)void refreshModules().catch(()=>{})},30000);const focus=()=>{if(live)void refreshModules().catch(()=>{})};window.addEventListener("focus",focus);return()=>{live=false;moduleGeneration.current++;clearInterval(timer);window.removeEventListener("focus",focus)}},[org,pid]);
+ useEffect(()=>subscribeProjectAccessInvalidation(scope=>{if(scope.account!==accountId||scope.org!==org||scope.project!==pid)return;invalidateProjectAccess(client);accessState.current="unknown";setScopedProject(true);setPermissions([]);setSavedContributions([]);setPartnerTools([]);void refreshModules(false).catch(e=>{setError(msg(e));if(e instanceof ApiError&&e.status===401)expire()})}),[accountId,org,pid]);
  useEffect(()=>{let live=true;setPlugin(null);setPluginReady(false);if(choice===undefined)return;if(!choice){setPluginReady(true);return}if(!installed.some(m=>m.extension_key===choice&&activations.some(a=>compatibleActivation(m,a)))){setChoice("");setPluginReady(true);return}const task=loadPlugin(choice);if(!task){setPluginReady(true);return}task.then(p=>{if(live){if(p.id!==choice)throw Error("Plugin không khớp manifest");setPlugin(p);setPluginReady(true)}}).catch(e=>{if(live){setError(msg(e));setChoice("");setPluginReady(true)}});return()=>{live=false}},[choice]);
  const change=async(m:Manifest,enable:boolean)=>{setBusy(true);setError("");try{const csrf=await loadCsrfToken(client);if(enable){const list=await listExtensionManifests(client,org);const registered=list.items.find(x=>compatibleRegistration(m,x))??await registerOfficialExtension(client,org,m.extension_key,csrf);if(!compatibleRegistration(m,registered))throw Error("Manifest không tương thích với runtime đang cài.");await activateProjectExtension(client,org,pid,registered.id,csrf);await refreshModules();setChoice(m.extension_key)}else{await disableProjectExtension(client,org,pid,m.extension_key,csrf);await refreshModules();setChoice("")}}catch(e){setError(msg(e));if(e instanceof ApiError&&e.status===401)expire()}finally{setBusy(false)}};
  const active=installed.find(m=>m.extension_key===choice);
@@ -161,6 +163,7 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
  const spatialRead=data.restricted===false&&data.permissions.includes("project.read"),spatialEdit=spatialRead&&data.permissions.includes("project.edit");
  useEffect(()=>{if(!loading&&!spatialRead){pendingLinkedIdentity.current=null;pendingLinkedCenter.current=null}},[loading,spatialRead]);
  const cacheScope=useMemo(()=>({account:accountId,org,project:pid}),[accountId,org,pid]);
+ useEffect(()=>subscribeProjectAccessInvalidation(scope=>{if(scope.account!==cacheScope.account||scope.org!==cacheScope.org||scope.project!==cacheScope.project)return;invalidateProjectAccess(client);void clearSpatialCache(accountId,cacheScope);setData(fresh());setFullReload(x=>x+1);setNotice("Quyền truy cập vừa thay đổi · đang xác minh lại…")}),[accountId,cacheScope]);
  const perf=useRef(new SpatialPerformance());
  const [perfOpen,setPerfOpen]=useState(false);
  const syncRequest=useRef<()=>void>(()=>{});
@@ -170,7 +173,7 @@ function LiveStudio({org,project,expire,extension,openManager,openIntegrations,m
  const [selection,setSelection]=useState<Set<string>>(new Set()),[performance,setPerformance]=useState(false),[autoMode,setAutoMode]=useState(true),[ortho,setOrtho]=useState(false);
  const workspaceKey="ovg-workspace:v1:"+accountId+":"+org+":"+pid,[workspace,setWorkspace]=useState(()=>readWorkspace(workspaceKey));const updatePrefs=(patch:Partial<WorkspacePrefs>)=>setWorkspace(p=>({...p,...patch}));useEffect(()=>storeWorkspace(workspaceKey,workspace),[workspaceKey,workspace]);const snapPrefsRef=useRef(workspace.snap);snapPrefsRef.current=workspace.snap;const geometryLookup=useMemo(()=>new Map(data.rows.filter(r=>r.geometry).map(r=>[r.key,r.geometry!])),[data.rows]),geometryLookupRef=useRef(geometryLookup);geometryLookupRef.current=geometryLookup;
   const map=useRef<ml.Map|null>(null),container=useRef<HTMLDivElement>(null),marker=useRef<ml.Marker|null>(null),fit=useRef<"none"|"partial"|"full">("none"),alive=useRef(true),running=useRef(false),draftRef=useRef(draft),renderLayers=useRef<string[]>([]),mouseModeRef=useRef(mouseMode);draftRef.current=draft;mouseModeRef.current=mouseMode;
-  const fail=(e:unknown)=>{if(e instanceof ApiError&&e.status===401){setData(fresh());expire()}else if(e instanceof ApiError&&e.status===403){setError(msg(e))}else setError(msg(e))};
+  const fail=(e:unknown)=>{if(e instanceof ApiError&&e.status===401){publishProjectAccessInvalidation(cacheScope);setData(fresh());expire()}else if(e instanceof ApiError&&e.status===403){invalidateProjectAccess(client);publishProjectAccessInvalidation(cacheScope);void clearSpatialCache(accountId,cacheScope);setData(fresh());setError(msg(e))}else setError(msg(e))};
   useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  useEffect(()=>{if(!gisStarted){
   let live=true;setLoading(true);
@@ -330,7 +333,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
         const layers=res.items.filter(x=>x.lifecycle==="active");
         const prevById=new Map(snapshot.layers.map(l=>[l.id,l]));
         const permissionsChanged=access.restricted!==snapshot.restricted||[...permissions.permissions].sort().join("|")!==[...snapshot.permissions].sort().join("|");
-        if(permissionsChanged){void clearSpatialCache(accountId,cacheScope);setData(fresh());}
+        if(permissionsChanged){if(snapshot.restricted===false&&snapshot.permissions.includes("project.read")&&(access.restricted||!permissions.permissions.includes("project.read")))publishProjectAccessInvalidation(cacheScope);void clearSpatialCache(accountId,cacheScope);setData(fresh());}
         if(permissionsChanged||layers.length!==prevById.size||layers.some(l=>!prevById.has(l.id))){
           setFullReload(x=>x+1);return;
         }
@@ -367,7 +370,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
         setNotice("Đã nhận cập nhật: "+changed.map(l=>l.name).join(", "));succeeded=true;
       }catch(e){
         if(active()){
-          if(isPermissionError(e)){void clearSpatialCache(accountId,cacheScope);setData(fresh());setFullReload(x=>x+1);}
+          if(isPermissionError(e)){invalidateProjectAccess(client);publishProjectAccessInvalidation(cacheScope);void clearSpatialCache(accountId,cacheScope);setData(fresh());setFullReload(x=>x+1);}
           else {setNotice("Đang chờ đồng bộ lại…");schedule(2000);}
         }
       }finally{if(!stopped)measurement.finish(succeeded);inFlight=false;if(pending&&timer===undefined&&!stopped)schedule();}
