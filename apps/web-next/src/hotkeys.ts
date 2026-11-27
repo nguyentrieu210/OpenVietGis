@@ -27,8 +27,8 @@ export const FIXED_KEYS: Hotkey[] = [
   { combo: "Ctrl+Z / Ctrl+Shift+Z", label: "Hoàn tác / làm lại", action: "" },
 ];
 const KEY = "ovg:hotkeys";
-export const hotkeysEnabled = () => { try { return localStorage.getItem(KEY) !== "off"; } catch { return true; } };
-export const setHotkeysEnabled = (on: boolean) => { try { localStorage.setItem(KEY, on ? "on" : "off"); } catch { /* storage unavailable */ } window.dispatchEvent(new Event("ovg:hotkeys-changed")); };
+export const hotkeysEnabled = (storageKey=KEY) => { try { return localStorage.getItem(storageKey) !== "off"; } catch { return true; } };
+export const setHotkeysEnabled = (on: boolean,storageKey=KEY) => { try { localStorage.setItem(storageKey, on ? "on" : "off"); } catch { /* storage unavailable */ } window.dispatchEvent(new Event("ovg:hotkeys-changed")); };
 
 export function comboOf(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">): string {
   const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;

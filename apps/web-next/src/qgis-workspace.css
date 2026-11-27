@@ -173,3 +173,4 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .core-ribbon-menu.is-dropdown button:disabled .core-menu-command b{color:#9aa6a0}
 .core-ribbon-menu.is-dropdown button :is(kbd,code,.core-menu-alias){margin-left:auto;font-size:10px;color:#7d8b85;background:transparent;border:0}
 .qgis-coord-format{font-size:10px;padding:0 5px;min-height:20px;border:1px solid #b5c2bc;background:#fff;border-radius:3px;cursor:pointer}
+.attribute-server-query{display:flex;flex-direction:column;min-height:0;overflow:auto;padding:6px;gap:5px}.attribute-server-query form{display:flex;flex-wrap:wrap;gap:6px;align-items:end}.attribute-server-query form label{display:grid;gap:3px;font-size:11px}.attribute-server-query select,.attribute-server-query input{max-width:190px}.attribute-server-query .qgis-table-scroll{min-height:80px}.attribute-server-query p{margin:3px 0;font-size:12px}.dock-menu-pop{max-width:calc(100vw - 8px);box-sizing:border-box}

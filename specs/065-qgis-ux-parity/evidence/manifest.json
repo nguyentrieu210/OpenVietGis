@@ -37,9 +37,12 @@
     {
       "id": "SHELL-05",
       "task": "T013",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/hotkeys.ts",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "SHELL-06",
@@ -67,16 +70,21 @@
       "task": "T019",
       "status": "partial",
       "candidate_paths": [
-        "apps/web-next/dock-sizing.test.mjs"
+        "apps/web-next/dock-sizing.test.mjs",
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/workspace-preferences.test.mjs"
       ],
-      "blocker": "QGIS paired fixture and authenticated acceptance not executed"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "DOCK-02",
       "task": "T020",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "DOCK-03",
@@ -209,9 +217,11 @@
       "task": "T043",
       "status": "partial",
       "candidate_paths": [
-        "apps/web-next/src/QgisWorkspace.tsx"
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/table-query.test.ts"
       ],
-      "blocker": "QGIS paired fixture and authenticated acceptance not executed"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; Rust query is geometry-present only with source/offset limits"
     },
     {
       "id": "TABLE-03",
@@ -324,9 +334,10 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/ProcessingToolbox.tsx",
-        "apps/web-next/command-search.test.mjs"
+        "apps/web-next/command-search.test.mjs",
+        "apps/web-next/workspace-preferences.test.mjs"
       ],
-      "blocker": "QGIS paired fixture and authenticated acceptance not executed"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "PROC-02",
