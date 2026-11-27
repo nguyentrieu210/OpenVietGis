@@ -6,14 +6,21 @@
       "id": "SHELL-01",
       "task": "T009",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/core-toolkit-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "SHELL-02",
       "task": "T010",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -55,21 +62,34 @@
       "id": "SHELL-06",
       "task": "T014",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/dock-sizing.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "SHELL-07",
       "task": "T015",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/route-compat.test.ts",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "SHELL-08",
       "task": "T016",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/studio-ui.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -97,14 +117,24 @@
       "id": "DOCK-03",
       "task": "T021",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/CatalogManager.tsx",
+        "apps/web-next/src/DsmPanes.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/dsm-sources.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "DOCK-04",
       "task": "T022",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/DsmPanes.tsx",
+        "apps/web-next/src/TransferTool.tsx",
+        "apps/web-next/src/ExternalPluginHub.tsx",
+        "apps/web-next/core-toolkit-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -132,22 +162,33 @@
       "id": "DOCK-07",
       "task": "T025",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/graduated.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "DOCK-08",
       "task": "T026",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "DOCK-09",
       "task": "T027",
       "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "candidate_paths": [
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx"
+      ],
+      "blocker": "Secondary map view and independent order not demonstrated."
     },
     {
       "id": "DOCK-10",
@@ -162,7 +203,11 @@
       "id": "STYLE-01",
       "task": "T031",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -179,8 +224,12 @@
       "id": "STYLE-03",
       "task": "T033",
       "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/src/style-io.ts"
+      ],
+      "blocker": "Rule-based renderer and multi-symbol layers not demonstrated; existing renderer sources are candidates only."
     },
     {
       "id": "STYLE-04",
@@ -218,21 +267,32 @@
       "id": "STYLE-07",
       "task": "T037",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/ExcelJoin.ts",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/api-rust/src/editing.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "STYLE-08",
       "task": "T038",
       "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/FeatureInfo.tsx"
+      ],
+      "blocker": "Metadata candidate sources; diagrams/actions/map tips not demonstrated."
     },
     {
       "id": "STYLE-09",
       "task": "T039",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -263,7 +323,12 @@
       "id": "TABLE-03",
       "task": "T044",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/api-rust/src/queries.rs",
+        "apps/web-next/src/table-query.test.ts"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -294,7 +359,11 @@
       "id": "TABLE-06",
       "task": "T047",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/attribute-value.test.ts"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -312,7 +381,11 @@
       "id": "TABLE-08",
       "task": "T049",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/api-rust/src/queries.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -371,7 +444,11 @@
       "id": "EDIT-06",
       "task": "T057",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/api-rust/src/professional.rs",
+        "apps/api-rust/src/editing.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -433,9 +510,14 @@
     {
       "id": "PROC-03",
       "task": "T065",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/api-rust/src/processing.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "fixtures/qgis-parity/generate.py",
+        "fixtures/qgis-parity/vector-oracle.sql"
+      ],
+      "blocker": "Independent PostGIS 3.7.0 fixture oracle passed; Rust API and QGIS paired outputs not captured."
     },
     {
       "id": "PROC-04",
@@ -450,141 +532,224 @@
     {
       "id": "PROC-05",
       "task": "T067",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/workbenches/features/platform/processing-batch.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-batch.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Batch journal and intercepted browser evidence; authenticated Rust/PostGIS execution and QGIS pairing remain."
     },
     {
       "id": "PROC-06",
       "task": "T068",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/api-rust/src/processing_models.rs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Modeler registry and explicit input validation passed synthetic Chromium; durable graph execution and raster cancel/idempotent resume remain."
     },
     {
       "id": "PROC-07",
       "task": "T069",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/ProjectRaster.tsx",
+        "apps/web-next/src/RasterWorkbench.tsx",
+        "apps/api-rust/src/raster_compute.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "PROC-08",
       "task": "T070",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/RasterWorkbench.tsx",
+        "apps/web-next/src/RasterReportWorkbench.tsx",
+        "apps/api-rust/src/raster_compute.rs",
+        "fixtures/qgis-parity/generate.py"
+      ],
+      "blocker": "Generated GeoTIFF and independent GDAL oracle verified; actual OVG API output and lineage not verified."
     },
     {
       "id": "PROC-09",
       "task": "T071",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/CadGeorefPanel.tsx",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "PROC-10",
       "task": "T072",
       "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "candidate_paths": [
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/Spatial3DSettings.tsx",
+        "apps/api-rust/src/tilesets.rs"
+      ],
+      "blocker": "Temporal controller, mesh and point-cloud adapter support not demonstrated; no fake provider UI."
     },
     {
       "id": "OUTPUT-01",
       "task": "T075",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/PrintDesigner.tsx",
+        "apps/api-rust/src/cartography"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-02",
       "task": "T076",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-03",
       "task": "T077",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/core-toolkit-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-04",
       "task": "T078",
       "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts"
+      ],
+      "blocker": "No authenticated atlas generation and authorization evidence; layout sources are candidates only."
     },
     {
       "id": "OUTPUT-05",
       "task": "T079",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/PrintDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-06",
       "task": "T080",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/crs-display.ts",
+        "apps/web-next/crs-display.test.mjs",
+        "apps/api-rust/src/catalog.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-07",
       "task": "T081",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/TransferTool.tsx",
+        "apps/web-next/src/ExportDialog.tsx",
+        "apps/web-next/export-formats.test.mjs",
+        "apps/api-rust/src/transfers"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "OUTPUT-08",
       "task": "T082",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/QgisBindingManager.tsx",
+        "apps/web-next/src/QgisConnectPage.tsx",
+        "apps/api-rust/src/managed_sync.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-01",
       "task": "T085",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/Spatial3DSettings.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "packages/spatial-workspace/tests/coordinator.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-02",
       "task": "T086",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/CadEditorPanel.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "packages/spatial-workspace/tests/cad-editor-dirty.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-03",
       "task": "T087",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-04",
       "task": "T088",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/AiCopilotPanel.tsx",
+        "apps/web-next/src/ai-copilot",
+        "apps/mcp-rust"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-05",
       "task": "T089",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/MapChat.tsx",
+        "apps/web-next/src/OrgChat.tsx",
+        "apps/web-next/src/TeamCollaboration.tsx",
+        "apps/web-next/src/TaskReminder.tsx",
+        "apps/api-rust/src/org_chat.rs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-06",
       "task": "T090",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/AppMarket.tsx",
+        "apps/web-next/src/ExternalPluginHub.tsx",
+        "apps/web-next/src/workbench-registry.ts",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
@@ -601,14 +766,24 @@
       "id": "COLLAB-08",
       "task": "T092",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/SpatialPerformance.ts",
+        "apps/web-next/src/SpatialCache.ts",
+        "apps/web-next/src/SpatialIncremental.ts",
+        "apps/web-next/spatial-performance.test.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     },
     {
       "id": "COLLAB-09",
       "task": "T093",
       "status": "unverified",
-      "candidate_paths": [],
+      "candidate_paths": [
+        "apps/web-next/src/SpatialCache.ts",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/workbenches/features/offline",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
       "blocker": "Acceptance evidence not collected"
     }
   ]

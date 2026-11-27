@@ -27,6 +27,15 @@ def main():
     for row in rows:
         if row["task"] != tasks[row["id"]]:
             raise SystemExit(f"FAIL: task mapping mismatch {row['id']}")
+        candidates = row.get("candidate_paths", [])
+        if not isinstance(candidates, list) or not candidates:
+            raise SystemExit(f"FAIL: missing candidate source/test mapping {row['id']}")
+        for path in candidates:
+            if not isinstance(path, str) or Path(path).is_absolute():
+                raise SystemExit(f"FAIL: invalid candidate path {row['id']}")
+            candidate = (ROOT / path).resolve()
+            if not candidate.is_relative_to(ROOT) or not candidate.exists():
+                raise SystemExit(f"FAIL: missing/out-of-scope candidate {row['id']}: {path}")
         if row["status"] not in ("verified", "partial", "unverified"):
             raise SystemExit(f"FAIL: invalid status {row['id']}")
         if row["status"] == "verified":

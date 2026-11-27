@@ -32,7 +32,7 @@ try{
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer"}],next_after_id:null};
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
-  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1)return route.fulfill({status:503,json:{}});body={id:"job-test",operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
+  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
   else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
   else if(p.endsWith("/features"))body={context:{source_id:p.includes("layer2")?"source2":"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
@@ -149,6 +149,34 @@ try{
  assert.equal(processingRequests.length,2);assert.deepEqual(processingRequests[0],processingRequests[1]);
  await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
  console.log("PASS synthetic Chromium: processing request survives workbench close with exact operation ID");
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");await processing.waitFor();
+ await processing.getByLabel("Lớp đầu vào",{exact:true}).selectOption("layer1");
+ await processing.getByLabel("Tên lớp kết quả mới",{exact:true}).fill("Batch A");
+ await processing.getByRole("button",{name:"Thêm vào batch",exact:true}).click();
+ await processing.getByLabel("Tên lớp kết quả mới",{exact:true}).fill("Batch B");
+ await processing.getByRole("button",{name:"Thêm vào batch",exact:true}).click();
+ const batchPanel=processing.getByRole("region",{name:"Batch Processing"});await batchPanel.getByText("Batch B",{exact:true}).waitFor();
+ await batchPanel.getByRole("button",{name:"Chạy batch",exact:true}).click();
+ await batchPanel.getByRole("button",{name:"Xác minh / tiếp tục batch",exact:true}).waitFor();
+ await batchPanel.getByText(/503/).waitFor();
+ assert.equal(processingRequests.length,4);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();await processing.waitFor({state:"detached"});
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");await processing.waitFor();
+ await batchPanel.getByRole("button",{name:"Xác minh / tiếp tục batch",exact:true}).click();
+ await batchPanel.getByText(/job-batch-5/).waitFor();
+ assert.equal(processingRequests.length,5);assert.deepEqual(processingRequests[3],processingRequests[4]);assert.notEqual(processingRequests[2].operation_id,processingRequests[3].operation_id);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ console.log("PASS synthetic Chromium: batch row recovery without replaying received jobs");
+ await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
+ const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();
+ await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).waitFor();
+ assert.equal(await modeler.getByRole("button",{name:/Dissolve · Gộp vùng/}).count(),0);
+ await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).click();
+ await modeler.getByText(/Chọn đầu vào A của Buffer/).waitFor();
+ assert.equal(await modeler.getByRole("button",{name:/Chạy mô hình/}).isEnabled(),false);
+ console.log("PASS synthetic Chromium: modeler registry and explicit input validation");
+
+
 
 
 
