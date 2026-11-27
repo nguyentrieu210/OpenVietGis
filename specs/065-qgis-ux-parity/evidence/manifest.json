@@ -208,9 +208,11 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/style-io.ts",
-        "apps/web-next/style-io.test.mjs"
+        "apps/web-next/style-io.test.mjs",
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/graduated.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; limited symbol subset, not lossless arbitrary QML/SLD"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD"
     },
     {
       "id": "STYLE-07",
@@ -236,9 +238,12 @@
     {
       "id": "TABLE-01",
       "task": "T042",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; remote and duplicate-source selection/revision coverage remains"
     },
     {
       "id": "TABLE-02",
@@ -282,9 +287,13 @@
     {
       "id": "TABLE-07",
       "task": "T048",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/table-columns.ts",
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; column width/order and selected export remain"
     },
     {
       "id": "TABLE-08",

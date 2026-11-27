@@ -72,6 +72,20 @@ try{
  await expression.fill("{height_m|round:1}");assert.equal(await apply.isEnabled(),true);
  await properties.getByRole("button",{name:"Hủy",exact:true}).click();await properties.waitFor({state:"detached"});
  console.log("PASS synthetic Chromium: expression validation and cancel");
+ await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");
+ const table=page.getByRole("region",{name:"Bảng thuộc tính"}).or(page.locator("section.qgis-table"));await table.waitFor();
+ await table.getByLabel("Layer bảng thuộc tính").selectOption("layer1");
+ const dataRow=table.locator("tbody tr").first();await dataRow.click();
+ assert.ok(await dataRow.getByRole("checkbox").isChecked());
+ await dataRow.getByRole("checkbox").uncheck();assert.equal(await dataRow.evaluate(e=>e.classList.contains("selected")),false);
+ await table.getByRole("button",{name:"Cột",exact:true}).click();
+ const columnPicker=table.locator(".attribute-column-picker");await columnPicker.getByLabel("height_m",{exact:true}).uncheck();
+ assert.equal(await table.getByRole("columnheader",{name:"height_m",exact:true}).count(),0);
+ await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");await table.waitFor();
+ await table.getByLabel("Layer bảng thuộc tính").selectOption("layer1");
+ assert.equal(await table.getByRole("columnheader",{name:"height_m",exact:true}).count(),0);
+ console.log("PASS synthetic Chromium: table selection and persisted column preference");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
 }finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

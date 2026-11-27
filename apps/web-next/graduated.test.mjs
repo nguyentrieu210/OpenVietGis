@@ -25,3 +25,13 @@ test("graduated nulls, precise legend keys and persisted breaks",()=>{
  const v={gradBreaks:[0,0.00001,0.00002]};
  assert.notEqual(gradKey(0,v),gradKey(0.000015,v));
 });
+
+import {cleanGradColors,gradLegend} from "./src/graduated.ts";
+test("custom class colors persist, invalid keys ignored and legend uses same color",()=>{
+ const b=[0,10,20,30],colors=cleanGradColors({"0":"#ff0000","1":"#00ff00","2":"#0000ff","3":"#123456","-1":"#111111"},b);
+ assert.deepEqual(colors,{"0":"#ff0000","1":"#00ff00","2":"#0000ff"});
+ const ramp={gradField:"value",gradFrom:"#ff0000",gradTo:"#0000ff",gradBreaks:b,gradColors:colors};
+ assert.equal(gradColor(1,ramp),"#00ff00");
+ assert.equal(gradColor(3,ramp),"#bdbdbd");
+ assert.equal(gradLegend([],ramp)[1].color,"#00ff00");
+});
