@@ -1496,6 +1496,20 @@ impl TenantTx {
         Ok(result)
     }
 
+    pub async fn put_avatar(&mut self, data_url: &str) -> Result<(), AppError> {
+        sqlx::query(
+            "INSERT INTO identity.user_avatars (user_id,data_url) VALUES ($1,$2)
+             ON CONFLICT (user_id) DO UPDATE
+             SET data_url=excluded.data_url, updated_at=now()",
+        )
+        .bind(self.actor_id)
+        .bind(data_url)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        Ok(())
+    }
+
     pub async fn delete_avatar(&mut self) -> Result<(), AppError> {
         sqlx::query("DELETE FROM identity.user_avatars WHERE user_id=$1")
             .bind(self.actor_id)

@@ -61,7 +61,7 @@ fn safe_hostname(input: &str) -> Result<String, AppError> {
     if !host.contains('.')
         || ["localhost", ".localhost", ".local", ".internal", ".home.arpa"]
             .iter()
-            .any(|suffix| host.ends_with(suffix))
+            .any(|suffix| host.ends_with(*suffix))
     {
         return Err(blocked("SSRF_BLOCKED", "SSRF blocked internal hostname"));
     }

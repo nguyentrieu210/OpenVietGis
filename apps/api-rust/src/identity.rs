@@ -6,7 +6,7 @@ use axum::http::{header, request::Parts, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD}, Engine};
 use hmac::{Hmac, Mac};
 use ovg_core::AppError;
 use ovg_storage::identity::{
@@ -178,7 +178,10 @@ pub(crate) fn router() -> Router<AppState> {
             "/me/identity-links",
             get(list_my_identity_links).delete(unlink_identity),
         )
-        .route("/me/avatar", get(get_my_avatar).delete(delete_avatar))
+        .route(
+            "/me/avatar",
+            get(get_my_avatar).put(put_avatar).delete(delete_avatar),
+        )
         .route("/auth/csrf", get(get_csrf))
 }
 
@@ -372,6 +375,90 @@ async fn unlink_identity(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AvatarRequest {
+    data_url: String,
+}
+
+const AVATAR_SIDE: u16 = 192;
+const AVATAR_PIXELS: usize = AVATAR_SIDE as usize * AVATAR_SIDE as usize;
+const AVATAR_PREFIX: &str = "data:image/jpeg;base64,";
+
+fn invalid_avatar() -> IdentityError {
+    IdentityError::Http(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "avatar must be a valid 192x192 JPEG",
+    )
+}
+
+/// Decode a bounded JPEG and emit a new RGB JPEG, without copying EXIF, XMP,
+/// ICC profiles or trailing bytes supplied by the client.
+fn normalize_avatar(input: &str) -> Result<String, IdentityError> {
+    if input.len() > 150_000 {
+        return Err(IdentityError::InvalidPayload);
+    }
+    let encoded = input.strip_prefix(AVATAR_PREFIX).ok_or_else(invalid_avatar)?;
+    let raw = STANDARD.decode(encoded).map_err(|_| invalid_avatar())?;
+    let mut decoder = jpeg_decoder::Decoder::new(raw.as_slice());
+    decoder.set_max_decoding_buffer_size(AVATAR_PIXELS * 4);
+    decoder.read_info().map_err(|_| invalid_avatar())?;
+    let info = decoder.info().ok_or_else(invalid_avatar)?;
+    if info.width != AVATAR_SIDE || info.height != AVATAR_SIDE {
+        return Err(invalid_avatar());
+    }
+    let pixels = decoder.decode().map_err(|_| invalid_avatar())?;
+    let rgb = match info.pixel_format {
+        jpeg_decoder::PixelFormat::RGB24 if pixels.len() == AVATAR_PIXELS * 3 => pixels,
+        jpeg_decoder::PixelFormat::L8 if pixels.len() == AVATAR_PIXELS => {
+            pixels.into_iter().flat_map(|v| [v; 3]).collect()
+        }
+        jpeg_decoder::PixelFormat::CMYK32 if pixels.len() == AVATAR_PIXELS * 4 => {
+            pixels.chunks_exact(4).flat_map(|p| {
+                let component = |v: u8| {
+                    let value = u16::from(255 - v) * u16::from(255 - p[3]);
+                    ((value + 127) / 255) as u8
+                };
+                [component(p[0]), component(p[1]), component(p[2])]
+            }).collect()
+        }
+        _ => return Err(invalid_avatar()),
+    };
+    let mut output = Vec::new();
+    jpeg_encoder::Encoder::new(&mut output, 85)
+        .encode(&rgb, AVATAR_SIDE, AVATAR_SIDE, jpeg_encoder::ColorType::Rgb)
+        .map_err(|_| invalid_avatar())?;
+    let data_url = format!("{AVATAR_PREFIX}{}", STANDARD.encode(output));
+    if data_url.len() > 150_000 {
+        return Err(invalid_avatar());
+    }
+    Ok(data_url)
+}
+
+async fn put_avatar(
+    State(state): State<AppState>,
+    session: HumanSession,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, IdentityError> {
+    require_csrf(&state, &session, &headers)?;
+    let input: AvatarRequest =
+        serde_json::from_slice(&body).map_err(|_| IdentityError::InvalidPayload)?;
+    let value = tokio::task::spawn_blocking(move || normalize_avatar(&input.data_url))
+        .await
+        .map_err(|_| AppError::internal("avatar decoder task failed"))??;
+    let mut tx = TenantTx::begin(
+        database(&state)?,
+        session.actor_id(),
+        session.session_id(),
+        session.display_name(),
+    )
+    .await?;
+    tx.put_avatar(&value).await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "data_url": value })))
+}
+
 async fn delete_avatar(
     State(state): State<AppState>,
     session: HumanSession,
@@ -434,6 +521,31 @@ fn database(state: &AppState) -> Result<&DbPool, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn avatar_reencodes_valid_jpeg_and_rejects_other_dimensions() {
+        let fixture = |side: u16| {
+            let mut bytes = Vec::new();
+            let pixels = vec![180u8; usize::from(side) * usize::from(side) * 3];
+            jpeg_encoder::Encoder::new(&mut bytes, 95)
+                .encode(&pixels, side, side, jpeg_encoder::ColorType::Rgb)
+                .unwrap();
+            format!("{AVATAR_PREFIX}{}", STANDARD.encode(bytes))
+        };
+        let normalized = normalize_avatar(&fixture(192));
+        assert!(normalized.is_ok());
+        if let Ok(value) = normalized {
+            let bytes = STANDARD.decode(value.strip_prefix(AVATAR_PREFIX).unwrap()).unwrap();
+            let mut decoder = jpeg_decoder::Decoder::new(bytes.as_slice());
+            assert!(decoder.read_info().is_ok());
+            let info = decoder.info().unwrap();
+            assert_eq!((info.width, info.height), (192, 192));
+        }
+        assert!(normalize_avatar(&fixture(191)).is_err());
+        assert!(normalize_avatar("data:image/png;base64,AAAA").is_err());
+        assert!(normalize_avatar("data:image/jpeg;base64,AAAA").is_err());
+        assert!(normalize_avatar(&"a".repeat(150_001)).is_err());
+    }
 
     #[test]
     fn emits_csrf_token_compatible_with_python() {

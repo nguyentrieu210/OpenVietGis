@@ -30,6 +30,8 @@ hmac.workspace = true
 http.workspace = true
 hyper = { version = "1", default-features = false }
 hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
+jpeg-decoder = { version = "=0.3.2", default-features = false }
+jpeg-encoder = "=0.6.1"
 miniz_oxide = "0.8"
 ovg-core.workspace = true
 ovg-module-house-numbering = { workspace = true, optional = true }
