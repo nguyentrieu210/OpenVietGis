@@ -42,7 +42,7 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
   })().catch(e=>{if(abort.signal.aborted||selectionSerial.current!==serial)return;if(e instanceof ApiError&&e.status===401)expire();else setLookupMessage("Không tra được liên kết của phiên bản này.")});
  };
  useEffect(()=>{
-  setReady(false);setFailed(false);setElapsed(0);setMessage("Đang đọc và kiểm tra bản vẽ…");
+  setReady(false);setDirty(false);setSaving(false);setFailed(false);setElapsed(0);setMessage("Đang đọc và kiểm tra bản vẽ…");
   const abort=new AbortController();const started=performance.now();const tick=setInterval(()=>setElapsed(Math.floor((performance.now()-started)/1000)),1000);
   const report=(text:string)=>{if(!abort.signal.aborted)setMessage(text)};
   void (async()=>{
