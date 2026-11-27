@@ -257,8 +257,7 @@ async fn create_binding(
     allowed.sort();
 
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -293,8 +292,7 @@ async fn activate_binding(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -317,8 +315,7 @@ async fn change_binding_lifecycle(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -381,8 +378,7 @@ async fn issue_pairing_token(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -408,8 +404,7 @@ async fn revoke_pairing_token(
 ) -> Result<Response, Failure> {
     let (actor, headers, _) = authenticate_json(&state, request, &org).await?;
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -472,8 +467,7 @@ async fn record_binding_conflicts(
         });
     }
 
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -501,8 +495,7 @@ async fn resolve_binding_conflict(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let Some(mut scope) =
-        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
     else {
         return Err(EditError::InvalidRequest.into());
     };

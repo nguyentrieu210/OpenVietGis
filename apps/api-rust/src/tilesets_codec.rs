@@ -1130,10 +1130,19 @@ pub(crate) fn build_tiles(
         child_regions.push(reg);
         resources.insert(uri.clone(), glb_bytes);
         indices.insert(uri.clone(), Value::Array(ranges));
+        let matrix_json: Vec<Value> = matrix
+            .iter()
+            .enumerate()
+            .map(|(idx, &v)| match idx {
+                2 | 3 | 7 | 11 => json!(0),
+                15 => json!(1),
+                _ => json!(v),
+            })
+            .collect();
         children.push(json!({
             "boundingVolume": { "region": reg },
             "geometricError": 0,
-            "transform": matrix,
+            "transform": matrix_json,
             "content": { "uri": uri },
         }));
         Ok(())

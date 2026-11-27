@@ -342,7 +342,12 @@ def main() -> int:
                     # Verify generated manifest & GLB structural parity
                     man_o = oracle.get(f"{url_o}/{ts_gen_o}/tileset.json", headers=headers).json()
                     man_r = rust.get(f"{url_r}/{ts_gen_r}/tileset.json", headers=headers).json()
-                    req(len(man_o["root"]["children"]) == len(man_r["root"]["children"]) == 1, "generated child count")
+                    req(
+                        len(man_o["root"]["children"])
+                        == len(man_r["root"]["children"])
+                        == gen_o.json()["tile_count"],
+                        "generated child count",
+                    )
                     gen_uri = man_o["root"]["children"][0]["content"]["uri"]
                     req(man_r["root"]["children"][0]["content"]["uri"] == gen_uri, "generated tile uri")
                     glb_gen_r = rust.get(f"{url_r}/{ts_gen_r}/{gen_uri}", headers=headers)

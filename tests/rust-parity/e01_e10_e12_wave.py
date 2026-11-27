@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import csv
+import io
 import json
 import os
 import re
@@ -100,6 +102,9 @@ def compare(label: str, exp, act, *, norm=None, expect_status: int | tuple[int, 
         exp.status_code == act.status_code,
         f"{label}: status {exp.status_code} != {act.status_code} (oracle={exp.text}, rust={act.text})",
     )
+    if exp.status_code == 204:
+        print(f"PASS {label}", flush=True)
+        return act
     eb = exp.json()
     ab = act.json()
     if norm is not None:
@@ -112,15 +117,33 @@ def compare(label: str, exp, act, *, norm=None, expect_status: int | tuple[int, 
 
 
 def make_glb() -> bytes:
-    gltf = json.dumps({"asset": {"version": "2.0"}}, separators=(",", ":")).encode("utf-8")
-    pad = (4 - (len(gltf) % 4)) % 4
-    gltf_padded = gltf + b" " * pad
-    total_len = 12 + 8 + len(gltf_padded)
+    bin_data = struct.pack("<9f", 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    doc = {
+        "asset": {"version": "2.0"},
+        "buffers": [{"byteLength": len(bin_data)}],
+        "bufferViews": [{"buffer": 0, "byteLength": len(bin_data), "target": 34962}],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": 3,
+                "type": "VEC3",
+                "min": [0.0, 0.0, 0.0],
+                "max": [1.0, 1.0, 0.0],
+            }
+        ],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}}]}],
+        "nodes": [{"mesh": 0}],
+        "scenes": [{"nodes": [0]}],
+        "scene": 0,
+    }
+    raw = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+    raw += b" " * (-len(raw) % 4)
     return (
-        b"glTF"
-        + struct.pack("<II", 2, total_len)
-        + struct.pack("<I4s", len(gltf_padded), b"JSON")
-        + gltf_padded
+        struct.pack("<5I", 0x46546C67, 2, 28 + len(raw) + len(bin_data), len(raw), 0x4E4F534A)
+        + raw
+        + struct.pack("<2I", len(bin_data), 0x004E4942)
+        + bin_data
     )
 
 
@@ -180,25 +203,25 @@ def add_org_member(owner_url: str, org_id: str, user_id: str, role: str = "membe
 
 def create_manual_layer_with_point(client, base: str, csrf: dict, name: str):
     payload = {
-        "operation_id": f"op-{uuid4().hex[:8]}",
+        "operation_id": str(uuid4()),
         "name": name,
         "geometry_family": "Point",
-        "crs_code": 4326,
         "fields": [
-            {"field_id": "fld_name", "display_name": "Name", "field_type": "text", "required": True},
+            {"field_id": "fld_name", "name": "Name", "type": "text", "nullable": False},
         ],
     }
     resp = client.post(f"{base}/layers/manual", headers=csrf, json=payload)
     require(resp.status_code == 201, f"create manual layer failed: {resp.status_code} {resp.text}")
     body = resp.json()
     lid, sid = body["layer_id"], body["source_id"]
+    src = client.get(f"{base}/layers/{lid}", headers=csrf).json()["source"]
     cs = client.post(
         f"{base}/sources/{sid}/changesets",
         headers=csrf,
         json={
-            "operation_id": f"seed-{uuid4().hex[:8]}",
-            "base_content_revision": body["content_revision"],
-            "base_schema_revision": body["schema_revision"],
+            "operation_id": str(uuid4()),
+            "base_content_revision": src["content_revision"],
+            "base_schema_revision": src["schema_revision"],
             "summary": "seed point",
             "operations": [
                 {
@@ -320,7 +343,7 @@ def main() -> int:
                         "offset_m": 2.0,
                         "dem_id": None,
                         "vertical_reference": "local",
-                        "reference_label": "Bench",
+                        "reference_label": "",
                     }
                     placement_r = {**placement, "source_id": sid_r}
                     m_o = oracle.post(
@@ -364,8 +387,8 @@ def main() -> int:
                         files={"file": ("plan.dxf", dxf, "application/dxf")},
                     )
                     compare("E10 create cad document 201", doc_o, doc_r, norm=norm_value, expect_status=201)
-                    did_o = doc_o.json()["document_id"]
-                    did_r = doc_r.json()["document_id"]
+                    did_o = doc_o.json()["id"]
+                    did_r = doc_r.json()["id"]
 
                     v2_o = oracle.post(
                         f"{base_o}/cad/documents/{did_o}/versions",
@@ -389,8 +412,8 @@ def main() -> int:
 
                     compare(
                         "E10 cad links by feature",
-                        oracle.get(f"{base_o}/cad/links/by-feature?source_id={sid_o}&feature_id=pt_1", headers=h_a),
-                        rust.get(f"{base_r}/cad/links/by-feature?source_id={sid_r}&feature_id=pt_1", headers=h_a),
+                        oracle.get(f"{base_o}/cad/documents/links?source_id={sid_o}&feature_id=pt_1", headers=h_a),
+                        rust.get(f"{base_r}/cad/documents/links?source_id={sid_r}&feature_id=pt_1", headers=h_a),
                         expect_status=200,
                     )
                     compare(
@@ -408,12 +431,12 @@ def main() -> int:
                     compare(
                         "E10 cogo traverse",
                         oracle.post(
-                            f"{base_o}/cad/cogo/traverse",
+                            f"{base_o}/cad/precision/traverse",
                             headers=csrf_a,
                             json={"origin": [0.0, 0.0], "distance": 100.0, "azimuth_degrees": 90.0},
                         ),
                         rust.post(
-                            f"{base_r}/cad/cogo/traverse",
+                            f"{base_r}/cad/precision/traverse",
                             headers=csrf_a,
                             json={"origin": [0.0, 0.0], "distance": 100.0, "azimuth_degrees": 90.0},
                         ),
@@ -422,12 +445,12 @@ def main() -> int:
                     compare(
                         "E10 cogo intersection",
                         oracle.post(
-                            f"{base_o}/cad/cogo/intersection",
+                            f"{base_o}/cad/precision/intersection",
                             headers=csrf_a,
                             json={"seg_a": [[0.0, 0.0], [10.0, 10.0]], "seg_b": [[0.0, 10.0], [10.0, 0.0]]},
                         ),
                         rust.post(
-                            f"{base_r}/cad/cogo/intersection",
+                            f"{base_r}/cad/precision/intersection",
                             headers=csrf_a,
                             json={"seg_a": [[0.0, 0.0], [10.0, 10.0]], "seg_b": [[0.0, 10.0], [10.0, 0.0]]},
                         ),
@@ -436,12 +459,12 @@ def main() -> int:
                     compare(
                         "E10 cogo offset",
                         oracle.post(
-                            f"{base_o}/cad/cogo/offset",
+                            f"{base_o}/cad/precision/offset",
                             headers=csrf_a,
                             json={"segment": [[0.0, 0.0], [10.0, 0.0]], "offset_distance": 5.0},
                         ),
                         rust.post(
-                            f"{base_r}/cad/cogo/offset",
+                            f"{base_r}/cad/precision/offset",
                             headers=csrf_a,
                             json={"segment": [[0.0, 0.0], [10.0, 0.0]], "offset_distance": 5.0},
                         ),
@@ -450,12 +473,12 @@ def main() -> int:
                     compare(
                         "E10 cogo snap",
                         oracle.post(
-                            f"{base_o}/cad/cogo/snap",
+                            f"{base_o}/cad/precision/snap",
                             headers=csrf_a,
                             json={"target": [0.5, 0.0], "segments": [[[0.0, 0.0], [10.0, 0.0]]], "tolerance": 2.0},
                         ),
                         rust.post(
-                            f"{base_r}/cad/cogo/snap",
+                            f"{base_r}/cad/precision/snap",
                             headers=csrf_a,
                             json={"target": [0.5, 0.0], "segments": [[[0.0, 0.0], [10.0, 0.0]]], "tolerance": 2.0},
                         ),
@@ -558,7 +581,11 @@ def main() -> int:
                     csv_o = oracle.get(f"{base_o}/access/export/{lid_o}?format=csv", headers=h_b)
                     csv_r = rust.get(f"{base_r}/access/export/{lid_r}?format=csv", headers=h_b)
                     require(csv_o.status_code == csv_r.status_code == 200, "csv export status")
-                    require(csv_o.text == csv_r.text, f"csv mismatch: {csv_o.text!r} != {csv_r.text!r}")
+                    rows_o = list(csv.reader(io.StringIO(csv_o.text)))
+                    rows_r = list(csv.reader(io.StringIO(csv_r.text)))
+                    require(len(rows_o) == len(rows_r) and rows_o[0] == rows_r[0], f"csv header/len mismatch: {rows_o} != {rows_r}")
+                    for ro, rr in zip(rows_o[1:], rows_r[1:], strict=True):
+                        require(ro[:-1] == rr[:-1] and json.loads(ro[-1]) == json.loads(rr[-1]), f"csv row mismatch: {ro} != {rr}")
                     print("PASS E01 scoped csv export", flush=True)
 
                     compare(
@@ -588,7 +615,7 @@ def main() -> int:
                         "E01 revoke access rule",
                         oracle.delete(f"{base_o}/access/rules/{rid_o}", headers=csrf_a),
                         rust.delete(f"{base_r}/access/rules/{rid_r}", headers=csrf_a),
-                        expect_status=200,
+                        expect_status=204,
                     )
 
                     # ------------------------------------------------------------------

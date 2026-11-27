@@ -159,9 +159,8 @@ async fn create_tileset(
             "Unsupported tileset structure",
         )
     })?;
-    let total_size = manifest_bytes.len() as i64
-        + resources_map.values().map(|v| v.len() as i64).sum::<i64>()
-        + (resources_map.len() as i64) * 2;
+    let total_size =
+        manifest_bytes.len() as i64 + resources_map.values().map(|v| v.len() as i64).sum::<i64>();
     let resources = resources_map
         .into_iter()
         .map(|(uri, payload)| NewTileResource {
