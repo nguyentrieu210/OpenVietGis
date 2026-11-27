@@ -11,7 +11,86 @@ use uuid::Uuid;
 
 use crate::catalog::ProjectRead;
 
-fn db_error(error: sqlx::Error) -> AppError {
+mod assignment;
+mod buildings;
+mod field;
+mod hierarchy;
+mod numbering;
+mod proposals;
+mod records;
+mod route_import;
+
+pub use assignment::*;
+pub use buildings::*;
+pub use field::*;
+pub use hierarchy::*;
+pub use numbering::*;
+pub use proposals::*;
+pub use records::*;
+pub use route_import::*;
+
+/// Read the `wire` jsonb column that every module query projects, with Python
+/// `datetime.isoformat()` timestamps (`_wire` rows).
+pub(crate) fn wire(row: &sqlx::postgres::PgRow) -> Result<Value, AppError> {
+    let mut value = row.try_get::<Value, _>("wire").map_err(db_error)?;
+    fix_times(&mut value, false);
+    Ok(value)
+}
+
+/// Like [`wire`] for rows FastAPI serializes with Pydantic (`...Z` for UTC).
+pub(crate) fn wire_py(row: &sqlx::postgres::PgRow) -> Result<Value, AppError> {
+    let mut value = row.try_get::<Value, _>("wire").map_err(db_error)?;
+    fix_times(&mut value, true);
+    Ok(value)
+}
+
+/// Postgres trims trailing fractional zeros; Python keeps six microsecond digits.
+pub(crate) fn fix_times(value: &mut Value, pydantic: bool) {
+    if let Some(object) = value.as_object_mut() {
+        for (key, item) in object.iter_mut() {
+            if !key.ends_with("_at") {
+                continue;
+            }
+            if let Some(fixed) = item.as_str().and_then(|text| py_timestamp(text, pydantic)) {
+                *item = Value::String(fixed);
+            }
+        }
+    }
+}
+
+fn py_timestamp(text: &str, pydantic: bool) -> Option<String> {
+    if text.len() < 25 || text.as_bytes().get(10) != Some(&b'T') {
+        return None;
+    }
+    let (main, offset) = text.split_at(text.len() - 6);
+    let ob = offset.as_bytes();
+    if !matches!(ob[0], b'+' | b'-') || ob[3] != b':' {
+        return None;
+    }
+    let (seconds, fraction) = main.split_once('.').unwrap_or((main, ""));
+    if seconds.len() != 19 || fraction.len() > 6 || !fraction.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let fraction = if fraction.bytes().all(|b| b == b'0') {
+        String::new()
+    } else {
+        format!(".{fraction:0<6}")
+    };
+    let offset = if pydantic && offset == "+00:00" {
+        "Z"
+    } else {
+        offset
+    };
+    Some(format!("{seconds}{fraction}{offset}"))
+}
+
+pub(crate) fn db_error(error: sqlx::Error) -> AppError {
+    // SQLSTATE OV409 is a module lock guard; Core renders it as 409 DATA_LOCKED.
+    if let sqlx::Error::Database(db) = &error {
+        if db.code().as_deref() == Some("OV409") {
+            return AppError::conflict("DATA_LOCKED", db.message().to_owned());
+        }
+    }
     tracing::error!(%error, "house-numbering database operation failed");
     AppError::internal("house-numbering database operation failed")
 }
@@ -74,10 +153,7 @@ async fn json_rows(
         .fetch_all(&mut **read.transaction())
         .await
         .map_err(db_error)?;
-    let items = rows
-        .iter()
-        .map(|row| row.try_get::<Value, _>("wire").map_err(db_error))
-        .collect::<Result<Vec<_>, _>>()?;
+    let items = rows.iter().map(wire).collect::<Result<Vec<_>, _>>()?;
     Ok(json!({ "items": items }))
 }
 
@@ -236,7 +312,7 @@ pub struct AreaCreateInput<'a> {
     pub feature_id: Option<&'a str>,
 }
 
-async fn append_audit(
+pub(crate) async fn append_audit(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
     action: &str,
@@ -265,11 +341,12 @@ async fn append_audit(
     Ok(())
 }
 
-async fn validate_area_feature(
+pub(crate) async fn spatial_feature(
     edit: &mut ProjectRead<'_>,
     source_id: Uuid,
     feature_id: &str,
-) -> Result<(), AppError> {
+    expected: &[&str],
+) -> Result<i32, AppError> {
     let row = sqlx::query(
         "SELECT ds.stored_crs, ds.lifecycle, ds.validation_state,
                 ST_SRID(rf.geometry) AS srid,
@@ -303,18 +380,20 @@ async fn validate_area_feature(
         ));
     }
     let geometry_type: String = row.try_get("geometry_type").map_err(db_error)?;
-    if geometry_type != "ST_Polygon" {
+    if !expected.contains(&geometry_type.as_str()) {
         return Err(AppError::validation(
             "GEOMETRY_TYPE_MISMATCH",
-            format!("linked feature geometry {geometry_type:?} is not valid for this entity"),
+            format!("linked feature geometry '{geometry_type}' is not valid for this entity"),
         ));
     }
     let srid = row
         .try_get::<Option<i32>, _>("srid")
         .map_err(db_error)?
+        .filter(|srid| *srid != 0)
         .or(row
             .try_get::<Option<i32>, _>("stored_crs")
-            .map_err(db_error)?)
+            .map_err(db_error)?
+            .filter(|srid| *srid != 0))
         .unwrap_or(0);
     if srid <= 0 {
         return Err(AppError::validation(
@@ -322,10 +401,11 @@ async fn validate_area_feature(
             "linked geometry has no explicit CRS",
         ));
     }
-    Ok(())
+    Ok(srid)
 }
 
 fn rule_wire(mut wire: Value, distance: String) -> Result<Value, AppError> {
+    fix_times(&mut wire, false);
     let object = wire
         .as_object_mut()
         .ok_or_else(|| AppError::internal("house-numbering rule row must be an object"))?;
@@ -399,7 +479,7 @@ pub async fn create_area(
         ));
     }
     if let (Some(source_id), Some(feature_id)) = (input.source_id, input.feature_id) {
-        validate_area_feature(edit, source_id, feature_id).await?;
+        spatial_feature(edit, source_id, feature_id, &["ST_Polygon"]).await?;
     }
 
     let row = sqlx::query(
@@ -439,7 +519,7 @@ pub async fn create_area(
         json!({ "name": persisted_name }),
     )
     .await?;
-    row.try_get::<Value, _>("wire").map_err(db_error)
+    wire(&row)
 }
 
 #[cfg(test)]

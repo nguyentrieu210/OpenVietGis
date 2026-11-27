@@ -2,21 +2,23 @@
 
 use std::collections::{HashMap, HashSet};
 
-use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::extract::rejection::QueryRejection;
+use axum::extract::{Path, Query, Request, State};
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use ovg_processing::registry::{validate_algorithm_parameters, AlgorithmId as VectorAlgorithm};
-use ovg_storage::catalog::ProjectReadPolicy;
+use ovg_storage::editing::{EditError, Guard, Permission};
 use ovg_storage::processing_models::{self as store, ModelStoreError, ModelWrite};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
 
-use crate::catalog::{project_read, CatalogError};
-use crate::identity::{require_csrf, HumanSession};
+use crate::catalog::CatalogError;
+use crate::edit_auth::{
+    authenticate_actor, authenticate_json, decode, open, require_csrf, Failure,
+};
 use crate::AppState;
 
 const BASE: &str = "/organizations/{organization_id}/projects/{project_id}/processing/models";
@@ -137,22 +139,28 @@ struct DeleteQuery {
 
 async fn list_models(
     State(state): State<AppState>,
-    auth: HumanSession,
-    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
+    Path((organization, project)): Path<(String, String)>,
+    request: Request,
 ) -> Result<Json<Value>, ModelError> {
-    let mut read = project_read(
-        &state,
-        &auth,
-        organization_id,
-        project_id,
-        ProjectReadPolicy::Unrestricted,
-    )
-    .await
-    .map_err(ModelError::Access)?;
-    let result = store::list_models(&mut read)
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization)
+        .await
+        .map_err(ModelError::Failure)?;
+    let Some(mut scope) = open(&state, &actor, &organization, &project, Guard::Read)
+        .await
+        .map_err(ModelError::Failure)?
+    else {
+        return Err(ModelError::InvalidRequest);
+    };
+    scope
+        .authorize(Permission::Read)
+        .await
+        .map_err(|e| ModelError::Failure(Failure::Edit(e)))?;
+    let result = store::list_models_scoped(&mut scope)
         .await
         .map_err(ModelError::Store)?;
-    read.commit()
+    scope
+        .commit()
         .await
         .map_err(|_| ModelError::Store(ModelStoreError::Database))?;
     Ok(Json(result))
@@ -160,29 +168,31 @@ async fn list_models(
 
 async fn create_model(
     State(state): State<AppState>,
-    auth: HumanSession,
-    headers: HeaderMap,
-    Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
-    body: Result<Json<ModelRequest>, JsonRejection>,
+    Path((organization, project)): Path<(String, String)>,
+    request: Request,
 ) -> Result<(StatusCode, Json<Value>), ModelError> {
-    let Json(body) = body.map_err(|_| ModelError::InvalidRequest)?;
-    require_csrf(&state, &auth, &headers)
-        .map_err(|error| ModelError::Access(CatalogError::Identity(error)))?;
+    let (actor, headers, body) = authenticate_json(&state, request, &organization)
+        .await
+        .map_err(ModelError::Failure)?;
+    let scope = open(&state, &actor, &organization, &project, Guard::ScopedDenied)
+        .await
+        .map_err(ModelError::Failure)?;
+    require_csrf(&state, &actor, &headers).map_err(ModelError::Failure)?;
+    let body: ModelRequest = decode(body).map_err(ModelError::Failure)?;
     let input = normalize_model(body.name, body.graph)?;
 
-    let mut edit = project_read(
-        &state,
-        &auth,
-        organization_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await
-    .map_err(ModelError::Access)?;
-    let result = store::create_model(&mut edit, auth.actor_id(), auth.display_name(), input)
+    let Some(mut scope) = scope else {
+        return Err(ModelError::InvalidRequest);
+    };
+    scope
+        .authorize(Permission::Edit)
+        .await
+        .map_err(|e| ModelError::Failure(Failure::Edit(e)))?;
+    let result = store::create_model_scoped(&mut scope, input)
         .await
         .map_err(ModelError::Store)?;
-    edit.commit()
+    scope
+        .commit()
         .await
         .map_err(|_| ModelError::Store(ModelStoreError::Database))?;
     Ok((StatusCode::CREATED, Json(result)))
@@ -190,39 +200,34 @@ async fn create_model(
 
 async fn update_model(
     State(state): State<AppState>,
-    auth: HumanSession,
-    headers: HeaderMap,
-    Path((organization_id, project_id, model_id)): Path<(Uuid, Uuid, Uuid)>,
-    body: Result<Json<UpdateRequest>, JsonRejection>,
+    Path((organization, project, model)): Path<(String, String, String)>,
+    request: Request,
 ) -> Result<Json<Value>, ModelError> {
-    let Json(body) = body.map_err(|_| ModelError::InvalidRequest)?;
+    let (actor, headers, body) = authenticate_json(&state, request, &organization)
+        .await
+        .map_err(ModelError::Failure)?;
+    let scope = open(&state, &actor, &organization, &project, Guard::ScopedDenied)
+        .await
+        .map_err(ModelError::Failure)?;
+    require_csrf(&state, &actor, &headers).map_err(ModelError::Failure)?;
+    let body: UpdateRequest = decode(body).map_err(ModelError::Failure)?;
     if body.revision < 1 {
         return Err(ModelError::InvalidRequest);
     }
-    require_csrf(&state, &auth, &headers)
-        .map_err(|error| ModelError::Access(CatalogError::Identity(error)))?;
     let input = normalize_model(body.name, body.graph)?;
 
-    let mut edit = project_read(
-        &state,
-        &auth,
-        organization_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await
-    .map_err(ModelError::Access)?;
-    let result = store::update_model(
-        &mut edit,
-        auth.actor_id(),
-        auth.display_name(),
-        model_id,
-        body.revision,
-        input,
-    )
-    .await
-    .map_err(ModelError::Store)?;
-    edit.commit()
+    let (Some(mut scope), Ok(model_id)) = (scope, Uuid::parse_str(&model)) else {
+        return Err(ModelError::InvalidRequest);
+    };
+    scope
+        .authorize(Permission::Edit)
+        .await
+        .map_err(|e| ModelError::Failure(Failure::Edit(e)))?;
+    let result = store::update_model_scoped(&mut scope, model_id, body.revision, input)
+        .await
+        .map_err(ModelError::Store)?;
+    scope
+        .commit()
         .await
         .map_err(|_| ModelError::Store(ModelStoreError::Database))?;
     Ok(Json(result))
@@ -230,35 +235,33 @@ async fn update_model(
 
 async fn delete_model(
     State(state): State<AppState>,
-    auth: HumanSession,
-    headers: HeaderMap,
-    Path((organization_id, project_id, model_id)): Path<(Uuid, Uuid, Uuid)>,
+    Path((organization, project, model)): Path<(String, String, String)>,
     query: Result<Query<DeleteQuery>, QueryRejection>,
+    request: Request,
 ) -> Result<StatusCode, ModelError> {
+    let (actor, headers, _) = authenticate_json(&state, request, &organization)
+        .await
+        .map_err(ModelError::Failure)?;
+    let scope = open(&state, &actor, &organization, &project, Guard::ScopedDenied)
+        .await
+        .map_err(ModelError::Failure)?;
+    require_csrf(&state, &actor, &headers).map_err(ModelError::Failure)?;
     let Query(query) = query.map_err(|_| ModelError::InvalidRequest)?;
-    require_csrf(&state, &auth, &headers)
-        .map_err(|error| ModelError::Access(CatalogError::Identity(error)))?;
-    let mut edit = project_read(
-        &state,
-        &auth,
-        organization_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await
-    .map_err(ModelError::Access)?;
-    store::delete_model(
-        &mut edit,
-        auth.actor_id(),
-        auth.display_name(),
-        model_id,
-        query.revision,
-    )
-    .await
-    .map_err(ModelError::Store)?;
-    edit.commit()
+    let (Some(mut scope), Ok(model_id)) = (scope, Uuid::parse_str(&model)) else {
+        return Err(ModelError::InvalidRequest);
+    };
+    scope
+        .authorize(Permission::Edit)
+        .await
+        .map_err(|e| ModelError::Failure(Failure::Edit(e)))?;
+    store::delete_model_scoped(&mut scope, model_id, query.revision)
+        .await
+        .map_err(ModelError::Store)?;
+    scope
+        .commit()
         .await
         .map_err(|_| ModelError::Store(ModelStoreError::Database))?;
+    let _ = EditError::InvalidRequest;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -491,7 +494,7 @@ fn is_word(value: char) -> bool {
 
 enum ModelError {
     InvalidRequest,
-    Access(CatalogError),
+    Failure(Failure),
     Store(ModelStoreError),
     Http(StatusCode, &'static str),
 }
@@ -500,7 +503,7 @@ impl IntoResponse for ModelError {
     fn into_response(self) -> Response {
         match self {
             Self::InvalidRequest => CatalogError::InvalidRequest.into_response(),
-            Self::Access(error) => error.into_response(),
+            Self::Failure(failure) => failure.into_response(),
             Self::Store(ModelStoreError::Quota) => (
                 StatusCode::PAYLOAD_TOO_LARGE,
                 Json(serde_json::json!({"detail": "Maximum 50 models per project"})),

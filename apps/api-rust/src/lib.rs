@@ -5,11 +5,20 @@ pub mod cartography;
 pub(crate) mod catalog;
 pub mod config;
 pub mod connectors;
+pub(crate) mod edit_auth;
 pub(crate) mod editing;
 pub mod error;
 pub(crate) mod extensions;
 pub(crate) mod field_offline;
+#[cfg(feature = "house-numbering")]
 pub(crate) mod house_numbering;
+/// Without the official module compiled in, Core mounts no house-numbering routes.
+#[cfg(not(feature = "house-numbering"))]
+pub(crate) mod house_numbering {
+    pub(crate) fn router() -> axum::Router<crate::AppState> {
+        axum::Router::new()
+    }
+}
 pub(crate) mod identity;
 pub(crate) mod map_render;
 pub mod metrics;
@@ -17,6 +26,7 @@ pub mod middleware;
 pub(crate) mod ops;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
+pub(crate) mod professional;
 pub(crate) mod queries;
 pub mod raster_policy;
 pub mod routes;
@@ -192,6 +202,8 @@ mod tests {
                 .to_vec(),
         )
         .unwrap();
+        assert!(text.starts_with("# HELP openvietgis_up "));
+        assert!(text.contains("openvietgis_database_ready 0\n"));
         assert!(text.contains("ovg_http_requests_total"));
         assert!(text.contains(&format!("ovg_registered_modules_total {expected_modules}")));
 

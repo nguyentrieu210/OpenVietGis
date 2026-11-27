@@ -65,9 +65,18 @@ pub struct JobRecord {
 impl JobRecord {
     #[must_use]
     pub fn new_queued(organization_id: Uuid, job_type: impl Into<String>) -> Self {
+        Self::new_queued_with_id(JobId::new(), organization_id, job_type)
+    }
+
+    #[must_use]
+    pub fn new_queued_with_id(
+        id: JobId,
+        organization_id: Uuid,
+        job_type: impl Into<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
-            id: JobId::new(),
+            id,
             organization_id,
             job_type: job_type.into(),
             status: JobStatus::Queued,

@@ -43,7 +43,7 @@ def upstream(name):
             if self.command != "HEAD":
                 self.wfile.write(data)
 
-        do_GET = do_HEAD = do_POST = do_DELETE = do_OPTIONS = respond
+        do_GET = do_HEAD = do_POST = do_PUT = do_DELETE = do_OPTIONS = respond
 
         def log_message(self, *_args):
             pass
@@ -135,9 +135,19 @@ def main():
                 ("GET", f"{P}/processing/algorithms", "python", 200),
                 ("GET", f"{P}/modules/house-numbering", "python", 200),
                 ("GET", f"{P}/integration/events", "python", 200),
+                ("GET", "/api/v1/health/live", "python", 200),
+                ("GET", "/api/v1/health/ready", "python", 200),
+                ("GET", "/api/v1/ops/health/ready", "python", 200),
+                ("GET", "/api/v1/ops/metrics", "python", 200),
+                ("GET", "/api/v1/ops/release-capabilities", "rust", 200),
+                ("GET", "/api/v1/ops/release-capabilities/extra", "python", 200),
+                ("HEAD", "/api/v1/ops/health/live", "python", 200),
+                ("GET", f"/api/v1/organizations/{ORG}/ops/entitlement", "rust", 200),
+                ("PUT", f"/api/v1/organizations/{ORG}/ops/entitlement", "rust", 200),
+                ("POST", f"/api/v1/organizations/{ORG}/ops/entitlement", "python", 200),
             ]
             for method, target, expected, expected_status in cases:
-                sent = "{}" if method == "POST" else None
+                sent = "{}" if method in ("POST", "PUT") else None
                 status, backend, raw = request(port, method, target, sent)
                 assert (status, backend) == (expected_status, expected), (method, target, status, backend)
                 if method != "HEAD":
@@ -155,6 +165,7 @@ def main():
                 (f"{L}/viewport", "python"),
                 (f"{L}/features/feature_7-A", "python"),
                 (f"{L}/tiles/9/42/10.mvt", "rust"),
+                (f"/api/v1/organizations/{ORG}/ops/entitlement", "python"),
             ):
                 status, backend, raw = request(port, "GET", target, authorization="Bearer fixture")
                 assert (status, backend) == (200, expected)
