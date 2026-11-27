@@ -1,6 +1,7 @@
 //! Native, transport-independent MCP session store. A caller must first
 //! authenticate browser identity and OAuth subject; this store never grants
 //! GIS permissions. All operations are scoped to the authenticated owner.
+pub mod tools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -188,7 +189,7 @@ impl Store {
     pub fn ack(&mut self,id:Uuid,token:&str,owner:&Owner,cid:Uuid,ok:bool,result:Value,now:u64)->Result<(),Error> {
         let s=self.browser(id,token,owner,now)?;s.last_seen=now;Self::expire(s,now);
         let c=s.command.as_mut().filter(|c|c.id==cid&&c.state==CommandState::Claimed).ok_or(Error::CommandUnavailable)?;
-        if ok && !bounded(&result){return Err(Error::Invalid);}
+        if ok { tools::validate_result(&c.method,&result)?; }
         c.result=if ok{Some(result)}else{None};c.state=if ok{CommandState::Done}else{CommandState::Denied};Ok(())
     }
     /// Receipt retries return the terminal result only to the original OAuth
@@ -228,7 +229,7 @@ mod tests {
         let (id,c)=s.submit("a",None,"map_view",json!({}),0,40_000,10_000,0).unwrap();
         assert_eq!(s.ack(id,&x.browser_token,&a,c,true,json!({}),1),Err(Error::CommandUnavailable));
         s.poll(id,&x.browser_token,&a,1).unwrap();assert_eq!(s.prepare(id,&x.browser_token,&a,c,2).unwrap(),9998);
-        s.ack(id,&x.browser_token,&a,c,true,json!({"ok":true}),3).unwrap();let r=s.result("a",id,c,4).unwrap();assert_eq!(r.state,CommandState::Done);assert_eq!(s.result("a",id,c,5).unwrap(),r);
+        s.ack(id,&x.browser_token,&a,c,true,json!({"crs":"EPSG:4326","center":[0,0],"bbox":[-1,-1,1,1],"zoom":1}),3).unwrap();let r=s.result("a",id,c,4).unwrap();assert_eq!(r.state,CommandState::Done);assert_eq!(s.result("a",id,c,5).unwrap(),r);
         assert_eq!(s.submit("a",None,"map_view",json!({}),0,40_000,10_000,1000),Err(Error::RateLimited));
         let (_,c)=s.submit("a",None,"map_view",json!({}),0,40_000,10_000,2000).unwrap();
         s.poll(id,&x.browser_token,&a,2001).unwrap();assert_eq!(s.prepare(id,&x.browser_token,&a,c,10_000),Err(Error::CommandUnavailable));assert_eq!(s.result("a",id,c,10_001).unwrap().state,CommandState::Expired);
