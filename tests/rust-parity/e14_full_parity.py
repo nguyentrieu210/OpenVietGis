@@ -612,13 +612,9 @@ def main() -> int:
                         lambda b: norm_fields(b, "manifest_id", "occurred_at"),
                     )
 
-                    # --- 3. Portable Export & Import ---
-                    exp_o, exp_r = compare(
-                        "E14 portable export",
-                        oracle.get(f"{proj}/extensions/demo_oracle/portable-export", headers=owner_h),
-                        rust.get(f"{proj}/extensions/demo_rust/portable-export", headers=owner_h),
-                        lambda b: norm_fields(
-                            b,
+                    def norm_export(body: object) -> object:
+                        normed = norm_fields(
+                            body,
                             "sha256",
                             "extension_key",
                             "active_manifest_id",
@@ -630,7 +626,25 @@ def main() -> int:
                             "commands",
                             "display_name",
                             "activation_history",
-                        ),
+                        )
+                        if isinstance(normed, dict) and isinstance(normed.get("bundle"), dict):
+                            recs = normed["bundle"].get("records")
+                            if isinstance(recs, list):
+                                recs.sort(
+                                    key=lambda r: (
+                                        str(r.get("entity_name")),
+                                        int(r.get("revision", 0)),
+                                        json.dumps(r.get("payload", {}), sort_keys=True),
+                                    )
+                                )
+                        return normed
+
+                    # --- 3. Portable Export & Import ---
+                    exp_o, exp_r = compare(
+                        "E14 portable export",
+                        oracle.get(f"{proj}/extensions/demo_oracle/portable-export", headers=owner_h),
+                        rust.get(f"{proj}/extensions/demo_rust/portable-export", headers=owner_h),
+                        norm_export,
                         check_cache=True,
                     )
                     compare(

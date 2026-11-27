@@ -58,7 +58,7 @@ def compare_response(label: str, expected, actual, *, normalize=None):
     print(f"PASS {label}", flush=True)
 
 
-def clone_project(owner_url: str, org_id: str, template_project_id: str) -> str:
+def clone_project(owner_url: str, org_id: str, template_project_id: str, suffix: str) -> str:
     new_id = str(uuid4())
     with psycopg.connect(owner_url) as conn:
         conn.execute(
@@ -67,12 +67,12 @@ def clone_project(owner_url: str, org_id: str, template_project_id: str) -> str:
                 id, organization_id, workspace_id, name, slug, status,
                 created_by_actor_type, created_by_actor_id, created_at, updated_at
             )
-            SELECT %s, organization_id, workspace_id, name || ' Rust', slug || '-rust',
+            SELECT %s, organization_id, workspace_id, name || ' ' || %s, slug || '-' || %s,
                    status, created_by_actor_type, created_by_actor_id, created_at, updated_at
             FROM workspace.projects
             WHERE organization_id = %s AND id = %s
             """,
-            (new_id, org_id, template_project_id),
+            (new_id, suffix, suffix, org_id, template_project_id),
         )
     return new_id
 
@@ -139,8 +139,9 @@ def main() -> int:
                 csrf_secret=baseline.DEFAULT_CSRF_SECRET,
             )
             org_id = str(fixture["org_a_id"])
-            proj_o = str(fixture["project_a_id"])
-            proj_r = clone_project(owner_url, org_id, proj_o)
+            template_proj = str(fixture["project_a_id"])
+            proj_o = clone_project(owner_url, org_id, template_proj, "oracle")
+            proj_r = clone_project(owner_url, org_id, template_proj, "rust")
             user_a = str(fixture["user_a_id"])
 
             from fastapi.testclient import TestClient
