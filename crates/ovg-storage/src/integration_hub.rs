@@ -1,6 +1,7 @@
 //! E12 integration-hub authorization context, export scopes, and QGIS bindings.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt::Write;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Duration, Utc};
@@ -187,17 +188,6 @@ pub async fn accessible_layers(
             })
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn project_level_order_is_monotonic() {
-        assert_ne!(EffectiveProjectLevel::Read, EffectiveProjectLevel::Edit);
-        assert_ne!(EffectiveProjectLevel::Edit, EffectiveProjectLevel::Manage);
-    }
 }
 
 fn edit_db_err(error: sqlx::Error) -> EditError {
@@ -586,6 +576,7 @@ fn serialize_conflict(row: &sqlx::postgres::PgRow) -> Result<Value, EditError> {
     }))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn append_binding_audit(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
@@ -1202,7 +1193,10 @@ pub async fn issue_pairing_token(
     .map_err(edit_db_err)?;
 
     let token_id = Uuid::new_v4();
-    let token_hash_hex: String = secret_hash.iter().map(|b| format!("{b:02x}")).collect();
+    let mut token_hash_hex = String::with_capacity(secret_hash.len() * 2);
+    for b in &secret_hash {
+        let _ = write!(&mut token_hash_hex, "{b:02x}");
+    }
     let token_row = sqlx::query(
         "INSERT INTO integration_hub.binding_pairing_tokens
            (id, organization_id, project_id, binding_id, label,
@@ -1567,4 +1561,15 @@ pub async fn resolve_binding_conflict(
     .await?;
 
     serialize_conflict(&row)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_level_order_is_monotonic() {
+        assert_ne!(EffectiveProjectLevel::Read, EffectiveProjectLevel::Edit);
+        assert_ne!(EffectiveProjectLevel::Edit, EffectiveProjectLevel::Manage);
+    }
 }

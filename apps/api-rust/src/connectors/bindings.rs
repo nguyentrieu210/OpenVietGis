@@ -17,7 +17,7 @@ use ovg_storage::integration_hub::{
     self, is_valid_binding_field_id, is_valid_dataset_ref, ConflictItemInput, CreateBindingInput,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use tokio::sync::{mpsc, Semaphore};
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -183,7 +183,11 @@ async fn get_export_scopes(
 ) -> Result<Response, Failure> {
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::ReadScopedAllowed).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ReadScopedAllowed).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Read).await?;
     let body = integration_hub::export_scopes(&mut scope).await?;
     scope.commit().await?;
@@ -198,7 +202,9 @@ async fn list_candidates(
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await?;
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     let body = integration_hub::list_binding_candidates(&mut scope).await?;
     scope.commit().await?;
@@ -213,7 +219,9 @@ async fn list_bindings(
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await?;
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     let body = integration_hub::list_bindings(&mut scope).await?;
     scope.commit().await?;
@@ -249,7 +257,11 @@ async fn create_binding(
     allowed.sort();
 
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
 
@@ -281,7 +293,11 @@ async fn activate_binding(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
     let body =
@@ -301,7 +317,11 @@ async fn change_binding_lifecycle(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
     let body = integration_hub::change_binding_lifecycle(
@@ -323,7 +343,9 @@ async fn list_pairing_tokens(
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await?;
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     let body = integration_hub::list_pairing_tokens(&mut scope, binding_id).await?;
     scope.commit().await?;
@@ -359,7 +381,11 @@ async fn issue_pairing_token(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
     let server_url = resolve_server_url(&headers, &state.config.api_public_base_url);
@@ -382,7 +408,11 @@ async fn revoke_pairing_token(
 ) -> Result<Response, Failure> {
     let (actor, headers, _) = authenticate_json(&state, request, &org).await?;
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
     let body = integration_hub::revoke_pairing_token(&mut scope, binding_id, token_id).await?;
@@ -398,7 +428,9 @@ async fn list_binding_conflicts(
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await?;
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     let body = integration_hub::list_binding_conflicts(&mut scope, binding_id).await?;
     scope.commit().await?;
@@ -440,7 +472,11 @@ async fn record_binding_conflicts(
         });
     }
 
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Edit).await?;
     let body = integration_hub::record_binding_conflicts(&mut scope, binding_id, items).await?;
     scope.commit().await?;
@@ -465,7 +501,11 @@ async fn resolve_binding_conflict(
         return Err(EditError::InvalidRequest.into());
     }
     require_human(&actor)?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Write).await?;
+    let Some(mut scope) =
+        edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
     scope.authorize(Permission::Manage).await?;
     require_csrf(&state, &actor, &headers)?;
     let body = integration_hub::resolve_binding_conflict(
@@ -488,7 +528,9 @@ async fn stream_integration_events(
 ) -> Result<Response, Failure> {
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
-    let mut scope = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await?;
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
     let org_id = scope.organization_id();
     let proj_id = scope.project_id();
     scope.authorize(Permission::Read).await?;

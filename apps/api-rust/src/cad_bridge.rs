@@ -165,6 +165,7 @@ fn is_valid_dxf_header(payload: &[u8]) -> bool {
     false
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn save_cad_version(
     state: AppState,
     auth: HumanSession,
@@ -445,10 +446,12 @@ async fn feature_cad_links(
             "Invalid feature_id",
         ));
     }
+    let org_id = read.organization_id();
+    let proj_id = read.project_id();
     let items = cad_documents::linked_features(
         read.transaction(),
-        read.organization_id(),
-        read.project_id(),
+        org_id,
+        proj_id,
         LinkedFilter::ByFeature {
             source_id: q.source_id,
             feature_id: &q.feature_id,
@@ -482,10 +485,12 @@ async fn cad_feature_links(
         ));
     }
     let handle_upper = q.handle.to_ascii_uppercase();
+    let org_id = read.organization_id();
+    let proj_id = read.project_id();
     let items = cad_documents::linked_features(
         read.transaction(),
-        read.organization_id(),
-        read.project_id(),
+        org_id,
+        proj_id,
         LinkedFilter::ByDocument {
             document_id: doc_id,
             version,
@@ -554,7 +559,7 @@ fn cogo_err(msg: &'static str) -> Failure {
     Failure::Edit(EditError::Platform {
         status: 422,
         code: "INVALID_COGO",
-        message: msg,
+        message: msg.to_owned(),
         details: None,
     })
 }
@@ -715,33 +720,42 @@ async fn cogo_snap(
     for &seg in &body.segments {
         let _ = validate_seg(seg)?;
     }
-    let [tx, ty] = body.target;
-    let mut best_dist = body.tolerance;
-    let mut best_pt = [tx, ty];
-    let mut kind = "none";
-
-    let mut try_candidate = |px: f64, py: f64, label: &'static str| {
-        let d = (tx - px).hypot(ty - py);
-        if d < best_dist
-            || (d == best_dist && (kind == "none" || (px, py) < (best_pt[0], best_pt[1])))
-        {
-            best_dist = d;
-            best_pt = [px, py];
-            kind = label;
+    struct SnapBest {
+        dist: f64,
+        pt: [f64; 2],
+        kind: &'static str,
+    }
+    impl SnapBest {
+        fn consider(&mut self, tx: f64, ty: f64, px: f64, py: f64, label: &'static str) {
+            let d = (tx - px).hypot(ty - py);
+            if d < self.dist
+                || (d == self.dist && (self.kind == "none" || (px, py) < (self.pt[0], self.pt[1])))
+            {
+                self.dist = d;
+                self.pt = [px, py];
+                self.kind = label;
+            }
         }
+    }
+
+    let [tx, ty] = body.target;
+    let mut best = SnapBest {
+        dist: body.tolerance,
+        pt: [tx, ty],
+        kind: "none",
     };
 
     for &[a, b] in &body.segments {
         for [vx, vy] in [a, b] {
-            try_candidate(vx, vy, "vertex");
+            best.consider(tx, ty, vx, vy, "vertex");
         }
     }
-    if kind == "none" {
+    if best.kind == "none" {
         for &[[ax, ay], [bx, by]] in &body.segments {
-            try_candidate((ax + bx) / 2.0, (ay + by) / 2.0, "midpoint");
+            best.consider(tx, ty, (ax + bx) / 2.0, (ay + by) / 2.0, "midpoint");
         }
     }
-    if kind == "none" {
+    if best.kind == "none" {
         for &[[ax, ay], [bx, by]] in &body.segments {
             let dx = bx - ax;
             let dy = by - ay;
@@ -750,15 +764,15 @@ async fn cogo_snap(
                 continue;
             }
             let t = (((tx - ax) * dx + (ty - ay) * dy) / lsq).clamp(0.0, 1.0);
-            try_candidate(ax + t * dx, ay + t * dy, "perpendicular");
+            best.consider(tx, ty, ax + t * dx, ay + t * dy, "perpendicular");
         }
     }
 
     Ok(Json(planar_preview(json!({
-        "snapped": kind != "none",
-        "kind": kind,
-        "point": best_pt,
-        "distance": if kind != "none" { Some(best_dist) } else { None },
+        "snapped": best.kind != "none",
+        "kind": best.kind,
+        "point": best.pt,
+        "distance": if best.kind != "none" { Some(best.dist) } else { None },
     }))))
 }
 

@@ -49,6 +49,7 @@ pub async fn bump_project_permission_epoch(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn append_gis_audit(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,
@@ -394,6 +395,7 @@ pub async fn create_group(
     Ok(gid)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn replace_group(
     t: &mut TenantTx,
     org_id: Uuid,

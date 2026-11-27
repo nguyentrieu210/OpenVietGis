@@ -148,13 +148,13 @@ fn validate_rule_body(body: RuleBody) -> Result<RuleInput, GisAccessError> {
     })
 }
 
-async fn open_admin_scope<'a>(
-    state: &'a AppState,
+async fn open_admin_scope(
+    state: &AppState,
     auth: &HumanSession,
     org_id: Uuid,
     project_id: Uuid,
     write: bool,
-) -> Result<tenancy::TenantTx<'a>, GisAccessError> {
+) -> Result<tenancy::TenantTx, GisAccessError> {
     let mut tx = crate::tenancy::begin(state, auth)
         .await
         .map_err(GisAccessError::Tenancy)?;

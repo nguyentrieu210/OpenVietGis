@@ -146,12 +146,6 @@ impl Store {
         }
         Ok(data)
     }
-
-    pub(crate) async fn delete(&self, key: &str) {
-        if let Ok(path) = self.path(key) {
-            let _ = tokio::fs::remove_file(path).await;
-        }
-    }
 }
 
 pub(super) struct Staged {
