@@ -69,14 +69,9 @@ async fn list_contributions(
         &actor,
         org_id,
         project_id,
-        ProjectReadPolicy::LayerAcl,
+        ProjectReadPolicy::Unrestricted,
     )
     .await?;
-    if read.is_gis_scoped() {
-        return Err(ExtensionError::Domain(AppError::forbidden(
-            "partner integrations require unrestricted project access",
-        )));
-    }
     let items = store_list_contributions(&mut read)
         .await
         .map_err(ExtensionError::Domain)?;
@@ -112,14 +107,9 @@ async fn save_contributions(
         &actor,
         org_id,
         project_id,
-        ProjectReadPolicy::ScopedManage,
+        ProjectReadPolicy::UnrestrictedManage,
     )
     .await?;
-    if edit.is_gis_scoped() {
-        return Err(ExtensionError::Domain(AppError::forbidden(
-            "partner integrations require unrestricted project access",
-        )));
-    }
     let result = store_save_contributions(
         &mut edit,
         manifest_id,
@@ -151,14 +141,9 @@ async fn list_events(
         &actor,
         org_id,
         project_id,
-        ProjectReadPolicy::LayerAcl,
+        ProjectReadPolicy::Unrestricted,
     )
     .await?;
-    if read.is_gis_scoped() {
-        return Err(ExtensionError::Domain(AppError::forbidden(
-            "partner integrations require unrestricted project access",
-        )));
-    }
     let result = store_list_events(&mut read, query.after, query.limit)
         .await
         .map_err(ExtensionError::Domain)?;
