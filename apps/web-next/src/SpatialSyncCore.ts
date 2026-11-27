@@ -21,6 +21,20 @@ export async function parallelBounded<T>(items:readonly T[],concurrency:number,r
 
 
 type RenderFeature={id?:string|number;geometry:unknown;properties:Record<string,unknown>|null};
+// The render pipeline recreates plain scalar style objects on each selection.
+// Avoid allocating two JSON strings for every unchanged feature. Fall back to
+// the previous serialization semantics for nested values or differing keys.
+function sameRenderProperties(a:RenderFeature["properties"],b:RenderFeature["properties"]):boolean{
+  if(a===b)return true;
+  if(a&&b&&Object.getPrototypeOf(a)===Object.prototype&&Object.getPrototypeOf(b)===Object.prototype){
+    const keys=Object.keys(a),other=Object.keys(b);
+    if(keys.length===other.length&&keys.every((k,i)=>{
+      const x=a[k];
+      return k===other[i]&&(x===null||typeof x==="string"||typeof x==="number"||typeof x==="boolean")&&x===b[k];
+    }))return true;
+  }
+  return JSON.stringify(a)===JSON.stringify(b);
+}
 export function renderDiff<T extends RenderFeature>(before:readonly T[],after:readonly T[]){
   const old=new Map(before.map(f=>[f.id,f])),next=new Map(after.map(f=>[f.id,f]));
   if(old.size!==before.length||next.size!==after.length||old.has(undefined)||next.has(undefined))return null;
@@ -30,7 +44,7 @@ export function renderDiff<T extends RenderFeature>(before:readonly T[],after:re
     const previous=old.get(id);
     if(!previous){add.push(f);continue;}
     const geometryChanged=previous.geometry!==f.geometry&&JSON.stringify(previous.geometry)!==JSON.stringify(f.geometry);
-    const propertiesChanged=JSON.stringify(previous.properties)!==JSON.stringify(f.properties);
+    const propertiesChanged=!sameRenderProperties(previous.properties,f.properties);
     // Never removeAllProperties: geojson-vt 6.3.3 then returns {} and ignores addOrUpdateProperties, so the feature loses layerId and vanishes until reload.
     if(geometryChanged||propertiesChanged)update.push({id:id!,...(geometryChanged?{newGeometry:f.geometry}:{}),...(propertiesChanged?{removeProperties:Object.keys(previous.properties??{}).filter(key=>!(key in (f.properties??{}))),addOrUpdateProperties:Object.entries(f.properties??{}).map(([key,value])=>({key,value}))}:{})});
   }

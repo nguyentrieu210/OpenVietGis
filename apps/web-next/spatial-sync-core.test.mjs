@@ -35,3 +35,13 @@ test('one selection / edit among 35000 points produces one render update',async(
   console.log('35k render diff ms:',(performance.now()-start).toFixed(1));
   assert.equal(renderDiff(rows,[...rows,rows[0]]),null);
 });
+
+test('render property fast path preserves serialized comparison semantics',async()=>{
+  const {renderDiff}=await import('./src/SpatialSyncCore.ts');
+  const variants=[null,{}, {a:1,b:2},{b:2,a:1},{a:undefined},{a:null},{a:NaN},{a:0},{a:-0},{a:{x:1}},{a:[1,2]},{a:[2,1]},Object.assign(Object.create(null),{a:1})];
+  for(const a of variants)for(const b of variants){
+    const prev={id:'f',geometry:{type:'Point',coordinates:[1,2]},properties:a};
+    const next={...prev,properties:b};
+    assert.equal(renderDiff([prev],[next]).update.length,JSON.stringify(a)===JSON.stringify(b)?0:1);
+  }
+});
