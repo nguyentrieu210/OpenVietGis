@@ -17,3 +17,19 @@ describe("digitizing safeguards",()=>{
   expect(orthoPoint([2,1.2],[1,1])).toEqual([2,1]);
  });
 });
+
+import {lockedSegment,sphericalInverse,hasSegmentLock} from "./digitizing";
+describe("spherical digitizing constraints",()=>{
+ it("locks distance and north-based bearing",()=>{
+  const a:[number,number]=[106.5,10.5],b=lockedSegment(a,a,{distance:"100",bearing:"90"}),r=sphericalInverse(a,b);
+  expect(r.distance).toBeCloseTo(100,5);expect(r.bearing).toBeCloseTo(90,5);
+  expect(b[0]).toBeGreaterThan(a[0]);
+  const c=lockedSegment(a,[106.5,10.6],{distance:"10",bearing:""});
+  expect(sphericalInverse(a,c).distance).toBeCloseTo(10,5);
+ });
+ it("rejects invalid constraints, never silently clips",()=>{
+  const a:[number,number]=[106,10];
+  for(const lock of [{distance:"0",bearing:"90"},{distance:"10",bearing:"360"},{distance:"x",bearing:"0"},{distance:"10",bearing:""}])expect(()=>lockedSegment(a,a,lock)).toThrow();
+  expect(hasSegmentLock({distance:" ",bearing:""})).toBe(false);
+ });
+});

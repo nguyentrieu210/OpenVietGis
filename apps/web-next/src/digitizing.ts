@@ -35,3 +35,28 @@ export function parseSketchPoints(raw:string):XY[]|null{
  const parts=s.split(/[ ,;\s]+/).map(Number);if(parts.length%2)return null;
  const points=Array.from({length:parts.length/2},(_,i):XY=>[parts[i*2]!,parts[i*2+1]!]);return points.every(validXY)?points:null;
 }
+
+export type SegmentLock={distance:string;bearing:string};
+const R=6371008.8,rad=Math.PI/180;
+export function sphericalInverse(a:XY,b:XY){
+ const p=a[1]*rad,q=b[1]*rad,d=(b[0]-a[0])*rad;
+ const h=Math.sin((q-p)/2)**2+Math.cos(p)*Math.cos(q)*Math.sin(d/2)**2;
+ const distance=2*R*Math.asin(Math.sqrt(Math.min(1,Math.max(0,h))));
+ const bearing=distance>1e-7?(Math.atan2(Math.sin(d)*Math.cos(q),Math.cos(p)*Math.sin(q)-Math.sin(p)*Math.cos(q)*Math.cos(d))/rad+360)%360:null;
+ return {distance,bearing};
+}
+export function lockedSegment(origin:XY,target:XY,lock:SegmentLock):XY{
+ if(!validXY(origin)||!validXY(target))throw Error("Tọa độ ngoài phạm vi bản đồ.");
+ const raw=sphericalInverse(origin,target);
+ const parse=(s:string,min:number,max:number)=>{if(!/^\d+(?:\.\d+)?$/.test(s.trim()))throw Error("Nhập số hợp lệ bằng dấu chấm.");const n=Number(s);if(!Number.isFinite(n)||n<min||n>max)throw Error("Giá trị khóa ngoài giới hạn.");return n};
+ const distance=lock.distance.trim()?parse(lock.distance,0.001,1000000):raw.distance;
+ const bearing=lock.bearing.trim()?parse(lock.bearing,0,359.999999):raw.bearing;
+ if(!distance||bearing===null)throw Error("Cần hướng hoặc khoảng cách khác 0.");
+ const p=origin[1]*rad,l=origin[0]*rad,t=bearing*rad,d=distance/R;
+ const q=Math.asin(Math.sin(p)*Math.cos(d)+Math.cos(p)*Math.sin(d)*Math.cos(t));
+ const x=l+Math.atan2(Math.sin(t)*Math.sin(d)*Math.cos(p),Math.cos(d)-Math.sin(p)*Math.sin(q));
+ const result:XY=[((x/rad+540)%360)-180,q/rad];
+ if(!validXY(result))throw Error("Điểm kết quả ngoài phạm vi bản đồ.");
+ return result;
+}
+export function hasSegmentLock(lock:SegmentLock){return !!(lock.distance.trim()||lock.bearing.trim())}

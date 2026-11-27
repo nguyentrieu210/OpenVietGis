@@ -380,9 +380,11 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CoreMapTools.tsx",
-        "apps/web-next/src/digitizing.ts"
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; distance/angle constraint UI remains"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; spherical WGS84 approximation, ellipsoidal/projected CRS parity not verified"
     },
     {
       "id": "EDIT-08",
@@ -397,9 +399,13 @@
     {
       "id": "EDIT-09",
       "task": "T060",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; spherical WGS84 approximation, ellipsoidal/projected CRS parity not verified"
     },
     {
       "id": "PROC-01",

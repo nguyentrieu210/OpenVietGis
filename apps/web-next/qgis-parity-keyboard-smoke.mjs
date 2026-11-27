@@ -120,6 +120,18 @@ try{
  assert.equal(await workspace.getByRole("checkbox",{name:"Buildings",exact:true}).isChecked(),true);
  await workspace.getByRole("button",{name:"Xong",exact:true}).click();
  console.log("PASS synthetic Chromium: snapping layer scope persistence");
+ await page.keyboard.press("Control+k");await command.fill("DIST 106.5,10.5");await command.press("Enter");
+ const sketch=page.locator(".core-sketch");await sketch.waitFor();
+ await sketch.getByText("Khóa khoảng cách / phương vị",{exact:true}).click();
+ await sketch.getByLabel("Khóa khoảng cách (m)",{exact:true}).fill("100");
+ await sketch.getByLabel("Khóa phương vị (°)",{exact:true}).fill("90");
+ await sketch.getByRole("button",{name:"Thêm đỉnh theo khóa",exact:true}).click();
+ await sketch.getByText(/Phương vị cạnh cuối: 90.00°/).waitFor();
+ assert.match(await sketch.locator(".core-sketch-measure").innerText(),/100/);
+ await sketch.getByRole("button",{name:"Hủy vẽ",exact:true}).click();
+ await sketch.waitFor({state:"detached"});
+ console.log("PASS synthetic Chromium: exact spherical segment constraints");
+
 
 
 
