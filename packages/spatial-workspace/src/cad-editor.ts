@@ -61,10 +61,10 @@ export function openCadEditor(host:HTMLElement,input:OpenInput,events:Events,sig
   if(d.type==="ready"&&!ready&&d.version==="2026.46"&&Array.isArray(d.capabilities)&&caps.every(c=>d.capabilities.includes(c))){
    ready=true;events.onStage?.("drawing");selectionSupported=d.capabilities.includes("selection");send("open",{name:input.name,readOnly:input.readOnly,buffer:input.bytes},[input.bytes]);
   }else if(d.type==="loaded"&&ready&&!loaded&&d.name===input.name){
-   loaded=true;clearTimeout(timer);resolveReady(handle);
+   loaded=true;engineDirty=false;events.onDirty(false);clearTimeout(timer);resolveReady(handle);
   }else if(d.type==="selection"&&loaded&&selectionSupported&&(d.handle===null||isCadHandle(d.handle))){
    events.onSelection?.(d.handle===null?null:d.handle.toUpperCase());
-  }else if(d.type==="dirty"&&ready&&typeof d.dirty==="boolean"){
+  }else if(d.type==="dirty"&&loaded&&typeof d.dirty==="boolean"){
    if(input.readOnly&&d.dirty){fail("Read-only CAD modified");return}
    engineDirty=d.dirty;events.onDirty(engineDirty||saveFailed);
   }else if(d.type==="save"&&loaded&&typeof d.saveId==="string"&&/^save-[0-9]{1,20}$/.test(d.saveId)){
