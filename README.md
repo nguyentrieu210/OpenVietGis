@@ -184,13 +184,15 @@ pnpm dev:web
 
 Mặc định: web `http://127.0.0.1:5173`; API `http://127.0.0.1:8000`; readiness endpoint `/api/v1/health/ready`.
 
-Repo có **`apps/web`** (được chạy bởi `pnpm dev:web`) và **`apps/web-next`** (giao diện đang phát triển). Để chạy riêng web-next, **dừng web đang chiếm cổng 5173**, rồi dùng:
+Frontend chính thức là **`apps/web-next`**, được chạy bằng `pnpm dev:web`
+và đóng gói bằng `pnpm build:web`. `apps/web` chỉ còn là frontend legacy phục vụ
+các bộ kiểm thử Playwright cũ; chưa xóa cho đến khi chuyển và xác nhận tương đương
+các kịch bản này trên frontend chính.
 
-```bash
-pnpm --filter @openvietgis/web-next dev
-```
-
-Không mặc định các frontend hoặc bản demo luôn cùng commit, feature flags và cấu hình backend.
+Backend Rust nằm tại `apps/api-rust` và các crate trong Cargo workspace.
+FastAPI tại `apps/api` vẫn phục vụ migration, kiểm thử tương đương và cấu hình
+triển khai cũ. Xem [Spec 064](specs/064-rust-platform/spec.md) và
+[engine scope](specs/064-rust-platform/engine-scope.md) trước khi loại bỏ backend cũ.
 
 ### OIDC development profile
 
