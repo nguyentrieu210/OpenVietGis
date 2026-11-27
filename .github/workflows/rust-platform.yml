@@ -217,6 +217,15 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e08-professional.log
 
+      - name: Run E02 catalog write parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e02_writes.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e02-writes.log
+
       - name: Run E14 extension, marketplace & partner parity
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
         run: |
