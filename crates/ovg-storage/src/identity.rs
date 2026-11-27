@@ -1,7 +1,10 @@
 //! Browser sessions and self-scoped identity reads against the existing PostgreSQL schema.
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use chrono::{Duration, Utc};
 use ovg_core::AppError;
 use serde::Serialize;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use sqlx::{Postgres, Row, Transaction};
 use subtle::ConstantTimeEq;
@@ -220,6 +223,366 @@ pub async fn installation_initialized(pool: &DbPool) -> Result<bool, AppError> {
     .map_err(db_error)
 }
 
+#[derive(Clone, Debug)]
+pub struct ExternalIdentityClaims {
+    pub issuer: String,
+    pub subject: String,
+    pub display_name: String,
+    pub email: Option<String>,
+    pub email_verified: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct LoginOutcome {
+    pub user_id: Uuid,
+    pub identity_link_id: Uuid,
+    pub session_id: Uuid,
+    pub session_token: String,
+}
+
+pub enum OidcIdentityError {
+    Conflict(&'static str),
+    LinkConflict,
+    InvalidLinkSession(&'static str),
+    Storage(AppError),
+}
+
+impl From<AppError> for OidcIdentityError {
+    fn from(error: AppError) -> Self {
+        Self::Storage(error)
+    }
+}
+
+pub fn random_urlsafe_token(num_bytes: usize) -> Result<String, AppError> {
+    let mut bytes = vec![0u8; num_bytes];
+    getrandom::getrandom(&mut bytes)
+        .map_err(|err| AppError::internal(format!("CSPRNG failed: {err}")))?;
+    Ok(URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn issue_session_token(session_id: Uuid) -> Result<(String, [u8; 32]), AppError> {
+    let secret = format!("ovg_s_{}", random_urlsafe_token(32)?);
+    let token = format!("ovgs_{}.{}", session_id.simple(), secret);
+    let digest: [u8; 32] = Sha256::digest(secret.as_bytes()).into();
+    Ok((token, digest))
+}
+
+async fn lock_external_identity(
+    tx: &mut Transaction<'_, Postgres>,
+    issuer: &str,
+    subject: &str,
+) -> Result<(), AppError> {
+    let key = format!("openvietgis.identity:{}:{}{}", issuer.chars().count(), issuer, subject);
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&key)
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    Ok(())
+}
+
+async fn find_external_identity_row(
+    tx: &mut Transaction<'_, Postgres>,
+    issuer: &str,
+    subject: &str,
+) -> Result<Option<(Uuid, String, Uuid)>, AppError> {
+    let row = sqlx::query(
+        "SELECT u.id AS user_id, u.status, l.id AS identity_link_id
+         FROM identity.identity_links AS l
+         JOIN identity.users AS u ON u.id = l.user_id
+         WHERE l.issuer = $1 AND l.subject = $2",
+    )
+    .bind(issuer)
+    .bind(subject)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(db_error)?;
+
+    row.map(|row| -> Result<_, sqlx::Error> {
+        Ok((
+            row.try_get("user_id")?,
+            row.try_get("status")?,
+            row.try_get("identity_link_id")?,
+        ))
+    })
+    .transpose()
+    .map_err(db_error)
+}
+
+async fn insert_identity_link_audit(
+    tx: &mut Transaction<'_, Postgres>,
+    user_id: Uuid,
+    display_name: &str,
+    resource_id: Option<Uuid>,
+    outcome: &str,
+    metadata: serde_json::Value,
+    created_at: chrono::DateTime<Utc>,
+) -> Result<(), AppError> {
+    sqlx::query(
+        "INSERT INTO audit.audit_events (
+             id, organization_id, actor_type, actor_id, actor_display_snapshot,
+             action, resource_type, resource_id, outcome, metadata, created_at
+         )
+         VALUES ($1, NULL, 'human', $2, $3, 'identity.link', 'identity_link', $4, $5, $6, $7)",
+    )
+    .bind(Uuid::new_v4())
+    .bind(user_id)
+    .bind(display_name)
+    .bind(resource_id)
+    .bind(outcome)
+    .bind(metadata)
+    .bind(created_at)
+    .execute(&mut **tx)
+    .await
+    .map_err(db_error)?;
+    Ok(())
+}
+
+pub async fn complete_oidc_login(
+    pool: &DbPool,
+    claims: &ExternalIdentityClaims,
+    session_ttl_seconds: i64,
+) -> Result<LoginOutcome, OidcIdentityError> {
+    let mut tx = pool.inner().begin().await.map_err(db_error)?;
+    lock_external_identity(&mut tx, &claims.issuer, &claims.subject).await?;
+
+    let now = Utc::now();
+    let existing = find_external_identity_row(&mut tx, &claims.issuer, &claims.subject).await?;
+    let (user_id, identity_link_id) = match existing {
+        None => {
+            let user_id = Uuid::new_v4();
+            let link_id = Uuid::new_v4();
+            sqlx::query(
+                "INSERT INTO identity.users (
+                     id, display_name, email_snapshot, status, created_at, updated_at
+                 )
+                 VALUES ($1, $2, $3, 'active', $4, $4)",
+            )
+            .bind(user_id)
+            .bind(&claims.display_name)
+            .bind(&claims.email)
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+
+            sqlx::query(
+                "INSERT INTO identity.identity_links (
+                     id, user_id, issuer, subject, email_snapshot, email_verified,
+                     display_name_snapshot, created_at, last_login_at
+                 )
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)",
+            )
+            .bind(link_id)
+            .bind(user_id)
+            .bind(&claims.issuer)
+            .bind(&claims.subject)
+            .bind(&claims.email)
+            .bind(claims.email_verified)
+            .bind(&claims.display_name)
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            (user_id, link_id)
+        }
+        Some((user_id, status, link_id)) => {
+            if status != "active" {
+                return Err(OidcIdentityError::Conflict("user is disabled"));
+            }
+            sqlx::query(
+                "UPDATE identity.identity_links
+                 SET last_login_at = $1,
+                     email_snapshot = $2,
+                     email_verified = $3,
+                     display_name_snapshot = $4
+                 WHERE id = $5 AND user_id = $6",
+            )
+            .bind(now)
+            .bind(&claims.email)
+            .bind(claims.email_verified)
+            .bind(&claims.display_name)
+            .bind(link_id)
+            .bind(user_id)
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            (user_id, link_id)
+        }
+    };
+
+    let session_id = Uuid::new_v4();
+    let (session_token, secret_hash) = issue_session_token(session_id)?;
+    let expires_at = now + Duration::seconds(session_ttl_seconds);
+    sqlx::query(
+        "INSERT INTO identity.web_sessions (
+             id, user_id, identity_link_id, secret_hash,
+             issued_at, expires_at, last_seen_at, revoked_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL)",
+    )
+    .bind(session_id)
+    .bind(user_id)
+    .bind(identity_link_id)
+    .bind(secret_hash.as_slice())
+    .bind(now)
+    .bind(expires_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    tx.commit().await.map_err(db_error)?;
+    Ok(LoginOutcome {
+        user_id,
+        identity_link_id,
+        session_id,
+        session_token,
+    })
+}
+
+pub async fn complete_oidc_link(
+    pool: &DbPool,
+    user_id: Uuid,
+    session_id: Uuid,
+    claims: &ExternalIdentityClaims,
+) -> Result<Uuid, OidcIdentityError> {
+    let mut tx = pool.inner().begin().await.map_err(db_error)?;
+
+    let active_session = sqlx::query_scalar::<_, Uuid>(
+        "SELECT id
+         FROM identity.web_sessions
+         WHERE id = $1
+           AND user_id = $2
+           AND revoked_at IS NULL
+           AND expires_at > clock_timestamp()
+         FOR UPDATE",
+    )
+    .bind(session_id)
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_error)?;
+    if active_session.is_none() {
+        return Err(OidcIdentityError::InvalidLinkSession(
+            "link session no longer valid",
+        ));
+    }
+
+    let user_row = sqlx::query("SELECT display_name, status FROM identity.users WHERE id = $1")
+        .bind(user_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?;
+    let Some(user_row) = user_row else {
+        return Err(OidcIdentityError::Conflict("user not found"));
+    };
+    let display_name: String = user_row.try_get("display_name").map_err(db_error)?;
+    let status: String = user_row.try_get("status").map_err(db_error)?;
+    if status != "active" {
+        return Err(OidcIdentityError::Conflict("user not found"));
+    }
+
+    let now = Utc::now();
+    lock_external_identity(&mut tx, &claims.issuer, &claims.subject).await?;
+    if let Some((existing_user_id, _, existing_link_id)) =
+        find_external_identity_row(&mut tx, &claims.issuer, &claims.subject).await?
+    {
+        if existing_user_id == user_id {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(existing_link_id);
+        }
+        insert_identity_link_audit(
+            &mut tx,
+            user_id,
+            &display_name,
+            None,
+            "denied",
+            json!({ "reason": "identity_conflict" }),
+            now,
+        )
+        .await?;
+        tx.commit().await.map_err(db_error)?;
+        return Err(OidcIdentityError::LinkConflict);
+    }
+
+    let new_link_id = Uuid::new_v4();
+    let inserted = sqlx::query_scalar::<_, Uuid>(
+        "INSERT INTO identity.identity_links (
+             id, user_id, issuer, subject, email_snapshot, email_verified,
+             display_name_snapshot, created_at, last_login_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+         ON CONFLICT (issuer, subject) DO NOTHING
+         RETURNING id",
+    )
+    .bind(new_link_id)
+    .bind(user_id)
+    .bind(&claims.issuer)
+    .bind(&claims.subject)
+    .bind(&claims.email)
+    .bind(claims.email_verified)
+    .bind(&claims.display_name)
+    .bind(now)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(db_error)?;
+
+    if inserted.is_none() {
+        if let Some((existing_user_id, _, existing_link_id)) =
+            find_external_identity_row(&mut tx, &claims.issuer, &claims.subject).await?
+        {
+            if existing_user_id == user_id {
+                tx.commit().await.map_err(db_error)?;
+                return Ok(existing_link_id);
+            }
+        }
+        insert_identity_link_audit(
+            &mut tx,
+            user_id,
+            &display_name,
+            None,
+            "denied",
+            json!({ "reason": "identity_conflict" }),
+            now,
+        )
+        .await?;
+        tx.commit().await.map_err(db_error)?;
+        return Err(OidcIdentityError::LinkConflict);
+    }
+
+    insert_identity_link_audit(
+        &mut tx,
+        user_id,
+        &display_name,
+        Some(new_link_id),
+        "success",
+        json!({ "issuer": claims.issuer }),
+        now,
+    )
+    .await?;
+    tx.commit().await.map_err(db_error)?;
+    Ok(new_link_id)
+}
+
+pub async fn verify_password_action_identity(
+    pool: &DbPool,
+    user_id: Uuid,
+    claims: &ExternalIdentityClaims,
+) -> Result<bool, AppError> {
+    let found = sqlx::query_scalar::<_, Uuid>(
+        "SELECT u.id
+         FROM identity.identity_links AS l
+         JOIN identity.users AS u ON u.id = l.user_id
+         WHERE l.issuer = $1 AND l.subject = $2",
+    )
+    .bind(&claims.issuer)
+    .bind(&claims.subject)
+    .fetch_optional(pool.inner())
+    .await
+    .map_err(db_error)?;
+    Ok(found == Some(user_id))
+}
+
 async fn begin_self_read(
     pool: &DbPool,
     session: &VerifiedSession,
@@ -266,5 +629,16 @@ mod tests {
         assert!(parse_session_token("other_10000000000000000000000000000001.s_example").is_none());
         assert!(parse_session_token("ovgs_not-a-uuid.s_example").is_none());
         assert!(parse_session_token("ovgs_10000000000000000000000000000001").is_none());
+    }
+
+    #[test]
+    fn issued_session_token_roundtrips_through_parser_and_digest() {
+        let session_id = Uuid::from_u128(0x20000000000000000000000000000002);
+        let (token, secret_hash) = issue_session_token(session_id).unwrap();
+        let (parsed_id, secret) = parse_session_token(&token).unwrap();
+        assert_eq!(parsed_id, session_id);
+        assert!(secret.starts_with("ovg_s_"));
+        assert!(verify_digest(secret, &secret_hash));
+        assert!(!verify_digest("tampered", &secret_hash));
     }
 }

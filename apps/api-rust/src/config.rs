@@ -8,11 +8,15 @@ use ovg_storage::DbPoolConfig;
 use serde::Deserialize;
 use uuid::Uuid;
 
-/// Public part of one `OPENVIETGIS_OIDC_PROVIDERS` entry; secrets are ignored.
+/// Configuration for one `OPENVIETGIS_OIDC_PROVIDERS` entry.
 #[derive(Clone, Debug, Deserialize)]
 pub struct OidcProvider {
     pub issuer: String,
     pub display_name: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret: Option<String>,
 }
 
 #[derive(Clone)]
@@ -24,6 +28,8 @@ pub struct AppConfig {
     pub cors_origins: Vec<String>,
     pub session_cookie_name: String,
     pub session_cookie_secure: bool,
+    pub session_secret: Option<String>,
+    pub session_ttl_seconds: i64,
     pub web_base_url: String,
     pub api_public_base_url: String,
     pub oidc_providers: BTreeMap<String, OidcProvider>,
@@ -50,6 +56,8 @@ impl Default for AppConfig {
             ],
             session_cookie_name: "ovg_session".to_string(),
             session_cookie_secure: false,
+            session_secret: None,
+            session_ttl_seconds: 28_800,
             web_base_url: "http://127.0.0.1:5173".to_string(),
             api_public_base_url: "http://127.0.0.1:8000".to_string(),
             oidc_providers: BTreeMap::new(),
@@ -98,6 +106,14 @@ impl AppConfig {
                 secure.trim().to_ascii_lowercase().as_str(),
                 "1" | "true" | "yes" | "on"
             );
+        }
+        cfg.session_secret = std::env::var("OPENVIETGIS_APPLICATION_SESSION_SECRET")
+            .ok()
+            .filter(|secret| !secret.is_empty());
+        if let Ok(ttl) = std::env::var("OPENVIETGIS_SESSION_TTL_SECONDS") {
+            if let Ok(seconds) = ttl.trim().parse::<i64>() {
+                cfg.session_ttl_seconds = seconds.clamp(300, 604_800);
+            }
         }
         if let Ok(url) = std::env::var("OPENVIETGIS_WEB_BASE_URL") {
             cfg.web_base_url = url;

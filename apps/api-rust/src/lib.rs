@@ -30,6 +30,7 @@ pub(crate) mod managed_sync;
 pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
+mod oidc_worker;
 pub(crate) mod ops;
 pub(crate) mod org_chat;
 pub(crate) mod presence;
