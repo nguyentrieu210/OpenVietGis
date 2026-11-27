@@ -46,6 +46,7 @@ pub fn router() -> Router<AppState> {
             &format!("{PROJECT}/layers/{{layer_id}}/features/{{feature_id}}"),
             get(get_feature),
         )
+        .merge(crate::catalog_write::router())
 }
 
 /// Raw feature-read query; validated like the FastAPI parameter declarations.
@@ -426,11 +427,13 @@ pub(crate) enum CatalogError {
     Identity(IdentityError),
     /// Fixed spatial descriptions rendered as `{"code", "detail"}`.
     Spatial(StatusCode, &'static str, String),
+    /// Fixed HTTP detail rendered as `{"detail": ...}`.
+    Detail(StatusCode, String),
     Application(AppError),
 }
 
 /// Spatial error codes with a fixed public description in the reference API.
-const SPATIAL_CODES: [&str; 13] = [
+const SPATIAL_CODES: [&str; 19] = [
     "STALE_MAP_REVISION",
     "OPERATION_INTENT_CONFLICT",
     "NO_CHANGES",
@@ -444,11 +447,27 @@ const SPATIAL_CODES: [&str; 13] = [
     "UNSUPPORTED_TRANSFORMATION",
     "TRANSFORMATION_OUT_OF_AREA",
     "TRANSFORMATION_UNAVAILABLE",
+    "STALE_CATALOG_REVISION",
+    "STALE_LAYER_REVISION",
+    "SOURCE_ALREADY_REGISTERED",
+    "ACTIVE_LAYER_DEPENDENCIES",
+    "UNKNOWN_REFERENCE_KEY",
+    "CRS_CORRECTION_UNVERIFIED",
 ];
 
 impl CatalogError {
     pub(crate) fn spatial(error: AppError) -> Self {
         match error {
+            AppError::Conflict { code, message, .. }
+                if code == ovg_storage::catalog::DETAIL_CODE =>
+            {
+                Self::Detail(StatusCode::CONFLICT, message)
+            }
+            AppError::Validation { code, message, .. }
+                if code == ovg_storage::catalog::DETAIL_CODE =>
+            {
+                Self::Detail(StatusCode::UNPROCESSABLE_ENTITY, message)
+            }
             AppError::Conflict { code, message, .. } if SPATIAL_CODES.contains(&code) => {
                 Self::Spatial(StatusCode::CONFLICT, code, message)
             }
@@ -483,6 +502,7 @@ impl IntoResponse for CatalogError {
             Self::Spatial(status, code, detail) => {
                 (status, Json(json!({"code": code, "detail": detail}))).into_response()
             }
+            Self::Detail(status, detail) => (status, Json(json!({"detail": detail}))).into_response(),
             Self::Application(error) => {
                 if let AppError::Internal { internal_detail } = &error {
                     tracing::error!(detail = %internal_detail, "catalog request failed");
