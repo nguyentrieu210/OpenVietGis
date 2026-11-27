@@ -14,7 +14,7 @@
 - [ ] T008 Create CI acceptance evidence manifest and gate script; map every matrix row to test IDs and blockers.
 
 ## Wave 1 — US1: Application Shell & điều hướng
-**Source boundary**: apps/web-next/src/LiveApp.tsx, SpatialWorkspace.tsx, QgisWorkspace.tsx, CoreCommandBar.tsx, hotkeys.ts. 
+**Source boundary**: apps/web-next/src/LiveApp.tsx, SpatialWorkspace.tsx, QgisWorkspace.tsx, CoreCommandBar.tsx, hotkeys.ts.
 - [ ] T009 [US1] [SHELL-01] Menu chức năng Project/Edit/View/Layer/Settings/Plugins/Vector/Raster/Processing/Help: xác minh và hoàn thiện Nhóm theo ngữ cảnh và capability; menu/toolbar/locator dùng cùng command ID; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T010 [US1] [SHELL-02] Toolbars theo nhóm, kéo thả, ẩn/hiện: xác minh và hoàn thiện Kiểm tra thứ tự, vị trí, reset, narrow screen và phím tắt; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T011 [US1] [SHELL-03] Locator / Ctrl+K tìm lệnh, dữ liệu, tọa độ: xác minh và hoàn thiện Locator đa nguồn có scope, tìm tên lệnh VN/EN, layer, tọa độ; không vượt quyền; test/evidence theo contracts/ux-contracts.md (P1).
@@ -27,7 +27,7 @@
 - [ ] T018 [US1] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 2 — US2: Dock, Browser & Layers
-**Source boundary**: apps/web-next/src/DockLayout.tsx, Splitter.tsx, QgisWorkspace.tsx, layer-tree.ts, CatalogManager.tsx, DsmPanes.tsx. 
+**Source boundary**: apps/web-next/src/DockLayout.tsx, Splitter.tsx, QgisWorkspace.tsx, layer-tree.ts, CatalogManager.tsx, DsmPanes.tsx.
 - [ ] T019 [US2] [DOCK-01] Dock trái/phải/dưới/nổi, resize: xác minh và hoàn thiện Kéo thả mọi panel theo capability; resize chuột và bàn phím, giới hạn viewport; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T020 [US2] [DOCK-02] Tab dock, lưu/đổi/reset layout: xác minh và hoàn thiện Tab stack, layout preset và keyboard alternatives; không rơi panel ngoài màn; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T021 [US2] [DOCK-03] Browser tree nguồn dữ liệu, metadata, drag/drop: xác minh và hoàn thiện Browser nguồn server, kéo layer vào bản đồ, xem metadata và lỗi provider; test/evidence theo contracts/ux-contracts.md (P1).
@@ -42,7 +42,7 @@
 - [ ] T030 [US2] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 3 — US3: Layer Properties, Symbology, Labels
-**Source boundary**: apps/web-next/src/LayerProperties.tsx, style-io.ts, label-expr.ts, graduated.ts, ProfessionalTools.tsx. 
+**Source boundary**: apps/web-next/src/LayerProperties.tsx, style-io.ts, label-expr.ts, graduated.ts, ProfessionalTools.tsx.
 - [ ] T031 [US3] [STYLE-01] Information / Source / Fields / Display: xác minh và hoàn thiện Thông tin nguồn/storage/display CRS, fields, rendering; Apply/OK/Cancel nhất quán; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T032 [US3] [STYLE-02] Single symbol / categorized / graduated: xác minh và hoàn thiện So khớp fixture phân loại null, breaks, màu, legend, export; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T033 [US3] [STYLE-03] Rule-based / symbol layers / data-defined overrides: xác minh và hoàn thiện Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng; test/evidence theo contracts/ux-contracts.md (P2).
@@ -56,7 +56,7 @@
 - [ ] T041 [US3] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 4 — US4: Attribute Table, Form & Selection
-**Source boundary**: apps/web-next/src/QgisWorkspace.tsx, FeatureInfo.tsx, ProfessionalTools.tsx, AdvancedEditor.tsx. 
+**Source boundary**: apps/web-next/src/QgisWorkspace.tsx, FeatureInfo.tsx, ProfessionalTools.tsx, AdvancedEditor.tsx.
 - [ ] T042 [US4] [TABLE-01] Table gắn với active layer, map/table selection: xác minh và hoàn thiện Một selection store theo layer/revision; chọn ở map/table/inspector khớp; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T043 [US4] [TABLE-02] Tìm kiếm, phân trang, sort/filter toàn bộ nguồn: xác minh và hoàn thiện Server-side filter/sort trên toàn nguồn; ghi rõ loaded vs total; không lọc riêng trang gây hiểu nhầm; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T044 [US4] [TABLE-03] Chọn theo biểu thức, vị trí, vùng chọn: xác minh và hoàn thiện Select/add/remove/intersect/invert trên toàn tập hợp có permission và count; test/evidence theo contracts/ux-contracts.md (P1).
@@ -69,7 +69,7 @@
 - [ ] T051 [US4] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 5 — US5: Digitizing, Snapping & Topology
-**Source boundary**: apps/web-next/src/CoreMapTools.tsx, AdvancedEditor.tsx, SnapMath.ts, ProfessionalTools.tsx; apps/api-rust/src/editing.rs. 
+**Source boundary**: apps/web-next/src/CoreMapTools.tsx, AdvancedEditor.tsx, SnapMath.ts, ProfessionalTools.tsx; apps/api-rust/src/editing.rs.
 - [ ] T052 [US5] [EDIT-01] Pan, zoom, identify, extent, Space-pan tạm: xác minh và hoàn thiện Không đổi công cụ đang chọn khi nhả Space; không capture khi input/IME; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T053 [US5] [EDIT-02] Point/Line/Polygon digitize, vertex editor: xác minh và hoàn thiện Create/move/insert/delete vertex, precision input, preview, save/cancel có test; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T054 [US5] [EDIT-03] Edit mode & unsaved changes, save/rollback: xác minh và hoàn thiện Layer edit state rõ; bản nháp khác shared revision; cảnh báo chuyển project/F5; test/evidence theo contracts/ux-contracts.md (P1).
@@ -83,7 +83,7 @@
 - [ ] T062 [US5] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 6 — US6: Processing, Raster & Analysis
-**Source boundary**: apps/web-next/src/ProcessingToolbox.tsx, ProcessingModeler.tsx, RasterWorkbench.tsx, RasterReportWorkbench.tsx, TerrainEngineering.tsx; apps/api-rust/src/processing.rs. 
+**Source boundary**: apps/web-next/src/ProcessingToolbox.tsx, ProcessingModeler.tsx, RasterWorkbench.tsx, RasterReportWorkbench.tsx, TerrainEngineering.tsx; apps/api-rust/src/processing.rs.
 - [ ] T063 [US6] [PROC-01] Processing Toolbox search, category/provider: xác minh và hoàn thiện Registry thuật toán theo capability, tìm/lọc, help, favorite/recent; không hiện thuật toán giả; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T064 [US6] [PROC-02] Algorithm parameter form / preview: xác minh và hoàn thiện Typed inputs, CRS, extent, output, validation, chạy lại cùng tham số; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T065 [US6] [PROC-03] Buffer/Clip/Dissolve, spatial joins & analysis: xác minh và hoàn thiện Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage; test/evidence theo contracts/ux-contracts.md (P1).
@@ -98,7 +98,7 @@
 - [ ] T074 [US6] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 7 — US7: Print Layout, CRS & interoperability
-**Source boundary**: apps/web-next/src/LayoutDesigner.tsx, PrintDesigner.tsx, LayoutRender.ts, ExportDialog.tsx, TransferTool.tsx, QgisBindingManager.tsx, crs-display.ts. 
+**Source boundary**: apps/web-next/src/LayoutDesigner.tsx, PrintDesigner.tsx, LayoutRender.ts, ExportDialog.tsx, TransferTool.tsx, QgisBindingManager.tsx, crs-display.ts.
 - [ ] T075 [US7] [OUTPUT-01] Layout manager, page, map frames: xác minh và hoàn thiện Danh sách layout, khổ giấy, trang, map frame, CRS, scale; lưu phiên bản; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T076 [US7] [OUTPUT-02] Item properties, guides/grid, alignment, undo: xác minh và hoàn thiện Dock item properties, align/distribute, guides, snap, lock, undo/redo; golden layout; test/evidence theo contracts/ux-contracts.md (P2).
 - [ ] T077 [US7] [OUTPUT-03] Legend, north arrow, scale bar, label: xác minh và hoàn thiện Liên kết đúng map item, scale và legend; không sai đơn vị/CRS; test/evidence theo contracts/ux-contracts.md (P1).
@@ -111,7 +111,7 @@
 - [ ] T084 [US7] Review wave changes against Constitution, capability/permission and performance gate; update matrix and deliver independently reviewable PR.
 
 ## Wave 8 — US8: CAD/3D, collaboration, AI & cross-cutting
-**Source boundary**: apps/web-next/src/SpatialWorkspace.tsx, CadEditorPanel.tsx, MapChat.tsx, OrgChat.tsx, AiCopilotPanel.tsx, ai-copilot/; apps/mcp-rust/. 
+**Source boundary**: apps/web-next/src/SpatialWorkspace.tsx, CadEditorPanel.tsx, MapChat.tsx, OrgChat.tsx, AiCopilotPanel.tsx, ai-copilot/; apps/mcp-rust/.
 - [ ] T085 [US8] [COLLAB-01] 3D map view, camera, layers, terrain: xác minh và hoàn thiện Giữ Cesium/MapLibre; camera/selection sync theo capability; không thay bằng QGIS engine; test/evidence theo contracts/ux-contracts.md (P2).
 - [ ] T086 [US8] [COLLAB-02] CAD Model/Layout, save, document revision: xác minh và hoàn thiện Giữ OpenCAD engine; lưu đúng bản vẽ/phiên bản, dirty gate, không lệnh CAD giả; test/evidence theo contracts/ux-contracts.md (P1).
 - [ ] T087 [US8] [COLLAB-03] Application Shell chung CAD/GIS/3D: xác minh và hoàn thiện Chat/task/AI luôn khả dụng theo quyền, chỉ toolbar chuyên ngành đổi; không remount thừa; test/evidence theo contracts/ux-contracts.md (P1).
