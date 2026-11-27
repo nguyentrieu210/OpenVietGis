@@ -72,6 +72,9 @@ function CadVault({client,path,initial,canEdit,onBusy,expire,onImported,focus,ch
 type Props={scope:ProjectScope;client:ApiClient;canRead:boolean;accessReason?:string|undefined;canEdit:boolean;blocked:boolean;rows:StudioRow[];rasters:StoredRaster[];mapHost?:HTMLElement|null;mapReady?:boolean;onEngineering?:()=>void;basemapId?:string;onBasemapChange?:(id:string)=>void;camera:()=>MLMap|null;expire:()=>void;onCadImport:()=>void;selectedKey:string;selectedSourceRow?:StudioRow;onClearSelection:()=>void;onSelectRow:(key:string)=>void;onOpenTileFeature:(identity:SourceFeatureRef,signal:AbortSignal)=>Promise<boolean>;onModeChange?:(mode:SpatialMode)=>void;children:ReactNode};
 export function SpatialWorkspace(props:Props){
  const {scope,client,rows}=props;
+ const modeKey="ovg:resume-mode:v1:"+scope.accountId+":"+scope.organizationId+":"+scope.projectId;
+ const restoreMode=useRef<SpatialMode>((()=>{try{const m=localStorage.getItem(modeKey);return m==="cad"||m==="3d"?m:"gis"}catch{return "gis"}})());
+ const restoreStarted=useRef(false),restoreFinished=useRef(false);
  const path="/organizations/"+encodeURIComponent(scope.organizationId)+"/projects/"+encodeURIComponent(scope.projectId)+"/cad/documents";
  const modelPath="/organizations/"+encodeURIComponent(scope.organizationId)+"/projects/"+encodeURIComponent(scope.projectId)+"/3d/models";
  const scenePath="/organizations/"+encodeURIComponent(scope.organizationId)+"/projects/"+encodeURIComponent(scope.projectId)+"/3d/scenes";
@@ -164,6 +167,16 @@ export function SpatialWorkspace(props:Props){
  useEffect(()=>{if(active!=="gis"||!props.canRead||props.blocked)setSurveyTerrain(false)},[active,props.canRead,props.blocked]);
  const empty3d=active==="3d"&&sceneLayers.length===0&&!tileset;
 
+ useEffect(()=>{
+  if(restoreStarted.current||!props.canRead||!controller.current)return;
+  const desired=restoreMode.current;
+  if(desired==="3d"&&!props.mapReady)return;
+  restoreStarted.current=true;
+  if(desired==="gis"){restoreFinished.current=true;return}
+  const c=controller.current;
+  void c.switchTo(desired).finally(()=>{if(controller.current===c){restoreFinished.current=true;try{localStorage.setItem(modeKey,c.state.active)}catch{}}});
+ },[props.canRead,props.mapReady,modeKey]);
+ useEffect(()=>{if(restoreFinished.current){try{localStorage.setItem(modeKey,active)}catch{}}},[active,modeKey]);
  useEffect(()=>{props.onModeChange?.(active)},[active,props.onModeChange]);
  const selectedModelLayer=sceneLayers.find(l=>l.id===pickedModel&&l.visible);
  const selectedModelSource=selectedModelLayer?.rowKey?rows.find(row=>row.key===selectedModelLayer.rowKey):undefined;
