@@ -405,7 +405,7 @@ def main() -> int:
     parser.add_argument("--candidate", required=True)
     args = parser.parse_args()
     binary = Path(args.candidate).resolve()
-    admin_url = os.environ.get("OPENVIETGIS_PARITY_ADMIN_URL", baseline.DEFAULT_ADMIN_URL)
+    admin_url = os.environ.get("OPENVIETGIS_PARITY_ADMIN_URL", baseline.DEFAULT_ADMIN_PG_URL)
 
     with MockOidcIdp().running() as idp:
         providers_json = json.dumps(

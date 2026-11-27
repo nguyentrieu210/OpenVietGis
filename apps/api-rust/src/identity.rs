@@ -640,7 +640,9 @@ fn redirect_response(location: &str, cookies: &[String]) -> Result<Response, Ide
     for cookie in cookies {
         let header_val = HeaderValue::from_str(cookie)
             .map_err(|_| AppError::internal("invalid cookie header"))?;
-        response.headers_mut().append(header::SET_COOKIE, header_val);
+        response
+            .headers_mut()
+            .append(header::SET_COOKIE, header_val);
     }
     Ok(response)
 }
@@ -648,7 +650,9 @@ fn redirect_response(location: &str, cookies: &[String]) -> Result<Response, Ide
 fn json_error_with_clear(status: StatusCode, detail: &str, clear_cookie: &str) -> Response {
     let mut response = (status, Json(json!({ "detail": detail }))).into_response();
     if let Ok(header_val) = HeaderValue::from_str(clear_cookie) {
-        response.headers_mut().append(header::SET_COOKIE, header_val);
+        response
+            .headers_mut()
+            .append(header::SET_COOKIE, header_val);
     }
     response
 }
@@ -659,7 +663,9 @@ fn oidc_tx_secret(state: &AppState) -> Result<&str, AppError> {
         .session_secret
         .as_deref()
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| AppError::service_unavailable("AUTH_UNAVAILABLE", "OIDC session unavailable"))
+        .ok_or_else(|| {
+            AppError::service_unavailable("AUTH_UNAVAILABLE", "OIDC session unavailable")
+        })
 }
 
 fn sign_oidc_transaction(tx: &OidcTransaction, secret: &str) -> Result<String, AppError> {
@@ -673,11 +679,7 @@ fn sign_oidc_transaction(tx: &OidcTransaction, secret: &str) -> Result<String, A
     Ok(format!("v1.{payload_b64}.{sig_b64}"))
 }
 
-fn verify_oidc_transaction(
-    raw: &str,
-    secret: &str,
-    now_ts: i64,
-) -> Option<OidcTransaction> {
+fn verify_oidc_transaction(raw: &str, secret: &str, now_ts: i64) -> Option<OidcTransaction> {
     let rest = raw.strip_prefix("v1.")?;
     let (payload_b64, sig_b64) = rest.split_once('.')?;
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).ok()?;
@@ -1018,9 +1020,11 @@ async fn complete_login(
                 redirect_response(&dest, &[clear_tx_cookie])
             }
             Err(OidcIdentityError::InvalidLinkSession(msg))
-            | Err(OidcIdentityError::Conflict(msg)) => {
-                Ok(json_error_with_clear(StatusCode::BAD_REQUEST, msg, &clear_tx_cookie))
-            }
+            | Err(OidcIdentityError::Conflict(msg)) => Ok(json_error_with_clear(
+                StatusCode::BAD_REQUEST,
+                msg,
+                &clear_tx_cookie,
+            )),
             Err(OidcIdentityError::LinkConflict) => Ok(json_error_with_clear(
                 StatusCode::BAD_REQUEST,
                 "external identity cannot be linked",
@@ -1041,9 +1045,11 @@ async fn complete_login(
             );
             redirect_response(&dest, &[clear_tx_cookie, session_cookie])
         }
-        Err(OidcIdentityError::Conflict(msg)) => {
-            Ok(json_error_with_clear(StatusCode::BAD_REQUEST, msg, &clear_tx_cookie))
-        }
+        Err(OidcIdentityError::Conflict(msg)) => Ok(json_error_with_clear(
+            StatusCode::BAD_REQUEST,
+            msg,
+            &clear_tx_cookie,
+        )),
         Err(OidcIdentityError::LinkConflict | OidcIdentityError::InvalidLinkSession(_)) => {
             Ok(json_error_with_clear(
                 StatusCode::BAD_REQUEST,

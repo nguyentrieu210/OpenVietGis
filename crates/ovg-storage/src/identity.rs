@@ -272,7 +272,12 @@ async fn lock_external_identity(
     issuer: &str,
     subject: &str,
 ) -> Result<(), AppError> {
-    let key = format!("openvietgis.identity:{}:{}{}", issuer.chars().count(), issuer, subject);
+    let key = format!(
+        "openvietgis.identity:{}:{}{}",
+        issuer.chars().count(),
+        issuer,
+        subject
+    );
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(&key)
         .execute(&mut **tx)
