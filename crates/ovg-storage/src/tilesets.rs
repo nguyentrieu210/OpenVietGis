@@ -186,14 +186,17 @@ pub async fn persist_tileset(
     .map_err(store_db)?;
     let count: i64 = quota_row.try_get("count").map_err(store_db)?;
     let total: i64 = quota_row.try_get("total").map_err(store_db)?;
-    if count >= MAX_TILESETS_PER_PROJECT || total.saturating_add(args.byte_size) > MAX_TILESET_QUOTA_BYTES
+    if count >= MAX_TILESETS_PER_PROJECT
+        || total.saturating_add(args.byte_size) > MAX_TILESET_QUOTA_BYTES
     {
-        return Err(TilesetStoreError::Detail(413, "Project tileset quota exceeded"));
+        return Err(TilesetStoreError::Detail(
+            413,
+            "Project tileset quota exceeded",
+        ));
     }
 
-    let tile_count = i32::try_from(args.resources.len()).map_err(|_| {
-        TilesetStoreError::Internal(AppError::internal("tile count overflow"))
-    })?;
+    let tile_count = i32::try_from(args.resources.len())
+        .map_err(|_| TilesetStoreError::Internal(AppError::internal("tile count overflow")))?;
 
     sqlx::query(
         "INSERT INTO spatial.tilesets
@@ -356,7 +359,10 @@ pub async fn prepare_generation(
         .await
         .map_err(store_db)?;
         if !matches!(found.as_deref(), Some("integer" | "decimal")) {
-            return Err(TilesetStoreError::Detail(422, "Height field must be numeric"));
+            return Err(TilesetStoreError::Detail(
+                422,
+                "Height field must be numeric",
+            ));
         }
         found
     } else {
@@ -408,7 +414,10 @@ pub async fn prepare_generation(
         return Err(TilesetStoreError::Detail(409, "Feature count changed"));
     }
     if vertices > MAX_GENERATOR_VERTICES {
-        return Err(TilesetStoreError::Detail(413, "60,000 vertex budget exceeded"));
+        return Err(TilesetStoreError::Detail(
+            413,
+            "60,000 vertex budget exceeded",
+        ));
     }
     if !valid.unwrap_or(false) {
         return Err(TilesetStoreError::Detail(
@@ -585,10 +594,12 @@ pub async fn load_current_feature_context(
         field_names.insert(fid, fname);
     }
 
+    let org_id = read.organization_id();
+    let proj_id = read.project_id();
     let cad_links = crate::cad_documents::linked_features(
         read.transaction(),
-        read.organization_id(),
-        read.project_id(),
+        org_id,
+        proj_id,
         crate::cad_documents::LinkedFilter::ByFeature {
             source_id,
             feature_id,
@@ -649,15 +660,24 @@ pub async fn find_feature_by_id(
         ));
     }
     if rows.len() != 1 {
-        return Err(TilesetStoreError::Detail(409, "Feature index integrity failure"));
+        return Err(TilesetStoreError::Detail(
+            409,
+            "Feature index integrity failure",
+        ));
     }
     let uri: String = rows[0].try_get("uri").map_err(store_db)?;
     let tri_val: Value = rows[0].try_get("triangle").map_err(store_db)?;
     let Some(triangle) = tri_val.as_i64() else {
-        return Err(TilesetStoreError::Detail(409, "Feature index integrity failure"));
+        return Err(TilesetStoreError::Detail(
+            409,
+            "Feature index integrity failure",
+        ));
     };
     if tri_val.is_f64() || !(0..100_000).contains(&triangle) {
-        return Err(TilesetStoreError::Detail(409, "Feature index integrity failure"));
+        return Err(TilesetStoreError::Detail(
+            409,
+            "Feature index integrity failure",
+        ));
     }
     Ok((uri, triangle))
 }

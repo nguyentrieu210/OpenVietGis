@@ -154,7 +154,10 @@ async fn create_tileset(
 
     let (doc, resources_map) = read_archive(payload).map_err(TilesetError::Codec)?;
     let manifest_bytes = serde_json::to_vec(&doc).map_err(|_| {
-        TilesetError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+        TilesetError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
     })?;
     let total_size = manifest_bytes.len() as i64
         + resources_map.values().map(|v| v.len() as i64).sum::<i64>()
@@ -282,7 +285,8 @@ async fn generate_tileset(
     .await
     .map_err(TilesetError::Store)?;
 
-    let generated = build_tiles(&gen_ctx.rows, body.base_ellipsoid_m).map_err(TilesetError::Codec)?;
+    let generated =
+        build_tiles(&gen_ctx.rows, body.base_ellipsoid_m).map_err(TilesetError::Codec)?;
     manifest_check(&generated.manifest).map_err(TilesetError::Codec)?;
     for (uri, payload) in &generated.resources {
         let filename = uri.rsplit('/').next().unwrap_or(uri);
@@ -290,7 +294,10 @@ async fn generate_tileset(
     }
 
     let manifest_bytes = serde_json::to_vec(&generated.manifest).map_err(|_| {
-        TilesetError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+        TilesetError::Detail(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
     })?;
     let mut byte_size = manifest_bytes.len() as i64;
     let mut resources = Vec::with_capacity(generated.resources.len());
@@ -301,7 +308,10 @@ async fn generate_tileset(
             .cloned()
             .unwrap_or_else(|| json!([]));
         let index_bytes = serde_json::to_vec(&index).map_err(|_| {
-            TilesetError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            TilesetError::Detail(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?;
         byte_size += payload.len() as i64 + index_bytes.len() as i64;
         resources.push(NewTileResource {
@@ -369,9 +379,10 @@ async fn resolve_tile_feature(
     if !is_valid_tile_uri(uri) {
         return Err(TilesetError::NotFound("Tile not found"));
     }
-    let Some((provenance, feature_index)) = tilesets::load_tile_feature_index(read, tileset_id, uri)
-        .await
-        .map_err(TilesetError::Domain)?
+    let Some((provenance, feature_index)) =
+        tilesets::load_tile_feature_index(read, tileset_id, uri)
+            .await
+            .map_err(TilesetError::Domain)?
     else {
         return Err(TilesetError::NotFound("Feature picking unavailable"));
     };
@@ -379,9 +390,10 @@ async fn resolve_tile_feature(
         return Err(TilesetError::NotFound("Feature picking unavailable"));
     }
 
-    let entries = feature_index
-        .as_array()
-        .ok_or(TilesetError::Detail(StatusCode::CONFLICT, "Feature index integrity failure"))?;
+    let entries = feature_index.as_array().ok_or(TilesetError::Detail(
+        StatusCode::CONFLICT,
+        "Feature index integrity failure",
+    ))?;
     if entries.is_empty() || entries.len() > MAX_FEATURES {
         return Err(TilesetError::Detail(
             StatusCode::CONFLICT,
@@ -430,20 +442,22 @@ async fn resolve_tile_feature(
         StatusCode::CONFLICT,
         "Feature index integrity failure",
     ))?;
-    let source_id_str = prov_obj
-        .get("source_id")
-        .and_then(Value::as_str)
-        .ok_or(TilesetError::Detail(
-            StatusCode::CONFLICT,
-            "Feature index integrity failure",
-        ))?;
-    let layer_id_str = prov_obj
-        .get("layer_id")
-        .and_then(Value::as_str)
-        .ok_or(TilesetError::Detail(
-            StatusCode::CONFLICT,
-            "Feature index integrity failure",
-        ))?;
+    let source_id_str =
+        prov_obj
+            .get("source_id")
+            .and_then(Value::as_str)
+            .ok_or(TilesetError::Detail(
+                StatusCode::CONFLICT,
+                "Feature index integrity failure",
+            ))?;
+    let layer_id_str =
+        prov_obj
+            .get("layer_id")
+            .and_then(Value::as_str)
+            .ok_or(TilesetError::Detail(
+                StatusCode::CONFLICT,
+                "Feature index integrity failure",
+            ))?;
     let layer_rev = prov_obj
         .get("layer_revision")
         .and_then(Value::as_i64)

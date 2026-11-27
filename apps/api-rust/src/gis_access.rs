@@ -17,7 +17,9 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::edit_auth::{self, authenticate_actor, authenticate_json, require_csrf as actor_csrf, Failure};
+use crate::edit_auth::{
+    self, authenticate_actor, authenticate_json, require_csrf as actor_csrf, Failure,
+};
 use crate::identity::{require_csrf, HumanSession, IdentityError};
 use crate::AppState;
 
@@ -303,7 +305,9 @@ async fn batch_rules(
         || parsed.rules.len() > 200
         || parsed.revoke_ids.len() > 200
     {
-        return Err(GisAccessError::Unprocessable("invalid batch rules selection"));
+        return Err(GisAccessError::Unprocessable(
+            "invalid batch rules selection",
+        ));
     }
     let mut rules = Vec::with_capacity(parsed.rules.len());
     for item in parsed.rules {
@@ -504,7 +508,8 @@ async fn decide_review(
     let (session, headers, body) = authenticate_json(&state, request, &org).await?;
     actor_csrf(&state, &session, &headers)?;
     let parsed: DecisionBody = edit_auth::decode(body)?;
-    if !matches!(parsed.decision.as_str(), "approved" | "rejected") || parsed.note.chars().count() > 500
+    if !matches!(parsed.decision.as_str(), "approved" | "rejected")
+        || parsed.note.chars().count() > 500
     {
         return Err(EditError::InvalidRequest.into());
     }
@@ -520,8 +525,8 @@ async fn decide_review(
     if !scope.is_scoped() {
         scope.authorize(Permission::Manage).await?;
     }
-    let rid = gis_access::decide_review(&mut scope, changeset_id, &parsed.decision, &parsed.note)
-        .await?;
+    let rid =
+        gis_access::decide_review(&mut scope, changeset_id, &parsed.decision, &parsed.note).await?;
     scope.commit().await?;
     Ok((StatusCode::CREATED, Json(json!({ "id": rid }))))
 }

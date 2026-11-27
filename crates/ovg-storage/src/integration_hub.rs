@@ -971,7 +971,11 @@ pub async fn change_binding_lifecycle(
     let project_id = scope.project_id();
     let actor_id = scope.actor_id();
     let actor_display = scope.display_name().to_owned();
-    let new_state = if action == "pause" { "paused" } else { "revoked" };
+    let new_state = if action == "pause" {
+        "paused"
+    } else {
+        "revoked"
+    };
     let sql = format!(
         "UPDATE integration_hub.connector_bindings
          SET state = $5, revision = revision + 1, updated_at = now()
@@ -1166,7 +1170,11 @@ pub async fn issue_pairing_token(
     let mut entropy = [0u8; 32];
     getrandom::getrandom(&mut entropy)
         .map_err(|_| EditError::Internal("OS credential randomness unavailable".to_owned()))?;
-    let secret = format!("ovgsvc{}_{}", cred_id.simple(), URL_SAFE_NO_PAD.encode(entropy));
+    let secret = format!(
+        "ovgsvc{}_{}",
+        cred_id.simple(),
+        URL_SAFE_NO_PAD.encode(entropy)
+    );
     let prefix = secret[..20].to_owned();
     let secret_hash = Sha256::digest(secret.as_bytes()).to_vec();
     let cred_name: String = format!("QGIS · {label}").chars().take(200).collect();

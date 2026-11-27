@@ -252,9 +252,9 @@ async fn bootstrap_initialize(
         ));
     }
 
-    let mut tx = crate::tenancy::begin(&state, &session)
-        .await
-        .map_err(|_| AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable"))?;
+    let mut tx = crate::tenancy::begin(&state, &session).await.map_err(|_| {
+        AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable")
+    })?;
     let result = tx
         .bootstrap_initialize(&parsed.organization_name, &parsed.organization_slug)
         .await;

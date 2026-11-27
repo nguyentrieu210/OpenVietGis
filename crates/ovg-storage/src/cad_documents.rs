@@ -325,7 +325,10 @@ pub async fn prepare_cad_save(
         .await
         .map_err(db_error)?;
         if prior_fmt != fmt {
-            return Err(CadDocError::Detail(422, "CAD revision format cannot change"));
+            return Err(CadDocError::Detail(
+                422,
+                "CAD revision format cannot change",
+            ));
         }
     }
     Ok(())

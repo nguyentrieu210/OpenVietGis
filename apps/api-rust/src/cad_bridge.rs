@@ -17,7 +17,9 @@ use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
 use crate::catalog::{project_read, CatalogError};
-use crate::edit_auth::{self, authenticate_actor, authenticate_json, require_csrf as actor_csrf, Failure};
+use crate::edit_auth::{
+    self, authenticate_actor, authenticate_json, require_csrf as actor_csrf, Failure,
+};
 use crate::identity::{require_csrf, HumanSession};
 use crate::tilesets::sha256_hex;
 use crate::transfers::store::{multipart_parts, Store};
@@ -49,10 +51,7 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{CAD_DOCS}/{{document_id}}/versions/{{version}}/links"),
             get(cad_feature_links),
         )
-        .route(
-            &format!("{CAD_BASE}/conversions"),
-            get(list_conversions),
-        )
+        .route(&format!("{CAD_BASE}/conversions"), get(list_conversions))
         .route(
             &format!("{CAD_BASE}/precision/traverse"),
             post(cogo_traverse),
@@ -61,10 +60,7 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{CAD_BASE}/precision/intersection"),
             post(cogo_intersection),
         )
-        .route(
-            &format!("{CAD_BASE}/precision/offset"),
-            post(cogo_offset),
-        )
+        .route(&format!("{CAD_BASE}/precision/offset"), post(cogo_offset))
         .route(&format!("{CAD_BASE}/precision/snap"), post(cogo_snap))
 }
 
@@ -192,8 +188,10 @@ async fn save_cad_version(
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    let parts = multipart_parts(content_type, &bytes)
-        .ok_or(CadReadError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Invalid file name"))?;
+    let parts = multipart_parts(content_type, &bytes).ok_or(CadReadError::Detail(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Invalid file name",
+    ))?;
 
     let expected = if require_expected {
         let raw = parts
@@ -216,7 +214,9 @@ async fn save_cad_version(
 
     let (filename, payload) = parts
         .iter()
-        .find_map(|(k, fn_opt, d)| (k == "file" && fn_opt.is_some()).then_some((fn_opt.unwrap_or(""), *d)))
+        .find_map(|(k, fn_opt, d)| {
+            (k == "file" && fn_opt.is_some()).then_some((fn_opt.unwrap_or(""), *d))
+        })
         .ok_or(CadReadError::Detail(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Invalid file name",
@@ -236,7 +236,9 @@ async fn save_cad_version(
     let expected_sha = sha256_hex(payload);
     if digest != expected_sha {
         store.delete(&key).await;
-        return Err(CadReadError::Domain(AppError::internal("CAD digest mismatch")));
+        return Err(CadReadError::Domain(AppError::internal(
+            "CAD digest mismatch",
+        )));
     }
 
     let created = match cad_documents::insert_cad_version(
@@ -280,7 +282,17 @@ async fn create_document(
     Path((o, p)): Path<(Uuid, Uuid)>,
     body: Body,
 ) -> Result<(StatusCode, Json<Value>), CadReadError> {
-    save_cad_version(state, auth, request_headers, o, p, Uuid::new_v4(), false, body).await
+    save_cad_version(
+        state,
+        auth,
+        request_headers,
+        o,
+        p,
+        Uuid::new_v4(),
+        false,
+        body,
+    )
+    .await
 }
 
 async fn append_document_version(
@@ -355,18 +367,24 @@ async fn download_document_version(
     let mut read = project_read(&state, &auth, o, p, ProjectReadPolicy::Unrestricted)
         .await
         .map_err(CadReadError::Access)?;
-    let Some((filename, key, sha256)) = cad_documents::get_download_version(&mut read, doc_id, version)
-        .await
-        .map_err(CadReadError::Domain)?
+    let Some((filename, key, sha256)) =
+        cad_documents::get_download_version(&mut read, doc_id, version)
+            .await
+            .map_err(CadReadError::Domain)?
     else {
-        return Err(CadReadError::Detail(StatusCode::NOT_FOUND, "CAD version not found"));
+        return Err(CadReadError::Detail(
+            StatusCode::NOT_FOUND,
+            "CAD version not found",
+        ));
     };
     read.commit().await.map_err(CadReadError::Domain)?;
 
     let (mut file, _) = Store::new(&state)
         .open_verified(&key, &sha256)
         .await
-        .map_err(|_| CadReadError::Detail(StatusCode::CONFLICT, "CAD artifact integrity failure"))?;
+        .map_err(|_| {
+            CadReadError::Detail(StatusCode::CONFLICT, "CAD artifact integrity failure")
+        })?;
     let mut payload = Vec::new();
     file.read_to_end(&mut payload)
         .await
@@ -385,10 +403,9 @@ async fn download_document_version(
         ))
         .unwrap_or_else(|_| HeaderValue::from_static("attachment")),
     );
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
-    );
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response.headers_mut().insert(
         "x-content-type-options",
         HeaderValue::from_static("nosniff"),
@@ -488,7 +505,9 @@ async fn list_conversions(
 ) -> Result<Json<Value>, Failure> {
     let (mut parts, _) = request.into_parts();
     let session = authenticate_actor(&state, &mut parts, &org).await?;
-    let Some(mut scope) = edit_auth::open(&state, &session, &org, &proj, Guard::ReadScopedAllowed).await? else {
+    let Some(mut scope) =
+        edit_auth::open(&state, &session, &org, &proj, Guard::ReadScopedAllowed).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     scope.authorize(Permission::Read).await?;
@@ -703,7 +722,8 @@ async fn cogo_snap(
 
     let mut try_candidate = |px: f64, py: f64, label: &'static str| {
         let d = (tx - px).hypot(ty - py);
-        if d < best_dist || (d == best_dist && (kind == "none" || (px, py) < (best_pt[0], best_pt[1])))
+        if d < best_dist
+            || (d == best_dist && (kind == "none" || (px, py) < (best_pt[0], best_pt[1])))
         {
             best_dist = d;
             best_pt = [px, py];
@@ -812,7 +832,10 @@ mod tests {
 
     #[test]
     fn cad_header_checks() {
-        assert_eq!(validate_cad_upload("a.dwg", b"AC1032abcdef").unwrap(), "dwg");
+        assert_eq!(
+            validate_cad_upload("a.dwg", b"AC1032abcdef").unwrap(),
+            "dwg"
+        );
         assert_eq!(
             validate_cad_upload("b.dxf", b"0\r\nSECTION\r\n2\r\nHEADER\r\n").unwrap(),
             "dxf"

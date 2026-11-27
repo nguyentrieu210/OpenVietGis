@@ -22,9 +22,7 @@ use tokio::sync::{mpsc, Semaphore};
 use tokio::time::Instant;
 use uuid::Uuid;
 
-use crate::edit_auth::{
-    self, authenticate_actor, authenticate_json, require_csrf, Actor, Failure,
-};
+use crate::edit_auth::{self, authenticate_actor, authenticate_json, require_csrf, Actor, Failure};
 use crate::AppState;
 
 const HUB_BASE: &str = "/organizations/{organization_id}/projects/{project_id}/integration-hub";
@@ -41,10 +39,16 @@ const UNAVAILABLE: &str = "event: unavailable\ndata: {}\n\n";
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{HUB_BASE}/export-scopes"), get(get_export_scopes))
-        .route(&format!("{HUB_BASE}/events"), get(stream_integration_events))
+        .route(
+            &format!("{HUB_BASE}/events"),
+            get(stream_integration_events),
+        )
         .route(&format!("{BIND_BASE}/candidates"), get(list_candidates))
         .route(BIND_BASE, get(list_bindings).post(create_binding))
-        .route(&format!("{BIND_BASE}/{{binding_id}}/activate"), post(activate_binding))
+        .route(
+            &format!("{BIND_BASE}/{{binding_id}}/activate"),
+            post(activate_binding),
+        )
         .route(
             &format!("{BIND_BASE}/{{binding_id}}/lifecycle"),
             post(change_binding_lifecycle),
@@ -453,7 +457,10 @@ async fn resolve_binding_conflict(
     if !matches!(
         parsed.decision.as_str(),
         "keep_web" | "keep_qgis" | "merge" | "dismiss"
-    ) || parsed.note.as_ref().is_some_and(|n| n.chars().count() > 500)
+    ) || parsed
+        .note
+        .as_ref()
+        .is_some_and(|n| n.chars().count() > 500)
     {
         return Err(EditError::InvalidRequest.into());
     }

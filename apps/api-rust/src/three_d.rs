@@ -538,8 +538,10 @@ async fn create_model(
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    let parts = multipart_parts(content_type, &bytes)
-        .ok_or(ThreeDError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Invalid placement"))?;
+    let parts = multipart_parts(content_type, &bytes).ok_or(ThreeDError::Detail(
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "Invalid placement",
+    ))?;
     let raw_placement = parts
         .iter()
         .find_map(|(name, filename, data)| {
@@ -557,9 +559,8 @@ async fn create_model(
             "Invalid placement",
         ));
     }
-    let req: PlacementRequest = serde_json::from_str(raw_placement).map_err(|_| {
-        ThreeDError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Invalid placement")
-    })?;
+    let req: PlacementRequest = serde_json::from_str(raw_placement)
+        .map_err(|_| ThreeDError::Detail(StatusCode::UNPROCESSABLE_ENTITY, "Invalid placement"))?;
     let placement = validate_placement(req)?;
 
     let (filename, payload) = parts
@@ -655,7 +656,8 @@ impl IntoResponse for ThreeDError {
                     (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
                 }
                 ModelStoreError::Detail(code, msg) => {
-                    let st = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                    let st =
+                        StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                     (st, Json(json!({ "detail": msg }))).into_response()
                 }
             },

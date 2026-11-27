@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
-use crate::editing::{self, EditError, EditScope};
+use crate::editing::{EditError, EditScope};
 use crate::tenancy::TenantTx;
 
 fn db_err(e: sqlx::Error) -> EditError {
@@ -125,7 +125,7 @@ async fn restrict_member(
 }
 
 pub async fn get_access_admin(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
 ) -> Result<Value, AppError> {
@@ -321,7 +321,7 @@ pub async fn my_access(scope: &mut EditScope<'_>) -> Result<Value, EditError> {
 }
 
 pub async fn create_group(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
     actor_id: Uuid,
@@ -395,7 +395,7 @@ pub async fn create_group(
 }
 
 pub async fn replace_group(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
     actor_id: Uuid,
@@ -690,7 +690,7 @@ async fn insert_rule_inner(
 }
 
 pub async fn create_rule(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
     actor_id: Uuid,
@@ -750,7 +750,7 @@ async fn revoke_rule_inner(
 }
 
 pub async fn revoke_rule(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
     actor_id: Uuid,
@@ -773,7 +773,7 @@ pub async fn revoke_rule(
 }
 
 pub async fn batch_rules(
-    t: &mut TenantTx<'_>,
+    t: &mut TenantTx,
     org_id: Uuid,
     project_id: Uuid,
     actor_id: Uuid,
@@ -805,15 +805,7 @@ pub async fn batch_rules(
         if !seen_revoke.insert(rid) {
             continue;
         }
-        revoke_rule_inner(
-            t.tx_mut(),
-            org_id,
-            project_id,
-            actor_id,
-            actor_display,
-            rid,
-        )
-        .await?;
+        revoke_rule_inner(t.tx_mut(), org_id, project_id, actor_id, actor_display, rid).await?;
     }
     if created > 0 || !seen_revoke.is_empty() {
         bump_project_permission_epoch(t.tx_mut(), org_id, project_id)

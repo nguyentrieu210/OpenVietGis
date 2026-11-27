@@ -106,26 +106,46 @@ fn walk_manifest(
     )?;
 
     if let Some(refine) = obj.get("refine") {
-        require(refine.as_str() == Some("REPLACE"), "Unsupported tileset structure")?;
+        require(
+            refine.as_str() == Some("REPLACE"),
+            "Unsupported tileset structure",
+        )?;
     }
-    let error = as_num_in(obj.get("geometricError"), 0.0, parent_error)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
+    let error = as_num_in(obj.get("geometricError"), 0.0, parent_error).ok_or_else(|| {
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
+    })?;
 
     let bv = obj
         .get("boundingVolume")
         .and_then(Value::as_object)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
-    require(bv.len() == 1 && bv.contains_key("region"), "Unsupported tileset structure")?;
+        .ok_or_else(|| {
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
+        })?;
+    require(
+        bv.len() == 1 && bv.contains_key("region"),
+        "Unsupported tileset structure",
+    )?;
 
-    let r_vals = bv
-        .get("region")
-        .and_then(Value::as_array)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
+    let r_vals = bv.get("region").and_then(Value::as_array).ok_or_else(|| {
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
+    })?;
     require(r_vals.len() == 6, "Unsupported tileset structure")?;
     let mut r = [0.0_f64; 6];
     for (idx, item) in r_vals.iter().enumerate() {
         r[idx] = as_num_in(Some(item), -12_000.0, 100_000.0).ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?;
     }
     let [w, s, x, n, h, h_max] = r;
@@ -156,13 +176,19 @@ fn walk_manifest(
 
     let local = if let Some(t_val) = obj.get("transform") {
         let t_arr = t_val.as_array().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?;
         require(t_arr.len() == 16, "Unsupported tileset structure")?;
         let mut t = [0.0_f64; 16];
         for (idx, item) in t_arr.iter().enumerate() {
             t[idx] = as_num_in(Some(item), -1e7, 1e7).ok_or_else(|| {
-                CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+                CodecError::new(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Unsupported tileset structure",
+                )
             })?;
         }
         require(
@@ -181,20 +207,28 @@ fn walk_manifest(
             for k in 0..4 {
                 sum += parent_matrix[k * 4 + row] * local[col * 4 + k];
             }
-            require(sum.is_finite() && (-1e9..=1e9).contains(&sum), "Unsupported tileset structure")?;
+            require(
+                sum.is_finite() && (-1e9..=1e9).contains(&sum),
+                "Unsupported tileset structure",
+            )?;
             matrix[col * 4 + row] = sum;
         }
     }
 
     let has_content = if let Some(c_val) = obj.get("content") {
         let c_obj = c_val.as_object().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?;
         require(c_obj.len() == 1, "Unsupported tileset structure")?;
-        let uri = c_obj
-            .get("uri")
-            .and_then(Value::as_str)
-            .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
+        let uri = c_obj.get("uri").and_then(Value::as_str).ok_or_else(|| {
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
+        })?;
         require(
             is_valid_tile_uri(uri) && !seen.contains(uri),
             "Unsupported tileset structure",
@@ -207,7 +241,10 @@ fn walk_manifest(
 
     let children = match obj.get("children") {
         Some(v) => v.as_array().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?,
         None => &Vec::new(),
     };
@@ -233,10 +270,12 @@ pub(crate) fn manifest_check(doc: &Value) -> Result<BTreeSet<String>, CodecError
             .all(|k| matches!(k.as_str(), "asset" | "geometricError" | "root")),
         "Unsupported tileset structure",
     )?;
-    let asset = obj
-        .get("asset")
-        .and_then(Value::as_object)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
+    let asset = obj.get("asset").and_then(Value::as_object).ok_or_else(|| {
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
+    })?;
     require(
         asset.get("version").and_then(Value::as_str) == Some("1.1")
             && asset
@@ -246,18 +285,28 @@ pub(crate) fn manifest_check(doc: &Value) -> Result<BTreeSet<String>, CodecError
     )?;
     if let Some(tv) = asset.get("tilesetVersion") {
         let s = tv.as_str().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported tileset structure",
+            )
         })?;
         require(
             s.len() <= 160 && s.bytes().all(|b| (b' '..=b'~').contains(&b)),
             "Unsupported tileset structure",
         )?;
     }
-    let root_geo_error = as_num_in(obj.get("geometricError"), 0.0, 1e7)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
-    let root = obj
-        .get("root")
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported tileset structure"))?;
+    let root_geo_error = as_num_in(obj.get("geometricError"), 0.0, 1e7).ok_or_else(|| {
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
+    })?;
+    let root = obj.get("root").ok_or_else(|| {
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported tileset structure",
+        )
+    })?;
     require(
         root.as_object()
             .and_then(|r| r.get("refine"))
@@ -293,7 +342,10 @@ fn read_u32_le(bytes: &[u8], off: usize) -> Option<u32> {
     Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
-pub(crate) fn validate_model_asset(filename: &str, payload: &[u8]) -> Result<&'static str, CodecError> {
+pub(crate) fn validate_model_asset(
+    filename: &str,
+    payload: &[u8],
+) -> Result<&'static str, CodecError> {
     if filename.is_empty()
         || filename.chars().count() > 180
         || filename
@@ -410,7 +462,12 @@ fn validate_model_json(data: &Value, bin_len: usize, allow_uri: bool) -> Option<
 fn validate_gltf_inner(payload: &[u8]) -> Option<()> {
     use base64::Engine;
     let data: Value = serde_json::from_slice(payload).ok()?;
-    let uri = data.get("buffers")?.as_array()?.first()?.get("uri")?.as_str()?;
+    let uri = data
+        .get("buffers")?
+        .as_array()?
+        .first()?
+        .get("uri")?
+        .as_str()?;
     let encoded = uri
         .strip_prefix("data:application/octet-stream;base64,")
         .or_else(|| uri.strip_prefix("data:application/gltf-buffer;base64,"))?;
@@ -644,10 +701,7 @@ pub(crate) fn read_archive(
 
     let mut resources = BTreeMap::new();
     for uri in uris {
-        let entry = entries
-            .iter()
-            .find(|e| e.name == uri)
-            .ok_or_else(invalid)?;
+        let entry = entries.iter().find(|e| e.name == uri).ok_or_else(invalid)?;
         let data = extract_entry(payload, entry)?;
         let filename = uri.rsplit('/').next().unwrap_or(&uri);
         validate_glb_bytes(filename, &data)?;
@@ -670,20 +724,16 @@ fn ecef(lon_deg: f64, lat_deg: f64, height: f64) -> [f64; 3] {
     ]
 }
 
-fn build_frame(lon_deg: f64, lat_deg: f64, height: f64) -> ([f64; 16], [f64; 3], [f64; 3], [f64; 3], [f64; 3]) {
+fn build_frame(
+    lon_deg: f64,
+    lat_deg: f64,
+    height: f64,
+) -> ([f64; 16], [f64; 3], [f64; 3], [f64; 3], [f64; 3]) {
     let lam = lon_deg * DEG_TO_RAD;
     let phi = lat_deg * DEG_TO_RAD;
     let east = [-lam.sin(), lam.cos(), 0.0];
-    let north = [
-        -phi.sin() * lam.cos(),
-        -phi.sin() * lam.sin(),
-        phi.cos(),
-    ];
-    let up = [
-        phi.cos() * lam.cos(),
-        phi.cos() * lam.sin(),
-        phi.sin(),
-    ];
+    let north = [-phi.sin() * lam.cos(), -phi.sin() * lam.sin(), phi.cos()];
+    let up = [phi.cos() * lam.cos(), phi.cos() * lam.sin(), phi.sin()];
     let origin = ecef(lon_deg, lat_deg, height);
     let matrix = [
         east[0], east[1], east[2], 0.0, //
@@ -741,10 +791,14 @@ fn parse_decimal_height(s: &str) -> Result<f64, CodecError> {
     let valid_syntax = (1..=4).contains(&int_part.len())
         && int_part.bytes().all(|b| b.is_ascii_digit())
         && (s.split_once('.').is_none()
-            || ((1..=18).contains(&frac_part.len()) && frac_part.bytes().all(|b| b.is_ascii_digit())));
+            || ((1..=18).contains(&frac_part.len())
+                && frac_part.bytes().all(|b| b.is_ascii_digit())));
     require(valid_syntax, "Invalid exact decimal height")?;
     let int_val: u64 = int_part.parse().map_err(|_| {
-        CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid exact decimal height")
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid exact decimal height",
+        )
     })?;
     let mut frac_padded = String::with_capacity(18);
     frac_padded.push_str(frac_part);
@@ -752,31 +806,49 @@ fn parse_decimal_height(s: &str) -> Result<f64, CodecError> {
         frac_padded.push('0');
     }
     let frac_val: u64 = frac_padded.parse().map_err(|_| {
-        CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid exact decimal height")
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid exact decimal height",
+        )
     })?;
     let in_range = (int_val > 0 || frac_val >= 10_000_000_000_000_000)
         && (int_val < 3000 || (int_val == 3000 && frac_val == 0));
     require(in_range, "Height outside [0.01,3000] m")?;
     s.parse::<f64>().map_err(|_| {
-        CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid exact decimal height")
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Invalid exact decimal height",
+        )
     })
 }
 
 fn parse_ring_points(val: &Value) -> Result<Vec<[f64; 2]>, CodecError> {
     let arr = val.as_array().ok_or_else(|| {
-        CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported geographic extent")
+        CodecError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Unsupported geographic extent",
+        )
     })?;
     let mut out = Vec::with_capacity(arr.len());
     for pt in arr {
         let coords = pt.as_array().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported geographic extent")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported geographic extent",
+            )
         })?;
         require(coords.len() == 2, "Unsupported geographic extent")?;
         let lon = coords[0].as_f64().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported geographic extent")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported geographic extent",
+            )
         })?;
         let lat = coords[1].as_f64().ok_or_else(|| {
-            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Unsupported geographic extent")
+            CodecError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "Unsupported geographic extent",
+            )
         })?;
         require(
             lon.is_finite()
@@ -850,7 +922,9 @@ fn feature_mesh(row: &TriangulatedRow, base: f64) -> Result<(Vec<[f64; 3]>, [f64
         .triangles
         .get("geometries")
         .and_then(Value::as_array)
-        .ok_or_else(|| CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid triangulation"))?;
+        .ok_or_else(|| {
+            CodecError::new(StatusCode::UNPROCESSABLE_ENTITY, "Invalid triangulation")
+        })?;
     let mut mesh = Vec::new();
     for tri in tri_geoms {
         let tri_coords = tri
@@ -990,7 +1064,10 @@ pub(crate) struct GeneratedTileset {
     pub(crate) indices: BTreeMap<String, Value>,
 }
 
-pub(crate) fn build_tiles(rows: &[TriangulatedRow], base: f64) -> Result<GeneratedTileset, CodecError> {
+pub(crate) fn build_tiles(
+    rows: &[TriangulatedRow],
+    base: f64,
+) -> Result<GeneratedTileset, CodecError> {
     require(
         (1..=MAX_FEATURES).contains(&rows.len()),
         "Feature count outside generator budget",
@@ -1039,7 +1116,10 @@ pub(crate) fn build_tiles(rows: &[TriangulatedRow], base: f64) -> Result<Generat
     let mut child_regions = Vec::new();
     let mut indices = BTreeMap::new();
 
-    let mut emit = |mesh: Vec<[f64; 3]>, bounds: Vec<[f64; 6]>, ranges: Vec<Value>| -> Result<(), CodecError> {
+    let mut emit = |mesh: Vec<[f64; 3]>,
+                    bounds: Vec<[f64; 6]>,
+                    ranges: Vec<Value>|
+     -> Result<(), CodecError> {
         require(children.len() < MAX_TILES, "Tile count exceeds 128")?;
         let b = union_bounds(&bounds);
         let (matrix, east, north, up, origin) =

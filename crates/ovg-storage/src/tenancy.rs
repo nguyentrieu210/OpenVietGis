@@ -196,6 +196,10 @@ impl TenantTx {
         Ok(this)
     }
 
+    pub fn tx_mut(&mut self) -> &mut Transaction<'static, Postgres> {
+        &mut self.tx
+    }
+
     pub async fn commit(self) -> Result<(), AppError> {
         self.tx.commit().await.map_err(db_error)
     }
@@ -475,7 +479,9 @@ impl TenantTx {
         if !valid_slug {
             return Err(AppError::bad_request("invalid organization slug"));
         }
-        let (org, owner) = self.create_organization(cleaned_name, &cleaned_slug).await?;
+        let (org, owner) = self
+            .create_organization(cleaned_name, &cleaned_slug)
+            .await?;
         let now = Utc::now();
         let updated = sqlx::query(
             "UPDATE platform.installation_state
