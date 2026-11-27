@@ -15,7 +15,13 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 import run as parity
 from check_managed import blank, same
-from check_realtime import Pair, fastapi_server, first_page, service_bearers, validation_shape
+from check_realtime import (
+    Pair,
+    fastapi_server,
+    first_page,
+    service_bearers,
+    validation_shape,
+)
 from run import (
     baseline,
     configure_python,

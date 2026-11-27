@@ -142,7 +142,7 @@ def compare_rooms(pair, fixture, a, csrf, editor, editor2, scoped_id, bearers):
 def compare_messages(pair, fixture, a, csrf, editor, rooms_):
     org = f"/api/v1/organizations/{fixture['org_a_id']}/chat"
     editor_id, editor_read, editor_csrf = editor
-    oracle_room, rust_room, org_room = rooms_
+    oracle_room, _rust_room, org_room = rooms_
     messages = f"{org}/rooms/{oracle_room}/messages"
     seed = pair.oracle.post(messages, headers=csrf, json={"body": "Mở đầu"})
     require(seed.status_code == 201, f"seed chat message: {seed.text}")
@@ -223,7 +223,7 @@ def compare_messages(pair, fixture, a, csrf, editor, rooms_):
 def compare_people(pair, fixture, a, csrf, editor, editor2):
     org = f"/api/v1/organizations/{fixture['org_a_id']}/chat"
     editor_id, editor_read, editor_csrf = editor
-    editor2_id, editor2_read, editor2_csrf = editor2
+    editor2_id, _editor2_read, editor2_csrf = editor2
     people = f"{org}/people"
     same("ORG-CHAT people", pair, "GET", people, 200, headers=a)
     same("ORG-CHAT people search folds accents", pair, "GET", people, 200, headers=a,
