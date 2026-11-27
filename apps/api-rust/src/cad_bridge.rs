@@ -195,7 +195,7 @@ async fn save_cad_version(
     ))?;
 
     let expected = if require_expected {
-        let raw = parts
+        parts
             .iter()
             .find_map(|(k, fn_opt, d)| {
                 (k == "expected_version" && fn_opt.is_none())
@@ -207,8 +207,7 @@ async fn save_cad_version(
             .ok_or(CadReadError::Detail(
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "Invalid expected_version",
-            ))?;
-        raw
+            ))?
     } else {
         0
     };

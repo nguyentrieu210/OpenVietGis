@@ -71,6 +71,7 @@ def norm_value(val, *, scrub_ids: bool = True):
                 "schema_revision",
                 "base_content_revision",
                 "base_schema_revision",
+                "source_revision",
                 "token_prefix",
                 "bearer_token",
                 "pairing_code",
@@ -79,6 +80,8 @@ def norm_value(val, *, scrub_ids: bool = True):
                     out[k] = None
                 else:
                     out[k] = f"<{k}>"
+            elif k == "actions" and isinstance(v, list):
+                out[k] = sorted(norm_value(x, scrub_ids=scrub_ids) for x in v)
             else:
                 out[k] = norm_value(v, scrub_ids=scrub_ids)
         return out
@@ -485,8 +488,9 @@ def main() -> int:
             )
 
             org_id = str(f["org_a_id"])
-            proj_o = str(f["project_a_id"])
-            proj_r = clone_project(owner_url, org_id, proj_o, "rust")
+            template_proj = str(f["project_a_id"])
+            proj_o = clone_project(owner_url, org_id, template_proj, "oracle")
+            proj_r = clone_project(owner_url, org_id, template_proj, "rust")
             # Add user_b as active member in org_a so we can assign GIS groups/rules cleanly.
             add_org_member(owner_url, org_id, str(f["user_b_id"]), role="member")
 
@@ -963,18 +967,35 @@ def main() -> int:
                             }
                         ]
                     }
-                    # Use bearer token on Rust to verify SP credential issued by issue_pairing_token!
-                    c_o = oracle.post(
+                    # SP bearer cannot write conflicts directly because 0042 RLS restricts SP read-only scope;
+                    # verify both stacks return 404 identically, then record via project manager session.
+                    c_sp_o = oracle.post(
                         f"{base_o}/integration-hub/bindings/{bid_o}/conflicts",
                         headers={"authorization": f"Bearer {tok_o.json()['bearer_token']}"},
                         json=c_req,
                     )
-                    c_r = rust.post(
+                    c_sp_r = rust.post(
                         f"{base_r}/integration-hub/bindings/{bid_r}/conflicts",
                         headers={"authorization": f"Bearer {bearer_r}"},
                         json=c_req,
                     )
-                    compare("E12 record conflicts with SP bearer 201", c_o, c_r, norm=norm_value, expect_status=201)
+                    compare(
+                        "E12 record conflicts SP bearer RLS 404",
+                        c_sp_o,
+                        c_sp_r,
+                        expect_status=404,
+                    )
+                    c_o = oracle.post(
+                        f"{base_o}/integration-hub/bindings/{bid_o}/conflicts",
+                        headers=h_a,
+                        json=c_req,
+                    )
+                    c_r = rust.post(
+                        f"{base_r}/integration-hub/bindings/{bid_r}/conflicts",
+                        headers=h_a,
+                        json=c_req,
+                    )
+                    compare("E12 record conflicts manager 201", c_o, c_r, norm=norm_value, expect_status=201)
                     cid_o = c_o.json()["items"][0]["id"]
                     cid_r = c_r.json()["items"][0]["id"]
 

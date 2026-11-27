@@ -724,11 +724,10 @@ fn ecef(lon_deg: f64, lat_deg: f64, height: f64) -> [f64; 3] {
     ]
 }
 
-fn build_frame(
-    lon_deg: f64,
-    lat_deg: f64,
-    height: f64,
-) -> ([f64; 16], [f64; 3], [f64; 3], [f64; 3], [f64; 3]) {
+type LocalFrame = ([f64; 16], [f64; 3], [f64; 3], [f64; 3], [f64; 3]);
+type TileFeatureMesh = (Vec<[f64; 3]>, [f64; 6], String);
+
+fn build_frame(lon_deg: f64, lat_deg: f64, height: f64) -> LocalFrame {
     let lam = lon_deg * DEG_TO_RAD;
     let phi = lat_deg * DEG_TO_RAD;
     let east = [-lam.sin(), lam.cos(), 0.0];
@@ -1077,7 +1076,7 @@ pub(crate) fn build_tiles(
         "Unsupported base elevation",
     )?;
 
-    let mut buckets: BTreeMap<(i64, i64), Vec<(Vec<[f64; 3]>, [f64; 6], String)>> = BTreeMap::new();
+    let mut buckets: BTreeMap<(i64, i64), Vec<TileFeatureMesh>> = BTreeMap::new();
     let mut total = 0usize;
     let mut vertex_count = 0usize;
     let mut seen = HashSet::with_capacity(rows.len());

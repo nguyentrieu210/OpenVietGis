@@ -202,12 +202,14 @@ pub(crate) fn file_stream(file: File) -> impl Stream<Item = std::io::Result<Byte
     })
 }
 
+pub(crate) type MultipartPart<'a> = (String, Option<&'a str>, &'a [u8]);
+
 /// Extract all parts `(name, filename, content)` of a `multipart/form-data` body.
 /// Returns `None` for malformed multipart payloads or invalid headers.
 pub(crate) fn multipart_parts<'a>(
     content_type: &str,
     body: &'a [u8],
-) -> Option<Vec<(String, Option<&'a str>, &'a [u8])>> {
+) -> Option<Vec<MultipartPart<'a>>> {
     let (mime, params) = content_type.split_once(';')?;
     if !mime.trim().eq_ignore_ascii_case("multipart/form-data") {
         return None;

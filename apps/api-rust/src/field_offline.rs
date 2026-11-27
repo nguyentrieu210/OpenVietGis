@@ -281,34 +281,6 @@ async fn download_snapshot(
     Ok(response)
 }
 
-#[cfg(test)]
-mod snapshot_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn sqlite_snapshot_requires_exact_digest() {
-        let scratch = SnapshotScratch::create().expect("private scratch");
-        let path = scratch.0.join("fixture.gpkg");
-        let payload = br#"{"features":[]}"#;
-        let query = format!(
-            "CREATE TABLE ovg_offline_snapshot(payload BLOB NOT NULL); \
-             INSERT INTO ovg_offline_snapshot VALUES(X'{}');",
-            hex::encode(payload),
-        );
-        let status = tokio::process::Command::new("/usr/bin/sqlite3")
-            .arg(&path)
-            .arg(query)
-            .status()
-            .await
-            .expect("SQLite fixture engine is required");
-        assert!(status.success());
-        let digest = hex::encode(Sha256::digest(payload));
-        let result = extract_snapshot(&path, &digest).await;
-        assert_eq!(result.ok().as_deref(), Some(payload.as_slice()));
-        assert!(extract_snapshot(&path, &"0".repeat(64)).await.is_err());
-    }
-}
-
 async fn revoke_package(
     State(state): State<AppState>,
     auth: HumanSession,
@@ -382,5 +354,33 @@ impl IntoResponse for FieldError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod snapshot_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn sqlite_snapshot_requires_exact_digest() {
+        let scratch = SnapshotScratch::create().expect("private scratch");
+        let path = scratch.0.join("fixture.gpkg");
+        let payload = br#"{"features":[]}"#;
+        let query = format!(
+            "CREATE TABLE ovg_offline_snapshot(payload BLOB NOT NULL); \
+             INSERT INTO ovg_offline_snapshot VALUES(X'{}');",
+            hex::encode(payload),
+        );
+        let status = tokio::process::Command::new("/usr/bin/sqlite3")
+            .arg(&path)
+            .arg(query)
+            .status()
+            .await
+            .expect("SQLite fixture engine is required");
+        assert!(status.success());
+        let digest = hex::encode(Sha256::digest(payload));
+        let result = extract_snapshot(&path, &digest).await;
+        assert_eq!(result.ok().as_deref(), Some(payload.as_slice()));
+        assert!(extract_snapshot(&path, &"0".repeat(64)).await.is_err());
     }
 }
