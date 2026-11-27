@@ -811,3 +811,7 @@
 .xp>footer button{padding:7px 14px;border:1px solid #cdd5db;border-radius:7px;background:#fff;cursor:pointer}
 .xp>footer button.primary{background:#1565a9;border-color:#1565a9;color:#fff;font-weight:700}.xp>footer button:disabled{opacity:.5;cursor:default}
 @media (max-width:720px){.xp-body{grid-template-columns:1fr}.xp-layers{max-height:40%}.xp-fmt-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* Project-level controls remain visible even while CAD hides GIS-specific tools. */
+.qgis-studio header.top .ovg-shared-tools{order:4;display:flex;align-items:center;gap:5px;flex:0 0 auto;min-width:0}
+.qgis-studio header.top .ovg-shared-tools .plugin-tool{white-space:nowrap}

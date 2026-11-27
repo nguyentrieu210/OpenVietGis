@@ -1,5 +1,5 @@
 /** First-party panel: mount inside a trusted, authenticated GIS workspace. */
-export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
+export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMode=()=>"gis",runCad}) {
   // Explicit session consent is limited to these read-only / temporary commands.
   // All downloads, persisted writes, administration and unknown tools are reviewed individually.
   const SESSION_SAFE=new Set(["map_view","map_selection","map_navigate","gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_raster_layers","gis_processing_job","gis_models","gis_layouts","gis_plugins","gis_plugin_records"]);
@@ -20,7 +20,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     command=cmd;show("review",!!cmd);
     if(cmd){
       show("panel",true);
-      const names={map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON",gis_raster_layers:"Đọc lớp raster",gis_raster_process:"GHI DỮ LIỆU: xử lý raster",gis_raster_report:"Báo cáo raster",gis_raster_download:"Tải GeoTIFF",gis_processing_run:"GHI DỮ LIỆU: chạy xử lý vector",gis_processing_job:"Đọc trạng thái processing",gis_models:"Đọc mô hình xử lý",gis_model_save:"GHI DỮ LIỆU: lưu mô hình",gis_model_run:"GHI DỮ LIỆU: chạy toàn bộ mô hình",gis_layouts:"Đọc layout",gis_layout_save:"GHI DỮ LIỆU: lưu layout",gis_layout_export:"Xuất layout PDF/PNG/JSON",gis_plugins:"Đọc danh mục plugin",gis_plugin_activate:"QUẢN TRỊ: bật plugin",gis_plugin_disable:"QUẢN TRỊ: tắt plugin",gis_plugin_records:"Đọc bản ghi plugin",gis_plugin_create:"GHI DỮ LIỆU: tạo bản ghi plugin",gis_plugin_update:"GHI DỮ LIỆU: sửa bản ghi plugin"};
+      const names={cad_state:"Đọc trạng thái bản vẽ CAD",cad_select_handle:"Chọn Handle trên đúng bản vẽ CAD",map_view:"Chia sẻ vùng nhìn bản đồ",map_selection:"Chia sẻ hình học đang chọn",map_navigate:"Di chuyển và zoom bản đồ",gis_layers:"Đọc danh sách lớp",gis_features:"Chia sẻ đối tượng và thuộc tính",gis_feature:"Đọc một đối tượng",gis_query:"Truy vấn thuộc tính / không gian",gis_geometry_preview:"Tính hình học CAD/phân tích",gis_topology:"Kiểm tra topology",gis_overlay:"Vẽ lớp xem trước",gis_layer_visibility:"Hiện/ẩn lớp",gis_select:"Chọn đối tượng",gis_changeset:"GHI DỮ LIỆU: tạo/sửa/xóa đối tượng",gis_revert:"GHI DỮ LIỆU: hoàn tác changeset",gis_create_layer:"GHI DỮ LIỆU: tạo lớp",gis_schema:"GHI DỮ LIỆU: thay đổi cấu trúc trường",gis_export:"Xuất GeoJSON",gis_raster_layers:"Đọc lớp raster",gis_raster_process:"GHI DỮ LIỆU: xử lý raster",gis_raster_report:"Báo cáo raster",gis_raster_download:"Tải GeoTIFF",gis_processing_run:"GHI DỮ LIỆU: chạy xử lý vector",gis_processing_job:"Đọc trạng thái processing",gis_models:"Đọc mô hình xử lý",gis_model_save:"GHI DỮ LIỆU: lưu mô hình",gis_model_run:"GHI DỮ LIỆU: chạy toàn bộ mô hình",gis_layouts:"Đọc layout",gis_layout_save:"GHI DỮ LIỆU: lưu layout",gis_layout_export:"Xuất layout PDF/PNG/JSON",gis_plugins:"Đọc danh mục plugin",gis_plugin_activate:"QUẢN TRỊ: bật plugin",gis_plugin_disable:"QUẢN TRỊ: tắt plugin",gis_plugin_records:"Đọc bản ghi plugin",gis_plugin_create:"GHI DỮ LIỆU: tạo bản ghi plugin",gis_plugin_update:"GHI DỮ LIỆU: sửa bản ghi plugin"};
       get("command").textContent=names[cmd.method]||"Lệnh không hỗ trợ";
       const safe=SESSION_SAFE.has(cmd.method);
       get("risk").textContent=safe?"LỆNH AN TOÀN · KHÔNG GHI DỮ LIỆU":"CẦN XÁC NHẬN RIÊNG";
@@ -37,7 +37,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
     if(session)headers["X-OVG-Bridge"]=session.browser_token;
     const r=await fetch("/ai-copilot/sessions"+path,{
       method:"POST",headers,credentials:"same-origin",redirect:"error",cache:"no-store",
-      body:JSON.stringify(payload??{}),keepalive
+      body:JSON.stringify({...payload,workspace_mode:getMode()}),keepalive
     });
     if(!r.ok)throw Error("Phiên GIS không khả dụng ("+r.status+")");
     return r.json();
@@ -74,7 +74,8 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
         const c=data.command;
         const basic=["map_view","map_selection","map_navigate"].includes(c.method);
         const full=["gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_changeset","gis_revert","gis_create_layer","gis_schema","gis_export","gis_raster_layers","gis_raster_process","gis_raster_report","gis_raster_download","gis_processing_run","gis_processing_job","gis_models","gis_model_save","gis_model_run","gis_layouts","gis_layout_save","gis_layout_export","gis_plugins","gis_plugin_activate","gis_plugin_disable","gis_plugin_records","gis_plugin_create","gis_plugin_update"].includes(c.method)&&typeof getBridge()?.workspace==="function";
-        if((basic||full)&&c.expires_in>2){
+        const cad=["cad_state","cad_select_handle"].includes(c.method)&&typeof runCad==="function";
+        if((basic||full||cad)&&c.expires_in>2){
           const next={...c,deadline:performance.now()+c.expires_in*1000};
           if(autoAllowed&&SESSION_SAFE.has(c.method)){
             command=next;
@@ -98,8 +99,9 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge}) {
         if(permission.authorized!==true||permission.expires_in<1)throw Error("Lệnh đã hết hạn");
         if(disposed||active!==s||e!==epoch||performance.now()>=c.deadline||(automated&&!autoAllowed))throw Error("Lệnh đã hết hạn hoặc quyền tự động đã bị thu hồi");
         const bridge=getBridge();
-        if(!bridge)throw Error("Bản đồ không sẵn sàng");
-        if(c.method==="map_view")result=bridge.view();
+        if(c.method.startsWith("cad_")){if(getMode()!=="cad"||typeof runCad!=="function")throw Error("Không ở chế độ CAD");result=await runCad(c.method,c.params??{});}
+        else if(!bridge||getMode()==="cad"||(c.method.startsWith("map_")&&getMode()!=="gis"))throw Error("Lệnh không phù hợp chế độ đang mở");
+        else if(c.method==="map_view")result=bridge.view();
         else if(c.method==="map_selection")result=bridge.selection();
         else if(c.method==="map_navigate"){
           const {longitude,latitude,zoom}=c.params??{};

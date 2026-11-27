@@ -1,0 +1,2708 @@
+[
+  {
+    "name": "gis_create_layer",
+    "description": "Create an editable WGS84 vector layer with attribute schema; stable operation UUID.",
+    "inputSchema": {
+      "$defs": {
+        "FieldSpec": {
+          "additionalProperties": false,
+          "properties": {
+            "field_id": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Field Id",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "type": {
+              "enum": [
+                "text",
+                "integer",
+                "decimal",
+                "boolean",
+                "timestamp"
+              ],
+              "title": "Type",
+              "type": "string"
+            },
+            "nullable": {
+              "title": "Nullable",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "field_id",
+            "name",
+            "type",
+            "nullable"
+          ],
+          "title": "FieldSpec",
+          "type": "object"
+        },
+        "ManualLayer": {
+          "additionalProperties": false,
+          "properties": {
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "geometry_family": {
+              "enum": [
+                "Point",
+                "LineString",
+                "Polygon"
+              ],
+              "title": "Geometry Family",
+              "type": "string"
+            },
+            "fields": {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "maxItems": 100,
+              "title": "Fields",
+              "type": "array"
+            }
+          },
+          "required": [
+            "operation_id",
+            "name",
+            "geometry_family"
+          ],
+          "title": "ManualLayer",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/ManualLayer"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_create_layerArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_create_layerDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_schema",
+    "description": "Add or rename a field on a pinned source.",
+    "inputSchema": {
+      "$defs": {
+        "Schema": {
+          "additionalProperties": false,
+          "properties": {
+            "primary": {
+              "$ref": "#/$defs/Selection"
+            },
+            "action": {
+              "enum": [
+                "add",
+                "rename"
+              ],
+              "title": "Action",
+              "type": "string"
+            },
+            "field_id": {
+              "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+              "title": "Field Id",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "type": {
+              "default": "text",
+              "enum": [
+                "text",
+                "integer",
+                "decimal",
+                "boolean",
+                "timestamp"
+              ],
+              "title": "Type",
+              "type": "string"
+            }
+          },
+          "required": [
+            "primary",
+            "action",
+            "field_id",
+            "name"
+          ],
+          "title": "Schema",
+          "type": "object"
+        },
+        "Selection": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "feature_ids": {
+              "items": {
+                "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Feature Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Selection",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Schema"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_schemaArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_schemaDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_export",
+    "description": "Export a pinned layer as GeoJSON to the user's browser downloads.",
+    "inputSchema": {
+      "$defs": {
+        "Export": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "format": {
+              "const": "geojson",
+              "default": "geojson",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Export",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Export"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_exportArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_exportDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_layers",
+    "description": "List active project layers, schemas, capabilities and revision pins. Start here.",
+    "inputSchema": {
+      "$defs": {
+        "Layers": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            },
+            "after_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "After Id"
+            }
+          },
+          "title": "Layers",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Layers"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_layersArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_layersDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_features",
+    "description": "Page features and attributes from a pinned layer; WGS84 geometry. Small pages for large geometry.",
+    "inputSchema": {
+      "$defs": {
+        "Features": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "limit": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            },
+            "after_feature_id": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "After Feature Id"
+            },
+            "include_geometry": {
+              "default": true,
+              "title": "Include Geometry",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Features",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Features"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_featuresArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_featuresDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_query",
+    "description": "Filter by typed attribute AST (e.g. {op: eq, field: name, value: A}) or spatial predicate with WGS84 geometry; no raw SQL.",
+    "inputSchema": {
+      "$defs": {
+        "Query": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "attribute_filter": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Attribute Filter"
+            },
+            "spatial_filter": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Spatial Filter"
+            },
+            "sort_field": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Sort Field"
+            },
+            "sort_direction": {
+              "default": "asc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Sort Direction",
+              "type": "string"
+            },
+            "limit": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            },
+            "offset": {
+              "default": 0,
+              "maximum": 25000,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Query",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Query"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_queryArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_queryDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_feature",
+    "description": "Read one feature with current content/schema pins.",
+    "inputSchema": {
+      "$defs": {
+        "Feature": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "feature_id": {
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "title": "Feature Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision",
+            "feature_id"
+          ],
+          "title": "Feature",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Feature"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_featureArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_featureDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_geometry_preview",
+    "description": "PostGIS CAD and analysis preview: move, copy, offset, rotate, scale, stretch, extend, trim, fillet, intersection, union, difference, centroid, hull, simplify, nearest, spatial join. No persistence. Use gis_changeset to commit reviewed output.",
+    "inputSchema": {
+      "$defs": {
+        "Preview": {
+          "additionalProperties": false,
+          "properties": {
+            "operation": {
+              "enum": [
+                "move_batch",
+                "copy",
+                "offset",
+                "rotate",
+                "scale",
+                "stretch",
+                "extend",
+                "trim",
+                "fillet",
+                "intersection",
+                "union",
+                "difference",
+                "centroid",
+                "hull",
+                "simplify",
+                "nearest",
+                "spatial_join"
+              ],
+              "title": "Operation",
+              "type": "string"
+            },
+            "primary": {
+              "$ref": "#/$defs/Selection"
+            },
+            "secondary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Selection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "distance": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": -100000,
+              "title": "Distance",
+              "type": "number"
+            },
+            "dx": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": -100000,
+              "title": "Dx",
+              "type": "number"
+            },
+            "dy": {
+              "default": 0,
+              "maximum": 100000,
+              "minimum": -100000,
+              "title": "Dy",
+              "type": "number"
+            },
+            "angle": {
+              "default": 0,
+              "maximum": 360,
+              "minimum": -360,
+              "title": "Angle",
+              "type": "number"
+            },
+            "factor": {
+              "default": 1,
+              "exclusiveMinimum": 0,
+              "maximum": 100,
+              "title": "Factor",
+              "type": "number"
+            },
+            "vertex": {
+              "default": 1,
+              "maximum": 4096,
+              "minimum": 0,
+              "title": "Vertex",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "operation",
+            "primary"
+          ],
+          "title": "Preview",
+          "type": "object"
+        },
+        "Selection": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "feature_ids": {
+              "items": {
+                "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Feature Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Selection",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Preview"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_geometry_previewArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_geometry_previewDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_topology",
+    "description": "Find duplicates, invalid geometry, overlaps, dangles, outside or gaps. No persistence.",
+    "inputSchema": {
+      "$defs": {
+        "Selection": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "feature_ids": {
+              "items": {
+                "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Feature Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision"
+          ],
+          "title": "Selection",
+          "type": "object"
+        },
+        "Topology": {
+          "additionalProperties": false,
+          "properties": {
+            "check": {
+              "enum": [
+                "duplicate",
+                "invalid",
+                "overlap",
+                "dangling",
+                "outside",
+                "gap"
+              ],
+              "title": "Check",
+              "type": "string"
+            },
+            "primary": {
+              "$ref": "#/$defs/Selection"
+            },
+            "secondary": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Selection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            }
+          },
+          "required": [
+            "check",
+            "primary"
+          ],
+          "title": "Topology",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Topology"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_topologyArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_topologyDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_overlay",
+    "description": "Draw temporary WGS84 geometry on the live map; no persistent editing.",
+    "inputSchema": {
+      "$defs": {
+        "Overlay": {
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "maxLength": 60,
+              "minLength": 1,
+              "title": "Title",
+              "type": "string"
+            },
+            "geometries": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "maxItems": 50,
+              "minItems": 1,
+              "title": "Geometries",
+              "type": "array"
+            }
+          },
+          "required": [
+            "title",
+            "geometries"
+          ],
+          "title": "Overlay",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Overlay"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_overlayArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_overlayDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_layer_visibility",
+    "description": "Show or hide a project layer in the current workspace.",
+    "inputSchema": {
+      "$defs": {
+        "Visibility": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "visible": {
+              "title": "Visible",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "layer_id",
+            "visible"
+          ],
+          "title": "Visibility",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Visibility"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_layer_visibilityArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_layer_visibilityDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_select",
+    "description": "Select loaded, visible objects by layer and pinned feature IDs.",
+    "inputSchema": {
+      "$defs": {
+        "Select": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "feature_ids": {
+              "items": {
+                "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                "type": "string"
+              },
+              "maxItems": 100,
+              "minItems": 1,
+              "title": "Feature Ids",
+              "type": "array"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision",
+            "feature_ids"
+          ],
+          "title": "Select",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Select"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_selectArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_selectDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_changeset",
+    "description": "Atomically create, update or delete up to 100 features on one editable layer. WGS84 geometry; properties replace the full attribute map. Use current pins and a stable unique operation UUID. Requires explicit GIS approval.",
+    "inputSchema": {
+      "$defs": {
+        "Changeset": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            },
+            "content_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Content Revision",
+              "type": "string"
+            },
+            "schema_revision": {
+              "pattern": "^[a-f0-9]{64}$",
+              "title": "Schema Revision",
+              "type": "string"
+            },
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "summary": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Summary",
+              "type": "string"
+            },
+            "operations": {
+              "items": {
+                "$ref": "#/$defs/Edit"
+              },
+              "maxItems": 100,
+              "minItems": 1,
+              "title": "Operations",
+              "type": "array"
+            }
+          },
+          "required": [
+            "layer_id",
+            "content_revision",
+            "schema_revision",
+            "operation_id",
+            "summary",
+            "operations"
+          ],
+          "title": "Changeset",
+          "type": "object"
+        },
+        "Edit": {
+          "additionalProperties": false,
+          "properties": {
+            "op_type": {
+              "enum": [
+                "create",
+                "update",
+                "delete"
+              ],
+              "title": "Op Type",
+              "type": "string"
+            },
+            "feature_id": {
+              "pattern": "^[A-Za-z0-9_-]{1,128}$",
+              "title": "Feature Id",
+              "type": "string"
+            },
+            "geometry": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Geometry"
+            },
+            "properties": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Properties"
+            }
+          },
+          "required": [
+            "op_type",
+            "feature_id"
+          ],
+          "title": "Edit",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Changeset"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_changesetArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_changesetDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "gis_raster_layers",
+    "description": "List project raster layers and metadata.",
+    "inputSchema": {
+      "$defs": {
+        "Empty": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "Empty",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_raster_layersArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_raster_layersDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_raster_process",
+    "description": "Create a raster result from saved project rasters: NDVI/NDWI/NDBI, band, DEM, clip, RGB, mosaic, calculator, resample etc. Returns operation ticket.",
+    "inputSchema": {
+      "$defs": {
+        "Raster": {
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "enum": [
+                "band",
+                "ndvi",
+                "ndwi",
+                "ndbi",
+                "hillshade",
+                "calculator",
+                "rgb",
+                "clip",
+                "change",
+                "slope",
+                "aspect",
+                "mosaic",
+                "resample"
+              ],
+              "title": "Method",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "second_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Second Id"
+            },
+            "third_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Third Id"
+            },
+            "band_a": {
+              "default": 1,
+              "maximum": 16,
+              "minimum": 1,
+              "title": "Band A",
+              "type": "integer"
+            },
+            "band_b": {
+              "default": 2,
+              "maximum": 16,
+              "minimum": 1,
+              "title": "Band B",
+              "type": "integer"
+            },
+            "band_c": {
+              "default": 3,
+              "maximum": 16,
+              "minimum": 1,
+              "title": "Band C",
+              "type": "integer"
+            },
+            "formula": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Formula"
+            },
+            "clip_geojson": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Clip Geojson"
+            },
+            "factor": {
+              "anyOf": [
+                {
+                  "maximum": 10,
+                  "minimum": 0.1,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Factor"
+            },
+            "resampling": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "near",
+                    "bilinear"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Resampling"
+            }
+          },
+          "required": [
+            "method",
+            "name",
+            "source_id"
+          ],
+          "title": "Raster",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Raster"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_raster_processArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_raster_processDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_raster_report",
+    "description": "Compute zonal statistics or contour from an existing raster. Returns operation ticket.",
+    "inputSchema": {
+      "$defs": {
+        "RasterReport": {
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "enum": [
+                "zonal",
+                "contour"
+              ],
+              "title": "Method",
+              "type": "string"
+            },
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "band": {
+              "default": 1,
+              "maximum": 16,
+              "minimum": 1,
+              "title": "Band",
+              "type": "integer"
+            },
+            "zones": {
+              "anyOf": [
+                {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "maxItems": 100,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Zones"
+            },
+            "interval": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Interval"
+            }
+          },
+          "required": [
+            "method",
+            "source_id"
+          ],
+          "title": "RasterReport",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/RasterReport"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_raster_reportArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_raster_reportDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_raster_download",
+    "description": "Download authorized project GeoTIFF in browser.",
+    "inputSchema": {
+      "$defs": {
+        "RasterId": {
+          "additionalProperties": false,
+          "properties": {
+            "layer_id": {
+              "format": "uuid",
+              "title": "Layer Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "layer_id"
+          ],
+          "title": "RasterId",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/RasterId"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_raster_downloadArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_raster_downloadDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_processing_run",
+    "description": "Run Buffer, Clip or Dissolve with existing vector processing engine. Creates output layer; returns operation ticket.",
+    "inputSchema": {
+      "$defs": {
+        "Proc": {
+          "additionalProperties": false,
+          "properties": {
+            "algorithm_id": {
+              "enum": [
+                "buffer",
+                "clip",
+                "dissolve"
+              ],
+              "title": "Algorithm Id",
+              "type": "string"
+            },
+            "input_layer_id": {
+              "format": "uuid",
+              "title": "Input Layer Id",
+              "type": "string"
+            },
+            "overlay_layer_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Overlay Layer Id"
+            },
+            "output_name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Output Name",
+              "type": "string"
+            },
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "parameters": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Parameters",
+              "type": "object"
+            }
+          },
+          "required": [
+            "algorithm_id",
+            "input_layer_id",
+            "output_name",
+            "operation_id"
+          ],
+          "title": "Proc",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Proc"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_processing_runArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_processing_runDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_processing_job",
+    "description": "Read durable vector processing job status and output layer.",
+    "inputSchema": {
+      "$defs": {
+        "Job": {
+          "additionalProperties": false,
+          "properties": {
+            "job_id": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "job_id"
+          ],
+          "title": "Job",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Job"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_processing_jobArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_processing_jobDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_models",
+    "description": "List saved Processing Modeler graphs.",
+    "inputSchema": {
+      "$defs": {
+        "Empty": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "Empty",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_modelsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_modelsDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_model_save",
+    "description": "Create or update revision-pinned Processing Modeler graph (up to 12 steps).",
+    "inputSchema": {
+      "$defs": {
+        "Graph": {
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "const": 1,
+              "default": 1,
+              "title": "Version",
+              "type": "integer"
+            },
+            "nodes": {
+              "items": {
+                "$ref": "#/$defs/Node"
+              },
+              "maxItems": 12,
+              "minItems": 1,
+              "title": "Nodes",
+              "type": "array"
+            }
+          },
+          "required": [
+            "nodes"
+          ],
+          "title": "Graph",
+          "type": "object"
+        },
+        "ModelSave": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Id"
+            },
+            "revision": {
+              "anyOf": [
+                {
+                  "maximum": 2147483646,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Revision"
+            },
+            "graph": {
+              "$ref": "#/$defs/Graph"
+            }
+          },
+          "required": [
+            "name",
+            "graph"
+          ],
+          "title": "ModelSave",
+          "type": "object"
+        },
+        "Node": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "algorithm": {
+              "enum": [
+                "buffer",
+                "clip",
+                "dissolve",
+                "band",
+                "ndvi",
+                "ndwi",
+                "ndbi",
+                "hillshade",
+                "slope",
+                "aspect",
+                "resample",
+                "mosaic",
+                "change",
+                "rgb",
+                "calculator"
+              ],
+              "title": "Algorithm",
+              "type": "string"
+            },
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "a": {
+              "$ref": "#/$defs/Ref"
+            },
+            "b": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Ref"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "c": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Ref"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "parameters": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": "Parameters",
+              "type": "object"
+            },
+            "x": {
+              "default": 0,
+              "maximum": 5000,
+              "minimum": 0,
+              "title": "X",
+              "type": "integer"
+            },
+            "y": {
+              "default": 0,
+              "maximum": 5000,
+              "minimum": 0,
+              "title": "Y",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "algorithm",
+            "name",
+            "a"
+          ],
+          "title": "Node",
+          "type": "object"
+        },
+        "Ref": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "enum": [
+                "layer",
+                "step"
+              ],
+              "title": "Type",
+              "type": "string"
+            },
+            "id": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "title": "Ref",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/ModelSave"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_model_saveArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_model_saveDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_model_run",
+    "description": "Run saved graph at exact revision, producing independent output layers; returns operation ticket, partial outputs possible.",
+    "inputSchema": {
+      "$defs": {
+        "ModelRun": {
+          "additionalProperties": false,
+          "properties": {
+            "model_id": {
+              "format": "uuid",
+              "title": "Model Id",
+              "type": "string"
+            },
+            "revision": {
+              "maximum": 2147483646,
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "run_id": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model_id",
+            "revision",
+            "run_id"
+          ],
+          "title": "ModelRun",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/ModelRun"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_model_runArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_model_runDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_layouts",
+    "description": "List saved cartography Layout Designer documents.",
+    "inputSchema": {
+      "$defs": {
+        "Empty": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "Empty",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_layoutsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_layoutsDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_layout_save",
+    "description": "Create/update revision-pinned print layout: A0–A4, map frames, text, legend, scale, north, grid.",
+    "inputSchema": {
+      "$defs": {
+        "Camera": {
+          "additionalProperties": false,
+          "properties": {
+            "lng": {
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Lng",
+              "type": "number"
+            },
+            "lat": {
+              "maximum": 85,
+              "minimum": -85,
+              "title": "Lat",
+              "type": "number"
+            },
+            "zoom": {
+              "maximum": 24,
+              "minimum": 0,
+              "title": "Zoom",
+              "type": "number"
+            },
+            "bearing": {
+              "default": 0,
+              "maximum": 180,
+              "minimum": -180,
+              "title": "Bearing",
+              "type": "number"
+            },
+            "reference_width": {
+              "default": 900,
+              "maximum": 100000,
+              "minimum": 1,
+              "title": "Reference Width",
+              "type": "number"
+            }
+          },
+          "required": [
+            "lng",
+            "lat",
+            "zoom"
+          ],
+          "title": "Camera",
+          "type": "object"
+        },
+        "Element": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "format": "uuid",
+              "title": "Id",
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "map",
+                "text",
+                "legend",
+                "north",
+                "scale",
+                "rect"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "x": {
+              "maximum": 1200,
+              "minimum": 0,
+              "title": "X",
+              "type": "number"
+            },
+            "y": {
+              "maximum": 1200,
+              "minimum": 0,
+              "title": "Y",
+              "type": "number"
+            },
+            "w": {
+              "maximum": 1200,
+              "minimum": 5,
+              "title": "W",
+              "type": "number"
+            },
+            "h": {
+              "maximum": 1200,
+              "minimum": 5,
+              "title": "H",
+              "type": "number"
+            },
+            "text": {
+              "default": "",
+              "maxLength": 500,
+              "title": "Text",
+              "type": "string"
+            },
+            "font_size": {
+              "default": 4,
+              "maximum": 40,
+              "minimum": 2,
+              "title": "Font Size",
+              "type": "number"
+            },
+            "color": {
+              "default": "#15383b",
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "title": "Color",
+              "type": "string"
+            },
+            "border": {
+              "default": true,
+              "title": "Border",
+              "type": "boolean"
+            },
+            "grid": {
+              "default": false,
+              "title": "Grid",
+              "type": "boolean"
+            },
+            "camera": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Camera"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "map_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Map Id"
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
+          "title": "Element",
+          "type": "object"
+        },
+        "Layout": {
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "const": 1,
+              "default": 1,
+              "title": "Version",
+              "type": "integer"
+            },
+            "paper": {
+              "default": "A4",
+              "enum": [
+                "A0",
+                "A1",
+                "A2",
+                "A3",
+                "A4"
+              ],
+              "title": "Paper",
+              "type": "string"
+            },
+            "landscape": {
+              "default": true,
+              "title": "Landscape",
+              "type": "boolean"
+            },
+            "dpi": {
+              "default": 150,
+              "enum": [
+                150,
+                300
+              ],
+              "title": "Dpi",
+              "type": "integer"
+            },
+            "items": {
+              "items": {
+                "$ref": "#/$defs/Element"
+              },
+              "maxItems": 40,
+              "minItems": 1,
+              "title": "Items",
+              "type": "array"
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "title": "Layout",
+          "type": "object"
+        },
+        "LayoutSave": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "maxLength": 120,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            },
+            "id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Id"
+            },
+            "revision": {
+              "anyOf": [
+                {
+                  "maximum": 2147483646,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Revision"
+            },
+            "document": {
+              "$ref": "#/$defs/Layout"
+            }
+          },
+          "required": [
+            "name",
+            "document"
+          ],
+          "title": "LayoutSave",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/LayoutSave"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_layout_saveArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_layout_saveDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_layout_export",
+    "description": "Render and download saved layout at exact revision as PDF, PNG or JSON. Returns operation ticket.",
+    "inputSchema": {
+      "$defs": {
+        "LayoutExport": {
+          "additionalProperties": false,
+          "properties": {
+            "layout_id": {
+              "format": "uuid",
+              "title": "Layout Id",
+              "type": "string"
+            },
+            "revision": {
+              "maximum": 2147483646,
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "format": {
+              "default": "pdf",
+              "enum": [
+                "pdf",
+                "png",
+                "json"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          "required": [
+            "layout_id",
+            "revision"
+          ],
+          "title": "LayoutExport",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/LayoutExport"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_layout_exportArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_layout_exportDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_plugins",
+    "description": "List project activations and organization registered extension manifests and entity schemas.",
+    "inputSchema": {
+      "$defs": {
+        "Empty": {
+          "additionalProperties": false,
+          "properties": {},
+          "title": "Empty",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_pluginsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_pluginsDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_plugin_activate",
+    "description": "Activate an existing registered extension on this project; requires project management permission.",
+    "inputSchema": {
+      "$defs": {
+        "PluginActivate": {
+          "additionalProperties": false,
+          "properties": {
+            "manifest_id": {
+              "format": "uuid",
+              "title": "Manifest Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "manifest_id"
+          ],
+          "title": "PluginActivate",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/PluginActivate"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_plugin_activateArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_plugin_activateDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_plugin_disable",
+    "description": "Disable project's active extension; requires project management permission.",
+    "inputSchema": {
+      "$defs": {
+        "Plugin": {
+          "additionalProperties": false,
+          "properties": {
+            "extension_key": {
+              "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+              "title": "Extension Key",
+              "type": "string"
+            }
+          },
+          "required": [
+            "extension_key"
+          ],
+          "title": "Plugin",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Plugin"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_plugin_disableArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_plugin_disableDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "gis_plugin_records",
+    "description": "List authorized extension records, optionally by entity.",
+    "inputSchema": {
+      "$defs": {
+        "PluginRecords": {
+          "additionalProperties": false,
+          "properties": {
+            "extension_key": {
+              "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+              "title": "Extension Key",
+              "type": "string"
+            },
+            "entity_name": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Entity Name"
+            }
+          },
+          "required": [
+            "extension_key"
+          ],
+          "title": "PluginRecords",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/PluginRecords"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_plugin_recordsArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_plugin_recordsDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_plugin_create",
+    "description": "Create a record through the active extension schema using idempotent operation UUID.",
+    "inputSchema": {
+      "$defs": {
+        "PluginCreate": {
+          "additionalProperties": false,
+          "properties": {
+            "extension_key": {
+              "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+              "title": "Extension Key",
+              "type": "string"
+            },
+            "entity_name": {
+              "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+              "title": "Entity Name",
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": true,
+              "title": "Payload",
+              "type": "object"
+            },
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "linked_layer_id": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Linked Layer Id"
+            },
+            "linked_feature_id": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Linked Feature Id"
+            },
+            "expected_link_context": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expected Link Context"
+            }
+          },
+          "required": [
+            "extension_key",
+            "entity_name",
+            "payload",
+            "operation_id"
+          ],
+          "title": "PluginCreate",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/PluginCreate"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_plugin_createArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_plugin_createDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_plugin_update",
+    "description": "Update extension record with expected revision and manifest, existing schema and permissions.",
+    "inputSchema": {
+      "$defs": {
+        "PluginUpdate": {
+          "additionalProperties": false,
+          "properties": {
+            "extension_key": {
+              "pattern": "^[a-zA-Z0-9_.-]{1,128}$",
+              "title": "Extension Key",
+              "type": "string"
+            },
+            "record_id": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            },
+            "expected_revision": {
+              "maximum": 2147483646,
+              "minimum": 1,
+              "title": "Expected Revision",
+              "type": "integer"
+            },
+            "expected_manifest_id": {
+              "format": "uuid",
+              "title": "Expected Manifest Id",
+              "type": "string"
+            },
+            "payload": {
+              "additionalProperties": true,
+              "title": "Payload",
+              "type": "object"
+            },
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "expected_link_context": {
+              "anyOf": [
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Expected Link Context"
+            }
+          },
+          "required": [
+            "extension_key",
+            "record_id",
+            "expected_revision",
+            "expected_manifest_id",
+            "payload",
+            "operation_id"
+          ],
+          "title": "PluginUpdate",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/PluginUpdate"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_plugin_updateArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_plugin_updateDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false
+    }
+  },
+  {
+    "name": "gis_revert",
+    "description": "Revert a specific GIS changeset using a new operation UUID. Requires explicit GIS approval and server authorization.",
+    "inputSchema": {
+      "$defs": {
+        "Revert": {
+          "additionalProperties": false,
+          "properties": {
+            "changeset_id": {
+              "format": "uuid",
+              "title": "Changeset Id",
+              "type": "string"
+            },
+            "operation_id": {
+              "format": "uuid",
+              "title": "Operation Id",
+              "type": "string"
+            },
+            "summary": {
+              "default": "Undo AI changeset",
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Summary",
+              "type": "string"
+            }
+          },
+          "required": [
+            "changeset_id",
+            "operation_id"
+          ],
+          "title": "Revert",
+          "type": "object"
+        }
+      },
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/Revert"
+        }
+      },
+      "required": [
+        "request"
+      ],
+      "title": "gis_revertArguments",
+      "type": "object"
+    },
+    "outputSchema": {
+      "additionalProperties": true,
+      "title": "gis_revertDictOutput",
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true
+    }
+  }
+]

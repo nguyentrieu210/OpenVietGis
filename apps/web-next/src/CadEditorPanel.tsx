@@ -1,4 +1,5 @@
 import {uiConfirm} from "./ui-dialog";
+import {registerCadCopilot,type CadAiState} from "./ai-copilot/cad-actions";
 import {useEffect,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
@@ -18,6 +19,9 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  useEffect(()=>{onBusy?.(dirty||saving)},[dirty,saving,onBusy]);
  const lookup=useRef<AbortController|null>(null),selectionSerial=useRef(0);
  const [supported,setSupported]=useState(false),[selectedHandle,setSelectedHandle]=useState<string|null>(null),[links,setLinks]=useState<CadLink[]>([]),[lookupMessage,setLookupMessage]=useState("");
+ const aiState=useRef<CadAiState>({document_id:document.id,filename:document.filename,version:document.version,dirty:false,saving:false,writable:false,selected_handle:null});
+ aiState.current={document_id:current.current.id,filename,version,dirty,saving,writable:writable&&canEdit,selected_handle:selectedHandle};
+ useEffect(()=>{if(!ready)return;return registerCadCopilot(path,{state:()=>({...aiState.current}),select:value=>handle.current?.requestSelect(value)===true})},[path,ready]);
  const clearSelection=()=>{selectionSerial.current++;lookup.current?.abort();setLinks([]);setSelectedHandle(null);setLookupMessage("")};
  const selectHandle=(value:string|null)=>{
   const serial=++selectionSerial.current;lookup.current?.abort();setLinks([]);setSelectedHandle(value);setLookupMessage(value?"Đang tra liên kết GIS…":"");
