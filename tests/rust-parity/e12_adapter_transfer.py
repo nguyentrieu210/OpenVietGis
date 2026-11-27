@@ -63,51 +63,40 @@ def _norm_push(body):
     return out
 
 
-def _seed_projected_layer(client, base_url: str, csrf: dict[str, str], name: str) -> tuple[str, str, dict]:
-    src = client.post(
-        f"{base_url}/sources",
+def _seed_layer(client, base_url: str, csrf: dict[str, str], name: str) -> tuple[str, str, dict]:
+    layer = client.post(
+        f"{base_url}/layers/manual",
         headers=csrf,
         json={
-            "name": f"{name} Source",
+            "operation_id": str(uuid4()),
+            "name": name,
             "geometry_family": "Point",
-            "dimensions": "XY",
-            "source_crs_code": 3857,
-            "stored_crs_code": 3857,
+            "fields": [{"field_id": "fld_name", "name": "Name", "type": "text", "nullable": False}],
         },
     )
-    require(src.status_code in (200, 201), f"create source failed: {src.status_code} {src.text}")
-    sid = src.json()["id"]
-    fld = client.post(
-        f"{base_url}/sources/{sid}/fields",
-        headers=csrf,
-        json={"field_id": "fld_name", "name": "Name", "type": "text"},
-    )
-    require(fld.status_code in (200, 201), f"create field failed: {fld.status_code} {fld.text}")
-    layer = client.post(
-        f"{base_url}/layers",
-        headers=csrf,
-        json={"name": name, "source_id": sid},
-    )
-    require(layer.status_code in (200, 201), f"create layer failed: {layer.status_code} {layer.text}")
-    lid = layer.json()["id"]
+    require(layer.status_code == 201, f"create manual layer failed: {layer.status_code} {layer.text}")
+    body = layer.json()
+    lid, sid = body["layer_id"], body["source_id"]
+    initial = client.get(f"{base_url}/layers/{lid}", headers=csrf).json()["source"]
     cs = client.post(
         f"{base_url}/sources/{sid}/changesets",
         headers=csrf,
         json={
             "operation_id": f"seed-{uuid4().hex[:8]}",
-            "base_content_revision": layer.json()["source"]["content_revision"],
+            "base_content_revision": initial["content_revision"],
+            "base_schema_revision": initial["schema_revision"],
             "summary": "Seed 2 points",
             "operations": [
                 {
                     "op_type": "create",
                     "feature_id": "pt_1",
-                    "geometry": {"type": "Point", "coordinates": [11872000.0, 1204000.0]},
+                    "geometry": {"type": "Point", "coordinates": [106.65, 10.75]},
                     "properties": {"fld_name": "Alpha"},
                 },
                 {
                     "op_type": "create",
                     "feature_id": "pt_2",
-                    "geometry": {"type": "Point", "coordinates": [11872100.0, 1204100.0]},
+                    "geometry": {"type": "Point", "coordinates": [106.66, 10.76]},
                     "properties": {"fld_name": "Beta"},
                 },
             ],
@@ -135,13 +124,13 @@ def _mutate_gpkg_for_sync(raw_gpkg: bytes) -> bytes:
             )
             # Delete pt_2 locally -> omitted on server -> deletions_blocked should protect it
             conn.execute(f"DELETE FROM {quoted} WHERE ovg_feature_id = 'pt_2'")
-            # Build GPB Point header (GP, version=0, flags=0x01 little-endian no envelope, srs_id=3857) + WKB Point
+            # Build GPB Point header (GP, version=0, flags=0x01 little-endian no envelope, srs_id=4326) + WKB Point
             gpb = (
                 b"GP\x00\x01"
-                + struct.pack("<i", 3857)
+                + struct.pack("<i", 4326)
                 + b"\x01"
                 + struct.pack("<I", 1)
-                + struct.pack("<dd", 11872250.0, 1204250.0)
+                + struct.pack("<dd", 106.68, 10.78)
             )
             conn.execute(
                 f"INSERT INTO {quoted} (geom, ovg_feature_id, fld_name) VALUES (?, ?, ?)",
@@ -197,8 +186,8 @@ def main() -> int:
                     TestClient(app, raise_server_exceptions=False) as oracle,
                     parity.rust_client(binary, runtime_url, work) as rust,
                 ):
-                    lid_o, _sid_o, src_o = _seed_projected_layer(oracle, base_o, csrf_a, "Điểm Khảo Sát 1")
-                    lid_r, _sid_r, src_r = _seed_projected_layer(rust, base_r, csrf_a, "Điểm Khảo Sát 1")
+                    lid_o, _sid_o, src_o = _seed_layer(oracle, base_o, csrf_a, "Điểm Khảo Sát 1")
+                    lid_r, _sid_r, src_r = _seed_layer(rust, base_r, csrf_a, "Điểm Khảo Sát 1")
 
                     # 1. Error checks on export
                     offline_helpers.compare(
@@ -229,14 +218,14 @@ def main() -> int:
                         gpkg_r.headers["x-content-sha256"] == hashlib.sha256(gpkg_r.content).hexdigest(),
                         "rust x-content-sha256 mismatch",
                     )
-                    require(gpkg_r.headers["x-openvietgis-crs"] == "EPSG:3857", "bad crs header")
+                    require(gpkg_r.headers["x-openvietgis-crs"] == "EPSG:4326", "bad crs header")
                     require(gpkg_r.headers["x-openvietgis-feature-count"] == "2", "bad feature count")
                     require(
                         "diem-khao-sat-1-qgis.gpkg" in gpkg_r.headers["content-disposition"],
                         f"unexpected content-disposition: {gpkg_r.headers['content-disposition']}",
                     )
 
-                    # 3. GeoJSON export (3857 -> 4326)
+                    # 3. GeoJSON export (4326 -> 4326)
                     gj_o = oracle.get(f"{base_o}/integration-hub/adapters/qgis/layers/{lid_o}/export?format=geojson", headers=h_a)
                     gj_r = rust.get(f"{base_r}/integration-hub/adapters/qgis/layers/{lid_r}/export?format=geojson", headers=h_a)
                     offline_helpers.compare("E12 geojson export 200", gj_o, gj_r, expect_status=200)
@@ -248,10 +237,11 @@ def main() -> int:
                     require(sql_o.status_code == 200 and sql_r.status_code == 200, "postgis_sql export failed")
                     require(b"CREATE TABLE" in sql_r.content and b"ST_GeomFromText" in sql_r.content, "invalid postgis SQL")
 
-                    # 5. AutoCAD DXF export + ezdxf roundtrip check
+                    # 5. AutoCAD DXF export (4326 -> UTM 32648) + ezdxf roundtrip check
                     dxf_o = oracle.get(f"{base_o}/integration-hub/adapters/autocad/layers/{lid_o}/export?format=dxf", headers=h_a)
                     dxf_r = rust.get(f"{base_r}/integration-hub/adapters/autocad/layers/{lid_r}/export?format=dxf", headers=h_a)
                     require(dxf_o.status_code == 200 and dxf_r.status_code == 200, f"dxf export failed: {dxf_r.status_code} {dxf_r.text}")
+                    require(dxf_r.headers.get("x-openvietgis-crs") == "EPSG:32648", f"bad dxf crs: {dxf_r.headers.get('x-openvietgis-crs')}")
                     require(dxf_r.headers.get("x-openvietgis-attribute-loss") == "true", "missing attribute loss header")
                     doc_r = ezdxf.read(io.StringIO(dxf_r.content.decode("utf-8")))
                     pts_r = [e for e in doc_r.modelspace() if e.dxftype() == "POINT"]
