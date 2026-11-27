@@ -327,6 +327,7 @@ def main() -> int:
                     )
 
                     # 8. Valid sync-push 201
+                    sync_op_id = f"qgis-sync-{uuid4().hex[:8]}"
                     push_o = oracle.post(
                         f"{base_o}/integration-hub/adapters/qgis/layers/{lid_o}/sync-push",
                         headers=csrf_a,
@@ -334,7 +335,7 @@ def main() -> int:
                         data={
                             "base_content_revision": src_o["content_revision"],
                             "base_schema_revision": src_o["schema_revision"],
-                            "operation_id": f"qgis-sync-{uuid4().hex[:8]}",
+                            "operation_id": sync_op_id,
                             "expected_diff_sha256": prev_o.json()["diff_sha256"],
                         },
                     )
@@ -345,7 +346,7 @@ def main() -> int:
                         data={
                             "base_content_revision": src_r["content_revision"],
                             "base_schema_revision": src_r["schema_revision"],
-                            "operation_id": f"qgis-sync-{uuid4().hex[:8]}",
+                            "operation_id": sync_op_id,
                             "expected_diff_sha256": prev_r.json()["diff_sha256"],
                         },
                     )
