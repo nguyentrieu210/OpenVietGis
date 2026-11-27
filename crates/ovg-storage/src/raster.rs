@@ -185,10 +185,7 @@ pub struct NewRaster {
 
 /// Caller holds the unrestricted project write guard. Layer, tile pyramid and
 /// audit event commit atomically; no unverified worker output is published.
-pub async fn insert_layer(
-    edit: &mut ProjectRead<'_>,
-    input: NewRaster,
-) -> Result<Value, AppError> {
+pub async fn insert_layer(edit: &mut ProjectRead<'_>, input: NewRaster) -> Result<Value, AppError> {
     let id = Uuid::new_v4();
     let organization_id = edit.organization_id();
     let project_id = edit.project_id();

@@ -11,13 +11,34 @@ use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 const MODULES: &[(&str, &str)] = &[
-    ("openvietgis_api/domains/platform_errors.py", include_str!("../../api/openvietgis_api/domains/platform_errors.py")),
-    ("openvietgis_api/domains/external_sources/domain.py", include_str!("../../api/openvietgis_api/domains/external_sources/domain.py")),
-    ("openvietgis_api/domains/external_sources/provider.py", include_str!("../../api/openvietgis_api/domains/external_sources/provider.py")),
-    ("openvietgis_api/domains/external_sources/tile_provider.py", include_str!("../../api/openvietgis_api/domains/external_sources/tile_provider.py")),
-    ("openvietgis_api/domains/external_sources/geotiff_provider.py", include_str!("../../api/openvietgis_api/domains/external_sources/geotiff_provider.py")),
-    ("openvietgis_api/domains/external_sources/cog_provider.py", include_str!("../../api/openvietgis_api/domains/external_sources/cog_provider.py")),
-    ("openvietgis_api/adapters/http/external_provider_transport.py", include_str!("../../api/openvietgis_api/adapters/http/external_provider_transport.py")),
+    (
+        "openvietgis_api/domains/platform_errors.py",
+        include_str!("../../api/openvietgis_api/domains/platform_errors.py"),
+    ),
+    (
+        "openvietgis_api/domains/external_sources/domain.py",
+        include_str!("../../api/openvietgis_api/domains/external_sources/domain.py"),
+    ),
+    (
+        "openvietgis_api/domains/external_sources/provider.py",
+        include_str!("../../api/openvietgis_api/domains/external_sources/provider.py"),
+    ),
+    (
+        "openvietgis_api/domains/external_sources/tile_provider.py",
+        include_str!("../../api/openvietgis_api/domains/external_sources/tile_provider.py"),
+    ),
+    (
+        "openvietgis_api/domains/external_sources/geotiff_provider.py",
+        include_str!("../../api/openvietgis_api/domains/external_sources/geotiff_provider.py"),
+    ),
+    (
+        "openvietgis_api/domains/external_sources/cog_provider.py",
+        include_str!("../../api/openvietgis_api/domains/external_sources/cog_provider.py"),
+    ),
+    (
+        "openvietgis_api/adapters/http/external_provider_transport.py",
+        include_str!("../../api/openvietgis_api/adapters/http/external_provider_transport.py"),
+    ),
 ];
 const DRIVER: &str = r####"import datetime
 import json
@@ -117,8 +138,12 @@ async fn scratch() -> Result<Scratch, Failure> {
     for (name, source) in MODULES {
         let file = scratch.0.join(name);
         let parent = file.parent().ok_or_else(unavailable)?;
-        tokio::fs::create_dir_all(parent).await.map_err(|_| unavailable())?;
-        tokio::fs::write(file, source).await.map_err(|_| unavailable())?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|_| unavailable())?;
+        tokio::fs::write(file, source)
+            .await
+            .map_err(|_| unavailable())?;
     }
     tokio::fs::write(scratch.0.join("driver.py"), DRIVER)
         .await
@@ -131,8 +156,8 @@ pub(crate) async fn prove(context: &Value, viewport: Option<Value>) -> Result<Va
         return Err(unavailable());
     }
     let _permit = SLOTS.try_acquire().map_err(|_| unavailable())?;
-    let profiles = std::env::var("OPENVIETGIS_EXTERNAL_PROVIDER_PROFILES")
-        .unwrap_or_else(|_| "[]".to_owned());
+    let profiles =
+        std::env::var("OPENVIETGIS_EXTERNAL_PROVIDER_PROFILES").unwrap_or_else(|_| "[]".to_owned());
     if profiles.len() > 64 * 1024 {
         return Err(unavailable());
     }
@@ -162,7 +187,10 @@ pub(crate) async fn prove(context: &Value, viewport: Option<Value>) -> Result<Va
         input.write_all(request.as_bytes()).await?;
         drop(input);
         let mut bytes = Vec::new();
-        output.take(4 * 1024 * 1024 + 1).read_to_end(&mut bytes).await?;
+        output
+            .take(4 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .await?;
         if bytes.len() > 4 * 1024 * 1024 {
             let _ = child.kill().await;
             return Err(std::io::Error::other("provider response limit"));
@@ -188,7 +216,10 @@ pub(crate) async fn prove(context: &Value, viewport: Option<Value>) -> Result<Va
         Some(502) => StatusCode::BAD_GATEWAY,
         _ => return Err(unavailable()),
     };
-    let error = result.as_object_mut().and_then(|v| v.remove("error"))
-        .filter(Value::is_object).ok_or_else(unavailable)?;
+    let error = result
+        .as_object_mut()
+        .and_then(|v| v.remove("error"))
+        .filter(Value::is_object)
+        .ok_or_else(unavailable)?;
     Err((status, error))
 }

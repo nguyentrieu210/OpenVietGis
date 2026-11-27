@@ -21,7 +21,9 @@ impl MailConfig {
             .unwrap_or_else(|_| "/rewrite/?live=1".to_owned());
         if key.is_empty()
             || key.len() > 4096
-            || key.bytes().any(|b| b.is_ascii_control() || b.is_ascii_whitespace())
+            || key
+                .bytes()
+                .any(|b| b.is_ascii_control() || b.is_ascii_whitespace())
             || from.trim().is_empty()
             || !path.starts_with('/')
             || path.starts_with("//")
@@ -123,7 +125,12 @@ impl MailConfig {
 fn quote(value: &str) -> String {
     format!(
         "\"{}\"",
-        value.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t"),
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t"),
     )
 }
 
@@ -157,7 +164,10 @@ mod tests {
 
     #[test]
     fn provider_acceptance_is_not_inbox_delivery() {
-        assert_eq!(classify(b"{\"id\":\"fixture\"}\n200"), "accepted_by_provider");
+        assert_eq!(
+            classify(b"{\"id\":\"fixture\"}\n200"),
+            "accepted_by_provider"
+        );
         assert_eq!(classify(b"{}\n200"), "unknown");
         assert_eq!(classify(b"{}\n429"), "rejected");
         assert_eq!(classify(b"{}\n503"), "unknown");

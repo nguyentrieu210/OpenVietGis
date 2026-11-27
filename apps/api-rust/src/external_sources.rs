@@ -32,7 +32,10 @@ pub(crate) fn router() -> Router<AppState> {
         )
         .route(&format!("{BASE}/{{connection_id}}/revoke"), post(revoke))
         .route(&format!("{BASE}/{{connection_id}}/preview"), post(preview))
-        .route(&format!("{BASE}/{{connection_id}}/viewport"), post(viewport))
+        .route(
+            &format!("{BASE}/{{connection_id}}/viewport"),
+            post(viewport),
+        )
 }
 
 enum ExternalError {
@@ -248,10 +251,7 @@ async fn prove(
     viewport: Option<Value>,
 ) -> Result<Response, ExternalError> {
     require_csrf(state, auth, headers).map_err(CatalogError::Identity)?;
-    let mut read = project_read(
-        state, auth, org, project, ProjectReadPolicy::Unrestricted,
-    )
-    .await?;
+    let mut read = project_read(state, auth, org, project, ProjectReadPolicy::Unrestricted).await?;
     let original = external_sources::provider_context(&mut read, id)
         .await
         .map_err(ExternalError::Domain)?;
@@ -260,10 +260,7 @@ async fn prove(
         .map_err(|(status, body)| ExternalError::Provider(status, body))?;
     read.commit().await.map_err(ExternalError::Domain)?;
     // Fresh authorization and comparison before returning any external data.
-    let mut read = project_read(
-        state, auth, org, project, ProjectReadPolicy::Unrestricted,
-    )
-    .await?;
+    let mut read = project_read(state, auth, org, project, ProjectReadPolicy::Unrestricted).await?;
     let current = external_sources::provider_context(&mut read, id)
         .await
         .map_err(ExternalError::Domain)?;
@@ -277,6 +274,8 @@ async fn prove(
     result["connection_id"] = json!(id);
     result["cache_generation"] = original["connection"]["cache_generation"].clone();
     let mut response = Json(result).into_response();
-    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok(response)
 }

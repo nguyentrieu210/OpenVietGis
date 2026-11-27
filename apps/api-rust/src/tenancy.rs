@@ -1252,7 +1252,10 @@ async fn email_invitation(
     require_csrf(&state, &session, &headers)?;
     let request: EmailInvitationRequest =
         serde_json::from_slice(&body).map_err(|_| TenancyError::InvalidRequest)?;
-    if !matches!(request.organization_role.as_str(), "member" | "guest" | "admin") {
+    if !matches!(
+        request.organization_role.as_str(),
+        "member" | "guest" | "admin"
+    ) {
         return Err(TenancyError::InvalidRequest);
     }
     let mut parts = request.email.split('@');
@@ -1267,9 +1270,15 @@ async fn email_invitation(
     let organization_id = uuid(&org)?;
     let mut tx = begin(&state, &session).await?;
     let (organization, _) = tx.member(organization_id, true, false).await?;
-    tx.require(organization_id, None, None, INVITATION_MANAGE).await?;
+    tx.require(organization_id, None, None, INVITATION_MANAGE)
+        .await?;
     let mail = crate::invitation_mail::MailConfig::from_env(&state.config.web_base_url)
-        .ok_or_else(|| detail(StatusCode::SERVICE_UNAVAILABLE, "invitation email is not configured"))?;
+        .ok_or_else(|| {
+            detail(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "invitation email is not configured",
+            )
+        })?;
     let recipient = request.email.trim().to_lowercase();
     let payload = json!({
         "target": {"kind": "email", "email": recipient},
@@ -1284,13 +1293,25 @@ async fn email_invitation(
     let secret = issued["secret"].as_str().ok_or(TenancyError::Internal)?;
     // Commit the one-time credential before any external delivery attempt.
     tx.commit().await?;
-    let delivery = mail.deliver(&recipient, &organization.name, organization_id, invitation_id, secret).await;
-    Ok((StatusCode::CREATED, Json(json!({
-        "id": invitation_id,
-        "organization_id": organization_id,
-        "status": "pending",
-        "delivery": delivery,
-    }))).into_response())
+    let delivery = mail
+        .deliver(
+            &recipient,
+            &organization.name,
+            organization_id,
+            invitation_id,
+            secret,
+        )
+        .await;
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "id": invitation_id,
+            "organization_id": organization_id,
+            "status": "pending",
+            "delivery": delivery,
+        })),
+    )
+        .into_response())
 }
 
 async fn revoke_invitation(

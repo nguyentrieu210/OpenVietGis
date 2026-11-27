@@ -33,12 +33,10 @@ const MIB: usize = 1024 * 1024;
 const MAX_INPUT: usize = 64 * MIB;
 const MAX_COMBINED: usize = 96 * MIB;
 const MAX_OUTPUT: usize = 128 * MIB;
-const WORKER: &str =
-    include_str!("../../api/openvietgis_api/adapters/formats/raster_worker.py");
+const WORKER: &str = include_str!("../../api/openvietgis_api/adapters/formats/raster_worker.py");
 const PERSISTENT: &str =
     include_str!("../../api/openvietgis_api/adapters/formats/persistent_raster_worker.py");
-const TERRAIN: &str =
-    include_str!("../../api/openvietgis_api/adapters/formats/terrain_worker.py");
+const TERRAIN: &str = include_str!("../../api/openvietgis_api/adapters/formats/terrain_worker.py");
 static GATE: Semaphore = Semaphore::const_new(1);
 
 pub(crate) fn router() -> Router<AppState> {
@@ -99,8 +97,12 @@ fn too_large(message: &str) -> ComputeError {
 }
 
 fn gate() -> Result<SemaphorePermit<'static>> {
-    GATE.try_acquire()
-        .map_err(|_| detail(StatusCode::TOO_MANY_REQUESTS, "Raster worker busy; retry shortly"))
+    GATE.try_acquire().map_err(|_| {
+        detail(
+            StatusCode::TOO_MANY_REQUESTS,
+            "Raster worker busy; retry shortly",
+        )
+    })
 }
 
 struct Scratch(PathBuf);
@@ -173,7 +175,9 @@ async fn worker(
     output_limit: usize,
 ) -> Result<Value> {
     if !worker_nonroot() {
-        return Err(invalid("Raster worker requires an unprivileged Linux runtime"));
+        return Err(invalid(
+            "Raster worker requires an unprivileged Linux runtime",
+        ));
     }
     for (name, source) in [
         ("raster_worker.py", WORKER),
@@ -227,8 +231,8 @@ async fn worker(
     .await
     .map_err(|_| invalid("Raster worker unavailable or resource limit exceeded"))?
     .map_err(|_| invalid("Raster worker unavailable or resource limit exceeded"))?;
-    let value: Value = serde_json::from_slice(&bytes)
-        .map_err(|_| invalid("Unable to process this GeoTIFF"))?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|_| invalid("Unable to process this GeoTIFF"))?;
     if !status.success() || value.get("error").is_some() {
         let message = value
             .get("error")
@@ -277,11 +281,15 @@ impl<'a> Form<'a> {
     fn parse(content_type: &str, bytes: &'a [u8]) -> Result<Self> {
         let mut result = HashMap::new();
         if content_type.split(';').next().is_some_and(|kind| {
-            kind.trim().eq_ignore_ascii_case("application/x-www-form-urlencoded")
+            kind.trim()
+                .eq_ignore_ascii_case("application/x-www-form-urlencoded")
         }) {
             for (name, value) in url::form_urlencoded::parse(bytes) {
                 if result
-                    .insert(name.into_owned(), (false, Cow::Owned(value.into_owned().into_bytes())))
+                    .insert(
+                        name.into_owned(),
+                        (false, Cow::Owned(value.into_owned().into_bytes())),
+                    )
                     .is_some()
                 {
                     return Err(ComputeError::InvalidRequest);
@@ -411,7 +419,9 @@ async fn analyze(
     let source = form.file("file")?.ok_or(ComputeError::InvalidRequest)?;
     let other = form.file("second")?;
     if other.is_some() && !matches!(method, "ndvi" | "ndwi" | "ndbi") {
-        return Err(invalid("Second file is supported for index calculations only"));
+        return Err(invalid(
+            "Second file is supported for index calculations only",
+        ));
     }
     let scratch = Scratch::create()?;
     let src = scratch.stage("source.tif", source, 32 * MIB).await?;
@@ -448,11 +458,7 @@ async fn analyze(
     Ok(Json(value))
 }
 
-async fn existing(
-    read: &mut ProjectRead<'_>,
-    id: Uuid,
-    missing: &str,
-) -> Result<Vec<u8>> {
+async fn existing(read: &mut ProjectRead<'_>, id: Uuid, missing: &str) -> Result<Vec<u8>> {
     let length = raster::file_size(read, id)
         .await?
         .ok_or_else(|| detail(StatusCode::NOT_FOUND, missing))?;
@@ -504,23 +510,31 @@ fn sentinel_valid(scene: &str, baseline: &str) -> bool {
     let scene_ok = scene.len() <= 100
         && ["S2A_MSIL2A_", "S2B_MSIL2A_", "S2C_MSIL2A_", "S2D_MSIL2A_"]
             .iter()
-            .any(|prefix| scene.strip_prefix(*prefix).is_some_and(|suffix| {
-                !suffix.is_empty()
-                    && suffix.bytes().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
-            }));
+            .any(|prefix| {
+                scene.strip_prefix(*prefix).is_some_and(|suffix| {
+                    !suffix.is_empty()
+                        && suffix
+                            .bytes()
+                            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_')
+                })
+            });
     let bytes = baseline.as_bytes();
     scene_ok
         && bytes.len() == 5
         && bytes[2] == b'.'
-        && bytes.iter().enumerate().all(|(i, c)| i == 2 || c.is_ascii_digit())
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(i, c)| i == 2 || c.is_ascii_digit())
 }
 
 fn parse_store_intent(form: &Form<'_>) -> Result<()> {
     let method = parse_method(form.required("method")?)?;
     let name = form.required("name")?;
-    let factor = form.text("factor")?.map(|s| {
-        s.parse::<f64>().map_err(|_| ComputeError::InvalidRequest)
-    }).transpose()?;
+    let factor = form
+        .text("factor")?
+        .map(|s| s.parse::<f64>().map_err(|_| ComputeError::InvalidRequest))
+        .transpose()?;
     let resampling = form.text("resampling")?;
     if resampling.is_some_and(|s| !matches!(s, "near" | "bilinear")) {
         return Err(ComputeError::InvalidRequest);
@@ -626,24 +640,37 @@ async fn store(
         form.id("second_id")?,
         form.id("third_id")?,
     ];
-    let files = [form.file("file")?, form.file("second")?, form.file("third")?];
+    let files = [
+        form.file("file")?,
+        form.file("second")?,
+        form.file("third")?,
+    ];
     let mut read = authorize(&state, &auth, ids, true).await?;
     let scratch = Scratch::create()?;
     let mut total = 0;
     let mut staged = Vec::new();
     for (i, file_name) in ["source.tif", "second.tif", "third.tif"].iter().enumerate() {
         staged.push(
-            stage_input(&scratch, &mut read, file_name, files[i], source_ids[i], &mut total)
-                .await?,
+            stage_input(
+                &scratch,
+                &mut read,
+                file_name,
+                files[i],
+                source_ids[i],
+                &mut total,
+            )
+            .await?,
         );
     }
     read.commit().await?;
-    let clip = form.text("clip_geojson")?.map(|s| {
-        serde_json::from_str::<Value>(s).map_err(|_| invalid("Invalid clip GeoJSON"))
-    }).transpose()?;
-    let factor = form.text("factor")?.map(|s| {
-        s.parse::<f64>().map_err(|_| ComputeError::InvalidRequest)
-    }).transpose()?;
+    let clip = form
+        .text("clip_geojson")?
+        .map(|s| serde_json::from_str::<Value>(s).map_err(|_| invalid("Invalid clip GeoJSON")))
+        .transpose()?;
+    let factor = form
+        .text("factor")?
+        .map(|s| s.parse::<f64>().map_err(|_| ComputeError::InvalidRequest))
+        .transpose()?;
     let formula = form.text("formula")?;
     let resampling = form.text("resampling")?;
     let scene = form.text("sentinel_scene")?;
@@ -654,21 +681,31 @@ async fn store(
         json!({
             "formula": formula, "clip": clip, "third": staged[2], "band_c": c,
             "factor": factor, "resampling": resampling, "sentinel_baseline": baseline,
-        }).to_string(),
-    ).await.map_err(|_| invalid("Raster workspace unavailable"))?;
+        })
+        .to_string(),
+    )
+    .await
+    .map_err(|_| invalid("Raster workspace unavailable"))?;
     let mut metadata = worker(
         &scratch,
         "persistent_raster_worker.py",
         &[
-            staged[0].clone(), staged[1].clone(), method.to_owned(), a.to_string(),
-            b.to_string(), scratch.0.to_string_lossy().into_owned(),
+            staged[0].clone(),
+            staged[1].clone(),
+            method.to_owned(),
+            a.to_string(),
+            b.to_string(),
+            scratch.0.to_string_lossy().into_owned(),
             config.to_string_lossy().into_owned(),
         ],
         true,
         65,
         4 * MIB,
-    ).await?;
-    let manifest = metadata.as_object_mut().and_then(|m| m.remove("tiles"))
+    )
+    .await?;
+    let manifest = metadata
+        .as_object_mut()
+        .and_then(|m| m.remove("tiles"))
         .ok_or_else(|| invalid("Invalid raster tile manifest"))?;
     let cog = read_output(&scratch.path("result.tif"), MAX_INPUT).await?;
     let magic = cog.get(..4).and_then(|v| v.try_into().ok());
@@ -702,13 +739,24 @@ async fn store(
     check_quota(&mut edit, size).await?;
     for id in source_ids.into_iter().flatten() {
         if raster::file_size(&mut edit, id).await?.is_none() {
-            return Err(detail(StatusCode::CONFLICT, "Input raster was removed during processing"));
+            return Err(detail(
+                StatusCode::CONFLICT,
+                "Input raster was removed during processing",
+            ));
         }
     }
-    let value = raster::insert_layer(&mut edit, NewRaster {
-        name, metadata, cog, tiles, actor_id: auth.actor_id(),
-        actor_display: auth.display_name().to_owned(),
-    }).await?;
+    let value = raster::insert_layer(
+        &mut edit,
+        NewRaster {
+            name,
+            metadata,
+            cog,
+            tiles,
+            actor_id: auth.actor_id(),
+            actor_display: auth.display_name().to_owned(),
+        },
+    )
+    .await?;
     edit.commit().await?;
     Ok((StatusCode::CREATED, Json(value)))
 }
@@ -735,35 +783,64 @@ async fn report(
     {
         return Err(invalid("Provide zones or contour interval"));
     }
-    let zones = zones.map(|s| {
-        if s.chars().count() > 750_000 {
-            return Err(invalid("Invalid report parameters"));
-        }
-        let value: Value = serde_json::from_str(s).map_err(|_| invalid("Invalid report parameters"))?;
-        if !value.as_array().is_some_and(|v| (1..=100).contains(&v.len()) && v.iter().all(Value::is_object)) {
-            return Err(invalid("Invalid report parameters"));
-        }
-        Ok(value)
-    }).transpose()?;
-    let interval = interval.map(|s| {
-        s.parse::<f64>().ok().filter(|x| x.is_finite() && *x > 0.0)
-            .ok_or_else(|| invalid("Invalid report parameters"))
-    }).transpose()?;
+    let zones = zones
+        .map(|s| {
+            if s.chars().count() > 750_000 {
+                return Err(invalid("Invalid report parameters"));
+            }
+            let value: Value =
+                serde_json::from_str(s).map_err(|_| invalid("Invalid report parameters"))?;
+            if !value
+                .as_array()
+                .is_some_and(|v| (1..=100).contains(&v.len()) && v.iter().all(Value::is_object))
+            {
+                return Err(invalid("Invalid report parameters"));
+            }
+            Ok(value)
+        })
+        .transpose()?;
+    let interval = interval
+        .map(|s| {
+            s.parse::<f64>()
+                .ok()
+                .filter(|x| x.is_finite() && *x > 0.0)
+                .ok_or_else(|| invalid("Invalid report parameters"))
+        })
+        .transpose()?;
     let data = existing(&mut read, id, "Input raster not found in this project").await?;
     read.commit().await?;
     let scratch = Scratch::create()?;
     let source = scratch.stage("source.tif", &data, MAX_INPUT).await?;
     let config = scratch.path("config.json");
-    tokio::fs::write(&config, json!({"zones": zones, "interval": interval}).to_string())
-        .await.map_err(|_| invalid("Raster workspace unavailable"))?;
-    let result = worker(&scratch, "persistent_raster_worker.py", &[
-        source.to_string_lossy().into_owned(), "-".to_owned(), method.to_owned(),
-        band.to_string(), "1".to_owned(), scratch.0.to_string_lossy().into_owned(),
-        config.to_string_lossy().into_owned(),
-    ], true, 65, 4_000_000).await?;
+    tokio::fs::write(
+        &config,
+        json!({"zones": zones, "interval": interval}).to_string(),
+    )
+    .await
+    .map_err(|_| invalid("Raster workspace unavailable"))?;
+    let result = worker(
+        &scratch,
+        "persistent_raster_worker.py",
+        &[
+            source.to_string_lossy().into_owned(),
+            "-".to_owned(),
+            method.to_owned(),
+            band.to_string(),
+            "1".to_owned(),
+            scratch.0.to_string_lossy().into_owned(),
+            config.to_string_lossy().into_owned(),
+        ],
+        true,
+        65,
+        4_000_000,
+    )
+    .await?;
     let mut read = authorize(&state, &auth, ids, false).await?;
     if raster::file_size(&mut read, id).await?.is_none() {
-        return Err(detail(StatusCode::CONFLICT, "Input raster removed during processing"));
+        return Err(detail(
+            StatusCode::CONFLICT,
+            "Input raster removed during processing",
+        ));
     }
     read.commit().await?;
     Ok(Json(result))
@@ -787,8 +864,12 @@ async fn terrain(
 ) -> Result<Response> {
     require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
     let Json(input) = input.map_err(|_| ComputeError::InvalidRequest)?;
-    if input.elevation_unit != "metre" || !input.acknowledge_dem
-        || !matches!(input.vertical_reference.as_str(), "local" | "orthometric" | "ellipsoidal")
+    if input.elevation_unit != "metre"
+        || !input.acknowledge_dem
+        || !matches!(
+            input.vertical_reference.as_str(),
+            "local" | "orthometric" | "ellipsoidal"
+        )
         || !(1..=120).contains(&input.reference_label.chars().count())
     {
         return Err(ComputeError::InvalidRequest);
@@ -799,20 +880,35 @@ async fn terrain(
     }
     let _permit = gate()?;
     let mut read = authorize(&state, &auth, (org, project), false).await?;
-    let (name, metadata) = raster::metadata(&mut read, layer).await?
+    let (name, metadata) = raster::metadata(&mut read, layer)
+        .await?
         .ok_or_else(|| detail(StatusCode::NOT_FOUND, "DEM layer not found"))?;
-    if metadata["method"] != "band" || metadata.get("output_bands").unwrap_or(&json!(1)) != &json!(1) {
-        return Err(invalid("Select an imported single elevation band, not an index"));
+    if metadata["method"] != "band"
+        || metadata.get("output_bands").unwrap_or(&json!(1)) != &json!(1)
+    {
+        return Err(invalid(
+            "Select an imported single elevation band, not an index",
+        ));
     }
     let data = existing(&mut read, layer, "DEM layer not found").await?;
     read.commit().await?;
     let scratch = Scratch::create()?;
     let source = scratch.stage("source.tif", &data, MAX_INPUT).await?;
-    let mut result = worker(&scratch, "terrain_worker.py", &[source.to_string_lossy().into_owned()],
-        false, 28, 1_000_000).await?;
+    let mut result = worker(
+        &scratch,
+        "terrain_worker.py",
+        &[source.to_string_lossy().into_owned()],
+        false,
+        28,
+        1_000_000,
+    )
+    .await?;
     let mut read = authorize(&state, &auth, (org, project), false).await?;
     if raster::file_size(&mut read, layer).await?.is_none() {
-        return Err(detail(StatusCode::CONFLICT, "DEM was deleted during sampling"));
+        return Err(detail(
+            StatusCode::CONFLICT,
+            "DEM was deleted during sampling",
+        ));
     }
     read.commit().await?;
     result["source_id"] = json!(layer);
@@ -823,8 +919,14 @@ async fn terrain(
     result["render_origin_m"] = result["min_m"].clone();
     result["declared_by_user"] = json!(true);
     let mut response = Json(result).into_response();
-    response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("private, no-store"));
-    response.headers_mut().insert("x-content-type-options", HeaderValue::from_static("nosniff"));
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    response.headers_mut().insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
     Ok(response)
 }
 
