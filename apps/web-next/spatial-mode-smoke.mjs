@@ -112,6 +112,10 @@ try{
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  console.log("PASS permission revocation, explicit restriction and restored access");
  pluginActive=true;await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ // A reload restores the last authorized CAD mode, even with a business module.
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ assert.equal(await page.locator(".maplibregl-canvas").count(),0);
+ await modes.getByRole("button",{name:"GIS",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();

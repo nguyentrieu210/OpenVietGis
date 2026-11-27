@@ -10,3 +10,6 @@
 | generated Cesium/WASM assets | license and reproducible build, content-addressed manifest |
 | VPS worktrees/images/cache | active owner/release/rollback/backup inventory; separate authorization before destructive pruning |
 For every path populate size, consumer, replacement, action, tests, commit and rollback. Never remove volumes, production data, backups, active worktrees or historical evidence. Do not rewrite history.
+
+## Slice 04 dependency verification
+27 Python files are literally embedded in Rust under apps/api; retain these and their transitive/runtime dependencies. See evidence/dependency-inventory.json. The older web manifest is still required by pnpm and parity checks. Current live Rust entrypoint does not establish complete Python retirement. No deletion approved by this inventory.

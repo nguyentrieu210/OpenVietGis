@@ -1,0 +1,13 @@
+{
+  "observed_at_utc": "2026-11-27T15:23:00Z",
+  "docker_disk_summary": "TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          17        5         5.633GB   3.176GB (56%)\nContainers      5         4         175.4MB   0B (0%)\nLocal Volumes   4         3         219.1MB   103.3MB (47%)\nBuild Cache     174       0         1.584GB   1.584GB",
+  "decision": "No pruning: protect all live and rollback images, volumes, active worktrees and unknown owners. Reclaimable does not mean safe to delete.",
+  "container_count": 5,
+  "image_listing_count": 18,
+  "observed_runtime": {
+    "api": "Rust executable",
+    "web": "Nginx static frontend",
+    "database": "PostgreSQL",
+    "identity": "Keycloak"
+  }
+}
