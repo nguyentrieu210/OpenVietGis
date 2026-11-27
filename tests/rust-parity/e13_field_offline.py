@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """E13 Field & Offline differential parity: package create, download, snapshot, revoke, and outbox sync."""
 
 from __future__ import annotations
@@ -196,8 +195,8 @@ def main() -> int:
                     TestClient(app, raise_server_exceptions=False) as oracle,
                     parity.rust_client(binary, runtime_url, work) as rust,
                 ):
-                    lid_o, sid_o, src_o = seed_manual_point_layer(oracle, base_o, csrf_a, "Field Pts")
-                    lid_r, sid_r, src_r = seed_manual_point_layer(rust, base_r, csrf_a, "Field Pts")
+                    lid_o, _sid_o, _src_o = seed_manual_point_layer(oracle, base_o, csrf_a, "Field Pts")
+                    lid_r, sid_r, _src_r = seed_manual_point_layer(rust, base_r, csrf_a, "Field Pts")
                     bbox = {"min_x": 106.5, "min_y": 10.6, "max_x": 106.8, "max_y": 10.9}
 
                     # Negative create checks

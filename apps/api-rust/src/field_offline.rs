@@ -82,8 +82,8 @@ async fn create_package(
     let raw = to_bytes(body, 256 * 1024)
         .await
         .map_err(|_| FieldError::Access(CatalogError::InvalidRequest))?;
-    let req: CreateOfflinePackageRequest =
-        serde_json::from_slice(&raw).map_err(|_| FieldError::Access(CatalogError::InvalidRequest))?;
+    let req: CreateOfflinePackageRequest = serde_json::from_slice(&raw)
+        .map_err(|_| FieldError::Access(CatalogError::InvalidRequest))?;
     let auth = HumanSession::from_request_parts(&mut parts, &state)
         .await
         .map_err(|err| FieldError::Access(CatalogError::Identity(err)))?;

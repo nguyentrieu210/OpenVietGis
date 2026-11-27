@@ -149,10 +149,7 @@ pub async fn prepare_package_data(
         ));
     }
     let geometry_family: String = meta.try_get("geometry_family").map_err(db_error)?;
-    if !matches!(
-        geometry_family.as_str(),
-        "Point" | "LineString" | "Polygon"
-    ) {
+    if !matches!(geometry_family.as_str(), "Point" | "LineString" | "Polygon") {
         return Err(AppError::validation(
             "VALIDATION_ERROR",
             "offline profile does not support this geometry family",
@@ -284,8 +281,8 @@ pub async fn prepare_package_data(
         }));
     }
 
-    let feature_count = i32::try_from(features.len())
-        .map_err(|_| AppError::internal("feature count overflow"))?;
+    let feature_count =
+        i32::try_from(features.len()).map_err(|_| AppError::internal("feature count overflow"))?;
     let package_id = Uuid::new_v4();
     let now = Utc::now().trunc_subsecs(6);
     let expires_at = now + Duration::hours(ttl_hours);
