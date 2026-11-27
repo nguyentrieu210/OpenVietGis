@@ -309,6 +309,15 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e01-oidc.log
 
+      - name: Run E12 adapter transfer parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e12_adapter_transfer.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e12-adapter-transfer.log
+
       - name: Record PostGIS version
         if: always()
         run: |

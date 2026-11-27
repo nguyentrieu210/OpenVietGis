@@ -16,8 +16,11 @@ COPY apps/api/openvietgis_api/domains/editing/domain.py apps/api/openvietgis_api
 COPY apps/api/openvietgis_api/domains/transfers/domain.py apps/api/openvietgis_api/domains/transfers/domain.py
 COPY apps/api/openvietgis_api/domains/transfers/ports.py apps/api/openvietgis_api/domains/transfers/ports.py
 COPY apps/api/openvietgis_api/adapters/formats/wkt_crs.py apps/api/openvietgis_api/adapters/formats/wkt_crs.py
+COPY apps/api/openvietgis_api/adapters/formats/geojson.py apps/api/openvietgis_api/adapters/formats/geojson.py
 COPY apps/api/openvietgis_api/adapters/formats/geopackage.py apps/api/openvietgis_api/adapters/formats/geopackage.py
+COPY apps/api/openvietgis_api/adapters/formats/postgis_sql.py apps/api/openvietgis_api/adapters/formats/postgis_sql.py
 COPY apps/api/openvietgis_api/adapters/formats/offline_snapshot.py apps/api/openvietgis_api/adapters/formats/offline_snapshot.py
+COPY apps/api/openvietgis_api/domains/integration_hub/sync_diff.py apps/api/openvietgis_api/domains/integration_hub/sync_diff.py
 COPY apps/api/openvietgis_api/domains/external_sources/domain.py apps/api/openvietgis_api/domains/external_sources/domain.py
 COPY apps/api/openvietgis_api/domains/external_sources/provider.py apps/api/openvietgis_api/domains/external_sources/provider.py
 COPY apps/api/openvietgis_api/domains/external_sources/tile_provider.py apps/api/openvietgis_api/domains/external_sources/tile_provider.py

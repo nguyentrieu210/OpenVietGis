@@ -1563,6 +1563,584 @@ pub async fn resolve_binding_conflict(
     serialize_conflict(&row)
 }
 
+pub const MAX_HUB_EXPORT_FEATURES: i64 = 50_000;
+
+#[derive(Debug, Clone)]
+pub struct ExportLayerMeta {
+    pub layer_id: Uuid,
+    pub source_id: Uuid,
+    pub name: String,
+    pub geometry_family: String,
+    pub dimensions: String,
+    pub validation_state: String,
+    pub stored_crs_code: Option<i32>,
+    pub content_revision: String,
+    pub schema_revision: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportFieldSpec {
+    pub field_id: String,
+    pub source_name: String,
+    pub output_name: String,
+    pub field_type: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExportScopeSpec {
+    pub area_sids: Vec<Uuid>,
+    pub hamlet_sids: Vec<Uuid>,
+    pub commune_sids: Vec<Uuid>,
+    pub area_fids: Vec<String>,
+    pub area_names: Vec<String>,
+    pub area_codes: Vec<String>,
+    pub route_sids: Vec<Uuid>,
+    pub route_ids: Vec<String>,
+    pub route_distance_m: f64,
+}
+
+pub async fn load_active_layer_by_id(
+    scope: &mut EditScope<'_>,
+    layer_id: Uuid,
+) -> Result<Option<ExportLayerMeta>, EditError> {
+    let row = sqlx::query(
+        "SELECT
+             l.id AS layer_id,
+             l.source_id AS source_id,
+             l.name AS name,
+             s.geometry_family AS geometry_family,
+             s.dimensions AS dimensions,
+             s.validation_state AS validation_state,
+             s.stored_crs AS stored_crs_code,
+             s.content_revision AS content_revision,
+             s.schema_revision AS schema_revision
+         FROM spatial.layers l
+         JOIN spatial.data_sources s
+           ON s.organization_id = l.organization_id
+          AND s.project_id = l.project_id
+          AND s.id = l.source_id
+         WHERE l.organization_id = $1
+           AND l.project_id = $2
+           AND l.id = $3
+           AND l.lifecycle = 'active'
+           AND s.lifecycle = 'active'
+         LIMIT 1",
+    )
+    .bind(scope.organization_id())
+    .bind(scope.project_id())
+    .bind(layer_id)
+    .fetch_optional(&mut **scope.tx_mut())
+    .await
+    .map_err(edit_db_err)?;
+
+    row.map(|r| -> Result<ExportLayerMeta, sqlx::Error> {
+        Ok(ExportLayerMeta {
+            layer_id: r.try_get("layer_id")?,
+            source_id: r.try_get("source_id")?,
+            name: r.try_get("name")?,
+            geometry_family: r.try_get("geometry_family")?,
+            dimensions: r.try_get("dimensions")?,
+            validation_state: r.try_get("validation_state")?,
+            stored_crs_code: r.try_get("stored_crs_code")?,
+            content_revision: r.try_get("content_revision")?,
+            schema_revision: r.try_get("schema_revision")?,
+        })
+    })
+    .transpose()
+    .map_err(edit_db_err)
+}
+
+pub async fn is_source_allowed(
+    scope: &mut EditScope<'_>,
+    source_id: Uuid,
+    action: &str,
+) -> Result<bool, EditError> {
+    sqlx::query_scalar::<_, bool>("SELECT gis_access.source_allowed($1, $2, $3, $4)")
+        .bind(scope.organization_id())
+        .bind(scope.project_id())
+        .bind(source_id)
+        .bind(action)
+        .fetch_one(&mut **scope.tx_mut())
+        .await
+        .map_err(edit_db_err)
+}
+
+pub fn wgs84_utm_code(longitude: f64, latitude: f64) -> i32 {
+    let zone = (((longitude + 180.0) / 6.0).floor() as i32 + 1).clamp(1, 60);
+    (if latitude >= 0.0 { 32600 } else { 32700 }) + zone
+}
+
+pub async fn utm_code_for_source(
+    scope: &mut EditScope<'_>,
+    source_id: Uuid,
+) -> Result<i32, EditError> {
+    let row = sqlx::query(
+        "SELECT ST_X(c) AS x, ST_Y(c) AS y
+         FROM (
+             SELECT ST_Centroid(ST_Extent(geometry)) AS c
+             FROM spatial.reference_features
+             WHERE organization_id = $1 AND project_id = $2
+               AND source_id = $3 AND geometry IS NOT NULL
+         ) e",
+    )
+    .bind(scope.organization_id())
+    .bind(scope.project_id())
+    .bind(source_id)
+    .fetch_optional(&mut **scope.tx_mut())
+    .await
+    .map_err(edit_db_err)?;
+
+    let Some(row) = row else {
+        return Ok(32648);
+    };
+    let x: Option<f64> = row.try_get("x").map_err(edit_db_err)?;
+    let y: Option<f64> = row.try_get("y").map_err(edit_db_err)?;
+    match (x, y) {
+        (Some(lon), Some(lat)) => Ok(wgs84_utm_code(lon, lat)),
+        _ => Ok(32648),
+    }
+}
+
+pub async fn load_source_fields(
+    scope: &mut EditScope<'_>,
+    source_id: Uuid,
+) -> Result<Vec<ExportFieldSpec>, EditError> {
+    let rows = sqlx::query(
+        "SELECT field_id, name, type
+         FROM spatial.source_fields
+         WHERE organization_id = $1
+           AND project_id = $2
+           AND source_id = $3
+         ORDER BY ordinal ASC",
+    )
+    .bind(scope.organization_id())
+    .bind(scope.project_id())
+    .bind(source_id)
+    .fetch_all(&mut **scope.tx_mut())
+    .await
+    .map_err(edit_db_err)?;
+
+    rows.into_iter()
+        .map(|r| -> Result<ExportFieldSpec, sqlx::Error> {
+            let field_id: String = r.try_get("field_id")?;
+            let source_name: String = r.try_get("name")?;
+            let field_type: String = r.try_get("type")?;
+            Ok(ExportFieldSpec {
+                output_name: field_id.clone(),
+                field_id,
+                source_name,
+                field_type,
+            })
+        })
+        .collect::<Result<_, _>>()
+        .map_err(edit_db_err)
+}
+
+pub async fn resolve_export_scope(
+    scope: &mut EditScope<'_>,
+    area_fids: &[String],
+    route_ids: &[String],
+    route_distance_m: f64,
+) -> Result<ExportScopeSpec, EditError> {
+    let org_id = scope.organization_id();
+    let project_id = scope.project_id();
+    let layer_rows = sqlx::query(
+        "SELECT l.source_id AS source_id, l.name AS name, s.geometry_family AS geometry_family
+         FROM spatial.layers l
+         JOIN spatial.data_sources s
+           ON s.organization_id = l.organization_id
+          AND s.project_id = l.project_id
+          AND s.id = l.source_id
+         WHERE l.organization_id = $1 AND l.project_id = $2 AND l.lifecycle = 'active'",
+    )
+    .bind(org_id)
+    .bind(project_id)
+    .fetch_all(&mut **scope.tx_mut())
+    .await
+    .map_err(edit_db_err)?;
+
+    let mut commune_sids = Vec::<Uuid>::new();
+    let mut hamlet_sids = Vec::<Uuid>::new();
+    let mut route_sids = Vec::<Uuid>::new();
+    for row in layer_rows {
+        let name: String = row.try_get("name").map_err(edit_db_err)?;
+        let sid: Uuid = row.try_get("source_id").map_err(edit_db_err)?;
+        let family: String = row.try_get("geometry_family").map_err(edit_db_err)?;
+        let tokens = ascii_tokens(&name);
+        let first = tokens.first().map(String::as_str).unwrap_or("");
+        let words: HashSet<&str> = tokens.iter().map(String::as_str).collect();
+        let polygon = matches!(family.as_str(), "Polygon" | "MultiPolygon");
+        let boundary = words.contains("ranh");
+        if polygon
+            && (words.contains("xa") || words.contains("phuong"))
+            && (boundary || matches!(first, "xa" | "phuong"))
+        {
+            commune_sids.push(sid);
+        } else if polygon
+            && words.contains("ap")
+            && (boundary || first == "ap")
+            && !words.contains("cu")
+            && !words.contains("lich")
+        {
+            hamlet_sids.push(sid);
+        } else if matches!(family.as_str(), "LineString" | "MultiLineString")
+            && (words.contains("tuyen") || (words.contains("duong") && words.contains("hem")))
+        {
+            route_sids.push(sid);
+        }
+    }
+
+    let mut area_sids = commune_sids.clone();
+    area_sids.extend(hamlet_sids.iter().copied());
+
+    let mut area_names = Vec::<String>::new();
+    let mut codes = BTreeSet::<String>::new();
+    if !area_fids.is_empty() {
+        let chosen: HashSet<&str> = area_fids.iter().map(String::as_str).collect();
+        if !commune_sids.is_empty() {
+            let rows = sqlx::query(
+                "SELECT feature_id, attributes FROM spatial.reference_features
+                 WHERE organization_id = $1 AND project_id = $2
+                   AND source_id = ANY($3) AND geometry IS NOT NULL",
+            )
+            .bind(org_id)
+            .bind(project_id)
+            .bind(&commune_sids)
+            .fetch_all(&mut **scope.tx_mut())
+            .await
+            .map_err(edit_db_err)?;
+            for row in rows {
+                let fid: String = row.try_get("feature_id").map_err(edit_db_err)?;
+                let attrs: Value = row.try_get("attributes").map_err(edit_db_err)?;
+                if chosen.contains(fid.as_str()) {
+                    if let Some(code) = attr_non_empty_str(&attrs, "ma_xa") {
+                        codes.insert(code);
+                    }
+                }
+            }
+        }
+        if !hamlet_sids.is_empty() {
+            let rows = sqlx::query(
+                "SELECT feature_id, attributes FROM spatial.reference_features
+                 WHERE organization_id = $1 AND project_id = $2
+                   AND source_id = ANY($3) AND geometry IS NOT NULL",
+            )
+            .bind(org_id)
+            .bind(project_id)
+            .bind(&hamlet_sids)
+            .fetch_all(&mut **scope.tx_mut())
+            .await
+            .map_err(edit_db_err)?;
+            let mut all_name_counts = BTreeMap::<String, usize>::new();
+            let mut picked_names = Vec::<String>::new();
+            for row in rows {
+                let fid: String = row.try_get("feature_id").map_err(edit_db_err)?;
+                let attrs: Value = row.try_get("attributes").map_err(edit_db_err)?;
+                let name = attr_non_empty_str(&attrs, "name");
+                if let Some(ref n) = name {
+                    *all_name_counts.entry(n.clone()).or_insert(0) += 1;
+                }
+                let ma_xa = attr_non_empty_str(&attrs, "ma_xa");
+                let in_codes = ma_xa.as_ref().is_some_and(|c| codes.contains(c));
+                if chosen.contains(fid.as_str()) || in_codes {
+                    if let Some(code) = ma_xa {
+                        codes.insert(code);
+                    }
+                    if let Some(n) = name {
+                        picked_names.push(n);
+                    }
+                }
+            }
+            if !picked_names
+                .iter()
+                .any(|n| all_name_counts.get(n).copied().unwrap_or(0) > 1)
+            {
+                area_names = picked_names;
+            }
+        }
+    }
+
+    Ok(ExportScopeSpec {
+        area_sids,
+        hamlet_sids,
+        commune_sids,
+        area_fids: area_fids.to_vec(),
+        area_names,
+        area_codes: codes.into_iter().collect(),
+        route_sids,
+        route_ids: route_ids.to_vec(),
+        route_distance_m,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn load_export_features(
+    scope: &mut EditScope<'_>,
+    source_id: Uuid,
+    output_crs_code: i32,
+    native_crs_code: i32,
+    expected_geometry_family: &str,
+    scope_filter: Option<&ExportScopeSpec>,
+    area_mode: Option<&str>,
+    route_mode: Option<&str>,
+) -> Result<Vec<Value>, EditError> {
+    let org_id = scope.organization_id();
+    let project_id = scope.project_id();
+    let is_scoped = scope.is_scoped();
+
+    let mut qb = sqlx::QueryBuilder::<Postgres>::new(
+        "SELECT feature_id, attributes, ST_AsGeoJSON(ST_Transform(CASE WHEN ST_SRID(geometry) = 0 THEN ST_SetSRID(geometry, ",
+    );
+    qb.push_bind(native_crs_code);
+    qb.push(") ELSE geometry END, ");
+    qb.push_bind(output_crs_code);
+    qb.push(")) AS geom_json FROM spatial.reference_features WHERE organization_id = ");
+    qb.push_bind(org_id);
+    qb.push(" AND project_id = ");
+    qb.push_bind(project_id);
+    qb.push(" AND source_id = ");
+    qb.push_bind(source_id);
+    qb.push(" AND geometry_state = 'present' AND geometry IS NOT NULL");
+
+    if is_scoped {
+        qb.push(" AND gis_access.feature_allowed(");
+        qb.push_bind(org_id);
+        qb.push(", ");
+        qb.push_bind(project_id);
+        qb.push(", ");
+        qb.push_bind(source_id);
+        qb.push(", feature_id, attributes, geometry, 'export')");
+    }
+
+    if let (Some(sf), Some(mode)) = (scope_filter, area_mode) {
+        match mode {
+            "attribute" => {
+                qb.push(" AND attributes->>'ap' = ANY(");
+                qb.push_bind(&sf.area_names);
+                qb.push(")");
+            }
+            "own_name" => {
+                qb.push(" AND attributes->>'name' = ANY(");
+                qb.push_bind(&sf.area_names);
+                qb.push(")");
+            }
+            "commune" => {
+                qb.push(" AND (feature_id = ANY(");
+                qb.push_bind(&sf.area_fids);
+                qb.push(") OR attributes->>'ma_xa' = ANY(");
+                qb.push_bind(&sf.area_codes);
+                qb.push("))");
+            }
+            "spatial" => {
+                qb.push(
+                    " AND ST_Intersects(geometry, (SELECT ST_Transform(ST_Union(geometry), ",
+                );
+                qb.push_bind(native_crs_code);
+                qb.push(
+                    ") FROM (SELECT ST_Transform(geometry, 4326) AS geometry FROM spatial.reference_features WHERE organization_id = ",
+                );
+                qb.push_bind(org_id);
+                qb.push(" AND project_id = ");
+                qb.push_bind(project_id);
+                qb.push(" AND geometry IS NOT NULL AND source_id = ANY(");
+                qb.push_bind(&sf.area_sids);
+                qb.push(") AND feature_id = ANY(");
+                qb.push_bind(&sf.area_fids);
+                qb.push(")) area))");
+            }
+            _ => {}
+        }
+    }
+
+    if let (Some(sf), Some(mode)) = (scope_filter, route_mode) {
+        match mode {
+            "self" => {
+                qb.push(" AND coalesce(attributes->>'id', feature_id) = ANY(");
+                qb.push_bind(&sf.route_ids);
+                qb.push(")");
+            }
+            "attribute" => {
+                qb.push(" AND attributes->>'tuyen_id' = ANY(");
+                qb.push_bind(&sf.route_ids);
+                qb.push(")");
+            }
+            "distance" => {
+                qb.push(
+                    " AND ST_DWithin(ST_Transform(geometry, 4326)::geography, (SELECT ST_Union(geometry)::geography FROM (SELECT ST_Transform(geometry, 4326) AS geometry FROM spatial.reference_features WHERE organization_id = ",
+                );
+                qb.push_bind(org_id);
+                qb.push(" AND project_id = ");
+                qb.push_bind(project_id);
+                qb.push(" AND geometry IS NOT NULL AND source_id = ANY(");
+                qb.push_bind(&sf.route_sids);
+                qb.push(") AND coalesce(attributes->>'id', feature_id) = ANY(");
+                qb.push_bind(&sf.route_ids);
+                qb.push(")) route), ");
+                qb.push_bind(sf.route_distance_m);
+                qb.push(")");
+            }
+            _ => {}
+        }
+    }
+
+    qb.push(" ORDER BY feature_id ASC LIMIT ");
+    qb.push_bind(MAX_HUB_EXPORT_FEATURES + 1);
+
+    let rows = qb
+        .build()
+        .fetch_all(&mut **scope.tx_mut())
+        .await
+        .map_err(edit_db_err)?;
+
+    if rows.len() > MAX_HUB_EXPORT_FEATURES as usize {
+        return Err(EditError::detail(
+            422,
+            "Export limit of 50,000 features exceeded.",
+        ));
+    }
+
+    let mut features = Vec::with_capacity(rows.len());
+    for row in rows {
+        let raw_geom: Option<String> = row.try_get("geom_json").map_err(edit_db_err)?;
+        let Some(raw_geom) = raw_geom else {
+            continue;
+        };
+        let geom_obj: Value = serde_json::from_str(&raw_geom)
+            .map_err(|_| EditError::detail(422, "Layer contains invalid or unsupported feature geometry."))?;
+        let Some(gtype) = geom_obj.get("type").and_then(Value::as_str) else {
+            return Err(EditError::detail(
+                422,
+                "Layer contains invalid or unsupported feature geometry.",
+            ));
+        };
+        if !matches!(gtype, "Point" | "LineString" | "Polygon") {
+            return Err(EditError::detail(
+                422,
+                "Layer contains invalid or unsupported feature geometry.",
+            ));
+        }
+        if gtype != expected_geometry_family {
+            return Err(EditError::detail(
+                422,
+                "Feature geometry type does not match layer geometry family.",
+            ));
+        }
+        let feature_id: String = row.try_get("feature_id").map_err(edit_db_err)?;
+        let attributes: Value = row.try_get("attributes").map_err(edit_db_err)?;
+        features.push(json!({
+            "feature_id": feature_id,
+            "attributes": if attributes.is_object() { attributes } else { json!({}) },
+            "geometry": geom_obj,
+        }));
+    }
+    Ok(features)
+}
+
+pub async fn load_sync_server_features(
+    scope: &mut EditScope<'_>,
+    source_id: Uuid,
+) -> Result<Vec<Value>, EditError> {
+    let org_id = scope.organization_id();
+    let project_id = scope.project_id();
+    let is_scoped = scope.is_scoped();
+    let sql = if is_scoped {
+        "SELECT feature_id, attributes, ST_AsGeoJSON(geometry) AS geom_json
+         FROM spatial.reference_features
+         WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
+           AND geometry_state = 'present' AND geometry IS NOT NULL
+           AND gis_access.feature_allowed($1, $2, $3, feature_id, attributes, geometry, 'read')
+         ORDER BY feature_id ASC LIMIT $4"
+    } else {
+        "SELECT feature_id, attributes, ST_AsGeoJSON(geometry) AS geom_json
+         FROM spatial.reference_features
+         WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
+           AND geometry_state = 'present' AND geometry IS NOT NULL
+         ORDER BY feature_id ASC LIMIT $4"
+    };
+    let rows = sqlx::query(sql)
+        .bind(org_id)
+        .bind(project_id)
+        .bind(source_id)
+        .bind(MAX_HUB_EXPORT_FEATURES + 1)
+        .fetch_all(&mut **scope.tx_mut())
+        .await
+        .map_err(edit_db_err)?;
+
+    if rows.len() > MAX_HUB_EXPORT_FEATURES as usize {
+        return Err(EditError::detail(
+            422,
+            "Sync feature limit of 50,000 server features exceeded.",
+        ));
+    }
+
+    let mut snapshots = Vec::with_capacity(rows.len());
+    for row in rows {
+        let raw_geom: Option<String> = row.try_get("geom_json").map_err(edit_db_err)?;
+        let Some(raw_geom) = raw_geom else {
+            continue;
+        };
+        let geom_obj: Value = serde_json::from_str(&raw_geom).map_err(|_| {
+            EditError::detail(422, "Layer contains invalid or unsupported feature geometry.")
+        })?;
+        if !geom_obj.is_object() {
+            return Err(EditError::detail(
+                422,
+                "Layer contains invalid or unsupported feature geometry.",
+            ));
+        }
+        let feature_id: String = row.try_get("feature_id").map_err(edit_db_err)?;
+        let attributes: Value = row.try_get("attributes").map_err(edit_db_err)?;
+        snapshots.push(json!({
+            "feature_id": feature_id,
+            "attributes": if attributes.is_object() { attributes } else { json!({}) },
+            "geometry_geojson": geom_obj,
+        }));
+    }
+    Ok(snapshots)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn record_layer_export_audit(
+    scope: &mut EditScope<'_>,
+    layer_id: Uuid,
+    adapter_key: &str,
+    export_format: &str,
+    stored_crs_code: i32,
+    feature_count: usize,
+    content_revision: &str,
+    schema_revision: &str,
+    sha256: &str,
+) -> Result<(), EditError> {
+    let org_id = scope.organization_id();
+    let project_id = scope.project_id();
+    let actor_type = scope.actor_kind();
+    let actor_id = scope.actor_id();
+    let actor_display = scope.display_name().to_owned();
+    let scoped_access = scope.is_scoped();
+    append_binding_audit(
+        scope.tx_mut(),
+        org_id,
+        actor_type,
+        actor_id,
+        &actor_display,
+        "integration_hub.layer_export",
+        "layer",
+        layer_id,
+        json!({
+            "project_id": project_id.to_string(),
+            "adapter_key": adapter_key,
+            "format": export_format,
+            "crs": format!("EPSG:{stored_crs_code}"),
+            "feature_count": feature_count,
+            "content_revision": content_revision,
+            "schema_revision": schema_revision,
+            "sha256": sha256,
+            "scoped_access": scoped_access,
+        }),
+    )
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
