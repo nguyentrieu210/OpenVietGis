@@ -1,11 +1,12 @@
 //! Environment-backed runtime configuration for `openvietgis-api-rust`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use ovg_storage::DbPoolConfig;
 use serde::Deserialize;
+use uuid::Uuid;
 
 /// Public part of one `OPENVIETGIS_OIDC_PROVIDERS` entry; secrets are ignored.
 #[derive(Clone, Debug, Deserialize)]
@@ -28,6 +29,9 @@ pub struct AppConfig {
     pub oidc_providers: BTreeMap<String, OidcProvider>,
     pub csrf_secret: Option<String>,
     pub artifact_store_dir: PathBuf,
+    pub marketplace_catalog_path: Option<String>,
+    pub marketplace_operator_public_key: Option<String>,
+    pub marketplace_reviewer_user_ids: BTreeSet<Uuid>,
     pub service_version: String,
 }
 
@@ -50,6 +54,9 @@ impl Default for AppConfig {
             oidc_providers: BTreeMap::new(),
             csrf_secret: None,
             artifact_store_dir: PathBuf::from("/tmp/openvietgis-artifacts"),
+            marketplace_catalog_path: None,
+            marketplace_operator_public_key: None,
+            marketplace_reviewer_user_ids: BTreeSet::new(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }
@@ -109,6 +116,29 @@ impl AppConfig {
             .filter(|secret| !secret.is_empty());
         if let Some(dir) = std::env::var_os("OPENVIETGIS_ARTIFACT_STORE_DIR") {
             cfg.artifact_store_dir = PathBuf::from(dir);
+        }
+        cfg.marketplace_catalog_path = std::env::var("OPENVIETGIS_MARKETPLACE_CATALOG_PATH")
+            .ok()
+            .filter(|v| !v.is_empty());
+        cfg.marketplace_operator_public_key =
+            std::env::var("OPENVIETGIS_MARKETPLACE_OPERATOR_PUBLIC_KEY")
+                .ok()
+                .filter(|v| !v.is_empty());
+        if let Ok(raw) = std::env::var("OPENVIETGIS_MARKETPLACE_REVIEWER_USER_IDS") {
+            let trimmed = raw.trim();
+            if !trimmed.is_empty() {
+                if let Ok(ids) = serde_json::from_str::<Vec<Uuid>>(trimmed) {
+                    cfg.marketplace_reviewer_user_ids = ids.into_iter().collect();
+                } else {
+                    let ids: BTreeSet<Uuid> = trimmed
+                        .split(',')
+                        .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+                        .collect();
+                    if !ids.is_empty() {
+                        cfg.marketplace_reviewer_user_ids = ids;
+                    }
+                }
+            }
         }
         if let Ok(fmt) = std::env::var("OVG_LOG_FORMAT") {
             cfg.log_json = fmt.eq_ignore_ascii_case("json");
