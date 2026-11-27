@@ -47,6 +47,14 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
+ await page.locator(".qgis-crs").click();
+ const crs=page.getByRole("dialog",{name:"Hệ tọa độ hiển thị"});await crs.waitFor();
+ await crs.getByRole("option",{name:/WGS 84 \/ UTM múi 48N/}).first().click();
+ await crs.getByRole("button",{name:"OK",exact:true}).click();
+ assert.equal(await page.getByLabel("Tọa độ hiển thị · chỉ đọc",{exact:true}).getAttribute("readonly"),"");
+ await page.locator(".qgis-crs").click();await crs.getByRole("option",{name:/WGS 84 \(kinh độ, vĩ độ\)/}).first().click();await crs.getByRole("button",{name:"OK",exact:true}).click();
+ console.log("PASS synthetic Chromium: display CRS cannot be mistaken for coordinate input");
+
  await first.click();await first.press("ArrowDown");assert.equal(await second.evaluate(e=>e===document.activeElement),true);
  await second.press("Shift+ArrowUp");assert.equal(await page.locator('[data-layer-id][aria-selected="true"]').count(),2);
  await first.press("Shift+F10");const menu=page.getByRole("menu").filter({hasText:"Zoom tới layer"});await menu.waitFor();

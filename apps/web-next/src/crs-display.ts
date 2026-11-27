@@ -51,3 +51,14 @@ export function projectForDisplay(lon: number, lat: number, crs: DisplayCrs): [n
   return tm(l, p, crs.lon0!, crs.k0!);
 }
 export const findCrs = (id: string | null | undefined) => DISPLAY_CRS.find(c => c.id === id) ?? DISPLAY_CRS[0]!;
+
+/** Conservative display domain, not an EPSG area-of-use polygon or survey certification. */
+export function displayCrsWarning(lon:number,lat:number,crs:DisplayCrs):string|null{
+ if(!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lon)>180||Math.abs(lat)>90)return "Tọa độ ngoài miền WGS84";
+ if(crs.kind==="mercator"&&Math.abs(lat)>85.05112878)return "Ngoài miền Web Mercator";
+ if(crs.kind==="tm"){
+  const tm3=crs.id.startsWith("VN2000-TM3-"),half=tm3?1.5:3;
+  if(lat<0||lat>84||!Number.isFinite(crs.lon0)||Math.abs(lon-crs.lon0!)>half+1e-9)return "Ngoài múi chiếu đã chọn";
+ }
+ return null;
+}

@@ -598,34 +598,39 @@
     {
       "id": "OUTPUT-01",
       "task": "T075",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/PrintDesigner.tsx",
-        "apps/api-rust/src/cartography"
+        "apps/api-rust/src/cartography",
+        "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Two-frame synthetic browser save/reopen passes; server revision conflicts not exercised."
     },
     {
       "id": "OUTPUT-02",
       "task": "T076",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayoutDesigner.tsx",
-        "apps/web-next/src/LayoutRender.ts"
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/src/layout-history.ts",
+        "apps/web-next/src/layout-history.test.ts",
+        "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Align/distribute, bounded document undo/redo, nonprinting guides and session-local direct-edit lock; no persisted lock or multi-item drag."
     },
     {
       "id": "OUTPUT-03",
       "task": "T077",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/LayoutRender.ts",
-        "apps/web-next/core-toolkit-smoke.mjs"
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Scale/north linked; legend is current visible-layer list, not complete per-frame categorized symbol legend."
     },
     {
       "id": "OUTPUT-04",
@@ -640,24 +645,26 @@
     {
       "id": "OUTPUT-05",
       "task": "T079",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/PrintDesigner.tsx",
-        "apps/web-next/src/LayoutRender.ts"
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/layout-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Actual browser PDF/PNG/SVG files verified dimensions/metadata; PDF flattened, SVG map embedded raster; no paired visual comparison."
     },
     {
       "id": "OUTPUT-06",
       "task": "T080",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/crs-display.ts",
         "apps/web-next/crs-display.test.mjs",
-        "apps/api-rust/src/catalog.rs"
+        "apps/api-rust/src/catalog.rs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. PROJ fixture point matched; conservative projection-domain guard; no surveyed VN2000 control point, reprojection/import roundtrip or jurisdiction-specific CRS validation."
     },
     {
       "id": "OUTPUT-07",

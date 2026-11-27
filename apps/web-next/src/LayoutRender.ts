@@ -1,7 +1,7 @@
 import * as ml from "./map-surface";
 export type Camera={lng:number;lat:number;zoom:number;bearing:number;reference_width:number};
 export type GridLine={path:string;label:string;x:number;y:number};
-export type Shot={url:string;meters:number;bearing:number;ratio:number;grid:GridLine[];attribution:string};
+export type Shot={url:string;meters:number;bearing:number;ratio:number;effectiveDpi:number;grid:GridLine[];attribution:string};
 export function currentCamera(m:ml.Map):Camera{const c=m.getCenter();return {lng:((c.lng+180)%360+360)%360-180,lat:Math.max(-85,Math.min(85,c.lat)),zoom:Math.max(0,Math.min(24,m.getZoom())),bearing:((m.getBearing()+180)%360+360)%360-180,reference_width:Math.max(1,m.getCanvas().clientWidth)}}
 const clamp=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v));
 export async function captureFrame(live:ml.Map,camera:Camera,wmm:number,hmm:number,dpi:number):Promise<Shot>{
@@ -21,10 +21,24 @@ export async function captureFrame(live:ml.Map,camera:Camera,wmm:number,hmm:numb
   const line=(v:number,vertical:boolean)=>{const points=Array.from({length:15},(_,i)=>vertical?proj(v,box.getSouth()+(box.getNorth()-box.getSouth())*i/14):proj(box.getWest()+(box.getEast()-box.getWest())*i/14,v));const inside=points.find(([x,y])=>x>=0&&x<=1000&&y>=0&&y<=1000);if(!inside)return;grid.push({path:points.map((p,i)=>(i?"L":"M")+p.map(n=>n.toFixed(2)).join(",")).join(" "),label:v.toFixed(Math.min(6,Math.max(0,-Math.floor(Math.log10(step)))))+"°",x:clamp(inside[0]+5,5,930),y:clamp(inside[1]+12,14,990)})};
   if(Number.isFinite(step)&&step>0){for(let x=Math.ceil(box.getWest()/step)*step;x<=box.getEast()&&grid.length<20;x+=step)line(x,true);for(let y=Math.ceil(box.getSouth()/step)*step;y<=box.getNorth()&&grid.length<40;y+=step)line(y,false)}
   if(!url.startsWith("data:image/png")||!Number.isFinite(meters)||meters<=0)throw Error("Không lấy được ảnh / tỷ lệ bản đồ");
-  return {url,meters,bearing:m.getBearing(),ratio:width/height,grid,attribution:[...attrs].join(" · ").slice(0,350)};
+  return {url,meters,bearing:m.getBearing(),ratio:width/height,effectiveDpi:Math.min(width*25.4/wmm,height*25.4/hmm),grid,attribution:[...attrs].join(" · ").slice(0,350)};
  }finally{map?.remove();host.remove()}
 }
-export async function svgCanvas(svg:SVGSVGElement,wmm:number,hmm:number,dpi:number){const clone=svg.cloneNode(true) as SVGSVGElement;clone.querySelectorAll("[data-editor]").forEach(n=>n.remove());clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("width",String(wmm));clone.setAttribute("height",String(hmm));const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));try{const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(Error("Không dựng được bản in SVG"));i.src=url});const c=document.createElement("canvas");c.width=Math.round(wmm*dpi/25.4);c.height=Math.round(hmm*dpi/25.4);if(c.width*c.height>40_000_000)throw Error("Trang vượt giới hạn 40 triệu pixel");const ctx=c.getContext("2d");if(!ctx)throw Error("Không tạo được ảnh in");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(image,0,0,c.width,c.height);return c}finally{URL.revokeObjectURL(url)}}
+export function layoutSvgBlob(svg:SVGSVGElement,wmm:number,hmm:number,rasterSize?:[number,number]):Blob{
+ if(!Number.isFinite(wmm)||!Number.isFinite(hmm)||wmm<=0||hmm<=0)throw Error("Khổ giấy không hợp lệ");
+ const clone=svg.cloneNode(true) as SVGSVGElement;clone.querySelectorAll("[data-editor]").forEach(n=>n.remove());
+ for(const el of clone.querySelectorAll("image")){if(!el.getAttribute("href")?.startsWith("data:image/png;base64,"))throw Error("Khung bản đồ chưa có ảnh nhúng.");}
+ clone.removeAttribute("style");clone.removeAttribute("class");clone.removeAttribute("xmlns");clone.setAttribute("width",rasterSize?String(rasterSize[0]):wmm+"mm");clone.setAttribute("height",rasterSize?String(rasterSize[1]):hmm+"mm");clone.setAttribute("viewBox",`0 0 ${wmm} ${hmm}`);
+ return new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"});
+}
+export async function svgCanvas(svg:SVGSVGElement,wmm:number,hmm:number,dpi:number){
+ const width=Math.round(wmm*dpi/25.4),height=Math.round(hmm*dpi/25.4);
+ if(width<1||height<1||width*height>40_000_000)throw Error("Trang vượt giới hạn 40 triệu pixel");
+ const url=URL.createObjectURL(layoutSvgBlob(svg,wmm,hmm,[width,height]));try{
+ const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(Error("Không dựng được bản in SVG"));i.src=url});
+ const c=document.createElement("canvas");c.width=width;c.height=height;const ctx=c.getContext("2d");if(!ctx)throw Error("Không tạo được ảnh in");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(image,0,0,c.width,c.height);return c
+ }finally{URL.revokeObjectURL(url)}
+}
 export function canvasBlob(c:HTMLCanvasElement,type:string,quality?:number){return new Promise<Blob>((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(Error("Không mã hóa được bản in")),type,quality))}
 /** Embed the requested physical print resolution, not the browser's default. */
 export async function pngFromCanvas(canvas:HTMLCanvasElement,dpi:number):Promise<Blob>{

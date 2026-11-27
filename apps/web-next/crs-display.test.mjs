@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findCrs, projectForDisplay } from "./src/crs-display.ts";
+import { findCrs, projectForDisplay, displayCrsWarning } from "./src/crs-display.ts";
 
 const near = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b} (±${tol})`);
 
@@ -24,4 +24,16 @@ test("VN-2000 TM-3 differs from WGS 84 TM-3 by the datum shift only (tens to a f
   const vn = projectForDisplay(105.75, 10.8, findCrs("VN2000-TM3-105.75"));
   near(vn[0], 500000, 400); // on the central meridian
   assert.ok(vn[1] > 1_190_000 && vn[1] < 1_196_000);
+});
+
+test("PROJ control point, explicit VN2000 parameters, and conservative display extent",()=>{
+  // Independent cs2cs output on the fixture coordinate, not a cadastral control point.
+  const p=projectForDisplay(106.7,10.776,findCrs("EPSG:32648"));
+  near(p[0],685878.879904,.01);near(p[1],1191727.524344,.01);
+  const v=projectForDisplay(106.7,10.776,findCrs("VN2000-TM3-106.25"));
+  near(v[0],549016.708826,.01);near(v[1],1191718.033723,.01);
+  assert.equal(displayCrsWarning(106.7,10.776,findCrs("VN2000-TM3-106.25")),null);
+  assert.ok(displayCrsWarning(110,10,findCrs("VN2000-TM3-106.25")));
+  assert.ok(displayCrsWarning(105,-1,findCrs("EPSG:32648")));
+  assert.ok(displayCrsWarning(0,89,findCrs("EPSG:3857")));
 });

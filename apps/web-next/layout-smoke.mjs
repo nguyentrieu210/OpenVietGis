@@ -1,9 +1,13 @@
+import {preview} from "vite";
+import {fileURLToPath} from "node:url";
+import {dirname} from "node:path";
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
-const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4176/rewrite/?live=1";
+const server=process.env.OVG_TEST_URL?null:await preview({root:dirname(fileURLToPath(import.meta.url)),preview:{host:"127.0.0.1",port:0,strictPort:true}});const url=process.env.OVG_TEST_URL??"http://127.0.0.1:"+server.httpServer.address().port+"/app";if(new URL(url).hostname!=="127.0.0.1")throw Error("Layout fixture must use loopback");
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.route("**/*",r=>new URL(r.request().url()).hostname==="127.0.0.1"?r.continue():r.abort());
  const org="fixture-org",pid="fixture-project",layer=(i)=>({id:"layer"+i,source_id:"source"+i,name:"Khảo sát số nhà · Phần 0"+i,lifecycle:"active",layer_revision:1,capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"edit",available:true,actor_authorized:true,technical_supported:true}],source:{feature_count:i===1?1500:100,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:i===2?"LineString":"Point",dimensions:"XY",fields:[{field_id:"fld_name",name:"Tên hiển thị",type:"text",nullable:false},{field_id:"fld_num",name:"Số",type:"integer",nullable:true}]}}});
  const features=part=>Array.from({length:100},(_,i)=>({feature_id:"f"+i,geometry_state:"present",attributes:{fld_name:"Điểm "+i,fld_num:i,name:"Điểm "+i,ap:"Ấp "+part,ten_duong:i<50?"Đường A":"Đường B",hem:i%2===0?"12":"",so_nha:String(1000+i),hien_trang:"Nhà ở",trang_thai:"khop"},geometry:{type:part===2?"LineString":"Point",coordinates:part===2?[[106.60+(i%10)*.006,10.58+part*.03+Math.floor(i/10)*.006],[106.60+(i%10)*.006+.002,10.58+part*.03+Math.floor(i/10)*.006+.002]]:[106.60+(i%10)*.006,10.58+part*.03+Math.floor(i/10)*.006],coordinate_reference:{code:4326}}}));
  let layoutStore=[],modelStore=[],modelJobs=[];let topoCalls=0, geomCalls=0,tileCalls=0,schemaCalls=0,rasterTiles=0,stored=[]; let active=false,pluginCalls=0,chunkCalls=0,manual,commits=[];
@@ -59,9 +63,9 @@ try{
   else return route.fulfill({status:404,json:{}});
   return route.fulfill({json:body});
  });
- await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
+ await page.route(/^https:\/\/(?:tile\.openstreetmap\.org|mt[0-3]\.google\.com)\//,r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
  await page.goto(url,{waitUntil:"domcontentloaded"});
- await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await page.locator('[data-layer-id="layer1"]').waitFor({timeout:30000});
  assert.equal(pluginCalls,0);assert.equal(chunkCalls,0);
  assert.equal(await page.getByRole("button",{name:"Địa bàn",exact:true}).count(),0);
 
@@ -71,14 +75,25 @@ try{
 
 
  page.on("dialog",d=>d.accept());
- await command("LAYOUT");
+ await command("PLOT");
  const layout=page.getByRole("dialog",{name:"Layout Designer",exact:true});
  await layout.waitFor();
  await layout.getByRole("button",{name:"⬇ Xuất PDF"}).waitFor();
  try{await page.waitForFunction(()=>document.querySelector(".layout-print-sheet image")?.getAttribute("href")?.startsWith("data:image/png"),{},{timeout:40000})}catch(error){console.error("Layout diagnostic:",await layout.locator("footer").innerText(),errors);throw error}
+ await layout.getByRole("button",{name:/Văn bản: BẢN ĐỒ HIỆN TRẠNG/}).click();
+ await layout.getByRole("button",{name:"Trái",exact:true}).click();assert.equal(await layout.getByLabel("X (mm)").inputValue(),"0");
+ await layout.getByRole("button",{name:"Hoàn tác",exact:true}).click();
+ await layout.getByRole("button",{name:/Văn bản: BẢN ĐỒ HIỆN TRẠNG/}).click();assert.equal(await layout.getByLabel("X (mm)").inputValue(),"9");
+ await layout.getByRole("button",{name:"Làm lại",exact:true}).click();
+ await layout.getByRole("button",{name:/Văn bản: BẢN ĐỒ HIỆN TRẠNG/}).click();assert.equal(await layout.getByLabel("X (mm)").inputValue(),"0");
+ await layout.getByLabel("Khóa chỉnh trực tiếp (phiên này)").check();assert.equal(await layout.getByLabel("X (mm)").isEnabled(),false);
+ await layout.getByLabel("Khóa chỉnh trực tiếp (phiên này)").uncheck();
+ await layout.getByLabel("Lưới dẫn 10 mm").check();
  await layout.getByRole("button",{name:"＋ Khung bản đồ",exact:true}).click();
  await layout.getByLabel("Zoom",{exact:true}).fill("16");
  await layout.getByLabel("Lưới tọa độ WGS84").check();
+ // Smaller map frames keep software-rendered tests bounded.
+ for(const frame of [0,1]){await layout.getByRole("button",{name:"Khung bản đồ",exact:true}).nth(frame).click();await layout.getByLabel("Rộng (mm)").fill("50");await layout.getByLabel("Cao (mm)").fill("50")}
  await layout.getByRole("textbox",{name:"Tên layout"}).fill("Kiểm thử 2 bản đồ");
  await layout.getByRole("button",{name:"Lưu",exact:true}).click();
  await layout.getByText("Đã lưu layout vào dự án").waitFor();
@@ -93,10 +108,15 @@ try{
  for(const frame of [0,1]){await layout.getByRole("button",{name:"Khung bản đồ",exact:true}).nth(frame).click();await layout.getByLabel("Rộng (mm)").fill("50");await layout.getByLabel("Cao (mm)").fill("50")}
  await layout.getByLabel("DPI",{exact:true}).selectOption("300");const [pngFile]=await Promise.all([page.waitForEvent("download",{timeout:90000}),layout.getByRole("button",{name:"PNG",exact:true}).click()]);await pngFile.saveAs("/tmp/ovg-layout-smoke.png");const png=await readFile("/tmp/ovg-layout-smoke.png");assert.equal(png.readUInt32BE(16),Math.round(297*300/25.4));assert.equal(png.readUInt32BE(20),Math.round(210*300/25.4));const phys=png.indexOf("pHYs");assert.ok(phys>0);assert.equal(png.readUInt32BE(phys+4),Math.round(300/.0254));assert.equal(png.readUInt32BE(phys+8),Math.round(300/.0254));assert.equal(png[phys+12],1);
  await layout.getByText(/Đã tạo PNG/).waitFor();
+ const [svgFile]=await Promise.all([page.waitForEvent("download",{timeout:90000}),layout.getByRole("button",{name:"SVG",exact:true}).click()]);
+ await svgFile.saveAs("/tmp/ovg065-layout-smoke.svg");const svg=await readFile("/tmp/ovg065-layout-smoke.svg","utf8");
+ assert.match(svg,/width="297mm"/);assert.match(svg,/height="210mm"/);assert.match(svg,/BẢN ĐỒ HIỆN TRẠNG/);assert.match(svg,/data:image\/png;base64,/);assert.doesNotMatch(svg,/data-editor|ld-guide/);
+ await layout.getByText(/Đã tạo SVG/).waitFor();console.log("PASS actual SVG/PDF/PNG downloads, alignment, history and temporary lock");
+
  await layout.getByRole("textbox",{name:"Tên layout"}).fill("Kiểm thử v2");await layout.getByRole("button",{name:"Lưu",exact:true}).click();await layout.getByText("Đã lưu layout vào dự án").waitFor();assert.equal(layoutStore[0].revision,2);
  await layout.getByRole("button",{name:"Đóng Layout Designer"}).click();
- await command("LAYOUT");await layout.waitFor();
+ await command("PLOT");await layout.waitFor();
  await layout.getByRole("button",{name:"Lưu",exact:true}).waitFor();await layout.getByLabel("Layout đã lưu").selectOption("layout-test");
  await page.waitForFunction(()=>document.querySelectorAll(".layout-print-sheet image").length===2,{},{timeout:65000});
  assert.deepEqual(errors,[]); console.log("Layout UI: two independent frames, save/reopen, PDF download passed");
-}finally{await browser.close()}
+}finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}
