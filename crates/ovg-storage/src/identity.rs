@@ -452,6 +452,13 @@ pub async fn complete_oidc_link(
     claims: &ExternalIdentityClaims,
 ) -> Result<Uuid, OidcIdentityError> {
     let mut tx = pool.inner().begin().await.map_err(db_error)?;
+    sqlx::query(crate::rls::BIND_TENANT_GUCS_SQL)
+        .bind("")
+        .bind(user_id.to_string())
+        .bind("")
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
 
     let active_session = sqlx::query_scalar::<_, Uuid>(
         "SELECT id
