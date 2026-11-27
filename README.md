@@ -192,6 +192,13 @@ pnpm --filter @openvietgis/web-next dev
 
 Không mặc định các frontend hoặc bản demo luôn cùng commit, feature flags và cấu hình backend.
 
+E08 (processing jobs, processing models, professional GIS) is implemented only
+by Rust. The legacy development server needs `OPENVIETGIS_E08_RUST_URL=http://127.0.0.1:8080`
+and a Rust API process using the same restricted runtime database and session secrets.
+Build `cargo build --locked -p openvietgis-api-rust` before running the integration/browser
+validation commands; their test launcher starts Rust automatically. The old E08 Python
+implementation and differential-only suites have been retired from this source tree.
+
 ### OIDC development profile
 
 ```bash

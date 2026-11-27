@@ -32,9 +32,6 @@ from openvietgis_api.adapters.http import (
     org_chat,
     organizations,
     partner_platform,
-    processing,
-    processing_models,
-    professional,
     projects,
     queries,
     raster,
@@ -53,6 +50,7 @@ from openvietgis_api.adapters.http import (
 )
 from openvietgis_api.adapters.http.errors import install_error_handlers
 from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
+from openvietgis_api.adapters.http.native_processing import install_native_processing
 from openvietgis_api.adapters.http.official_modules import discover_official_module_runtimes
 from openvietgis_api.config import get_settings
 
@@ -108,9 +106,6 @@ def create_app() -> FastAPI:
     api_v1.include_router(transfers.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(editing.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(queries.router, dependencies=[Depends(project_access_guard)])
-    api_v1.include_router(processing.router, dependencies=[Depends(project_access_guard)])
-    api_v1.include_router(processing_models.router, dependencies=[Depends(project_access_guard)])
-    api_v1.include_router(professional.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(raster.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(cartography.router, dependencies=[Depends(project_access_guard)])
     api_v1.include_router(layout_designer.router, dependencies=[Depends(project_access_guard)])
@@ -143,6 +138,7 @@ def create_app() -> FastAPI:
     for module_runtime in discover_official_module_runtimes():
         api_v1.include_router(module_runtime.router, dependencies=[Depends(project_access_guard)])
     app.include_router(api_v1)
+    install_native_processing(app)
     install_error_handlers(app)
     return app
 

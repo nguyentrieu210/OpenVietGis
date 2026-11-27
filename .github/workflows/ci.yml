@@ -38,6 +38,13 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
 
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Build native E08 backend for integration and browser tests
+        run: cargo build --locked -p openvietgis-api-rust
+
       - name: Install system GDAL runtime for raster fixtures
         run: |
           sudo apt-get update
@@ -127,6 +134,13 @@ jobs:
 
       - name: Install Python dependencies
         run: uv sync --project apps/api --frozen
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - name: Build native E08 backend for integration and browser tests
+        run: cargo build --locked -p openvietgis-api-rust
 
       - name: Install system GDAL runtime for raster fixtures
         run: |

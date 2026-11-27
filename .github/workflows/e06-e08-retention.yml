@@ -1,4 +1,4 @@
-name: E06 and E08 FastAPI Retention
+name: E06 retention and E08 native integration
 
 on:
   workflow_dispatch:
@@ -39,13 +39,17 @@ jobs:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --project apps/api --frozen
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked -p openvietgis-api-rust
       - run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
-      - name: Verify retained styles, print, models, and jobs under the restricted role
+      - name: Verify retained E06 and Rust-owned E08 under the restricted role
         run: >-
           uv run --project apps/api python -m tools.run_with_test_database
           pytest -ra --show-capture=no
           apps/api/tests/unit/test_cartography_output.py
-          apps/api/tests/unit/test_processing_domain.py
           apps/api/tests/integration/m2/test_cartography_completeness.py
           apps/api/tests/integration/m2/test_print_revision_pins.py
           apps/api/tests/integration/spatial/test_layout_designer.py

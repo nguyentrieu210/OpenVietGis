@@ -7,8 +7,6 @@ from uuid import uuid4
 
 from sqlalchemy import text
 
-from openvietgis_api.adapters.persistence import processing_repository
-from openvietgis_api.domains.platform_errors import PlatformValidationError
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
 from tests.integration.m2.test_r006_r009_real import _import_geojson
@@ -228,7 +226,7 @@ def test_clip_retains_family_and_empty_output(migrated_database):
         assert nonpolygon.status_code == 422 and nonpolygon.json()["code"] == "INVALID_OVERLAY"
 
 
-def test_atomic_rollback_on_publication_failure_and_consumers(migrated_database, monkeypatch):
+def test_atomic_rollback_on_publication_failure_and_consumers(migrated_database):
     world = seed_access_world()
     base = _base(world)
     with _client(world.owner_user_id) as client:
@@ -245,14 +243,28 @@ def test_atomic_rollback_on_publication_failure_and_consumers(migrated_database,
         layer = imported["target_layer_id"]
         before = _derived_counts(world)
 
-        def fail_after_inserts(*args, **kwargs):
-            raise PlatformValidationError("synthetic publication rejection", code="TEST_REJECTION")
-
-        # The audit append is AFTER source, feature and layer insertion.
-        with monkeypatch.context() as patch:
-            patch.setattr(processing_repository, "append_project_audit", fail_after_inserts)
+        # Inject a scoped database failure, not a monkeypatch of the retired Python repository.
+        suffix = uuid4().hex
+        function = f"audit.e08_reject_{suffix}"
+        trigger = f"e08_reject_{suffix}"
+        with get_admin_engine().begin() as connection:
+            connection.exec_driver_sql(
+                f"CREATE FUNCTION {function}() RETURNS trigger LANGUAGE plpgsql AS $$ "
+                f"BEGIN IF NEW.organization_id = '{world.organization_id}'::uuid "
+                "AND NEW.action = 'processing.job.succeeded' THEN "
+                "RAISE EXCEPTION 'synthetic E08 publication failure'; END IF; RETURN NEW; END $$"
+            )
+            connection.exec_driver_sql(
+                f"CREATE TRIGGER {trigger} BEFORE INSERT ON audit.audit_events "
+                f"FOR EACH ROW EXECUTE FUNCTION {function}()"
+            )
+        try:
             failed = _job(client, base, "buffer", layer, {"distance_meters": 12.5})
-        assert failed["status"] == "failed" and failed["error_code"] == "TEST_REJECTION"
+        finally:
+            with get_admin_engine().begin() as connection:
+                connection.exec_driver_sql(f"DROP TRIGGER {trigger} ON audit.audit_events")
+                connection.exec_driver_sql(f"DROP FUNCTION {function}()")
+        assert failed["status"] == "failed" and failed["error_code"]
         assert failed["output_layer_id"] is None and _derived_counts(world) == before
         response = client.post(f"{base}/processing/jobs/{failed['id']}/retry")
         assert response.status_code == 200, response.text

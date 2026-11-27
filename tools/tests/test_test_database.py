@@ -23,8 +23,9 @@ def test_explicit_dedicated_test_database_takes_precedence() -> None:
     assert environment["OPENVIETGIS_DATABASE_URL"] == target
 
 
-def test_runner_applies_core_then_official_module_migrations(monkeypatch) -> None:
+def test_runner_applies_core_then_official_module_migrations(monkeypatch, tmp_path) -> None:
     events: list[str] = []
+    monkeypatch.setenv("OPENVIETGIS_RUST_TEST_BINARY", str(tmp_path / "missing-binary"))
     monkeypatch.setattr(run_with_test_database.sys, "argv", ["test-runner", "pytest"])
     monkeypatch.setattr(
         run_with_test_database.command,
