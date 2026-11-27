@@ -8,7 +8,6 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use ovg_core::AppError;
-use ovg_core::AppError;
 use ovg_storage::cad_documents::{
     self, find_existing_georef_conversion, insert_dxf_export_conversion,
     insert_rejected_dwg_conversion, load_cad_document_version_blob, load_dxf_export_source,
@@ -629,11 +628,16 @@ async fn inspect_cad_file(
         return Err(EditError::InvalidRequest.into());
     };
     let curve_tolerance_m = match tol_raw {
-        Some(t) => Some(t.trim().parse::<f64>().map_err(|_| EditError::InvalidRequest)?),
+        Some(t) => Some(
+            t.trim()
+                .parse::<f64>()
+                .map_err(|_| EditError::InvalidRequest)?,
+        ),
         None => None,
     };
 
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &parts.headers)?;
@@ -681,7 +685,10 @@ async fn inspect_cad_file(
     let digest = parsed["sha256"].as_str().unwrap_or_default();
     let mut summary = parsed["entity_summary"].clone();
     if let Some(obj) = summary.as_object_mut() {
-        obj.insert("drawing_sha256".to_owned(), Value::String(digest.to_owned()));
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(digest.to_owned()),
+        );
         obj.insert("crs_code".to_owned(), Value::from(crs_code));
     }
 
@@ -708,9 +715,9 @@ async fn import_cad_file(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_owned();
-    let raw = to_bytes(body, CAD_MULTIPART_CAP).await.map_err(|_| {
-        EditError::validation("CAD_FILE_LIMIT", "CAD upload exceeds 25 MiB limit")
-    })?;
+    let raw = to_bytes(body, CAD_MULTIPART_CAP)
+        .await
+        .map_err(|_| EditError::validation("CAD_FILE_LIMIT", "CAD upload exceeds 25 MiB limit"))?;
     let Some(mp) = multipart_parts(&content_type, &raw) else {
         return Err(EditError::InvalidRequest.into());
     };
@@ -733,7 +740,9 @@ async fn import_cad_file(
                 "curve_tolerance_m" if !v.trim().is_empty() => tol_raw = Some(v.to_owned()),
                 "acknowledge_loss" => ack_loss = parse_bool_field(v)?,
                 "expected_sha256" if !v.is_empty() => expected_sha256 = Some(v.to_owned()),
-                "expected_inspection_fingerprint" if !v.is_empty() => expected_fp = Some(v.to_owned()),
+                "expected_inspection_fingerprint" if !v.is_empty() => {
+                    expected_fp = Some(v.to_owned())
+                }
                 _ => {}
             }
         }
@@ -748,11 +757,16 @@ async fn import_cad_file(
         return Err(EditError::InvalidRequest.into());
     };
     let curve_tolerance_m = match tol_raw {
-        Some(t) => Some(t.trim().parse::<f64>().map_err(|_| EditError::InvalidRequest)?),
+        Some(t) => Some(
+            t.trim()
+                .parse::<f64>()
+                .map_err(|_| EditError::InvalidRequest)?,
+        ),
         None => None,
     };
 
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &parts.headers)?;
@@ -771,22 +785,30 @@ async fn import_cad_file(
 
     let lower = filename.to_ascii_lowercase();
     if !lower.ends_with(".dwg") && !lower.ends_with(".dxf") {
-        return Err(EditError::validation("CAD_FORMAT_UNSUPPORTED", "only .dxf is supported").into());
+        return Err(
+            EditError::validation("CAD_FORMAT_UNSUPPORTED", "only .dxf is supported").into(),
+        );
     }
 
     let conv_id = Uuid::new_v4();
     let sha256_hex_val = sha256_hex(payload);
     if let Some(ref exp) = expected_sha256 {
         if exp != &sha256_hex_val {
-            return Err(
-                EditError::conflict("CAD_INSPECTION_STALE", "DXF changed after inspection").into(),
-            );
+            return Err(EditError::conflict(
+                "CAD_INSPECTION_STALE",
+                "DXF changed after inspection",
+            )
+            .into());
         }
     }
 
     let org_id = scope.organization_id();
     let proj_id = scope.project_id();
-    let fmt = if lower.ends_with(".dwg") { "dwg" } else { "dxf" };
+    let fmt = if lower.ends_with(".dwg") {
+        "dwg"
+    } else {
+        "dxf"
+    };
     let skey = format!("cad/{org_id}/{proj_id}/{conv_id}.{fmt}");
 
     if fmt == "dwg" {
@@ -857,8 +879,14 @@ async fn import_cad_file(
     }
 
     if let Some(obj) = summary.as_object_mut() {
-        obj.insert("drawing_sha256".to_owned(), Value::String(sha256_hex_val.clone()));
-        obj.insert("inspection_fingerprint".to_owned(), Value::String(fingerprint.clone()));
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(sha256_hex_val.clone()),
+        );
+        obj.insert(
+            "inspection_fingerprint".to_owned(),
+            Value::String(fingerprint.clone()),
+        );
         obj.insert("crs_code".to_owned(), Value::from(crs_code));
     }
     if let Some(obj) = loss_report.as_object_mut() {
@@ -972,7 +1000,10 @@ async fn export_cad_dxf(
     scope.commit().await?;
 
     let mut resp_headers = HeaderMap::new();
-    resp_headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/dxf"));
+    resp_headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/dxf"),
+    );
     if let Ok(hv) = HeaderValue::from_str(&format!("attachment; filename=\"{fname}\"")) {
         resp_headers.insert(header::CONTENT_DISPOSITION, hv);
     }
@@ -1056,7 +1087,8 @@ async fn inspect_georef(
     else {
         return Err(EditError::InvalidRequest.into());
     };
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &headers)?;
@@ -1100,7 +1132,10 @@ async fn inspect_georef(
     let placed_crs = parsed["crs_code"].as_i64().unwrap_or(3857);
     let mut summary = parsed["entity_summary"].clone();
     if let Some(obj) = summary.as_object_mut() {
-        obj.insert("drawing_sha256".to_owned(), Value::String(digest.to_owned()));
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(digest.to_owned()),
+        );
         obj.insert("crs_code".to_owned(), Value::from(placed_crs));
     }
 
@@ -1143,7 +1178,8 @@ async fn import_georef(
     else {
         return Err(EditError::InvalidRequest.into());
     };
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &headers)?;
@@ -1152,7 +1188,9 @@ async fn import_georef(
     let (filename, _, storage_key, doc_sha256) =
         load_cad_document_version_blob(&mut scope, document_id, version).await?;
     if body.expected_sha256 != doc_sha256 {
-        return Err(EditError::conflict("CAD_INSPECTION_STALE", "DXF changed after inspection").into());
+        return Err(
+            EditError::conflict("CAD_INSPECTION_STALE", "DXF changed after inspection").into(),
+        );
     }
     let payload = read_store_bytes(&state, &storage_key, &doc_sha256).await?;
     let parsed = run_parse_dxf(
@@ -1212,8 +1250,14 @@ async fn import_georef(
             "imported_schema_revision".to_owned(),
             Value::String(schema_rev.to_owned()),
         );
-        obj.insert("drawing_sha256".to_owned(), Value::String(doc_sha256.clone()));
-        obj.insert("inspection_fingerprint".to_owned(), Value::String(fingerprint.clone()));
+        obj.insert(
+            "drawing_sha256".to_owned(),
+            Value::String(doc_sha256.clone()),
+        );
+        obj.insert(
+            "inspection_fingerprint".to_owned(),
+            Value::String(fingerprint.clone()),
+        );
         obj.insert("crs_code".to_owned(), Value::from(placed_crs));
     }
     let mut loss_report = parsed["loss_report"].clone();
@@ -1315,7 +1359,8 @@ async fn export_georef_draft(
     else {
         return Err(EditError::InvalidRequest.into());
     };
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &headers)?;
@@ -1383,7 +1428,10 @@ async fn export_georef_draft(
 
     let payload_sha = meta["payload_sha256"].as_str().unwrap_or_default();
     let mut resp_headers = HeaderMap::new();
-    resp_headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/dxf"));
+    resp_headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/dxf"),
+    );
     if let Ok(hv) = HeaderValue::from_str(&format!(
         "attachment; filename=\"derived-{document_id}-v{version}.dxf\""
     )) {
@@ -1426,7 +1474,8 @@ async fn preview_native_import(
     else {
         return Err(EditError::InvalidRequest.into());
     };
-    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await? else {
+    let Some(mut scope) = edit_auth::open(&state, &actor, &org, &proj, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
     actor_csrf(&state, &actor, &headers)?;
@@ -1470,7 +1519,10 @@ async fn preview_native_import(
     )
     .await?;
 
-    let ops = preview["operations"].as_array().cloned().unwrap_or_default();
+    let ops = preview["operations"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     validate_geojson_ops_postgis(&mut scope, &ops).await?;
     scope.rollback().await?;
 

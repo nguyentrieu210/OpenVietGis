@@ -600,9 +600,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, EditError> {
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     let _ = StatusCode::INTERNAL_SERVER_ERROR;
-    Err(EditError::Internal(format!(
-        "CAD worker failed: {stderr}"
-    )))
+    Err(EditError::Internal(format!("CAD worker failed: {stderr}")))
 }
 
 fn leak_static_code(code: &str) -> &'static str {

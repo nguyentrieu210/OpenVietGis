@@ -469,7 +469,8 @@ pub async fn validate_wkts_postgis(
     scope: &mut EditScope<'_>,
     wkts: &[String],
 ) -> Result<(), EditError> {
-    let json_wkts = serde_json::to_string(wkts).map_err(|err| EditError::Internal(err.to_string()))?;
+    let json_wkts =
+        serde_json::to_string(wkts).map_err(|err| EditError::Internal(err.to_string()))?;
     let invalid: i64 = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM jsonb_array_elements_text($1::jsonb) AS a(wkt)
          WHERE NOT ST_IsValid(ST_GeomFromText(a.wkt)) OR ST_IsEmpty(ST_GeomFromText(a.wkt))",
@@ -641,12 +642,9 @@ pub async fn publish_cad_import(
     .await
     .map_err(edit_cad_db_err)?;
 
-    for (ordinal, (fid, fname)) in [
-        ("cad_layer", "CAD Layer"),
-        ("cad_entity", "CAD Entity"),
-    ]
-    .into_iter()
-    .enumerate()
+    for (ordinal, (fid, fname)) in [("cad_layer", "CAD Layer"), ("cad_entity", "CAD Entity")]
+        .into_iter()
+        .enumerate()
     {
         sqlx::query(
             "INSERT INTO spatial.source_fields (
@@ -780,7 +778,10 @@ pub async fn publish_cad_import(
         "units": args.units,
     });
     if let (Some((doc_id, ver)), Some(obj)) = (args.doc_placement, audit_meta.as_object_mut()) {
-        obj.insert("cad_document_id".to_owned(), Value::String(doc_id.to_string()));
+        obj.insert(
+            "cad_document_id".to_owned(),
+            Value::String(doc_id.to_string()),
+        );
         obj.insert("cad_document_version".to_owned(), Value::from(ver));
         obj.insert(
             "inspection_fingerprint".to_owned(),
@@ -1028,7 +1029,10 @@ pub async fn load_cad_document_version_blob(
 
     let fmt: String = row.try_get("format").map_err(edit_cad_db_err)?;
     if fmt != "dxf" {
-        return Err(EditError::detail(422, "Control-point import supports 2D DXF only"));
+        return Err(EditError::detail(
+            422,
+            "Control-point import supports 2D DXF only",
+        ));
     }
     Ok((
         row.try_get("filename").map_err(edit_cad_db_err)?,
@@ -1312,7 +1316,8 @@ pub async fn validate_geojson_ops_postgis(
             })
         })
         .collect();
-    let serialized = serde_json::to_string(&payload).map_err(|e| EditError::Internal(e.to_string()))?;
+    let serialized =
+        serde_json::to_string(&payload).map_err(|e| EditError::Internal(e.to_string()))?;
     let invalid: Option<String> = sqlx::query_scalar(
         "SELECT item->>'feature_id'
          FROM jsonb_array_elements($1::jsonb) AS item
