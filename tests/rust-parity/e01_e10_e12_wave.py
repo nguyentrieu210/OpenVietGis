@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Consolidated differential parity for Mega-Wave:
 - E01: POST /bootstrap/initialize + 10 gis_access routes
 - E10: 2 Model Vault write routes + 10 CAD doc/version/download/links/conversions/COGO routes
@@ -17,11 +16,9 @@ import re
 import struct
 import sys
 import tempfile
-from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-import httpx
 import psycopg
 
 ROOT = Path(__file__).resolve().parents[2]

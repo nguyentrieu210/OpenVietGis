@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """E05 / E10 3D Tiles differential parity across ZIP import, procedural generation,
 tile byte serving, and triangle/ID feature picking on isolated PostGIS."""
 

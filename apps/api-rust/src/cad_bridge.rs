@@ -847,12 +847,12 @@ mod tests {
     #[test]
     fn cad_header_checks() {
         assert_eq!(
-            validate_cad_upload("a.dwg", b"AC1032abcdef").unwrap(),
-            "dwg"
+            validate_cad_upload("a.dwg", b"AC1032abcdef").ok(),
+            Some("dwg")
         );
         assert_eq!(
-            validate_cad_upload("b.dxf", b"0\r\nSECTION\r\n2\r\nHEADER\r\n").unwrap(),
-            "dxf"
+            validate_cad_upload("b.dxf", b"0\r\nSECTION\r\n2\r\nHEADER\r\n").ok(),
+            Some("dxf")
         );
         assert!(validate_cad_upload("b.dwg", b"BAD123").is_err());
         assert!(validate_cad_upload("b.pdf", b"AC1032").is_err());
