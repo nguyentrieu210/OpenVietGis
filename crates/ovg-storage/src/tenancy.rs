@@ -442,6 +442,73 @@ impl TenantTx {
         Ok(initialized == Some(true))
     }
 
+    pub async fn bootstrap_initialize(
+        &mut self,
+        name: &str,
+        slug: &str,
+    ) -> Result<(Uuid, Uuid), AppError> {
+        let initialized: Option<Option<DateTime<Utc>>> = sqlx::query_scalar(
+            "SELECT initialized_at FROM platform.installation_state
+             WHERE singleton_key = 'installation' FOR UPDATE",
+        )
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        if initialized.flatten().is_some() {
+            return Err(AppError::conflict(
+                "INSTALLATION_ALREADY_INITIALIZED",
+                "installation already initialized",
+            ));
+        }
+        let cleaned_name = name.trim();
+        if cleaned_name.is_empty() {
+            return Err(AppError::bad_request("organization name is required"));
+        }
+        let cleaned_slug = slug.trim().to_ascii_lowercase();
+        let valid_slug = !cleaned_slug.is_empty()
+            && !cleaned_slug.starts_with('-')
+            && !cleaned_slug.ends_with('-')
+            && !cleaned_slug.contains("--")
+            && cleaned_slug
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-');
+        if !valid_slug {
+            return Err(AppError::bad_request("invalid organization slug"));
+        }
+        let (org, owner) = self.create_organization(cleaned_name, &cleaned_slug).await?;
+        let now = Utc::now();
+        let updated = sqlx::query(
+            "UPDATE platform.installation_state
+             SET initialized_at = $1,
+                 initial_organization_id = $2,
+                 initialized_by_user_id = $3,
+                 updated_at = $1
+             WHERE singleton_key = 'installation' AND initialized_at IS NULL",
+        )
+        .bind(now)
+        .bind(org.id)
+        .bind(self.actor_id)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(db_error)?;
+        if updated.rows_affected() != 1 {
+            return Err(AppError::conflict(
+                "INSTALLATION_ALREADY_INITIALIZED",
+                "installation already initialized",
+            ));
+        }
+        self.audit(
+            org.id,
+            "installation.bootstrap.initialize",
+            "organization",
+            Some(org.id),
+            "success",
+            json!({ "owner_membership_id": owner.id.to_string() }),
+        )
+        .await?;
+        Ok((org.id, owner.id))
+    }
+
     pub async fn create_organization(
         &mut self,
         name: &str,

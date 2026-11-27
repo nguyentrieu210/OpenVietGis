@@ -28,6 +28,7 @@ pub struct AppConfig {
     pub api_public_base_url: String,
     pub oidc_providers: BTreeMap<String, OidcProvider>,
     pub csrf_secret: Option<String>,
+    pub bootstrap_secret: Option<String>,
     pub artifact_store_dir: PathBuf,
     pub marketplace_catalog_path: Option<String>,
     pub marketplace_operator_public_key: Option<String>,
@@ -53,6 +54,7 @@ impl Default for AppConfig {
             api_public_base_url: "http://127.0.0.1:8000".to_string(),
             oidc_providers: BTreeMap::new(),
             csrf_secret: None,
+            bootstrap_secret: None,
             artifact_store_dir: PathBuf::from("/tmp/openvietgis-artifacts"),
             marketplace_catalog_path: None,
             marketplace_operator_public_key: None,
@@ -112,6 +114,9 @@ impl AppConfig {
             }
         }
         cfg.csrf_secret = std::env::var("OPENVIETGIS_CSRF_SECRET")
+            .ok()
+            .filter(|secret| !secret.is_empty());
+        cfg.bootstrap_secret = std::env::var("OPENVIETGIS_BOOTSTRAP_SECRET")
             .ok()
             .filter(|secret| !secret.is_empty());
         if let Some(dir) = std::env::var_os("OPENVIETGIS_ARTIFACT_STORE_DIR") {

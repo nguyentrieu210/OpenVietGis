@@ -8,6 +8,7 @@ pub mod e11_outbox;
 pub mod editing;
 pub mod extensions;
 pub mod field_packages;
+pub mod gis_access;
 pub mod house_numbering;
 pub mod identity;
 pub mod integration_hub;

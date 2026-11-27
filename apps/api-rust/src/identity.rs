@@ -4,7 +4,7 @@ use axum::body::Bytes;
 use axum::extract::{rejection::PathRejection, FromRequestParts, Path, State};
 use axum::http::{header, request::Parts, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use hmac::{Hmac, Mac};
@@ -167,6 +167,7 @@ fn session_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str) -> Option<&'a s
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/bootstrap/status", get(bootstrap_status))
+        .route("/bootstrap/initialize", post(bootstrap_initialize))
         .route("/me", get(get_me))
         .route("/me/organizations", get(list_my_organizations))
         .route(
@@ -186,6 +187,97 @@ type PrivateJson<T> = ([(header::HeaderName, &'static str); 1], Json<T>);
 async fn bootstrap_status(State(state): State<AppState>) -> Result<Json<Value>, IdentityError> {
     let initialized = identity::installation_initialized(database(&state)?).await?;
     Ok(Json(json!({ "initialized": initialized })))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BootstrapInitializeBody {
+    organization_name: String,
+    organization_slug: String,
+}
+
+async fn bootstrap_initialize(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Response, IdentityError> {
+    // Parse JSON first like FastAPI/Pydantic body extraction before cookie/CSRF/secret, or cookie first?
+    // FastAPI authenticates cookie (`authenticate_human_request`) even when `Authorization: Bearer`
+    // carries the bootstrap secret, so do NOT reject Bearer headers like `HumanSession` does.
+    let unauthorized = |detail| IdentityError::Http(StatusCode::UNAUTHORIZED, detail);
+    let token = session_cookie(&headers, &state.config.session_cookie_name)
+        .ok_or_else(|| unauthorized("authentication required"))?;
+    let verified = identity::authenticate_session(database(&state)?, token)
+        .await
+        .map_err(|error| match error {
+            SessionAuthenticationError::Invalid => unauthorized("invalid session"),
+            SessionAuthenticationError::Revoked => unauthorized("session revoked"),
+            SessionAuthenticationError::Expired => unauthorized("session expired"),
+            SessionAuthenticationError::Database(error) => IdentityError::from(error),
+        })?;
+    let session = HumanSession {
+        verified,
+        token: token.to_owned(),
+    };
+
+    let parsed: BootstrapInitializeBody =
+        serde_json::from_slice(&body).map_err(|_| IdentityError::InvalidPayload)?;
+    let name_len = parsed.organization_name.chars().count();
+    let slug_len = parsed.organization_slug.chars().count();
+    if !(1..=200).contains(&name_len) || !(1..=120).contains(&slug_len) {
+        return Err(IdentityError::InvalidPayload);
+    }
+
+    require_csrf(&state, &session, &headers)?;
+
+    let authz = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if authz.len() < 7 || !authz[..7].eq_ignore_ascii_case("bearer ") {
+        return Err(IdentityError::Http(
+            StatusCode::FORBIDDEN,
+            "bootstrap authority required",
+        ));
+    }
+    let presented = authz[7..].trim();
+    let configured = state.config.bootstrap_secret.as_deref().unwrap_or("");
+    if presented.is_empty()
+        || configured.is_empty()
+        || !constant_time_eq(presented.as_bytes(), configured.as_bytes())
+    {
+        return Err(IdentityError::Http(
+            StatusCode::FORBIDDEN,
+            "invalid bootstrap authority",
+        ));
+    }
+
+    let mut tx = crate::tenancy::begin(&state, &session)
+        .await
+        .map_err(|_| AppError::service_unavailable("DATABASE_UNAVAILABLE", "database unavailable"))?;
+    let result = tx
+        .bootstrap_initialize(&parsed.organization_name, &parsed.organization_slug)
+        .await;
+    match result {
+        Ok((org_id, owner_membership_id)) => {
+            tx.commit().await?;
+            Ok((
+                StatusCode::CREATED,
+                Json(json!({
+                    "organization_id": org_id,
+                    "owner_membership_id": owner_membership_id,
+                })),
+            )
+                .into_response())
+        }
+        Err(AppError::Conflict { message, .. }) => {
+            Ok((StatusCode::CONFLICT, Json(json!({ "detail": message }))).into_response())
+        }
+        Err(AppError::BadRequest { message, .. }) => {
+            Ok((StatusCode::BAD_REQUEST, Json(json!({ "detail": message }))).into_response())
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 async fn get_me(session: HumanSession) -> PrivateJson<UserProfile> {

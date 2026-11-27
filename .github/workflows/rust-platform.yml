@@ -262,6 +262,24 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e15-full-parity.log
 
+      - name: Run E05 3D tilesets parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e05_tilesets.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e05-tilesets.log
+
+      - name: Run E01/E10/E12 Mega-Wave parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e01_e10_e12_wave.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e01-e10-e12-wave.log
+
       - name: Record PostGIS version
         if: always()
         run: |
