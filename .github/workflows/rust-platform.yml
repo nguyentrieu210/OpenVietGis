@@ -291,6 +291,15 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e01-e10-e12-wave.log
 
+      - name: Run E13 field offline parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e13_field_offline.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e13-field-offline.log
+
       - name: Record PostGIS version
         if: always()
         run: |

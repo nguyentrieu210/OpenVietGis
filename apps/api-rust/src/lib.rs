@@ -13,6 +13,7 @@ pub mod error;
 pub(crate) mod extensions;
 pub(crate) mod external_sources;
 pub(crate) mod field_offline;
+mod field_worker;
 pub(crate) mod gis_access;
 #[cfg(feature = "house-numbering")]
 pub(crate) mod house_numbering;
