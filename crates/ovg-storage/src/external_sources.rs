@@ -51,7 +51,9 @@ fn safe_hostname(input: &str) -> Result<String, AppError> {
     if host.is_empty()
         || host.len() > 253
         || !host.is_ascii()
-        || host.bytes().any(|b| !(b.is_ascii_alphanumeric() || b == b'.' || b == b'-'))
+        || host
+            .bytes()
+            .any(|b| !(b.is_ascii_alphanumeric() || b == b'.' || b == b'-'))
         || host.split('.').any(|part| {
             part.is_empty() || part.len() > 63 || part.starts_with('-') || part.ends_with('-')
         })
@@ -59,9 +61,15 @@ fn safe_hostname(input: &str) -> Result<String, AppError> {
         return Err(invalid("INVALID_HOSTNAME", "invalid external hostname"));
     }
     if !host.contains('.')
-        || ["localhost", ".localhost", ".local", ".internal", ".home.arpa"]
-            .iter()
-            .any(|suffix| host.ends_with(*suffix))
+        || [
+            "localhost",
+            ".localhost",
+            ".local",
+            ".internal",
+            ".home.arpa",
+        ]
+        .iter()
+        .any(|suffix| host.ends_with(*suffix))
     {
         return Err(blocked("SSRF_BLOCKED", "SSRF blocked internal hostname"));
     }
@@ -80,7 +88,10 @@ fn safe_hostname(input: &str) -> Result<String, AppError> {
                 || (a == 198 && (matches!(b, 18 | 19) || (b == 51 && c == 100)))
                 || (a == 203 && b == 0 && c == 113)
             {
-                return Err(blocked("SSRF_BLOCKED", "SSRF blocked non-public or ambiguous IP address"));
+                return Err(blocked(
+                    "SSRF_BLOCKED",
+                    "SSRF blocked non-public or ambiguous IP address",
+                ));
             }
         }
         _ => return Err(invalid("INVALID_HOSTNAME", "invalid external hostname")),
@@ -135,10 +146,20 @@ pub async fn register_allowlist(
     let schemes = if input.allowed_schemes.is_empty() {
         default_schemes()
     } else {
-        input.allowed_schemes.iter().map(|s| s.to_ascii_lowercase()).collect()
+        input
+            .allowed_schemes
+            .iter()
+            .map(|s| s.to_ascii_lowercase())
+            .collect()
     };
-    if schemes.iter().any(|s| !matches!(s.as_str(), "http" | "https")) {
-        return Err(invalid("VALIDATION_ERROR", "allowed_schemes must be http or https"));
+    if schemes
+        .iter()
+        .any(|s| !matches!(s.as_str(), "http" | "https"))
+    {
+        return Err(invalid(
+            "VALIDATION_ERROR",
+            "allowed_schemes must be http or https",
+        ));
     }
     let ports = if input.allowed_ports.is_empty() {
         default_ports()
@@ -146,11 +167,15 @@ pub async fn register_allowlist(
         input.allowed_ports
     };
     if ports.iter().any(|p| !(1..=65535).contains(p)) {
-        return Err(invalid("VALIDATION_ERROR", "allowed_ports must be 1..65535"));
+        return Err(invalid(
+            "VALIDATION_ERROR",
+            "allowed_ports must be 1..65535",
+        ));
     }
-    let secret = input.secret_ref_name.filter(|s| !s.is_empty()).map(|s| {
-        s.trim().chars().take(128).collect::<String>()
-    });
+    let secret = input
+        .secret_ref_name
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim().chars().take(128).collect::<String>());
     let row = sqlx::query(
         "INSERT INTO external_sources.allowlisted_hosts
          (id, organization_id, hostname, allowed_schemes, allowed_ports,
@@ -171,7 +196,9 @@ pub async fn register_allowlist(
     .fetch_optional(&mut **tx.tx_mut())
     .await
     .map_err(db_error)?
-    .ok_or_else(|| AppError::conflict("HOST_EXISTS", format!("host '{host}' already allowlisted")))?;
+    .ok_or_else(|| {
+        AppError::conflict("HOST_EXISTS", format!("host '{host}' already allowlisted"))
+    })?;
     allowlist_wire(&row)
 }
 
@@ -216,53 +243,82 @@ fn endpoint(
     enabled: bool,
 ) -> Result<String, AppError> {
     let clean = value.trim();
-    if clean.is_empty() || clean.len() > 1000 || !clean.is_ascii()
+    if clean.is_empty()
+        || clean.len() > 1000
+        || !clean.is_ascii()
         || clean.bytes().any(|b| b <= 32 || b == 127 || b == b'\\')
     {
         return Err(invalid("INVALID_URL", "invalid endpoint URL"));
     }
     let url = url::Url::parse(clean).map_err(|_| invalid("INVALID_URL", "invalid endpoint URL"))?;
     // Inspect raw authority too: even an empty userinfo marker is prohibited.
-    let authority = clean.split_once("://").map(|(_, tail)| {
-        tail.split(['/', '?', '#']).next().unwrap_or_default()
-    }).unwrap_or_default();
+    let authority = clean
+        .split_once("://")
+        .map(|(_, tail)| tail.split(['/', '?', '#']).next().unwrap_or_default())
+        .unwrap_or_default();
     if authority.contains('@') || !url.username().is_empty() || url.password().is_some() {
-        return Err(blocked("URL_CREDENTIALS_FORBIDDEN", "credentials must not be embedded in external URLs; use secret_ref_name"));
+        return Err(blocked(
+            "URL_CREDENTIALS_FORBIDDEN",
+            "credentials must not be embedded in external URLs; use secret_ref_name",
+        ));
     }
     if clean.contains(['?', '#']) {
-        return Err(blocked("URL_PARAMETERS_FORBIDDEN", "endpoint query strings and fragments are not supported"));
+        return Err(blocked(
+            "URL_PARAMETERS_FORBIDDEN",
+            "endpoint query strings and fragments are not supported",
+        ));
     }
     if !matches!(url.scheme(), "http" | "https") {
-        return Err(invalid("INVALID_SCHEME", "only http/https external endpoints are permitted"));
+        return Err(invalid(
+            "INVALID_SCHEME",
+            "only http/https external endpoints are permitted",
+        ));
     }
     if authority.is_empty() || authority.contains('%') {
         return Err(invalid("INVALID_URL", "invalid endpoint authority"));
     }
-    let parsed_host = url.host_str().ok_or_else(|| invalid("INVALID_URL", "endpoint URL requires a hostname"))?;
+    let parsed_host = url
+        .host_str()
+        .ok_or_else(|| invalid("INVALID_URL", "endpoint URL requires a hostname"))?;
     let raw_host = authority.split(':').next().unwrap_or_default();
     let actual_host = safe_hostname(raw_host)?;
     if actual_host != parsed_host.trim_end_matches('.') {
         return Err(blocked("SSRF_BLOCKED", "SSRF blocked ambiguous hostname"));
     }
-    let port = url.port_or_known_default().ok_or_else(|| invalid("INVALID_URL", "invalid endpoint port"))?;
+    let port = url
+        .port_or_known_default()
+        .ok_or_else(|| invalid("INVALID_URL", "invalid endpoint port"))?;
     if !enabled {
         return Err(blocked("HOST_DISABLED", "allowlisted host is disabled"));
     }
     if actual_host != host {
-        return Err(blocked("HOST_NOT_ALLOWLISTED", "endpoint host does not match allowlisted host"));
+        return Err(blocked(
+            "HOST_NOT_ALLOWLISTED",
+            "endpoint host does not match allowlisted host",
+        ));
     }
     if !schemes.iter().any(|scheme| scheme == url.scheme()) {
-        return Err(blocked("SCHEME_NOT_ALLOWLISTED", "endpoint scheme is not allowlisted"));
+        return Err(blocked(
+            "SCHEME_NOT_ALLOWLISTED",
+            "endpoint scheme is not allowlisted",
+        ));
     }
     if !ports.contains(&i32::from(port)) {
-        return Err(blocked("PORT_NOT_ALLOWLISTED", "endpoint port is not allowlisted"));
+        return Err(blocked(
+            "PORT_NOT_ALLOWLISTED",
+            "endpoint port is not allowlisted",
+        ));
     }
     Ok(clean.to_owned())
 }
 
 fn bounded_text(value: &str, max: usize, fallback: &str) -> String {
     let value: String = value.trim().chars().take(max).collect();
-    if value.is_empty() { fallback.to_owned() } else { value }
+    if value.is_empty() {
+        fallback.to_owned()
+    } else {
+        value
+    }
 }
 
 fn metadata_capabilities() -> Value {
@@ -300,10 +356,21 @@ pub async fn create_connection(
     let host: String = allowlist.try_get("hostname").map_err(db_error)?;
     let enabled: bool = allowlist.try_get("enabled").map_err(db_error)?;
     let clean = endpoint(&input.endpoint_url, &host, &schemes, &ports, enabled)?;
-    if input.crs_codes.is_empty() || input.crs_codes.iter().any(|c| !matches!(c, 4326 | 3857 | 4756 | 5899)) {
-        return Err(invalid("UNSUPPORTED_CRS", "crs_codes must contain supported EPSG codes (4326, 3857, 4756, 5899)"));
+    if input.crs_codes.is_empty()
+        || input
+            .crs_codes
+            .iter()
+            .any(|c| !matches!(c, 4326 | 3857 | 4756 | 5899))
+    {
+        return Err(invalid(
+            "UNSUPPORTED_CRS",
+            "crs_codes must contain supported EPSG codes (4326, 3857, 4756, 5899)",
+        ));
     }
-    if !matches!(input.protocol.as_str(), "wms" | "wmts_xyz" | "cog_geotiff" | "wfs_ogc_features") {
+    if !matches!(
+        input.protocol.as_str(),
+        "wms" | "wmts_xyz" | "cog_geotiff" | "wfs_ogc_features"
+    ) {
         return Err(invalid("VALIDATION_ERROR", "invalid external protocol"));
     }
     let row = sqlx::query(
@@ -323,7 +390,11 @@ pub async fn create_connection(
     .bind(clean)
     .bind(bounded_text(&input.layer_identifier, 200, "default"))
     .bind(bounded_text(&input.attribution, 300, "External Provider"))
-    .bind(bounded_text(&input.license_text, 300, "Provider License Terms Apply"))
+    .bind(bounded_text(
+        &input.license_text,
+        300,
+        "Provider License Terms Apply",
+    ))
     .bind(json!(input.crs_codes))
     .bind(metadata_capabilities())
     .bind(actor_id)
@@ -349,7 +420,10 @@ pub async fn list_allowlisted_hosts(
     .fetch_all(&mut **tx.tx_mut())
     .await
     .map_err(db_error)?;
-    let items = rows.iter().map(allowlist_wire).collect::<Result<Vec<_>, _>>()?;
+    let items = rows
+        .iter()
+        .map(allowlist_wire)
+        .collect::<Result<Vec<_>, _>>()?;
     Ok(json!({"items": items}))
 }
 
@@ -429,11 +503,23 @@ mod tests {
 
     #[test]
     fn registration_blocks_internal_and_ambiguous_addresses() {
-        for host in ["localhost", "a.internal", "127.0.0.1", "127.1", "0x7f000001",
-            "169.254.169.254", "10.0.0.1", "192.168.0.1", "100.64.0.1"] {
+        for host in [
+            "localhost",
+            "a.internal",
+            "127.0.0.1",
+            "127.1",
+            "0x7f000001",
+            "169.254.169.254",
+            "10.0.0.1",
+            "192.168.0.1",
+            "100.64.0.1",
+        ] {
             assert!(safe_hostname(host).is_err(), "{host}");
         }
-        assert_eq!(safe_hostname(" Maps.Example.org. ").unwrap(), "maps.example.org");
+        assert_eq!(
+            safe_hostname(" Maps.Example.org. ").unwrap(),
+            "maps.example.org"
+        );
     }
 
     #[test]
@@ -442,12 +528,14 @@ mod tests {
         let ports = vec![443];
         let check = |url| endpoint(url, "maps.example.org", &schemes, &ports, true);
         assert!(check("https://maps.example.org/maps").is_ok());
-        for url in ["https://maps.example.org@evil.example/maps",
+        for url in [
+            "https://maps.example.org@evil.example/maps",
             "https://maps.example.org.evil.example/maps",
             "https://maps.example.org:8443/maps",
             "https://maps.example.org/maps?token=secret",
             "http://maps.example.org/maps",
-            "https://127.0.0.1/maps"] {
+            "https://127.0.0.1/maps",
+        ] {
             assert!(check(url).is_err(), "{url}");
         }
     }

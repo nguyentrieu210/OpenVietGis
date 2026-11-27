@@ -6,7 +6,10 @@ use axum::http::{header, request::Parts, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use base64::{engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD}, Engine};
+use base64::{
+    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
+    Engine,
+};
 use hmac::{Hmac, Mac};
 use ovg_core::AppError;
 use ovg_storage::identity::{
@@ -398,7 +401,9 @@ fn normalize_avatar(input: &str) -> Result<String, IdentityError> {
     if input.len() > 150_000 {
         return Err(IdentityError::InvalidPayload);
     }
-    let encoded = input.strip_prefix(AVATAR_PREFIX).ok_or_else(invalid_avatar)?;
+    let encoded = input
+        .strip_prefix(AVATAR_PREFIX)
+        .ok_or_else(invalid_avatar)?;
     let raw = STANDARD.decode(encoded).map_err(|_| invalid_avatar())?;
     let mut decoder = jpeg_decoder::Decoder::new(raw.as_slice());
     decoder.set_max_decoding_buffer_size(AVATAR_PIXELS * 4);
@@ -413,15 +418,16 @@ fn normalize_avatar(input: &str) -> Result<String, IdentityError> {
         jpeg_decoder::PixelFormat::L8 if pixels.len() == AVATAR_PIXELS => {
             pixels.into_iter().flat_map(|v| [v; 3]).collect()
         }
-        jpeg_decoder::PixelFormat::CMYK32 if pixels.len() == AVATAR_PIXELS * 4 => {
-            pixels.chunks_exact(4).flat_map(|p| {
+        jpeg_decoder::PixelFormat::CMYK32 if pixels.len() == AVATAR_PIXELS * 4 => pixels
+            .chunks_exact(4)
+            .flat_map(|p| {
                 let component = |v: u8| {
                     let value = u16::from(255 - v) * u16::from(255 - p[3]);
                     ((value + 127) / 255) as u8
                 };
                 [component(p[0]), component(p[1]), component(p[2])]
-            }).collect()
-        }
+            })
+            .collect(),
         _ => return Err(invalid_avatar()),
     };
     let mut output = Vec::new();
@@ -535,7 +541,9 @@ mod tests {
         let normalized = normalize_avatar(&fixture(192));
         assert!(normalized.is_ok());
         if let Ok(value) = normalized {
-            let bytes = STANDARD.decode(value.strip_prefix(AVATAR_PREFIX).unwrap()).unwrap();
+            let bytes = STANDARD
+                .decode(value.strip_prefix(AVATAR_PREFIX).unwrap())
+                .unwrap();
             let mut decoder = jpeg_decoder::Decoder::new(bytes.as_slice());
             assert!(decoder.read_info().is_ok());
             let info = decoder.info().unwrap();

@@ -155,13 +155,8 @@ impl Drop for SnapshotScratch {
 
 /// SQLite is a separately maintained file-format engine. Invoke a fixed query
 /// against a private, checksummed copy; no shell, user SQL, or outbound access.
-async fn extract_snapshot(
-    path: &FsPath,
-    expected_sha256: &str,
-) -> Result<Vec<u8>, FieldError> {
-    if expected_sha256.len() != 64
-        || !expected_sha256.bytes().all(|b| b.is_ascii_hexdigit())
-    {
+async fn extract_snapshot(path: &FsPath, expected_sha256: &str) -> Result<Vec<u8>, FieldError> {
+    if expected_sha256.len() != 64 || !expected_sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(invalid_snapshot());
     }
     let query = format!(
@@ -274,7 +269,10 @@ async fn download_snapshot(
     edit.commit().await.map_err(FieldError::Domain)?;
     let mut response = Response::new(Body::from(payload));
     let headers = response.headers_mut();
-    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     headers.insert(
         "x-content-sha256",

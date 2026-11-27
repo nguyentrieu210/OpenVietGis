@@ -74,7 +74,8 @@ async fn register_allowlist(
     require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
     let pool = state.db_pool.as_ref().ok_or_else(|| {
         CatalogError::Application(AppError::service_unavailable(
-            "DATABASE_UNAVAILABLE", "database unavailable",
+            "DATABASE_UNAVAILABLE",
+            "database unavailable",
         ))
     })?;
     let mut tx = ovg_storage::tenancy::TenantTx::begin(
@@ -85,14 +86,10 @@ async fn register_allowlist(
     )
     .await
     .map_err(ExternalError::Domain)?;
-    let result = external_sources::register_allowlist(
-        &mut tx,
-        organization_id,
-        auth.actor_id(),
-        input,
-    )
-    .await
-    .map_err(ExternalError::Domain)?;
+    let result =
+        external_sources::register_allowlist(&mut tx, organization_id, auth.actor_id(), input)
+            .await
+            .map_err(ExternalError::Domain)?;
     tx.commit().await.map_err(ExternalError::Domain)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
@@ -115,7 +112,8 @@ async fn create_connection(
     )
     .await?;
     let result = external_sources::create_connection(&mut edit, auth.actor_id(), input)
-        .await.map_err(ExternalError::Domain)?;
+        .await
+        .map_err(ExternalError::Domain)?;
     edit.commit().await.map_err(ExternalError::Domain)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
