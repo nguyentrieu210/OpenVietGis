@@ -447,11 +447,23 @@ def main() -> int:
                             "blade": blade,
                         },
                     )
+                    require(
+                        split_o.json().get("content_revision") == pin_o["content_revision"]
+                        and split_r.json().get("content_revision") == pin_r["content_revision"]
+                        and split_o.json().get("schema_revision") == pin_o["schema_revision"]
+                        and split_r.json().get("schema_revision") == pin_r["schema_revision"],
+                        "geometry-preview revision mismatch",
+                    )
                     compare_response(
                         "E02 geometry-preview split",
                         split_o,
                         split_r,
-                        normalize=lambda b: {**b, "source_id": "<source_id>"},
+                        normalize=lambda b: {
+                            **b,
+                            "source_id": "<source_id>",
+                            "content_revision": "<content_revision>",
+                            "schema_revision": "<schema_revision>",
+                        },
                     )
                     compare_response(
                         "E02 geometry-preview stale revision 409",
