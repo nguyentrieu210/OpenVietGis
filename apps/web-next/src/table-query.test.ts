@@ -18,3 +18,9 @@ describe("table server query",()=>{
   for(const patch of [{source_id:"foreign"},{schema_revision:"other"},{query_fingerprint:"wrong"},{offset:0},{limit:50}])expect(()=>verifyTableQuery(layer,{...result,...patch},100,"pin")).toThrow();
  });
 });
+describe("multiple server filters",()=>{
+ it("preserves AND/OR and NOT with literal values",()=>{
+  const second={...filter,value:"a",negate:true};
+  expect(tableQueryBody(layer,[filter,second],"","asc",0,undefined,"or").attribute_filter).toEqual({op:"or",conditions:[{field:"name",op:"contains",value:"%_';"},{op:"not",condition:{field:"name",op:"contains",value:"a"}}]});
+ });
+});

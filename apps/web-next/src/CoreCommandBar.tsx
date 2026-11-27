@@ -41,12 +41,13 @@ export function CoreCommandBar(host:Host){
   if(!root.current||root.current.closest("[inert]")||document.querySelector(".core-ribbon-menu-fixed"))return;
   if(e.defaultPrevented||e.isComposing||e.repeat&&["Escape","F2","F3","F8"].includes(e.key))return;
   const t=e.target as HTMLElement|null,own=t===ref.current,modal=!!document.querySelector('[aria-modal="true"]'),otherForm=editable(t)&&!own,button=!!t?.closest("button,a,[role=button]");
-  if(e.key==="Escape"){if(modal||otherForm)return;e.preventDefault();latest.current.escape();return}
+  if(e.key==="Escape"){if(modal||otherForm||document.querySelector(".qgis-context,.dock-menu-pop"))return;e.preventDefault();latest.current.escape();return}
   if(modal||e.altKey)return;
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==="k"){e.preventDefault();e.stopPropagation();latest.current.focus();return}
   if(otherForm)return;
   if((e.ctrlKey||e.metaKey)&&(!own||!ref.current?.value)&&["z","y"].includes(e.key.toLowerCase())){e.preventDefault();e.stopPropagation();void latest.current.execute(e.key.toLowerCase()==="y"||e.shiftKey?"REDO":"UNDO");return}
   if(e.ctrlKey||e.metaKey)return;
+  if(e.key==="F2"&&t?.closest(".qgis-tree"))return;
   if(e.key==="F2"){e.preventDefault();e.stopPropagation();setShowHistory(v=>!v);setHelp(false);return}
   if(e.key==="F3"||e.key==="F8"){e.preventDefault();e.stopPropagation();const result=latest.current.shortcut(e.key);if(result)report(result);return}
   if(own)return;
