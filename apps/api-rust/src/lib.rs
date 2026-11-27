@@ -24,6 +24,7 @@ pub(crate) mod house_numbering {
     }
 }
 pub(crate) mod identity;
+mod invitation_mail;
 pub(crate) mod managed_sync;
 pub(crate) mod map_render;
 pub mod metrics;

@@ -50,7 +50,13 @@ impl IntoResponse for ExternalError {
             Self::Domain(error) => {
                 if matches!(&error, AppError::Internal { .. })
                     || matches!(&error, AppError::Unauthorized { .. })
-                    || matches!(&error, AppError::Forbidden { code: "FORBIDDEN", .. })
+                    || matches!(
+                        &error,
+                        AppError::Forbidden {
+                            code: "FORBIDDEN",
+                            ..
+                        }
+                    )
                     || matches!(&error, AppError::NotFound { message, .. } if message == "organization not found")
                 {
                     return CatalogError::Application(error).into_response();
