@@ -15,6 +15,8 @@ impl Registry {
             json!({"name":"gis_live_selection","description":"Read current selected WGS84 geometry after approval.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false}}),
             json!({"name":"gis_live_navigate","description":"Move the connected live camera after approval.","inputSchema":{"type":"object","properties":{"longitude":{"type":"number","minimum":-180,"maximum":180},"latitude":{"type":"number","minimum":-85,"maximum":85},"zoom":{"type":"number","minimum":0,"maximum":22}},"required":["longitude","latitude","zoom"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}}),
             json!({"name":"gis_operation_status","description":"Read the status of a prior operation ticket in the same workspace.","inputSchema":{"type":"object","properties":{"operation_ticket":{"type":"string","format":"uuid"}},"required":["operation_ticket"],"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false}}),
+            json!({"name":"cad_state","description":"Read the exact open CAD drawing, version, dirty flag and selected handle after browser approval.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false}}),
+            json!({"name":"cad_select_handle","description":"Request selection of a handle on the exact open CAD document and version; no persistent edits.","inputSchema":{"type":"object","properties":{"document_id":{"type":"string","format":"uuid"},"version":{"type":"integer","minimum":1,"maximum":20},"handle":{"type":"string","pattern":"^[0-9a-fA-F]{1,16}$"}},"required":["document_id","version","handle"],"additionalProperties":false},"annotations":{"readOnlyHint":false,"destructiveHint":false}}),
             json!({"name":"gis_workspaces","description":"List your connected GIS workspaces. When more than one exists, supply the exact session_id on subsequent tool calls.","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false}})
         ]);
         for t in &mut tools {
@@ -135,7 +137,7 @@ fn cross_check(name:&str,v:&Value)->Result<(),Error>{
 pub fn dispatch(name:&str)->(&str,u8,u64){
     let method=match name{"gis_live_view"=>"map_view","gis_live_selection"=>"map_selection","gis_live_navigate"=>"map_navigate",x=>x};
     let advanced=["gis_raster_layers","gis_raster_process","gis_raster_report","gis_raster_download","gis_processing_run","gis_processing_job","gis_models","gis_model_save","gis_model_run","gis_layouts","gis_layout_save","gis_layout_export","gis_plugins","gis_plugin_activate","gis_plugin_disable","gis_plugin_records","gis_plugin_create","gis_plugin_update"];
-    let version=if method.starts_with("map_"){0}else if advanced.contains(&method){2}else{1};
+    let version=if method.starts_with("map_"){0}else if method.starts_with("cad_")||advanced.contains(&method){2}else{1};
     let ttl=match method{"gis_model_run"=>840_000,"gis_layout_export"=>180_000,"gis_raster_process"|"gis_raster_report"|"gis_raster_download"|"gis_processing_run"=>150_000,_=>40_000};
     (method,version,ttl)
 }
@@ -155,6 +157,6 @@ pub fn validate_result(method:&str,result:&Value)->Result<(),Error>{
     }
 }
 #[cfg(test)]mod tests{use super::*;
-#[test]fn registry_and_validation(){let r=Registry::new();assert_eq!(r.list().len(),37);assert_eq!(r.call("gis_layers",&json!({"request":{}})).unwrap().1,json!({"limit":50}));assert!(r.call("gis_layers",&json!({"request":{"limit":101}})).is_err());assert!(r.call("gis_live_navigate",&json!({"longitude":181,"latitude":0,"zoom":2})).is_err());assert!(r.call("gis_overlay",&json!({"request":{"title":"a","geometries":[{"type":"Point","coordinates":[181,0]}]}})).is_err());}
+#[test]fn registry_and_validation(){let r=Registry::new();assert_eq!(r.list().len(),39);assert_eq!(r.call("gis_layers",&json!({"request":{}})).unwrap().1,json!({"limit":50}));assert!(r.call("gis_layers",&json!({"request":{"limit":101}})).is_err());assert!(r.call("gis_live_navigate",&json!({"longitude":181,"latitude":0,"zoom":2})).is_err());assert!(r.call("gis_overlay",&json!({"request":{"title":"a","geometries":[{"type":"Point","coordinates":[181,0]}]}})).is_err());}
 #[test]fn strict_required_and_uuid(){let r=Registry::new();assert!(r.call("gis_processing_job",&json!({"request":{"job_id":"not-uuid"}})).is_err());assert!(r.call("gis_layers",&json!({"request":{"raw_sql":"select *"}})).is_err());assert!(r.call("gis_live_view",&json!({"unexpected":true})).is_err());}
 }
