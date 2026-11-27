@@ -45,6 +45,7 @@ pub struct Workspace {
     pub organization_id: Uuid,
     pub project_id: Uuid,
     pub workspace_version: u8,
+    pub mode: String,
     pub expires_in: u64,
 }
 #[derive(Serialize)]
@@ -63,6 +64,7 @@ struct Session {
     owner: Owner,
     token_hash: [u8; 32],
     version: u8,
+    mode: String,
     deadline: u64,
     last_seen: u64,
     last_submit: Option<u64>,
@@ -89,6 +91,8 @@ pub enum Error {
     TokenExpired,
     #[error("Update the workspace to use this tool")]
     Version,
+    #[error("Tool is not available in the active workspace mode")]
+    ModeMismatch,
 }
 fn hash(value: &str) -> [u8; 32] { Sha256::digest(value.as_bytes()).into() }
 fn secret() -> String { format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple()) }
@@ -124,13 +128,13 @@ impl Store {
         }
         let session_id=Uuid::new_v4();
         let browser_token=secret();
-        self.sessions.insert(session_id, Session { owner, token_hash:hash(&browser_token),version,deadline:now.saturating_add(SESSION_TTL_MS),last_seen:now,last_submit:None,command:None,receipt:None });
+        self.sessions.insert(session_id, Session { owner, token_hash:hash(&browser_token),version,mode:"gis".into(),deadline:now.saturating_add(SESSION_TTL_MS),last_seen:now,last_submit:None,command:None,receipt:None });
         Ok(Opened{session_id,browser_token,expires_in:SESSION_TTL_MS/1000})
     }
     /// Never return other users' workspaces, even if they share a project.
     pub fn list(&mut self, subject:&str, now:u64)->Vec<Workspace> {
         self.purge(now);
-        let mut rows:Vec<_>=self.sessions.iter().filter(|(_,s)|s.owner.subject==subject).map(|(id,s)|Workspace{session_id:*id,organization_id:s.owner.organization_id,project_id:s.owner.project_id,workspace_version:s.version,expires_in:s.deadline.saturating_sub(now)/1000}).collect();
+        let mut rows:Vec<_>=self.sessions.iter().filter(|(_,s)|s.owner.subject==subject).map(|(id,s)|Workspace{session_id:*id,organization_id:s.owner.organization_id,project_id:s.owner.project_id,workspace_version:s.version,mode:s.mode.clone(),expires_in:s.deadline.saturating_sub(now)/1000}).collect();
         rows.sort_by_key(|r|r.session_id);
         rows
     }
@@ -157,6 +161,11 @@ impl Store {
         if self.browser_owner(id,token,now)?!=*owner {return Err(Error::Unavailable);}
         self.sessions.get_mut(&id).ok_or(Error::Unavailable)
     }
+    pub fn set_mode(&mut self,id:Uuid,token:&str,owner:&Owner,mode:&str,now:u64)->Result<(),Error>{
+        if !["gis","cad","3d"].contains(&mode){return Err(Error::Invalid)}
+        self.browser(id,token,owner,now)?.mode=mode.into();Ok(())
+    }
+    fn mode_allows(mode:&str,method:&str)->bool{if method.starts_with("cad_"){mode=="cad"}else if method.starts_with("map_"){mode=="gis"}else{mode!="cad"}}
     pub fn ping(&mut self,id:Uuid,token:&str,owner:&Owner,now:u64)->Result<(),Error> {
         let s=self.browser(id,token,owner,now)?;s.last_seen=now;Self::expire(s,now);Ok(())
     }
@@ -166,7 +175,7 @@ impl Store {
     }
     pub fn prepare(&mut self,id:Uuid,token:&str,owner:&Owner,cid:Uuid,now:u64)->Result<u64,Error> {
         let s=self.browser(id,token,owner,now)?;Self::expire(s,now);
-        s.command.as_ref().filter(|c|c.id==cid&&c.state==CommandState::Claimed).map(|c|c.expires_at_ms.saturating_sub(now)).ok_or(Error::CommandUnavailable)
+        s.command.as_ref().filter(|c|c.id==cid&&c.state==CommandState::Claimed&&Self::mode_allows(&s.mode,&c.method)).map(|c|c.expires_at_ms.saturating_sub(now)).ok_or(Error::CommandUnavailable)
     }
     /// Payload and method must have been validated against the pinned tool
     /// contract by the transport before submission. This still enforces the
@@ -177,6 +186,7 @@ impl Store {
         let id=self.resolve(subject,target,now)?;
         let s=self.sessions.get_mut(&id).ok_or(Error::Unavailable)?;
         if s.version<min_version{return Err(Error::Version);}
+        if !Self::mode_allows(&s.mode,method){return Err(Error::ModeMismatch);}
         Self::expire(s,now);
         if s.command.as_ref().is_some_and(|c|c.state!=CommandState::Expired){return Err(Error::PreviousUnread);}
         if s.last_submit.is_some_and(|v|now.saturating_sub(v)<2000){return Err(Error::RateLimited);}
