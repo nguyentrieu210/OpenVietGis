@@ -1,0 +1,138 @@
+name: Build immutable release candidates
+
+# Intentionally manual and main-only. This workflow produces image receipts;
+# it never approves a candidate, connects to the VPS or deploys anything.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: api
+            dockerfile: infra/rust-platform/Dockerfile.api-rust
+            args: OVG_RUST_PROFILE=full
+          - role: web
+            dockerfile: infra/prod/Dockerfile.web
+            args: ''
+          - role: migrate
+            dockerfile: infra/prod/Dockerfile.api
+            args: ''
+          - role: postgres
+            dockerfile: infra/prod/Dockerfile.postgres
+            args: ''
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Pin candidate identity
+        id: identity
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          ROLE: ${{ matrix.role }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          repo="${GITHUB_REPOSITORY,,}"
+          echo "image=ghcr.io/$repo-$ROLE" >> "$GITHUB_OUTPUT"
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish exactly once per role
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: ${{ matrix.args }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.identity.outputs.image }}:sha-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=release-${{ matrix.role }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.role }}
+          provenance: mode=max
+          sbom: true
+      - name: Record immutable reference
+        env:
+          IMAGE: ${{ steps.identity.outputs.image }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          ROLE: ${{ matrix.role }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", os.environ["DIGEST"])
+          Path("receipt.json").write_text(json.dumps({
+              "ref": os.environ["IMAGE"] + "@" + os.environ["DIGEST"],
+              "source_sha": os.environ["SOURCE_SHA"],
+          }) + "\n")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: receipt-${{ matrix.role }}
+          path: receipt.json
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  receipt:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: receipt-*
+          path: receipts
+      - name: Assemble and validate candidate receipt
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest = {
+              "schema": 1,
+              "source_sha": os.environ["SOURCE_SHA"],
+              "repository": os.environ["GITHUB_REPOSITORY"].lower(),
+              "platform": "linux/amd64",
+              "images": {role: json.loads(Path(f"receipts/receipt-{role}/receipt.json").read_text())
+                         for role in ("api", "web", "migrate", "postgres")},
+          }
+          Path("release-images.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+          python3 infra/release/image_manifest.py release-images.json --repository "${GITHUB_REPOSITORY,,}" --candidate "$SOURCE_SHA" > release-images.override.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: immutable-images-${{ github.sha }}
+          path: |
+            release-images.json
+            release-images.override.yml
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
