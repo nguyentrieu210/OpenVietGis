@@ -1011,6 +1011,7 @@ dependencies = [
  "crc32fast",
  "ed25519-dalek",
  "futures-util",
+ "hex",
  "hmac",
  "http",
  "hyper",

@@ -48,8 +48,6 @@ env:
 jobs:
   check-and-test:
     name: Format, Clippy, Tests & Architecture Isolation
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -64,6 +62,9 @@ jobs:
 
       - name: Cache Cargo registry and target
         uses: Swatinem/rust-cache@v2
+
+      - name: Install SQLite format engine
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
 
       - name: Verify formatting
         run: cargo fmt --all -- --check
@@ -115,8 +116,6 @@ jobs:
 
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -148,6 +147,9 @@ jobs:
       # Same PostGIS image, port 54330, template_postgis and openvietgis_runtime role as the Python CI.
       - name: Start dedicated PostGIS test database
         run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
+
+      - name: Install SQLite format engine
+        run: sudo apt-get update && sudo apt-get install -y sqlite3
 
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
@@ -307,8 +309,6 @@ jobs:
 
   security-audit:
     name: Cargo Audit
-    # 064-* branches already run this on push for the same commit; skip the duplicate PR run.
-    if: github.event_name != 'pull_request' || !startsWith(github.head_ref, '064-')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

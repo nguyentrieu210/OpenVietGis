@@ -26,6 +26,7 @@ chrono.workspace = true
 crc32fast = "1.5"
 ed25519-dalek.workspace = true
 futures-util = { version = "0.3", default-features = false }
+hex.workspace = true
 hmac.workspace = true
 http.workspace = true
 hyper = { version = "1", default-features = false }
@@ -44,7 +45,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha1 = "0.10"
 sha2.workspace = true
-tokio = { workspace = true, features = ["fs", "io-util"] }
+tokio = { workspace = true, features = ["fs", "io-util", "process"] }
 tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true

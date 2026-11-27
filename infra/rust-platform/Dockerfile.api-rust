@@ -7,7 +7,7 @@ COPY modules/house_numbering/rust modules/house_numbering/rust
 RUN cargo build --locked --release --no-default-features -p openvietgis-api-rust
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts
