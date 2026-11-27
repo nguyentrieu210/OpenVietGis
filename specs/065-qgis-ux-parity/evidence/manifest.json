@@ -273,16 +273,22 @@
       "candidate_paths": [
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/src/FeatureInfo.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/attribute-value.ts",
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/attribute-value.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; form read-only; typed edit widgets and transactional validation remain"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; single field typed dialog; relation widgets and full form edit remain"
     },
     {
       "id": "TABLE-05",
       "task": "T046",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested"
     },
     {
       "id": "TABLE-06",
@@ -329,9 +335,12 @@
     {
       "id": "EDIT-03",
       "task": "T054",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/LiveApp.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains"
     },
     {
       "id": "EDIT-04",
@@ -364,9 +373,12 @@
     {
       "id": "EDIT-08",
       "task": "T059",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; real concurrent conflict, persisted revert and rollback remain"
     },
     {
       "id": "EDIT-09",

@@ -14,8 +14,8 @@ try{
  await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
- const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
- const saved=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
+ const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
+ const saved=[],edits=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -30,6 +30,7 @@ try{
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer"}],next_after_id:null};
+  else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
   else if(p.endsWith("/features"))body={context:{source_id:p.includes("layer2")?"source2":"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
     if(m==="POST"){if(holdSave)await new Promise(resolve=>{releaseSave=resolve});const x=ver();saved.unshift(x);body=x}
@@ -98,6 +99,18 @@ try{
  await table.getByRole("button",{name:"Bảng",exact:true}).click();
  await table.locator("tbody tr").first().waitFor();
  console.log("PASS synthetic Chromium: sortable typed headers and read-only feature form");
+ await table.locator("tbody tr").first().click();
+ await page.keyboard.press("Control+k");await command.fill("ATTR_EDIT");await command.press("Enter");
+ const editor=page.getByRole("dialog",{name:"Sửa thuộc tính đối tượng"});await editor.waitFor();
+ const value=editor.getByLabel("Giá trị mới",{exact:true});assert.equal(await value.inputValue(),"25");
+ await value.fill("2147483648");await editor.getByRole("checkbox",{name:/Tôi xác nhận/}).check();
+ assert.equal(await editor.getByRole("button",{name:"Lưu changeset"}).isEnabled(),false);
+ await value.fill("30");await editor.getByRole("checkbox",{name:/Tôi xác nhận/}).check();await editor.getByRole("button",{name:"Lưu changeset"}).click();
+ await editor.getByRole("button",{name:"Thử lại lưu"}).waitFor();assert.equal(await value.isEnabled(),false);
+ await editor.getByRole("button",{name:"Thử lại lưu"}).click();await editor.waitFor({state:"detached"});
+ assert.equal(edits.length,2);assert.deepEqual(edits[0],edits[1]);assert.equal(edits[0].operations[0].properties.height_m,30);
+ console.log("PASS synthetic Chromium: typed attribute edit and identical idempotent retry");
+
 
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
