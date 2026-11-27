@@ -815,3 +815,8 @@
 /* Project-level controls remain visible even while CAD hides GIS-specific tools. */
 .qgis-studio header.top .ovg-shared-tools{order:4;display:flex;align-items:center;gap:5px;flex:0 0 auto;min-width:0}
 .qgis-studio header.top .ovg-shared-tools .plugin-tool{white-space:nowrap}
+
+/* Keep expanded digitizing controls above the floating command bar. */
+.qgis-studio .qgis-map-region .core-sketch{max-height:calc(100% - 135px);overflow:auto;overscroll-behavior:contain;min-height:0;z-index:16}
+.qgis-studio .core-sketch-coords label{display:block;min-width:0;width:100%}
+.qgis-studio .core-sketch-coords>div>button{white-space:normal}
