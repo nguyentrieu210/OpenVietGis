@@ -11,6 +11,7 @@ pub(crate) mod edit_auth;
 pub(crate) mod editing;
 pub mod error;
 pub(crate) mod extensions;
+pub(crate) mod external_sources;
 pub(crate) mod field_offline;
 pub(crate) mod gis_access;
 #[cfg(feature = "house-numbering")]

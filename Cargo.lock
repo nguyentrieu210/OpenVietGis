@@ -1101,6 +1101,7 @@ dependencies = [
  "tracing",
  "unicode-casefold",
  "unicode-normalization",
+ "url",
  "uuid",
 ]
 

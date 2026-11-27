@@ -26,4 +26,5 @@ tokio.workspace = true
 tracing.workspace = true
 unicode-casefold = "0.2.0"
 unicode-normalization = "0.1.26"
+url = "2.5"
 uuid.workspace = true

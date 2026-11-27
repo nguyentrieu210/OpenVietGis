@@ -33,6 +33,7 @@ pub fn api_v1_router() -> Router<AppState> {
         .merge(crate::tilesets::router())
         .merge(crate::editing::router())
         .merge(crate::extensions::router())
+        .merge(crate::external_sources::router())
         .merge(crate::house_numbering::router())
         .merge(crate::field_offline::router())
         .merge(crate::queries::router())

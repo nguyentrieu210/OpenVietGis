@@ -7,6 +7,7 @@ pub mod collaboration;
 pub mod e11_outbox;
 pub mod editing;
 pub mod extensions;
+pub mod external_sources;
 pub mod field_packages;
 pub mod gis_access;
 pub mod house_numbering;
