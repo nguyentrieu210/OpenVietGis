@@ -34,6 +34,8 @@ impl Registry {
         let mut params=if let Some(req)=normalized.get("request"){req.clone()}else{normalized};
         if let Some(o)=params.as_object_mut(){o.remove("session_id");}
         cross_check(name,&params)?;
+        if name=="gis_changeset"{if let Some(ops)=params["operations"].as_array_mut(){for op in ops{if let Some(g)=op.get_mut("geometry"){*g=clean_geometry(g);}}}}
+        if name=="gis_overlay"{if let Some(geometries)=params["geometries"].as_array_mut(){for g in geometries{*g=clean_geometry(g);}}}
         Ok((target,params))
     }
 }
@@ -61,9 +63,11 @@ fn validate(v:&Value,s:&Value,root:&Value,depth:usize)->Result<Value,Error>{
                         _=>val.clone()
                     }
                 };
-                if !n.is_null(){out.insert(k.clone(),n);}
+                if !n.is_null()||props.and_then(|p|p.get(k)).is_none(){out.insert(k.clone(),n);}
             }
             if let Some(p)=props{for(k,schema)in p{if !out.contains_key(k)&&!obj.contains_key(k){if let Some(default)=schema.get("default").filter(|v|!v.is_null()){out.insert(k.clone(),validate(default,schema,root,depth+1)?);}}}}
+            // Pydantic default_factory values are absent from the exported schema.
+            match s["title"].as_str(){Some("Selection")=>{out.entry("feature_ids").or_insert(json!([]));},Some("ManualLayer")=>{out.entry("fields").or_insert(json!([]));},Some("Proc")|Some("Node")=>{out.entry("parameters").or_insert(json!({}));},_=>{}}
             Ok(Value::Object(out))
         }
         Some("array")=>{
@@ -134,6 +138,11 @@ pub fn dispatch(name:&str)->(&str,u8,u64){
     let version=if method.starts_with("map_"){0}else if advanced.contains(&method){2}else{1};
     let ttl=match method{"gis_model_run"=>840_000,"gis_layout_export"=>180_000,"gis_raster_process"|"gis_raster_report"|"gis_raster_download"|"gis_processing_run"=>150_000,_=>40_000};
     (method,version,ttl)
+}
+fn clean_geometry(g:&Value)->Value{json!({"type":g["type"],"coordinates":g["coordinates"]})}
+pub fn clean_result(method:&str,result:&Value)->Result<Value,Error>{
+    validate_result(method,result)?;
+    Ok(match method{"map_view"=>json!({"crs":"EPSG:4326","center":result["center"],"bbox":result["bbox"],"zoom":result["zoom"]}),"map_selection"=>json!({"crs":"EPSG:4326","geometry":clean_geometry(&result["geometry"])}),_=>result.clone()})
 }
 pub fn validate_result(method:&str,result:&Value)->Result<(),Error>{
     if !super::bounded(result){return Err(Error::Invalid)}
