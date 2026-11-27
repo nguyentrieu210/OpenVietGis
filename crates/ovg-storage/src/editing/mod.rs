@@ -7,6 +7,8 @@
 #![allow(clippy::needless_borrows_for_generic_args)]
 
 pub mod domain;
+pub mod managed;
+pub mod team;
 
 use std::collections::HashSet;
 
@@ -26,6 +28,7 @@ use domain::{
 };
 pub use domain::{snap, EditError, EditOperation, OpType};
 
+use crate::collaboration::{self, Activity, ActivityPosition};
 use crate::{DbPool, TenantTransaction};
 
 /// Route behavior of FastAPI `project_access_guard` for a scoped (GIS ACL) account.
@@ -41,11 +44,48 @@ pub enum Guard {
     ScopedDenied,
 }
 
+impl Guard {
+    fn lock(self) -> &'static str {
+        if matches!(self, Self::Read | Self::ReadScopedAllowed) {
+            "FOR SHARE"
+        } else {
+            "FOR UPDATE"
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Permission {
     Read,
     Edit,
+    Manage,
 }
+
+impl Permission {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Read => "project.read",
+            Self::Edit => "project.edit",
+            Self::Manage => "project.manage",
+        }
+    }
+}
+
+const SERVICE_GRANT_SQL: &str = "SELECT EXISTS (
+     SELECT 1 FROM org.service_credentials c
+     JOIN org.service_principals sp ON sp.organization_id=c.organization_id
+          AND sp.id=c.service_principal_id
+     JOIN org.resource_grants g ON g.organization_id=sp.organization_id
+          AND g.subject_kind='service_principal' AND g.service_principal_id=sp.id
+     WHERE c.organization_id=$1 AND sp.id=$2 AND c.id=$6
+       AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
+       AND sp.status='active' AND sp.revoked_at IS NULL
+       AND g.revoked_at IS NULL AND g.role=ANY($5)
+       AND (c.permission_ceiling IS NULL OR $7=ANY(c.permission_ceiling))
+       AND (g.scope_kind='organization'
+            OR (g.scope_kind='workspace' AND g.workspace_id=$3)
+            OR (g.scope_kind='project' AND g.project_id=$4))
+ )";
 
 /// Public `CommitChangesetRequest` body (extra fields forbidden).
 #[derive(Debug, Deserialize)]
@@ -255,11 +295,7 @@ impl<'a> EditScope<'a> {
             return Err(EditError::detail(404, "organization not found"));
         }
 
-        let lock = if matches!(guard, Guard::Read | Guard::ReadScopedAllowed) {
-            "FOR SHARE"
-        } else {
-            "FOR UPDATE"
-        };
+        let lock = guard.lock();
         let organization_status: Option<String> = sqlx::query_scalar(&format!(
             "SELECT status FROM org.organizations WHERE id = $1 {lock}"
         ))
@@ -365,11 +401,7 @@ impl<'a> EditScope<'a> {
         ).bind(organization_id).bind(auth.principal_id).bind(auth.credential_id)
             .fetch_optional(&mut **tx.tx_mut()).await.map_err(db_error)?
             .ok_or_else(invalid_credential)?;
-        let lock = if matches!(guard, Guard::Read | Guard::ReadScopedAllowed) {
-            "FOR SHARE"
-        } else {
-            "FOR UPDATE"
-        };
+        let lock = guard.lock();
         let project = sqlx::query_as::<_, (String, Option<Uuid>)>(&format!(
             "SELECT status, workspace_id FROM workspace.projects
              WHERE organization_id=$1 AND id=$2 {lock}",
@@ -449,7 +481,6 @@ impl<'a> EditScope<'a> {
 
     /// `prepare_project_scope`: lifecycle, live grants and project writability.
     pub async fn authorize(&mut self, permission: Permission) -> Result<(), EditError> {
-        let organization_id = self.tx.organization_id();
         match self.organization_status.as_deref() {
             None => return Err(EditError::detail(404, "organization not found")),
             Some("active") => {}
@@ -460,37 +491,61 @@ impl<'a> EditScope<'a> {
             .clone()
             .filter(|(status, _)| matches!(status.as_str(), "active" | "archived"))
             .ok_or_else(|| EditError::detail(404, "project not found"))?;
+        let granted = self
+            .grant(permission, workspace_id)
+            .await?
+            .ok_or_else(|| EditError::detail(404, "organization not found"))?;
+        if !granted {
+            let name = permission.name();
+            return Err(EditError::detail(
+                403,
+                format!("missing permission: {name}"),
+            ));
+        }
+        if permission != Permission::Read && status != "active" {
+            return Err(EditError::Spatial(
+                409,
+                "PROJECT_NOT_WRITABLE",
+                "The project is read-only.",
+            ));
+        }
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(self.project_id.to_string())
+            .execute(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+        Ok(())
+    }
+
+    /// Live project grant for `permission` (`SqlEffectivePermissionProvider` roles and
+    /// credential ceiling); `None` when a human has no active membership.
+    async fn grant(
+        &mut self,
+        permission: Permission,
+        workspace_id: Option<Uuid>,
+    ) -> Result<Option<bool>, EditError> {
+        let organization_id = self.tx.organization_id();
         let roles: &[&str] = match permission {
             Permission::Read => &["manager", "editor", "contributor", "viewer"],
             Permission::Edit => &["manager", "editor", "contributor"],
+            Permission::Manage => &["manager"],
         };
-        let granted = if let Some(credential_id) = self.credential_id {
-            let name = match permission {
-                Permission::Read => "project.read",
-                Permission::Edit => "project.edit",
-            };
-            sqlx::query_scalar::<_, bool>(
-                "SELECT EXISTS (
-                     SELECT 1 FROM org.service_credentials c
-                     JOIN org.service_principals sp ON sp.organization_id=c.organization_id
-                          AND sp.id=c.service_principal_id
-                     JOIN org.resource_grants g ON g.organization_id=sp.organization_id
-                          AND g.subject_kind='service_principal' AND g.service_principal_id=sp.id
-                     WHERE c.organization_id=$1 AND sp.id=$2 AND c.id=$6
-                       AND c.revoked_at IS NULL AND (c.expires_at IS NULL OR c.expires_at>clock_timestamp())
-                       AND sp.status='active' AND sp.revoked_at IS NULL
-                       AND g.revoked_at IS NULL AND g.role=ANY($5)
-                       AND (c.permission_ceiling IS NULL OR $7=ANY(c.permission_ceiling))
-                       AND (g.scope_kind='organization'
-                            OR (g.scope_kind='workspace' AND g.workspace_id=$3)
-                            OR (g.scope_kind='project' AND g.project_id=$4))
-                 )",
-            ).bind(organization_id).bind(self.actor_id).bind(workspace_id)
-                .bind(self.project_id).bind(roles).bind(credential_id).bind(name)
-                .fetch_one(&mut **self.tx.tx_mut()).await.map_err(db_error)?
-        } else {
-            sqlx::query_scalar::<_, bool>(
-                "SELECT m.role IN ('owner', 'admin') OR EXISTS (
+        if let Some(credential_id) = self.credential_id {
+            let granted = sqlx::query_scalar::<_, bool>(SERVICE_GRANT_SQL)
+                .bind(organization_id)
+                .bind(self.actor_id)
+                .bind(workspace_id)
+                .bind(self.project_id)
+                .bind(roles)
+                .bind(credential_id)
+                .bind(permission.name())
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+            return Ok(Some(granted));
+        }
+        sqlx::query_scalar::<_, bool>(
+            "SELECT m.role IN ('owner', 'admin') OR EXISTS (
                  SELECT 1 FROM org.resource_grants AS g
                  WHERE g.organization_id = m.organization_id
                    AND g.membership_id = m.id AND g.subject_kind = 'membership'
@@ -504,40 +559,50 @@ impl<'a> EditScope<'a> {
              )
              FROM org.organization_memberships AS m
              WHERE m.organization_id = $1 AND m.user_id = $2 AND m.status = 'active'",
-            )
-            .bind(organization_id)
-            .bind(self.actor_id)
-            .bind(workspace_id)
-            .bind(self.project_id)
-            .bind(roles)
-            .fetch_optional(&mut **self.tx.tx_mut())
-            .await
-            .map_err(db_error)?
-            .ok_or_else(|| EditError::detail(404, "organization not found"))?
+        )
+        .bind(organization_id)
+        .bind(self.actor_id)
+        .bind(workspace_id)
+        .bind(self.project_id)
+        .bind(roles)
+        .fetch_optional(&mut **self.tx.tx_mut())
+        .await
+        .map_err(db_error)
+    }
+
+    /// Whether the actor currently holds `permission` here, without raising.
+    pub async fn granted(&mut self, permission: Permission) -> Result<bool, EditError> {
+        if self.organization_status.as_deref() != Some("active") {
+            return Ok(false);
+        }
+        let Some((_, workspace_id)) = self.project.clone() else {
+            return Ok(false);
         };
-        if !granted {
-            let name = match permission {
-                Permission::Read => "project.read",
-                Permission::Edit => "project.edit",
-            };
-            return Err(EditError::detail(
-                403,
-                format!("missing permission: {name}"),
-            ));
-        }
-        if permission == Permission::Edit && status != "active" {
-            return Err(EditError::Spatial(
-                409,
-                "PROJECT_NOT_WRITABLE",
-                "The project is read-only.",
-            ));
-        }
-        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
-            .bind(self.project_id.to_string())
-            .execute(&mut **self.tx.tx_mut())
-            .await
-            .map_err(db_error)?;
-        Ok(())
+        Ok(self.grant(permission, workspace_id).await?.unwrap_or(false))
+    }
+
+    /// Authenticated actor and credential that bind an activity cursor.
+    pub fn actor(&self) -> (Uuid, Option<Uuid>) {
+        (self.actor_id, self.credential_id)
+    }
+
+    /// R011 activity page after `authorize(Read)`; `Ok(None)` for an invisible boundary.
+    pub async fn list_activities(
+        &mut self,
+        cutoff: DateTime<Utc>,
+        after: Option<ActivityPosition>,
+        limit: i64,
+    ) -> Result<Option<Vec<Activity>>, EditError> {
+        let organization = self.tx.organization_id();
+        let project = self.project_id;
+        let tx = self.tx.tx_mut();
+        let page = collaboration::list_activities(tx, organization, project, cutoff, after, limit);
+        page.await.map_err(|error| EditError::Platform {
+            status: error.status_code(),
+            code: error.code(),
+            message: error.to_string(),
+            details: None,
+        })
     }
 
     pub async fn commit(self) -> Result<(), EditError> {

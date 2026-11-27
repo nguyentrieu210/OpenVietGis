@@ -104,6 +104,20 @@ impl DbPool {
         &self.config
     }
 
+    /// A one-connection pool with the same runtime-role check as this pool, for a
+    /// dedicated session such as LISTEN.
+    pub async fn dedicated(&self) -> Result<PgPool, sqlx::Error> {
+        let config = DbPoolConfig {
+            max_connections: 1,
+            min_connections: 0,
+            ..self.config.clone()
+        };
+        let options = (*self.inner.connect_options()).clone();
+        Self::build_options(&config, Arc::clone(&self.role_rejected))
+            .connect_with(options)
+            .await
+    }
+
     fn build_options(
         config: &DbPoolConfig,
         role_rejected: Arc<watch::Sender<bool>>,

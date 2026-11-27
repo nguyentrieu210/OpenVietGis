@@ -41,6 +41,11 @@ pub fn api_v1_router() -> Router<AppState> {
         .merge(crate::processing_models::router())
         .merge(crate::professional::router())
         .merge(crate::transfers::router())
+        .merge(crate::collaboration::router())
+        .merge(crate::managed_sync::router())
+        .merge(crate::team::router())
+        .merge(crate::org_chat::router())
+        .merge(crate::presence::router())
         .merge(crate::spatial_replay::router())
         .merge(crate::ops::router())
 }

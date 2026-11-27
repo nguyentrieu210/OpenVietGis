@@ -6,13 +6,19 @@
 
 use axum::body::to_bytes;
 use axum::extract::{FromRequestParts, Path, Query, Request, State};
-use axum::http::{header, HeaderMap, StatusCode, Uri};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use chrono::{Timelike, Utc};
+use ovg_core::{ActorContext, ActorType, AppError, TenantScope};
+use ovg_storage::collaboration::{isoformat, ActivityPosition};
 use ovg_storage::editing::domain::{py_strip, Segment, Xy};
 use ovg_storage::editing::{
     authenticate_service, snap, CommitRequest, EditError, EditScope, Guard, Permission, ServiceAuth,
+};
+use ovg_sync::activity_cursor::{
+    ActivityCursor, ActivityCursorScope, ActivityStream, CURSOR_MAX_LENGTH,
 };
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -41,6 +47,123 @@ pub(crate) fn router() -> Router<AppState> {
             post(revert_changeset),
         )
         .route(&format!("{PROJECT}/editing/snap"), post(compute_snap))
+        .route(
+            &format!("{PROJECT}/collaboration/activities"),
+            get(list_activities),
+        )
+}
+
+/// R011 activity history (`collaboration.list_activities`): edits merged with reviews,
+/// keyset paged by a cursor bound to the actor, credential and project.
+async fn list_activities(
+    State(state): State<AppState>,
+    Path((organization, project)): Path<(String, String)>,
+    uri: Uri,
+    request: Request,
+) -> Result<Response, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization).await?;
+    let scope = open(&state, &actor, &organization, &project, Guard::Read).await?;
+    let limit = query_limit(&uri)?;
+    let cursor = query_cursor(&uri)?;
+    let org = Uuid::parse_str(&organization).ok();
+    let ids = org.zip(Uuid::parse_str(&project).ok());
+    let (Some(mut scope), Some((organization_id, project_id))) = (scope, ids) else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    scope.authorize(Permission::Read).await?;
+
+    // Python datetimes carry microseconds; the cursor and SQL comparisons use the same.
+    let now = Utc::now();
+    let now = now
+        .with_nanosecond(now.nanosecond() / 1_000 * 1_000)
+        .unwrap_or(now);
+    let (actor_id, credential_id) = scope.actor();
+    let actor_type = match actor {
+        Actor::Human(_) => ActorType::Human,
+        Actor::Service(_) => ActorType::ServicePrincipal,
+    };
+    let cursor_scope = ActivityCursorScope::from(&TenantScope {
+        organization_id,
+        workspace_id: None,
+        project_id: Some(project_id),
+        actor: ActorContext {
+            actor_type,
+            actor_id,
+            credential_id,
+            email: None,
+        },
+        permissions: Vec::new(),
+    });
+    let position = cursor
+        .map(|token| ActivityCursor::decode(&token, &cursor_scope, now))
+        .transpose()
+        .map_err(platform)?;
+    let cutoff = position.map_or(now, |cursor| cursor.cutoff);
+    let after = position.map(|cursor| ActivityPosition {
+        created_at: cursor.created_at,
+        stream: cursor.stream as i32,
+        id: cursor.id,
+    });
+    let Some(mut rows) = scope.list_activities(cutoff, after, limit).await? else {
+        return Err(platform(AppError::validation(
+            "INVALID_ACTIVITY_CURSOR",
+            "activity continuation unavailable; refresh the activity list",
+        )));
+    };
+    scope.commit().await?;
+
+    let has_more = rows.len() as i64 > limit;
+    rows.truncate(limit as usize);
+    let mut next_cursor = None;
+    if let Some(last) = rows.last().filter(|_| has_more) {
+        let stream = if last.position.stream == 1 {
+            ActivityStream::Edit
+        } else {
+            ActivityStream::Review
+        };
+        let cursor = ActivityCursor {
+            cutoff,
+            created_at: last.position.created_at,
+            stream,
+            id: last.position.id,
+        };
+        next_cursor = Some(cursor.encode(&cursor_scope).map_err(platform)?);
+    }
+    let items: Vec<Value> = rows.into_iter().map(|row| row.wire).collect();
+    let body = json!({
+        "items": items,
+        "cutoff": isoformat(cutoff),
+        "next_cursor": next_cursor,
+    });
+    let mut response = Json(body).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(response)
+}
+
+/// FastAPI `cursor: Query(min_length=1, max_length=512)`; the last repeated value wins.
+fn query_cursor(uri: &Uri) -> Result<Option<String>, Failure> {
+    let Query(pairs) =
+        Query::<Vec<(String, String)>>::try_from_uri(uri).map_err(|_| EditError::InvalidRequest)?;
+    let cursor = pairs.into_iter().rev().find(|(key, _)| key == "cursor");
+    let cursor = cursor.map(|(_, token)| token);
+    let length = cursor.as_deref().map_or(1, |token| token.chars().count());
+    if length == 0 || length > CURSOR_MAX_LENGTH {
+        return Err(EditError::InvalidRequest.into());
+    }
+    Ok(cursor)
+}
+
+/// `PlatformDomainError` envelope for a domain `AppError`.
+fn platform(error: AppError) -> Failure {
+    Failure::Edit(EditError::Platform {
+        status: error.status_code(),
+        code: error.code(),
+        message: error.to_string(),
+        details: None,
+    })
 }
 
 type Ids = Path<(String, String, String)>;
@@ -184,12 +307,12 @@ async fn compute_snap(
     Ok(Json(result))
 }
 
-enum Actor {
+pub(crate) enum Actor {
     Human(HumanSession),
     Service(ServiceAuth),
 }
 
-async fn authenticate_actor(
+pub(crate) async fn authenticate_actor(
     state: &AppState,
     parts: &mut axum::http::request::Parts,
     organization: &str,
@@ -219,10 +342,10 @@ async fn authenticate_actor(
         .map_err(|error| Failure::Identity(Box::new(error)))
 }
 
-type Authenticated = (Actor, HeaderMap, Option<Value>);
+pub(crate) type Authenticated = (Actor, HeaderMap, Option<Value>);
 
 /// FastAPI decodes a JSON body before dependencies run, then authenticates.
-async fn authenticate_json(
+pub(crate) async fn authenticate_json(
     state: &AppState,
     request: Request,
     organization: &str,
@@ -260,7 +383,7 @@ fn json_content_type(headers: &HeaderMap) -> bool {
 }
 
 /// Project guard; skipped (like the oracle) when the path IDs are not UUIDs.
-async fn open<'a>(
+pub(crate) async fn open<'a>(
     state: &'a AppState,
     session: &Actor,
     organization: &str,
@@ -295,7 +418,11 @@ async fn open<'a>(
     Ok(Some(scope))
 }
 
-fn require_csrf(state: &AppState, session: &Actor, headers: &HeaderMap) -> Result<(), Failure> {
+pub(crate) fn require_csrf(
+    state: &AppState,
+    session: &Actor,
+    headers: &HeaderMap,
+) -> Result<(), Failure> {
     let Actor::Human(session) = session else {
         return Ok(());
     };
@@ -303,7 +430,7 @@ fn require_csrf(state: &AppState, session: &Actor, headers: &HeaderMap) -> Resul
         .map_err(|error| Failure::Identity(Box::new(error)))
 }
 
-fn decode<T: DeserializeOwned>(body: Option<Value>) -> Result<T, Failure> {
+pub(crate) fn decode<T: DeserializeOwned>(body: Option<Value>) -> Result<T, Failure> {
     body.and_then(|value| serde_json::from_value(value).ok())
         .ok_or(Failure::Edit(EditError::InvalidRequest))
 }
@@ -326,7 +453,7 @@ fn query_limit(uri: &Uri) -> Result<i64, Failure> {
     }
 }
 
-enum Failure {
+pub(crate) enum Failure {
     Edit(EditError),
     Identity(Box<IdentityError>),
 }

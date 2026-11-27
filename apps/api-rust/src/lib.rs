@@ -3,6 +3,7 @@
 pub(crate) mod cad_bridge;
 pub mod cartography;
 pub(crate) mod catalog;
+pub(crate) mod collaboration;
 pub mod config;
 pub mod connectors;
 pub(crate) mod edit_auth;
@@ -20,10 +21,13 @@ pub(crate) mod house_numbering {
     }
 }
 pub(crate) mod identity;
+pub(crate) mod managed_sync;
 pub(crate) mod map_render;
 pub mod metrics;
 pub mod middleware;
 pub(crate) mod ops;
+pub(crate) mod org_chat;
+pub(crate) mod presence;
 pub(crate) mod processing;
 pub(crate) mod processing_models;
 pub(crate) mod professional;
@@ -32,6 +36,7 @@ pub mod raster_policy;
 pub mod routes;
 pub(crate) mod spatial_replay;
 pub mod state;
+pub(crate) mod team;
 pub(crate) mod tenancy;
 pub(crate) mod three_d;
 pub(crate) mod tilesets;

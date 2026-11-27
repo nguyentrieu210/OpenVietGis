@@ -1001,6 +1001,8 @@ dependencies = [
  "futures-util",
  "hmac",
  "http",
+ "hyper",
+ "hyper-util",
  "miniz_oxide",
  "ovg-core",
  "ovg-module-house-numbering",
@@ -1011,6 +1013,7 @@ dependencies = [
  "ovg-sync",
  "serde",
  "serde_json",
+ "sha1",
  "sha2",
  "tokio",
  "tower",
@@ -1096,6 +1099,8 @@ dependencies = [
  "subtle",
  "tokio",
  "tracing",
+ "unicode-casefold",
+ "unicode-normalization",
  "uuid",
 ]
 
@@ -1901,6 +1906,12 @@ name = "unicode-bidi"
 version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
+
+[[package]]
+name = "unicode-casefold"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f66b1c8f8caa2ab31dc6d3f35386f16efdab89668f93411e565ac368908e8f"
 
 [[package]]
 name = "unicode-ident"
