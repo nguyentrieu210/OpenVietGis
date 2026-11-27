@@ -328,9 +328,13 @@
     {
       "id": "EDIT-02",
       "task": "T053",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/digitizing.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
     },
     {
       "id": "EDIT-03",
@@ -345,16 +349,23 @@
     {
       "id": "EDIT-04",
       "task": "T055",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; shared pixel tolerance; no per-layer tolerance/map-unit mode; no scoped geometry fixture yet"
     },
     {
       "id": "EDIT-05",
       "task": "T056",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/AdvancedEditor.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; structural draft checks only; cross-feature topology not added"
     },
     {
       "id": "EDIT-06",
@@ -366,9 +377,12 @@
     {
       "id": "EDIT-07",
       "task": "T058",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/digitizing.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; distance/angle constraint UI remains"
     },
     {
       "id": "EDIT-08",

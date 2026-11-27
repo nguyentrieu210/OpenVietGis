@@ -110,6 +110,17 @@ try{
  await editor.getByRole("button",{name:"Thử lại lưu"}).click();await editor.waitFor({state:"detached"});
  assert.equal(edits.length,2);assert.deepEqual(edits[0],edits[1]);assert.equal(edits[0].operations[0].properties.height_m,30);
  console.log("PASS synthetic Chromium: typed attribute edit and identical idempotent retry");
+ await page.keyboard.press("Control+k");await command.fill("WORKSPACE");await command.press("Enter");
+ const workspace=page.getByRole("dialog",{name:"Tùy chỉnh workspace"});await workspace.waitFor();
+ await workspace.getByLabel("Phạm vi snapping").selectOption("selected");
+ await workspace.getByRole("checkbox",{name:"Buildings",exact:true}).check();
+ await workspace.getByRole("button",{name:"Xong",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("WORKSPACE");await command.press("Enter");
+ await workspace.waitFor();assert.equal(await workspace.getByLabel("Phạm vi snapping").inputValue(),"selected");
+ assert.equal(await workspace.getByRole("checkbox",{name:"Buildings",exact:true}).isChecked(),true);
+ await workspace.getByRole("button",{name:"Xong",exact:true}).click();
+ console.log("PASS synthetic Chromium: snapping layer scope persistence");
+
 
 
  assert.equal(errors.length,0,errors.join("\n"));
