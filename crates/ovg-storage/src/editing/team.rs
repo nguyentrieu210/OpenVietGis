@@ -98,7 +98,7 @@ fn platform(status: u16, code: &'static str, message: impl Into<String>) -> Edit
 }
 
 /// Python `uuid5(NAMESPACE_URL, name)`.
-fn uuid5_url(name: &str) -> Uuid {
+pub(crate) fn uuid5_url(name: &str) -> Uuid {
     let mut hasher = Sha1::new();
     hasher.update(Uuid::NAMESPACE_URL.as_bytes());
     hasher.update(name.as_bytes());

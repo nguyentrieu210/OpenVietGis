@@ -40,7 +40,10 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{PROJECT}/layers/manual"),
             post(create_manual_layer),
         )
-        .route(&format!("{PROJECT}/layers/{{layer_id}}"), patch(rename_layer))
+        .route(
+            &format!("{PROJECT}/layers/{{layer_id}}"),
+            patch(rename_layer),
+        )
         .route(
             &format!("{PROJECT}/layers/{{layer_id}}/retire"),
             post(retire_layer),

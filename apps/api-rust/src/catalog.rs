@@ -502,7 +502,9 @@ impl IntoResponse for CatalogError {
             Self::Spatial(status, code, detail) => {
                 (status, Json(json!({"code": code, "detail": detail}))).into_response()
             }
-            Self::Detail(status, detail) => (status, Json(json!({"detail": detail}))).into_response(),
+            Self::Detail(status, detail) => {
+                (status, Json(json!({"detail": detail}))).into_response()
+            }
             Self::Application(error) => {
                 if let AppError::Internal { internal_detail } = &error {
                     tracing::error!(detail = %internal_detail, "catalog request failed");

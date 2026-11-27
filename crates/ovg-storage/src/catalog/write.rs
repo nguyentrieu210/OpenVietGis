@@ -59,7 +59,12 @@ fn clean_name(raw: &str) -> Result<String, AppError> {
     Ok(cleaned.to_owned())
 }
 
-fn layer_snapshot(name: &str, source_id: Uuid, lifecycle: &str, rev: i64) -> BTreeMap<&'static str, Value> {
+fn layer_snapshot(
+    name: &str,
+    source_id: Uuid,
+    lifecycle: &str,
+    rev: i64,
+) -> BTreeMap<&'static str, Value> {
     let mut m = BTreeMap::new();
     m.insert("name", json!(name));
     m.insert("source_id", json!(source_id.to_string()));
@@ -392,7 +397,10 @@ impl<'a> ProjectRead<'a> {
             ));
         }
         if !(1..MAX_REVISION).contains(&prior_rev) {
-            return Err(AppError::validation("INVALID_REQUEST", "catalog revision exhausted"));
+            return Err(AppError::validation(
+                "INVALID_REQUEST",
+                "catalog revision exhausted",
+            ));
         }
         let next_rev = prior_rev + 1;
 
@@ -460,9 +468,8 @@ impl<'a> ProjectRead<'a> {
             "schema_revision": schema_rev,
         });
 
-        let needs_crs_correction = declared_crs.is_some_and(|crs| {
-            Some(crs) != prior_source_crs || prior_val_state != "ready"
-        });
+        let needs_crs_correction = declared_crs
+            .is_some_and(|crs| Some(crs) != prior_source_crs || prior_val_state != "ready");
 
         let (
             new_val_state,
@@ -684,7 +691,10 @@ impl<'a> ProjectRead<'a> {
             ));
         }
         if !(1..MAX_REVISION).contains(&prior_rev) {
-            return Err(AppError::validation("INVALID_REQUEST", "catalog revision exhausted"));
+            return Err(AppError::validation(
+                "INVALID_REQUEST",
+                "catalog revision exhausted",
+            ));
         }
         let has_active: bool = sqlx::query_scalar(
             "SELECT EXISTS (
@@ -971,8 +981,8 @@ impl<'a> ProjectRead<'a> {
         let proj_id = self.project_id;
         let source_ns = format!("openvietgis/{org_id}/{proj_id}/{key}/source");
         let layer_ns = format!("openvietgis/{org_id}/{proj_id}/{key}/layer");
-        let source_id = Uuid::new_v5(&Uuid::NAMESPACE_URL, source_ns.as_bytes());
-        let layer_id = Uuid::new_v5(&Uuid::NAMESPACE_URL, layer_ns.as_bytes());
+        let source_id = crate::editing::team::uuid5_url(&source_ns);
+        let layer_id = crate::editing::team::uuid5_url(&layer_ns);
 
         let existing: Option<(String, Option<String>)> = sqlx::query_as(
             "SELECT kind, manifest_digest
@@ -1023,8 +1033,7 @@ impl<'a> ProjectRead<'a> {
                 schema_revision: String::new(),
             })
             .collect();
-        let schema_revision =
-            schema_revision_digest(&field_specs, geometry_family, "XY", "known");
+        let schema_revision = schema_revision_digest(&field_specs, geometry_family, "XY", "known");
         let content_revision = crate::spatial_pins::content_revision_digest(
             &[],
             &field_specs,
@@ -1217,7 +1226,10 @@ impl<'a> ProjectRead<'a> {
             ));
         }
         if !(1..MAX_REVISION).contains(&prior_rev) {
-            return Err(AppError::validation("INVALID_REQUEST", "layer revision exhausted"));
+            return Err(AppError::validation(
+                "INVALID_REQUEST",
+                "layer revision exhausted",
+            ));
         }
         let prior_name: String = row.try_get("name").map_err(db_error)?;
         if prior_name == cleaned {
@@ -1321,7 +1333,10 @@ impl<'a> ProjectRead<'a> {
             ));
         }
         if !(1..MAX_REVISION).contains(&prior_rev) {
-            return Err(AppError::validation("INVALID_REQUEST", "layer revision exhausted"));
+            return Err(AppError::validation(
+                "INVALID_REQUEST",
+                "layer revision exhausted",
+            ));
         }
 
         let name: String = row.try_get("name").map_err(db_error)?;
@@ -1545,4 +1560,3 @@ impl<'a> ProjectRead<'a> {
         }))
     }
 }
-

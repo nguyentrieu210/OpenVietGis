@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Duration, SecondsFormat, TimeZone, Utc};
+use chrono::{Duration, SecondsFormat, TimeZone, Utc};
 use ovg_core::AppError;
 use serde_json::{json, Value};
 
@@ -137,14 +137,16 @@ pub fn reference_fields(schema_revision: &str) -> Vec<FieldSpec> {
         ("fld_note", "Note", 6, "text", true),
     ]
     .into_iter()
-    .map(|(field_id, name, ordinal, field_type, nullable)| FieldSpec {
-        field_id: field_id.to_owned(),
-        name: name.to_owned(),
-        ordinal,
-        field_type: field_type.to_owned(),
-        nullable,
-        schema_revision: schema_revision.to_owned(),
-    })
+    .map(
+        |(field_id, name, ordinal, field_type, nullable)| FieldSpec {
+            field_id: field_id.to_owned(),
+            name: name.to_owned(),
+            ordinal,
+            field_type: field_type.to_owned(),
+            nullable,
+            schema_revision: schema_revision.to_owned(),
+        },
+    )
     .collect()
 }
 
@@ -263,12 +265,48 @@ fn record(
     }
 }
 
-const CIRCULAR: [(&str, (i64, i64, i64), (i64, i64, i64), (i64, i64, i64), (i64, i64, i64)); 5] = [
-    ("VH1", (108, 1, 1000), (21, 24, 4000), (108, 1, 1680), (21, 24, 3640)),
-    ("VH2", (108, 3, 3530), (21, 24, 5210), (108, 3, 4210), (21, 24, 4850)),
-    ("VH10", (107, 56, 4600), (21, 14, 1050), (107, 56, 5280), (21, 14, 690)),
-    ("CT1", (107, 45, 4080), (20, 58, 1430), (107, 45, 4760), (20, 58, 1070)),
-    ("QY1", (106, 52, 5920), (20, 50, 780), (106, 53, 600), (20, 50, 420)),
+const CIRCULAR: [(
+    &str,
+    (i64, i64, i64),
+    (i64, i64, i64),
+    (i64, i64, i64),
+    (i64, i64, i64),
+); 5] = [
+    (
+        "VH1",
+        (108, 1, 1000),
+        (21, 24, 4000),
+        (108, 1, 1680),
+        (21, 24, 3640),
+    ),
+    (
+        "VH2",
+        (108, 3, 3530),
+        (21, 24, 5210),
+        (108, 3, 4210),
+        (21, 24, 4850),
+    ),
+    (
+        "VH10",
+        (107, 56, 4600),
+        (21, 14, 1050),
+        (107, 56, 5280),
+        (21, 14, 690),
+    ),
+    (
+        "CT1",
+        (107, 45, 4080),
+        (20, 58, 1430),
+        (107, 45, 4760),
+        (20, 58, 1070),
+    ),
+    (
+        "QY1",
+        (106, 52, 5920),
+        (20, 50, 780),
+        (106, 53, 600),
+        (20, 50, 420),
+    ),
 ];
 
 const HVS: [(
@@ -330,7 +368,15 @@ fn point_bounds(pts: &[(&str, (f64, f64))]) -> [f64; 4] {
 fn point_records(pts: &[(&str, (f64, f64))], srid: i32) -> Vec<FixtureRecord> {
     pts.iter()
         .enumerate()
-        .map(|(i, &(id, (x, y)))| record(id, Some(point_geom(x, y, Some(srid))), i as i64 + 1, None, "present"))
+        .map(|(i, &(id, (x, y)))| {
+            record(
+                id,
+                Some(point_geom(x, y, Some(srid))),
+                i as i64 + 1,
+                None,
+                "present",
+            )
+        })
         .collect()
 }
 
@@ -483,7 +529,12 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
         "reference_points_4756" => {
             let pts: Vec<(&str, (f64, f64))> = CIRCULAR
                 .iter()
-                .map(|&(id, vlon, vlat, _, _)| (id, (dms(vlon.0, vlon.1, vlon.2), dms(vlat.0, vlat.1, vlat.2))))
+                .map(|&(id, vlon, vlat, _, _)| {
+                    (
+                        id,
+                        (dms(vlon.0, vlon.1, vlon.2), dms(vlat.0, vlat.1, vlat.2)),
+                    )
+                })
                 .collect();
             let mut recs = point_records(&pts, 4756);
             recs.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
@@ -509,7 +560,12 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
         "reference_points_4326_quang_ninh" => {
             let pts: Vec<(&str, (f64, f64))> = CIRCULAR
                 .iter()
-                .map(|&(id, _, _, wlon, wlat)| (id, (dms(wlon.0, wlon.1, wlon.2), dms(wlat.0, wlat.1, wlat.2))))
+                .map(|&(id, _, _, wlon, wlat)| {
+                    (
+                        id,
+                        (dms(wlon.0, wlon.1, wlon.2), dms(wlat.0, wlat.1, wlat.2)),
+                    )
+                })
                 .collect();
             let mut recs = point_records(&pts, 4326);
             recs.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
@@ -535,7 +591,12 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
         "reference_points_4756_hvs" => {
             let pts: Vec<(&str, (f64, f64))> = HVS
                 .iter()
-                .map(|&(id, _, vlon, vlat, _, _)| (id, (dms(vlon.0, vlon.1, vlon.2), dms(vlat.0, vlat.1, vlat.2))))
+                .map(|&(id, _, vlon, vlat, _, _)| {
+                    (
+                        id,
+                        (dms(vlon.0, vlon.1, vlon.2), dms(vlat.0, vlat.1, vlat.2)),
+                    )
+                })
                 .collect();
             let mut recs = point_records(&pts, 4756);
             recs.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
@@ -561,7 +622,12 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
         "reference_points_4326_hvs" => {
             let pts: Vec<(&str, (f64, f64))> = HVS
                 .iter()
-                .map(|&(id, _, _, _, wlon, wlat)| (id, (dms(wlon.0, wlon.1, wlon.2), dms(wlat.0, wlat.1, wlat.2))))
+                .map(|&(id, _, _, _, wlon, wlat)| {
+                    (
+                        id,
+                        (dms(wlon.0, wlon.1, wlon.2), dms(wlat.0, wlat.1, wlat.2)),
+                    )
+                })
                 .collect();
             let mut recs = point_records(&pts, 4326);
             recs.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
@@ -585,7 +651,8 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
             ))
         }
         "reference_points_5899" => {
-            let pts: Vec<(&str, (f64, f64))> = HVS.iter().map(|&(id, xy, _, _, _, _)| (id, xy)).collect();
+            let pts: Vec<(&str, (f64, f64))> =
+                HVS.iter().map(|&(id, xy, _, _, _, _)| (id, xy)).collect();
             let mut recs = point_records(&pts, 5899);
             recs.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
             Some((
@@ -663,7 +730,13 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
                 axis_control_xy: None,
                 correctable_to_crs: None,
             },
-            vec![record("point-000001", Some(point_geom(106.6, 10.7, None)), 1, None, "present")],
+            vec![record(
+                "point-000001",
+                Some(point_geom(106.6, 10.7, None)),
+                1,
+                None,
+                "present",
+            )],
         )),
         "reference_conflicting_metadata" => Some((
             ReferenceSpec {
@@ -1243,14 +1316,8 @@ pub fn source_snapshot(s: &SourceSnapshotArgs<'_>) -> BTreeMap<&'static str, Val
         "validation_reason.message",
         s.reason.map_or(Value::Null, |(_, m)| json!(m)),
     );
-    map.insert(
-        "source_crs",
-        s.source_crs.map_or(Value::Null, |c| json!(c)),
-    );
-    map.insert(
-        "stored_crs",
-        s.stored_crs.map_or(Value::Null, |c| json!(c)),
-    );
+    map.insert("source_crs", s.source_crs.map_or(Value::Null, |c| json!(c)));
+    map.insert("stored_crs", s.stored_crs.map_or(Value::Null, |c| json!(c)));
     map.insert("schema_state", json!(s.schema_state));
     map.insert("geometry_family", json!(s.geometry_family));
     map.insert("dimensions", json!(s.dimensions));
