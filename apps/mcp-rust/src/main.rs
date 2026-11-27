@@ -15,7 +15,7 @@ const JWKS:&str="http://127.0.0.1:18080/realms/openvietgis/protocol/openid-conne
 const CLIENTS:[&str;2]=["openvietgis-mcp-chatgpt","openvietgis-mcp-claude"];
 const PROTOCOLS:[&str;3]=["2025-03-26","2025-06-18","2025-11-25"];
 #[derive(Clone)]
-struct App {store:Arc<Mutex<Store>>,registry:Arc<Registry>,http:reqwest::Client,clock:Instant,jwks:Arc<tokio::sync::Mutex<Option<(Instant,JwkSet)>>>}
+struct App {store:Arc<Mutex<Store>>,registry:Arc<Registry>,http:reqwest::Client,clock:Instant,jwks:Arc<tokio::sync::Mutex<Option<(Instant,JwkSet)>>>,core:String,jwks_url:String}
 impl App{
     fn now(&self)->u64{self.clock.elapsed().as_millis().try_into().unwrap_or(u64::MAX)}
     fn store(&self)->Result<MutexGuard<'_,Store>,Failure>{self.store.lock().map_err(|_|Failure::new(503,"Workspace store unavailable"))}
@@ -96,7 +96,7 @@ async fn verify(app:&App,h:&HeaderMap)->Result<Claims,Failure>{
     if cache.as_ref().is_none_or(|(t,k)|t.elapsed()>Duration::from_secs(300)||k.find(&kid).is_none()){
         // Bound key refreshes on unknown kid as well as normal cache expiry.
         if cache.as_ref().is_some_and(|(t,k)|t.elapsed()<Duration::from_secs(5)&&k.find(&kid).is_none()){return Err(err())}
-        let keys=app.http.get(JWKS).send().await.map_err(|_|err())?.error_for_status().map_err(|_|err())?.json::<JwkSet>().await.map_err(|_|err())?;
+        let keys=app.http.get(&app.jwks_url).send().await.map_err(|_|err())?.error_for_status().map_err(|_|err())?.json::<JwkSet>().await.map_err(|_|err())?;
         *cache=Some((Instant::now(),keys));
     }
     let jwk=cache.as_ref().and_then(|(_,k)|k.find(&kid)).ok_or_else(err)?;
@@ -116,7 +116,7 @@ fn browser_guard(h:&HeaderMap)->Result<String,Failure>{
 }
 async fn identity(app:&App,cookie:&str,org:Uuid,project:Uuid)->Result<Owner,Failure>{
     async fn get(app:&App,cookie:&str,path:&str)->Result<Value,Failure>{
-        let r=app.http.get(format!("{CORE}{path}")).header(header::COOKIE,format!("ovg_session={cookie}")).send().await.map_err(|_|Failure::new(403,"GIS identity unavailable"))?;
+        let r=app.http.get(format!("{}{path}",app.core)).header(header::COOKIE,format!("ovg_session={cookie}")).send().await.map_err(|_|Failure::new(403,"GIS identity unavailable"))?;
         if r.status()!=StatusCode::OK{return Err(Failure::new(if r.status()==StatusCode::UNAUTHORIZED{401}else{403},"GIS permission unavailable"))}
         r.json().await.map_err(|_|Failure::new(403,"GIS identity verification failed"))
     }
@@ -223,20 +223,114 @@ async fn mcp_get(State(app):State<App>,h:HeaderMap)->Response{
     if verify(&app,&h).await.is_err(){return unauthorized()}
     StatusCode::METHOD_NOT_ALLOWED.into_response()
 }
-#[tokio::main]
-async fn main()->Result<(),Box<dyn std::error::Error>>{
-    let app=App{store:Arc::new(Mutex::new(Store::default())),registry:Arc::new(Registry::new()),http:reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(5)).build()?,clock:Instant::now(),jwks:Arc::new(tokio::sync::Mutex::new(None))};
-    let routes=Router::new()
+fn app(core:String,jwks_url:String)->Result<App,reqwest::Error>{
+    Ok(App{store:Arc::new(Mutex::new(Store::default())),registry:Arc::new(Registry::new()),http:reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(5)).build()?,clock:Instant::now(),jwks:Arc::new(tokio::sync::Mutex::new(None)),core,jwks_url})
+}
+fn routes(app:App)->Router{
+    Router::new()
         .route("/.well-known/oauth-protected-resource/mcp",get(metadata))
         .route("/mcp",post(mcp).get(mcp_get))
         .route("/ai-copilot/sessions",post(open))
         .route("/ai-copilot/sessions/{id}/{action}",post(browser_action))
         .route("/ai-copilot/sessions/{id}/commands/{cid}/{action}",post(browser_command))
         .layer(DefaultBodyLimit::max(128_000))
-        .with_state(app);
+        .with_state(app)
+}
+#[tokio::main]
+async fn main()->Result<(),Box<dyn std::error::Error>>{
+    let app=app(CORE.into(),JWKS.into())?;
     // Separate loopback candidate port, never shadow the production relay.
     let listener=tokio::net::TcpListener::bind("127.0.0.1:9188").await?;
     println!("native MCP candidate listening on loopback :9188");
-    axum::serve(listener,routes).await?;Ok(())
+    axum::serve(listener,routes(app)).await?;Ok(())
 }
-#[cfg(test)]mod tests{use super::*;#[test]fn duplicate_json_rejected(){let mut h=HeaderMap::new();h.insert(header::CONTENT_TYPE,header::HeaderValue::from_static("application/json"));assert!(parse(&Bytes::from_static(br#"{"x":1,"x":2}"#),&h).is_err());assert!(parse(&Bytes::from_static(br#"{"x":{"a":1,"a":2}}"#),&h).is_err());assert!(parse(&Bytes::from_static(br#"{"x":1}"#),&h).is_ok());}}
+#[cfg(test)]mod tests{
+    use super::*;
+    use base64::{Engine as _,engine::general_purpose::URL_SAFE_NO_PAD};
+    use rsa::{RsaPrivateKey,traits::PublicKeyParts,pkcs1::EncodeRsaPrivateKey};
+    use jsonwebtoken::{encode,Header,EncodingKey};
+
+    #[test]fn duplicate_json_rejected(){
+        let mut h=HeaderMap::new();h.insert(header::CONTENT_TYPE,header::HeaderValue::from_static("application/json"));
+        assert!(parse(&Bytes::from_static(br#"{"x":1,"x":2}"#),&h).is_err());
+        assert!(parse(&Bytes::from_static(br#"{"x":{"a":1,"a":2}}"#),&h).is_err());
+        assert!(parse(&Bytes::from_static(br#"{"x":1}"#),&h).is_ok());
+    }
+
+    async fn serve(router:Router)->(String,tokio::task::JoinHandle<()>){
+        let l=tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url=format!("http://{}",l.local_addr().unwrap());
+        let task=tokio::spawn(async move{axum::serve(l,router).await.unwrap()});
+        (url,task)
+    }
+    fn sign(key:&RsaPrivateKey,claims:Value)->String{
+        let mut h=Header::new(Algorithm::RS256);h.kid=Some("test-key".into());
+        encode(&h,&claims,&EncodingKey::from_rsa_der(key.to_pkcs1_der().unwrap().as_bytes())).unwrap()
+    }
+    fn claims(subject:&str)->Value{
+        let t=unix_now();json!({"iss":ISSUER,"sub":subject,"aud":RESOURCE,"azp":CLIENTS[0],"scope":"openid gis:live","typ":"Bearer","iat":t,"exp":t+900})
+    }
+    async fn post_rpc(client:&reqwest::Client,url:&str,token:&str,method:&str,params:Value)->reqwest::Response{
+        client.post(format!("{url}/mcp")).header("host","openvietgis.cloud").bearer_auth(token).json(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":params})).send().await.unwrap()
+    }
+    async fn browser(client:&reqwest::Client,url:&str,path:&str,token:Option<&str>,data:Value)->reqwest::Response{
+        let req=client.post(format!("{url}/ai-copilot/sessions{path}")).header("host","openvietgis.cloud").header("origin",ORIGIN).header("x-ovg-ai","1").header("cookie","ovg_session=test-cookie");
+        let req=if let Some(t)=token{req.header("x-ovg-bridge",t)}else{req};req.json(&data).send().await.unwrap()
+    }
+    #[tokio::test]
+    async fn signed_oauth_and_multi_project_browser_roundtrip(){
+        // Ephemeral fixture key; no live OAuth credentials or production calls.
+        let key=RsaPrivateKey::new(&mut rand::thread_rng(),2048).unwrap();
+        let jwks=json!({"keys":[{"kty":"RSA","kid":"test-key","alg":"RS256","use":"sig","n":URL_SAFE_NO_PAD.encode(key.n().to_bytes_be()),"e":URL_SAFE_NO_PAD.encode(key.e().to_bytes_be())}]});
+        let uid=Uuid::new_v4();let org=Uuid::new_v4();let project_a=Uuid::new_v4();let project_b=Uuid::new_v4();
+        let core_router=Router::new()
+            .route("/jwks",get(move||{let j=jwks.clone();async move{Json(j)}}))
+            .route("/api/v1/me",get(move|h:HeaderMap|async move{if hdr(&h,"cookie")!="ovg_session=test-cookie"{return respond(401,json!({}))}respond(200,json!({"id":uid,"status":"active"}))}))
+            .route("/api/v1/me/identity-links",get(||async{Json(json!([{"issuer":ISSUER,"subject":"alice"}]))}))
+            .route("/api/v1/organizations/{org}/projects/{project}/access/mine",get(move|Path((o,p)):Path<(Uuid,Uuid)>|async move{Json(json!({"restricted":o!=org||(p!=project_a&&p!=project_b)}))}));
+        let (core,core_task)=serve(core_router).await;
+        let (url,task)=serve(routes(app(format!("{core}/api/v1"),format!("{core}/jwks")).unwrap())).await;
+        let client=reqwest::Client::new();
+        let valid=sign(&key,claims("alice"));
+        let mut wrong=claims("alice");wrong["aud"]=json!("other-resource");
+        assert_eq!(post_rpc(&client,&url,&sign(&key,wrong),"tools/list",json!({})).await.status(),401);
+        let mut wrong=claims("alice");wrong["scope"]=json!("openid");
+        assert_eq!(post_rpc(&client,&url,&sign(&key,wrong),"tools/list",json!({})).await.status(),401);
+        let mut wrong=claims("alice");wrong["azp"]=json!("openvietgis-web");
+        assert_eq!(post_rpc(&client,&url,&sign(&key,wrong),"tools/list",json!({})).await.status(),401);
+        assert_eq!(post_rpc(&client,&url,"invalid","tools/list",json!({})).await.status(),401);
+        let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
+        assert_eq!(init["result"]["protocolVersion"],"2025-11-25");
+        let listed:Value=post_rpc(&client,&url,&valid,"tools/list",json!({})).await.json().await.unwrap();
+        assert_eq!(listed["result"]["tools"].as_array().unwrap().len(),37);
+        let denied=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":Uuid::new_v4(),"workspace_version":2})).await;
+        assert_eq!(denied.status(),403);
+        let a:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_a,"workspace_version":2})).await.json().await.unwrap();
+        let b:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_b,"workspace_version":2})).await.json().await.unwrap();
+        let sa=a["session_id"].as_str().unwrap();let sb=b["session_id"].as_str().unwrap();
+        let ta=a["browser_token"].as_str().unwrap();let tb=b["browser_token"].as_str().unwrap();
+        let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
+        assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
+        let amb:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_live_view","arguments":{}})).await.json().await.unwrap();
+        assert_eq!(amb["result"]["structuredContent"]["status"],409);
+        let other=sign(&key,claims("mallory"));
+        let other_result:Value=post_rpc(&client,&url,&other,"tools/call",json!({"name":"gis_live_view","arguments":{"session_id":sb}})).await.json().await.unwrap();
+        assert_eq!(other_result["result"]["structuredContent"]["status"],404);
+        let (c,u,t,id)=(client.clone(),url.clone(),valid.clone(),sb.to_string());
+        let call=tokio::spawn(async move{post_rpc(&c,&u,&t,"tools/call",json!({"name":"gis_live_view","arguments":{"session_id":id}})).await.json::<Value>().await.unwrap()});
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let no:Value=browser(&client,&url,&format!("/{sa}/poll"),Some(ta),json!({})).await.json().await.unwrap();
+        assert!(no["command"].is_null());
+        let wrong=browser(&client,&url,&format!("/{sb}/poll"),Some(ta),json!({})).await;assert_eq!(wrong.status(),404);
+        let cmd:Value=browser(&client,&url,&format!("/{sb}/poll"),Some(tb),json!({})).await.json().await.unwrap();
+        let cid=cmd["command"]["id"].as_str().unwrap();
+        assert_eq!(cmd["command"]["method"],"map_view");
+        let prep:Value=browser(&client,&url,&format!("/{sb}/commands/{cid}/prepare"),Some(tb),json!({})).await.json().await.unwrap();
+        assert_eq!(prep["authorized"],true);
+        let ack=browser(&client,&url,&format!("/{sb}/commands/{cid}/ack"),Some(tb),json!({"ok":true,"result":{"crs":"EPSG:4326","center":[1,2],"bbox":[0,0,3,3],"zoom":6,"unapproved_extra":"hidden"}})).await;
+        assert_eq!(ack.status(),200);
+        let result=call.await.unwrap();assert_eq!(result["result"]["structuredContent"]["acknowledged"],true);
+        assert!(result["result"]["structuredContent"]["result"].get("unapproved_extra").is_none());
+        task.abort();core_task.abort();
+    }
+}
