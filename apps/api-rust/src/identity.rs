@@ -455,7 +455,15 @@ fn encode_avatar_rgb(rgb: &[u8], side: u16) -> Result<Vec<u8>, IdentityError> {
                   out=io.BytesIO(); im.save(out,format='JPEG',quality=85); \
                   sys.stdout.buffer.write(out.getvalue())";
     let mut child = Command::new("/usr/bin/timeout")
-        .args(["--kill-after=1s", "5s", "/usr/bin/python3", "-I", "-B", "-c", script])
+        .args([
+            "--kill-after=1s",
+            "5s",
+            "/usr/bin/python3",
+            "-I",
+            "-B",
+            "-c",
+            script,
+        ])
         .arg(side.to_string())
         .env_clear()
         .env("LANG", "C.UTF-8")
@@ -465,12 +473,19 @@ fn encode_avatar_rgb(rgb: &[u8], side: u16) -> Result<Vec<u8>, IdentityError> {
         .spawn()
         .map_err(|_| invalid_avatar())?;
     let result = (|| -> std::io::Result<Vec<u8>> {
-        let mut input = child.stdin.take().ok_or_else(|| std::io::Error::other("encoder stdin"))?;
+        let mut input = child
+            .stdin
+            .take()
+            .ok_or_else(|| std::io::Error::other("encoder stdin"))?;
         input.write_all(rgb)?;
         drop(input);
         let mut output = Vec::new();
-        child.stdout.take().ok_or_else(|| std::io::Error::other("encoder stdout"))?
-            .take(112_501).read_to_end(&mut output)?;
+        child
+            .stdout
+            .take()
+            .ok_or_else(|| std::io::Error::other("encoder stdout"))?
+            .take(112_501)
+            .read_to_end(&mut output)?;
         if output.len() > 112_500 {
             return Err(std::io::Error::other("encoder output limit"));
         }
@@ -577,7 +592,9 @@ mod tests {
     fn avatar_reencodes_valid_jpeg_and_rejects_other_dimensions() {
         let fixture = |side: u16| {
             let pixels = vec![180u8; usize::from(side) * usize::from(side) * 3];
-            let bytes = encode_avatar_rgb(&pixels, side).ok().expect("system JPEG codec");
+            let bytes = encode_avatar_rgb(&pixels, side)
+                .ok()
+                .expect("system JPEG codec");
             format!("{AVATAR_PREFIX}{}", STANDARD.encode(bytes))
         };
         let normalized = normalize_avatar(&fixture(192));
