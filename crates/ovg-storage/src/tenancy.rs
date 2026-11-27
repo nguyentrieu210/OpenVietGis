@@ -320,6 +320,38 @@ impl TenantTx {
             .map_err(db_error)
     }
 
+    /// Bind the verified project for RLS-protected GIS administration.
+    /// Call only after the caller's organization and project grants are verified.
+    pub async fn bind_admin_project(
+        &mut self,
+        organization_id: Uuid,
+        project_id: Uuid,
+        write: bool,
+    ) -> Result<(), AppError> {
+        if self.organization_id != Some(organization_id) {
+            return Err(AppError::not_found("organization not found"));
+        }
+        let lock = if write { "FOR UPDATE" } else { "FOR SHARE" };
+        let status: String = sqlx::query_scalar(&format!(
+            "SELECT status FROM workspace.projects WHERE organization_id=$1 AND id=$2 {lock}"
+        ))
+        .bind(organization_id)
+        .bind(project_id)
+        .fetch_optional(&mut *self.tx)
+        .await
+        .map_err(db_error)?
+        .ok_or_else(|| AppError::not_found("project not found"))?;
+        if status != "active" {
+            return Err(AppError::forbidden("project is not active"));
+        }
+        sqlx::query("SELECT set_config('openvietgis.project_id', $1, true)")
+            .bind(project_id.to_string())
+            .execute(&mut *self.tx)
+            .await
+            .map_err(db_error)?;
+        Ok(())
+    }
+
     pub async fn organization(
         &mut self,
         organization_id: Uuid,

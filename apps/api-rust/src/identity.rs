@@ -430,15 +430,60 @@ fn normalize_avatar(input: &str) -> Result<String, IdentityError> {
             .collect(),
         _ => return Err(invalid_avatar()),
     };
-    let mut output = Vec::new();
-    jpeg_encoder::Encoder::new(&mut output, 85)
-        .encode(&rgb, AVATAR_SIDE, AVATAR_SIDE, jpeg_encoder::ColorType::Rgb)
-        .map_err(|_| invalid_avatar())?;
+    let output = encode_avatar_rgb(&rgb, AVATAR_SIDE)?;
     let data_url = format!("{AVATAR_PREFIX}{}", STANDARD.encode(output));
     if data_url.len() > 150_000 {
         return Err(invalid_avatar());
     }
     Ok(data_url)
+}
+
+// Reuse the system image codec already shipped with the format workers.
+// Only bounded, decoded RGB pixels enter the encoder, not the client JPEG.
+// This avoids adding an unapproved IJG Rust dependency to the workspace.
+fn encode_avatar_rgb(rgb: &[u8], side: u16) -> Result<Vec<u8>, IdentityError> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+
+    if rgb.len() != usize::from(side) * usize::from(side) * 3 || side > AVATAR_SIDE {
+        return Err(invalid_avatar());
+    }
+    let script = "import sys,io; from PIL import Image; n=int(sys.argv[1]); \
+                  raw=sys.stdin.buffer.read(n*n*3+1); \
+                  assert len(raw)==n*n*3; \
+                  im=Image.frombytes('RGB',(n,n),raw); \
+                  out=io.BytesIO(); im.save(out,format='JPEG',quality=85); \
+                  sys.stdout.buffer.write(out.getvalue())";
+    let mut child = Command::new("/usr/bin/timeout")
+        .args(["--kill-after=1s", "5s", "/usr/bin/python3", "-I", "-B", "-c", script])
+        .arg(side.to_string())
+        .env_clear()
+        .env("LANG", "C.UTF-8")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| invalid_avatar())?;
+    let result = (|| -> std::io::Result<Vec<u8>> {
+        let mut input = child.stdin.take().ok_or_else(|| std::io::Error::other("encoder stdin"))?;
+        input.write_all(rgb)?;
+        drop(input);
+        let mut output = Vec::new();
+        child.stdout.take().ok_or_else(|| std::io::Error::other("encoder stdout"))?
+            .take(112_501).read_to_end(&mut output)?;
+        if output.len() > 112_500 {
+            return Err(std::io::Error::other("encoder output limit"));
+        }
+        if !child.wait()?.success() || !output.starts_with(&[0xff, 0xd8]) {
+            return Err(std::io::Error::other("encoder failed"));
+        }
+        Ok(output)
+    })();
+    if result.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    result.map_err(|_| invalid_avatar())
 }
 
 async fn put_avatar(
@@ -531,11 +576,8 @@ mod tests {
     #[test]
     fn avatar_reencodes_valid_jpeg_and_rejects_other_dimensions() {
         let fixture = |side: u16| {
-            let mut bytes = Vec::new();
             let pixels = vec![180u8; usize::from(side) * usize::from(side) * 3];
-            jpeg_encoder::Encoder::new(&mut bytes, 95)
-                .encode(&pixels, side, side, jpeg_encoder::ColorType::Rgb)
-                .unwrap();
+            let bytes = encode_avatar_rgb(&pixels, side).ok().expect("system JPEG codec");
             format!("{AVATAR_PREFIX}{}", STANDARD.encode(bytes))
         };
         let normalized = normalize_avatar(&fixture(192));

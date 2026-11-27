@@ -168,6 +168,9 @@ async fn open_admin_scope(
     tx.require(org_id, None, Some(project_id), perm)
         .await
         .map_err(GisAccessError::Domain)?;
+    tx.bind_admin_project(org_id, project_id, write)
+        .await
+        .map_err(GisAccessError::Domain)?;
     Ok(tx)
 }
 

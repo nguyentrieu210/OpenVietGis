@@ -455,14 +455,17 @@ def main() -> int:
                     ren_o = oracle.patch(
                         f"{base_o}/layers/{lid_o}",
                         headers=csrf,
-                        json={"name": "Extrude Poly Renamed", "expected_layer_revision": det_o["layer_revision"]},
+                        json={"name": "Extrude Poly Renamed", "expected_revision": det_o["layer_revision"]},
                     )
                     ren_r = rust.patch(
                         f"{base_r}/layers/{lid_r}",
                         headers=csrf,
-                        json={"name": "Extrude Poly Renamed", "expected_layer_revision": det_r["layer_revision"]},
+                        json={"name": "Extrude Poly Renamed", "expected_revision": det_r["layer_revision"]},
                     )
-                    req(ren_o.status_code == 200 and ren_r.status_code == 200, "rename layer failed")
+                    req(
+                        ren_o.status_code == 200 and ren_r.status_code == 200,
+                        f"rename layer failed: oracle={ren_o.status_code} rust={ren_r.status_code}",
+                    )
                     compare_response(
                         "E05 stale feature pick after layer revision change",
                         oracle.get(f"{url_o}/{ts_gen_o}/feature", headers=headers, params={"uri": gen_uri, "triangle": 0}),
