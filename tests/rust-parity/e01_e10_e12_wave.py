@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import csv
+import hashlib
 import io
 import json
 import os
@@ -234,6 +235,145 @@ def create_manual_layer_with_point(client, base: str, csrf: dict, name: str):
     return lid, sid, cs.json()["id"]
 
 
+def check_remaining_native_boundaries(
+    oracle, rust, org_id, base_o, base_r, lid_o, h_a, csrf_a, h_b
+):
+    """Exercise real PostGIS and artifact boundaries, including negative authorization."""
+    from PIL import Image
+
+    # E01: JPEG encoders need not produce identical compressed bytes. Both must
+    # accept a valid image, normalize it, and persist the exact returned bytes.
+    image = io.BytesIO()
+    Image.new("RGB", (192, 192), (80, 120, 160)).save(image, format="JPEG")
+    avatar = {"data_url": "data:image/jpeg;base64," + base64.b64encode(image.getvalue()).decode()}
+    for client in (oracle, rust):
+        response = client.put(f"{API}/me/avatar", headers=csrf_a, json=avatar)
+        require(response.status_code == 200, f"avatar upload failed: {response.status_code}")
+        value = response.json()["data_url"]
+        decoded = Image.open(io.BytesIO(base64.b64decode(value.split(",", 1)[1])))
+        require(decoded.size == (192, 192) and decoded.format == "JPEG", "avatar normalization")
+        require(
+            client.get(f"{API}/me/avatar", headers=h_a).json() == {"data_url": value},
+            "avatar storage mismatch",
+        )
+        require(
+            client.put(f"{API}/me/avatar", headers=h_a, json=avatar).status_code == 403,
+            "avatar mutation without CSRF",
+        )
+        require(
+            client.put(
+                f"{API}/me/avatar", headers=csrf_a,
+                json={"data_url": "data:image/jpeg;base64,AAAA"},
+            ).status_code == 422,
+            "invalid JPEG accepted",
+        )
+        require(client.delete(f"{API}/me/avatar", headers=csrf_a).status_code == 204, "avatar delete")
+
+    # E12: only registration metadata is involved; never contact an external host.
+    allow = f"{API}/organizations/{org_id}/external-sources/allowlist"
+    body = {"hostname": "maps.example.org", "secret_ref_name": "fixture-secret-reference"}
+    host = rust.post(allow, headers=csrf_a, json=body)
+    require(host.status_code == 201, f"allowlist registration: {host.status_code} {host.text}")
+    host_wire = host.json()
+    require(host_wire["secret_ref_name"] is None and host_wire["has_secret_ref"], "secret exposed")
+    require("fixture-secret-reference" not in host.text, "raw secret reference exposed")
+    compare(
+        "E12 allowlist shared database read",
+        oracle.get(allow, headers=h_a),
+        rust.get(allow, headers=h_a),
+        expect_status=200,
+    )
+    duplicate = rust.post(allow, headers=csrf_a, json=body)
+    require(
+        duplicate.status_code == 409 and duplicate.json().get("code") == "HOST_EXISTS",
+        "duplicate hostname accepted",
+    )
+    forbidden = rust.post(allow, headers=csrf_a, json={"hostname": "127.0.0.1"})
+    require(
+        forbidden.status_code == 403 and forbidden.json().get("code") == "SSRF_BLOCKED",
+        "internal hostname accepted",
+    )
+    require(
+        rust.post(allow, headers=h_a, json={"hostname": "other.example.org"}).status_code == 403,
+        "allowlist mutation without CSRF",
+    )
+    connection = {
+        "allowlist_id": host_wire["id"],
+        "name": "Test external WMS",
+        "protocol": "wms",
+        "endpoint_url": "https://maps.example.org/wms",
+    }
+    po, pr = f"{base_o}/external-sources", f"{base_r}/external-sources"
+    co = oracle.post(po, headers=csrf_a, json=connection)
+    cr = rust.post(pr, headers=csrf_a, json=connection)
+    compare("E12 external source registration", co, cr, norm=norm_value, expect_status=201)
+    io_id, ir_id = co.json()["id"], cr.json()["id"]
+    require(cr.json()["capabilities"]["render"] is False, "unverified render advertised")
+    compare(
+        "E12 external connection list",
+        oracle.get(po, headers=h_a),
+        rust.get(pr, headers=h_a),
+        norm=norm_value,
+        expect_status=200,
+    )
+    for action in ("invalidate-cache", "revoke"):
+        compare(
+            f"E12 external connection {action}",
+            oracle.post(f"{po}/{io_id}/{action}", headers=csrf_a),
+            rust.post(f"{pr}/{ir_id}/{action}", headers=csrf_a),
+            norm=norm_value,
+            expect_status=200,
+        )
+    for endpoint_url in (
+        "https://maps.example.org/wms?token=secret",
+        "https://maps.example.org@evil.example/wms",
+        "https://127.0.0.1/wms",
+    ):
+        response = rust.post(pr, headers=csrf_a, json=connection | {"endpoint_url": endpoint_url})
+        require(response.status_code == 403, "unsafe external endpoint accepted")
+    require(
+        rust.post(f"{pr}/{ir_id}/revoke", headers=h_a).status_code == 403,
+        "external revoke without CSRF",
+    )
+
+    # E13: Python remains the issuance oracle until native package creation
+    # lands. Rust reads that same immutable package and verifies both digests.
+    package = oracle.post(
+        f"{base_o}/field/packages",
+        headers=csrf_a,
+        json={
+            "name": "Snapshot parity",
+            "layer_id": lid_o,
+            "aoi_bbox": {"min_x": 106.6, "min_y": 10.7, "max_x": 106.7, "max_y": 10.8},
+            "local_storage_confirmed": True,
+        },
+    )
+    require(package.status_code == 201, f"offline fixture issuance: {package.text}")
+    package_id = package.json()["id"]
+    snapshot_path = f"{base_o}/field/packages/{package_id}/snapshot"
+    expected = oracle.get(snapshot_path, headers=h_a)
+    actual = rust.get(snapshot_path, headers=h_a)
+    require(expected.status_code == actual.status_code == 200, "offline snapshot status")
+    require(expected.content == actual.content, "offline snapshot bytes differ")
+    require(
+        actual.headers.get("x-content-sha256") == hashlib.sha256(actual.content).hexdigest(),
+        "offline snapshot digest mismatch",
+    )
+    require(actual.headers.get("cache-control") == "no-store", "offline snapshot cache policy")
+    require(rust.get(snapshot_path).status_code == 401, "anonymous snapshot accepted")
+    require(rust.get(snapshot_path, headers=h_b).status_code in (403, 404), "foreign actor snapshot")
+    require(
+        rust.get(f"{base_r}/field/packages/{package_id}/snapshot", headers=h_a).status_code == 404,
+        "cross-project snapshot accepted",
+    )
+    require(
+        oracle.post(f"{base_o}/field/packages/{package_id}/revoke", headers=csrf_a).status_code == 200,
+        "snapshot fixture revocation failed",
+    )
+    require(rust.get(snapshot_path, headers=h_a).status_code == 403, "revoked snapshot accepted")
+    print("PASS E01 avatar / E12 external metadata / E13 snapshot boundaries", flush=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--candidate", type=Path, required=True)
@@ -327,6 +467,10 @@ def main() -> int:
                     # Seed identical manual editable layers on proj_o and proj_r
                     lid_o, sid_o, cs_o = create_manual_layer_with_point(oracle, base_o, csrf_a, "Parcels")
                     lid_r, sid_r, cs_r = create_manual_layer_with_point(rust, base_r, csrf_a, "Parcels")
+
+                    check_remaining_native_boundaries(
+                        oracle, rust, org_id, base_o, base_r, lid_o, h_a, csrf_a, h_b
+                    )
 
                     # ------------------------------------------------------------------
                     # 2. E10: Model Vault writes (2 routes)

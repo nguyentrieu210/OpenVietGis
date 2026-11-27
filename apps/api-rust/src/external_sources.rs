@@ -1,12 +1,13 @@
 //! E12 authenticated external-source metadata and cache lifecycle.
 
-use axum::extract::{Path, State};
+use axum::extract::{rejection::JsonRejection, Path, State};
 use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use ovg_core::AppError;
 use ovg_storage::catalog::ProjectReadPolicy;
 use ovg_storage::external_sources::{self, AllowlistInput, ConnectionInput};
-use ovg_core::AppError;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -31,15 +32,34 @@ pub(crate) fn router() -> Router<AppState> {
         .route(&format!("{BASE}/{{connection_id}}/revoke"), post(revoke))
 }
 
-fn domain_error(error: AppError) -> CatalogError {
-    match error {
-        AppError::Validation { code, message, .. } =>
-            CatalogError::Spatial(StatusCode::UNPROCESSABLE_ENTITY, code, message),
-        AppError::Forbidden { code, message } =>
-            CatalogError::Spatial(StatusCode::FORBIDDEN, code, message),
-        AppError::Conflict { code, message, .. } =>
-            CatalogError::Spatial(StatusCode::CONFLICT, code, message),
-        error => CatalogError::Application(error),
+enum ExternalError {
+    Access(CatalogError),
+    Domain(AppError),
+}
+
+impl From<CatalogError> for ExternalError {
+    fn from(error: CatalogError) -> Self {
+        Self::Access(error)
+    }
+}
+
+impl IntoResponse for ExternalError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Access(error) => error.into_response(),
+            Self::Domain(error) => {
+                if matches!(&error, AppError::Internal { .. })
+                    || matches!(&error, AppError::Unauthorized { .. })
+                    || matches!(&error, AppError::Forbidden { code: "FORBIDDEN", .. })
+                    || matches!(&error, AppError::NotFound { message, .. } if message == "organization not found")
+                {
+                    return CatalogError::Application(error).into_response();
+                }
+                let status = StatusCode::from_u16(error.status_code())
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                (status, Json(error.to_envelope(None))).into_response()
+            }
+        }
     }
 }
 
@@ -48,8 +68,9 @@ async fn register_allowlist(
     auth: HumanSession,
     headers: HeaderMap,
     Path(organization_id): Path<Uuid>,
-    Json(input): Json<AllowlistInput>,
-) -> Result<(StatusCode, Json<Value>), CatalogError> {
+    input: Result<Json<AllowlistInput>, JsonRejection>,
+) -> Result<(StatusCode, Json<Value>), ExternalError> {
+    let Json(input) = input.map_err(|_| CatalogError::InvalidRequest)?;
     require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
     let pool = state.db_pool.as_ref().ok_or_else(|| {
         CatalogError::Application(AppError::service_unavailable(
@@ -57,12 +78,22 @@ async fn register_allowlist(
         ))
     })?;
     let mut tx = ovg_storage::tenancy::TenantTx::begin(
-        pool, auth.actor_id(), auth.session_id(), auth.display_name(),
-    ).await.map_err(domain_error)?;
+        pool,
+        auth.actor_id(),
+        auth.session_id(),
+        auth.display_name(),
+    )
+    .await
+    .map_err(ExternalError::Domain)?;
     let result = external_sources::register_allowlist(
-        &mut tx, organization_id, auth.actor_id(), input,
-    ).await.map_err(domain_error)?;
-    tx.commit().await.map_err(domain_error)?;
+        &mut tx,
+        organization_id,
+        auth.actor_id(),
+        input,
+    )
+    .await
+    .map_err(ExternalError::Domain)?;
+    tx.commit().await.map_err(ExternalError::Domain)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -71,15 +102,21 @@ async fn create_connection(
     auth: HumanSession,
     headers: HeaderMap,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
-    Json(input): Json<ConnectionInput>,
-) -> Result<(StatusCode, Json<Value>), CatalogError> {
+    input: Result<Json<ConnectionInput>, JsonRejection>,
+) -> Result<(StatusCode, Json<Value>), ExternalError> {
+    let Json(input) = input.map_err(|_| CatalogError::InvalidRequest)?;
     require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
     let mut edit = project_read(
-        &state, &auth, organization_id, project_id, ProjectReadPolicy::UnrestrictedEdit,
-    ).await?;
+        &state,
+        &auth,
+        organization_id,
+        project_id,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
     let result = external_sources::create_connection(&mut edit, auth.actor_id(), input)
-        .await.map_err(domain_error)?;
-    edit.commit().await.map_err(domain_error)?;
+        .await.map_err(ExternalError::Domain)?;
+    edit.commit().await.map_err(ExternalError::Domain)?;
     Ok((StatusCode::CREATED, Json(result)))
 }
 
@@ -98,7 +135,7 @@ async fn list_connections(
     State(state): State<AppState>,
     auth: HumanSession,
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
-) -> Result<Json<Value>, CatalogError> {
+) -> Result<Json<Value>, ExternalError> {
     let mut read = project_read(
         &state,
         &auth,
@@ -109,8 +146,8 @@ async fn list_connections(
     .await?;
     let result = external_sources::list_connections(&mut read)
         .await
-        .map_err(CatalogError::Application)?;
-    read.commit().await.map_err(CatalogError::Application)?;
+        .map_err(ExternalError::Domain)?;
+    read.commit().await.map_err(ExternalError::Domain)?;
     Ok(Json(result))
 }
 
@@ -119,7 +156,7 @@ async fn invalidate_cache(
     auth: HumanSession,
     headers: HeaderMap,
     Path(scope): Path<(Uuid, Uuid, Uuid)>,
-) -> Result<Json<Value>, CatalogError> {
+) -> Result<Json<Value>, ExternalError> {
     update(&state, &auth, &headers, scope, false).await
 }
 
@@ -128,7 +165,7 @@ async fn revoke(
     auth: HumanSession,
     headers: HeaderMap,
     Path(scope): Path<(Uuid, Uuid, Uuid)>,
-) -> Result<Json<Value>, CatalogError> {
+) -> Result<Json<Value>, ExternalError> {
     update(&state, &auth, &headers, scope, true).await
 }
 
@@ -138,7 +175,7 @@ async fn update(
     headers: &HeaderMap,
     (organization_id, project_id, connection_id): (Uuid, Uuid, Uuid),
     revoke: bool,
-) -> Result<Json<Value>, CatalogError> {
+) -> Result<Json<Value>, ExternalError> {
     require_csrf(state, auth, headers).map_err(CatalogError::Identity)?;
     let mut edit = project_read(
         state,
@@ -150,7 +187,7 @@ async fn update(
     .await?;
     let result = external_sources::update_lifecycle(&mut edit, connection_id, revoke)
         .await
-        .map_err(CatalogError::Application)?;
-    edit.commit().await.map_err(CatalogError::Application)?;
+        .map_err(ExternalError::Domain)?;
+    edit.commit().await.map_err(ExternalError::Domain)?;
     Ok(Json(result))
 }
