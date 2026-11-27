@@ -190,6 +190,33 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e18-ops.log
 
+      - name: Run E08 processing jobs parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_jobs.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-jobs.log
+
+      - name: Run E08 processing models parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_processing_models.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-models.log
+
+      - name: Run E08 professional GIS parity
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          set -o pipefail
+          mkdir -p dist/parity
+          uv run --project apps/api python tests/rust-parity/e08_professional.py \
+            --candidate target/debug/openvietgis-api-rust \
+            2>&1 | tee dist/parity/e08-professional.log
+
       - name: Run E06 cartography parity
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
         run: |
