@@ -92,6 +92,7 @@ impl ReasonCode {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct FixtureGeometry {
     pub gtype: &'static str,
     pub dimensions: &'static str,
@@ -265,13 +266,11 @@ fn record(
     }
 }
 
-const CIRCULAR: [(
-    &str,
-    (i64, i64, i64),
-    (i64, i64, i64),
-    (i64, i64, i64),
-    (i64, i64, i64),
-); 5] = [
+type Dms = (i64, i64, i64);
+type CircularRow = (&'static str, Dms, Dms, Dms, Dms);
+type HvsRow = (&'static str, (f64, f64), Dms, Dms, Dms, Dms);
+
+const CIRCULAR: [CircularRow; 5] = [
     (
         "VH1",
         (108, 1, 1000),
@@ -309,14 +308,7 @@ const CIRCULAR: [(
     ),
 ];
 
-const HVS: [(
-    &str,
-    (f64, f64),
-    (i64, i64, i64),
-    (i64, i64, i64),
-    (i64, i64, i64),
-    (i64, i64, i64),
-); 4] = [
+const HVS: [HvsRow; 4] = [
     (
         "HVS-QN1",
         (438442.69, 2291039.83),
@@ -500,6 +492,7 @@ pub fn get_reference_spec(key: &str) -> Option<(ReferenceSpec, Vec<FixtureRecord
             ))
         }
         "reference_points_3857" => {
+            #[allow(clippy::excessive_precision)]
             let pts = [
                 ("merc-000001", (11866657.718562961, 1198103.040560261)),
                 ("merc-000002", (11877745.139845973, 1201433.906852360)),

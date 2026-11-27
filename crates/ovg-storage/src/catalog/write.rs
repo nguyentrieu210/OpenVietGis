@@ -86,7 +86,7 @@ struct CatalogEvidence<'a> {
     now: DateTime<Utc>,
 }
 
-impl<'a> ProjectRead<'a> {
+impl ProjectRead<'_> {
     async fn append_catalog_evidence(&mut self, ev: CatalogEvidence<'_>) -> Result<Uuid, AppError> {
         let change_id = Uuid::new_v4();
         let audit_id = Uuid::new_v4();
