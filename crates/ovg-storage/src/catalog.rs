@@ -26,6 +26,8 @@ pub enum ProjectReadPolicy {
     Unrestricted,
     UnrestrictedEdit,
     UnrestrictedManage,
+    /// project.manage, but GIS-scoped callers are admitted; the route checks `is_gis_scoped`.
+    ScopedManage,
 }
 
 /// Proof of project.read on exactly one organization and project. The
@@ -129,9 +131,14 @@ impl<'a> ProjectRead<'a> {
         }
         let edit = matches!(
             policy,
-            ProjectReadPolicy::UnrestrictedEdit | ProjectReadPolicy::UnrestrictedManage
+            ProjectReadPolicy::UnrestrictedEdit
+                | ProjectReadPolicy::UnrestrictedManage
+                | ProjectReadPolicy::ScopedManage
         );
-        let manage = matches!(policy, ProjectReadPolicy::UnrestrictedManage);
+        let manage = matches!(
+            policy,
+            ProjectReadPolicy::UnrestrictedManage | ProjectReadPolicy::ScopedManage
+        );
         let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
         let mut tx = TenantTransaction::begin(
             pool,
@@ -285,9 +292,14 @@ impl<'a> ProjectRead<'a> {
     ) -> Result<Self, AppError> {
         let edit = matches!(
             policy,
-            ProjectReadPolicy::UnrestrictedEdit | ProjectReadPolicy::UnrestrictedManage
+            ProjectReadPolicy::UnrestrictedEdit
+                | ProjectReadPolicy::UnrestrictedManage
+                | ProjectReadPolicy::ScopedManage
         );
-        let manage = matches!(policy, ProjectReadPolicy::UnrestrictedManage);
+        let manage = matches!(
+            policy,
+            ProjectReadPolicy::UnrestrictedManage | ProjectReadPolicy::ScopedManage
+        );
         let lock = if edit { "FOR UPDATE" } else { "FOR SHARE" };
         if organization_id.is_nil() {
             return Err(AppError::not_found("organization not found"));
@@ -389,7 +401,11 @@ impl<'a> ProjectRead<'a> {
             .fetch_one(&mut **tx.tx_mut())
             .await
             .map_err(db_error)?;
-        if gis_scoped && !matches!(policy, ProjectReadPolicy::LayerAcl) {
+        let admits_scoped = matches!(
+            policy,
+            ProjectReadPolicy::LayerAcl | ProjectReadPolicy::ScopedManage
+        );
+        if gis_scoped && !admits_scoped {
             return Err(AppError::forbidden(
                 "Thao tác chưa được cấp quyền trong phạm vi GIS",
             ));

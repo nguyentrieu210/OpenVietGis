@@ -99,6 +99,8 @@ async fn list_records(
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
+    let Query(query) = Query::<ListRecordsQuery>::try_from_uri(&parts.uri)
+        .map_err(|_| ExtensionError::InvalidRequest)?;
     let mut read = open_project_scope(
         &state,
         &actor,
@@ -107,8 +109,6 @@ async fn list_records(
         ProjectReadPolicy::Unrestricted,
     )
     .await?;
-    let Query(query) = Query::<ListRecordsQuery>::try_from_uri(&parts.uri)
-        .map_err(|_| ExtensionError::InvalidRequest)?;
     let items = store_list_records(&mut read, &extension_key, query.entity_name.as_deref())
         .await
         .map_err(ExtensionError::Domain)?;
@@ -122,17 +122,9 @@ async fn create_record(
     request: Request<axum::body::Body>,
 ) -> Result<(StatusCode, Json<Value>), ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
-    let mut edit = open_project_scope(
-        &state,
-        &actor,
-        org_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
     let body: CreateRecordBody = decode_body(body)?;
     if !body.payload.is_object()
         || body
@@ -142,6 +134,14 @@ async fn create_record(
     {
         return Err(ExtensionError::InvalidRequest);
     }
+    let mut edit = open_project_scope(
+        &state,
+        &actor,
+        org_id,
+        project_id,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
     let display = project_actor_display(&edit, &actor);
     let rec = store_create_record(
         &mut edit,
@@ -169,18 +169,10 @@ async fn update_record(
     request: Request<axum::body::Body>,
 ) -> Result<Json<Value>, ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
     let record_id = parse_uuid(&record)?;
-    let mut edit = open_project_scope(
-        &state,
-        &actor,
-        org_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
     let body: UpdateRecordBody = decode_body(body)?;
     if !(1..=2_147_483_646).contains(&body.expected_revision)
         || !body.payload.is_object()
@@ -191,6 +183,14 @@ async fn update_record(
     {
         return Err(ExtensionError::InvalidRequest);
     }
+    let mut edit = open_project_scope(
+        &state,
+        &actor,
+        org_id,
+        project_id,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
     let display = project_actor_display(&edit, &actor);
     let rec = store_update_record(
         &mut edit,
@@ -267,17 +267,9 @@ async fn import_bundle(
     request: Request<axum::body::Body>,
 ) -> Result<Json<Value>, ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
-    let mut edit = open_project_scope(
-        &state,
-        &actor,
-        org_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedEdit,
-    )
-    .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
     let body: PortableImportBody = decode_body(body)?;
     let valid_sha = body.sha256.len() == 64
         && body
@@ -287,6 +279,14 @@ async fn import_bundle(
     if !valid_sha || !body.bundle.is_object() {
         return Err(ExtensionError::InvalidRequest);
     }
+    let mut edit = open_project_scope(
+        &state,
+        &actor,
+        org_id,
+        project_id,
+        ProjectReadPolicy::UnrestrictedEdit,
+    )
+    .await?;
     let display = project_actor_display(&edit, &actor);
     let result = store_import_bundle(
         &mut edit,

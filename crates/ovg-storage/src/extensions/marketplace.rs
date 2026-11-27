@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::DbPool;
 
-use super::{db_error, iso, iso_z};
+use super::{db_error, iso_z};
 
 pub const DEVELOPER_QUOTA: i64 = 30;
 
@@ -27,7 +27,7 @@ impl PublisherRow {
             "id": self.id,
             "name": self.name,
             "public_key": self.public_key,
-            "created_at": iso(self.created_at),
+            "created_at": iso_z(self.created_at),
         })
     }
 }

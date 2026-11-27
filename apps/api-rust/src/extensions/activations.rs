@@ -144,8 +144,10 @@ async fn activate_extension(
     request: Request<axum::body::Body>,
 ) -> Result<(StatusCode, Json<Value>), ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
+    let body: ActivateRequest = decode_body(body)?;
     let mut edit = open_project_scope(
         &state,
         &actor,
@@ -154,8 +156,6 @@ async fn activate_extension(
         ProjectReadPolicy::UnrestrictedManage,
     )
     .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
-    let body: ActivateRequest = decode_body(body)?;
     let manifest = extension_store::manifest(&mut edit, body.manifest_id)
         .await
         .map_err(ExtensionError::Domain)?
@@ -179,6 +179,7 @@ async fn disable_extension(
 ) -> Result<Json<Value>, ExtensionError> {
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
+    require_actor_csrf(&state, &actor, &parts.headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
     let mut edit = open_project_scope(
@@ -189,7 +190,6 @@ async fn disable_extension(
         ProjectReadPolicy::UnrestrictedManage,
     )
     .await?;
-    require_actor_csrf(&state, &actor, &parts.headers)?;
     let display = project_actor_display(&edit, &actor);
     let value = extension_store::disable(&mut edit, actor.actor_id(), &display, &extension_key)
         .await
@@ -205,6 +205,7 @@ async fn deactivate_extension(
 ) -> Result<Json<Value>, ExtensionError> {
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
+    require_actor_csrf(&state, &actor, &parts.headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
     let activation_id = parse_uuid(&activation)?;
@@ -216,7 +217,6 @@ async fn deactivate_extension(
         ProjectReadPolicy::UnrestrictedManage,
     )
     .await?;
-    require_actor_csrf(&state, &actor, &parts.headers)?;
     let display = project_actor_display(&edit, &actor);
     let value = extension_store::deactivate(&mut edit, actor.actor_id(), &display, activation_id)
         .await
@@ -231,9 +231,11 @@ async fn transition_extension(
     request: Request<axum::body::Body>,
 ) -> Result<Json<Value>, ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
     let activation_id = parse_uuid(&activation)?;
+    let body: TransitionRequest = decode_body(body)?;
     let mut edit = open_project_scope(
         &state,
         &actor,
@@ -242,8 +244,6 @@ async fn transition_extension(
         ProjectReadPolicy::UnrestrictedManage,
     )
     .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
-    let body: TransitionRequest = decode_body(body)?;
 
     let current = extension_store::manifest(&mut edit, body.expected_manifest_id)
         .await

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::catalog::ProjectRead;
 
 use super::validation::validate_contributions;
-use super::{db_error, iso, iso_z};
+use super::{db_error, iso_z};
 
 pub async fn list_contributions(read: &mut ProjectRead<'_>) -> Result<Vec<Value>, AppError> {
     let rows = sqlx::query(
@@ -38,7 +38,7 @@ pub async fn list_contributions(read: &mut ProjectRead<'_>) -> Result<Vec<Value>
                 "manifest_id": row.try_get::<Uuid, _>("manifest_id").map_err(db_error)?,
                 "document": row.try_get::<Value, _>("document").map_err(db_error)?,
                 "revision": row.try_get::<i32, _>("revision").map_err(db_error)?,
-                "updated_at": iso(row.try_get::<DateTime<Utc>, _>("updated_at").map_err(db_error)?),
+                "updated_at": iso_z(row.try_get::<DateTime<Utc>, _>("updated_at").map_err(db_error)?),
                 "display_name": row.try_get::<String, _>("display_name").map_err(db_error)?,
             }))
         })
@@ -112,7 +112,7 @@ pub async fn save_contributions(
         "manifest_id": row.try_get::<Uuid, _>("manifest_id").map_err(db_error)?,
         "document": row.try_get::<Value, _>("document").map_err(db_error)?,
         "revision": row.try_get::<i32, _>("revision").map_err(db_error)?,
-        "updated_at": iso(row.try_get::<DateTime<Utc>, _>("updated_at").map_err(db_error)?),
+        "updated_at": iso_z(row.try_get::<DateTime<Utc>, _>("updated_at").map_err(db_error)?),
         "display_name": display_name,
     }))
 }

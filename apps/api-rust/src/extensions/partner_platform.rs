@@ -69,7 +69,7 @@ async fn list_contributions(
         &actor,
         org_id,
         project_id,
-        ProjectReadPolicy::Unrestricted,
+        ProjectReadPolicy::LayerAcl,
     )
     .await?;
     if read.is_gis_scoped() {
@@ -94,20 +94,10 @@ async fn save_contributions(
     request: Request<axum::body::Body>,
 ) -> Result<Json<Value>, ExtensionError> {
     let (actor, headers, body) = authenticate_json(&state, request, &org).await?;
+    require_actor_csrf(&state, &actor, &headers)?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
     let manifest_id = parse_uuid(&manifest)?;
-    // Enforce project_access_guard before body & human checks; note for service principals
-    // Python checks actor_type != "human" right after CSRF & body parsing.
-    let mut edit = open_project_scope(
-        &state,
-        &actor,
-        org_id,
-        project_id,
-        ProjectReadPolicy::UnrestrictedManage,
-    )
-    .await?;
-    require_actor_csrf(&state, &actor, &headers)?;
     let body: SaveContributionsBody = decode_body(body)?;
     if !(0..=2_147_483_646).contains(&body.expected_revision) || !body.document.is_object() {
         return Err(ExtensionError::InvalidRequest);
@@ -117,6 +107,14 @@ async fn save_contributions(
             "human project manager required",
         )));
     }
+    let mut edit = open_project_scope(
+        &state,
+        &actor,
+        org_id,
+        project_id,
+        ProjectReadPolicy::ScopedManage,
+    )
+    .await?;
     if edit.is_gis_scoped() {
         return Err(ExtensionError::Domain(AppError::forbidden(
             "partner integrations require unrestricted project access",
@@ -143,19 +141,19 @@ async fn list_events(
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     let org_id = parse_uuid(&org)?;
     let project_id = parse_uuid(&project)?;
-    let mut read = open_project_scope(
-        &state,
-        &actor,
-        org_id,
-        project_id,
-        ProjectReadPolicy::Unrestricted,
-    )
-    .await?;
     let Query(query) = Query::<EventsQuery>::try_from_uri(&parts.uri)
         .map_err(|_| ExtensionError::InvalidRequest)?;
     if query.after < 0 || !(1..=200).contains(&query.limit) {
         return Err(ExtensionError::InvalidRequest);
     }
+    let mut read = open_project_scope(
+        &state,
+        &actor,
+        org_id,
+        project_id,
+        ProjectReadPolicy::LayerAcl,
+    )
+    .await?;
     if read.is_gis_scoped() {
         return Err(ExtensionError::Domain(AppError::forbidden(
             "partner integrations require unrestricted project access",
