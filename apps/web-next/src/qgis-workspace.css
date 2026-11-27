@@ -178,3 +178,5 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .attribute-filter-row{display:flex;flex-wrap:wrap;gap:6px;align-items:end;padding:4px;border:1px solid #d0dcd2;border-radius:3px}.attribute-filter-row label:has(input[type=checkbox]){display:flex;align-items:center}
 
 .attribute-column-picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 8px;max-height:100px;overflow:auto;border-bottom:1px solid #d0dcd2}.attribute-column-picker label{display:inline-flex;align-items:center;gap:3px}
+
+.attribute-form-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px}.qgis-table th>button{font:inherit;color:inherit;background:transparent;border:0;padding:2px;cursor:pointer}.attribute-form .feature-info{padding:8px}

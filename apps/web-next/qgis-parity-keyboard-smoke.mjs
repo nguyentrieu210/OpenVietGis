@@ -86,6 +86,19 @@ try{
  await table.getByLabel("Layer bảng thuộc tính").selectOption("layer1");
  assert.equal(await table.getByRole("columnheader",{name:"height_m",exact:true}).count(),0);
  console.log("PASS synthetic Chromium: table selection and persisted column preference");
+ await table.getByRole("button",{name:"Cột",exact:true}).click();
+ await table.getByRole("button",{name:"Hiện tất cả cột",exact:true}).click();
+ await table.getByRole("button",{name:"height_m",exact:true}).click();
+ assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"ascending");
+ await table.getByRole("button",{name:/height_m/}).click();
+ assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"descending");
+ await table.getByRole("button",{name:"Biểu mẫu",exact:true}).click();
+ await table.getByLabel("Thông tin đối tượng",{exact:true}).waitFor();
+ await table.getByText(/chỉ đọc/).waitFor();
+ await table.getByRole("button",{name:"Bảng",exact:true}).click();
+ await table.locator("tbody tr").first().waitFor();
+ console.log("PASS synthetic Chromium: sortable typed headers and read-only feature form");
+
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
 }finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

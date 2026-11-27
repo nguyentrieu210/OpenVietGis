@@ -241,9 +241,10 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/table-columns.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; remote and duplicate-source selection/revision coverage remains"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain"
     },
     {
       "id": "TABLE-02",
@@ -252,9 +253,11 @@
       "candidate_paths": [
         "apps/web-next/src/QgisWorkspace.tsx",
         "apps/web-next/src/AttributeServerQuery.tsx",
-        "apps/web-next/src/table-query.test.ts"
+        "apps/web-next/src/table-query.test.ts",
+        "apps/web-next/src/table-columns.ts",
+        "apps/web-next/src/table-columns.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; Rust query is geometry-present only with source/offset limits"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only"
     },
     {
       "id": "TABLE-03",
@@ -266,9 +269,13 @@
     {
       "id": "TABLE-04",
       "task": "T045",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; form read-only; typed edit widgets and transactional validation remain"
     },
     {
       "id": "TABLE-05",
