@@ -51,18 +51,18 @@ pub enum ReasonCode {
 impl ReasonCode {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::NullGeometry => "null_geometry",
-            Self::EmptyGeometry => "empty_geometry",
-            Self::MissingCrs => "missing_crs",
-            Self::UnsupportedCrs => "unsupported_crs",
-            Self::CrsMismatch => "crs_mismatch",
-            Self::UnsupportedGeometry => "unsupported_geometry",
-            Self::UnsupportedDimensions => "unsupported_dimensions",
-            Self::GeometryFamilyMismatch => "geometry_family_mismatch",
-            Self::InvalidGeometry => "invalid_geometry",
-            Self::AxisConflict => "axis_conflict",
-            Self::CoordinateOutOfDomain => "coordinate_out_of_domain",
-            Self::ExtentWrapUnsupported => "extent_wrap_unsupported",
+            Self::NullGeometry => "NULL_GEOMETRY",
+            Self::EmptyGeometry => "EMPTY_GEOMETRY",
+            Self::MissingCrs => "MISSING_CRS",
+            Self::UnsupportedCrs => "UNSUPPORTED_CRS",
+            Self::CrsMismatch => "CRS_MISMATCH",
+            Self::UnsupportedGeometry => "UNSUPPORTED_GEOMETRY",
+            Self::UnsupportedDimensions => "UNSUPPORTED_DIMENSIONS",
+            Self::GeometryFamilyMismatch => "GEOMETRY_FAMILY_MISMATCH",
+            Self::InvalidGeometry => "INVALID_GEOMETRY",
+            Self::AxisConflict => "AXIS_CONFLICT",
+            Self::CoordinateOutOfDomain => "COORDINATE_OUT_OF_DOMAIN",
+            Self::ExtentWrapUnsupported => "EXTENT_WRAP_UNSUPPORTED",
         }
     }
 

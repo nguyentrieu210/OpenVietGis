@@ -494,7 +494,7 @@ impl ProjectRead<'_> {
                 && crs == 4326
                 && stored_crs == Some(4326)
                 && prior_val_state == "invalid"
-                && prior_reason_code.as_deref() == Some("crs_mismatch")
+                && prior_reason_code.as_deref() == Some("CRS_MISMATCH")
                 && prior_source_crs != Some(4326);
             if !valid_correction {
                 return Err(AppError::validation(
