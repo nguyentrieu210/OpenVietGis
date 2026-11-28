@@ -887,6 +887,13 @@ async fn build_preview(
     let stored = source.stored_crs.ok_or_else(|| {
         TransferError::validation("MISSING_CRS", "Source has no verified stored CRS.")
     })?;
+    if format != "geojson" && source.feature_count > MAX_TRANSFER_FEATURES as i64 {
+        return Err(TransferError::coded(
+            413,
+            "FEATURE_LIMIT_EXCEEDED",
+            "Binary export supports up to 50000 features.",
+        ));
+    }
     let fields: Vec<SchemaField<'_>> = source
         .fields
         .iter()
