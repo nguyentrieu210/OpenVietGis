@@ -491,6 +491,121 @@ fn tmerc_inverse(
     Ok(out)
 }
 
+/// Mathematical conversion within Vietnam 2000 only. These bounds and
+/// parameters are the EPSG projected CRS definitions (PROJ database), not a
+/// geodetic datum operation, cadastral certification, or administrative boundary.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct NativeVn2000Zone {
+    pub code: u32,
+    pub central_meridian: f64,
+    pub scale_factor: f64,
+    pub bounds: [f64; 4],
+}
+const fn vn_zone(code: u32, central_meridian: f64, scale_factor: f64, bounds: [f64; 4]) -> NativeVn2000Zone {
+    NativeVn2000Zone { code, central_meridian, scale_factor, bounds }
+}
+pub const NATIVE_VN2000_ZONES: &[NativeVn2000Zone] = &[
+    vn_zone(3405, 105.0, 0.9996, [102.14, 8.33, 108.0, 23.4]),
+    vn_zone(3406, 111.0, 0.9996, [108.0, 10.43, 109.53, 21.56]),
+    vn_zone(5896, 102.0, 0.9999, [102.14, 9.2, 103.51, 22.82]),
+    vn_zone(5897, 105.0, 0.9999, [103.5, 8.33, 106.51, 23.4]),
+    vn_zone(5898, 108.0, 0.9999, [106.5, 8.57, 109.53, 22.95]),
+    vn_zone(5899, 107.75, 0.9999, [106.43, 8.57, 108.76, 21.67]),
+    vn_zone(9205, 103.0, 0.9999, [102.14, 20.89, 103.99, 22.82]),
+    vn_zone(9206, 104.0, 0.9999, [103.21, 20.57, 105.03, 22.04]),
+    vn_zone(9207, 104.5, 0.9999, [103.4, 8.33, 105.54, 10.55]),
+    vn_zone(9208, 104.75, 0.9999, [103.53, 10.18, 105.86, 22.85]),
+    vn_zone(9209, 105.5, 0.9999, [104.33, 9.19, 106.69, 23.4]),
+    vn_zone(9210, 105.75, 0.9999, [105.26, 9.75, 107.8, 23.12]),
+    vn_zone(9211, 106.0, 0.9999, [104.83, 16.92, 107.03, 22.7]),
+    vn_zone(9212, 106.25, 0.9999, [106.41, 11.3, 107.43, 17.22]),
+    vn_zone(9213, 106.5, 0.9999, [105.43, 21.32, 106.25, 22.75]),
+    vn_zone(9214, 107.0, 0.9999, [105.88, 15.99, 108.24, 21.63]),
+    vn_zone(9215, 107.25, 0.9999, [106.09, 21.32, 107.37, 22.47]),
+    vn_zone(9216, 107.5, 0.9999, [107.33, 13.92, 108.55, 15.42]),
+    vn_zone(9217, 108.25, 0.9999, [108.55, 11.25, 109.53, 14.71]),
+    vn_zone(9218, 108.5, 0.9999, [107.2, 10.43, 109.52, 14.61]),
+];
+fn native_zone(code: u32) -> Result<&'static NativeVn2000Zone, AppError> {
+    NATIVE_VN2000_ZONES.iter().find(|z| z.code == code).ok_or_else(|| AppError::unsupported_crs(code))
+}
+fn native_vn2000_bounds(c: Coord2D, zone: Option<&NativeVn2000Zone>) -> Result<(), AppError> {
+    let [w,s,e,n] = zone.map_or([102.14,8.33,109.53,23.4], |z| z.bounds);
+    let valid = c.x.is_finite() && c.y.is_finite() && c.x >= w-1e-8 && c.x <= e+1e-8 && c.y >= s-1e-8 && c.y <= n+1e-8;
+    let in_zone = zone.map_or(true, |z| (c.x-z.central_meridian).abs() <= if z.scale_factor == 0.9996 {3.0+1e-8} else {1.5+1e-8});
+    if !valid || !in_zone {
+        return Err(AppError::transformation_out_of_area("Coordinate outside the declared VN-2000 projection rectangle or zone."));
+    }
+    Ok(())
+}
+/// No WGS84 is accepted. A caller must explicitly certify native VN-2000 datum.
+/// Supports both directions and projected-to-projected through EPSG:4756.
+pub fn project_native_vn2000(source: u32, target: u32, point: Coord2D) -> Result<Coord2D, AppError> {
+    if !point.x.is_finite() || !point.y.is_finite() {
+        return Err(AppError::validation("INVALID_COORDINATE", "Coordinates must be finite."));
+    }
+    let src = if source == 4756 { None } else { Some(native_zone(source)?) };
+    let dst = if target == 4756 { None } else { Some(native_zone(target)?) };
+    let geographic = match src {
+        Some(z) => {
+            if !(100_000.0..=900_000.0).contains(&point.x) || !(0.0..=3_000_000.0).contains(&point.y) {
+                return Err(AppError::transformation_out_of_area("Invalid projected VN-2000 XY coordinate."));
+            }
+            tmerc_inverse(point, z.central_meridian, z.scale_factor, 500_000.0, 0.0, 0.0)?
+        },
+        None => point,
+    };
+    native_vn2000_bounds(geographic, src)?;
+    native_vn2000_bounds(geographic, dst)?;
+    if source == target { return Ok(point); }
+    match dst {
+        Some(z) => tmerc_forward(geographic, z.central_meridian, z.scale_factor, 500_000.0, 0.0, 0.0),
+        None => Ok(geographic),
+    }
+}
+
+#[cfg(test)]
+mod native_vn2000_tests {
+    use super::*;
+    // Synthetic same-datum reference results from pyproj 3.7.2 / PROJ EPSG.
+    // They test numerical projection only, not survey control points.
+    #[test]
+    fn all_epsg_zones_match_proj_and_round_trip() {
+        let controls = [
+            (3405, 105.07, 15.865, 507494.419657, 1754003.773531),
+            (3406, 108.765, 15.995, 260816.092685, 1769668.247396),
+            (5896, 102.82, 16.01, 587757.610353, 1770745.954408),
+            (5897, 105.0, 15.865, 500000.0, 1754528.933334),
+            (5898, 108.0, 15.76, 500000.0, 1742911.134273),
+            (5899, 107.595, 15.12, 483340.655837, 1672106.153998),
+            (9205, 103.065, 21.855, 506718.170832, 2417504.373916),
+            (9206, 104.12, 21.305, 512449.68815, 2356615.221545),
+            (9207, 104.47, 9.44, 496705.672924, 1043811.255818),
+            (9208, 104.695, 16.515, 494129.010642, 1826451.972181),
+            (9209, 105.51, 16.295, 501068.652423, 1802107.79364),
+            (9210, 106.255, 16.435, 553929.067253, 1817666.208099),
+            (9211, 105.93, 19.81, 492666.686981, 2191115.04902),
+            (9212, 106.92, 14.26, 572294.882281, 1577058.582505),
+            (9213, 105.84, 22.035, 431869.441307, 2437579.50178),
+            (9214, 107.06, 18.81, 506324.024733, 2080429.844781),
+            (9215, 106.73, 21.895, 446269.081027, 2422022.581063),
+            (9216, 107.94, 14.67, 547389.677912, 1622359.87985),
+            (9217, 109.04, 12.98, 585703.701812, 1435487.365224),
+            (9218, 108.36, 12.52, 484784.984108, 1384474.710134),
+        ];
+        assert_eq!(controls.len(), NATIVE_VN2000_ZONES.len());
+        for (code, lon, lat, easting, northing) in controls {
+            let xy = project_native_vn2000(4756, code, Coord2D::new(lon,lat)).unwrap();
+            assert!((xy.x-easting).abs()<0.02 && (xy.y-northing).abs()<0.02, "EPSG:{code}: {xy:?}");
+            let back = project_native_vn2000(code,4756,xy).unwrap();
+            assert!((back.x-lon).abs()<1e-8 && (back.y-lat).abs()<1e-8, "EPSG:{code}: {back:?}");
+        }
+        assert!(project_native_vn2000(4326,9212,Coord2D::new(106.7,11.5)).is_err());
+        assert!(project_native_vn2000(4756,3405,Coord2D::new(109.0,11.0)).is_err());
+        assert!(project_native_vn2000(4756,9212,Coord2D::new(105.0,11.5)).is_err());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

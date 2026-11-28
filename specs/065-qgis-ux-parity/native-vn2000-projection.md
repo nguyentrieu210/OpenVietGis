@@ -1,0 +1,7 @@
+# Native VN-2000 mathematical projection
+
+The authenticated Rust catalog endpoint `GET /organizations/{organization_id}/projects/{project_id}/spatial/vn2000-projections` reports 20 explicit EPSG TM-3/UTM projection definitions. POST at the same route requires CSRF, unrestricted project read access, explicit native-datum acknowledgement, and 1–256 XY points. It returns no-store scoped results; no layer, source, or project data is written.
+
+The inputs and outputs must all use the VN-2000 datum. EPSG:4756 is the geographic intermediate. Projected coordinates are easting/northing in meters; geographic coordinates longitude/latitude in degrees. The kernel rejects other datum codes, nonfinite values, and points outside the declared EPSG rectangle and zone. Province names refer to the EPSG definition and historical administrative names, not a current province boundary.
+
+Projection control values were computed independently using pyproj 3.7.2 with PROJ's EPSG database. They are mathematical controls, not independently surveyed datum control points. EPSG:6960 national datum operation and regional fixture provenance checks remain separate. This endpoint does not enable new stored layer CRS codes, survey-grade WGS84/VN-2000 conversion, or nationwide layer reprojection. Tests in `ovg-spatial::transform::native_vn2000_tests` cover all 20 forward/inverse projections; integration and browser acceptance remain pending.

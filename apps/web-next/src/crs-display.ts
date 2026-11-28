@@ -4,10 +4,11 @@
 export type DisplayCrs = { id: string; name: string; group: string; kind: "geographic" | "mercator" | "tm"; lon0?: number; k0?: number; fe?: number; vn2000?: boolean; epsg?: number };
 
 const A = 6378137, F = 1 / 298.257223563, E2 = F * (2 - F);
+const TM3_EPSG:Record<number,number>={102:5896,103:9205,104:9206,104.5:9207,104.75:9208,105:5897,105.5:9209,105.75:9210,106:9211,106.25:9212,106.5:9213,107:9214,107.25:9215,107.5:9216,107.75:5899,108:5898,108.25:9217,108.5:9218};
 const VN_ZONES: [number, string][] = [
-  [102, "Lai Châu"], [103, "Điện Biên"], [104, "Sơn La"], [104.5, "Kiên Giang, Cà Mau"], [104.75, "Lào Cai, Phú Thọ, Nghệ An, An Giang"],
-  [105, "Vĩnh Phúc, Hà Nam, Ninh Bình, Thanh Hóa, Đồng Tháp, Cần Thơ, Bạc Liêu, Hậu Giang"], [105.5, "Hà Giang, Bắc Ninh, Hải Dương, Hưng Yên, Nam Định, Thái Bình, Hà Tĩnh, Tây Ninh, Vĩnh Long, Trà Vinh"],
-  [105.75, "Hà Nội, Hải Phòng, Long An, Tiền Giang, Bến Tre, TP Hồ Chí Minh, Bình Dương"], [106, "Tuyên Quang, Hòa Bình, Quảng Bình"], [106.25, "Quảng Trị, Bình Phước"],
+  [102, "Múi 481 phía Tây"], [103, "Điện Biên, Lai Châu"], [104, "Sơn La"], [104.5, "Kiên Giang, Cà Mau"], [104.75, "Lào Cai, Phú Thọ, Nghệ An, An Giang, Yên Bái"],
+  [105, "Hà Nội, Vĩnh Phúc, Hà Nam, Ninh Bình, Thanh Hóa, Đồng Tháp, Cần Thơ, Bạc Liêu, Hậu Giang"], [105.5, "Hà Giang, Bắc Ninh, Hải Dương, Hưng Yên, Nam Định, Thái Bình, Hà Tĩnh, Tây Ninh, Vĩnh Long, Trà Vinh"],
+  [105.75, "Hải Phòng, Long An, Tiền Giang, Bến Tre, TP Hồ Chí Minh, Bình Dương, Cao Bằng"], [106, "Tuyên Quang, Hòa Bình, Quảng Bình"], [106.25, "Quảng Trị, Bình Phước"],
   [106.5, "Bắc Kạn, Thái Nguyên"], [107, "Bắc Giang, Thừa Thiên Huế"], [107.25, "Lạng Sơn"], [107.5, "Kon Tum"], [107.75, "Quảng Ninh, Đồng Nai, Bà Rịa - Vũng Tàu, Quảng Nam, Lâm Đồng, Đà Nẵng"],
   [108, "Quảng Ngãi"], [108.25, "Bình Định, Khánh Hòa, Ninh Thuận"], [108.5, "Gia Lai, Đắk Lắk, Đắk Nông, Phú Yên, Bình Thuận"],
 ];
@@ -19,7 +20,7 @@ export const DISPLAY_CRS: DisplayCrs[] = [
   { id: "EPSG:32649", name: "WGS 84 / UTM múi 49N", group: "UTM", kind: "tm", lon0: 111, k0: 0.9996, epsg: 32649 },
   { id: "EPSG:3405", name: "VN-2000 / UTM múi 48N", group: "VN-2000", kind: "tm", lon0: 105, k0: 0.9996, vn2000: true, epsg: 3405 },
   { id: "EPSG:3406", name: "VN-2000 / UTM múi 49N", group: "VN-2000", kind: "tm", lon0: 111, k0: 0.9996, vn2000: true, epsg: 3406 },
-  ...VN_ZONES.map(([lon0, where]) => ({ id: "VN2000-TM3-" + lon0, name: "VN-2000 / TM-3 kinh tuyến trục " + dms(lon0) + " · " + where, group: "VN-2000 TM-3 (bản đồ địa chính)", kind: "tm" as const, lon0, k0: 0.9999, vn2000: true })),
+  ...VN_ZONES.map(([lon0, where]) => ({ id: "VN2000-TM3-" + lon0, name: "VN-2000 / TM-3 kinh tuyến trục " + dms(lon0) + " · " + where, group: "VN-2000 TM-3 (bản đồ địa chính)", kind: "tm" as const, lon0, k0: 0.9999, vn2000: true, epsg: TM3_EPSG[lon0] })),
 ];
 
 const rad = Math.PI / 180;

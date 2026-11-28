@@ -6,6 +6,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
+use ovg_spatial::transform::{project_native_vn2000, Coord2D, NATIVE_VN2000_ZONES};
 use axum::{Json, Router};
 use ovg_core::crs::reference_registry_wire;
 use ovg_core::AppError;
@@ -38,6 +39,7 @@ pub fn router() -> Router<AppState> {
             &format!("{PROJECT}/spatial/crs-profiles"),
             get(list_crs_profiles),
         )
+        .route(&format!("{PROJECT}/spatial/vn2000-projections"), get(list_native_vn2000).post(convert_native_vn2000))
         .route(
             &format!("{PROJECT}/layers/{{layer_id}}/features"),
             get(page_features),
@@ -318,6 +320,52 @@ async fn list_crs_profiles(
     let result = reference_registry_wire(organization_id, project_id);
     read.commit().await?;
     Ok(Json(result))
+}
+
+async fn list_native_vn2000(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+) -> Result<Response, CatalogError> {
+    let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let read = project_read(&state, &auth, org, project, ProjectReadPolicy::Unrestricted).await?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL,"no-store")], Json(json!({
+        "organization_id":org,"project_id":project,"datum":"VN-2000",
+        "geographic_code":4756,"zones":NATIVE_VN2000_ZONES,
+        "scope":"mathematical_same_datum_projection_only"
+    }))).into_response())
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NativeVn2000Request {
+    source_epsg: u32,
+    target_epsg: u32,
+    acknowledge_native_datum: bool,
+    coordinates: Vec<Coord2D>,
+}
+async fn convert_native_vn2000(
+    auth: HumanSession,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    path: Result<Path<(Uuid, Uuid)>, PathRejection>,
+    body: Bytes,
+) -> Result<Response, CatalogError> {
+    require_csrf(&state,&auth,&headers).map_err(CatalogError::Identity)?;
+    let Path((org,project))=path.map_err(|_|CatalogError::InvalidRequest)?;
+    let read=project_read(&state,&auth,org,project,ProjectReadPolicy::Unrestricted).await?;
+    if body.len()>32768 {return Err(CatalogError::InvalidRequest);}
+    let req:NativeVn2000Request=serde_json::from_slice(&body).map_err(|_|CatalogError::InvalidRequest)?;
+    if !req.acknowledge_native_datum || req.coordinates.is_empty() || req.coordinates.len()>256 {
+        return Err(CatalogError::InvalidRequest);
+    }
+    let coordinates=req.coordinates.into_iter().map(|point| project_native_vn2000(req.source_epsg,req.target_epsg,point)).collect::<Result<Vec<_>,_>>()?;
+    read.commit().await?;
+    Ok(([(header::CACHE_CONTROL,"no-store")],Json(json!({
+        "organization_id":org,"project_id":project,"source_epsg":req.source_epsg,
+        "target_epsg":req.target_epsg,"coordinates":coordinates,
+        "scope":"mathematical_same_datum_projection_only"
+    }))).into_response())
 }
 
 async fn get_map(
