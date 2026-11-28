@@ -233,6 +233,7 @@ pub async fn desktop_photo_overview(window:WebviewWindow,host:State<'_,Host>,han
  Ok(tauri::ipc::Response::new(bytes))
 }
 
+static PHOTO_XYZ_CACHE:OnceLock<ovg_processing::photogrammetry::xyz_cache::Cache>=OnceLock::new();
 static PHOTO_TILE_SLOTS:OnceLock<tokio::sync::Semaphore>=OnceLock::new();
 #[tauri::command]
 pub async fn desktop_photo_xyz(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,z:u8,x:u32,y:u32,request_id:Uuid)->Reply<tauri::ipc::Response>{
@@ -252,9 +253,10 @@ pub async fn desktop_photo_xyz(window:WebviewWindow,host:State<'_,Host>,handle:U
  if !fs::symlink_metadata(p).map_err(|_|"INVALID_PREVIEW")?.file_type().is_dir(){return Err("INVALID_PREVIEW");}
  }
  let stop=||read.token.flag.load(Ordering::Acquire)||h.generation(handle).is_err();
- let b=ovg_processing::photogrammetry::xyz::render(&root,z,x,y,stop).map_err(|e|
+ let cache=PHOTO_XYZ_CACHE.get_or_init(||ovg_processing::photogrammetry::xyz_cache::Cache::new(64*1024*1024));
+ let (b,_hit)=cache.get(&root,z,x,y,stop).map_err(|e|
  if matches!(e,ovg_processing::photogrammetry::xyz::Error::Cancelled){"CANCELLED"}else{"PHOTO_TILE_FAILED"})?;
- if stop(){return Err("CANCELLED");}if b.len()!=256*256*4{return Err("INVALID_TILE");}Ok(b)
+ if stop(){return Err("CANCELLED");}if b.len()!=256*256*4{return Err("INVALID_TILE");}Ok(b.to_vec())
  }).await?;
  Ok(tauri::ipc::Response::new(bytes))
 }

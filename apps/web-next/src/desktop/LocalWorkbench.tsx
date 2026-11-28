@@ -213,8 +213,14 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
     const m=map.current;if(!ready||!m||!styleReady.current||!photoPreview)return;
     const selected=photoPreview;const abort=new AbortController();const id="photo-overview";
     const protocol="ovgphoto";let registered=false;
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    let warm:AbortController|undefined;
+    let warmHandler:(()=>void)|undefined;
+    let warmStart:(()=>void)|undefined;
+    const stopWarm=()=>{if(timer!==undefined){clearTimeout(timer);timer=undefined}warm?.abort();warm=undefined};
     const remove=()=>{
       if(map.current===m){if(m.getLayer(id))m.removeLayer(id);if(m.getSource(id))m.removeSource(id)}
+      stopWarm();if(warmHandler)m.off("moveend",warmHandler);if(warmStart)m.off("movestart",warmStart);
       if(registered){maplibregl.removeProtocol(protocol);registered=false;}
     };
     void (async()=>{
@@ -243,7 +249,39 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
       m.addSource(id,{type:"raster",tiles:[protocol+"://"+selected.id+"/{z}/{x}/{y}.png"],bounds:extent,tileSize:256,minzoom:0,maxzoom:24});
       m.addLayer({id,type:"raster",source:id,paint:{"raster-opacity":0.9,"raster-fade-duration":0,"raster-resampling":"nearest"}},"local-fill");
       m.fitBounds(bounds,{padding:48,maxZoom:20,duration:0});
-      setNotice("Orthomosaic · XYZ theo mức zoom, bản thử nghiệm");
+      // Idle-only best-effort warm-up; never request an unbounded viewport ring.
+      // MapLibre raster tiles use 256px; its 512px nominal world adds one zoom.
+      const xy=(lon:number,lat:number,z:number):[number,number]=>{
+        const n=2**z;const y=(1-Math.asinh(Math.tan(Math.max(-85,Math.min(85,lat))*Math.PI/180))/Math.PI)/2*n;
+        return [Math.max(0,Math.min(n-1,Math.floor((lon+180)/360*n))),Math.max(0,Math.min(n-1,Math.floor(y)))];
+      };
+      let lastCenter=m.getCenter();
+      warmStart=stopWarm;
+      warmHandler=()=>{
+        stopWarm();
+        const center=m.getCenter(),dx=center.lng-lastCenter.lng,dy=center.lat-lastCenter.lat;lastCenter=center;
+        timer=setTimeout(()=>{
+          if(abort.signal.aborted||map.current!==m||m.isMoving())return;
+          const z=Math.min(24,Math.max(0,Math.floor(m.getZoom()+1)));
+          const b=m.getBounds();
+          if(b.getEast()-b.getWest()>180||b.getWest()< -180||b.getEast()>180)return;
+          const [left,top]=xy(b.getWest(),b.getNorth(),z),[right,bottom]=xy(b.getEast(),b.getSouth(),z);
+          const [ex0,ey0]=xy(extent[0],extent[3],z),[ex1,ey1]=xy(extent[2],extent[1],z);
+          const [cx,cy]=xy(center.lng,center.lat,z);
+          const horiz:[number,number]=[dx<0?left-1:right+1,cy];
+          const vert:[number,number]=[cx,dy>0?top-1:bottom+1];
+          const candidates=(Math.abs(dx)>=Math.abs(dy)?[horiz,vert]:[vert,horiz]).filter(([x,y])=>x>=ex0&&x<=ex1&&y>=ey0&&y<=ey1);
+          const controller=new AbortController();warm=controller;
+          const signal=AbortSignal.any([abort.signal,controller.signal]);
+          void(async()=>{for(const [x,y]of candidates.slice(0,2)){
+            if(signal.aborted||m.isMoving())break;
+            try{await desktop.photoXYZ(selected.handle,selected.id,z,x,y,signal)}catch{break}
+          }})().finally(()=>{if(warm===controller)warm=undefined});
+        },700);
+      };
+      m.on("movestart",warmStart);m.on("moveend",warmHandler);
+      warmHandler();
+      setNotice("Orthomosaic · XYZ, cache RAM/đĩa và tải trước khi rảnh");
     })().catch(e=>{if(!abort.signal.aborted){remove();setNotice(String(e))}});
     return()=>{abort.abort();remove()};
   },[ready,photoPreview?.handle,photoPreview?.id]);
