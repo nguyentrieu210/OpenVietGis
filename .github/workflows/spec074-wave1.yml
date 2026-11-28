@@ -28,7 +28,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @openvietgis/web-next exec vitest run src/desktop/transport.test.ts
+      - run: pnpm --filter @openvietgis/web-next exec vitest run src/desktop/transport.test.ts src/desktop/vertices.test.ts
       - run: pnpm --filter @openvietgis/web-next build
       - run: pnpm --filter @openvietgis/web-next build
         env:
