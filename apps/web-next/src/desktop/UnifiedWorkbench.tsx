@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from "react";
-import {unified,nativeProviders,unifiedAssets,type UnifiedAsset,type UnifiedAssetKind,type AssetRead,type NativeProviderStatus,type Opened,type Project,type UnifiedCatalog,type UnifiedPlan,type UnifiedCursor,type UnifiedBatch,type AttributeField} from "./transport";
+import {unified,nativeProviders,unifiedAssets,type UnifiedAsset,type UnifiedAssetKind,type AssetRead,type PersistentAsset,type NativeProviderStatus,type Opened,type Project,type UnifiedCatalog,type UnifiedPlan,type UnifiedCursor,type UnifiedBatch,type AttributeField} from "./transport";
 import maplibregl,{type GeoJSONSource} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 export default function UnifiedWorkbench(){
@@ -10,12 +10,13 @@ export default function UnifiedWorkbench(){
  const [tileMode,setTileMode]=useState(false),[visibleLayers,setVisibleLayers]=useState<string[]>([]);
  const [native,setNative]=useState<NativeProviderStatus>(),[nativeOutput,setNativeOutput]=useState("");
  const [ogrIndex,setOgrIndex]=useState("0"),[fromCrs,setFromCrs]=useState("4326"),[toCrs,setToCrs]=useState("3857"),[xyText,setXyText]=useState("[[106.7,11]]"),[band,setBand]=useState("1");
+ const [persisted,setPersisted]=useState<PersistentAsset[]>([]),[bulkName,setBulkName]=useState("Import NDJSON");
  const [asset,setAsset]=useState<UnifiedAsset>(),[assetKind,setAssetKind]=useState<UnifiedAssetKind>("cad"),[assetEpsg,setAssetEpsg]=useState("4326"),[assetChunk,setAssetChunk]=useState("0"),[assetWindow,setAssetWindow]=useState("0,0,256,256"),[assetBounds,setAssetBounds]=useState(""),[assetLod,setAssetLod]=useState("0"),[assetPreview,setAssetPreview]=useState(""),[rasterImage,setRasterImage]=useState("");
  const [message,setMessage]=useState(""),[busy,setBusy]=useState(false),[ready,setReady]=useState(false);
  const active=useRef<Opened|undefined>(undefined),locked=useRef(false),alive=useRef(true),div=useRef<HTMLDivElement>(null),map=useRef<maplibregl.Map|undefined>(undefined);
- const refresh=async(h:string)=>{const c=await unified.catalog(h);if(alive.current){setCatalog(c);setVisibleLayers(v=>v.filter(id=>c.layers.some(l=>l.id===id)));setLayer(l=>c.layers.some(x=>x.id===l)?l:c.layers[0]?.id??"");setCursor(null);setRows([]);(map.current?.getSource("features") as GeoJSONSource|undefined)?.setData({type:"FeatureCollection",features:[]})}};
+ const refresh=async(h:string)=>{const c=await unified.catalog(h);const a=await unifiedAssets.list(h);if(alive.current){setPersisted(a);setCatalog(c);setVisibleLayers(v=>v.filter(id=>c.layers.some(l=>l.id===id)));setLayer(l=>c.layers.some(x=>x.id===l)?l:c.layers[0]?.id??"");setCursor(null);setRows([]);(map.current?.getSource("features") as GeoJSONSource|undefined)?.setData({type:"FeatureCollection",features:[]})}};
  const run=async(f:()=>Promise<void>)=>{if(locked.current)return;locked.current=true;setBusy(true);setMessage("");try{await f()}catch(e){if(alive.current)setMessage(String(e))}finally{locked.current=false;if(alive.current)setBusy(false)}};
- const open=async(id:string)=>{if(active.current?.id===id)return;if(active.current){await unified.close(active.current.handle);active.current=undefined;setOpened(undefined);setCatalog(undefined);setAsset(undefined);setAssetPreview("");setRasterImage("")}const w=await unified.open(id);if(!alive.current){await unified.close(w.handle);return}active.current=w;setOpened(w);setVisibleLayers([]);await refresh(w.handle)};
+ const open=async(id:string)=>{if(active.current?.id===id)return;if(active.current){await unified.close(active.current.handle);active.current=undefined;setOpened(undefined);setCatalog(undefined);setAsset(undefined);setAssetPreview("");setRasterImage("");setPersisted([])}const w=await unified.open(id);if(!alive.current){await unified.close(w.handle);return}active.current=w;setOpened(w);setVisibleLayers([]);await refresh(w.handle)};
  useEffect(()=>{alive.current=true;void run(async()=>{setProjects(await unified.list());setNative(await nativeProviders.status())});return()=>{alive.current=false;if(active.current)void unified.close(active.current.handle).catch(()=>{})}},[]);
  useEffect(()=>{if(!div.current)return;
  maplibregl.addProtocol("ovgr",async(params,abort)=>{
@@ -53,6 +54,24 @@ export default function UnifiedWorkbench(){
   m.addLayer({id:"asset-raster",source:"asset-raster",type:"raster"},"fill");
   return()=>{if(map.current!==m)return;if(m.getLayer("asset-raster"))m.removeLayer("asset-raster");if(m.getSource("asset-raster"))m.removeSource("asset-raster")};
  },[opened,asset,ready]);
+ const assetCrs=()=>{
+  const epsg=assetKind==="cad"?4326:["las","laz","copc"].includes(assetKind)?Number(assetEpsg):null;
+  if(epsg!==null&&(!Number.isInteger(epsg)||epsg<=0||epsg>4294967295))throw Error("INVALID_CRS");return epsg;
+ };
+ const attachAsset=async()=>{
+  if(!opened||!catalog)return;
+  const epsg=assetCrs();
+  if(assetKind==="cad"&&!window.confirm("Xác nhận DXF POINT/LINE XY dùng WGS84?"))return;
+  const a=await unifiedAssets.attach(opened.handle,assetKind,epsg,catalog.revision);
+  if(a){await refresh(opened.handle);setMessage("Đã lưu tài nguyên "+a.id+" vào SQLite")}
+ };
+ const restoreAsset=async(id:string)=>{
+  if(!opened)return;
+  if(asset?.id===id)return;
+  if(asset){await unifiedAssets.close(opened.handle,asset.id);setAsset(undefined)}
+  const a=await unifiedAssets.reopen(opened.handle,id);setAsset(a);setAssetChunk("0");setAssetPreview(JSON.stringify(a,null,2));setRasterImage("");
+  if(a.metadata)setAssetWindow("0,0,"+Math.min(256,a.metadata.width)+","+Math.min(256,a.metadata.height));
+ };
  const loadAsset=async()=>{
   if(!opened)return;
   const epsg=assetKind==="cad"?4326:["las","laz","copc"].includes(assetKind)?Number(assetEpsg):null;
@@ -109,12 +128,16 @@ export default function UnifiedWorkbench(){
  </div>
  <div ref={div} className="ovg-local-map" aria-label="Bản đồ kho thống nhất"/>
  {opened&&catalog&&<div className="ovg-local-table">
+ <details><summary>Nhập dữ liệu lớn NDJSON</summary><p>Mỗi dòng một GeoJSON Feature WGS84 XY; tối đa 100.000 đối tượng, tạo lớp mới nguyên tử. Không dùng Undo cho thao tác nhập lớp.</p><input aria-label="Tên lớp nhập lớn" value={bulkName} onChange={e=>setBulkName(e.target.value)} maxLength={256}/><button disabled={busy||!bulkName.trim()} onClick={()=>void run(async()=>{const r=await unifiedAssets.importNDJSON(opened.handle,bulkName,catalog.revision);if(r){await refresh(opened.handle);setLayer(r.layer);setMessage("Đã nhập "+r.count+" đối tượng, revision "+r.revision)}})}>Chọn NDJSON</button></details>
  <details><summary>Giao dịch nhiều lớp</summary><p>Layer ID: {catalog.layers.map(l=>l.name+": "+l.id).join(" · ")}</p><textarea aria-label="Batch edits links" rows={5} value={batch} onChange={e=>setBatch(e.target.value)}/><button disabled={busy} onClick={()=>void run(apply)}>Commit nguyên tử</button><button disabled={!layer||busy} onClick={()=>setBatch(JSON.stringify({edits:[{layer,feature:crypto.randomUUID(),expected:"0",geometry:{type:"Point",coordinates:[106.7,11]},attributes:{}}],links:[]},null,2))}>Mẫu thêm điểm</button></details>
  <details><summary>Quan hệ và Virtual Layer</summary><select aria-label="Lớp nguồn" value={source} onChange={e=>setSource(e.target.value)}><option value="">Nguồn</option>{catalog.layers.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><select aria-label="Lớp đích" value={target} onChange={e=>setTarget(e.target.value)}><option value="">Đích</option>{catalog.layers.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><select aria-label="Cardinality" value={kind} onChange={e=>setKind(e.target.value)}><option value="one_one">1–1</option><option value="one_many">1–N</option><option value="many_many">N–N</option></select><button disabled={busy||!source||!target} onClick={()=>void run(async()=>{await unified.addRelation(opened.handle,source,target,kind,catalog.revision);await refresh(opened.handle)})}>Tạo quan hệ</button>
  <select aria-label="Lọc theo quan hệ" value={relation} onChange={e=>{setRelation(e.target.value);setCursor(null)}}><option value="">Không lọc quan hệ</option>{catalog.relations.map(r=><option key={r.id} value={r.id}>{option(r.source)} → {option(r.target)} · {r.id}</option>)}</select><input aria-label="Feature ID nguồn" value={sourceId} onChange={e=>{setSourceId(e.target.value);setCursor(null)}}/><textarea aria-label="Bộ lọc JSON" rows={3} value={filter} onChange={e=>{setFilter(e.target.value);setCursor(null)}}/></details>
  <details><summary>Tài nguyên CAD / Point Cloud / Raster</summary>
  <select aria-label="Loại tài nguyên" value={assetKind} onChange={e=>setAssetKind(e.target.value as UnifiedAssetKind)}>{["cad","las","laz","copc","glb","mbtiles","tiff"].map(k=><option key={k} value={k} disabled={k==="tiff"&&!native?.ogr_linked}>{k.toUpperCase()}</option>)}</select>
- <label>EPSG điểm <input value={assetEpsg} onChange={e=>setAssetEpsg(e.target.value)} maxLength={10}/></label><button disabled={busy||!ready} onClick={()=>void run(loadAsset)}>Mở tài nguyên</button>
+ <label>EPSG điểm <input value={assetEpsg} onChange={e=>setAssetEpsg(e.target.value)} maxLength={10}/></label><button disabled={busy||!ready} onClick={()=>void run(loadAsset)}>Mở tài nguyên</button><button disabled={busy||!ready} onClick={()=>void run(attachAsset)}>Lưu bản sao vào dự án</button>
+ <p>Tài nguyên lưu trong SQLite (đi kèm backup)</p>
+ {persisted.map(a=><div key={a.id}><span>{a.kind.toUpperCase()} · {(a.bytes/1048576).toFixed(1)} MiB · {a.id.slice(0,8)}</span><button disabled={busy||!ready} onClick={()=>void run(()=>restoreAsset(a.id))}>Mở lại</button><button disabled={busy} onClick={()=>void run(async()=>{if(!window.confirm("Xóa bản sao tài nguyên trong dự án? File gốc không bị thay đổi."))return;await unifiedAssets.detach(opened.handle,a.id,catalog.revision);if(asset?.id===a.id){setAsset(undefined);setAssetPreview("");setRasterImage("")}await refresh(opened.handle)})}>Gỡ khỏi dự án</button></div>)}
+ 
  {asset&&<><button disabled={busy} onClick={()=>void run(async()=>{await unifiedAssets.close(opened.handle,asset.id);setAsset(undefined);setAssetPreview("");setRasterImage("")})}>Đóng</button>
  {["las","laz","copc"].includes(asset.kind)&&<label>Khối điểm <input value={assetChunk} onChange={e=>setAssetChunk(e.target.value)} maxLength={10}/></label>}
  {asset.kind==="copc"&&<><label>BBox XYZ (trống: khối) <input value={assetBounds} onChange={e=>setAssetBounds(e.target.value)}/></label><label>LOD <input value={assetLod} onChange={e=>setAssetLod(e.target.value)} maxLength={2}/></label></>}
