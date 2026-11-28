@@ -299,3 +299,56 @@ pub async fn native_cad_edit_adopt(window:WebviewWindow,u:State<'_,Unified>,edit
 pub async fn native_cad_versions(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid)->Reply<Vec<ovg_project_store::asset_store::CadVersion>>{
  work(window,u.inner().clone(),move|s|s.with(handle,|store|store.cad_versions().map_err(|_|"STORE_QUERY_FAILED"))).await
 }
+
+// Explicit WGS84 read-only projection. This never rewrites the CAD document;
+// unsupported entities, Z/OCS or duplicate handles reject the entire snapshot.
+fn project_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64,operation:Uuid,layer:Uuid,name:&str)->R<ovg_project_store::bulk_import::BulkReceipt>{
+ use ovg_project_store::{Error,Image,bulk_import::BulkRow};
+ if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=revision{return Err("REVISION_CONFLICT")}
+ let a=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
+ if a.kind!="cad-native-dxf"{return Err("DXF_REQUIRED")}
+ let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let path=dir.path().join("source.dxf");
+ let cancel=AtomicBool::new(false);
+ store.materialize_asset(asset,&path,&cancel).map_err(|_|"CAD_ASSET_READ_FAILED")?;
+ let cad=crate::resource_files::Cad::open(&path)?;
+ let ancestry=store.cad_versions().map_err(|_|"STORE_QUERY_FAILED")?;
+ let mut root=asset;let mut seen=std::collections::HashSet::new();
+ while let Some(parent)=ancestry.iter().find(|v|v.asset==root){
+  if !seen.insert(root)||seen.len()>32{return Err("INVALID_CAD_ANCESTRY")}
+  root=parent.parent;
+ }
+ let rows=cad.features().iter().map(|v|{
+  let handle=v["properties"]["handle"].as_str().ok_or(Error::Invalid)?;
+  let mut hash=Sha256::new();hash.update(b"OVG-CAD-ENTITY-1");hash.update(root.as_bytes());hash.update(handle.as_bytes());
+  let digest=hash.finalize();let mut raw=[0;16];raw.copy_from_slice(&digest[..16]);raw[6]=(raw[6]&15)|0x80;raw[8]=(raw[8]&63)|0x80;
+  let id=Uuid::from_bytes(raw);
+  let g=ovg_spatial::parse_geojson(&v["geometry"],&ovg_spatial::ValidationLimits::default()).map_err(|_|Error::Invalid)?;
+  let wkb=ovg_spatial::encode_wkb(&g,None).map_err(|_|Error::Invalid)?;
+  Ok(BulkRow{id,image:Image{wkb,attributes:serde_json::json!({"cad_root":root,"cad_asset":asset,"cad_sha256":a.sha256,"cad_handle":handle,"cad_layer":v["properties"]["layer"],"cad_entity":v["properties"]["entity"]})}})
+ });
+ store.import_layer_stream(operation,layer,name,revision,rows,&cancel).map_err(|e|match e{Error::Conflict=>"REVISION_CONFLICT",Error::Limit=>"RESOURCE_LIMIT",Error::Reused=>"OPERATION_ID_REUSED",_=>"CAD_PROJECTION_FAILED"})
+}
+#[tauri::command]
+pub async fn native_cad_project_dxf(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,asset:Uuid,expected:String,operation:Uuid,layer:Uuid,name:String,assert_wgs84:bool)->Reply<Value>{
+ if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  let r=project_dxf(store,asset,unified::number(&expected)?,operation,layer,&name)?;
+  Ok(serde_json::json!({"layer":r.layer,"revision":r.revision.to_string(),"count":r.count,"digest":r.digest}))
+ })).await
+}
+#[cfg(test)]
+mod projection_tests{
+ use super::*;
+ #[test]fn project_dxf_preserves_handle_and_source_version(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("a.dxf");
+  fs::write(&p,"0\nSECTION\n2\nENTITIES\n0\nPOINT\n5\nAB\n8\nSurvey\n10\n106\n20\n11\n0\nENDSEC\n0\nEOF\n").unwrap();
+  let s=ovg_project_store::Store::create(&d.path().join("p.sqlite")).unwrap();
+  let a=Uuid::new_v4();let h=digest(&p,MAX).unwrap().1;
+  s.attach_cad_version(a,"cad-native-dxf",&p,0,&h,None,&AtomicBool::new(false)).unwrap();
+  let l=Uuid::new_v4();let r=project_dxf(&s,a,1,Uuid::new_v4(),l,"CAD projection").unwrap();
+  assert_eq!(r.count,1);let page=s.query(l,[105.,10.,107.,12.],0,10,2).unwrap();
+  assert_eq!(page.rows[0].image.attributes["cad_handle"],"AB");assert_eq!(page.rows[0].image.attributes["cad_asset"],a.to_string());
+  assert_eq!(s.assets().unwrap()[0].sha256,h);assert!(s.integrity().unwrap());
+ }
+}
