@@ -16,7 +16,7 @@ const numeric=(v:unknown,n:number):number[]=>{
 function scalar(v:unknown,defaultValue:number){if(v===undefined)return defaultValue;if(typeof v==="number"&&Number.isFinite(v))return v;if(ArrayBuffer.isView(v)&&"length" in v&&v.length===1){const x=numeric(v,1)[0]!;if(Number.isFinite(x))return x}throw Error("Invalid HDF5 numeric attribute")}
 function missingValues(v:unknown):number[]{if(v===undefined)return [];if(typeof v==="number")return [v];if(ArrayBuffer.isView(v)&&"length" in v&&typeof v.length==="number"&&v.length<=256)return numeric(v,v.length);throw Error("Invalid HDF5 missing values")}
 function assertNumeric(v:HdfVariable){
- if(typeof v.dtype!=="string"||!/^([<>|=])?[iuf][1248]$/.test(v.dtype)||v.filters.some(f=>![1,2,3].includes(f.id)))throw Error("Unsupported HDF5 dtype or compression");
+ if(typeof v.dtype!=="string"||!/^([<>|=])?[bBhHiIfd]$/.test(v.dtype)||v.filters.some(f=>![1,2,3].includes(f.id)))throw Error("Unsupported HDF5 dtype or compression");
 }
 function scale(v:HdfVariable,axis:number,name:string){const names=v.get_attached_scales(axis);if(names.length!==1||names[0]!=="/"+name)throw Error("NetCDF4 axis lacks explicit dimension scale: "+name)}
 function timeValues(v:HdfVariable,nt:number){
@@ -45,7 +45,7 @@ export function readNetcdf4Variables(get:(name:string)=>HdfVariable,mesh:LocalMe
   const factor=scalar(attr(v,"scale_factor"),1),offset=scalar(attr(v,"add_offset"),0);
   if(!factor)throw Error("Invalid NetCDF4 scale");
   const fill=attr(v,"_FillValue"),missing=[...missingValues(fill),...missingValues(attr(v,"missing_value"))];
-  if(fill===undefined){const defaults:Record<string,number>={i1:-127,u1:255,i2:-32767,u2:65535,i4:-2147483647,u4:4294967295,f4:Math.fround(9.969209968386869e36),f8:9.969209968386869e36};const k=String(v.dtype).replace(/^[<>|=]/,"");if(Object.hasOwn(defaults,k))missing.push(defaults[k]!)}
+  if(fill===undefined){const defaults:Record<string,number>={b:-127,B:255,h:-32767,H:65535,i:-2147483647,I:4294967295,f:Math.fround(9.969209968386869e36),d:9.969209968386869e36};const k=String(v.dtype).replace(/^[<>|=]/,"");if(Object.hasOwn(defaults,k))missing.push(defaults[k]!)}
   return (i:number)=>numeric(v.slice([[i,i+1],[0,nn]]),nn).map(n=>Number.isNaN(n)||missing.includes(n)?null:n*factor+offset);
  };
  const readX=reader(x),readY=y?reader(y):undefined;
@@ -56,8 +56,8 @@ export async function decodeNetcdf4(bytes:ArrayBuffer,mesh:LocalMesh,variable:st
  if(bytes.byteLength<8||bytes.byteLength>DATASET_MAX_BYTES||new DataView(bytes).getBigUint64(0)!==0x894844460d0a1a0an)throw Error("Invalid or oversized NetCDF4/HDF5 file");
  const validName=(s:string)=>/^[A-Za-z_][A-Za-z0-9_.-]{0,119}$/.test(s);
  if(!validName(variable)||componentY&&!validName(componentY)||variable==="time"||variable==="node_id"||componentY===variable||componentY==="time"||componentY==="node_id")throw Error("Invalid NetCDF4 variable name");
- const h=await import("h5wasm"),mod=await h.ready;
- const fs=mod.FS;if(!fs)throw Error("HDF5 virtual filesystem unavailable");
+ const h=await import("h5wasm");await h.ready;
+ const fs=h.FS;if(!fs)throw Error("HDF5 virtual filesystem unavailable");
  const path="/ovg-netcdf4.h5";fs.writeFile(path,new Uint8Array(bytes));
  let file:InstanceType<typeof h.File>|undefined;
  try{
