@@ -51,6 +51,8 @@ try{
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("BUFFER");
+ // React may commit search results after the input event returns; assert the settled exact alias.
+ await page.waitForFunction(()=>{const buttons=document.querySelectorAll(".core-menu-items button");return buttons.length===1&&buttons[0]?.querySelector("code")?.textContent==="BUFFER"});
  assert.equal(await page.locator(".core-menu-items button").count(),1);
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
