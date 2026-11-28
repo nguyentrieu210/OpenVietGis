@@ -2,7 +2,7 @@
 use ovg_spatial::{Coord2D, PortableTransformKernel, TransformBackend};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex};
+use std::sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Mutex};
 use uuid::Uuid;
 pub mod batch;
 pub mod measure;
@@ -45,7 +45,8 @@ pub enum Error {
 #[derive(Debug, Clone, PartialEq)]
 pub enum JobStatus { Pending, Finished(Result<Vec<f64>, Error>) }
 
-struct Record { cancel: Arc<AtomicBool>, result: Option<Result<Vec<f64>, Error>> }
+enum Payload{Coordinates(Vec<f64>),Processing(processing::ResultSet)}
+struct Record { cancel: Arc<AtomicBool>, progress:Arc<AtomicU32>, result: Option<Result<Payload, Error>> }
 #[derive(Default)]
 struct State {
     sessions: HashMap<Session, Vec<Workspace>>,
@@ -107,16 +108,24 @@ impl Engine {
     }
     fn start<F>(&self, workspace: Workspace, f: F) -> Result<Job, Error>
     where F: FnOnce(&AtomicBool) -> Result<Vec<f64>, Error> + Send + 'static {
+        self.start_payload(workspace,move|cancel,_|f(cancel).map(Payload::Coordinates))
+    }
+    pub fn start_processing(&self,workspace:Workspace,algorithm:AlgorithmId,epsg:u32,input:Vec<processing::Input>,overlay:Vec<processing::Input>,params:serde_json::Value)->Result<Job,Error>{
+        self.start_payload(workspace,move|cancel,progress|processing::run(algorithm,epsg,&input,&overlay,&params,||cancel.load(Ordering::Acquire),|p|progress.store(p,Ordering::Release)).map(Payload::Processing))
+    }
+    fn start_payload<F>(&self,workspace:Workspace,f:F)->Result<Job,Error>
+    where F:FnOnce(&AtomicBool,&AtomicU32)->Result<Payload,Error>+Send+'static{
         let mut s = self.lock()?;
         if !s.sessions.get(&workspace.session).is_some_and(|v| v.contains(&workspace)) { return Err(Error::Stale); }
         if s.running >= MAX_RUNNING || s.jobs.len() >= MAX_JOBS { return Err(Error::Limit); }
         let id = Job { workspace, generation: Uuid::new_v4() };
         let cancel = Arc::new(AtomicBool::new(false));
-        s.jobs.insert(id, Record { cancel: cancel.clone(), result: None });
+        let progress=Arc::new(AtomicU32::new(0));
+        s.jobs.insert(id, Record { cancel: cancel.clone(),progress:progress.clone(), result: None });
         s.running += 1;
         let state = Arc::clone(&self.state);
         let spawned = std::thread::Builder::new().name("ovg-mobile-job".into()).spawn(move || {
-            let outcome = catch_unwind(AssertUnwindSafe(|| f(&cancel)));
+            let outcome = catch_unwind(AssertUnwindSafe(|| f(&cancel,&progress)));
             if let Ok(mut s) = state.lock() {
                 s.running -= 1;
                 match outcome {
@@ -146,7 +155,13 @@ impl Engine {
     pub fn take_result(&self, job: Job) -> Result<Vec<f64>, Error> {
         let mut s = self.lock()?;
         if s.jobs.get(&job).ok_or(Error::Stale)?.result.is_none() { return Err(Error::Pending); }
-        s.jobs.remove(&job).ok_or(Error::Stale)?.result.ok_or(Error::Pending)?
+        match s.jobs.remove(&job).ok_or(Error::Stale)?.result.ok_or(Error::Pending)??{Payload::Coordinates(v)=>Ok(v),_=>Err(Error::InvalidBatch)}
+    }
+    pub fn progress(&self,job:Job)->Result<u32,Error>{Ok(self.lock()?.jobs.get(&job).ok_or(Error::Stale)?.progress.load(Ordering::Acquire))}
+    pub fn take_processing(&self,job:Job)->Result<processing::ResultSet,Error>{
+        let mut s=self.lock()?;
+        if s.jobs.get(&job).ok_or(Error::Stale)?.result.is_none(){return Err(Error::Pending);}
+        match s.jobs.remove(&job).ok_or(Error::Stale)?.result.ok_or(Error::Pending)??{Payload::Processing(v)=>Ok(v),_=>Err(Error::InvalidBatch)}
     }
     pub fn cancel(&self, job: Job) -> Result<(), Error> {
         let s = self.lock()?;

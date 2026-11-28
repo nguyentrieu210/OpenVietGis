@@ -148,6 +148,22 @@ impl NativeWorkspace {
     pub fn checkpoint(&self)->Result<(),String>{
         self.with_state(|s|s.store.checkpoint().map_err(|e|e.to_string()))
     }
+    pub fn start_local_processing(&self,algorithm:String,input_ids:Vec<String>,overlay_ids:Vec<String>,parameters_json:String)->Result<NativeProcessingJob,String>{
+        if parameters_json.len()>65536||input_ids.len()>128||overlay_ids.len()>128{return Err("RESOURCE_LIMIT".into());}
+        let algorithm=serde_json::from_value::<ovg_mobile_engine::AlgorithmId>(serde_json::Value::String(algorithm)).map_err(|_|"UNKNOWN_ALGORITHM".to_owned())?;
+        let params=serde_json::from_str(&parameters_json).map_err(|_|"INVALID_PARAMETERS".to_owned())?;
+        let input_ids=input_ids.iter().map(|v|id(v)).collect::<Result<Vec<_>,_>>()?;
+        let overlay_ids=overlay_ids.iter().map(|v|id(v)).collect::<Result<Vec<_>,_>>()?;
+        self.with_state(|s|{
+            let (mut a,mut b)=s.store.processing_inputs(&input_ids,&overlay_ids).map_err(|e|e.to_string())?;
+            let epsg=if algorithm==ovg_mobile_engine::AlgorithmId::Buffer{
+                let projected=ovg_mobile_engine::processing::run(ovg_mobile_engine::AlgorithmId::Reproject,4326,&a,&[],&serde_json::json!({"target_srid":3857}),||false,|_|{}).map_err(|e|e.to_string())?;
+                a=projected.rows.into_iter().map(|row|ovg_mobile_engine::processing::Input{id:row.source_ids[0].clone(),wkb:row.wkb,attributes:row.attributes}).collect();3857
+            }else{4326};
+            let handle=s.engine.start_processing(s.workspace,algorithm,epsg,std::mem::take(&mut a),std::mem::take(&mut b),params).map_err(|e|e.to_string())?;
+            Ok(NativeProcessingJob{engine:s.engine.clone(),handle})
+        })
+    }
     pub fn start_transform(&self,source_epsg:u32,target_epsg:u32,xy:Vec<f64>)->Result<NativeJob,String>{
         self.with_state(|s|{
             let handle=s.engine.start_transform(s.workspace,source_epsg,target_epsg,xy).map_err(|e|e.to_string())?;
@@ -164,3 +180,17 @@ impl NativeJob {
     pub fn close(&self)->Result<(),String>{self.engine.dispose_job(self.handle).map_err(|e|e.to_string())}
 }
 impl Drop for NativeJob {fn drop(&mut self){let _=self.engine.dispose_job(self.handle);}}
+
+#[flutter_rust_bridge::frb(opaque)]
+pub struct NativeProcessingJob{engine:Engine,handle:Job}
+impl NativeProcessingJob{
+    pub fn is_finished(&self)->Result<bool,String>{self.engine.is_finished(self.handle).map_err(|e|e.to_string())}
+    pub fn progress(&self)->Result<u32,String>{self.engine.progress(self.handle).map_err(|e|e.to_string())}
+    pub fn cancel(&self)->Result<(),String>{self.engine.cancel(self.handle).map_err(|e|e.to_string())}
+    pub fn take_processing_json(&self)->Result<String,String>{
+        let r=self.engine.take_processing(self.handle).map_err(|e|e.to_string())?;
+        serde_json::to_string(&r).map_err(|_|"SERIALIZE_RESULT".into())
+    }
+    pub fn close(&self)->Result<(),String>{self.engine.dispose_job(self.handle).map_err(|e|e.to_string())}
+}
+impl Drop for NativeProcessingJob{fn drop(&mut self){let _=self.engine.dispose_job(self.handle);}}

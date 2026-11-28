@@ -191,6 +191,21 @@ impl LocalStore {
         }
         Ok(out)
     }
+    /// Consistent revision-pinned input from the standalone workspace only.
+    pub fn processing_inputs(&self,ids:&[Uuid],overlay:&[Uuid])->Result<(Vec<ovg_mobile_engine::processing::Input>,Vec<ovg_mobile_engine::processing::Input>),Error>{
+        if ids.is_empty()||ids.len()>128||overlay.len()>128{return Err(Error::Limit);}
+        let mut db=self.lock()?;let tx=db.transaction()?;
+        let read=|ids:&[Uuid]|->Result<Vec<ovg_mobile_engine::processing::Input>,Error>{
+            let mut out=Vec::new();let mut seen=std::collections::HashSet::new();let mut bytes=0;
+            for id in ids{
+                if id.is_nil()||!seen.insert(id){return Err(Error::Invalid);}
+                let (revision,blob,attrs):(u64,Vec<u8>,String)=tx.query_row("SELECT revision,geom,attributes FROM features WHERE stable_id=?1",[id.to_string()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?.ok_or(Error::Conflict)?;
+                bytes+=blob.len()+attrs.len();if bytes>4*1024*1024{return Err(Error::Limit);}
+                out.push(ovg_mobile_engine::processing::Input{id:format!("{id}@{revision}"),wkb:unpack(&blob)?.to_vec(),attributes:serde_json::from_str(&attrs).map_err(|_|Error::Invalid)?});
+            }Ok(out)
+        };
+        let a=read(ids)?;let b=read(overlay)?;tx.commit()?;Ok((a,b))
+    }
     pub fn checkpoint(&self)->Result<(),Error>{
         let db=self.lock()?;
         let busy:i32=db.query_row("PRAGMA wal_checkpoint(TRUNCATE)",[],|r|r.get(0))?;
