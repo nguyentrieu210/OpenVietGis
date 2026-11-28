@@ -21,7 +21,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, layer:Option<Uuid>, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive,tempfile::NamedTempFile)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, layer:Option<Uuid>, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive,tempfile::NamedTempFile)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)>, direct:Option<(Uuid,crate::gpkg_import::Direct)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -120,6 +120,38 @@ impl Host {
               "vector_layers":[{"id":"local","fields":{"stable_id":"String"},"minzoom":0,"maxzoom":22}]})).map_err(|_|"INVALID_LOCAL_DATA")
         })
     }
+    pub fn direct_open(&self,handle:Uuid,path:&Path)->Result<Value>{
+        let d=crate::gpkg_import::Direct::open(path)?;
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        let id=Uuid::new_v4();let v=json!({"id":id,"layers":d.layers});w.direct=Some((id,d));Ok(v)
+    }
+    pub fn direct_page(&self,handle:Uuid,grant:Uuid,table:&str,bbox:[f64;4],after:&str)->Result<crate::gpkg_import::DirectPage>{
+        self.read(handle,|w|{
+            let (_,d)=w.direct.as_ref().filter(|(id,_)|*id==grant).ok_or("STALE_HANDLE")?;
+            d.page(table,bbox,after)
+        })
+    }
+    pub fn direct_close(&self,handle:Uuid,grant:Uuid)->Result<()>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        if w.direct.as_ref().map(|(id,_)|*id)!=Some(grant){return Err("STALE_HANDLE")}
+        w.direct=None;Ok(())
+    }
+    pub fn integrity_report(&self,handle:Uuid)->Result<Value>{
+        self.read(handle,|w|{
+            let tmp=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+            let path=tmp.path().join("check.gpkg");
+            w._store.export_snapshot(&path).map_err(store_err)?;
+            let db=rusqlite::Connection::open_with_flags(&path,rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|_|"INVALID_STORAGE")?;
+            let quick:String=db.pragma_query_value(None,"quick_check",|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let fk:i64=db.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let missing:i64=db.query_row("SELECT count(*) FROM features f LEFT JOIN rtree_features_geom i ON i.id=f.fid WHERE i.id IS NULL",[],|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let orphan:i64=db.query_row("SELECT count(*) FROM rtree_features_geom i LEFT JOIN features f ON f.fid=i.id WHERE f.fid IS NULL",[],|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let features:i64=db.query_row("SELECT count(*) FROM features",[],|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let pages:i64=db.pragma_query_value(None,"page_count",|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            let free:i64=db.pragma_query_value(None,"freelist_count",|r|r.get(0)).map_err(|_|"INVALID_STORAGE")?;
+            Ok(json!({"ok":quick=="ok"&&fk==0&&missing==0&&orphan==0,"quick_check":quick,"foreign_keys":fk,"missing_index":missing,"orphan_index":orphan,"features":features,"pages":pages,"free_pages":free}))
+        })
+    }
     pub fn inspect_gpkg(&self,handle:Uuid,path:&Path)->Result<Value>{
         let catalog=crate::gpkg_import::Catalog::open(path)?;
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
@@ -213,7 +245,7 @@ impl Host {
         let cache=ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project,layer:Some(layer),generation:0,cache,raster:None,assets:HashMap::new(),catalog:None});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project,layer:Some(layer),generation:0,cache,raster:None,assets:HashMap::new(),catalog:None,direct:None});
         Ok(Opened{id:project,handle})
     }
     pub fn import_gpkg(&self,handle:Uuid,path:&Path)->Result<u32>{
@@ -487,7 +519,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,layer:None,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new(),catalog:None});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,layer:None,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new(),catalog:None,direct:None});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
