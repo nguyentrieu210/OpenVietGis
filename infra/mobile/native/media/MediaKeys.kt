@@ -135,6 +135,31 @@ class MediaKeys(context: Context) {
             generateKey()
         }
     }
+    // Import only into an absent scope; never overwrite an existing key.
+    fun putScopedKey(scope: String, raw: ByteArray): Boolean = synchronized(lock) {
+        try {
+            val u = UUID.fromString(scope)
+            if (u.toString() != scope || u == UUID(0L, 0L) || raw.size != 32 || raw.all { it == 0.toByte() }) return@synchronized false
+            if (!root.exists() && !root.mkdirs()) return@synchronized false
+            val path = File(root, "$scope.wrap")
+            if (path.exists() || File(path.path + ".bak").exists()) {
+                val existing = getScopedKey(scope, false) ?: return@synchronized false
+                try { return@synchronized java.security.MessageDigest.isEqual(existing, raw) }
+                finally { existing.fill(0) }
+            }
+            val key = master(true) ?: return@synchronized false
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.ENCRYPT_MODE, key)
+            c.updateAAD("OVGKEY1:$scope".toByteArray(Charsets.UTF_8))
+            val encrypted = c.doFinal(raw)
+            if (c.iv.size != 12 || encrypted.size != 48) return@synchronized false
+            val atomic = AtomicFile(path)
+            val out = atomic.startWrite()
+            try { out.write(c.iv); out.write(encrypted); atomic.finishWrite(out) }
+            catch (e: Exception) { atomic.failWrite(out); throw e }
+            true
+        } catch (_: Exception) { false } finally { raw.fill(0) }
+    }
     // JNI caller wipes the returned byte array immediately after copying.
     fun getScopedKey(scope: String, create: Boolean): ByteArray? = synchronized(lock) {
         try {
