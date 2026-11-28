@@ -19,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64 }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -50,6 +50,8 @@ const MAX_IMPORT:u64=16*1024*1024;
 const MAX_READ:usize=2*1024*1024;
 #[derive(Serialize)]
 pub struct Viewport { pub generation:String, pub data:Value, pub truncated:bool }
+#[derive(Serialize)]
+pub struct Raster { pub id:Uuid, pub attribution:String }
 impl Host {
     fn read<T>(&self,handle:Uuid,f:impl FnOnce(&Open)->Result<T>)->Result<T>{
         let s=self.lock()?; f(s.open.get(&handle).ok_or("STALE_HANDLE")?)
@@ -58,6 +60,31 @@ impl Host {
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         let next=w.generation.checked_add(1).ok_or("RESOURCE_LIMIT")?;
         let out=f(&w._store)?;w.generation=next;Ok(out)
+    }
+    // Session-scoped, explicitly selected raster archive. No persistent path grants.
+    pub fn open_raster(&self,handle:Uuid,path:&Path)->Result<Raster>{
+        regular(path)?;
+        let archive=ovg_local_storage::mbtiles::Archive::open(path).map_err(store_err)?;
+        if archive.format!="png"{return Err("UNSUPPORTED_FORMAT")}
+        let id=Uuid::new_v4();let attribution=archive.attribution.clone();
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        w.raster=Some((id,archive));Ok(Raster{id,attribution})
+    }
+    pub fn raster_tile(&self,handle:Uuid,id:Uuid,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
+        if z>22||x>=(1u32<<z)||y>=(1u32<<z){return Err("INVALID_TILE")}
+        self.read(handle,|w|{
+            let (_,a)=w.raster.as_ref().filter(|(key,_)|*key==id).ok_or("STALE_HANDLE")?;
+            let b=a.tile(z,x,y).map_err(store_err)?.ok_or("TILE_NOT_FOUND")?;
+            if b.len()<33||b.len()>4*1024*1024||&b[..8]!=b"\\x89PNG\\r\\n\\x1a\\n"||&b[12..16]!=b"IHDR"{return Err("INVALID_TILE")}
+            let width=u32::from_be_bytes(b[16..20].try_into().map_err(|_|"INVALID_TILE")?);
+            let height=u32::from_be_bytes(b[20..24].try_into().map_err(|_|"INVALID_TILE")?);
+            if !matches!(width,256|512)||height!=width{return Err("INVALID_TILE")}
+            Ok(b)
+        })
+    }
+    pub fn close_raster(&self,handle:Uuid)->Result<()>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        w.raster=None;Ok(())
     }
     pub fn generation(&self,handle:Uuid)->Result<String>{self.read(handle,|w|Ok(w.generation.to_string()))}
     pub fn viewport(&self,handle:Uuid,bbox:[f64;4])->Result<Viewport>{
@@ -192,7 +219,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,raster:None});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
