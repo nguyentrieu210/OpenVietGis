@@ -225,3 +225,50 @@ def compare_tiles(suite, layer_path, polygons, owner, outsider, surveyor):
     _outcome(suite, "E05 tile unauthenticated", lambda: _require(
         rust.get(tile, params=pins).status_code == 401, "anonymous tile"
     ))
+
+
+def check_cached_tile_revocation(
+    suite, layer_path, layer, org_path, project_id, membership_id, owner, member, owner_csrf
+):
+    """Warm the private Rust tile cache, revoke its reader grant, and retry the same URL."""
+    z, x, y = TILE
+    tile = f"{layer_path(layer['layer_id'])}/tiles/{z}/{x}/{y}.mvt"
+    pins = _pins(layer)
+    owner_headers = {"cookie": f"ovg_session={owner}", "x-openvietgis-csrf": owner_csrf}
+
+    def check():
+        created = suite.oracle.post(
+            f"{org_path}/grants",
+            headers=owner_headers,
+            json={
+                "subject_kind": "membership",
+                "subject_id": str(membership_id),
+                "scope_kind": "project",
+                "project_id": str(project_id),
+                "role": "viewer",
+            },
+        )
+        _require(created.status_code == 201, f"reader grant: {created.status_code} {created.text}")
+        grant_id = created.json()["id"]
+        headers = {"cookie": f"ovg_session={member}"}
+        first = suite.rust.get(tile, params=pins, headers=headers)
+        _require(first.status_code == 200, f"warm tile status {first.status_code}: {first.text[:200]}")
+        _require(
+            first.headers.get("content-type") == "application/vnd.mapbox-vector-tile"
+            and b"poly-000002" in first.content,
+            "authorized reader did not receive the seeded tile",
+        )
+        warm = suite.rust.get(tile, params=pins, headers=headers)
+        _require(warm.status_code == 200 and warm.content == first.content, "repeat tile was not stable")
+
+        revoked = suite.oracle.post(f"{org_path}/grants/{grant_id}/revoke", headers=owner_headers)
+        _require(revoked.status_code == 204, f"grant revoke: {revoked.status_code} {revoked.text[:200]}")
+        denied = suite.rust.get(tile, params=pins, headers=headers)
+        _require(denied.status_code == 403, f"cached tile survived revocation: HTTP {denied.status_code}")
+        _require(
+            denied.headers.get("content-type") != "application/vnd.mapbox-vector-tile"
+            and b"poly-000002" not in denied.content,
+            "revoked response disclosed cached tile bytes",
+        )
+
+    _outcome(suite, "E05 cached tile rechecks revoked project grant", check)
