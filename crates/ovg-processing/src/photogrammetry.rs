@@ -26,6 +26,7 @@ pub mod simd;
 pub mod depth;
 pub mod surface;
 pub mod seam;
+pub mod seam_graph;
 pub mod mesh;
 pub mod streaming;
 pub mod incremental;

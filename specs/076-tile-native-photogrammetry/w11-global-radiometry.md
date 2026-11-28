@@ -1,0 +1,2 @@
+# W11 global radiometry checkpoint
+Adds anchored graph-wide additive sRGB correction from aligned overlap median offsets, weighted by bounded support, deterministic sparse relaxation with bounded offsets and all-edge residual gate. Disconnected and contradictory graphs fail closed. No exposure gain/vignetting model, spatial seamline selection, multiband blending or integration into final mosaic publication yet. Tests authored, not executed.
