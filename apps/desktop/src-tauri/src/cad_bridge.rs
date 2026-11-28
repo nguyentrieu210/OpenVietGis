@@ -519,9 +519,10 @@ fn sync_cad_to_gis(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,child:U
   let before=base.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("STALE_ENTITY")?;
   let after=updated.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("SYNC_ENTITY_SET_CHANGED")?;
   if before["properties"]["entity"]!=after["properties"]["entity"]{return Err("SYNC_ENTITY_TYPE_CHANGED")}
-  if row.image.wkb!=cad_wkb(&before["geometry"])?{return Err("GIS_GEOMETRY_CONFLICT")}
+  let target=cad_wkb(&after["geometry"])?;
+  if row.image.wkb!=cad_wkb(&before["geometry"])?&&row.image.wkb!=target{return Err("GIS_GEOMETRY_CONFLICT")}
   let mut attrs=row.image.attributes.clone();attrs["cad_asset"]=serde_json::json!(child);attrs["cad_sha256"]=serde_json::json!(next.sha256);attrs["cad_layer"]=after["properties"]["layer"].clone();
-  edits.push(Edit{layer,feature:row.id,expected:row.revision,image:Some(Image{wkb:cad_wkb(&after["geometry"])?,attributes:attrs})});
+  edits.push(Edit{layer,feature:row.id,expected:row.revision,image:Some(Image{wkb:target,attributes:attrs})});
  }
  store.apply(&Batch{operation,expected_project:revision,edits,links:vec![]}).map_err(|e|match e{ovg_project_store::Error::Conflict=>"REVISION_CONFLICT",ovg_project_store::Error::Limit=>"SYNC_BATCH_LIMIT",_=>"SYNC_FAILED"})
 }
@@ -550,4 +551,28 @@ pub async fn native_cad_sync_layer(window:WebviewWindow,u:State<'_,Unified>,hand
   if let Some(c)=child{let r=sync_cad_to_gis(store,layer,asset,c,rev,operation)?;Ok(serde_json::json!({"revision":r.revision.to_string(),"features":r.features.len()}))}
   else{let r=sync_gis_to_cad(store,layer,asset,rev)?;Ok(serde_json::json!({"asset":r.id,"sha256":r.sha256}))}
  })).await
+}
+
+#[cfg(test)]mod sync_tests{
+ use super::*;
+ use ovg_project_store::{Store,Batch,Edit};
+ #[test]fn direct_child_sync_preserves_stable_id_and_rejects_divergence(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("source.dxf");
+  fs::write(&p,"0\nSECTION\n2\nENTITIES\n0\nPOINT\n5\nAB\n8\nSurvey\n10\n106\n20\n11\n0\nENDSEC\n0\nEOF\n").unwrap();
+  let s=Store::create(&d.path().join("p.sqlite")).unwrap();let a=Uuid::new_v4();let h=digest(&p,MAX).unwrap().1;let cancel=AtomicBool::new(false);
+  s.attach_cad_version(a,"cad-native-dxf",&p,0,&h,None,&cancel).unwrap();
+  let l=Uuid::new_v4();project_dxf(&s,a,1,Uuid::new_v4(),l,"Survey").unwrap();
+  let f=cad_feature_id(a,"AB");
+  let child=adopt_entity(&s,a,2,&h,"AB",&serde_json::json!({"type":"Point","coordinates":[106.5,11.]})).unwrap();
+  let r=sync_cad_to_gis(&s,l,a,child.id,3,Uuid::new_v4()).unwrap();assert_eq!(r.revision,4);
+  let(fr,mut img)=s.feature(l,f,4).unwrap();assert_eq!(img.attributes["cad_asset"],child.id.to_string());
+  img.wkb=cad_wkb(&serde_json::json!({"type":"Point","coordinates":[107.,11.]})).unwrap();
+  s.apply(&Batch{operation:Uuid::new_v4(),expected_project:4,edits:vec![Edit{layer:l,feature:f,expected:fr,image:Some(img)}],links:vec![]}).unwrap();
+  let fork=adopt_entity(&s,child.id,5,&child.sha256,"AB",&serde_json::json!({"type":"Point","coordinates":[108.,11.]})).unwrap();
+  assert_eq!(sync_cad_to_gis(&s,l,child.id,fork.id,6,Uuid::new_v4()),Err("GIS_GEOMETRY_CONFLICT"));
+  assert_eq!(s.revision().unwrap(),6);
+  let back=sync_gis_to_cad(&s,l,child.id,6).unwrap();
+  sync_cad_to_gis(&s,l,child.id,back.id,7,Uuid::new_v4()).unwrap();
+  assert_eq!(s.feature(l,f,8).unwrap().1.attributes["cad_asset"],back.id.to_string());assert!(s.integrity().unwrap());
+ }
 }
