@@ -166,6 +166,12 @@ impl NativeProject{
   let b=Batch{operation:id(operation)?,expected_project:revision(expected_project)?,edits:vec![Edit{layer:id(layer)?,feature:id(feature)?,expected:revision(expected_feature)?,image:Some(Image{wkb,attributes:decode(attributes_json)?})}],links:vec![]};
   self.apply(&json(&b)?)
  }
+ pub fn survey_tracks(&self,layer:&str,after:&str,expected:&str)->Result<String>{
+  self.with(|s|encode(&s.survey_tracks(id(layer)?,after,100,revision(expected)?)?))
+ }
+ pub fn survey_fixes(&self,layer:&str,track:&str,after:&str,expected:&str)->Result<String>{
+  self.with(|s|encode(&s.survey_fixes(id(layer)?,id(track)?,revision(after)?,100,revision(expected)?)?))
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
@@ -217,3 +223,12 @@ pub fn restore_project(path:&Path,exchange:&Path,name:&str)->Result<String>{
   assert!(restore_project(&root,&ex,"../wrong.sqlite").is_err());
  }
 }
+
+ /// Explicit copy of a trusted standalone LocalStore. The encrypted external
+ /// media vault is not accessed, copied, decrypted or downgraded.
+ pub fn migrate_local_store(path:&Path,legacy:&ovg_local_storage::LocalStore,layer:Uuid,name:&str)->Result<String>{
+  let dir=tempfile::tempdir_in(root(path)?).map_err(|_|Error::Storage)?;
+  let snap=dir.path().join("source.gpkg");
+  legacy.export_snapshot(&snap).map_err(|_|Error::Storage)?;
+  publish(path,|p|{migration::migrate(&[migration::Source{layer,name:name.into(),snapshot:snap}],p,&AtomicBool::new(false))?;Ok(())})
+ }
