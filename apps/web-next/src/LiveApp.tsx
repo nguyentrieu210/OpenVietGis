@@ -447,7 +447,7 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
  // change until ProjectStudio remounts the workspace with a different plugin key.
  const useContribution=extension?.useStudio??useEmptyStudio;
  const contribution=useContribution({client,org,pid,uiScope:uiKey("plugin:"+ (extension?.id??"core")),data,row,selected,loading,busy,editing:!!draft||toolkit.editingTool||!!advanced.mode||!!pro.panel,revision:reload,action,refresh,fail,select:setSelected,goto,fit:()=>{fit.current="none"},resetLayers:()=>setHidden(new Set()),notify:setNotice});
- const commands=[...baseCommands,...pluginUICommands(extension?.id??"",contribution.actions??[],baseCommands,!spatialRead||workspaceMode!=="gis"||specialDisabled||rasterBusy),...partnerCommands(partnerTools,baseCommands,!spatialRead||workspaceMode!=="gis"||specialDisabled||rasterBusy)];
+ const commands=[...baseCommands,...pluginUICommands(extension?.id??"",contribution.actions??[],baseCommands,!spatialRead||workspaceMode!=="gis"||specialDisabled||rasterBusy,moduleName??extension?.id??"Plugin"),...partnerCommands(partnerTools,baseCommands,!spatialRead||workspaceMode!=="gis"||specialDisabled||rasterBusy)];
  // QGIS display name: a meaningful attribute, else a short ordinal; never the internal UUID-like feature id.
  const label=(r:Row)=>contribution.label?.(r)??displayName(r,data.rows);
  const previewViews=useMemo(()=>toolkit.displayPreview?{...workspace.layerViews,[toolkit.displayPreview.id]:{...toolkit.displayPreview.view,selectable:workspace.layerViews[toolkit.displayPreview.id]?.selectable??true,locked:workspace.layerViews[toolkit.displayPreview.id]?.locked??false}}:workspace.layerViews,[workspace.layerViews,toolkit.displayPreview]);

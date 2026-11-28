@@ -65,14 +65,15 @@ function useStudio(host:StudioHost):StudioContribution{
  const show=(next="overview")=>{setSection(next);setNavigator(true)};
  const canWrite=businessAccess&&data.permissions.includes("project.edit")&&!draft&&!busy;
  const actions:PluginAction[]=[
-  {id:"workspace",label:"Quản lý số nhà · Mở không gian",run:()=>show()},
-  {id:"toolbar",label:tools?"Quản lý số nhà · Ẩn thanh công cụ":"Quản lý số nhà · Hiện thanh công cụ",run:()=>{setNavigator(true);setTools(x=>!x)}},
-  {id:"close",label:"Quản lý số nhà · Đóng không gian",disabled:!enabled||busy||draft,run:closeWorkspace},
-  {id:"area",label:"Quản lý số nhà · Thêm địa bàn",shortLabel:"▧ Địa bàn",toolbar:true,disabled:!canWrite,run:()=>open("area")},
-  {id:"route",label:"Quản lý số nhà · Liên kết tuyến/hẻm",shortLabel:"╱ Tuyến",toolbar:true,disabled:!canWrite||row?.geometry?.type!=="LineString"||!!route,run:()=>open("route")},
-  {id:"building",label:"Quản lý số nhà · Liên kết công trình",shortLabel:"⌂ Nhà",toolbar:true,disabled:!canWrite||!row||!!building||(isSurvey(row.layer.name)&&(loading||!["Nhà ở","Công trình"].includes(surveyText(row,"hien_trang")))),run:()=>open("building")},
-  {id:"number",label:"Quản lý số nhà · Đánh số đối tượng",shortLabel:"123",toolbar:true,disabled:!businessAccess||!building||draft||busy,run:()=>open("number")},
-  {id:"bulk",label:"Quản lý số nhà · Đánh số hàng loạt",shortLabel:"123+",toolbar:true,disabled:!businessAccess||draft||busy,run:()=>{setSection("numbering");setNavigator(true)}}
+  {id:"workspace",menuLabel:"Mở không gian",checked:navigator,section:"workspace",label:"Quản lý số nhà · Mở không gian",run:()=>navigator?closeWorkspace():show()},
+  {id:"toolbar",menuLabel:"Thanh công cụ",checked:tools,section:"workspace",label:tools?"Quản lý số nhà · Ẩn thanh công cụ":"Quản lý số nhà · Hiện thanh công cụ",run:()=>{setNavigator(true);setTools(x=>!x)}},
+  {id:"close",menuLabel:"Đóng không gian",section:"workspace",label:"Quản lý số nhà · Đóng không gian",disabled:!enabled||busy||draft,run:closeWorkspace},
+  {id:"area",menuLabel:"Thêm địa bàn",section:"tools",label:"Quản lý số nhà · Thêm địa bàn",shortLabel:"▧ Địa bàn",toolbar:true,disabled:!canWrite,run:()=>open("area")},
+  {id:"route",menuLabel:"Liên kết tuyến / hẻm",section:"tools",label:"Quản lý số nhà · Liên kết tuyến/hẻm",shortLabel:"╱ Tuyến",toolbar:true,disabled:!canWrite||row?.geometry?.type!=="LineString"||!!route,run:()=>open("route")},
+  {id:"building",menuLabel:"Liên kết công trình",section:"tools",label:"Quản lý số nhà · Liên kết công trình",shortLabel:"⌂ Nhà",toolbar:true,disabled:!canWrite||!row||!!building||(isSurvey(row.layer.name)&&(loading||!["Nhà ở","Công trình"].includes(surveyText(row,"hien_trang")))),run:()=>open("building")},
+  {id:"number",menuLabel:"Đánh số đối tượng",section:"numbering",label:"Quản lý số nhà · Đánh số đối tượng",shortLabel:"123",toolbar:true,disabled:!businessAccess||!building||draft||busy,run:()=>open("number")},
+  {id:"bulk",menuLabel:"Đánh số hàng loạt",section:"numbering",label:"Quản lý số nhà · Đánh số hàng loạt",shortLabel:"123+",toolbar:true,disabled:!businessAccess||draft||busy,run:()=>{setSection("numbering");setNavigator(true)}},
+  ...["Phương án","Đối soát","Khảo sát","Hồ sơ","Tra cứu & xuất"].map((label,i)=>({id:"workflow_"+i,label:"Quản lý số nhà · "+label,menuLabel:label,section:"workflow",disabled:!businessAccess||busy||draft,run:()=>{setNavigator(true);setSection(label)}}))
  ];
  const toolbar=navigator&&tools?<PluginToolPalette scope={(host.uiScope??"hn")+":toolbar"} actions={actions} close={()=>setTools(false)}/>:null;
  const tabs=[["overview","Tổng quan"],["territory","Địa bàn"],["routes","Tuyến / hẻm"],["buildings","Công trình"],["numbering","Đánh số nhà"],["Phương án","Phương án"],["Đối soát","Đối soát"],["Khảo sát","Khảo sát"],["Hồ sơ","Hồ sơ"],["Tra cứu & xuất","Tra cứu & xuất"]];
