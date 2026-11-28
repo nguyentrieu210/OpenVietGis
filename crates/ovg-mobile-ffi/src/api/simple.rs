@@ -257,6 +257,10 @@ impl NativeUnifiedProject{
  pub fn viewport(&self,layer_id:String,west:f64,south:f64,east:f64,north:f64,expected:String)->Result<String,String>{
   self.inner.viewport(&layer_id,[west,south,east,north],&expected).map_err(unified_error)
  }
+ pub fn snap_unified(&self,layers:Vec<String>,x:f64,y:f64,tolerance_m:f64,expected:String,exclude_layer:Option<String>,exclude_feature:Option<String>)->Result<String,String>{
+  let exclude=match (&exclude_layer,&exclude_feature){(Some(l),Some(f))=>Some((l.as_str(),f.as_str())),(None,None)=>None,_=>return Err("INVALID_EXCLUSION".into())};
+  self.inner.snap(&layers,x,y,tolerance_m,&expected,exclude).map_err(unified_error)
+ }
  pub fn feature_detail(&self,layer_id:String,feature_id:String,expected:String)->Result<String,String>{
   self.inner.feature(&layer_id,&feature_id,&expected).map_err(unified_error)
  }
