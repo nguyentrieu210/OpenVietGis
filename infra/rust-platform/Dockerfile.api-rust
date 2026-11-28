@@ -56,7 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts
 ENV OPENVIETGIS_CAD_PYTHON=/opt/ovg-cad-venv/bin/python3
 ENV OPENVIETGIS_VECTOR_CODEC_PYTHON=/opt/ovg-cad-venv/bin/python3
-COPY --from=build /src/target/release/openvietgis-api-rust /usr/local/bin/
+COPY --from=build /out/openvietgis-api-rust /usr/local/bin/openvietgis-api-rust
 USER openvietgis
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/openvietgis-api-rust"]
