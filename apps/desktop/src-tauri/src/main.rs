@@ -240,6 +240,21 @@ async fn desktop_restore_snapshot(window:WebviewWindow,host:State<'_,Host>)->Rep
         h.restore_snapshot(&path).map(Some)
     }).await
 }
+#[tauri::command]
+async fn desktop_inspect_gpkg(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<Value>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("GeoPackage",&["gpkg"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.inspect_gpkg(handle,&path).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_import_layer(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,grant:Uuid,table:String)->Reply<u32>{
+    if table.len()>128{return Err("RESOURCE_LIMIT".into())}
+    run(window,host.inner().clone(),move|h|h.import_layer(handle,grant,&table)).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -275,6 +290,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
