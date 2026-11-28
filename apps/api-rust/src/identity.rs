@@ -26,6 +26,9 @@ use uuid::Uuid;
 use crate::oidc_worker::{self, OidcWorkerError};
 use crate::{ApiError, AppState};
 
+#[cfg(feature = "mobile-auth-candidate")]
+mod mobile;
+
 pub(crate) struct HumanSession {
     verified: VerifiedSession,
     token: String,
@@ -176,7 +179,7 @@ fn session_cookie<'a>(headers: &'a HeaderMap, cookie_name: &str) -> Option<&'a s
 }
 
 pub(crate) fn router() -> Router<AppState> {
-    Router::new()
+    let router = Router::new()
         .route("/bootstrap/status", get(bootstrap_status))
         .route("/bootstrap/initialize", post(bootstrap_initialize))
         .route("/me", get(get_me))
@@ -195,7 +198,10 @@ pub(crate) fn router() -> Router<AppState> {
         )
         .route("/auth/login/{provider}", get(begin_login))
         .route("/auth/callback/{provider}", get(complete_login))
-        .route("/auth/csrf", get(get_csrf))
+        .route("/auth/csrf", get(get_csrf));
+    #[cfg(feature = "mobile-auth-candidate")]
+    let router = router.merge(mobile::router());
+    router
 }
 
 type PrivateJson<T> = ([(header::HeaderName, &'static str); 1], Json<T>);

@@ -16,6 +16,7 @@ path = "src/main.rs"
 [features]
 default = ["house-numbering"]
 e11-candidate = []
+mobile-auth-candidate = []
 house-numbering = ["dep:ovg-module-house-numbering"]
 
 [dependencies]

@@ -2,7 +2,7 @@ name: SPEC 073 W4 identity candidate
 on:
   push:
     branches: ["073-native-mobile-platform"]
-    paths: ["crates/ovg-storage/src/mobile_identity.rs", ".github/workflows/spec073-wave4-identity.yml"]
+    paths: ["crates/ovg-storage/src/mobile_identity.rs", "apps/api-rust/src/identity.rs", "apps/api-rust/src/identity/mobile.rs", "apps/api-rust/tests/spec073_mobile_identity_http.rs", "apps/api-rust/Cargo.toml", ".github/workflows/spec073-wave4-identity.yml"]
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -25,6 +25,7 @@ jobs:
           persist-credentials: false
       - run: cargo test --locked -p ovg-storage mobile_identity::tests
       - run: cargo test --locked -p openvietgis-api-rust --test spec073_mobile_contract_baseline
+      - run: cargo test --locked -p openvietgis-api-rust --test spec073_mobile_identity_http
       - name: Isolated identity repository integration
         env:
           PGPASSWORD: fixture-admin
@@ -35,3 +36,4 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d ovg_mobile_fixture -v ON_ERROR_STOP=1 -f specs/073-native-mobile-platform/contracts/mobile-identity-candidate.sql
           psql -h 127.0.0.1 -U postgres -d ovg_mobile_fixture -v ON_ERROR_STOP=1 -c 'GRANT USAGE ON SCHEMA identity TO openvietgis_runtime; GRANT SELECT ON identity.users,identity.identity_links,identity.web_sessions TO openvietgis_runtime; GRANT SELECT,INSERT,UPDATE ON identity.mobile_grants,identity.mobile_sessions,identity.mobile_refresh TO openvietgis_runtime;'
           cargo test --locked -p ovg-storage --test mobile_identity_postgres
+          cargo test --locked -p openvietgis-api-rust --features mobile-auth-candidate --test spec073_mobile_identity_http
