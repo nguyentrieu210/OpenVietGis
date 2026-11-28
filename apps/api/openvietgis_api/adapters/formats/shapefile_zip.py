@@ -7,6 +7,7 @@ import io
 import math
 import re
 import zipfile
+import zlib
 from collections.abc import Sequence
 from decimal import Decimal, localcontext
 from typing import Any
@@ -69,14 +70,15 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
         files: dict[str, bytes] = {}
         seen_names: set[str] = set()
         for info in infos:
-            if info.is_dir():
-                continue
             name = info.filename.replace("\\", "/")
-            if name.startswith("/") or ".." in name.split("/") or ":" in name:
+            if (
+                not name or name.startswith("/") or ".." in name.split("/") or ":" in name
+                or "\x00" in info.orig_filename
+            ):
                 raise TransferFormatError(
                     "ARCHIVE_PATH_TRAVERSAL", "Archive contains unsafe entry path."
                 )
-            # Reject symlinks (UNIX mode 0o120000 in upper 16 bits)
+            # Validate directory entries too; a symlink must never be silently skipped.
             if ((info.external_attr >> 16) & 0o170000) == 0o120000:
                 raise TransferFormatError(
                     "ARCHIVE_SYMLINK_REJECTED", "Archive symbolic links are not permitted."
@@ -85,31 +87,42 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
                 raise TransferFormatError(
                     "ARCHIVE_ENCRYPTED", "Encrypted ZIP archives are not supported."
                 )
+            if info.is_dir():
+                if info.file_size != 0:
+                    raise TransferFormatError("INVALID_ZIP", "Directory entry contains data.")
+                continue
             if info.file_size > MAX_ZIP_EXPANDED_BYTES:
                 raise TransferLimitExceededError(
                     "ARCHIVE_SIZE_EXCEEDED", "Archive entry exceeds expanded size limit."
                 )
-            chunks = []
-            read_total = 0
-            with zf.open(info, "r") as handle:
-                while True:
-                    chunk = handle.read(65536)
-                    if not chunk:
-                        break
-                    read_total += len(chunk)
-                    total_expanded += len(chunk)
-                    if total_expanded > MAX_ZIP_EXPANDED_BYTES:
-                        raise TransferLimitExceededError(
-                            "ARCHIVE_BOMB_REJECTED",
-                            "Archive expansion exceeds safe byte budget.",
-                        )
-                    chunks.append(chunk)
             lower_key = name.lower()
             if lower_key in seen_names:
                 raise TransferFormatError(
                     "ARCHIVE_DUPLICATE_ENTRY", "Archive contains duplicate member names."
                 )
             seen_names.add(lower_key)
+            chunks = []
+            read_total = 0
+            try:
+                with zf.open(info, "r") as handle:
+                    while True:
+                        chunk = handle.read(65536)
+                        if not chunk:
+                            break
+                        read_total += len(chunk)
+                        total_expanded += len(chunk)
+                        if total_expanded > MAX_ZIP_EXPANDED_BYTES:
+                            raise TransferLimitExceededError(
+                                "ARCHIVE_BOMB_REJECTED",
+                                "Archive expansion exceeds safe byte budget.",
+                            )
+                        chunks.append(chunk)
+            except (zipfile.BadZipFile, EOFError, NotImplementedError, OSError, zlib.error) as exc:
+                raise TransferFormatError(
+                    "INVALID_ZIP", "Archive contains corrupt or unsupported compressed data."
+                ) from exc
+            if read_total != info.file_size:
+                raise TransferFormatError("INVALID_ZIP", "Archive entry size does not match.")
             files[name] = b"".join(chunks)
         return files
 
