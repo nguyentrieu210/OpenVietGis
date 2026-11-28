@@ -21,3 +21,6 @@ CREATE TABLE legacy_command(layer TEXT NOT NULL REFERENCES layer(id),command TEX
 CREATE TABLE project_asset(id TEXT PRIMARY KEY,kind TEXT NOT NULL,epsg INTEGER,bytes INTEGER NOT NULL CHECK(bytes>0 AND bytes<=536870912),sha256 TEXT NOT NULL CHECK(length(sha256)=64));
 CREATE TABLE project_asset_chunk(asset TEXT NOT NULL REFERENCES project_asset(id) ON DELETE CASCADE,seq INTEGER NOT NULL CHECK(seq>=0),data BLOB NOT NULL CHECK(length(data)>0 AND length(data)<=1048576),PRIMARY KEY(asset,seq));
 CREATE TABLE bulk_import(operation TEXT PRIMARY KEY,digest TEXT NOT NULL CHECK(length(digest)=64),layer TEXT NOT NULL REFERENCES layer(id),revision INTEGER NOT NULL,count INTEGER NOT NULL);
+-- V4 additive survey records
+CREATE TABLE survey_track(layer TEXT NOT NULL REFERENCES layer(id),id TEXT NOT NULL,name TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN('recording','paused','finished')),segment INTEGER NOT NULL CHECK(segment>=0),PRIMARY KEY(layer,id));
+CREATE TABLE survey_fix(layer TEXT NOT NULL,track_id TEXT NOT NULL,seq INTEGER NOT NULL CHECK(seq>0),segment INTEGER NOT NULL CHECK(segment>0),utc_ms INTEGER NOT NULL CHECK(utc_ms>0),fix_json TEXT NOT NULL CHECK(json_valid(fix_json)),PRIMARY KEY(layer,track_id,seq),FOREIGN KEY(layer,track_id) REFERENCES survey_track(layer,id) ON DELETE CASCADE);
