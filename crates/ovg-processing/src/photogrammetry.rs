@@ -38,6 +38,7 @@ pub mod disk_store;
 pub mod pipeline;
 pub mod prepared_render;
 pub mod preview;
+pub mod xyz;
 pub mod colmap_model;
 pub mod ingest;
 pub mod local_worker;
