@@ -30,6 +30,17 @@ void main(){
   t.status=403;await expectLater(c.delta(10),throwsA(isA<ProtocolError>()));expect(t.closed,true);
   await expectLater(c.delta(10),throwsStateError);
  });
+ test('reuse marketplace and project registry with explicit consent',()async{
+  final s=scope(),t=FixtureTransport(scope());final c=ManagedClient(s,t);
+  await c.marketplaceCatalog();expect(t.request!.url.path,'/api/v1/marketplace/catalog');
+  await c.installedManifests();expect(t.request!.url.path,'/api/v1/organizations/$uid/extensions/manifests');
+  await c.projectActivations();expect(t.request!.url.path,'/api/v1/organizations/$uid/projects/$uid/extensions/activations');
+  expect(()=>c.installReviewedRelease('demo','partner_demo_test','1.0.0',consent:false),throwsArgumentError);
+  await c.installReviewedRelease('demo','partner_demo_test','1.0.0',consent:true);
+  expect(t.request!.url.path,'/api/v1/organizations/$uid/marketplace/install/demo/partner_demo_test/1.0.0');
+  await c.activateManifest(uid,consent:true);expect(jsonDecode(t.request!.body),{'manifest_id':uid});
+  await c.disableExtension('partner_demo_test',consent:true);expect(t.request!.url.path.endsWith('/partner_demo_test/disable'),true);
+ });
  test('refresh single flight and fail closed',()async{
   final gate=RefreshGate<int>();var calls=0;final completer=Completer<int>();
   final a=gate.run((){calls++;return completer.future;});final b=gate.run(()async{calls++;return 2;});

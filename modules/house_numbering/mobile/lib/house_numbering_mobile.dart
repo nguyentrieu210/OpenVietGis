@@ -2,6 +2,7 @@
 /// by the trusted app host. No API credentials, direct database or Core imports.
 /// No activation without matching server manifest and project permission.
 library;
+import 'dart:async';
 import 'dart:convert';
 import 'package:openvietgis_plugin_sdk/openvietgis_plugin_sdk.dart';
 
@@ -85,7 +86,7 @@ final class HouseNumbering{
    _guard(permission);
    if(utf8.encode(jsonEncode(result)).length>4*1024*1024)deny('HN_RESPONSE_LIMIT');
    return result;
-  }finally{_busy=false;}
+  }on TimeoutException{close();deny('HN_UNKNOWN_OUTCOME');}finally{_busy=false;}
  }
  Future<Json> routes()=>_call(HnCommand.routes,HnPermission.read);
  Future<Json> areas()=>_call(HnCommand.areas,HnPermission.read);
@@ -118,6 +119,6 @@ final class HouseNumbering{
    if(!await confirm('uploadSurveyPhoto'))deny('CONSENT_DENIED');_guard(HnPermission.edit);
    final result=await _photo(copy,mediaType).timeout(const Duration(seconds:30));
    _guard(HnPermission.edit);final id=result['id'];if(!_uuid(id))deny('INVALID_ARTIFACT');return id as String;
-  }finally{copy.fillRange(0,copy.length,0);_busy=false;}
+  }on TimeoutException{close();deny('HN_UNKNOWN_OUTCOME');}finally{copy.fillRange(0,copy.length,0);_busy=false;}
  }
 }

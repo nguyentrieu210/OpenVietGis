@@ -127,7 +127,7 @@ final class Broker{
     if(!after.permissions.contains(a.permission)||!after.capabilities.contains(a.capability)||(a.mode=='online'&&!after.online))deny('PERMISSION_DENIED');
     final response=await command.run(copy,after,cancel).timeout(Duration(milliseconds:a.timeoutMs));
     cancel.check();final end=_guard();
-    if(!end.permissions.contains(a.permission)||!end.capabilities.contains(a.capability))deny('PERMISSION_DENIED');
+    if(!end.permissions.contains(a.permission)||!end.capabilities.contains(a.capability)||(a.mode=='online'&&!end.online))deny('PERMISSION_DENIED');
     validateValues(a.output,response);result.complete(jsonDecode(jsonEncode(response)) as Json);
    }on TimeoutException{close();result.completeError(StateError('ACTION_TIMEOUT_UNKNOWN_OUTCOME'));}
    catch(_){result.completeError(StateError('ACTION_DENIED_OR_FAILED'));}
