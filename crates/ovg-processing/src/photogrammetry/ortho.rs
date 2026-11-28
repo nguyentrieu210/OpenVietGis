@@ -9,7 +9,7 @@ pub struct Image<'a>{pub camera:Camera,pub width:u32,pub height:u32,pub rgb:&'a 
 pub enum Error{Invalid,Limit}
 fn dot(a:[f64;3],b:[f64;3])->f64{a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
 impl Camera{
-    fn valid(self)->bool{
+    pub(crate) fn valid(self)->bool{
         let r=self.world_to_camera;
         let det=r[0][0]*(r[1][1]*r[2][2]-r[1][2]*r[2][1])-r[0][1]*(r[1][0]*r[2][2]-r[1][2]*r[2][0])+r[0][2]*(r[1][0]*r[2][1]-r[1][1]*r[2][0]);
         self.center.iter().chain([self.fx,self.fy,self.cx,self.cy].iter()).all(|x|x.is_finite())&&self.fx>0.&&self.fy>0.&&
