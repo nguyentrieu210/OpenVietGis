@@ -24,7 +24,15 @@ A desktop GIS application with standalone, connected and hybrid modes. Reuse the
 - D14: Cloud schema/API compatibility preserved; no production deployment/migration in this SPEC without separately scoped release decision.
 - D15: DuckDB Spatial/GeoParquet, native GPU renderer and advanced drivers optional, after benchmarks and dependency licensing review. Not a second editable source of truth.
 
+## Revision 2 — Hybrid native architecture (approved direction)
+- D16: Reuse the single React workspace and design system; desktop-only UI is an additive capability adapter, not a fork. Preserve HTTP transport in browser builds; desktop uses typed IPC for control/mutations and a separate bounded binary read plane.
+- D17: Define logical ovg:// resource addressing and a versioned local protocol for TileJSON, vector/raster tiles, bounded attribute pages, CAD viewport data and qualified point-cloud/3D resources. Translate to platform-safe WebView transport after qualification; no raw filesystem paths or whole-layer IPC transfer. See [protocol contract](contracts/local-data-protocol.md).
+- D18: Rust query/render-data providers reuse portable runtime and local storage. Viewport-driven paging, spatial index, priority/cancellation, bounded memory/disk caches and revision-scoped invalidation are mandatory. Browser renderers remain MapLibre/Cesium; use native GPU only after a measured decision.
+- D19: Evaluate external native engines (including RustGIS) behind provider contracts for compute, file formats and optional rendering; no upstream code import before SPDX/license, dependency, ABI, geometry and CRS parity review. Study Sphere-style transport and GeoLibre-style shared UI as architecture patterns, not code dependencies.
+- D20: Qualify end-to-end latency, resource bounds and frame pacing on real Windows/macOS/Linux targets with published fixtures and thresholds; compare against existing Web baseline. See [performance contract](contracts/performance.md).
+
 ## Acceptance
+A7: Local data-plane security and performance contracts pass on each advertised desktop OS; Web HTTP behavior unchanged.
 A1: Clean Windows install, no network/account/server; open, edit, save, restart and export real fixture.
 A2: Same workspace opened on qualified Mobile/Desktop has equivalent canonical geometry, CRS and revisions; recovery tests prove no loss of acknowledged edit.
 A3: Isolated real PostGIS server and two clients: reconnect, duplicates, conflicts, revocation, expired lease and deletion all pass; existing API regression unchanged.
