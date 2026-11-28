@@ -40,7 +40,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 |---|---|---|---|---|---|
 | STYLE-01 | Information / Source / Fields / Display | D | LayerProperties 7 tab | Thông tin nguồn/storage/display CRS, fields, rendering; Apply/OK/Cancel nhất quán | P1 |
 | STYLE-02 | Single symbol / categorized / graduated | D | LayerProperties, graduated.ts | So khớp fixture phân loại null, breaks, màu, legend, export | P1 |
-| STYLE-03 | Rule-based / symbol layers / data-defined overrides | P | rule-style: first-match typed rules; line casing; no general data-defined expression renderer | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
+| STYLE-03 | Rule-based / symbol layers / data-defined overrides | P | rule-style: first-match typed rules; line casing; typed field-based color, opacity, width and radius overrides; no arbitrary expression renderer | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
