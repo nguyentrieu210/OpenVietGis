@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from "vitest";
 import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
-import {combineQuerySelection,collectQuerySelection,sameKeys,collectExpressionSelection,exportSelectedAttributes,collectSpatialSelection} from "./query-selection";
+import {combineQuerySelection,collectQuerySelection,sameKeys,collectExpressionSelection,exportSelectedAttributes,collectSpatialSelection,selectionPolygon} from "./query-selection";
 const layer={id:"l",source_id:"s",source:{content_revision:"c",schema_revision:"v",feature_count:101,schema:{fields:[]}}} as unknown as SpatialLayer;
 const page=(offset:number,ids:string[],fp="pin")=>({layer_id:"l",source_id:"s",content_revision:"c",schema_revision:"v",offset,limit:100,query_fingerprint:fp,attribute_only:true,total_count:101,has_more:offset===0,items:ids.map(feature_id=>({feature_id,attributes:{},geometry:null,geometry_state:"absent"}))} as LayerQueryResponse);
 const first=page(0,Array.from({length:100},(_,i)=>"id"+i));
@@ -65,4 +65,15 @@ describe("server spatial selection",()=>{
   await expect(run([105,10,107,12],{...response,selection_feature_ids:["b"]})).rejects.toThrow();
   await expect(run([105,10,107,12],{...response,reference_pin:{layer_id:"r",source_id:"r",content_revision:"c",schema_revision:"s",stored_crs:4326}})).rejects.toThrow();
  });
+});
+
+it("closes and validates a drawn polygon before querying",async()=>{
+ const points:[[number,number],[number,number],[number,number]]=[[106,10],[107,10],[106,11]];
+ expect(selectionPolygon(points).coordinates[0]).toEqual([...points,points[0]]);
+ expect(()=>selectionPolygon([[0,0],[1,1],[0,1],[1,0]])).toThrow();
+ expect(()=>selectionPolygon([[179,0],[-179,0],[179,1]])).toThrow();
+ const response={...page(0,[]),attribute_only:undefined,total_count:0,has_more:false,selection_feature_ids:[],items:[],reference_pin:null} as unknown as LayerQueryResponse;
+ const request=vi.fn(async(_body:Record<string,unknown>)=>response);
+ await collectSpatialSelection(layer,{polygon:points},"within",request,()=>true,()=>{});
+ expect(request.mock.calls[0]?.[0]).toMatchObject({spatial_filter:{predicate:"within",crs_code:4326,geometry:selectionPolygon(points)}});
 });

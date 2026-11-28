@@ -1,3 +1,4 @@
+import {draftError,validXY,type XY} from "./digitizing";
 import {parseExpression,evaluateExpression} from "./label-expr";
 import {tableTsv,tsvCell} from "./table-columns";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
@@ -105,7 +106,15 @@ export async function exportSelectedAttributes(layer:SpatialLayer,selected:Reado
 }
 
 export type SpatialSelectionPredicate="intersects"|"within"|"contains";
-export type SpatialSelectionInput={reference:SpatialLayer}|{bounds:[number,number,number,number]};
+export type SpatialSelectionInput={reference:SpatialLayer}|{bounds:[number,number,number,number]}|{polygon:XY[]};
+export function selectionPolygon(points:readonly XY[]){
+ if(points.length<3||points.length>256||points.some(p=>!validXY(p)))throw Error("Vùng chọn cần 3–256 đỉnh WGS84 hợp lệ.");
+ if(Math.max(...points.map(p=>p[0]))-Math.min(...points.map(p=>p[0]))>180)throw Error("Không hỗ trợ vùng qua kinh tuyến đổi ngày.");
+ const ring=points.map(p=>[...p] as XY);ring.push([...ring[0]!] as XY);
+ const geometry={type:"Polygon" as const,coordinates:[ring]};
+ const error=draftError(geometry);if(error)throw Error(error);
+ return geometry;
+}
 export async function collectSpatialSelection(layer:SpatialLayer,input:SpatialSelectionInput,predicate:SpatialSelectionPredicate,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean,progress:(count:number,total:number)=>void){
  if(!["intersects","within","contains"].includes(predicate))throw Error("Quan hệ không gian không hợp lệ.");
  let spatial:Record<string,unknown>;
@@ -113,7 +122,7 @@ export async function collectSpatialSelection(layer:SpatialLayer,input:SpatialSe
   const r=input.reference;
   if(!r.id||!selectionLayerCurrent(r,r))throw Error("Lớp tham chiếu không đủ quyền.");
   spatial={predicate,reference_layer_id:r.id};
- }else{
+ }else if("polygon" in input){spatial={predicate,crs_code:4326,geometry:selectionPolygon(input.polygon)}}else{
   const [w,s,e,n]=input.bounds;
   if(![w,s,e,n].every(Number.isFinite)||w < -180||e>180||s < -85.05112878||n>85.05112878||w>=e||s>=n||e-w>180)throw Error("Khung tọa độ WGS84 không hợp lệ.");
   spatial={predicate,crs_code:4326,geometry:{type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]}};

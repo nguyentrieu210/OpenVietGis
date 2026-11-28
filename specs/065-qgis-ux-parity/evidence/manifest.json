@@ -391,9 +391,11 @@
         "apps/web-next/src/query-selection.ts",
         "apps/web-next/src/query-selection.test.ts",
         "apps/web-next/src/QgisWorkspace.tsx",
-        "crates/ovg-storage/src/queries/mod.rs"
+        "crates/ovg-storage/src/queries/mod.rs",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SelectionSketch.tsx"
       ],
-      "blocker": "Source-wide attribute/AST and PostGIS spatial selection by reference layer or WGS84 rectangle (intersects/within/contains), fingerprint plus source/reference revision pins, 5000 FIDs and replace/add/remove/intersect. Invert via full attribute query; interactive drawn polygon and paired authenticated browser/QGIS acceptance remain. New tests not executed."
+      "blocker": "Source-wide attribute/AST and PostGIS spatial selection by reference layer, WGS84 rectangle or validated 3–256 vertex drawn polygon. Main-map sketch with explicit finish/cancel, source/revision/scope fences; fingerprinted pagination and scoped selection algebra. Paired authenticated browser/QGIS acceptance pending; new tests not executed."
     },
     {
       "id": "TABLE-04",
