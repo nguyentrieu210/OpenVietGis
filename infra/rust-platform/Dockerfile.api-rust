@@ -25,6 +25,7 @@ COPY apps/api/openvietgis_api/adapters/formats/wkt_crs.py apps/api/openvietgis_a
 COPY apps/api/openvietgis_api/adapters/formats/geojson.py apps/api/openvietgis_api/adapters/formats/geojson.py
 COPY apps/api/openvietgis_api/adapters/formats/geopackage.py apps/api/openvietgis_api/adapters/formats/geopackage.py
 COPY apps/api/openvietgis_api/adapters/formats/shapefile_zip.py apps/api/openvietgis_api/adapters/formats/shapefile_zip.py
+COPY apps/api/openvietgis_api/adapters/formats/georeference_worker.py apps/api/openvietgis_api/adapters/formats/georeference_worker.py
 COPY apps/api/openvietgis_api/adapters/formats/postgis_sql.py apps/api/openvietgis_api/adapters/formats/postgis_sql.py
 COPY apps/api/openvietgis_api/adapters/formats/offline_snapshot.py apps/api/openvietgis_api/adapters/formats/offline_snapshot.py
 COPY apps/api/openvietgis_api/domains/integration_hub/sync_diff.py apps/api/openvietgis_api/domains/integration_hub/sync_diff.py
@@ -50,11 +51,12 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp python3-qrcode fonts-dejavu-core python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv --system-site-packages /opt/ovg-cad-venv \
-    && /opt/ovg-cad-venv/bin/pip install --no-cache-dir "ezdxf>=1.4.5" \
+    && /opt/ovg-cad-venv/bin/pip install --no-cache-dir "ezdxf>=1.4.5" "pyshp==3.1.9" \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts
 ENV OPENVIETGIS_CAD_PYTHON=/opt/ovg-cad-venv/bin/python3
-COPY --from=build /out/openvietgis-api-rust /usr/local/bin/
+ENV OPENVIETGIS_VECTOR_CODEC_PYTHON=/opt/ovg-cad-venv/bin/python3
+COPY --from=build /src/target/release/openvietgis-api-rust /usr/local/bin/
 USER openvietgis
 EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/openvietgis-api-rust"]

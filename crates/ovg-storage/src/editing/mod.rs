@@ -95,6 +95,8 @@ pub struct CommitRequest {
     pub base_content_revision: String,
     #[serde(default)]
     pub base_schema_revision: Option<String>,
+    #[serde(default)]
+    pub acknowledge_native_crs: Option<i32>,
     #[serde(default = "default_summary")]
     pub summary: String,
     pub operations: Vec<EditOperation>,
@@ -122,6 +124,18 @@ pub struct EditScope<'a> {
     scoped: bool,
     organization_status: Option<String>,
     project: Option<(String, Option<Uuid>)>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RelationRequest {
+    pub source_id: Uuid,
+    pub local_field: String,
+    pub target_source_id: Uuid,
+    pub target_field: String,
+    pub cardinality: String,
+    pub source_schema_revision: String,
+    pub target_schema_revision: String,
 }
 
 struct Prepared {
@@ -667,7 +681,16 @@ impl<'a> EditScope<'a> {
         source_id: Uuid,
         request: CommitRequest,
     ) -> Result<Value, EditError> {
-        self.commit_inner(source_id, request, None).await
+        self.commit_inner(source_id, request, None, false).await
+    }
+
+    /// Opt-in transactional polygon overlap protection for an unrestricted editor.
+    pub async fn commit_changeset_no_overlap(
+        &mut self,
+        source_id: Uuid,
+        request: CommitRequest,
+    ) -> Result<Value, EditError> {
+        self.commit_inner(source_id, request, None, true).await
     }
 
     /// Commit the inverse of the latest changeset as a new `reverted` changeset.
@@ -713,13 +736,229 @@ impl<'a> EditScope<'a> {
                 .unwrap_or_default()
                 .to_owned(),
             base_schema_revision: None,
+            acknowledge_native_crs: None,
             summary: summary
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| format!("Revert changeset {changeset_id}")),
             operations,
         };
-        self.commit_inner(source_id, request, Some(changeset_id))
+        self.commit_inner(source_id, request, Some(changeset_id), false)
             .await
+    }
+
+    /// List persistent constraints, not personal relation-inspector preferences.
+    pub async fn list_relations(&mut self) -> Result<Value, EditError> {
+        self.authorize(Permission::Read).await?;
+        if self.scoped {
+            return Err(gis_denied());
+        }
+        let org = self.organization_id();
+        let project = self.project_id();
+        let rows: Vec<Value> = sqlx::query_scalar(
+            "SELECT to_jsonb(r) FROM editing.relations r
+             WHERE organization_id=$1 AND project_id=$2 ORDER BY id",
+        )
+        .bind(org)
+        .bind(project)
+        .fetch_all(&mut **self.tx_mut())
+        .await
+        .map_err(db_error)?;
+        Ok(json!({"items": rows}))
+    }
+
+    pub async fn create_relation(&mut self, request: RelationRequest) -> Result<Value, EditError> {
+        self.authorize(Permission::Manage).await?;
+        if self.scoped {
+            return Err(gis_denied());
+        }
+        let org = self.organization_id();
+        let project = self.project_id();
+        if !matches!(request.cardinality.as_str(), "one" | "many")
+            || request.source_id == request.target_source_id
+                && request.local_field == request.target_field
+        {
+            return Err(EditError::validation(
+                "INVALID_RELATION",
+                "invalid relation definition",
+            ));
+        }
+        let tx = self.tx_mut();
+        let fields: Vec<(Uuid, String, String, String)> = sqlx::query_as(
+            "SELECT f.source_id, f.field_id, f.type, f.schema_revision
+             FROM spatial.source_fields f JOIN spatial.data_sources s
+             ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+             WHERE f.organization_id=$1 AND f.project_id=$2 AND s.lifecycle='active'
+               AND s.validation_state='ready' AND f.schema_revision=s.schema_revision
+               AND ((f.source_id=$3 AND f.field_id=$4) OR (f.source_id=$5 AND f.field_id=$6))
+             ORDER BY f.source_id,f.field_id FOR SHARE OF f,s",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(request.source_id)
+        .bind(&request.local_field)
+        .bind(request.target_source_id)
+        .bind(&request.target_field)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        let local = fields
+            .iter()
+            .find(|f| f.0 == request.source_id && f.1 == request.local_field);
+        let target = fields
+            .iter()
+            .find(|f| f.0 == request.target_source_id && f.1 == request.target_field);
+        let (Some(local), Some(target)) = (local, target) else {
+            return Err(EditError::validation(
+                "INVALID_RELATION",
+                "relation fields must exist in ready project sources",
+            ));
+        };
+        if local.2 != target.2
+            || local.3 != request.source_schema_revision
+            || target.3 != request.target_schema_revision
+        {
+            return Err(EditError::conflict(
+                "STALE_RELATION_SCHEMA",
+                "relation field types or schema revisions changed",
+            ));
+        }
+        let existing: Option<Value> = sqlx::query_scalar(
+            "SELECT to_jsonb(r) FROM editing.relations r WHERE organization_id=$1 AND project_id=$2
+             AND source_id=$3 AND local_field=$4 AND target_source_id=$5 AND target_field=$6",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(request.source_id)
+        .bind(&request.local_field)
+        .bind(request.target_source_id)
+        .bind(&request.target_field)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        if let Some(row) = existing {
+            if row["cardinality"].as_str() == Some(request.cardinality.as_str()) {
+                return Ok(row);
+            }
+            return Err(EditError::conflict(
+                "RELATION_EXISTS",
+                "remove existing relation before changing cardinality",
+            ));
+        }
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM editing.relations WHERE organization_id=$1 AND project_id=$2",
+        )
+        .bind(org)
+        .bind(project)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        if count >= 100 {
+            return Err(EditError::validation(
+                "RELATION_LIMIT",
+                "at most 100 constraints per project",
+            ));
+        }
+        let row: Value = sqlx::query_scalar(
+            "INSERT INTO editing.relations AS r (id,organization_id,project_id,source_id,local_field,target_source_id,target_field,cardinality,field_type)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING to_jsonb(r)")
+            .bind(Uuid::new_v4()).bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
+            .bind(request.target_source_id).bind(&request.target_field).bind(&request.cardinality).bind(&local.2)
+            .fetch_one(&mut **tx).await.map_err(db_error)?;
+        self.validate_relations(request.source_id).await?;
+        let id = Uuid::parse_str(row["id"].as_str().unwrap_or_default())
+            .map_err(|_| EditError::Internal("relation receipt missing id".into()))?;
+        self.audit_relation(id, "editing.relation.create", json!({
+            "project_id":project,"source_id":request.source_id,"target_source_id":request.target_source_id,
+            "cardinality":request.cardinality
+        })).await?;
+        Ok(row)
+    }
+
+    pub async fn delete_relation(&mut self, id: Uuid) -> Result<Value, EditError> {
+        self.authorize(Permission::Manage).await?;
+        if self.scoped {
+            return Err(gis_denied());
+        }
+        let org = self.organization_id();
+        let project = self.project_id();
+        let result = sqlx::query(
+            "DELETE FROM editing.relations WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(id)
+        .execute(&mut **self.tx_mut())
+        .await
+        .map_err(db_error)?;
+        let deleted = result.rows_affected() == 1;
+        if deleted {
+            self.audit_relation(id, "editing.relation.delete", json!({"project_id":project}))
+                .await?;
+        }
+        Ok(json!({"id":id,"deleted":deleted}))
+    }
+
+    async fn audit_relation(
+        &mut self,
+        id: Uuid,
+        action: &str,
+        metadata: Value,
+    ) -> Result<(), EditError> {
+        let org = self.organization_id();
+        let actor = self.actor_id();
+        let kind = self.actor_kind();
+        let label = self.display_name().to_owned();
+        sqlx::query("INSERT INTO audit.audit_events
+            (id,organization_id,actor_type,actor_id,actor_display_snapshot,action,resource_type,resource_id,outcome,metadata,created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,'relation',$7,'success',$8,$9)")
+            .bind(Uuid::new_v4()).bind(org).bind(kind).bind(actor).bind(label).bind(action)
+            .bind(id).bind(metadata).bind(Utc::now().trunc_subsecs(6))
+            .execute(&mut **self.tx_mut()).await.map_err(db_error)?;
+        Ok(())
+    }
+
+    // Project write guards serialize changesets and relation configuration.
+    // Scoped relation-bound edits are denied before entering internal ACL mode.
+    // Return only a generic conflict, never another source's keys or identifiers.
+    async fn validate_relations(&mut self, source: Uuid) -> Result<(), EditError> {
+        let org = self.organization_id();
+        let project = self.project_id();
+        let tx = self.tx_mut();
+        let bad: bool=sqlx::query_scalar(
+            "SELECT EXISTS (
+                SELECT 1 FROM editing.relations r
+                JOIN spatial.data_sources a ON (a.organization_id,a.project_id,a.id)=(r.organization_id,r.project_id,r.source_id)
+                JOIN spatial.data_sources b ON (b.organization_id,b.project_id,b.id)=(r.organization_id,r.project_id,r.target_source_id)
+                JOIN spatial.source_fields af ON (af.organization_id,af.project_id,af.source_id,af.field_id)=(r.organization_id,r.project_id,r.source_id,r.local_field)
+                JOIN spatial.source_fields bf ON (bf.organization_id,bf.project_id,bf.source_id,bf.field_id)=(r.organization_id,r.project_id,r.target_source_id,r.target_field)
+                WHERE r.organization_id=$1 AND r.project_id=$2 AND (r.source_id=$3 OR r.target_source_id=$3)
+                AND (a.lifecycle<>'active' OR b.lifecycle<>'active' OR a.validation_state<>'ready' OR b.validation_state<>'ready'
+                  OR af.type<>r.field_type OR bf.type<>r.field_type
+                  OR EXISTS (
+                     WITH target_keys AS (
+                       SELECT editing.relation_key(f.attributes->r.target_field,r.field_type) AS k,count(*) AS n
+                       FROM spatial.reference_features f WHERE (f.organization_id,f.project_id,f.source_id)=(r.organization_id,r.project_id,r.target_source_id)
+                       AND f.attributes->r.target_field IS NOT NULL AND f.attributes->r.target_field<>'null'::jsonb
+                       GROUP BY 1
+                     )
+                     SELECT 1 FROM target_keys WHERE r.cardinality='one' AND n>1
+                     UNION ALL
+                     SELECT 1 FROM spatial.reference_features f
+                     LEFT JOIN target_keys t ON t.k=editing.relation_key(f.attributes->r.local_field,r.field_type)
+                     WHERE (f.organization_id,f.project_id,f.source_id)=(r.organization_id,r.project_id,r.source_id)
+                       AND f.attributes->r.local_field IS NOT NULL AND f.attributes->r.local_field<>'null'::jsonb
+                       AND t.k IS NULL
+                  ))
+            )")
+            .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(db_error)?;
+        if bad {
+            return Err(EditError::conflict(
+                "RELATION_CONSTRAINT",
+                "relation constraint would be violated; no data saved",
+            )
+            .with_details(json!({"draft_preserved":true})));
+        }
+        Ok(())
     }
 
     async fn commit_inner(
@@ -727,8 +966,12 @@ impl<'a> EditScope<'a> {
         source_id: Uuid,
         request: CommitRequest,
         reverted_from: Option<Uuid>,
+        prevent_overlap: bool,
     ) -> Result<Value, EditError> {
         self.authorize(Permission::Edit).await?;
+        if prevent_overlap && self.scoped {
+            return Err(gis_denied());
+        }
         let org = self.tx.organization_id();
         let proj = self.project_id;
         let actor_type = self.actor_type();
@@ -751,6 +994,22 @@ impl<'a> EditScope<'a> {
             .await
             .map_err(db_error)?;
             if !allowed {
+                return Err(gis_denied());
+            }
+            // No hidden-key oracle: scoped users cannot mutate a relation-bound
+            // source until both sides have a dedicated scoped relation policy.
+            let relation_bound: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM editing.relations
+                  WHERE organization_id=$1 AND project_id=$2
+                  AND (source_id=$3 OR target_source_id=$3))",
+            )
+            .bind(org)
+            .bind(proj)
+            .bind(source_id)
+            .fetch_one(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
+            if relation_bound {
                 return Err(gis_denied());
             }
             sqlx::query("SELECT set_config('openvietgis.acl_internal','on',true)")
@@ -778,6 +1037,12 @@ impl<'a> EditScope<'a> {
             &request.operations,
             reverted_from,
         )?;
+
+        let digest = if prevent_overlap {
+            domain::sha256_py_json(&json!({"request": digest, "prevent_overlap": true}))
+        } else {
+            digest
+        };
 
         // Serialize replay lookup with source mutation (row lock) like the oracle.
         let source = sqlx::query(
@@ -885,6 +1150,13 @@ impl<'a> EditScope<'a> {
         }
         let stored_crs: i32 = get::<Option<i32>>(&source, "stored_crs")?
             .ok_or_else(|| EditError::Internal("ready source without stored CRS".into()))?;
+        let extended_native=u32::try_from(stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000);
+        if extended_native {
+            if self.scoped{return Err(EditError::forbidden("GIS_SCOPE_DENIED","Native projected edits require unrestricted project edit permission"));}
+            if reverted_from.is_none() && (request.acknowledge_native_crs!=Some(stored_crs)||request.base_schema_revision.is_none()){
+                return Err(EditError::validation("NATIVE_CRS_ACK_REQUIRED","Explicit native EPSG and schema revision required; XY means easting/northing in metres"));
+            }
+        } else if request.acknowledge_native_crs.is_some(){return Err(EditError::validation("UNSUPPORTED_CRS","Native CRS acknowledgement is only for extended VN-2000 layers"));}
         let family: String = get(&source, "geometry_family")?;
         let catalog_revision: i64 = get(&source, "catalog_revision")?;
         let content_revision: String = get(&source, "content_revision")?;
@@ -914,6 +1186,12 @@ impl<'a> EditScope<'a> {
                     "draft_preserved": true,
                 })));
             }
+        }
+        if prevent_overlap && (family != "Polygon" || request.operations.len() > 100) {
+            return Err(EditError::validation(
+                "OVERLAP_POLICY_LIMIT",
+                "overlap guard requires a polygon source and at most 100 operations",
+            ));
         }
         let fields = self.load_fields(source_id).await?;
         if fields.iter().any(|f| f.schema_revision != schema_revision) {
@@ -1115,6 +1393,82 @@ impl<'a> EditScope<'a> {
                 .execute(&mut **self.tx.tx_mut())
                 .await
                 .map_err(db_error)?;
+        }
+
+        self.validate_relations(source_id).await?;
+
+        if prevent_overlap {
+            let changed: Vec<String> = prepared
+                .iter()
+                .filter(|item| item.after_wkb.is_some() && item.before_wkb != item.after_wkb)
+                .map(|item| item.feature_id.clone())
+                .collect();
+            if !changed.is_empty() {
+                // All new geometries are already in the same uncommitted transaction.
+                // The source lock protects against concurrent changeset writes.
+                let count: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM spatial.reference_features
+                     WHERE organization_id=$1 AND project_id=$2 AND source_id=$3",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if count > 5000 {
+                    return Err(EditError::validation(
+                        "OVERLAP_POLICY_LIMIT",
+                        "overlap guard requires at most 5000 source features",
+                    ));
+                }
+                let invalid: bool = sqlx::query_scalar(
+                    "SELECT EXISTS (
+                         SELECT 1 FROM spatial.reference_features
+                         WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
+                           AND (geometry_state <> 'present' OR geometry IS NULL
+                                OR NOT ST_IsValid(geometry) OR ST_IsEmpty(geometry))
+                     )",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if invalid {
+                    return Err(EditError::validation(
+                        "OVERLAP_POLICY_INCOMPLETE",
+                        "source has unavailable or invalid geometry; cannot verify overlap",
+                    ));
+                }
+                let collision: bool = sqlx::query_scalar(
+                    "SELECT EXISTS (
+                         SELECT 1 FROM spatial.reference_features a
+                         JOIN spatial.reference_features b
+                           ON b.organization_id=a.organization_id
+                          AND b.project_id=a.project_id AND b.source_id=a.source_id
+                          AND b.feature_id<>a.feature_id AND a.geometry && b.geometry
+                         WHERE a.organization_id=$1 AND a.project_id=$2 AND a.source_id=$3
+                           AND a.feature_id=ANY(CAST($4 AS varchar[]))
+                           AND ST_Relate(a.geometry,b.geometry,'2********')
+                     )",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .bind(&changed)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if collision {
+                    return Err(EditError::conflict(
+                        "POLYGON_OVERLAP",
+                        "polygon interiors overlap; changeset was not saved",
+                    )
+                    .with_details(json!({"draft_preserved": true})));
+                }
+            }
         }
 
         sqlx::query(
@@ -1445,7 +1799,13 @@ impl<'a> EditScope<'a> {
                 "geometry exceeds 4096 vertex limit",
             ));
         }
-        get(&row, "wkb")
+        let wkb:Vec<u8>=get(&row,"wkb")?;
+        if u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
+            let parsed=ovg_spatial::parse_wkb(&wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|EditError::validation("INVALID_GEOMETRY","Invalid native geometry"))?;
+            let geo=ovg_spatial::to_geojson(&parsed.geometry);
+            crate::spatial_pins::validate_ready_geojson(&geo,None,srid).map_err(|reason|EditError::validation("INVALID_GEOMETRY",reason))?;
+        }
+        Ok(wkb)
     }
 
     async fn load_fields(&mut self, source_id: Uuid) -> Result<Vec<FieldDef>, EditError> {

@@ -95,6 +95,7 @@ struct Snapshot {
     expected_count: Option<i64>,
     extent: Option<[f64; 4]>,
     transformation: Option<&'static TransformationProfile>,
+    datum_read:Option<crate::catalog::regional_crs::VerifiedDatumRead>,
 }
 
 impl ProjectRead<'_> {
@@ -161,7 +162,7 @@ impl ProjectRead<'_> {
                     THEN ST_AsBinary(prefix.geometry, 'NDR') END AS wkb
             FROM summary LEFT JOIN prefix ON total_positions - positions <= $14
             ORDER BY prefix.feature_id COLLATE \"C\"",
-            display_ctes(snapshot.transformation)
+            display_ctes(snapshot.transformation,snapshot.datum_read.as_ref())
         );
         let rows = self
             .bind_snapshot(sqlx::query(&sql), &snapshot, pins)
@@ -216,7 +217,7 @@ impl ProjectRead<'_> {
                     ST_Extent(geometry) FILTER (WHERE valid IS TRUE) AS extent
                 FROM display
             ) AS actual",
-            display_ctes(snapshot.transformation)
+            display_ctes(snapshot.transformation,snapshot.datum_read.as_ref())
         );
         let row = self
             .bind_snapshot(sqlx::query(&sql), &snapshot, pins)
@@ -283,9 +284,8 @@ impl ProjectRead<'_> {
         let snapshot = self
             .render_snapshot(layer_id, pins, RenderRead::Tile)
             .await?;
-        if snapshot.transformation.is_some() {
-            // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
-            return Err(unsupported_transformation());
+        if snapshot.transformation.is_some() || snapshot.datum_read.is_some() {
+            return self.projected_vector_tile(&snapshot,pins,z,x,y).await;
         }
         let (west, south, east, north) = tile_geographic_bounds(z, x, y);
         let covers_world = z == 0
@@ -421,6 +421,49 @@ impl ProjectRead<'_> {
         Ok((tile, candidates == included))
     }
 
+    // Projected tiles use the same proven and bounded WGS84 snapshot as viewport.
+    // Do not apply a geographic tile envelope to native projected coordinates.
+    async fn projected_vector_tile(&mut self,snapshot:&Snapshot,pins:&ReadPins<'_>,z:u32,x:u32,y:u32)->Result<(Vec<u8>,bool),AppError>{
+        let expected=snapshot.expected_count.ok_or_else(read_unavailable)?;
+        let display=display_ctes(snapshot.transformation,snapshot.datum_read.as_ref());
+        let max=WEB_MERCATOR_MAX_COORDINATE_METRE;
+        let sql=format!("{display}, summary AS (
+          SELECT count(*) AS n,COALESCE(bool_and(valid IS TRUE),true) AS valid FROM display
+        ), bounds AS (
+          SELECT ST_TileEnvelope($8,$9,$10) AS tile,
+          ST_InverseTransformPipeline(ST_Intersection(ST_TileEnvelope($8,$9,$10,margin=>$11),
+           ST_MakeEnvelope(-{max},{neg},{max},{max},3857)),'{WEB_MERCATOR_PIPELINE}',4326) AS area
+        ), candidate AS MATERIALIZED (
+          SELECT feature_id,geometry,ST_NPoints(geometry) AS positions FROM display CROSS JOIN bounds CROSS JOIN summary
+          WHERE summary.valid AND display.valid AND ST_Intersects(geometry,area)
+          ORDER BY feature_id COLLATE \"C\" LIMIT $12
+        ), ranked AS (
+          SELECT feature_id,geometry,row_number() OVER(ORDER BY feature_id COLLATE \"C\") AS ordinal,
+          sum(positions) OVER(ORDER BY feature_id COLLATE \"C\" ROWS UNBOUNDED PRECEDING) AS cumulative_positions FROM candidate
+        ), prefix AS MATERIALIZED (
+          SELECT feature_id,geometry FROM ranked WHERE ordinal<=$13 AND cumulative_positions<=$14
+        ), encoded AS (
+          SELECT feature_id,ST_AsMVTGeom(ST_TransformPipeline(ST_ClipByBox2D(geometry,area::box2d),'{WEB_MERCATOR_PIPELINE}',3857),
+          tile,$15,$16,true) AS geom FROM prefix CROSS JOIN bounds
+        ) SELECT summary.n,summary.valid,(SELECT count(*) FROM candidate) AS candidates,
+          (SELECT count(*) FROM prefix) AS included,
+          (SELECT ST_AsMVT(t,'features',$15,'geom' ORDER BY t.feature_id COLLATE \"C\")
+            FROM (SELECT feature_id,geom FROM encoded WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)) t) AS tile
+          FROM summary",neg=-max);
+        let row=self.bind_snapshot(sqlx::query(&sql),snapshot,pins)
+          .bind(z as i32).bind(x as i32).bind(y as i32)
+          .bind(f64::from(TILE_BUFFER)/f64::from(TILE_EXTENT))
+          .bind(MAX_TILE_FEATURES+1).bind(MAX_TILE_FEATURES).bind(MAX_TILE_POSITIONS)
+          .bind(TILE_EXTENT).bind(TILE_BUFFER).fetch_one(&mut **self.tx.tx_mut()).await.map_err(unavailable)?;
+        validate_summary(expected,row.try_get("n").map_err(unavailable)?,row.try_get("valid").map_err(unavailable)?)?;
+        let tile:Option<Vec<u8>>=row.try_get("tile").map_err(unavailable)?;
+        let tile=tile.unwrap_or_default();
+        if tile.len()>MAX_TILE_BYTES{return Err(read_unavailable());}
+        let candidates:i64=row.try_get("candidates").map_err(unavailable)?;
+        let included:i64=row.try_get("included").map_err(unavailable)?;
+        Ok((tile,candidates==included))
+    }
+
     /// Layer -> source -> pins -> CRS -> render profile, in the Python order.
     async fn render_snapshot(
         &mut self,
@@ -469,7 +512,10 @@ impl ProjectRead<'_> {
             .ok_or_else(|| AppError::internal("ready source requires native CRS"))?;
         let reference = reference_coordinate_wire(4326)
             .ok_or_else(|| AppError::internal("EPSG:4326 must be readable"))?;
-        let transformation = match native {
+        let extended=ovg_core::crs::is_extended_native_vn2000(native);
+        let mut datum_read=None;
+        let mut transformation = match native {
+            _ if extended=>None,
             4326 => None,
             _ => Some(
                 reference_transformation(native, 4326).ok_or_else(unsupported_transformation)?,
@@ -492,13 +538,23 @@ impl ProjectRead<'_> {
         let expected_count = match read {
             // The tile candidate query already applies the actor's RLS scope.
             // A whole-source count or size cap here would defeat bounded tile reads.
-            RenderRead::Tile => None,
+            RenderRead::Tile if native==4326 => None,
+            RenderRead::Tile => Some(self.whole_source_count(source_id,&source).await?),
             RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
         };
-        if transformation.is_some_and(requires_fixture) {
-            // shortcut: trusted Quang Ninh fixture provenance (manifest re-materialization) is not
-            // ported; fail closed like an unverified fixture until the fixture registry is native.
-            return Err(out_of_area());
+        if extended{
+            if self.gis_scoped{return Err(unsupported_transformation());}
+            let org=self.tx.organization_id();
+            datum_read=Some(crate::catalog::regional_crs::verify_extended_datum_read(self.tx.tx_mut(),org,self.project_id,source_id,native,"geometry").await?);
+        }
+        if let Some(edge) = transformation.filter(|edge| requires_fixture(edge)) {
+            if self.gis_scoped {
+                return Err(out_of_area());
+            }
+            let org = self.tx.organization_id();
+            transformation=Some(crate::catalog::regional_crs::verify_regional_source(
+                self.tx.tx_mut(),org,self.project_id,source_id,edge,
+            ).await?);
         }
         let extent = source["extent"].as_object().and_then(|e| {
             Some([
@@ -518,7 +574,7 @@ impl ProjectRead<'_> {
                 "schema_revision": pins.schema_revision,
                 "geometry_included": true,
                 "response_crs": reference,
-                "transformation": transformation.map(TransformationProfile::to_wire)
+                "transformation": transformation.map(TransformationProfile::to_wire).or_else(||datum_read.as_ref().map(|r|r.wire.clone()))
             }),
             source_id,
             native_srid: i32::try_from(native)
@@ -527,6 +583,7 @@ impl ProjectRead<'_> {
             expected_count,
             extent,
             transformation,
+            datum_read,
         })
     }
 
@@ -583,7 +640,7 @@ impl ProjectRead<'_> {
 /// repeat the pin/SRID/type equality; topology is rechecked after a transform.
 /// The bound is the 50k render ceiling (not Python's `LIMIT 10001`), so only a
 /// larger snapshot fails the count check, never a valid layer above 10k.
-fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
+fn display_ctes(transformation: Option<&TransformationProfile>,datum:Option<&crate::catalog::regional_crs::VerifiedDatumRead>) -> String {
     let lat = WEB_MERCATOR_MAX_LATITUDE;
     let native = format!(
         "SELECT feature_id, geometry,
@@ -598,7 +655,7 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
         "ST_CoveredBy(geometry, ST_MakeEnvelope(-180, {:?}, 180, {lat:?}, 4326))",
         -lat
     );
-    let Some(edge) = transformation else {
+    let (transform,area)=if let Some(datum)=datum{(datum.expression.clone(),datum.bounds)}else if let Some(edge)=transformation{(crate::catalog::regional_crs::profile_expression(edge,"geometry"),edge.geographic_bounds)}else{
         return format!(
             "WITH display AS MATERIALIZED (
                 SELECT feature_id, geometry, valid AND {display_domain} AS valid
@@ -606,13 +663,11 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
             )"
         );
     };
-    // Only fixture-free edges reach SQL: EPSG:3857 -> 4326 is one inverse step.
-    let area = edge.geographic_bounds;
     format!(
         "WITH native AS NOT MATERIALIZED ({native}),
         step0 AS NOT MATERIALIZED (
             SELECT feature_id, CASE WHEN valid
-                THEN ST_InverseTransformPipeline(geometry, '{WEB_MERCATOR_PIPELINE}', 4326) END
+                THEN {transform} END
                 AS geometry, valid
             FROM native
         ),

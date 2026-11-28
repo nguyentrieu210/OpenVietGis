@@ -2,9 +2,9 @@
 """Strict E07 round-trip gate against both the baseline and Rust candidate.
 
 Uses the same isolated database/session setup as run.py, never production.
-Each engine creates its own GeoJSON assets and jobs. Generated IDs may differ;
-semantic reports, revision digests and downloaded GeoJSON must agree. Binary
-formats are also exercised through the isolated Rust-owned transfer boundary.
+Each engine creates its own assets and jobs for GeoJSON, GeoPackage and ZIP
+Shapefile. Generated IDs may differ; semantic reports, revision digests and
+GeoJSON payloads must agree. Binary outputs are re-inspected, not byte-compared.
 """
 
 from __future__ import annotations
@@ -280,7 +280,26 @@ def check_binary_exports(client, base, headers, outsider, export):
 def unsafe_archive():
     buff = io.BytesIO()
     with zipfile.ZipFile(buff, "w") as archive:
-        archive.writestr("../escape.shp", b"not a shapefile")
+        info = zipfile.ZipInfo(name)
+        if symlink:
+            info.create_system = 3
+            info.external_attr = 0o120777 << 16
+        archive.writestr(info, b"" if name.endswith("/") else b"not a shapefile")
+    return buff.getvalue()
+
+
+def corrupt_archive():
+    buff = io.BytesIO()
+    with zipfile.ZipFile(buff, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("sample.shp", b"ORIGINAL")
+    return buff.getvalue().replace(b"ORIGINAL", b"CORRUPTD", 1)
+
+
+def duplicate_archive():
+    buff = io.BytesIO()
+    with zipfile.ZipFile(buff, "w") as archive:
+        archive.writestr("sample.shp", b"a")
+        archive.writestr("SAMPLE.SHP", b"b")
     return buff.getvalue()
 
 
@@ -324,7 +343,16 @@ def main():
                             start = time.monotonic()
                             actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
                             rust_ms = (time.monotonic() - start) * 1000
-                            require(actual == expected, f"semantic or revision mismatch: {fmt}")
+                            differences = {
+                                key: {"expected": expected[key], "actual": actual.get(key)}
+                                for key in expected
+                                if actual.get(key) != expected[key]
+                            }
+                            require(
+                                actual == expected,
+                                f"semantic or revision mismatch: {fmt}: "
+                                f"{json.dumps(differences, ensure_ascii=False, sort_keys=True)}",
+                            )
                             print(
                                 f"PASS E07 {fmt} roundtrip; "
                                 f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
@@ -346,6 +374,20 @@ def main():
                             "LEGACY_GEOJSON_CRS",
                         ),
                         ("traversal.zip", unsafe_archive(), "ARCHIVE_PATH_TRAVERSAL"),
+                        (
+                            "dir-traversal.zip", unsafe_archive("../escape/"),
+                            "ARCHIVE_PATH_TRAVERSAL",
+                        ),
+                        (
+                            "win-traversal.zip", unsafe_archive("C:/escape.shp"),
+                            "ARCHIVE_PATH_TRAVERSAL",
+                        ),
+                        (
+                            "symlink.zip", unsafe_archive("link.shp", symlink=True),
+                            "ARCHIVE_SYMLINK_REJECTED",
+                        ),
+                        ("duplicate.zip", duplicate_archive(), "ARCHIVE_DUPLICATE_ENTRY"),
+                        ("corrupt.zip", corrupt_archive(), "INVALID_ZIP"),
                     ]:
                         try:
                             for label, client in [("Python", oracle), ("Rust", rust)]:

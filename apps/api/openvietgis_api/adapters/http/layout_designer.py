@@ -1,5 +1,6 @@
 """Saved Layout Designer documents; no embedded remote URLs or untrusted images."""
 
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -52,6 +53,7 @@ class Element(BaseModel):
     color: str = Field(default="#15383b", pattern=r"^#[0-9a-fA-F]{6}$")
     border: bool = True
     grid: bool = False
+    locked: bool = Field(default=False, strict=True)
     camera: Camera | None = None
     map_id: UUID | None = None
 
@@ -117,7 +119,11 @@ def values(body):
     name = body.name.strip()
     if not name:
         raise HTTPException(422, "Layout name is required")
-    return {"name": name, "document": body.document.model_dump_json()}
+    document = body.document.model_dump(mode="json")
+    for item in document["items"]:
+        if not item["locked"]:
+            del item["locked"]
+    return {"name": name, "document": json.dumps(document, ensure_ascii=False)}
 
 
 def wire(row):

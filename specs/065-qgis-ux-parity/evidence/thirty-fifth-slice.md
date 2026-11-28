@@ -1,0 +1,6 @@
+# Thirty-fifth implementation slice (GitHub only)
+Base d3fc10f1ee886197b7a860e16f5bcaa480faf9ec.
+- DOCK-09: MAPVIEW command opens a bounded secondary MapLibre canvas inside the existing GIS shell. Read-only comparison, uses current visible authorized loaded vector collection and renderer templates, with independent ordered layer IDs, per-view visibility and camera, optional one-way main camera following, personal account/org/project preferences. No second local workspace or independent data store. 100 layers/5000 features/200000 vertices; reject excess rather than truncate. Close/unmount on permission loss, CAD/3D or tile-performance mode. No raster, basemap, label or vector-tile replication, independent primary render order, editing or source-wide parity.
+- Added helper tests for preference cleanup, order isolation, unauthorized layer filtering and limits. GitHub source only; build/browser tests not executed. No matrix promotion, merge or deploy.
+
+Follow-up: preserve secondary layer order when a main-view layer is temporarily hidden, filter feature identities by live source/content/schema pins, and avoid constructing renderer layers when the comparison population exceeds its budget. Still shares main-view filter/visibility for the input population. No tests executed.

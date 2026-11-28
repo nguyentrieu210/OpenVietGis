@@ -5,16 +5,26 @@
     {
       "id": "SHELL-01",
       "task": "T009",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Menu groups share command aliases with locator and toolbar; Chromium keyboard navigation and Escape focus restoration passed. Full command inventory/capability mapping and paired QGIS remain."
     },
     {
       "id": "SHELL-02",
       "task": "T010",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/qgis-workspace.css",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Keyboard move to another row, float, redock, focus retention and reset tested in Chromium. Pointer drag, profile restore on every viewport and paired QGIS still need evidence."
     },
     {
       "id": "SHELL-03",
@@ -24,9 +34,13 @@
         "apps/web-next/command-search.test.mjs",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/locator.ts",
-        "apps/web-next/src/locator.test.ts"
+        "apps/web-next/src/locator.test.ts",
+        "apps/web-next/qgis-parity-shell-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features",
+      "test_ids": [
+        "SHELL-CMD-001"
+      ]
     },
     {
       "id": "SHELL-04",
@@ -54,23 +68,41 @@
     {
       "id": "SHELL-06",
       "task": "T014",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/dock-sizing.test.mjs",
+        "apps/web-next/src/qgis-workspace.css"
+      ],
+      "blocker": "Temporary map focus hides dock panels without unmounting them or mutating saved layout; auto exits for active editing and other blocked states. Existing fullscreen button. Floating bounds skip hidden zero-size geometry. Browser and QGIS layout/keyboard/selection restoration tests remain."
     },
     {
       "id": "SHELL-07",
       "task": "T015",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/route-compat.test.ts",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/map-render-plan.ts",
+        "apps/web-next/src/map-render-plan.test.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Scoped camera including bearing and pitch restored over conflicting server default in synthetic F5 test. CAD document version and 3D scene-specific restoration, permissions/revocation and paired QGIS not fully accepted."
     },
     {
       "id": "SHELL-08",
       "task": "T016",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/studio-ui.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs"
+      ],
+      "blocker": "Session refresh and auth request generation guards invalidate stale identity responses after expiration/signout; explicit expiry message. Existing loading/error states. Retry policy, technical error sanitization and browser tests remain."
     },
     {
       "id": "DOCK-01",
@@ -79,9 +111,11 @@
       "candidate_paths": [
         "apps/web-next/dock-sizing.test.mjs",
         "apps/web-next/src/DockLayout.tsx",
-        "apps/web-next/workspace-preferences.test.mjs"
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/Splitter.tsx",
+        "apps/web-next/src/dock-sizing.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Pointer-ID scoped resize, cancel/blur/Escape/unmount cleanup, keyboard Home/End/fine step and ARIA values implemented; new tests written but not executed. Authenticated browser dock dragging, viewport and paired QGIS acceptance remain."
     },
     {
       "id": "DOCK-02",
@@ -96,16 +130,30 @@
     {
       "id": "DOCK-03",
       "task": "T021",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CatalogManager.tsx",
+        "apps/web-next/src/DsmPanes.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/dsm-sources.test.mjs",
+        "apps/web-next/src/source-browser.ts",
+        "apps/web-next/src/source-browser.test.ts"
+      ],
+      "blocker": "Server source browser has metadata, scoped pagination, duplicate active/retired source checks and bounded scan. New tests written but not executed; source-to-map drag/drop, provider errors and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-04",
       "task": "T022",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/DsmPanes.tsx",
+        "apps/web-next/src/TransferTool.tsx",
+        "apps/web-next/src/ExternalPluginHub.tsx",
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/src/dsm-sources.ts",
+        "apps/web-next/dsm-sources.test.mjs"
+      ],
+      "blocker": "CSV, WFS/OGC and ArcGIS import panes now validate input, bound remote responses and cancel stale fetches; CSV preserves noncanonical identifiers and noninteger decimals as text for server inspection. New regression tests written but not executed. Live provider, CRS, import confirmation and progress acceptance remain."
     },
     {
       "id": "DOCK-05",
@@ -131,23 +179,43 @@
     {
       "id": "DOCK-07",
       "task": "T025",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/graduated.test.mjs",
+        "apps/web-next/src/layer-visibility.ts",
+        "apps/web-next/src/layer-visibility.test.ts"
+      ],
+      "blocker": "Existing tree implements categorized legend, text/view filter, scale range and visibility policy; style parity, category counts across entire source and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-08",
       "task": "T026",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/map-themes.ts",
+        "apps/web-next/src/map-themes.test.ts",
+        "apps/web-next/src/layer-visibility.ts"
+      ],
+      "blocker": "Personal map theme save/apply/delete and exclusive groups implemented; snapshot now rejects duplicates and oversized membership, delayed prompt saves guard project scope and recheck names. New tests not executed; paired QGIS/browser and shared-theme policy remain."
     },
     {
       "id": "DOCK-09",
       "task": "T027",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/SecondaryMapView.tsx",
+        "apps/web-next/src/secondary-map-plan.ts",
+        "apps/web-next/src/secondary-map-plan.test.ts",
+        "apps/web-next/src/LiveApp.tsx"
+      ],
+      "blocker": "Existing bounded secondary MapLibre comparison view with personal vector layer order and camera is implemented in source. Full primary independent render order, raster/basemap/labels/vector tiles and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-10",
@@ -161,9 +229,13 @@
     {
       "id": "STYLE-01",
       "task": "T031",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Existing seven-tab properties dialog shows source/stored CRS, source revision, field metadata and local style apply. Full display CRS metadata, consistent Apply/OK/Cancel and paired authenticated browser/QGIS evidence remain."
     },
     {
       "id": "STYLE-02",
@@ -178,9 +250,19 @@
     {
       "id": "STYLE-03",
       "task": "T033",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/src/style-io.ts",
+        "apps/web-next/src/rule-style.ts",
+        "apps/web-next/src/rule-style.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/layout-legend.ts",
+        "apps/web-next/style-io.test.mjs"
+      ],
+      "blocker": "Ordered first-match typed single-field rules, fallback color, max 12 rules, loaded vector render and legend; browser preview/apply and unit checks. No multi-symbol layers, arbitrary expressions, server tile rule evaluation, QML/SLD rule exchange or QGIS pairing. Two-layer single line casing with on-map rendering, preview and bounded SLD/QML exchange. Arbitrary multilayer symbols, renderer expressions, tile parity and independent QGIS visual evidence remain missing; new tests not executed."
     },
     {
       "id": "STYLE-04",
@@ -198,9 +280,16 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/label-expr.ts",
-        "apps/web-next/label-expr.test.mjs"
+        "apps/web-next/label-expr.test.mjs",
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/field-calculation-plan.ts",
+        "apps/web-next/src/field-calculation-plan.test.ts",
+        "apps/web-next/src/AdvancedEditor.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; template language, not full QGIS expression AST"
+      "blocker": "Typed AST subset integrated into labels and complete revision-pinned attribute selection, with fields/functions, preview, null logic and no arbitrary eval. Full QGIS expression library, shared field calculator/filter/server AST and paired browser acceptance remain. New tests not executed. Shared typed AST and exact rational field-calculation preview integrated into existing atomic attribute changeset for loaded revision-pinned rows. No new-field creation or server expression execution; tests not executed."
     },
     {
       "id": "STYLE-06",
@@ -210,30 +299,53 @@
         "apps/web-next/src/style-io.ts",
         "apps/web-next/style-io.test.mjs",
         "apps/web-next/src/LayerProperties.tsx",
-        "apps/web-next/src/graduated.ts"
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/src/LiveApp.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD Two-layer single line casing with on-map rendering, preview and bounded SLD/QML exchange. Arbitrary multilayer symbols, renderer expressions, tile parity and independent QGIS visual evidence remain missing; new tests not executed."
     },
     {
       "id": "STYLE-07",
       "task": "T037",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ExcelJoin.ts",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/api-rust/src/editing.rs",
+        "apps/web-next/src/join-contract.ts",
+        "apps/web-next/src/join-contract.test.ts",
+        "apps/web-next/src/relation-inspector.ts",
+        "apps/web-next/src/relation-inspector.test.ts",
+        "apps/web-next/src/RelationInspector.tsx",
+        "apps/web-next/src/LiveApp.tsx"
+      ],
+      "blocker": "Exact spreadsheet join, local relation inspector and now revision-pinned server-side exact attribute relation lookup (up to 200 matches, 1/n cardinality check and navigation to unloaded FIDs). Configuration remains personal; shared durable relational schema, server write constraints, form design and paired QGIS acceptance remain. New tests not executed. Full two-population revision-pinned relation integrity audit (null, orphan, ambiguous references, duplicate target keys), bounded 5000 rows per source, exact scalar keys. No persistent server-side write constraint or shared relation schema; tests not executed."
     },
     {
       "id": "STYLE-08",
       "task": "T038",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/src/identify-plan.ts",
+        "apps/web-next/src/identify-plan.test.ts",
+        "apps/web-next/src/MapInspectPanel.tsx",
+        "apps/web-next/src/LiveApp.tsx"
+      ],
+      "blocker": "Read-only metadata plus plain-text map tips by configured schema field, on authorized rendered vector features. Diagrams and sandboxed actions still missing; paired browser/QGIS acceptance remains. New tests not executed."
     },
     {
       "id": "STYLE-09",
       "task": "T039",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/CoreMapTools.tsx"
+      ],
+      "blocker": "Temporary loaded-feature symbol preview with explicit apply/cancel; no persistence until apply. Does not preview layer filter, zoom or all label settings; no paired QGIS or pixel comparison."
     },
     {
       "id": "TABLE-01",
@@ -242,9 +354,11 @@
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
-        "apps/web-next/src/table-columns.test.ts"
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
     },
     {
       "id": "TABLE-02",
@@ -255,16 +369,35 @@
         "apps/web-next/src/AttributeServerQuery.tsx",
         "apps/web-next/src/table-query.test.ts",
         "apps/web-next/src/table-columns.ts",
-        "apps/web-next/src/table-columns.test.ts"
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/api-rust/src/queries.rs",
+        "crates/ovg-storage/src/queries/mod.rs",
+        "apps/web-next/src/table-query.ts",
+        "tests/spec065/attribute_query.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only"
+      "blocker": "Authenticated Rust/PostGIS query including absent geometry, typed global sorting/filter and last page of 30k records passed. Ready unrestricted sources only, 50k cap, no QGIS pairing or larger-source cursor benchmark."
     },
     {
       "id": "TABLE-03",
       "task": "T044",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/api-rust/src/queries.rs",
+        "apps/web-next/src/table-query.test.ts",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "crates/ovg-storage/src/queries/mod.rs",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SelectionSketch.tsx"
+      ],
+      "blocker": "Source-wide attribute/AST and PostGIS spatial selection by reference layer, WGS84 rectangle or validated 3–256 vertex drawn polygon. Main-map sketch with explicit finish/cancel, source/revision/scope fences; fingerprinted pagination and scoped selection algebra. Paired authenticated browser/QGIS acceptance pending; new tests not executed."
     },
     {
       "id": "TABLE-04",
@@ -276,9 +409,10 @@
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/attribute-value.ts",
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/src/attribute-value.test.ts"
+        "apps/web-next/src/attribute-value.test.ts",
+        "apps/web-next/src/CoreMapTools.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; single field typed dialog; relation widgets and full form edit remain"
+      "blocker": "Explicit nullable fields and typed create input; Chromium fixture pass. No complete QGIS widget parity."
     },
     {
       "id": "TABLE-05",
@@ -286,16 +420,32 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/edit-transaction.ts",
+        "apps/web-next/src/edit-transaction.test.ts",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested"
+      "blocker": "Actual typed attribute update, conflict, atomic rollback and revert pass; complete widget parity and QGIS pairing remain."
     },
     {
       "id": "TABLE-06",
       "task": "T047",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/attribute-value.test.ts",
+        "apps/web-next/src/precise-calculation.ts",
+        "apps/web-next/src/precise-calculation.test.ts",
+        "apps/web-next/src/attribute-population.ts",
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/table-query.test.ts"
+      ],
+      "blocker": "Existing exact rational calculator and revision-pinned selected/all attribute population support preview; shared query verifier now rejects malformed FID, attributes and fingerprint. New tests not executed. Virtual fields, full atomic transaction and paired browser/QGIS acceptance remain."
     },
     {
       "id": "TABLE-07",
@@ -304,16 +454,36 @@
       "candidate_paths": [
         "apps/web-next/src/table-columns.ts",
         "apps/web-next/src/table-columns.test.ts",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/selected-geojson.ts",
+        "apps/web-next/src/selected-geojson.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; column width/order and selected export remain"
+      "blocker": "Page TSV, selected full-source TSV and selected WGS84 XY GeoJSON including unloaded FIDs, original wire attributes and explicit null geometry state, complete pinned read verification, 5000 selected FIDs/50000 source rows/32 MiB GeoJSON bound. No selected GPKG/SHP or lossless native CRS export and paired QGIS/browser acceptance; new tests not executed."
     },
     {
       "id": "TABLE-08",
       "task": "T049",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/api-rust/src/queries.rs",
+        "apps/web-next/src/precise-calculation.ts",
+        "apps/web-next/src/attribute-population.ts",
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/identify-plan.ts",
+        "apps/web-next/src/identify-plan.test.ts",
+        "apps/web-next/src/MapInspectPanel.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/LayerProperties.tsx"
+      ],
+      "blocker": "Grouped exact statistics plus multi-layer rendered vector Identify with layer+FID identity, bounded 100 results, authorized row check, independent read-only details. No unloaded/vector tile/raster identify or paired browser/QGIS acceptance; tests not executed."
     },
     {
       "id": "EDIT-01",
@@ -332,9 +502,10 @@
       "candidate_paths": [
         "apps/web-next/src/digitizing.ts",
         "apps/web-next/src/CoreMapTools.tsx",
-        "apps/web-next/src/digitizing.test.ts"
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Structural checks plus bounded local ring self-intersection/repeated vertex checks; PostGIS authoritative. Large rings and hole relationships not checked by client; QGIS pairing remains."
     },
     {
       "id": "EDIT-03",
@@ -342,9 +513,16 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/src/LiveApp.tsx"
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/edit-transaction.ts",
+        "apps/web-next/src/edit-transaction.test.ts",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains"
+      "blocker": "Actual Rust/PostGIS two distinct authorized editor sessions: one commits, second 409, exact replay and atomic rollback. Browser durable request recovery, complete topology and paired QGIS still missing."
     },
     {
       "id": "EDIT-04",
@@ -353,9 +531,12 @@
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/digitizing.ts",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "packages/spatial-workspace/src/snap-math.ts",
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/core-toolkit-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; shared pixel tolerance; no per-layer tolerance/map-unit mode; no scoped geometry fixture yet"
+      "blocker": "Per-layer pixel and projected EPSG:3857 metre tolerance with independent persisted settings, bounded flat-map search, intersection limits and world-boundary protection implemented. Unit and synthetic browser persistence tests added, not yet verified. Native/project CRS-specific snapping, actual geometry browser interaction and paired QGIS acceptance remain."
     },
     {
       "id": "EDIT-05",
@@ -363,16 +544,33 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/digitizing.ts",
-        "apps/web-next/src/AdvancedEditor.tsx"
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "crates/ovg-storage/src/professional.rs",
+        "apps/web-next/src/topology-review.ts",
+        "apps/web-next/src/topology-review.test.ts",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "tests/spec065/topology.py",
+        "apps/web-next/src/advanced-geometry.ts",
+        "apps/web-next/src/advanced-geometry.test.ts",
+        "crates/ovg-storage/src/editing/mod.rs",
+        "apps/api-rust/src/editing.rs",
+        "packages/client-sdk/src/platform.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; structural draft checks only; cross-feature topology not added"
+      "blocker": "Rust/PostGIS topology review and exact shared vertex move; opt-in transaction-level polygon interior overlap rejection on final changeset state, source lock, bounded complete geometry scan, replay digest and rollback fixture. Edge touching permitted. Automatic noding, cross-source persistent policy and paired QGIS acceptance remain. New tests not executed. Atomic node insertion on exact matching edges (either direction), validated and bounded across the complete pinned source. No arbitrary intersection noding or cross-source topology; new regression tests not executed."
     },
     {
       "id": "EDIT-06",
       "task": "T057",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/api-rust/src/professional.rs",
+        "apps/api-rust/src/editing.rs",
+        "tests/spec065/topology.py",
+        "apps/web-next/src/advanced-geometry.ts",
+        "apps/web-next/src/advanced-geometry.test.ts"
+      ],
+      "blocker": "Authenticated split/merge; existing vertex editor now supports polygon holes, multipart member add/delete (preserves declared family) and endpoint-preserving forward path reshape, draft undo/redo and authoritative changeset/PostGIS validation. New tests not executed; unrestricted QGIS reshape, topology-aware segment noding and authenticated browser/QGIS acceptance remain. Atomic node insertion on exact matching edges (either direction), validated and bounded across the complete pinned source. No arbitrary intersection noding or cross-source topology; new regression tests not executed."
     },
     {
       "id": "EDIT-07",
@@ -392,9 +590,11 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; real concurrent conflict, persisted revert and rollback remain"
+      "blocker": "Authenticated Rust changeset conflict and persisted inverse revert/replay verified; paired QGIS and full persisted redo/history UX still missing."
     },
     {
       "id": "EDIT-09",
@@ -414,170 +614,424 @@
       "candidate_paths": [
         "apps/web-next/src/ProcessingToolbox.tsx",
         "apps/web-next/command-search.test.mjs",
-        "apps/web-next/workspace-preferences.test.mjs"
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "apps/api-rust/src/processing_models.rs",
+        "tests/spec065/edit_processing.py"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Paired QGIS and authenticated Rust/PostGIS acceptance not executed; server registry applied in vector workbench only; provider-aware toolbox remains Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-02",
       "task": "T064",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "tests/spec065/edit_processing.py"
+      ],
+      "blocker": "Vector request validation, registry and explicit expected input/overlay source, content and schema revision checked under existing share locks before enqueue; idempotent receipt pins verified and batch journal retains the exact request. Legacy API requests remain compatible. Stale source rejection fixture written, not executed. No output geometry preview, modeler pin parity or paired QGIS/browser acceptance."
     },
     {
       "id": "PROC-03",
       "task": "T065",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/api-rust/src/processing.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "fixtures/qgis-parity/generate.py",
+        "fixtures/qgis-parity/vector-oracle.sql",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh",
+        "fixtures/qgis-parity/qgis_oracle.py",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "apps/api-rust/src/processing_models.rs"
+      ],
+      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain. Independent QGIS 3.44 native clip/dissolve/buffer engine oracle and map reference runner added; not executed. Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-04",
       "task": "T066",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
+      ],
+      "blocker": "Authenticated queued/cancel/retry/terminal transitions and replay/conflict passed. In-flight cancellation races, persistent progress and QGIS pairing still missing."
     },
     {
       "id": "PROC-05",
       "task": "T067",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/workbenches/features/platform/processing-batch.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-batch.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Batch journal and intercepted browser evidence; authenticated Rust/PostGIS execution and QGIS pairing remain."
     },
     {
       "id": "PROC-06",
       "task": "T068",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/api-rust/src/processing_models.rs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/model-run-journal.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "tests/spec065/edit_processing.py"
+      ],
+      "blocker": "Persisted graph definitions and bounded DAG validation. Vector-only runs now have account/project-scoped durable browser journal, cross-tab lock, source pins, stable per-step request before POST, verified server job replay and partial resume, explicit journal export/discard. Mixed/raster graph execution retains legacy non-resumable path; no server-owned graph scheduler or raster idempotency/cancellation; new tests not executed. Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-07",
       "task": "T069",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProjectRaster.tsx",
+        "apps/web-next/src/RasterWorkbench.tsx",
+        "apps/api-rust/src/raster_compute.rs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/raster-contract.ts",
+        "apps/web-next/src/raster-contract.test.ts",
+        "apps/web-next/src/RasterReportWorkbench.tsx",
+        "tests/spec065/raster_reports.py",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Raster metadata/band/NoData validation, display opacity/brightness/contrast/saturation/resampling persisted by scope; Chromium fixture passed. Display controls apply to pre-rendered tiles, not native stretch/palette; paired QGIS and provider matrix remain."
     },
     {
       "id": "PROC-08",
       "task": "T070",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/RasterWorkbench.tsx",
+        "apps/web-next/src/RasterReportWorkbench.tsx",
+        "apps/api-rust/src/raster_compute.rs",
+        "fixtures/qgis-parity/generate.py",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/raster-contract.ts",
+        "apps/web-next/src/raster-contract.test.ts",
+        "apps/web-next/src/ProjectRaster.tsx",
+        "tests/spec065/raster_reports.py",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Authenticated GDAL NDVI/terrain and new zonal/contour tests PASS; validate report shape and lineage receipts, guard ambiguous persistence; no durable idempotency/reconciliation, complete calculator/resample/clip/mosaic matrix or paired QGIS."
     },
     {
       "id": "PROC-09",
       "task": "T071",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CadGeorefPanel.tsx",
+        "packages/spatial-workspace/tests/cad-georeference.test.mjs",
+        "apps/web-next/src/GeoreferenceWorkbench.tsx",
+        "apps/web-next/src/georeference-contract.ts",
+        "apps/web-next/src/georeference-contract.test.ts",
+        "apps/api/openvietgis_api/adapters/formats/georeference_worker.py",
+        "tests/spec065/georeference_fixture.py",
+        "apps/web-next/src/vector-georeference.ts",
+        "apps/web-next/src/VectorGeoreferencePanel.tsx",
+        "apps/web-next/src/vector-georeference.test.ts",
+        "apps/api-rust/src/raster_compute.rs"
+      ],
+      "blocker": "TIFF GCP affine preview and verified GeoTIFF; optional GDAL north-up nearest/bilinear for bounded homogeneous bands with common finite NoData and no custom masks/palette; client vector XY GeoJSON affine conversion to WGS84, residuals and reviewed download. New tests not executed; vector topology, broader raster profile, persisted project import and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "PROC-10",
       "task": "T072",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/Spatial3DSettings.tsx",
+        "apps/api-rust/src/tilesets.rs",
+        "apps/web-next/src/TemporalMapView.tsx",
+        "apps/web-next/src/temporal-plan.ts",
+        "apps/web-next/src/temporal-plan.test.ts",
+        "apps/web-next/src/SecondaryMapView.tsx",
+        "packages/spatial-workspace/src/gltf.ts",
+        "packages/spatial-workspace/src/tileset.ts",
+        "packages/spatial-workspace/src/terrain.ts",
+        "apps/web-next/src/local-las.ts",
+        "apps/web-next/src/local-las.test.ts",
+        "packages/spatial-workspace/src/cesium3d.ts",
+        "apps/web-next/src/local-mesh.ts",
+        "apps/web-next/src/local-mesh.test.ts",
+        "apps/web-next/src/mesh-dataset.ts",
+        "apps/web-next/src/mesh-dataset.test.ts",
+        "packages/spatial-workspace/src/maplibre3d.ts",
+        "apps/web-next/src/local-ept.ts",
+        "apps/web-next/src/local-ept.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/raster-temporal-plan.ts",
+        "apps/web-next/src/raster-temporal-plan.test.ts"
+      ],
+      "blocker": "Vector and raster temporal playback (operator-assigned UTC observations over up to 32 authorized pre-rendered raster layers), local LAS/2DM, scalar/vector magnitude JSON mesh, EPT binary directory. Raster preview uses per-layer rendered tile scale, no native multidimensional raster or harmonized pixel scale. No LAZ/COPC/zstandard, remote octree, SMS DAT/NetCDF or persisted mesh provider. New tests not executed; paired QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-01",
       "task": "T075",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/PrintDesigner.tsx",
+        "apps/api-rust/src/cartography",
+        "apps/web-next/layout-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
+      ],
+      "blocker": "Authenticated two-frame layout persisted, second editor updates revision, stale write and invalid map link rejected. Browser synthetic export previously passed; paired QGIS still missing."
     },
     {
       "id": "OUTPUT-02",
       "task": "T076",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/src/layout-history.ts",
+        "apps/web-next/src/layout-history.test.ts",
+        "apps/web-next/layout-smoke.mjs",
+        "apps/api-rust/src/cartography/designer.rs",
+        "apps/api/openvietgis_api/adapters/http/layout_designer.py",
+        "apps/api/tests/integration/spatial/test_layout_designer.py"
+      ],
+      "blocker": "Align/distribute, bounded undo/redo, nonprinting guides, persisted per-item direct-edit lock (optional backward-compatible Rust/Python JSON), group drag with common page-bounded delta and pointer cancellation rollback. Lock is layout editing metadata, not access control. New tests unexecuted; authenticated browser/QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-03",
       "task": "T077",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/layout-smoke.mjs",
+        "apps/web-next/src/layout-legend.ts",
+        "apps/web-next/src/layout-legend.test.ts",
+        "apps/web-next/src/rule-style.ts"
+      ],
+      "blocker": "Legend includes ordered-rule symbols and fallback for loaded vector features; independent per-frame style snapshots, full-source counts and paired QGIS still missing."
     },
     {
       "id": "OUTPUT-04",
       "task": "T078",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/src/layout-atlas.ts",
+        "apps/web-next/src/layout-atlas.test.ts",
+        "apps/web-next/layout-smoke.mjs",
+        "apps/api-rust/src/cartography/mod.rs",
+        "apps/api-rust/src/cartography/renderer.rs",
+        "apps/web-next/src/workbenches/features/platform/CartographyWorkbenchPage.tsx",
+        "packages/client-sdk/src/platform.ts",
+        "tests/spec065/topology.py"
+      ],
+      "blocker": "Client Atlas plus new server-side PDF Atlas on existing authorized print preview/export: locked source/style/layout snapshot, coverage layer from layout, optional FID filter, deterministic per-feature extent and page scale, revision fingerprint, artifact storage/checksum, up to 16 pages and 40M total pixels at 150 DPI. Multi-page xref test written, not executed. Large-source streaming, multi-frame designer server parity, authenticated browser/QGIS acceptance remain. Authenticated Atlas integration fixture added for ordered page IDs, invalid coverage, duplicate IDs, stale source revision, PDF page tree, artifact SHA256 and tenant denial; not yet executed."
     },
     {
       "id": "OUTPUT-05",
       "task": "T079",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayoutDesigner.tsx",
+        "apps/web-next/src/PrintDesigner.tsx",
+        "apps/web-next/src/LayoutRender.ts",
+        "apps/web-next/layout-smoke.mjs",
+        "apps/web-next/qgis-parity-output-smoke.mjs"
+      ],
+      "blocker": "Actual synthetic browser PDF/PNG/SVG and multi-page Atlas files verified; PDF flattened, SVG map embedded raster; no paired QGIS visual comparison or authenticated export.",
+      "test_ids": [
+        "OUTPUT-05-SMOKE-001"
+      ]
     },
     {
       "id": "OUTPUT-06",
       "task": "T080",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/crs-display.ts",
+        "apps/web-next/crs-display.test.mjs",
+        "apps/api-rust/src/catalog.rs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. PROJ fixture point matched; conservative projection-domain guard; no surveyed VN2000 control point, reprojection/import roundtrip or jurisdiction-specific CRS validation."
     },
     {
       "id": "OUTPUT-07",
       "task": "T081",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/TransferTool.tsx",
+        "apps/web-next/src/ExportDialog.tsx",
+        "apps/web-next/export-formats.test.mjs",
+        "apps/api-rust/src/transfers",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/transfer-verification.ts",
+        "apps/web-next/src/transfer-verification.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/api-rust/src/transfers/codec.rs",
+        "apps/api-rust/src/transfers/mod.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api/openvietgis_api/adapters/formats/geopackage.py",
+        "apps/api/openvietgis_api/adapters/formats/shapefile_zip.py",
+        "tests/spec065/native_import.py",
+        "infra/rust-platform/Dockerfile.api-rust",
+        "apps/web-next/src/binary-export.ts",
+        "apps/web-next/src/binary-export.test.ts",
+        "tests/rust-parity/e07_transfers.py"
+      ],
+      "blocker": "Rust Platform CI run 46111207590 at a3f5aae9074b4004fa30ce800a101dc6f4ed1268 passed E07 strict roundtrip for GeoJSON/GPKG/SHP with semantic and revision parity, digest/replay/tenant checks and archive negative cases (zero failures). Earlier native fixtures cover independent GDAL reading and polygon holes. Bounded XY single-part profile, Python codec worker; full lossless/CRS/type matrix, retry-job execution, runtime image and paired desktop acceptance remain."
     },
     {
       "id": "OUTPUT-08",
       "task": "T082",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisBindingManager.tsx",
+        "apps/web-next/src/QgisConnectPage.tsx",
+        "apps/api-rust/src/managed_sync.rs",
+        "apps/web-next/src/IntegrationCatalog.tsx",
+        "apps/web-next/src/transfer-verification.ts",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/realtime_collaboration.py",
+        "tests/spec065/run-attribute-query.sh",
+        "integrations/qgis_plugin/openvietgis_connector/managed_client.py",
+        "integrations/qgis_plugin/openvietgis_connector/plugin.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
+      ],
+      "blocker": "R029 authenticated two-user managed API verified previously. Native QGIS connector SSE now includes bounded complete-event framing, reconnect catch-up delta and desktop-command wakeup, bounded exponential backoff, stale worker signal fencing, revocation timer shutdown and snapshot count pinning. New pure-Python regression tests not executed; actual QGIS Desktop interactive reconnect/permission reset and broad project/style exchange acceptance remain."
     },
     {
       "id": "COLLAB-01",
       "task": "T085",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/Spatial3DSettings.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "packages/spatial-workspace/tests/coordinator.test.mjs"
+      ],
+      "blocker": "Existing Cesium/MapLibre 3D views, terrain, layers, selection and camera coordination inspected; async model attachment now pinned to project and current selected feature/source/schema revisions. Full scene and camera browser acceptance remains."
     },
     {
       "id": "COLLAB-02",
       "task": "T086",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CadEditorPanel.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "packages/spatial-workspace/tests/cad-editor-dirty.test.mjs"
+      ],
+      "blocker": "Existing CAD panel tracks verified document revisions, dirty/saving state and permission-gated save/navigation. Model/Layout and authenticated round-trip acceptance remain."
     },
     {
       "id": "COLLAB-03",
       "task": "T087",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Chromium verifies same shared header DOM node survives GIS/CAD/GIS transition and retained map canvas; no live external CAD relay or all shared chat/task/AI actions in 3D tested."
     },
     {
       "id": "COLLAB-04",
       "task": "T088",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AiCopilotPanel.tsx",
+        "apps/web-next/src/ai-copilot",
+        "apps/mcp-rust",
+        "apps/web-next/src/ai-copilot/first-party.js",
+        "apps/web-next/src/ai-copilot/session-guard.js",
+        "apps/web-next/src/ai-copilot/session-guard.test.ts"
+      ],
+      "blocker": "Existing AI consent, mode/epoch/document pins, expiry guard and bounded ephemeral command history inspected. Full project/revision cross-workspace browser and relay acceptance remain."
     },
     {
       "id": "COLLAB-05",
       "task": "T089",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/MapChat.tsx",
+        "apps/web-next/src/OrgChat.tsx",
+        "apps/web-next/src/TeamCollaboration.tsx",
+        "apps/web-next/src/TaskReminder.tsx",
+        "apps/api-rust/src/org_chat.rs",
+        "tests/spec065/realtime_collaboration.py",
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/chat-draft-store.ts",
+        "apps/web-next/src/chat-draft-store.test.ts",
+        "apps/web-next/org-chat-smoke.mjs"
+      ],
+      "blocker": "Actual authenticated project chat public/private separation, task assignment/notification/revision conflict, org group mentions/reply/reaction/pin/read/member removal; memory-only per-room drafts survive switching and chat panel reopen, 503 keeps draft, single in-flight claim and stale callback guard; Chromium chat fixture passed. Cross-engine draft continuity and live SSE dedup/reconnect still need acceptance."
     },
     {
       "id": "COLLAB-06",
       "task": "T090",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AppMarket.tsx",
+        "apps/web-next/src/ExternalPluginHub.tsx",
+        "apps/web-next/src/workbench-registry.ts",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/plugin-lifecycle.ts",
+        "apps/web-next/src/plugin-lifecycle.test.ts"
+      ],
+      "blocker": "Existing partner activation pin, namespaced commands and server reauthorization on bridge calls; activation/deactivation UI. Safe uninstall of all contributions and complete first-party lifecycle/browser acceptance remain."
     },
     {
       "id": "COLLAB-07",
@@ -585,23 +1039,44 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
-        "apps/web-next/src/QgisWorkspace.tsx"
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/studio-ui.tsx",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/qgis-workspace.css"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Modal focus containment, Shift+Tab wrap and Escape restore, keyboard toolbar/ribbon, visible focus and reduced-motion adjustments tested. No complete WCAG contrast/screen-reader/keyboard audit or paired QGIS acceptance."
     },
     {
       "id": "COLLAB-08",
       "task": "T092",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/SpatialPerformance.ts",
+        "apps/web-next/src/SpatialCache.ts",
+        "apps/web-next/src/SpatialIncremental.ts",
+        "apps/web-next/spatial-performance.test.mjs",
+        "apps/web-next/src/map-render-plan.ts",
+        "apps/web-next/src/map-render-plan.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Indexed layer order and grouped rows, minimal MapLibre structure reconciliation, coalesced nonzero-size resize. Synthetic Chromium at 390/1280/1440/1920 reports canvas size/settle times; no large-source p95 baseline or physical-device field workflow yet."
     },
     {
       "id": "COLLAB-09",
       "task": "T093",
-      "status": "unverified",
-      "candidate_paths": [],
-      "blocker": "Acceptance evidence not collected"
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/SpatialCache.ts",
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/workbenches/features/offline",
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/workbenches/features/offline/OfflineFieldPage.tsx",
+        "apps/web-next/src/workbenches/features/offline/offline-store.ts",
+        "apps/web-next/src/workbenches/features/offline/offline-store.test.ts"
+      ],
+      "blocker": "Existing official offline package verifies SHA-256, expiry, identity/scope and supports persistent scope locks and revision-checked drafts. Cross-tab permission loss, offline startup and no GuestStudio regression require authenticated browser evidence."
     }
   ]
 }

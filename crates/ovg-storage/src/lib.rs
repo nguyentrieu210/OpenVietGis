@@ -13,6 +13,7 @@ pub mod gis_access;
 pub mod house_numbering;
 pub mod identity;
 pub mod integration_hub;
+mod native_projection;
 pub mod pool;
 pub mod processing_jobs;
 pub mod processing_models;

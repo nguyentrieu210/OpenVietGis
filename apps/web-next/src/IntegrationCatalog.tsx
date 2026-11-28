@@ -25,6 +25,7 @@ import {
 } from "@openvietgis/client-sdk";
 import { QgisBindingManager } from "./QgisBindingManager";
 import { zipFiles } from "./zip";
+import {verifyExport,verifySyncPreview,verifySyncPush,safeTransferName} from "./transfer-verification";
 import "./integration-catalog.css";
 
 interface IntegrationCatalogProps {
@@ -178,7 +179,7 @@ function isExportAdapterKey(key: string): key is IntegrationExportAdapterKey {
 }
 
 function isAutocadMetricCrs(storedCrsCode: number | null): boolean {
-  return storedCrsCode === 5899 || storedCrsCode === 3857;
+  return storedCrsCode === 5899 || storedCrsCode === 3857 || (storedCrsCode!==null&&((storedCrsCode>=32601&&storedCrsCode<=32660)||(storedCrsCode>=32701&&storedCrsCode<=32760)));
 }
 
 function formatLayerCrs(layer: AdapterLayerDescriptor): string {
@@ -225,7 +226,7 @@ function formatExportErrorMessage(layerName: string, error: unknown): string {
       return `Không tìm thấy lớp "${layerName}" hoặc đầu cuối xuất chỉ đọc (HTTP 404).`;
     }
   }
-  return `Không thể tải tệp xuất chỉ đọc cho lớp "${layerName}". Vui lòng thử lại.`;
+  return error instanceof Error?`Lớp "${layerName}": ${error.message}`:`Không thể tải tệp xuất chỉ đọc cho lớp "${layerName}". Vui lòng thử lại.`;
 }
 
 function formatSyncErrorMessage(
@@ -333,15 +334,15 @@ export function BatchExport({ client, org, projectId, adapterKey, layers }: Inte
     const id = ++run.current;
     const failed: string[] = [];
     const empty: string[] = [];
-    const files: { name: string; blob: Blob }[] = [];
+    const files: { name: string; blob: Blob }[] = [];const names=new Set<string>();let totalBytes=0;
     const prefix = scopeSlug ? `${scopeSlug}-` : "";
     setResult(null);
     for (const [index, layer] of chosen.entries()) {
       setProgress(`Đang chuẩn bị ${index + 1}/${chosen.length}: ${layer.name}`);
       try {
-        const file = await downloadIntegrationLayerExport(client, org, projectId, BATCH_ADAPTER[format], layer.layer_id, format, scope);
+        const file = await verifyExport(layer,await downloadIntegrationLayerExport(client, org, projectId, BATCH_ADAPTER[format], layer.layer_id, format, scope));
         if (run.current !== id) return;
-        files.push({ name: prefix + file.filename, blob: file.blob });
+        if(totalBytes+file.blob.size>128*1024*1024){failed.push(layer.name+": vượt giới hạn 128 MiB mỗi batch");continue}totalBytes+=file.blob.size;files.push({ name: safeTransferName(prefix + file.filename,names), blob: file.blob });
       } catch (exportError: unknown) {
         if (run.current !== id) return;
         const detail = scope && exportError instanceof ApiError && exportError.status === 422 ? (await exportError.readPayload()).detail : undefined;
@@ -354,7 +355,7 @@ export function BatchExport({ client, org, projectId, adapterKey, layers }: Inte
     } else if (files.length > 1) {
       setProgress("Đang nén ZIP…");
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-      triggerBrowserBlobDownload(await zipFiles(files), `openvietgis-${prefix}${files.length}-lop-${EXPORT_FORMAT_EXT[format]}-${stamp}.zip`);
+      const archive=await zipFiles(files);if(run.current!==id)return;triggerBrowserBlobDownload(archive, `openvietgis-${prefix}${files.length}-lop-${EXPORT_FORMAT_EXT[format]}-${stamp}.zip`);
     }
     setProgress(null);
     setResult({ ok: files.length, failed, empty });
@@ -489,8 +490,11 @@ export function IntegrationCatalog({
   const [syncError, setSyncError] = useState("");
 
   const scopeGeneration = useRef(0);
+  const syncGeneration=useRef(0),syncInFlight=useRef(false);
+  const [syncUncertain,setSyncUncertain]=useState<string|null>(null);
 
   const resetSyncPanelState = () => {
+    syncGeneration.current++;syncInFlight.current=false;setSyncUncertain(null);
     setSyncLayerId(null);
     setSyncFile(null);
     setSyncPreviewLoading(false);
@@ -693,11 +697,12 @@ export function IntegrationCatalog({
       layer.layer_id,
       format
     )
-      .then((result) => {
+      .then(async(result) => {
+        await verifyExport(layer,result);
         if (scopeGeneration.current !== requestGeneration) {
           return;
         }
-        triggerBrowserBlobDownload(result.blob, result.filename);
+        triggerBrowserBlobDownload(result.blob, safeTransferName(result.filename,new Set()));
 
         const resolvedCrs = result.crs ?? formatLayerCrs(layer);
         const shortSha256 = result.sha256 ? result.sha256.slice(0, 12) : null;
@@ -752,6 +757,7 @@ export function IntegrationCatalog({
   };
 
   const toggleSyncLayerPanel = (layerId: string) => {
+    if(syncInFlight.current)return;syncGeneration.current++;setSyncUncertain(null);
     if (syncLayerId === layerId) {
       resetSyncPanelState();
       return;
@@ -764,9 +770,9 @@ export function IntegrationCatalog({
   };
 
   const handleSyncPreview = (layer: AdapterLayerDescriptor) => {
-    if (!syncFile) {
-      return;
-    }
+    if (!syncFile||syncInFlight.current||syncUncertain) return;
+    if(syncFile.size>16*1024*1024){setSyncError("Tệp vượt 16 MiB.");return}
+    syncInFlight.current=true;const generation=++syncGeneration.current;
     const requestGeneration = scopeGeneration.current;
     setSyncPreviewLoading(true);
     setSyncPreview(null);
@@ -784,29 +790,31 @@ export function IntegrationCatalog({
       });
     })()
       .then((preview) => {
-        if (scopeGeneration.current !== requestGeneration) {
+        if (scopeGeneration.current !== requestGeneration||syncGeneration.current!==generation) {
           return;
         }
-        setSyncPreview(preview);
+        setSyncPreview(verifySyncPreview(layer,preview));
       })
       .catch((previewError: unknown) => {
-        if (scopeGeneration.current !== requestGeneration) {
+        if (scopeGeneration.current !== requestGeneration||syncGeneration.current!==generation) {
           return;
         }
         setSyncError(formatSyncErrorMessage("preview", layer.name, previewError));
       })
       .finally(() => {
-        if (scopeGeneration.current === requestGeneration) {
-          setSyncPreviewLoading(false);
+        if (scopeGeneration.current === requestGeneration&&syncGeneration.current===generation) {
+          syncInFlight.current=false;setSyncPreviewLoading(false);
         }
       });
   };
 
   const handleSyncPush = (layer: AdapterLayerDescriptor) => {
-    if (!syncFile || !syncPreview || !syncPreview.can_commit) {
+    if (!syncFile || !syncPreview || !syncPreview.can_commit||syncInFlight.current||syncUncertain) {
       return;
     }
     const requestGeneration = scopeGeneration.current;
+    try{verifySyncPreview(layer,syncPreview)}catch(e){setSyncPreview(null);setSyncError(String(e));return}
+    syncInFlight.current=true;const generation=++syncGeneration.current;
     const expectedDiffSha256 = syncPreview.diff_sha256;
     const operationId = generateSyncOperationId();
 
@@ -831,6 +839,7 @@ export function IntegrationCatalog({
           csrfToken
         }
       );
+      verifySyncPush(syncPreview,operationId,pushResult);
       let refreshedProfile: IntegrationAdapterProfileResponse | null;
       try {
         refreshedProfile = await getIntegrationHubAdapterProfile(
@@ -845,7 +854,7 @@ export function IntegrationCatalog({
       return { pushResult, refreshedProfile };
     })()
       .then(({ pushResult, refreshedProfile }) => {
-        if (scopeGeneration.current !== requestGeneration) {
+        if (scopeGeneration.current !== requestGeneration||syncGeneration.current!==generation) {
           return;
         }
         setSyncPushResult(pushResult);
@@ -855,14 +864,15 @@ export function IntegrationCatalog({
         }
       })
       .catch((pushError: unknown) => {
-        if (scopeGeneration.current !== requestGeneration) {
+        if (scopeGeneration.current !== requestGeneration||syncGeneration.current!==generation) {
           return;
         }
-        setSyncError(formatSyncErrorMessage("push", layer.name, pushError));
+        setSyncPreview(null);
+        if(!(pushError instanceof ApiError)||![400,403,404,409,413,422].includes(pushError.status)){setSyncUncertain(operationId);setSyncError("Chưa xác minh được kết quả đẩy. Không gửi lại; đối chiếu lịch sử changeset với mã "+operationId+" và xuất lại lớp mới.")}else setSyncError(formatSyncErrorMessage("push", layer.name, pushError));
       })
       .finally(() => {
-        if (scopeGeneration.current === requestGeneration) {
-          setSyncPushLoading(false);
+        if (scopeGeneration.current === requestGeneration&&syncGeneration.current===generation) {
+          syncInFlight.current=false;setSyncPushLoading(false);
         }
       });
   };
@@ -1559,12 +1569,12 @@ export function IntegrationCatalog({
                                       type="file"
                                       accept=".gpkg"
                                       disabled={
-                                        syncPreviewLoading || syncPushLoading
+                                        syncPreviewLoading || syncPushLoading || !!syncUncertain
                                       }
                                       onChange={(event) => {
                                         const picked =
                                           event.target.files?.[0] ?? null;
-                                        setSyncFile(picked);
+                                        syncGeneration.current++;setSyncFile(picked);
                                         setSyncPreview(null);
                                         setSyncPushResult(null);
                                         setSyncError("");
@@ -1577,7 +1587,7 @@ export function IntegrationCatalog({
                                       type="button"
                                       className="integration-export-btn"
                                       disabled={
-                                        !syncFile ||
+                                        !syncFile || !!syncUncertain ||
                                         syncPreviewLoading ||
                                         syncPushLoading
                                       }
@@ -1595,7 +1605,7 @@ export function IntegrationCatalog({
                                       disabled={
                                         !syncFile ||
                                         !syncPreview ||
-                                        !syncPreview.can_commit ||
+                                        !syncPreview.can_commit || !!syncUncertain ||
                                         syncPreviewLoading ||
                                         syncPushLoading
                                       }

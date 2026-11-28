@@ -18,7 +18,8 @@ export async function executeWorkspace(h:Host,method:string,p:Params){
  if(!permissions.permissions.includes("project.read")||mutations.has(method)&&!permissions.permissions.includes("project.edit"))throw Error("Không có quyền thao tác");
  const access=await h.client.request<{restricted:boolean}>(base+"/access/mine");
  if(access.restricted!==false)throw Error("Không hỗ trợ tài khoản GIS giới hạn");
- if(advancedMethods.has(method))return output(await executeAdvanced(h,method,p));
+ h.guard();
+ if(advancedMethods.has(method)){const result=await executeAdvanced(h,method,p);h.guard();return output(result)}
  async function layer(id:unknown){const l=await getSpatialLayer(h.client,h.org,h.pid,uuid(id));if(l.lifecycle!=="active")throw Error("Lớp không hoạt động");return l}
  async function pinned(raw:unknown,edit=false):Promise<SpatialLayer>{
    if(!raw||typeof raw!=="object")throw Error("Thiếu revision pin");
@@ -79,5 +80,5 @@ export async function executeWorkspace(h:Host,method:string,p:Params){
  }
  default:throw Error("Lệnh AI không hỗ trợ");
  }
- return output(result);
+ h.guard();return output(result);
 }

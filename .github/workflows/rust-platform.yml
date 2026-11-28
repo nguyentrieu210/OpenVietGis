@@ -18,6 +18,8 @@ on:
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
+      - "tests/spec065/**"
+      - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
       - "specs/064-rust-platform/contracts/engines/**"
   pull_request:
@@ -35,6 +37,8 @@ on:
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
+      - "tests/spec065/**"
+      - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
       - "specs/064-rust-platform/contracts/engines/**"
 
@@ -315,6 +319,17 @@ jobs:
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e10-cad-dxf.log
 
+      - name: Spec 065 measured Rust processing reference
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' && (startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')) }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/parity/spec065
+          sudo env OVG_SPEC065_PYTHON="$PWD/apps/api/.venv/bin/python" \
+            OVG_SPEC065_BINARY="$PWD/target/debug/openvietgis-api-rust" \
+            OVG_SPEC065_IMAGE=postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262 \
+            OVG_SPEC065_EVIDENCE="$PWD/dist/parity/spec065/processing.json" \
+            bash tests/spec065/run-attribute-query.sh processing 2>&1 | tee dist/parity/spec065/processing.log
+          git rev-parse HEAD > dist/parity/spec065/candidate-sha.txt
       - name: Verify private tile cache authorization and current revisions
         if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
         run: |
@@ -390,3 +405,77 @@ jobs:
           name: cargo-audit
           path: dist/audit/
           if-no-files-found: warn
+
+  qgis-reference:
+    # Independent engine reference; not an interactive Desktop acceptance.
+    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Generate immutable synthetic fixtures
+        run: |
+          set -euo pipefail
+          mkdir -p dist/qgis-reference
+          python3 fixtures/qgis-parity/generate.py --out dist/qgis-reference/fixtures
+          (cd dist/qgis-reference/fixtures && sha256sum -c SHA256SUMS.txt)
+          git rev-parse HEAD > dist/qgis-reference/candidate-sha.txt
+      - name: Run pinned QGIS 3.44 engine reference
+        run: |
+          set -euo pipefail
+          image=qgis/qgis:3.44.16-noble@sha256:ddb8e114854ddeae75923a10e807aebe6895a144f1c9504416f4cc7bf813e07c
+          docker pull "$image"
+          docker image inspect "$image" --format '{{json .RepoDigests}}' > dist/qgis-reference/image-digests.json
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --env HOME=/tmp --env QT_QPA_PLATFORM=offscreen --env PROJ_NETWORK=OFF \
+            --env PYTHONDONTWRITEBYTECODE=1 --env QGIS_CUSTOM_CONFIG_PATH=/tmp/qgis-profile \
+            --mount "type=bind,source=$PWD/fixtures/qgis-parity,target=/oracle,readonly" \
+            --mount "type=bind,source=$PWD/dist/qgis-reference/fixtures,target=/evidence/fixtures,readonly" \
+            --mount "type=bind,source=$PWD/dist/qgis-reference,target=/evidence" \
+            --entrypoint /usr/bin/python3 "$image" /oracle/qgis_oracle.py \
+              --fixtures /evidence/fixtures --out /evidence/reference
+      - name: QGIS reference artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec065-qgis-reference
+          path: dist/qgis-reference/
+          if-no-files-found: error
+          retention-days: 14
+
+  spec065-processing-comparison:
+    needs: [qgis-reference, postgis-parity]
+    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: spec065-qgis-reference
+          path: dist/qgis-reference
+      - uses: actions/download-artifact@v4
+        with:
+          name: postgis-parity
+          path: dist/parity
+      - name: Compare the same commit and measured fixture
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s fixtures/qgis-parity -p test_compare_processing.py
+          python3 fixtures/qgis-parity/compare_processing.py \
+            --qgis dist/qgis-reference --rust dist/parity/spec065 \
+            | tee dist/spec065-processing-comparison.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spec065-processing-comparison
+          path: dist/spec065-processing-comparison.json
+          if-no-files-found: error

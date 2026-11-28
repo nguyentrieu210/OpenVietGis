@@ -180,3 +180,36 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .attribute-column-picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 8px;max-height:100px;overflow:auto;border-bottom:1px solid #d0dcd2}.attribute-column-picker label{display:inline-flex;align-items:center;gap:3px}
 
 .attribute-form-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px}.qgis-table th>button{font:inherit;color:inherit;background:transparent;border:0;padding:2px;cursor:pointer}.attribute-form .feature-info{padding:8px}
+
+/* Keyboard navigation and small field devices: keep focused controls identifiable. */
+.qgis-studio :is(button,input,select,textarea,a,[tabindex]):focus-visible,
+.core-ribbon-menu-fixed :is(button,input):focus-visible {
+ outline:2px solid #1765ad;outline-offset:2px;
+}
+.qgis-studio .qgis-tool-grip:focus-visible,.qgis-studio .qgis-palette-grip:focus-visible{outline-offset:-2px;background:#e1edff}
+@media(max-width:600px){
+ .qgis-studio .core-ribbon{overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin}
+ .qgis-studio .core-ribbon-group{flex:none}
+ .qgis-studio .qgis-toolrow{max-width:100%;overflow-x:auto}
+ .qgis-studio .qgis-table header{flex-wrap:wrap}
+ .qgis-studio .qgis-map-region{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){
+ .qgis-studio :is(.core-ribbon-menu,.qgis-floating-palette,.qgis-dock){transition:none!important;scroll-behavior:auto}
+}
+
+.attribute-column-picker{max-height:180px;overflow:auto;align-items:flex-start}
+.attribute-column-setting{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;border:1px solid #bdcbbf;padding:2px 4px;border-radius:3px}
+.attribute-column-setting input[type=number]{width:64px}
+
+.qgis-source-controls,.qgis-source-detail{display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid #bdcbbf;border-radius:3px}.qgis-source-detail small{overflow-wrap:anywhere}.qgis-source-items p[role=alert]{font-size:11px;overflow-wrap:anywhere}
+
+.ovg-secondary-map{position:absolute;right:8px;top:54px;z-index:14;width:min(460px,48%);height:min(580px,72%);min-height:180px;display:flex;flex-direction:column;background:#f7faf8;border:1px solid #a9b8b0;border-radius:5px;box-shadow:0 3px 12px #172f2b26;overflow:hidden;color:#263e36;font-size:11px}
+.ovg-secondary-map>header,.ovg-secondary-actions{display:flex;align-items:center;gap:5px;padding:4px 6px;border-bottom:1px solid #cbd4ce;flex-wrap:wrap}.ovg-secondary-map>header b{flex:1}.ovg-secondary-actions label{display:flex;align-items:center;gap:3px}.ovg-secondary-canvas{position:relative;min-height:80px;flex:1;overflow:hidden}.ovg-secondary-order{max-height:135px;overflow:auto;padding:4px 6px}.ovg-secondary-order>div{display:flex;gap:4px;align-items:center}.ovg-secondary-order label{flex:1;overflow-wrap:anywhere}.ovg-secondary-status,.ovg-secondary-map>p{padding:4px 6px;margin:0;overflow-wrap:anywhere}
+@container(max-width:520px){.ovg-secondary-map{width:calc(100% - 16px);height:55%;top:36px}}
+
+/* Temporary map focus keeps docks mounted and all saved layout/preferences intact. */
+.qgis-work[data-map-focus=on]>.qgis-dock,.qgis-work[data-map-focus=on] .qgis-main-row>.live-inspector,.qgis-work[data-map-focus=on] .qgis-canvas>.qgis-table{display:none!important}
+.qgis-work[data-map-focus=on] .qgis-canvas{flex-direction:column}
+
+.ovg-temporal-controls{padding:6px;display:grid;gap:5px;max-height:48%;overflow:auto;border-bottom:1px solid #cbd4ce}.ovg-temporal-controls label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovg-temporal-controls select{max-width:100%;min-width:0;flex:1}.ovg-temporal-controls input[type=range]{flex:1;min-width:80px}.ovg-temporal-buttons{display:flex;align-items:center;gap:5px}.ovg-temporal-controls p{margin:0}.ovg-temporal-controls small{overflow-wrap:anywhere}

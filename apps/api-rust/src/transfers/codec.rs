@@ -461,7 +461,7 @@ impl Geom {
         }
     }
 
-    pub(super) fn coordinates_value(&self) -> Value {
+    pub(crate) fn coordinates_value(&self) -> Value {
         let pos = |p: &[f64; 2]| json!([p[0], p[1]]);
         match self {
             Geom::Point(p) => pos(p),
@@ -548,7 +548,7 @@ fn validate_ready(
     srid: i32,
     output_roundoff: bool,
 ) -> Option<()> {
-    if !SUPPORTED_CRS.contains(&srid) || family.is_some_and(|f| f != geom.family()) {
+    if !u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_processing_crs) || family.is_some_and(|f| f != geom.family()) {
         return None;
     }
     let parts = geom.parts();
@@ -588,6 +588,7 @@ fn validate_ready(
             let ok = match srid {
                 4326 | 4756 => (-180.0..=180.0).contains(&x) && (-90.0..=90.0).contains(&y),
                 3857 => x.abs() <= WEB_MERCATOR_MAX + slack && y.abs() <= WEB_MERCATOR_MAX + slack,
+                _ if u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000) => ovg_spatial::transform::project_native_vn2000(srid as u32,4756,ovg_spatial::Coord2D::new(x,y)).is_ok(),
                 _ => true,
             };
             if !ok {
@@ -855,6 +856,9 @@ fn number(j: &J) -> Option<f64> {
 
 /// `_check_coords` -> (is_2d_finite_wgs84, has_non_2d).
 fn check_coords(coords: Option<&J>, depth: u8) -> (bool, bool) {
+    check_coords_native(coords, depth, true)
+}
+fn check_coords_native(coords: Option<&J>, depth: u8, geographic: bool) -> (bool, bool) {
     let Some(J::Arr(items)) = coords else {
         return (false, false);
     };
@@ -870,15 +874,14 @@ fn check_coords(coords: Option<&J>, depth: u8) -> (bool, bool) {
         };
         let ok = x.is_finite()
             && y.is_finite()
-            && (-180.0..=180.0).contains(&x)
-            && (-90.0..=90.0).contains(&y);
+            && (!geographic || ((-180.0..=180.0).contains(&x) && (-90.0..=90.0).contains(&y)));
         return (ok, false);
     }
     if items.is_empty() {
         return (false, false);
     }
     for child in items {
-        let (ok, non2d) = check_coords(Some(child), depth - 1);
+        let (ok, non2d) = check_coords_native(Some(child), depth - 1, geographic);
         if !ok {
             return (false, non2d);
         }
@@ -2069,7 +2072,12 @@ pub fn plan_export_mapping(
     output_crs: i32,
     has_long_text: bool,
 ) -> std::result::Result<ExportMappingPlan, String> {
-    if !SUPPORTED_CRS.contains(&source_crs) || !SUPPORTED_CRS.contains(&output_crs) {
+    let native_extended=|code:i32|u32::try_from(code).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000);
+    if native_extended(source_crs)||native_extended(output_crs){
+        if source_crs!=output_crs||!matches!(output_format,"geopackage"|"shapefile_zip"){
+            return Err("Extended VN-2000 export requires native CRS GeoPackage or Shapefile; use Reproject before changing datum or projection.".into());
+        }
+    }else if !SUPPORTED_CRS.contains(&source_crs) || !SUPPORTED_CRS.contains(&output_crs) {
         return Err("Unsupported CRS code".into());
     }
     let op_id = Transform::resolve(source_crs, output_crs)
@@ -2098,7 +2106,44 @@ pub fn plan_export_mapping(
         field_type: f.2.to_string(),
     };
     if output_format == "geopackage" {
-        return Ok((fields.iter().map(identity).collect(), disclosures, op_id));
+        let mut used: std::collections::HashSet<String> = ["fid", "geom", "ovg_feature_id"]
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        let mut mappings = Vec::new();
+        let mut renamed = Vec::new();
+        for f in fields {
+            let mut m = identity(f);
+            let mut suffix = 1;
+            while !used.insert(m.output_name.to_ascii_lowercase()) {
+                m.output_name = format!("{}_{}", f.0, suffix);
+                suffix += 1;
+            }
+            if m.output_name != f.0 {
+                renamed.push(format!("{}->{}", f.0, m.output_name));
+            }
+            mappings.push(m);
+        }
+        if !renamed.is_empty() {
+            let mut c = Conversion::new(
+                "GPKG_RESERVED_FIELD_RENAMED",
+                "Reserved or case-colliding GeoPackage column names will be mapped.",
+                true,
+            );
+            c.affected_fields = renamed;
+            disclosures.push(c);
+        }
+        let decimals: Vec<String> = fields
+            .iter()
+            .filter(|f| f.2 == "decimal")
+            .map(|f| f.0.to_owned())
+            .collect();
+        if !decimals.is_empty() {
+            let mut c=Conversion::new("GPKG_DECIMAL_REAL","GeoPackage REAL fields use binary64 floating point and may lose decimal precision.",true);
+            c.affected_fields = decimals;
+            disclosures.push(c);
+        }
+        return Ok((mappings, disclosures, op_id));
     }
     if output_format == "geojson" {
         let stringified: Vec<String> = fields
@@ -2186,6 +2231,15 @@ pub fn plan_export_mapping(
         "Shapefile DBF encodes decimals as fixed-width numeric fields \
          (up to 6 decimal places).",
         decimals,
+    );
+    add(
+        "DBF_TEXT_NULL_EMPTY",
+        "DBF character fields cannot preserve the distinction between NULL, empty and padded text.",
+        fields
+            .iter()
+            .filter(|f| f.2 == "text")
+            .map(|f| f.0.to_owned())
+            .collect(),
     );
     if has_long_text {
         let mut c = Conversion::new(
@@ -2444,6 +2498,7 @@ mod tests {
             [
                 "DBF_FIELD_NAME_TRUNCATED",
                 "DBF_DECIMAL_FIXED_PRECISION",
+                "DBF_TEXT_NULL_EMPTY",
                 "DBF_TEXT_TRUNCATED_254"
             ]
         );

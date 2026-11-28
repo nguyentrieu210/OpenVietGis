@@ -1,0 +1,5 @@
+# Twenty-eighth implementation slice (GitHub only)
+Base 02b6c3032a355481482d813c96b642b3c6266b55.
+- TABLE-03: expression selection from existing attribute-only Rust query, complete fingerprint-pinned pages up to 5000 FIDs, reject duplicate/stale pages and changed counts. Replace/add/remove/intersect within active source, invert using separately pinned unfiltered source population; other source selections retained. No partial state update on failure. Includes missing geometry FIDs, without pretending to hydrate them.
+- Live shell checks current scope/read/query permissions and revisions before/after each request and before applying selection, refuses if selection changed during pagination. Existing edit/export completeness guards remain necessary. No whole-source spatial selection or physical QGIS comparison.
+- Added unit cases for set algebra, cross-page duplicate, stale fingerprint, scope change and limit; not executed. Direct GitHub source only; no build/CI/browser claim. No acceptance promotion or deploy.

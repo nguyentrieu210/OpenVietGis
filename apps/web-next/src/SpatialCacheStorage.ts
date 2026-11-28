@@ -1,3 +1,4 @@
+import {completeSnapshot} from "./spatial-snapshot-guard";
 import type {SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 
@@ -23,7 +24,7 @@ export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEn
     const d=await db();
     return await new Promise((resolve,reject)=>{
       const r=d.transaction(STORE,"readonly").objectStore(STORE).get(key(scope,layerId));
-      r.onsuccess=()=>{const e=r.result as CacheEntry|undefined;resolve(e&&e.key===key(scope,layerId)&&Date.now()-e.saved<MAX_AGE&&e.rows.length<=MAX_ROWS&&e.bytes<=MAX_BYTES?e:null)};
+      r.onsuccess=()=>{const e=r.result as CacheEntry|undefined;resolve(e&&e.key===key(scope,layerId)&&e.scope?.account===scope.account&&e.scope?.org===scope.org&&e.scope?.project===scope.project&&e.layer?.id===layerId&&Number.isFinite(e.saved)&&Date.now()>=e.saved&&Date.now()-e.saved<MAX_AGE&&Array.isArray(e.rows)&&e.rows.length<=MAX_ROWS&&Number.isFinite(e.bytes)&&e.bytes>=0&&e.bytes<=MAX_BYTES&&completeSnapshot(e.rows,e.layer.source.feature_count)?e:null)};
       r.onerror=()=>reject(r.error);
     });
   }catch{return null}
@@ -31,7 +32,7 @@ export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEn
 let queue:Promise<unknown>=Promise.resolve();
 function serialized(fn:()=>Promise<void>){const task=queue.then(fn,fn);queue=task.catch(()=>{});return task.catch(()=>{})}
 export function writeCache(scope:CacheScope,layer:SpatialLayer,rows:CachedRow[],permissionKey:string){
-  if(!permissionKey||layer.organization_id!==scope.org||layer.project_id!==scope.project||rows.length!==layer.source.feature_count||rows.length>MAX_ROWS)return Promise.resolve();
+  if(!permissionKey||layer.organization_id!==scope.org||layer.project_id!==scope.project||!completeSnapshot(rows,layer.source.feature_count)||rows.length>MAX_ROWS)return Promise.resolve();
   return serialized(async()=>{
     const payload=rows;
     // Measure off the input event path. An oversized snapshot is never persisted.

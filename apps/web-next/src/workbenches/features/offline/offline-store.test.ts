@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OfflinePackage } from "@openvietgis/client-sdk";
-import { makeRecord, normalizeField, queueDraft, sha256, verifyRecord, wireDrafts,
+import { makeRecord, normalizeField, queueDraft, sha256, verifyRecord, wireDrafts, verifySyncReceipt, assertRecordTransition, type Receipt,
   type Draft, type Field, type Snapshot } from "./offline-store";
 
 function sample() {
@@ -74,4 +74,23 @@ describe("typed local draft values",()=>{
     expect(normalizeField({...field,type:"boolean"},"false",false)).toBe(false);
     expect(normalizeField({...field,type:"timestamp"},"2026-11-21T00:00:00.123Z",false)).toBe("2026-11-21T00:00:00.123000Z");
   });
+});
+
+describe("offline immutable submission and receipts",()=>{
+ it("validates group identity and every operation receipt",async()=>{
+  const {record}=await fixture();const r=queueDraft(record,{op_type:"update",feature_id:"p1",properties:{size:"12.5"}});
+  const pending={...r,batch:{...r.batch!,attempted:true}};
+  const receipt:Receipt={id:"receipt",package_id:r.id,operation_id:pending.batch.id,submitted_ops_count:1,status:"applied",applied_changeset_ids:["cs"],conflicts:[],operation_receipts:[{client_operation_id:r.drafts[0]!.client_operation_id!,local_feature_id:"p1",core_feature_id:"p1",status:"applied",changeset_id:"cs"}]};
+  expect(verifySyncReceipt(pending,receipt)).toEqual(receipt);
+  expect(()=>verifySyncReceipt(pending,{...receipt,operation_id:"different"})).toThrow();
+  expect(()=>verifySyncReceipt(pending,{...receipt,operation_receipts:[]})).toThrow();
+  expect(()=>verifySyncReceipt(pending,{...receipt,submitted_ops_count:2})).toThrow();
+  expect(()=>verifySyncReceipt(pending,{...receipt,status:"conflict"})).toThrow();
+  expect(()=>assertRecordTransition(pending,{...pending,drafts:[]})).toThrow();
+  expect(()=>assertRecordTransition(pending,{...pending,batch:{...pending.batch,attempted:false}})).toThrow();
+  const completed={...pending,batch:{...pending.batch,receipt}};
+  expect(()=>assertRecordTransition(pending,completed)).not.toThrow();
+  expect(()=>assertRecordTransition(completed,pending)).toThrow();
+  expect(()=>assertRecordTransition({...record,locked:true},record)).toThrow();
+ });
 });

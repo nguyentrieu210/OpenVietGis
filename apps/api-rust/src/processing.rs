@@ -62,6 +62,10 @@ struct CreateProcessingJobRequest {
     #[serde(default)]
     overlay_layer_id: Option<Uuid>,
     #[serde(default)]
+    expected_input: Option<processing_jobs::ExpectedSource>,
+    #[serde(default)]
+    expected_overlay: Option<processing_jobs::ExpectedSource>,
+    #[serde(default)]
     parameters: Map<String, Value>,
     output_name: String,
     operation_id: String,
@@ -97,6 +101,11 @@ const fn algorithm_str(id: AlgorithmId) -> &'static str {
         AlgorithmId::Buffer => "buffer",
         AlgorithmId::Clip => "clip",
         AlgorithmId::Dissolve => "dissolve",
+        AlgorithmId::Difference => "difference",
+        AlgorithmId::Intersection => "intersection",
+        AlgorithmId::Union => "union",
+        AlgorithmId::Reproject => "reproject",
+        AlgorithmId::SpatialJoin => "spatial_join",
     }
 }
 
@@ -116,7 +125,7 @@ async fn create_job(
 
     let clean_params = validate_algorithm_parameters(body.algorithm_id, &body.parameters)
         .map_err(app_to_edit_error)?;
-    let submitted = processing_jobs::submit_job(
+    let submitted = processing_jobs::submit_job_pinned(
         &mut scope,
         algorithm_str(body.algorithm_id),
         body.input_layer_id,
@@ -124,6 +133,8 @@ async fn create_job(
         clean_params,
         &body.output_name,
         &body.operation_id,
+        body.expected_input.as_ref(),
+        body.expected_overlay.as_ref(),
     )
     .await?;
     let job_id = submitted
@@ -353,7 +364,7 @@ mod tests {
     fn registry_matches_the_frozen_python_contract() {
         let body = algorithm_registry_wire();
         let items = body["items"].as_array().unwrap();
-        assert_eq!(items.len(), 3);
+        assert_eq!(items.len(), 8);
         assert_eq!(items[0]["id"], "buffer");
         assert_eq!(items[0]["parameters_schema"]["quad_segs"]["default"], 8);
         assert_eq!(items[1]["required_inputs"][1], "overlay_layer_id");

@@ -14,3 +14,12 @@ export function resolveCommand<T extends SearchableCommand>(commands:readonly T[
  const alias=Object.hasOwn(aliases,key)?aliases[key]:key;
  return commands.find(c=>normalizeCommand(c.alias)===alias);
 }
+
+/** Exact command IDs (including shortcuts) are unambiguous in the ribbon.
+ * Otherwise keep fuzzy discovery in the current category and display every match. */
+export function searchRibbonCommands<T extends SearchableCommand>(commands:readonly T[],query:string,aliases:Readonly<Record<string,string>>):T[]{
+ if(!normalizeCommand(query))return [...commands];
+ const exact=resolveCommand(commands,query,aliases);
+ if(exact)return [exact];
+ return searchCommands(commands,query,aliases,commands.length);
+}

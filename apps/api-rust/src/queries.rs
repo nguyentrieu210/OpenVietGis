@@ -40,6 +40,8 @@ pub(crate) fn router() -> Router<AppState> {
 #[serde(deny_unknown_fields)]
 struct ExecuteBody {
     #[serde(default)]
+    attribute_only: bool,
+    #[serde(default)]
     attribute_filter: Option<Map<String, Value>>,
     #[serde(default)]
     spatial_filter: Option<Map<String, Value>>,
@@ -101,10 +103,15 @@ async fn execute_query(
     let Path((organization_id, project_id, layer_id)) =
         path.map_err(|_| QueryError::InvalidRequest)?;
     let body: ExecuteBody = parse(&body)?;
-    if !(1..=500).contains(&body.limit) || !(0..=25_000).contains(&body.offset) {
+    let max_offset = if body.attribute_only { 50_000 } else { 25_000 };
+    if !(1..=500).contains(&body.limit)
+        || !(0..=max_offset).contains(&body.offset)
+        || (body.attribute_only && body.spatial_filter.is_some())
+    {
         return Err(QueryError::InvalidRequest);
     }
     let request = QueryRequest {
+        attribute_only: body.attribute_only,
         attribute_filter: body.attribute_filter.map(Value::Object),
         spatial_filter: body.spatial_filter.map(Value::Object),
         expected_content_revision: body.expected_content_revision,

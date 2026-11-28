@@ -1,3 +1,4 @@
+import {activePartner,partnerActivationPin} from "./plugin-lifecycle";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {ApiError, activateProjectExtension, disableProjectExtension, listExtensionManifests, listProjectActivations, getEffectivePermissions, loadCsrfToken, partnerPanel, registerPartnerPlugin, listMarketplace, installMarketplaceRelease, savePartnerContributions, type MarketplaceRelease, type SavedPartnerContribution, type PartnerContributionDocument, type ApiClient, type ExtensionManifest, type ExtensionActivation, type PartnerCapability} from "@openvietgis/client-sdk";
 import {navigateTarget,partnerOverlay,partnerTool,type NavigateTarget,type PartnerMapBridge,type PartnerMapMethod,type PartnerOverlay,type PartnerToolInput,type PartnerTool} from "./partner-map-bridge";
@@ -12,24 +13,26 @@ const mapMethods:PartnerMapMethod[]=["map_view","map_selection","map_navigate","
 export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsChange,saved,save}: {manifest:ExtensionManifest; panel:NonNullable<ReturnType<typeof partnerPanel>>; bridge:React.RefObject<PartnerMapBridge|null>; authorize:(method:PartnerMapMethod)=>Promise<boolean>;onToolsChange:(tools:PartnerTool[])=>void;saved?:SavedPartnerContribution;save?:(document:PartnerContributionDocument)=>Promise<void>}) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready,setReady] = useState(false), [notice,setNotice] = useState("");
-  const session = useRef(""), lastNotice = useRef(0);
+  const session = useRef(""), lastNotice = useRef(0), mounted=useRef(false);
+  const latest=useRef({authorize,onToolsChange,save,saved});latest.current={authorize,onToolsChange,save,saved};
   const tools=useRef<PartnerToolInput[]>([]), toolGeneration=useRef(0);
   const [overlayTitle,setOverlayTitle]=useState(""),[toolCount,setToolCount]=useState(0),[storageStatus,setStorageStatus]=useState(""),[saving,setSaving]=useState(false);
   const overlayRef=useRef<PartnerOverlay|null>(null);
   const clearContributions=(render=true)=>{
-    toolGeneration.current++;tools.current=[];overlayRef.current=null;onToolsChange([]);bridge.current?.clearOverlay();
+    toolGeneration.current++;tools.current=[];overlayRef.current=null;latest.current.onToolsChange([]);bridge.current?.clearOverlay();
     if(render){setOverlayTitle("");setToolCount(0)}
   };
   const registerTool=(tool:PartnerToolInput)=>{
     if(tools.current.length>=4&&!tools.current.some(t=>t.id===tool.id))throw Error("Tối đa 4 công cụ.");
     tools.current=[...tools.current.filter(t=>t.id!==tool.id),tool];
-    const generation=toolGeneration.current;
-    onToolsChange(tools.current.map(t=>({...t,run:()=>{void (async()=>{
-      const allowed=await authorize("tool_register");
-      if(generation!==toolGeneration.current)return;
-      if(!allowed){clearContributions();return}
-      frame.current?.contentWindow?.postMessage({protocol,type:"tool_click",session:session.current,toolId:t.id},"*");
-    })()}})));
+    const generation=++toolGeneration.current,original=session.current;
+    latest.current.onToolsChange(tools.current.map(t=>({...t,run:async()=>{
+      if(!mounted.current||!original||session.current!==original||generation!==toolGeneration.current)return;
+      let allowed=false;try{allowed=await latest.current.authorize("tool_register")}catch{}
+      if(!mounted.current||generation!==toolGeneration.current||session.current!==original)return;
+      if(!allowed){clearContributions();setNotice("Công cụ không còn quyền thực thi.");return}
+      frame.current?.contentWindow?.postMessage({protocol,type:"tool_click",session:original,toolId:t.id},"*");
+    }})));
     setToolCount(tools.current.length);
   };
   const pending=useRef<MapRequest|null>(null),lastMapRequest=useRef(0);
@@ -37,12 +40,13 @@ export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsC
   const finish=(req:MapRequest,ok:boolean,result:unknown,render=true)=>{
     if(pending.current!==req)return;
     pending.current=null;clearTimeout(req.timer);
-    req.port.postMessage({protocol,type:"map_response",ok,result});req.port.close();
+    try{req.port.postMessage({protocol,type:"map_response",ok,result})}catch{/* port closed by frame */}finally{req.port.close()}
     if(render){setRequest(null);setChecking(false)}
   };
   const cancel=(reason:string,render=true)=>{if(pending.current)finish(pending.current,false,reason,render)};
   const reset = () => {cancel("Plugin frame changed");clearContributions();session.current=crypto.randomUUID();setReady(false);setNotice("");lastNotice.current=0;frame.current?.contentWindow?.postMessage({protocol,type:"reset"},"*")};
   useEffect(() => {
+    mounted.current=true;
     const receive = (event:MessageEvent) => {
       if (!frame.current || event.source !== frame.current.contentWindow || event.origin !== "null") return;
       const data = event.data;
@@ -77,14 +81,16 @@ export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsC
       } else {respond(false,"Capability denied or invalid request");}
     };
     window.addEventListener("message",receive);
-    return () => {window.removeEventListener("message",receive);session.current="";cancel("Plugin closed",false);clearContributions(false)};
+    return () => {mounted.current=false;window.removeEventListener("message",receive);session.current="";cancel("Plugin closed",false);clearContributions(false)};
   },[panel.url,panel.capabilities.join(",")]);
+  const approvalFlight=useRef<MapRequest|null>(null);
   const approve=async(req:MapRequest)=>{
-    if(checking||pending.current!==req)return;
-    setChecking(true);
+    if(approvalFlight.current||pending.current!==req)return;
+    approvalFlight.current=req;const original=session.current;setChecking(true);
     try {
-      if(!await authorize(req.method)){clearContributions();throw Error("Quyền đã thay đổi hoặc plugin không còn hoạt động.");}
-      if(pending.current!==req)return;
+      const allowed=await latest.current.authorize(req.method);
+      if(!mounted.current||session.current!==original||pending.current!==req)return;
+      if(!allowed){clearContributions();throw Error("Quyền đã thay đổi hoặc plugin không còn hoạt động.");}
       const host=bridge.current;if(!host)throw Error("Bản đồ không sẵn sàng.");
       let result:unknown=null;
       if(req.method==="map_view")result=host.view();
@@ -93,20 +99,20 @@ export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsC
       else if(req.method==="map_overlay"){host.overlay(req.overlay!);overlayRef.current=req.overlay!;setOverlayTitle(req.overlay!.title)}
       else if(req.method==="tool_register")registerTool(req.tool!);
       finish(req,true,result??null);
-    }catch(e){finish(req,false,errorText(e))}
+    }catch(e){finish(req,false,errorText(e))}finally{if(approvalFlight.current===req)approvalFlight.current=null}
   };
   const persist=async(clear=false)=>{
-    if(!save||saving)return;const original=session.current;setSaving(true);setStorageStatus("");
-    try{await save(clear?{overlay:null,tools:[]}:{overlay:overlayRef.current,tools:tools.current});if(!original||session.current!==original)return;bridge.current?.clearOverlay();setOverlayTitle("");setStorageStatus(clear?"Đã gỡ đóng góp đã lưu.":"Đã lưu đóng góp cho dự án.")}
-    catch(e){setStorageStatus(errorText(e))}finally{setSaving(false)}
+    if(!latest.current.save||saving)return;const saveCurrent=latest.current.save,original=session.current;setSaving(true);setStorageStatus("");
+    try{await saveCurrent(clear?{overlay:null,tools:[]}:{overlay:overlayRef.current,tools:tools.current});if(!mounted.current||!original||session.current!==original)return;bridge.current?.clearOverlay();setOverlayTitle("");setStorageStatus(clear?"Đã gỡ đóng góp đã lưu.":"Đã lưu đóng góp cho dự án.")}
+    catch(e){if(mounted.current&&session.current===original)setStorageStatus(errorText(e))}finally{if(mounted.current)setSaving(false)}
   };
   const restore=async()=>{
     if(!saved||!ready)return;const original=session.current;setStorageStatus("");
     try {
       const overlay=partnerOverlay(saved.document.overlay);
       const entries=saved.document.tools.map(partnerTool).filter((x):x is PartnerToolInput=>!!x);
-      if((overlay&&!await authorize("map_overlay"))||(entries.length&&!await authorize("tool_register")))throw Error("Quyền không còn khả dụng.");
-      if(!original||session.current!==original)return;
+      if((overlay&&!await latest.current.authorize("map_overlay"))||(entries.length&&!await latest.current.authorize("tool_register")))throw Error("Quyền không còn khả dụng.");
+      if(!mounted.current||!original||session.current!==original)return;
       overlayRef.current=overlay;setOverlayTitle("");toolGeneration.current++;tools.current=[];setToolCount(0);onToolsChange([]);entries.forEach(registerTool);setStorageStatus("Đã khôi phục công cụ đã lưu.");
     }catch(e){setStorageStatus(errorText(e))}
   };
@@ -126,7 +132,8 @@ export function ExternalPluginHub({client,org,projectId,canRegister,canManage,re
   const [market,setMarket]=useState<MarketplaceRelease[]>([]);
   const [open,setOpen]=useState(""), [error,setError]=useState(""), [busy,setBusy]=useState(false), [loading,setLoading]=useState(true);
   const [register,setRegister]=useState(false),[name,setName]=useState(""),[key,setKey]=useState(""),[version,setVersion]=useState("1.0.0"),[url,setUrl]=useState(""),[description,setDescription]=useState(""),[caps,setCaps]=useState<PartnerCapability[]>(["host_context"]);
-  const generation=useRef(0);
+  const generation=useRef(0),alive=useRef(true),mutation=useRef(false),openIntent=useRef(0);
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;++generation.current;++openIntent.current}},[]);
   const refresh=useCallback(async()=>{
     const current=++generation.current;
     try {
@@ -134,16 +141,16 @@ export function ExternalPluginHub({client,org,projectId,canRegister,canManage,re
       if(current!==generation.current)return;
       const valid=access.restricted===false&&p.permissions.includes("project.read")?m.items.filter(x=>partnerPanel(x)):[];
       setItems(valid);setActivations(a.items);
-      setOpen(id=>valid.some(x=>x.id===id)&&a.items.some(x=>x.manifest_id===id&&x.status==="active")?id:"");
+      setOpen(id=>valid.some(x=>x.id===id&&activePartner(x,a.items))?id:"");
       setError("");return {items:valid,activations:a.items};
     } catch(e) {
       if(current===generation.current){setItems([]);setActivations([]);setOpen("");setError(errorText(e));if(e instanceof ApiError&&e.status===401)expire()}
     } finally {if(current===generation.current)setLoading(false)}
   },[client,org,projectId,expire]);
-  useEffect(()=>{void listMarketplace(client).then(r=>setMarket(r.items)).catch(()=>setMarket([]));},[client]);
+  useEffect(()=>{let live=true;void listMarketplace(client).then(r=>{if(live)setMarket(r.items)}).catch(()=>{if(live)setMarket([])});return()=>{live=false}},[client]);
   useEffect(()=>{void refresh();const timer=window.setInterval(()=>void refresh(),15000);return()=>{generation.current++;clearInterval(timer)}},[refresh]);
-  const execute=async(action:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await action();await refresh();await onChange()}catch(e){setError(errorText(e));if(e instanceof ApiError&&e.status===401)expire()}finally{setBusy(false)}};
-  const current=items.find(m=>m.id===open),panel=current?partnerPanel(current):null;
+  const execute=async(action:()=>Promise<unknown>)=>{if(mutation.current||restricted||!alive.current)return;mutation.current=true;++openIntent.current;setBusy(true);setError("");try{await action();if(!alive.current)return;await refresh();if(alive.current)await onChange()}catch(e){if(alive.current){setError(errorText(e));if(e instanceof ApiError&&e.status===401)expire()}}finally{mutation.current=false;if(alive.current)setBusy(false)}};
+  const current=items.find(m=>m.id===open&&activePartner(m,activations)),panel=current?partnerPanel(current):null;
   const docked=!!current&&!!panel&&!restricted;
   useEffect(()=>{onDockChange(docked);return()=>onDockChange(false)},[docked,onDockChange]);
   if(restricted)return <section className="partner-hub"><h3>Kho plugin đối tác</h3><p className="live-note">Không mở plugin bên ngoài trong dự án có giới hạn truy cập.</p></section>;
@@ -158,9 +165,9 @@ export function ExternalPluginHub({client,org,projectId,canRegister,canManage,re
     </form>}
     <section className="partner-marketplace"><h4>Marketplace · plugin đã duyệt</h4>{!market.length&&<p className="live-note">Chưa có bản phát hành công khai đã ký.</p>}{market.map(r=><div className="studio-module-card" key={r.manifest.extension_key+":"+r.manifest.version}><div><b>{r.manifest.display_name}</b><small>{r.publisher_name} · v{r.manifest.version} · Đã duyệt chữ ký</small><small>{r.manifest.description}</small></div><button disabled={busy||!canRegister||items.some(m=>m.extension_key===r.manifest.extension_key&&m.version===r.manifest.version)} onClick={()=>void execute(async()=>installMarketplaceRelease(client,org,r,await loadCsrfToken(client)))}>Cài vào tổ chức</button></div>)}</section>
     {loading&&<p>Đang tải danh mục…</p>}{!loading&&!items.length&&!error&&<p className="live-note">Chưa có plugin đối tác được đăng ký.</p>}
-    {items.map(m=>{const p=partnerPanel(m)!;const a=activations.find(x=>x.extension_key===m.extension_key),active=a?.manifest_id===m.id&&a.status==="active",different=a&&a.manifest_id!==m.id;return <div className="studio-module-card" key={m.id}><div><b>{m.display_name}</b><small>{m.extension_key} · v{m.version} · {new URL(p.url).hostname}</small><small>{m.description} · {p.capabilities.map(c=>labels[c]).join("; ")}</small></div>
-      {active?<><button disabled={busy} onClick={()=>{if(open===m.id){setOpen("");return}void refresh().then(r=>{if(r?.items.some(x=>x.id===m.id)&&r.activations.some(x=>x.manifest_id===m.id&&x.status==="active"))setOpen(m.id)})}}>{open===m.id?"Đóng khung":"Mở plugin"}</button><button disabled={busy||!canManage} onClick={()=>{setOpen("");void execute(async()=>disableProjectExtension(client,org,projectId,m.extension_key,await loadCsrfToken(client)))}}>Tắt</button></>:<button className="primary" disabled={busy||!canManage||!!different} onClick={()=>void execute(async()=>activateProjectExtension(client,org,projectId,m.id,await loadCsrfToken(client)))}>{different?"Cần chuyển phiên bản":"Kích hoạt"}</button>}</div>})}
-    {current&&panel&&<ExternalPluginFrame key={current.id} manifest={current} panel={panel} bridge={bridge} onToolsChange={onToolsChange} saved={savedContributions.find(x=>x.manifest_id===current.id)} save={canManage?async document=>{await savePartnerContributions(client,org,projectId,current.id,savedContributions.find(x=>x.manifest_id===current.id)?.revision??0,document,await loadCsrfToken(client));await onChange()}:undefined} authorize={async method=>{try{const [a,m,p,access]=await Promise.all([listProjectActivations(client,org,projectId),listExtensionManifests(client,org),getEffectivePermissions(client,org,{project_id:projectId}),client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+projectId+"/access/mine")]);return access.restricted===false&&p.permissions.includes("project.read")&&a.items.some(x=>x.status==="active"&&x.manifest_id===current.id)&&m.items.some(x=>x.id===current.id&&partnerPanel(x)?.capabilities.includes(method))}catch(e){if(e instanceof ApiError&&e.status===401)expire();return false}}}/> }
+    {items.map(m=>{const p=partnerPanel(m)!;const a=activations.find(x=>x.extension_key===m.extension_key),active=activePartner(m,activations),different=a&&a.manifest_id!==m.id;return <div className="studio-module-card" key={m.id}><div><b>{m.display_name}</b><small>{m.extension_key} · v{m.version} · {new URL(p.url).hostname}</small><small>{m.description} · {p.capabilities.map(c=>labels[c]).join("; ")}</small></div>
+      {active?<><button disabled={busy} onClick={()=>{const intent=++openIntent.current;if(open===m.id){setOpen("");return}void refresh().then(r=>{if(alive.current&&intent===openIntent.current&&r?.items.some(x=>x.id===m.id&&activePartner(x,r.activations)))setOpen(m.id)})}}>{open===m.id?"Đóng khung":"Mở plugin"}</button><button disabled={busy||!canManage} onClick={()=>{++openIntent.current;setOpen("");void execute(async()=>disableProjectExtension(client,org,projectId,m.extension_key,await loadCsrfToken(client)))}}>Tắt</button></>:<button className="primary" disabled={busy||!canManage||!!different} onClick={()=>void execute(async()=>activateProjectExtension(client,org,projectId,m.id,await loadCsrfToken(client)))}>{different?"Cần chuyển phiên bản":"Kích hoạt"}</button>}</div>})}
+    {current&&panel&&<ExternalPluginFrame key={partnerActivationPin(current,activations)} manifest={current} panel={panel} bridge={bridge} onToolsChange={onToolsChange} saved={savedContributions.find(x=>x.manifest_id===current.id)} save={canManage?async document=>{await savePartnerContributions(client,org,projectId,current.id,savedContributions.find(x=>x.manifest_id===current.id)?.revision??0,document,await loadCsrfToken(client));await onChange()}:undefined} authorize={async method=>{try{const [a,m,p,access]=await Promise.all([listProjectActivations(client,org,projectId),listExtensionManifests(client,org),getEffectivePermissions(client,org,{project_id:projectId}),client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+projectId+"/access/mine")]);return alive.current&&access.restricted===false&&p.permissions.includes("project.read")&&m.items.some(x=>x.id===current.id&&partnerActivationPin(x,a.items)===partnerActivationPin(current,activations)&&activePartner(x,a.items,method))}catch(e){if(e instanceof ApiError&&e.status===401)expire();return false}}}/> }
     {error&&<p className="error" role="alert">{error}</p>}
   </section>;
 }

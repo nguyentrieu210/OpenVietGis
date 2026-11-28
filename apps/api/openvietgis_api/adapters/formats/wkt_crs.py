@@ -50,6 +50,31 @@ EPSG_NAMES: dict[int, str] = {
     5899: "VN-2000 / TM-3 107-45",
 }
 
+# Native export definitions only. Do not infer a datum transformation from WKT.
+# Keep existing import recognition restricted to its previously approved codes.
+_NATIVE_EXPORT_ZONES = {
+    3405: (105, 0.9996), 3406: (111, 0.9996),
+    5896: (102, 0.9999), 5897: (105, 0.9999), 5898: (108, 0.9999),
+    9205: (103, 0.9999), 9206: (104, 0.9999), 9207: (104.5, 0.9999),
+    9208: (104.75, 0.9999), 9209: (105.5, 0.9999), 9210: (105.75, 0.9999),
+    9211: (106, 0.9999), 9212: (106.25, 0.9999), 9213: (106.5, 0.9999),
+    9214: (107, 0.9999), 9215: (107.25, 0.9999), 9216: (107.5, 0.9999),
+    9217: (108.25, 0.9999), 9218: (108.5, 0.9999),
+}
+for _code, (_meridian, _scale) in _NATIVE_EXPORT_ZONES.items():
+    _degrees = int(_meridian)
+    _minutes = round((_meridian - _degrees) * 60)
+    _name = (f"VN-2000 / UTM zone {48 if _code == 3405 else 49}N"
+             if _scale == 0.9996 else f"VN-2000 / TM-3 {_degrees}-{_minutes:02d}")
+    EPSG_NAMES[_code] = _name
+    EPSG_WKT1[_code] = (
+        f'PROJCS["{_name}",{EPSG_WKT1[4756]},PROJECTION["Transverse_Mercator"],'
+        f'PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",{_meridian}],'
+        f'PARAMETER["scale_factor",{_scale}],PARAMETER["false_easting",500000],'
+        'PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],'
+        f'AXIS["Easting",EAST],AXIS["Northing",NORTH],AUTHORITY["EPSG","{_code}"]]'
+    )
+
 _TRAILING_AUTH_RE = re.compile(
     r'AUTHORITY\["EPSG"\s*,\s*"(\d+)"\]\s*\]\s*$|ID\["EPSG"\s*,\s*(\d+)\]\s*\]\s*$'
 )
@@ -63,7 +88,7 @@ def parse_prj_to_epsg(prj_text: str) -> int | None:
     match = _TRAILING_AUTH_RE.search(text)
     if match:
         code = int(match.group(1) or match.group(2))
-        return code if code in EPSG_WKT1 else None
+        return code if code in (4326, 3857, 4756, 5899) else None
     upper = text.upper()
     if upper.startswith("GEOGCS[") and (
         '"WGS_1984"' in upper or '"GCS_WGS_1984"' in upper or '"WGS 84"' in upper

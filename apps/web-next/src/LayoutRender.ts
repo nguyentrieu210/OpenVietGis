@@ -1,7 +1,7 @@
 import * as ml from "./map-surface";
 export type Camera={lng:number;lat:number;zoom:number;bearing:number;reference_width:number};
 export type GridLine={path:string;label:string;x:number;y:number};
-export type Shot={url:string;meters:number;bearing:number;ratio:number;grid:GridLine[];attribution:string};
+export type Shot={url:string;meters:number;bearing:number;ratio:number;effectiveDpi:number;grid:GridLine[];attribution:string};
 export function currentCamera(m:ml.Map):Camera{const c=m.getCenter();return {lng:((c.lng+180)%360+360)%360-180,lat:Math.max(-85,Math.min(85,c.lat)),zoom:Math.max(0,Math.min(24,m.getZoom())),bearing:((m.getBearing()+180)%360+360)%360-180,reference_width:Math.max(1,m.getCanvas().clientWidth)}}
 const clamp=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v));
 export async function captureFrame(live:ml.Map,camera:Camera,wmm:number,hmm:number,dpi:number):Promise<Shot>{
@@ -21,10 +21,24 @@ export async function captureFrame(live:ml.Map,camera:Camera,wmm:number,hmm:numb
   const line=(v:number,vertical:boolean)=>{const points=Array.from({length:15},(_,i)=>vertical?proj(v,box.getSouth()+(box.getNorth()-box.getSouth())*i/14):proj(box.getWest()+(box.getEast()-box.getWest())*i/14,v));const inside=points.find(([x,y])=>x>=0&&x<=1000&&y>=0&&y<=1000);if(!inside)return;grid.push({path:points.map((p,i)=>(i?"L":"M")+p.map(n=>n.toFixed(2)).join(",")).join(" "),label:v.toFixed(Math.min(6,Math.max(0,-Math.floor(Math.log10(step)))))+"°",x:clamp(inside[0]+5,5,930),y:clamp(inside[1]+12,14,990)})};
   if(Number.isFinite(step)&&step>0){for(let x=Math.ceil(box.getWest()/step)*step;x<=box.getEast()&&grid.length<20;x+=step)line(x,true);for(let y=Math.ceil(box.getSouth()/step)*step;y<=box.getNorth()&&grid.length<40;y+=step)line(y,false)}
   if(!url.startsWith("data:image/png")||!Number.isFinite(meters)||meters<=0)throw Error("Không lấy được ảnh / tỷ lệ bản đồ");
-  return {url,meters,bearing:m.getBearing(),ratio:width/height,grid,attribution:[...attrs].join(" · ").slice(0,350)};
+  return {url,meters,bearing:m.getBearing(),ratio:width/height,effectiveDpi:Math.min(width*25.4/wmm,height*25.4/hmm),grid,attribution:[...attrs].join(" · ").slice(0,350)};
  }finally{map?.remove();host.remove()}
 }
-export async function svgCanvas(svg:SVGSVGElement,wmm:number,hmm:number,dpi:number){const clone=svg.cloneNode(true) as SVGSVGElement;clone.querySelectorAll("[data-editor]").forEach(n=>n.remove());clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("width",String(wmm));clone.setAttribute("height",String(hmm));const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));try{const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(Error("Không dựng được bản in SVG"));i.src=url});const c=document.createElement("canvas");c.width=Math.round(wmm*dpi/25.4);c.height=Math.round(hmm*dpi/25.4);if(c.width*c.height>40_000_000)throw Error("Trang vượt giới hạn 40 triệu pixel");const ctx=c.getContext("2d");if(!ctx)throw Error("Không tạo được ảnh in");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(image,0,0,c.width,c.height);return c}finally{URL.revokeObjectURL(url)}}
+export function layoutSvgBlob(svg:SVGSVGElement,wmm:number,hmm:number,rasterSize?:[number,number]):Blob{
+ if(!Number.isFinite(wmm)||!Number.isFinite(hmm)||wmm<=0||hmm<=0)throw Error("Khổ giấy không hợp lệ");
+ const clone=svg.cloneNode(true) as SVGSVGElement;clone.querySelectorAll("[data-editor]").forEach(n=>n.remove());
+ for(const el of clone.querySelectorAll("image")){if(!el.getAttribute("href")?.startsWith("data:image/png;base64,"))throw Error("Khung bản đồ chưa có ảnh nhúng.");}
+ clone.removeAttribute("style");clone.removeAttribute("class");clone.removeAttribute("xmlns");clone.setAttribute("width",rasterSize?String(rasterSize[0]):wmm+"mm");clone.setAttribute("height",rasterSize?String(rasterSize[1]):hmm+"mm");clone.setAttribute("viewBox",`0 0 ${wmm} ${hmm}`);
+ return new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"});
+}
+export async function svgCanvas(svg:SVGSVGElement,wmm:number,hmm:number,dpi:number){
+ const width=Math.round(wmm*dpi/25.4),height=Math.round(hmm*dpi/25.4);
+ if(width<1||height<1||width*height>40_000_000)throw Error("Trang vượt giới hạn 40 triệu pixel");
+ const url=URL.createObjectURL(layoutSvgBlob(svg,wmm,hmm,[width,height]));try{
+ const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=()=>reject(Error("Không dựng được bản in SVG"));i.src=url});
+ const c=document.createElement("canvas");c.width=width;c.height=height;const ctx=c.getContext("2d");if(!ctx)throw Error("Không tạo được ảnh in");ctx.fillStyle="#fff";ctx.fillRect(0,0,c.width,c.height);ctx.drawImage(image,0,0,c.width,c.height);return c
+ }finally{URL.revokeObjectURL(url)}
+}
 export function canvasBlob(c:HTMLCanvasElement,type:string,quality?:number){return new Promise<Blob>((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(Error("Không mã hóa được bản in")),type,quality))}
 /** Embed the requested physical print resolution, not the browser's default. */
 export async function pngFromCanvas(canvas:HTMLCanvasElement,dpi:number):Promise<Blob>{
@@ -36,12 +50,20 @@ export async function pngFromCanvas(canvas:HTMLCanvasElement,dpi:number):Promise
  for(let off=8;off+12<=png.length;){const len=view.getUint32(off),end=off+12+len;if(end>png.length)throw Error("PNG không hợp lệ");const kind=String.fromCharCode(...png.subarray(off+4,off+8));if(kind!=="pHYs")chunks.push(png.slice(off,end));if(kind==="IHDR")chunks.push(phys);off=end}
  return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"image/png"});
 }
-export async function pdfFromCanvas(canvas:HTMLCanvasElement,wmm:number,hmm:number):Promise<Blob>{
- const jpeg=new Uint8Array(await (await canvasBlob(canvas,"image/jpeg",.96)).arrayBuffer()),w=(wmm*72/25.4).toFixed(4),h=(hmm*72/25.4).toFixed(4),enc=new TextEncoder(),chunks:Uint8Array[]=[],offsets=[0];let offset=0;
+export type PdfImagePage={jpeg:Uint8Array;width:number;height:number};
+export async function pdfImagePage(canvas:HTMLCanvasElement):Promise<PdfImagePage>{return {jpeg:new Uint8Array(await (await canvasBlob(canvas,"image/jpeg",.96)).arrayBuffer()),width:canvas.width,height:canvas.height}}
+export function pdfFromPages(pages:PdfImagePage[],wmm:number,hmm:number):Blob{
+ if(!pages.length||pages.length>8||!Number.isFinite(wmm)||!Number.isFinite(hmm)||wmm<=0||hmm<=0||pages.some(p=>!p.jpeg.length||p.width<1||p.height<1))throw Error("Trang PDF không hợp lệ");
+ const w=(wmm*72/25.4).toFixed(4),h=(hmm*72/25.4).toFixed(4),enc=new TextEncoder(),chunks:Uint8Array[]=[],offsets=[0];let offset=0;
  const push=(chunk:string|Uint8Array)=>{const a=typeof chunk==="string"?enc.encode(chunk):chunk;chunks.push(a);offset+=a.byteLength};
  const obj=(id:number,body:string)=>{offsets[id]=offset;push(id+" 0 obj\n"+body+"\nendobj\n")};
- push("%PDF-1.4\n");obj(1,"<< /Type /Catalog /Pages 2 0 R >>");obj(2,"<< /Type /Pages /Kids [3 0 R] /Count 1 >>");obj(3,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+w+" "+h+"] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>");
- offsets[4]=offset;push("4 0 obj\n<< /Type /XObject /Subtype /Image /Width "+canvas.width+" /Height "+canvas.height+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+jpeg.length+" >>\nstream\n");push(jpeg);push("\nendstream\nendobj\n");
- const stream="q\n"+w+" 0 0 "+h+" 0 0 cm\n/Im0 Do\nQ\n";obj(5,"<< /Length "+enc.encode(stream).length+" >>\nstream\n"+stream+"endstream");const xref=offset;push("xref\n0 6\n0000000000 65535 f \n");for(let i=1;i<=5;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");push("trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n");return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"application/pdf"})
+ push("%PDF-1.4\n");obj(1,"<< /Type /Catalog /Pages 2 0 R >>");obj(2,"<< /Type /Pages /Kids ["+pages.map((_,i)=>(3+i*3)+" 0 R").join(" ")+"] /Count "+pages.length+" >>");
+ for(const [i,page] of pages.entries()){
+ const id=3+i*3;obj(id,"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 "+w+" "+h+"] /Resources << /XObject << /Im0 "+(id+1)+" 0 R >> >> /Contents "+(id+2)+" 0 R >>");
+ offsets[id+1]=offset;push((id+1)+" 0 obj\n<< /Type /XObject /Subtype /Image /Width "+page.width+" /Height "+page.height+" /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "+page.jpeg.length+" >>\nstream\n");push(page.jpeg);push("\nendstream\nendobj\n");
+ const stream="q\n"+w+" 0 0 "+h+" 0 0 cm\n/Im0 Do\nQ\n";obj(id+2,"<< /Length "+enc.encode(stream).length+" >>\nstream\n"+stream+"endstream");
+ }
+ const count=3+pages.length*3,xref=offset;push("xref\n0 "+count+"\n0000000000 65535 f \n");for(let i=1;i<count;i++)push(String(offsets[i]).padStart(10,"0")+" 00000 n \n");push("trailer\n<< /Size "+count+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n");return new Blob(chunks.map(a=>a.buffer.slice(a.byteOffset,a.byteOffset+a.byteLength) as ArrayBuffer),{type:"application/pdf"})
 }
+export async function pdfFromCanvas(canvas:HTMLCanvasElement,wmm:number,hmm:number):Promise<Blob>{return pdfFromPages([await pdfImagePage(canvas)],wmm,hmm)}
 export function saveBlob(blob:Blob,name:string){const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}

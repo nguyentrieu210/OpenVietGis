@@ -4,7 +4,7 @@ import {ApiClient,loadCsrfToken} from "@openvietgis/client-sdk";
 import * as ml from "./map-surface";
 import type {Peer} from "./LivePresence";
 import {EmojiPicker} from "./EmojiPicker";
-import {OrgChat} from "./OrgChat";
+import {OrgChat,createOrgDraftStore} from "./OrgChat";
 
 // Spec 058: app-level chat rail on the right edge (like Zalo PC): the project room plus 1–1 messages with
 // project members. The project room also shows on the map: running lines, emoji bursts, "/" cursor chat.
@@ -23,6 +23,7 @@ const sortMsgs=(l:Msg[])=>l.slice().sort((a,b)=>a.created_at.localeCompare(b.cre
 const makeBurst=(id:string,e:string):Burst[]=>Array.from({length:14},(_,k)=>({id:id+":"+k,e,x:Math.round(Math.random()*90-45),d:+(k*0.09+Math.random()*0.2).toFixed(2),t:+(2.2+Math.random()*1.2).toFixed(2),r:Math.round(Math.random()*40-20)}));
 
 export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite}:Props){
+ const [orgDrafts]=useState(createOrgDraftStore);
  const [orgChat,setOrgChat]=useState(false),[legacyHistory,setLegacyHistory]=useState(false);
  const base="/organizations/"+org+"/projects/"+pid+"/collaboration";
  const [railMin,setRailMin]=useState(()=>{try{return localStorage.getItem("ovg:chat-rail-min")==="1"}catch{return false}});
@@ -32,23 +33,25 @@ export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite
  const [bubbles,setBubbles]=useState<Msg[]>([]),[bursts,setBursts]=useState<Burst[]>([]),[typing,setTyping]=useState<{x:number;y:number}|null>(null),[text,setText]=useState(""),[draft,setDraft]=useState("");
  const seen=useRef(new Set<string>()),primed=useRef(new Set<string>()),mouse=useRef({x:0,y:0}),view=useRef({room:"",open});view.current={room,open};
  const listRef=useRef<HTMLDivElement>(null);
+ const chatEpoch=useRef(0),loads=useRef(new Map<string,number>()),sending=useRef(false);const [sendBusy,setSendBusy]=useState(false),[sendError,setSendError]=useState("");
  const announce=(fresh:Msg[])=>{const text=fresh.filter(m=>!onlyEmoji((REACT.exec(m.body)?.[2])??m.body)&&!REACT.test(m.body));setBubbles(b=>[...b,...text].slice(-8));for(const m of text)setTimeout(()=>setBubbles(b=>b.filter(x=>x.id!==m.id)),9000);
   const burst=fresh.flatMap(m=>{const e=(REACT.exec(m.body)?.[2])??m.body;return onlyEmoji(e)?makeBurst(m.id,e.trim()):[]});if(burst.length){setBursts(b=>[...b,...burst].slice(-120));setTimeout(()=>setBursts(b=>b.filter(x=>!burst.includes(x))),4200)}};
- const load=async(r:string,limit=40)=>{try{const res=await client.request<{items:Msg[]}|Msg[]>(base+"/messages?limit="+limit+(r?"&peer="+encodeURIComponent(r):""),{cache:"no-store"});const items=sortMsgs(Array.isArray(res)?res:res.items);
+ const load=async(r:string,limit=40)=>{const epoch=chatEpoch.current,seq=(loads.current.get(r)??0)+1;loads.current.set(r,seq);try{const res=await client.request<{items:Msg[]}|Msg[]>(base+"/messages?limit="+limit+(r?"&peer="+encodeURIComponent(r):""),{cache:"no-store"});if(chatEpoch.current!==epoch||loads.current.get(r)!==seq)return;const items=sortMsgs(Array.isArray(res)?res:res.items);
   const fresh=items.filter(m=>!seen.current.has(m.id));items.forEach(m=>seen.current.add(m.id));setLogs(l=>({...l,[r]:items}));
   if(primed.current.has(r)&&fresh.length){const others=fresh.filter(m=>m.author_id!==accountId);if(!r)announce(others);if(others.length&&!(view.current.open&&view.current.room===r))setUnread(u=>({...u,[r]:(u[r]??0)+others.length}))}primed.current.add(r)}catch{/* chat unavailable: keep the map usable */}};
- useEffect(()=>{seen.current.clear();primed.current.clear();setLogs({});setUnread({});void load("");
-  client.request<{items:Member[]}>(base+"/members",{cache:"no-store"}).then(r=>{setMembers(r.items.filter(m=>m.id!==accountId));r.items.filter(m=>m.id!==accountId).slice(0,20).forEach(m=>void load(m.id,20))}).catch(()=>setMembers([]));
-  const es=new EventSource("/api/v1"+base+"/events",{withCredentials:true});const on=()=>{void load("");if(view.current.room)void load(view.current.room)};es.addEventListener("change",on);
-  const poll=setInterval(()=>void load(""),30000);return()=>{es.close();clearInterval(poll)}},[org,pid]);
+ useEffect(()=>{const epoch=++chatEpoch.current;loads.current.clear();seen.current.clear();primed.current.clear();setLogs({});setUnread({});void load("");
+  client.request<{items:Member[]}>(base+"/members",{cache:"no-store"}).then(r=>{if(chatEpoch.current!==epoch)return;setMembers(r.items.filter(m=>m.id!==accountId));r.items.filter(m=>m.id!==accountId).slice(0,20).forEach(m=>void load(m.id,20))}).catch(()=>{if(chatEpoch.current===epoch)setMembers([])});
+  const es=new EventSource(client.url(base+"/events"),{withCredentials:true});const on=()=>{void load("");if(view.current.room)void load(view.current.room)};es.addEventListener("change",on);
+  const poll=setInterval(()=>void load(""),30000);return()=>{++chatEpoch.current;es.close();clearInterval(poll)}},[org,pid,accountId,client]);
  useEffect(()=>{const mv=(e:MouseEvent)=>{mouse.current={x:e.clientX,y:e.clientY}};const start=()=>{if(!canWrite)return;const {x,y}=mouse.current;setTyping({x:x||innerWidth/2,y:y||innerHeight/2});setText("")};
   window.addEventListener("mousemove",mv);window.addEventListener("ovg:chat",start);return()=>{window.removeEventListener("mousemove",mv);window.removeEventListener("ovg:chat",start)}},[canWrite]);
- const send=async(body:string,to=room)=>{const t=body.trim().slice(0,4000);if(!t)return;
-  const temp:Msg={id:"local-"+crypto.randomUUID(),author_id:accountId,author_name:peers.find(p=>p.actor===accountId)?.name??"Bạn",body:t,created_at:new Date().toISOString(),recipient_id:to||null};
-  setLogs(l=>({...l,[to]:[...(l[to]??[]),temp]}));if(!to)announce([temp]);
-  try{await loadCsrfToken(client);const saved=await client.request<Msg>(base+"/messages",{method:"POST",body:JSON.stringify(to?{body:t,recipient_id:to}:{body:t})});if(saved?.id)seen.current.add(saved.id)}
-  catch{setLogs(l=>({...l,[to]:(l[to]??[]).filter(m=>m.id!==temp.id)}));return}
-  void load(to)};
+ const send=async(body:string,to=room)=>{const t=body.trim().slice(0,4000);if(!t||!canWrite||to||sending.current)return false;
+  const epoch=chatEpoch.current;sending.current=true;setSendBusy(true);setSendError("");
+  try{await loadCsrfToken(client);const saved=await client.request<Msg>(base+"/messages",{method:"POST",body:JSON.stringify({body:t})});if(chatEpoch.current!==epoch)return false;if(!saved?.id||saved.author_id!==accountId)throw Error("Biên nhận tin nhắn không khớp.");seen.current.add(saved.id);setLogs(l=>({...l,[to]:sortMsgs([...(l[to]??[]).filter(m=>m.id!==saved.id),saved])}));announce([saved]);void load(to);return true}
+  catch{if(chatEpoch.current===epoch)setSendError("Chưa xác minh tin đã gửi. Kiểm tra lịch sử trước khi gửi lại; nội dung chưa bị xóa.");return false}
+  finally{sending.current=false;if(chatEpoch.current===epoch)setSendBusy(false)}
+ };
+
  useEffect(()=>{let alive=true;client.request<{data_url:string|null}>("/me/avatar",{cache:"no-store"}).then(r=>{if(alive&&r?.data_url)setPhotos(p=>({...p,[accountId]:r.data_url!}))}).catch(()=>{});return()=>{alive=false}},[accountId]);
  const asked=useRef(new Set<string>());
  const photoOf=(id:string)=>{if(!photos[id]&&!asked.current.has(id)&&id!==accountId){asked.current.add(id);client.request<{data_url:string|null}>("/organizations/"+org+"/chat/people/"+id+"/avatar").then(r=>{if(r?.data_url)setPhotos(p=>({...p,[id]:r.data_url!}))}).catch(()=>{})}return photos[id]};
@@ -64,7 +67,7 @@ export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite
  const inputRef=useRef<HTMLInputElement>(null);
  // emoji goes in at the caret, next to the text being typed
  const insert=(e:string)=>{const el=inputRef.current;const a=el?.selectionStart??draft.length,b=el?.selectionEnd??draft.length;setDraft(d=>d.slice(0,a)+e+d.slice(b));requestAnimationFrame(()=>{el?.focus();el?.setSelectionRange(a+e.length,a+e.length)})};
- const submit=(t:string)=>{if(!t.trim())return;setDraft("");void send(t)};
+ const submit=(t:string)=>{if(!t.trim()||sending.current)return;void send(t).then(ok=>{if(ok)setDraft(old=>old===t?"":old)})};
  const host=map.current?.getContainer().parentElement??null;
  const total=Object.values(unread).reduce((a,b)=>a+b,0);
  const lastOf=(r:string)=>{const l=(logs[r]??[]).filter(m=>!REACT.test(m.body));return l[l.length-1]};
@@ -79,7 +82,7 @@ export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite
    {legacyHistory&&members.slice(0,20).map(m=><button type="button" key={m.id} className={"ovg-rail-room"+(open&&room===m.id?" active":"")} style={{background:color(m.id)}} title={m.display_name+(online.has(m.id)?" · đang trực tuyến":"")+" · lịch sử dự án"} onClick={()=>pick(m.id)}>{initials(m.display_name)}{online.has(m.id)&&<i className="online"/>}{unread[m.id]?<b className="ovg-chat-badge">{unread[m.id]}</b>:null}</button>)}
    <button type="button" className="ovg-rail-fold" title="Thu thanh chat vào mép" aria-label="Thu thanh chat" onClick={()=>foldRail(true)}>›</button>
   </nav>}
-  {orgChat&&<OrgChat key={org+":"+accountId} client={client} org={org} accountId={accountId} close={()=>setOrgChat(false)}/>}
+  {orgChat&&<OrgChat drafts={orgDrafts} key={org+":"+accountId} client={client} org={org} accountId={accountId} close={()=>setOrgChat(false)}/>}
   {!orgChat&&people&&<section className="ovg-chat-pane ovg-people">
    <header><b>Nhắn tin mới</b><small>Người trong dự án có quyền sửa</small><button type="button" aria-label="Đóng" onClick={()=>setPeople(false)}>×</button></header>
    <div className="ovg-people-search"><input autoFocus value={who} onChange={e=>setWho(e.target.value)} placeholder="Tìm theo tên…" aria-label="Tìm người"/></div>
@@ -90,14 +93,14 @@ export function MapChat({projectName,client,org,pid,map,peers,accountId,canWrite
   {open&&!people&&!orgChat&&<section className={"ovg-chat-pane size-"+size}>
    <header><b>{room?"":"# "}{roomName}</b><small>{room?"Lịch sử nhắn riêng dự án · chỉ hai người thấy":members.length+1+" thành viên · tin cũng chạy trên bản đồ"}</small><span className="ovg-pane-tools"><button type="button" className="size" title={"Cỡ khung: "+["nhỏ","vừa","lớn"][size]+" · bấm để đổi"} aria-label="Đổi cỡ khung chat" onClick={()=>setSize(v=>{const n=(v+1)%3;try{localStorage.setItem("ovg:chat-size-level",String(n))}catch{/* storage unavailable */}return n})}>{["▫","◻","⬜"][size]}</button><button type="button" title="Thu nhỏ" aria-label="Thu nhỏ chat" onClick={()=>pick(room)}>–</button></span></header>
    <div className="ovg-chat-msgs" ref={listRef} aria-live="polite">{shown.length?shown.map(m=>{const mine=m.author_id===accountId,rs=reactions.get(m.id);return <div key={m.id} className={"ovg-live-msg"+(mine?" mine":"")+(onlyEmoji(m.body)?" only-emoji":"")}>{!mine&&av(m.author_id,m.author_name)}<div className="ovg-live-bubble"><p>{!mine&&!room&&<b style={{color:color(m.author_id)}}>{m.author_name}</b>}{m.body}<time>{time(m.created_at)}</time></p>{rs&&<span className="ovg-live-reacts" title={[...rs].map(([e,who])=>e+" "+who.join(", ")).join(" · ")}>{[...rs].map(([e,who])=><span key={e}>{e}{who.length>1?who.length:""}</span>)}</span>}{canWrite&&!room&&<span className="ovg-live-reactbar" role="group" aria-label="Thả cảm xúc">{REACTIONS.map(e=><button type="button" key={e} aria-label={"Thả "+e} onClick={()=>void send("⟦react:"+m.id+":"+e+"⟧")}>{e}</button>)}</span>}</div></div>}):<p className="ovg-live-empty">{room?"Bắt đầu cuộc trò chuyện với "+roomName+".":"Chưa có tin nhắn. Bấm / trên bản đồ để nhắn cạnh con trỏ."}</p>}</div>
-   {canWrite&&!room?<form className="ovg-live-input" onSubmit={e=>{e.preventDefault();submit(draft)}}><div className="ovg-live-quick">{["👍","❤️","😆","✅","❓","👀","🔥","🎉"].map(q=><button type="button" key={q} title={draft.trim()?"Chèn vào tin đang gõ":"Gửi ngay"} onMouseDown={e=>e.preventDefault()} onClick={()=>{if(draft.trim())insert(q);else submit(q)}} aria-label={"Gửi "+q}>{q}</button>)}<button type="button" className="more" aria-expanded={pickEmoji} title="Tất cả biểu tượng" onClick={()=>setPickEmoji(v=>!v)}>😊＋</button></div>{pickEmoji&&<EmojiPicker close={()=>setPickEmoji(false)} pick={insert}/>}<input value={draft} maxLength={4000} ref={inputRef} placeholder={room?"Nhắn riêng cho "+roomName+"…":"Nhắn cho cả dự án…"} onChange={e=>setDraft(e.target.value)}/><button type="submit" className="send" disabled={!draft.trim()} aria-label="Gửi">➤</button></form>:<p className="ovg-live-empty">{room?"Lịch sử cũ · dùng Chat tổ chức để gửi tin riêng mới.":"Bạn chỉ có quyền xem."}</p>}
+   {sendError&&<p role="alert" className="org-chat-error">{sendError}</p>}{canWrite&&!room?<form className="ovg-live-input" onSubmit={e=>{e.preventDefault();submit(draft)}}><div className="ovg-live-quick">{["👍","❤️","😆","✅","❓","👀","🔥","🎉"].map(q=><button type="button" key={q} title={draft.trim()?"Chèn vào tin đang gõ":"Gửi ngay"} onMouseDown={e=>e.preventDefault()} onClick={()=>{if(draft.trim())insert(q);else submit(q)}} aria-label={"Gửi "+q}>{q}</button>)}<button type="button" className="more" aria-expanded={pickEmoji} title="Tất cả biểu tượng" onClick={()=>setPickEmoji(v=>!v)}>😊＋</button></div>{pickEmoji&&<EmojiPicker close={()=>setPickEmoji(false)} pick={insert}/>}<input disabled={sendBusy} value={draft} maxLength={4000} ref={inputRef} placeholder={room?"Nhắn riêng cho "+roomName+"…":"Nhắn cho cả dự án…"} onChange={e=>setDraft(e.target.value)}/><button type="submit" className="send" disabled={sendBusy||!draft.trim()} aria-label="Gửi">➤</button></form>:<p className="ovg-live-empty">{room?"Lịch sử cũ · dùng Chat tổ chức để gửi tin riêng mới.":"Bạn chỉ có quyền xem."}</p>}
   </section>}
  </aside>;
  void lastOf;
  return <>
   <button type="button" className="plugin-tool ovg-chat" aria-pressed={open||orgChat} title="Chat · phím / để nhắn cạnh con trỏ" onClick={()=>{if(orgChat)setOrgChat(false);else{setOrgChat(true);setPeople(false);foldRail(false)}}}>💬{total&&!open?<b className="ovg-chat-badge">{total}</b>:null}</button>
   {createPortal(<div className="qgis-studio ovg-chat-root">{rail}</div>,document.body)}
-  {typing&&<form className="ovg-cursor-chat" style={{left:typing.x+14,top:typing.y+14}} onSubmit={e=>{e.preventDefault();const t=text;setTyping(null);setText("");void send(t,"")}}><input autoFocus value={text} maxLength={300} placeholder="Nhắn cả dự án… (Enter gửi, Esc hủy)" onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();setTyping(null)}}} onBlur={()=>setTyping(null)}/></form>}
+  {typing&&<form className="ovg-cursor-chat" style={{left:typing.x+14,top:typing.y+14}} onSubmit={e=>{e.preventDefault();const t=text;void send(t,"").then(ok=>{if(ok){setTyping(null);setText("")}else if(t.trim()){setDraft(old=>(old?old+"\n"+t:t).slice(0,4000));setText("");setTyping(null)}})}}><input autoFocus value={text} maxLength={300} placeholder="Nhắn cả dự án… (Enter gửi, Esc hủy)" onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==="Escape"){e.preventDefault();setTyping(null)}}} onBlur={()=>setTyping(null)}/></form>}
   {host&&bubbles.length>0&&createPortal(<div className="ovg-danmaku" aria-hidden="true" style={(r=>({left:r.left,top:r.top+4,width:r.width}))(host.getBoundingClientRect())}>{bubbles.map((m,i)=><div key={m.id} className="ovg-danmaku-line" style={{top:8+(i%3)*34,"--peer-color":color(m.author_id)} as React.CSSProperties}>{av(m.author_id,m.author_name)}<b>{m.author_name}</b>{m.body.length>140?m.body.slice(0,140)+"…":m.body}</div>)}</div>,document.body)}
   {host&&bursts.length>0&&createPortal(<div className="ovg-burst" aria-hidden="true" style={(r=>({left:r.right-90,top:r.bottom-70}))(host.getBoundingClientRect())}>{bursts.map(b=><span key={b.id} style={{"--x":b.x+"px","--r":b.r+"deg",animationDelay:b.d+"s",animationDuration:b.t+"s"} as React.CSSProperties}>{b.e}</span>)}</div>,document.body)}
  </>;

@@ -32,7 +32,8 @@ function decimalCompare(a:NonNullable<ReturnType<typeof decimalParts>>,b:NonNull
  return sign*(x<y?-1:x>y?1:0);
 }
 export function compareTableValue(a:unknown,b:unknown,type:string|undefined,direction:"asc"|"desc"):number{
- const value=(v:unknown):unknown=>v==null?null:type==="decimal"||type==="integer"?decimalParts(v):type==="timestamp"?typeof v==="string"&&Number.isFinite(Date.parse(v))?Date.parse(v):null:type==="boolean"?typeof v==="boolean"?Number(v):null:String(v);
+ const integerParts=(v:unknown)=>{const s=typeof v==="number"&&Number.isSafeInteger(v)?String(v):typeof v==="string"?v:"";return /^-?\d+$/.test(s)?decimalParts(s):null};
+ const value=(v:unknown):unknown=>v==null?null:type==="integer"?integerParts(v):type==="decimal"?decimalParts(v):type==="timestamp"?typeof v==="string"&&Number.isFinite(Date.parse(v))?Date.parse(v):null:type==="boolean"?typeof v==="boolean"?Number(v):null:String(v);
  const x=value(a),y=value(b);if(x===null||y===null)return x===y?0:x===null?1:-1;
  const cmp=type==="decimal"||type==="integer"?decimalCompare(x as NonNullable<ReturnType<typeof decimalParts>>,y as NonNullable<ReturnType<typeof decimalParts>>):typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"vi",{numeric:false});
  return direction==="asc"?cmp:-cmp;
@@ -40,4 +41,24 @@ export function compareTableValue(a:unknown,b:unknown,type:string|undefined,dire
 export type SelectionLayerPin={id:string;source_id:string;lifecycle:string;layer_revision?:number;source:{content_revision:string;schema_revision:string};capabilities:readonly {name:string;available:boolean;actor_authorized:boolean}[]};
 export function selectionScopePin(layers:readonly SelectionLayerPin[],permissions:readonly string[],restricted:boolean|undefined):string{
  return JSON.stringify([restricted,[...permissions].sort(),layers.map(l=>[l.id,l.source_id,l.lifecycle,l.layer_revision,l.source.content_revision,l.source.schema_revision,l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized)]).sort((a,b)=>String(a[0]).localeCompare(String(b[0])))]);
+}
+
+export type ColumnConfig={hidden:string[];order:string[];widths:Record<string,number>};
+export function columnConfig(raw:unknown,fields:readonly string[]):ColumnConfig{
+ const v=raw&&typeof raw==="object"&&!Array.isArray(raw)?raw as Partial<ColumnConfig>:{};
+ const list=(x:unknown)=>Array.isArray(x)?[...new Set(x.filter((id):id is string=>typeof id==="string"&&fields.includes(id)))]:[];
+ const order=list(v.order),widths:Record<string,number>=Object.create(null);
+ for(const id of fields){const w=v.widths&&Object.hasOwn(v.widths,id)?v.widths[id]:undefined;if(typeof w==="number"&&Number.isFinite(w))widths[id]=Math.round(Math.min(600,Math.max(70,w)))}
+ return {hidden:list(Array.isArray(raw)?raw:v.hidden),order:[...order,...fields.filter(id=>!order.includes(id))],widths};
+}
+export function readColumnConfig(raw:string|null,fields:readonly string[]):ColumnConfig{
+ try{return columnConfig(JSON.parse(raw??"null"),fields)}catch{return columnConfig(null,fields)}
+}
+export function moveColumn(order:readonly string[],id:string,direction:-1|1){
+ const next=[...order],i=next.indexOf(id),j=i+direction;if(i<0||j<0||j>=next.length)return next;
+ [next[i],next[j]]=[next[j]!,next[i]!];return next;
+}
+export function completeSelection<T extends {key:string;layer:{id:string}}>(rows:readonly T[],selected:ReadonlySet<string>,scope:string){
+ const unique=new Map<string,T>();for(const r of rows)if(selected.has(r.key)&&(!scope||r.layer.id===scope)&&!unique.has(r.key))unique.set(r.key,r);
+ return unique.size===selected.size?[...unique.values()]:null;
 }

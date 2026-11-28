@@ -43,6 +43,8 @@ const SAVED_COLUMNS: &str = "id, organization_id, project_id, layer_id, name, de
 
 /// Validated `ExecuteQueryRequest` body.
 pub struct QueryRequest {
+    /// Opt-in attribute-only mode includes rows with non-present geometry.
+    pub attribute_only: bool,
     pub attribute_filter: Option<Value>,
     pub spatial_filter: Option<Value>,
     pub expected_content_revision: Option<String>,
@@ -231,21 +233,28 @@ async fn resolve(read: &mut ProjectRead<'_>, layer_id: Uuid) -> Result<Source, A
 
 /// Per-row snapshot validity: pins, native CRS/family, topology, domain and
 /// declared attribute types (never turn malformed input into a zero match).
-fn row_valid(source: &Source, sql: &mut Sql) -> String {
+fn row_valid(source: &Source, sql: &mut Sql, attribute_only: bool) -> String {
     let crev = sql.bind(Param::Text(source.content_revision.clone()));
     let srev = sql.bind(Param::Text(source.schema_revision.clone()));
-    let srid = sql.bind(Param::I32(source.stored_crs));
-    let gtype = sql.bind(Param::Text(format!("ST_{}", source.family)));
-    let domain = match source.stored_crs {
-        4326 | 4756 => format!(
-            " AND ST_CoveredBy(rf.geometry, ST_MakeEnvelope(-180, -90, 180, 90, {srid})) \
-             AND ST_XMax(rf.geometry) - ST_XMin(rf.geometry) <= 180"
-        ),
-        3857 => {
-            let m = sql.bind(Param::Float(WEB_MERCATOR_MAX_COORDINATE_METRE));
-            format!(" AND ST_CoveredBy(rf.geometry, ST_MakeEnvelope(-{m}, -{m}, {m}, {m}, {srid}))")
-        }
-        _ => String::new(),
+    let geometry_check = if attribute_only {
+        String::new()
+    } else {
+        let srid = sql.bind(Param::I32(source.stored_crs));
+        let gtype = sql.bind(Param::Text(format!("ST_{}", source.family)));
+        let domain = match source.stored_crs {
+            4326 | 4756 => format!(
+                " AND ST_CoveredBy(rf.geometry, ST_MakeEnvelope(-180, -90, 180, 90, {srid})) \
+                 AND ST_XMax(rf.geometry) - ST_XMin(rf.geometry) <= 180"
+            ),
+            3857 => {
+                let m = sql.bind(Param::Float(WEB_MERCATOR_MAX_COORDINATE_METRE));
+                format!(
+                    " AND ST_CoveredBy(rf.geometry, ST_MakeEnvelope(-{m}, -{m}, {m}, {m}, {srid}))"
+                )
+            }
+            _ => String::new(),
+        };
+        format!(" AND rf.geometry_state = 'present' AND ST_SRID(rf.geometry) = {srid} AND ST_GeometryType(rf.geometry) = {gtype} AND ST_Zmflag(rf.geometry) = 0 AND ST_NPoints(rf.geometry) BETWEEN 1 AND 4096 AND NOT ST_IsEmpty(rf.geometry) AND ST_IsValid(rf.geometry){domain}")
     };
     let mut checks = vec!["jsonb_typeof(rf.attributes) = 'object'".to_owned()];
     if !source.fields.is_empty() {
@@ -255,7 +264,7 @@ fn row_valid(source: &Source, sql: &mut Sql) -> String {
     }
     let count = sql.bind(Param::Int(source.fields.len() as i64));
     checks.push(format!(
-        "(SELECT count(*) FROM jsonb_object_keys(rf.attributes)) = {count}"
+        "(SELECT count(*) FROM jsonb_object_keys(CASE WHEN jsonb_typeof(rf.attributes) = 'object' THEN rf.attributes ELSE '{{}}'::jsonb END)) = {count}"
     ));
     for field in &source.fields {
         let key = sql.bind(Param::Text(field.field_id.clone()));
@@ -289,10 +298,7 @@ fn row_valid(source: &Source, sql: &mut Sql) -> String {
     }
     format!(
         "rf.content_revision = {crev} AND rf.schema_revision = {srev} \
-         AND rf.geometry_state = 'present' AND ST_SRID(rf.geometry) = {srid} \
-         AND ST_GeometryType(rf.geometry) = {gtype} AND ST_Zmflag(rf.geometry) = 0 \
-         AND ST_NPoints(rf.geometry) BETWEEN 1 AND 4096 AND NOT ST_IsEmpty(rf.geometry) \
-         AND ST_IsValid(rf.geometry){domain} AND ({})",
+         {geometry_check} AND ({})",
         checks.join(" AND ")
     )
 }
@@ -303,13 +309,19 @@ async fn scan(
     read: &mut ProjectRead<'_>,
     source: &Source,
     target: Option<(Option<&Value>, &Spatial)>,
+    attribute_only: bool,
 ) -> Result<i64, AppError> {
     source.check_feature_limit()?;
     let mut sql = Sql::default();
     let org = sql.bind(Param::Uuid(read.organization_id()));
     let project = sql.bind(Param::Uuid(read.project_id()));
     let src = sql.bind(Param::Uuid(source.id));
-    let valid = row_valid(source, &mut sql);
+    let valid = row_valid(source, &mut sql, attribute_only);
+    let position_count = if attribute_only {
+        "0::bigint"
+    } else {
+        "COALESCE(sum(ST_NPoints(rf.geometry)), 0)::bigint"
+    };
     let (cte, hit) = match target {
         Some((filter, spatial)) => {
             let filter = compile_filter(filter, &source.fields, &mut sql)?;
@@ -322,7 +334,7 @@ async fn scan(
     // guarantees typed casts only run on rows that already passed validation.
     let text = format!(
         "{cte} SELECT count(*) AS cnt,
-                COALESCE(sum(ST_NPoints(rf.geometry)), 0)::bigint AS positions,
+                {position_count} AS positions,
                 COALESCE(bool_and(v.ok), true) AS valid,
                 count(*) FILTER (WHERE CASE WHEN v.ok THEN {hit} ELSE false END) AS matched
          FROM spatial.reference_features rf
@@ -527,7 +539,7 @@ async fn spatial_clause(
         Some(Value::String(id)) if (1..=128).contains(&id.chars().count()) => Some(id.clone()),
         Some(_) => return Err(invalid_spatial("invalid reference feature identifier")),
     };
-    scan(read, &reference, None).await?;
+    scan(read, &reference, None, false).await?;
     if feature_id.is_none()
         && reference
             .feature_count
@@ -595,6 +607,11 @@ pub async fn execute_query(
     layer_id: Uuid,
     request: &QueryRequest,
 ) -> Result<Value, AppError> {
+    if request.attribute_only && request.spatial_filter.is_some() {
+        return Err(invalid_spatial(
+            "attribute-only query cannot include spatial filter",
+        ));
+    }
     if !(1..=MAX_QUERY_LIMIT).contains(&request.limit) {
         return Err(AppError::validation(
             "INVALID_LIMIT",
@@ -661,9 +678,15 @@ pub async fn execute_query(
     )?;
     source.check_feature_limit()?;
     let spatial = spatial_clause(read, &source, request.spatial_filter.as_ref()).await?;
-    let total = scan(read, &source, Some((filter, &spatial))).await?;
+    let total = scan(
+        read,
+        &source,
+        Some((filter, &spatial)),
+        request.attribute_only,
+    )
+    .await?;
     let fingerprint = canonical_manifest_digest(&json!({
-        "version": "r007-query-v1",
+        "version": if request.attribute_only { "spec065-attribute-query-v1" } else { "r007-query-v1" },
         "scope": [
             read.organization_id().to_string(),
             read.project_id().to_string(),
@@ -708,14 +731,26 @@ pub async fn execute_query(
     let (cte, clause) = spatial.render(&mut sql);
     let limit = sql.bind(Param::Int(request.limit));
     let offset = sql.bind(Param::Int(request.offset));
-    let max_positions = sql.bind(Param::Int(MAX_PAGE_POSITIONS));
     let sort_key = sort
         .key
         .map(|key| format!(", {key} AS sort_key"))
         .unwrap_or_default();
     let (inner, outer) = (sort.inner, sort.outer);
-    let text = format!(
-        "{cte} SELECT feature_id, attributes, (SUM(np) OVER ())::bigint AS page_positions,
+    let text = if request.attribute_only {
+        format!(
+            "SELECT feature_id, attributes, geometry_state FROM (
+             SELECT rf.feature_id, rf.attributes, rf.geometry_state{sort_key}
+             FROM spatial.reference_features rf
+             WHERE rf.organization_id = {org} AND rf.project_id = {project}
+               AND rf.source_id = {src} AND rf.content_revision = {crev}
+               AND rf.schema_revision = {srev} AND ({compiled})
+             ORDER BY {inner} LIMIT {limit} OFFSET {offset}
+         ) page ORDER BY {outer}"
+        )
+    } else {
+        let max_positions = sql.bind(Param::Int(MAX_PAGE_POSITIONS));
+        format!(
+            "{cte} SELECT feature_id, attributes, (SUM(np) OVER ())::bigint AS page_positions,
              CASE WHEN SUM(np) OVER () <= {max_positions}
                  THEN ST_AsBinary(geometry, 'NDR') END AS wkb
          FROM (
@@ -729,7 +764,8 @@ pub async fn execute_query(
              ORDER BY {inner} LIMIT {limit} OFFSET {offset}
          ) page
          ORDER BY {outer}"
-    );
+        )
+    };
     let rows = bound(&text, sql.params)
         .fetch_all(&mut **read.transaction())
         .await
@@ -737,20 +773,27 @@ pub async fn execute_query(
     let mut items = Vec::with_capacity(rows.len());
     let mut selection = Vec::with_capacity(rows.len());
     for row in &rows {
-        let positions: i64 = row.try_get("page_positions").map_err(unavailable)?;
-        if positions > MAX_PAGE_POSITIONS {
-            return Err(too_complex(
-                "page geometry exceeds position limit; reduce page size",
-            ));
-        }
         let feature_id: String = row.try_get("feature_id").map_err(unavailable)?;
         let attributes: Value = row.try_get("attributes").map_err(unavailable)?;
-        let wkb: Option<Vec<u8>> = row.try_get("wkb").map_err(unavailable)?;
-        let geometry = wkb
-            .as_deref()
-            .and_then(Geom::from_wkb)
-            .filter(|g| validate_ready(g, Some(&source.family), source.stored_crs, false).is_ok())
-            .ok_or_else(invalid_source)?;
+        let geometry = if request.attribute_only {
+            Value::Null
+        } else {
+            let positions: i64 = row.try_get("page_positions").map_err(unavailable)?;
+            if positions > MAX_PAGE_POSITIONS {
+                return Err(too_complex(
+                    "page geometry exceeds position limit; reduce page size",
+                ));
+            }
+            let wkb: Option<Vec<u8>> = row.try_get("wkb").map_err(unavailable)?;
+            let geometry = wkb
+                .as_deref()
+                .and_then(Geom::from_wkb)
+                .filter(|g| {
+                    validate_ready(g, Some(&source.family), source.stored_crs, false).is_ok()
+                })
+                .ok_or_else(invalid_source)?;
+            json!({"type": geometry.family(), "coordinates": geometry.coordinates()})
+        };
         let canonical = attributes.as_object().is_some_and(|map| {
             map.len() == source.fields.len()
                 && source.fields.iter().all(|field| {
@@ -762,13 +805,18 @@ pub async fn execute_query(
             return Err(invalid_source());
         }
         selection.push(feature_id.clone());
-        items.push(json!({
-            "feature_id": feature_id,
-            "attributes": attributes,
-            "geometry": {"type": geometry.family(), "coordinates": geometry.coordinates()},
-        }));
+        let mut item =
+            json!({"feature_id": feature_id, "attributes": attributes, "geometry": geometry});
+        if request.attribute_only {
+            let state: String = row.try_get("geometry_state").map_err(unavailable)?;
+            item["geometry_state"] = json!(state);
+        }
+        items.push(item);
     }
     let mut body = source.pin();
+    if request.attribute_only {
+        body["attribute_only"] = json!(true);
+    }
     body["reference_pin"] = spatial.reference_pin;
     body["query_fingerprint"] = json!(fingerprint);
     body["geometry_transformation"] = json!(spatial.operation);
@@ -942,6 +990,33 @@ pub async fn delete_saved_query(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn attribute_snapshot_validation_does_not_read_geometry() {
+        let source = Source {
+            layer_id: Uuid::nil(),
+            id: Uuid::nil(),
+            stored_crs: 4326,
+            family: "Point".to_owned(),
+            feature_count: Some(2),
+            content_revision: "content".to_owned(),
+            schema_revision: "schema".to_owned(),
+            fields: vec![SourceField {
+                field_id: "rank".to_owned(),
+                field_type: FieldType::Integer,
+                nullable: true,
+            }],
+        };
+        let mut sql = Sql::default();
+        let attribute = row_valid(&source, &mut sql, true);
+        assert!(!attribute.contains("rf.geometry"));
+        assert!(attribute.contains("rf.content_revision"));
+        assert!(attribute.contains("jsonb_object_keys"));
+        assert!(attribute.contains("2147483647"));
+        let spatial = row_valid(&source, &mut Sql::default(), false);
+        assert!(spatial.contains("ST_IsValid"));
+        assert!(spatial.contains("geometry_state = 'present'"));
+    }
 
     #[test]
     fn strips_like_python_and_formats_isoformat() {

@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState,type ReactNode} from "react";
+import React,{useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import "./desktop-dialog.css";
 
 // Only the active blocking dialog owns Escape and Tab. Docked tools remain
@@ -7,12 +7,12 @@ const modalStack:HTMLElement[]=[];
 const focusable='button:not([disabled]),a[href],input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=>void,enabled=true){
  const latest=useRef(close);latest.current=close;
- useEffect(()=>{
+ useLayoutEffect(()=>{
   const el=ref.current;if(!enabled||!el)return;
   const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
   modalStack.push(el);
-  const items=()=>Array.from(el.querySelectorAll<HTMLElement>(focusable)).filter(x=>!x.closest('[inert],[hidden]')&&x.getClientRects().length>0);
-  const raf=requestAnimationFrame(()=>{if(!el.contains(document.activeElement))(el.querySelector<HTMLElement>('[autofocus]')??el).focus({preventScroll:true})});
+  const items=()=>Array.from(el.querySelectorAll<HTMLElement>(focusable)).filter(x=>x.tabIndex>=0&&!x.matches(":disabled")&&!x.closest('[inert],[hidden],[aria-hidden="true"]')&&x.getClientRects().length>0&&getComputedStyle(x).visibility!=="hidden").sort((a,b)=>(a.tabIndex||Number.MAX_SAFE_INTEGER)-(b.tabIndex||Number.MAX_SAFE_INTEGER));
+  const raf=requestAnimationFrame(()=>{if(top()&&!el.contains(document.activeElement))(el.querySelector<HTMLElement>('[autofocus]')??el).focus({preventScroll:true})});
   const top=()=>modalStack.at(-1)===el&&!Array.from(document.querySelectorAll<HTMLElement>('dialog[open],[aria-modal="true"]')).some(x=>x!==el&&!x.contains(el)&&!el.contains(x)&&!modalStack.includes(x)&&x.getClientRects().length);
   const key=(e:KeyboardEvent)=>{if(!top()||e.isComposing)return;
    if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();latest.current();return}
@@ -20,8 +20,10 @@ export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=
    if(!first||!last){e.preventDefault();el.focus();return}
    if(!el.contains(current)||current===el||e.shiftKey&&current===first||!e.shiftKey&&current===last){e.preventDefault();(e.shiftKey?last:first).focus()}
   };
-  window.addEventListener("keydown",key,true);
-  return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",key,true);const index=modalStack.lastIndexOf(el);if(index>=0)modalStack.splice(index,1);if(previous?.isConnected&&(!document.activeElement||document.activeElement===document.body||el.contains(document.activeElement)))previous.focus({preventScroll:true})};
+  const contain=(e:FocusEvent)=>{if(top()&&e.target instanceof Node&&!el.contains(e.target)){(items()[0]??el).focus({preventScroll:true})}};
+  window.addEventListener("keydown",key,true);document.addEventListener("focusin",contain);
+  return()=>{cancelAnimationFrame(raf);window.removeEventListener("keydown",key,true);document.removeEventListener("focusin",contain);const index=modalStack.lastIndexOf(el);if(index>=0)modalStack.splice(index,1);
+   requestAnimationFrame(()=>{const current=document.activeElement;if(previous?.isConnected&&(!current||current===document.body||el.contains(current))&&!previous.closest("[inert],[hidden]"))previous.focus({preventScroll:true})})};
  },[ref,enabled]);
 }
 export function Modal({title,close,children,docked=false}:{title:string;close:()=>void;children:ReactNode;docked?:boolean}){

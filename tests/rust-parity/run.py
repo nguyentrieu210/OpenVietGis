@@ -121,6 +121,8 @@ def rust_client(binary, runtime_url, directory, *, ready_status=200):
     env = {
         key: value for key, value in os.environ.items() if not key.startswith("OVG_")
     }
+    # Use the locked uv environment for pyshp; the system Python remains the GDAL runtime.
+    env.setdefault("OPENVIETGIS_VECTOR_CODEC_PYTHON", sys.executable)
     env.update(
         OPENVIETGIS_BIND_ADDR=f"127.0.0.1:{port}",
         OPENVIETGIS_DB_MAX_CONNECTIONS="1",

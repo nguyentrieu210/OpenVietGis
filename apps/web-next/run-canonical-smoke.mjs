@@ -9,7 +9,7 @@ try {
  const address=server.httpServer.address();
  if(!address||typeof address==="string"||address.address!=="127.0.0.1")throw Error("Expected loopback preview");
  const url="http://127.0.0.1:"+address.port+"/app";
- for(const script of ["spatial-mode-smoke.mjs","core-toolkit-smoke.mjs","qgis-parity-keyboard-smoke.mjs"]){
+ for(const script of ["spatial-mode-smoke.mjs","core-toolkit-smoke.mjs","qgis-parity-keyboard-smoke.mjs","qgis-parity-shell-smoke.mjs","qgis-parity-output-smoke.mjs"]){
   await new Promise((resolve,reject)=>{
    const child=spawn(process.execPath,[script],{cwd:root,env:{...process.env,OVG_TEST_URL:url},stdio:"inherit"});
    const timer=setTimeout(()=>child.kill("SIGKILL"),100_000);

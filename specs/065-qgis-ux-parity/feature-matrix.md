@@ -2,7 +2,7 @@
 
 Baseline OpenVietGIS: `5bfc83826161acd83b98a925e85690cebde53ae1` (27/11/2026). Đối chiếu source và tài liệu, chưa phải audit bằng ảnh hoặc kiểm thử trình duyệt đăng nhập. Không lấy số lượng file/nút làm bằng chứng parity.
 
-**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Tổng 71 tiêu chí: D 19, P 46, U 6. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
+**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Baseline: D 19, P 48, U 4. Sau đối chiếu source đợt này: D 19, P 52, U 0; V 0. Chỉ ghi nhận implementation, chưa có nghiệm thu. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
 
 Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh QGIS/OVG và kết quả đo trong evidence. Chỉ đổi sang V khi đủ bằng chứng; U phải kiểm tra trước khi phát triển mới, tránh code trùng. P1 = ưu tiên nghiệp vụ nền tảng; P2 = nâng cao; P3 = khảo sát mở rộng. Nguồn QGIS theo chương tại research.md.
 
@@ -31,7 +31,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | DOCK-06 | Chọn nhiều layer Ctrl/Shift, menu ngữ cảnh | D | QgisLayerDock | Chọn bằng bàn phím, thao tác batch, menu lớp/nhóm đúng capability | P1 |
 | DOCK-07 | Legend cây lớp, lọc lớp, scale range | D | QgisLayerDock, LayerProperties | Legend đúng style; trạng thái ngoài tỷ lệ, lọc chỉ đổi view | P1 |
 | DOCK-08 | Map themes / nhóm hiển thị độc quyền | D | QgisLayerDock, LayerProperties | Lưu, đổi, xóa theme; xác định cấu hình cá nhân/chia sẻ rõ ràng | P2 |
-| DOCK-09 | Layer order riêng / map view nhiều khung | U | Không xác nhận qua inventory hiện tại | Đặc tả render order độc lập; thêm secondary view chỉ khi adapter hỗ trợ | P2 |
+| DOCK-09 | Layer order riêng / map view nhiều khung | P | SecondaryMapView: independent order, visibility and camera; temporal raster frame subset | Đặc tả render order độc lập; thêm secondary view chỉ khi adapter hỗ trợ | P2 |
 | DOCK-10 | Remove khỏi map vs xóa layer/source | P | QgisLayerDock, CatalogManager | Phân biệt hành động và hậu quả; chặn xóa trái quyền, có xác nhận | P1 |
 
 ## Layer Properties, Symbology, Labels (STYLE)
@@ -40,12 +40,12 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 |---|---|---|---|---|---|
 | STYLE-01 | Information / Source / Fields / Display | D | LayerProperties 7 tab | Thông tin nguồn/storage/display CRS, fields, rendering; Apply/OK/Cancel nhất quán | P1 |
 | STYLE-02 | Single symbol / categorized / graduated | D | LayerProperties, graduated.ts | So khớp fixture phân loại null, breaks, màu, legend, export | P1 |
-| STYLE-03 | Rule-based / symbol layers / data-defined overrides | U | Chưa xác nhận bộ renderer tương ứng | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
+| STYLE-03 | Rule-based / symbol layers / data-defined overrides | P | rule-style: first-match typed rules; line casing; typed field-based color, opacity, width and radius overrides; no arbitrary expression renderer | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
-| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools; quan hệ/form chưa xác nhận | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
-| STYLE-08 | Metadata, diagrams, actions, map tips | U | Metadata cơ bản; phần còn lại chưa xác nhận | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
+| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, RelationValuePicker, editing.relations/changesets và deferred DB triggers; có code chọn khóa và ràng buộc dùng chung, chờ nghiệm thu; personal form designer + typed Value Map + atomic multi-field editor | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
+| STYLE-08 | Metadata, diagrams, actions, map tips | P | LayerProperties metadata, MapTips plain text, FeatureDiagrams signed per-feature bars, allowlisted clipboard actions | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
 | STYLE-09 | Layer styling panel live preview | P | LayerProperties modal, LayerLabels | Panel styling preview và apply rõ ràng; cancel không ghi đè dữ liệu | P2 |
 
 ## Attribute Table, Form & Selection (TABLE)
@@ -55,7 +55,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | TABLE-01 | Table gắn với active layer, map/table selection | D | QgisAttributeTable | Một selection store theo layer/revision; chọn ở map/table/inspector khớp | P1 |
 | TABLE-02 | Tìm kiếm, phân trang, sort/filter toàn bộ nguồn | P | QgisAttributeTable lọc inputRows/cursor | Server-side filter/sort trên toàn nguồn; ghi rõ loaded vs total; không lọc riêng trang gây hiểu nhầm | P1 |
 | TABLE-03 | Chọn theo biểu thức, vị trí, vùng chọn | P | ProfessionalTools, CoreMapTools query | Select/add/remove/intersect/invert trên toàn tập hợp có permission và count | P1 |
-| TABLE-04 | Form view / editor widget theo kiểu trường | P | FeatureInfo, AdvancedEditor | Table/form toggle, typed date/enum/relation/null, validation field-level | P1 |
+| TABLE-04 | Form view / editor widget theo kiểu trường | P | FeatureInfo, AdvancedEditor; typed grouped multi-field forms with relation keys and optional personal Value Maps | Table/form toggle, typed date/enum/relation/null, validation field-level | P1 |
 | TABLE-05 | Inline cell edit, multi-edit, save/rollback | P | AdvancedEditor bulkSave | Chỉnh sửa dòng/cột trong transaction ngắn, conflict, undo có receipt | P1 |
 | TABLE-06 | Field Calculator / add field / virtual field | P | ProfessionalTools Field Calculator | Preview công thức, phạm vi selected/all, nullable/kiểu dữ liệu, atomic update | P1 |
 | TABLE-07 | Copy/paste, export selected, cấu hình cột | P | ExportDialog, ProfessionalTools tsv | Copy dữ liệu đúng phạm vi; cột/width/order cá nhân, export selected có cảnh báo | P2 |
@@ -70,7 +70,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | EDIT-03 | Edit mode & unsaved changes, save/rollback | P | CoreMapTools, LiveApp, AdvancedEditor | Layer edit state rõ; bản nháp khác shared revision; cảnh báo chuyển project/F5 | P1 |
 | EDIT-04 | Snapping vertex/segment, layer-specific tolerance | P | SnapMath, LayerProperties WorkspacePrefs | Chọn active/all/advanced theo layer, pixel/map unit, chỉ báo snap; fixture CRS | P1 |
 | EDIT-05 | Topology checks, avoid overlap, shared boundary | P | ProfessionalTools topology, Rust editing | Kiểm tra invalid/dangling/overlap/gap; không auto-fix nếu chưa duyệt | P1 |
-| EDIT-06 | Split/merge, reshape, multipart, ring | P | AdvancedEditor split/merge | Hỗ trợ phần còn thiếu theo geometry capability; rollback atomic, giữ ID chính sách | P2 |
+| EDIT-06 | Split/merge, reshape, multipart, ring | P | AdvancedEditor split/merge, vertex, ring, multipart and path reshape | Hỗ trợ phần còn thiếu theo geometry capability; rollback atomic, giữ ID chính sách | P2 |
 | EDIT-07 | Advanced digitizing constraint distance/angle/ortho | P | CoreMapTools, ProfessionalTools, SurveyTerrain | Khóa góc/khoảng cách/trục; đơn vị CRS rõ, không đổi tọa độ âm thầm | P2 |
 | EDIT-08 | Undo/redo, edit history, concurrent conflict | D | CoreMapTools, AdvancedEditor, EditHistoryDetails | Phân biệt draft undo và persisted revert; revision pin, 2 user conflict | P1 |
 | EDIT-09 | Measure distance/area/bearing | D | CoreMapTools, geom-measure.test.mjs | Đơn vị và phương pháp trắc địa/planar rõ; đối chiếu mẫu QGIS | P1 |
@@ -81,14 +81,14 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 |---|---|---|---|---|---|
 | PROC-01 | Processing Toolbox search, category/provider | P | ProcessingToolbox | Registry thuật toán theo capability, tìm/lọc, help, favorite/recent; không hiện thuật toán giả | P1 |
 | PROC-02 | Algorithm parameter form / preview | P | ProcessingToolbox, CoreWorkbench, RasterWorkbench | Typed inputs, CRS, extent, output, validation, chạy lại cùng tham số | P1 |
-| PROC-03 | Buffer/Clip/Dissolve, spatial joins & analysis | P | CoreMapTools, AdvancedEditor, Rust processing | Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage | P1 |
+| PROC-03 | Buffer/Clip/Dissolve, spatial joins & analysis | P | CoreMapTools, AdvancedEditor, Rust processing; 8 thuật toán, Union/Spatial Join/Reproject có code, chờ golden/CI | Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage | P1 |
 | PROC-04 | Job progress, history, cancel, retry | P | CoreMapTools job controls, Rust processing | Durable job id, trạng thái queued/running/succeeded/failed/canceled, retry idempotent | P1 |
-| PROC-05 | Batch processing | U | Chưa xác nhận QGIS-style batch trong Toolbox | Bảng input/output nhiều lần chạy, preview, giới hạn, lỗi từng hàng, export history | P2 |
+| PROC-05 | Batch processing | P | ProcessingWorkbenchPage + processing-batch.ts: tối đa 20 hàng, chạy tuần tự, hiển thị đầu vào/tham số/trạng thái/lỗi từng hàng, phục hồi yêu cầu chưa xác minh, xuất lịch sử JSON | Chưa có xác nhận Rust/PostGIS có xác thực và đối chiếu QGIS; chưa phải parity batch đầy đủ | P2 |
 | PROC-06 | Model Designer | D | ProcessingModeler, Rust processing_models.rs | Graph DAG, parameter mapping, named outputs, revision, cancel/partial results | P2 |
 | PROC-07 | Raster properties, band, nodata, rendering | P | ProjectRaster, RasterWorkbench | Band metadata, stretch, palette, opacity, nodata, CRS; capability từng provider | P2 |
 | PROC-08 | Raster Calculator, NDVI/NDWI, DEM terrain | D | RasterWorkbench, RasterReportWorkbench, TerrainEngineering | Kết quả theo fixture, nodata/CRS/extent, lưu output có lineage | P2 |
-| PROC-09 | Georeferencer raster/vector GCP | P | CadGeorefPanel, native CAD georef; raster chưa xác nhận | GCP raster/vector, transform, residual, preview, xuất raster đã georef | P2 |
-| PROC-10 | Temporal controller / mesh / point clouds | U | Sentinel month không phải temporal controller tổng quát | Khảo sát adapter độc lập; chưa hỗ trợ thì ghi rõ, không tạo lớp giả | P3 |
+| PROC-09 | Georeferencer raster/vector GCP | P | Raster affine GCP + north-up nearest/bilinear cho TIFF giới hạn; vector XY GeoJSON affine WGS84, RMS và xuất tệp | Kiểm thử mới, topology vector, mask/palette raster mở rộng, nhập vào project và QGIS acceptance còn thiếu | P2 |
+| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView: vector and raster UTC series; Spatial3DSettings/Cesium: bounded LAS 1.2–1.4, EPT binary, 2DM mesh, JSON and SMS DAT temporal node datasets, RGB/height/intensity rendering | Bounded local/remote LAS, LAZ, COPC, EPT; CDF1/2 and NetCDF4/HDF5 node datasets; zoom and camera-window LOD, parallel range downloads, bounded cache; no full frustum/terrain occlusion or independent acceptance | P3 |
 
 ## Print Layout, CRS & interoperability (OUTPUT)
 
@@ -97,9 +97,9 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | OUTPUT-01 | Layout manager, page, map frames | D | LayoutDesigner, PrintDesigner | Danh sách layout, khổ giấy, trang, map frame, CRS, scale; lưu phiên bản | P1 |
 | OUTPUT-02 | Item properties, guides/grid, alignment, undo | P | LayoutDesigner | Dock item properties, align/distribute, guides, snap, lock, undo/redo; golden layout | P2 |
 | OUTPUT-03 | Legend, north arrow, scale bar, label | D | LayoutDesigner, LayoutRender | Liên kết đúng map item, scale và legend; không sai đơn vị/CRS | P1 |
-| OUTPUT-04 | Atlas / report nhiều trang | U | Chưa xác nhận | Coverage layer, lọc, trang theo đối tượng, batch export; không rò dữ liệu | P3 |
+| OUTPUT-04 | Atlas / report nhiều trang | P | LayoutDesigner, layout-atlas, LayoutRender: pinned coverage selection and multi-page PDF (8 pages, 20 visible vector layers, 2 map frames) | Browser and QGIS evidence pending; full atlas expressions and arbitrary report layouts not claimed | P3 |
 | OUTPUT-05 | PDF/PNG/SVG export, print preview | P | LayoutDesigner, PrintDesigner | Kiểm tra PDF/PNG, font VN, DPI, clipping; SVG chỉ khi engine hỗ trợ | P1 |
-| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust spatial | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
+| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust native projection: 20 VN-2000 projected EPSG codes; regional controls Quang Ninh, Da Nang, Hai Phong, Dong Nai; bounded provenance replay, feature/viewport/MVT, native changesets and GPKG/SHP; nationwide datum acceptance pending | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
 | OUTPUT-07 | Import/export GeoJSON/GPKG/SHP/CSV/DXF/raster | P | TransferTool, ExportDialog, Rust transfers | Kiểm tra từng format thực, CRS, schema/null/encoding, geometry, round-trip; không đoán parity | P1 |
 | OUTPUT-08 | Đồng bộ QGIS desktop & style/project exchange | P | QgisBindingManager, QgisConnectPage | Sync hai chiều, revision, conflict; QGZ/QGS/QML subset rõ ràng; plugin Python QGIS ngoài scope | P2 |
 

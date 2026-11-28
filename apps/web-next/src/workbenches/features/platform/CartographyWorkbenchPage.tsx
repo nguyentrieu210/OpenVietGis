@@ -27,7 +27,8 @@ export function CartographyWorkbenchPage() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<{ org: string; project: string; layoutId: string; format: "png" | "pdf"; dpi: 150 | 300; preview: PrintExportPreview } | null>(null);
+  const [atlasIds,setAtlasIds] = useState("");
+  const [pending, setPending] = useState<{ org: string; project: string; layoutId: string; format: "png" | "pdf"; dpi: 150 | 300; atlas?: {coverage_layer_id:string;feature_ids?:string[]}; preview: PrintExportPreview } | null>(null);
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
   const activePending = pending?.org === organizationId && pending.project === projectId ? pending : null;
@@ -100,7 +101,7 @@ export function CartographyWorkbenchPage() {
     }
   }
 
-  async function handleExportPreview(layoutId: string, format: "png" | "pdf", dpi: 150 | 300): Promise<void> {
+  async function handleExportPreview(layoutId: string, format: "png" | "pdf", dpi: 150 | 300, atlas?: {coverage_layer_id:string;feature_ids?:string[]}): Promise<void> {
     const request = ++generation.current;
     setError(null);
     setNotice(null);
@@ -108,8 +109,8 @@ export function CartographyWorkbenchPage() {
     setBusy(true);
     try {
       const csrf = await loadCsrfToken(apiClient);
-      const preview = await previewPrintExport(apiClient, organizationId, projectId, layoutId, { output_format: format, dpi }, csrf);
-      if (request === generation.current) setPending({ org: organizationId, project: projectId, layoutId, format, dpi, preview });
+      const preview = await previewPrintExport(apiClient, organizationId, projectId, layoutId, { output_format: format, dpi, ...(atlas?{atlas}:{}) }, csrf);
+      if (request === generation.current) setPending({ org: organizationId, project: projectId, layoutId, format, dpi, atlas, preview });
     } catch (err) {
       if (request === generation.current) setError(err instanceof Error ? err.message : "Không thể chuẩn bị bản in.");
     } finally {
@@ -127,7 +128,7 @@ export function CartographyWorkbenchPage() {
       const csrf = await loadCsrfToken(apiClient);
       const ex = await exportPrintLayout(
         apiClient, organizationId, projectId, selection.layoutId,
-        { output_format: selection.format, dpi: selection.dpi, expected_revision_fingerprint: selection.preview.revision_fingerprint },
+        { output_format: selection.format, dpi: selection.dpi, expected_revision_fingerprint: selection.preview.revision_fingerprint, ...(selection.atlas?{atlas:selection.atlas}:{}) },
         csrf
       );
       if (request === generation.current) {
@@ -222,6 +223,7 @@ export function CartographyWorkbenchPage() {
 
         <section className="ovg-card">
           <h2>Danh sách bố cục & Xuất bản</h2>
+          <label>Atlas PDF 150 DPI · FID cần in (mỗi dòng một FID, để trống để in toàn bộ lớp tối đa 16 đối tượng)<textarea disabled={busy} value={atlasIds} onChange={e=>setAtlasIds(e.target.value)} rows={2} maxLength={2048}/></label>
           <table className="ovg-table">
             <thead>
               <tr>
@@ -255,7 +257,7 @@ export function CartographyWorkbenchPage() {
                       onClick={() => void handleExportPreview(lo.id, "pdf", 300)}
                     >
                       PDF 300 DPI
-                    </button>
+                    </button>{lo.layer_ids.map(id=><button key={id} type="button" className="ovg-btn" disabled={busy} onClick={()=>void handleExportPreview(lo.id,"pdf",150,{coverage_layer_id:id,...(atlasIds.trim()?{feature_ids:atlasIds.split(/\r?\n/).map(s=>s.trim()).filter(Boolean)}:{})})}>Atlas · {layers.find(l=>l.id===id)?.name??id}</button>)}
                   </td>
                 </tr>
               ))}
@@ -266,7 +268,8 @@ export function CartographyWorkbenchPage() {
             <section className="ovg-card" data-testid="print-revision-preview">
               <h3>Xác nhận bản in đã ghim phiên bản</h3>
               <p>{activePending.format.toUpperCase()} · {activePending.dpi} DPI · EPSG:{activePending.preview.revision_manifest.crs_code} · {activePending.preview.revision_manifest.pixel_width} × {activePending.preview.revision_manifest.pixel_height} px</p>
-              <p>Tỷ lệ 1:{activePending.preview.revision_manifest.scale_denominator} (xấp xỉ) · {activePending.preview.revision_manifest.layers.length} lớp</p>
+              {activePending.preview.revision_manifest.atlas&&<><p>{activePending.preview.revision_manifest.atlas.page_count} trang Atlas, tỷ lệ riêng mỗi trang.</p><ol>{activePending.preview.revision_manifest.atlas.pages.map(p=><li key={p.feature_id}>{p.feature_id} · 1:{p.scale_denominator}</li>)}</ol></>}
+              <p>{activePending.atlas?"Tỷ lệ trang đầu ":"Tỷ lệ "}1:{activePending.preview.revision_manifest.scale_denominator} (xấp xỉ) · {activePending.preview.revision_manifest.layers.length} lớp</p>
               <p>Phạm vi in thực tế: {Object.entries(activePending.preview.revision_manifest.effective_extent).map(([axis, value]) => `${axis}: ${value.toFixed(5)}`).join(" · ")}</p>
               <p>Phiên bản <code>{activePending.preview.revision_fingerprint.slice(0, 12)}</code>. Nếu dữ liệu hoặc ký hiệu thay đổi, yêu cầu sẽ bị từ chối.</p>
               <button type="button" className="ovg-btn" disabled={busy} onClick={() => void confirmExport()}>Xác nhận xuất {activePending.format.toUpperCase()}</button>

@@ -806,6 +806,7 @@ async fn push_integration_layer_sync(
         .commit_changeset(
             prepared.source_id,
             CommitRequest {
+                acknowledge_native_crs: None,
                 operation_id,
                 base_content_revision: parsed.base_content_revision,
                 base_schema_revision: Some(parsed.base_schema_revision),

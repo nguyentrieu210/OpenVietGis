@@ -520,7 +520,7 @@ def test_r007_r008_r009_query_processing_and_cartography(migrated_database: None
         # --- R008: Processing (Buffer -> Clip -> Dissolve) ---
         algos = client.get(f"{base}/processing/algorithms")
         assert algos.status_code == 200
-        assert {a["id"] for a in algos.json()["items"]} == {"buffer", "clip", "dissolve"}
+        assert {"buffer", "clip", "dissolve"} <= {a["id"] for a in algos.json()["items"]}
 
         buf = client.post(
             f"{base}/processing/jobs",

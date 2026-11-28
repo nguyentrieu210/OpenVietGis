@@ -2,7 +2,11 @@
 // through the normal server import (inspection, CRS, validation), so nothing bypasses the import checks.
 export type Fc = { type: "FeatureCollection"; features: { type: "Feature"; geometry: unknown; properties: Record<string, unknown> }[] };
 
+export const DSM_CSV_MAX_BYTES = 16 * 1024 * 1024;
+export const DSM_MAX_FEATURES = 50000;
 export function splitCsv(text: string, delim: string): string[][] {
+  if (![",", ";", "\t", "|"].includes(delim)) throw Error("Dấu phân cách không hợp lệ.");
+  if (text.length > DSM_CSV_MAX_BYTES) throw Error("CSV vượt giới hạn 16 MiB.");
   const rows: string[][] = []; let row: string[] = [], cell = "", q = false;
   for (let i = 0; i < text.length; i++) {
     const c = text[i];
@@ -11,12 +15,13 @@ export function splitCsv(text: string, delim: string): string[][] {
     else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
     else cell += c;
   }
+  if (q) throw Error("CSV có trường trích dẫn chưa đóng.");
   if (cell || row.length) { row.push(cell); rows.push(row); }
   return rows.filter(r => r.some(x => x.trim() !== ""));
 }
-export const guessDelim = (text: string) => { const line = text.split(/\r?\n/, 1)[0] ?? ""; return [",", ";", "\t", "|"].sort((a, b) => line.split(b).length - line.split(a).length)[0]; };
+export function guessDelim(text:string){const counts=new Map([",",";","\t","|"].map(d=>[d,0]));let q=false;for(let i=0;i<text.length;i++){const ch=text[i]!;if(ch==='"'){if(q&&text[i+1]==='"')i++;else q=!q;}else if(!q){if(ch==="\n"||ch==="\r")break;if(counts.has(ch))counts.set(ch,counts.get(ch)!+1);}}return [...counts.keys()].sort((a,b)=>counts.get(b)!-counts.get(a)!)[0]!;}
 // Vietnamese sheets often write decimals with a comma ("106,7123") when the delimiter is ";".
-const num = (v: string) => { const t = v.trim().replace(/\s/g, ""); const n = Number(/^-?\d+,\d+$/.test(t) ? t.replace(",", ".") : t); return t !== "" && Number.isFinite(n) ? n : null; };
+const num = (v: string) => { const t = v.trim(); if(!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/.test(t))return null; const n = Number(t.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const X_NAMES = ["x", "lon", "lng", "long", "longitude", "kinh_do", "kinhdo", "easting", "e"];
 const Y_NAMES = ["y", "lat", "latitude", "vi_do", "vido", "northing", "n"];
 export const guessXY = (header: string[]) => { const low = header.map(h => h.trim().toLowerCase()); const f = (names: string[]) => header[low.findIndex(h => names.includes(h))] ?? ""; return { x: f(X_NAMES), y: f(Y_NAMES) }; };
@@ -24,13 +29,17 @@ export const guessXY = (header: string[]) => { const low = header.map(h => h.tri
 export function csvToGeoJSON(text: string, opt: { delim: string; x: string; y: string }): { fc: Fc; skipped: number } {
   const [header, ...rows] = splitCsv(text.replace(/^﻿/, ""), opt.delim);
   if (!header) throw Error("Tệp trống");
+  if (header.length > 256 || rows.length > DSM_MAX_FEATURES) throw Error("CSV vượt giới hạn 256 cột hoặc 50.000 dòng.");
+  const keys = header.map((h,i)=>h || "cot_" + (i+1));
+  if (new Set(keys).size !== keys.length || keys.some(k=>["__proto__","prototype","constructor"].includes(k))) throw Error("Tên cột trùng hoặc không hợp lệ.");
   const xi = header.indexOf(opt.x), yi = header.indexOf(opt.y);
-  if (xi < 0 || yi < 0) throw Error("Chọn cột X và cột Y");
+  if (xi < 0 || yi < 0 || xi === yi) throw Error("Chọn cột X và cột Y");
   let skipped = 0; const features: Fc["features"] = [];
   for (const r of rows) {
+    if (r.length !== header.length) throw Error("Số cột không khớp tại dòng dữ liệu " + (features.length + skipped + 1));
     const x = num(r[xi] ?? ""), y = num(r[yi] ?? "");
     if (x === null || y === null) { skipped++; continue; }
-    const properties: Record<string, unknown> = {}; header.forEach((h, i) => { if (i !== xi && i !== yi) { const n = num(r[i] ?? ""); properties[h || "cot_" + (i + 1)] = n ?? (r[i] ?? ""); } });
+    const properties: Record<string, unknown> = {}; header.forEach((h, i) => { if (i !== xi && i !== yi) { const raw=r[i] ?? "", n=num(raw); const canonical=raw.trim().replace(",","."); properties[h || "cot_" + (i + 1)] = n!==null && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(canonical) && Number.isSafeInteger(n) && String(n)===canonical ? n : raw; } });
     features.push({ type: "Feature", geometry: { type: "Point", coordinates: [x, y] }, properties });
   }
   return { fc: { type: "FeatureCollection", features }, skipped };
@@ -38,40 +47,52 @@ export function csvToGeoJSON(text: string, opt: { delim: string; x: string; y: s
 
 export const asFile = (fc: Fc | unknown, name: string) => new File([JSON.stringify(fc)], name.replace(/[^\p{L}\p{N}_ -]+/gu, "_").slice(0, 60) + ".geojson", { type: "application/geo+json" });
 
-const MAX = 50000;
-async function getJson(url: string) {
-  const r = await fetch(url, { credentials: "omit" });
-  if (!r.ok) throw Error("Máy chủ trả lỗi " + r.status);
-  return r.json();
+const MAX = DSM_MAX_FEATURES;
+export function remoteLimit(limit:number){if(!Number.isSafeInteger(limit)||limit<1||limit>MAX)throw Error("Giới hạn từ 1 đến 50.000 đối tượng.");return limit}
+export function validateRemoteCollection(raw:unknown,limit:number):Fc{
+  remoteLimit(limit);const v=raw as Fc;
+  if(!v||v.type!=="FeatureCollection"||!Array.isArray(v.features)||v.features.length>limit||v.features.some(f=>!f||f.type!=="Feature"||!("geometry" in f)||!f.properties||typeof f.properties!=="object"||Array.isArray(f.properties)))throw Error("Phản hồi GeoJSON không hợp lệ hoặc vượt giới hạn.");
+  return v;
 }
-const httpUrl = (raw: string) => { const u = new URL(raw.trim()); if (u.protocol !== "https:" && u.protocol !== "http:") throw Error("Chỉ hỗ trợ http(s)"); return u; };
+const REMOTE_MAX_BYTES=32*1024*1024;
+async function getText(url:string,signal?:AbortSignal){
+  const r=await fetch(url,{credentials:"omit",signal,cache:"no-store"});
+  if(!r.ok)throw Error("Máy chủ trả lỗi "+r.status);
+  const length=Number(r.headers.get("content-length"));if(length>REMOTE_MAX_BYTES)throw Error("Phản hồi vượt 32 MiB.");
+  if(!r.body)throw Error("Phản hồi trống.");
+  const reader=r.body.getReader(),decoder=new TextDecoder("utf-8",{fatal:true});let bytes=0;const parts:string[]=[];
+  try{for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>REMOTE_MAX_BYTES)throw Error("Phản hồi vượt 32 MiB.");parts.push(decoder.decode(value,{stream:true}));}parts.push(decoder.decode());return parts.join("");}
+  finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
+async function getJson(url:string,signal?:AbortSignal){return JSON.parse(await getText(url,signal));}
+const httpUrl = (raw: string) => { const u = new URL(raw.trim()); if (u.protocol !== "https:" && u.protocol !== "http:") throw Error("Chỉ hỗ trợ http(s)"); if(u.username||u.password)throw Error("Không hỗ trợ thông tin đăng nhập trong URL.");u.hash="";return u; };
 
 // WFS 2.0 / OGC API Features
-export async function wfsLayers(raw: string): Promise<{ name: string; title: string }[]> {
+export async function wfsLayers(raw: string,signal?:AbortSignal): Promise<{ name: string; title: string }[]> {
   const u = httpUrl(raw);
   if (/\/collections\/?$/.test(u.pathname) || u.searchParams.get("f") === "json") {
-    const j = await getJson(u.toString()); return (j.collections ?? []).map((c: { id: string; title?: string }) => ({ name: c.id, title: c.title ?? c.id }));
+    const j = await getJson(u.toString(),signal); return (j.collections ?? []).map((c: { id: string; title?: string }) => ({ name: c.id, title: c.title ?? c.id }));
   }
   u.search = ""; u.searchParams.set("service", "WFS"); u.searchParams.set("request", "GetCapabilities");
-  const r = await fetch(u.toString(), { credentials: "omit" }); if (!r.ok) throw Error("Máy chủ trả lỗi " + r.status);
-  const xml = new DOMParser().parseFromString(await r.text(), "application/xml");
+  const xml = new DOMParser().parseFromString(await getText(u.toString(),signal), "application/xml");
+  if(xml.getElementsByTagName("parsererror").length)throw Error("WFS capabilities XML không hợp lệ.");
   return [...xml.getElementsByTagNameNS("*", "FeatureType")].map(ft => ({ name: ft.getElementsByTagNameNS("*", "Name")[0]?.textContent ?? "", title: ft.getElementsByTagNameNS("*", "Title")[0]?.textContent ?? "" })).filter(x => x.name);
 }
-export async function wfsFetch(raw: string, layer: string, limit: number): Promise<Fc> {
-  const u = httpUrl(raw), n = Math.min(Math.max(1, limit), MAX);
-  if (/\/collections\/?$/.test(u.pathname)) { const items = new URL(u.toString().replace(/\/?$/, "/") + encodeURIComponent(layer) + "/items"); items.searchParams.set("f", "json"); items.searchParams.set("limit", String(n)); return getJson(items.toString()); }
+export async function wfsFetch(raw: string, layer: string, limit: number,signal?:AbortSignal): Promise<Fc> {
+  const u = httpUrl(raw), n = remoteLimit(limit);
+  if (/\/collections\/?$/.test(u.pathname)) { const items = new URL(u); items.pathname = u.pathname.replace(/\/?$/, "/") + encodeURIComponent(layer) + "/items"; items.searchParams.set("f", "json"); items.searchParams.set("limit", String(n)); return validateRemoteCollection(await getJson(items.toString(),signal),n); }
   u.search = ""; for (const [k, v] of Object.entries({ service: "WFS", version: "2.0.0", request: "GetFeature", typeNames: layer, outputFormat: "application/json", srsName: "EPSG:4326", count: String(n) })) u.searchParams.set(k, v);
-  return getJson(u.toString());
+  return validateRemoteCollection(await getJson(u.toString(),signal),n);
 }
 
 // ArcGIS REST: service root lists layers; a layer URL (…/FeatureServer/0) is queried as GeoJSON.
-export async function arcgisLayers(raw: string): Promise<{ name: string; title: string }[]> {
+export async function arcgisLayers(raw: string,signal?:AbortSignal): Promise<{ name: string; title: string }[]> {
   const u = httpUrl(raw); if (/\/\d+\/?$/.test(u.pathname)) return [{ name: u.toString().replace(/\/$/, ""), title: "Lớp " + u.pathname.split("/").filter(Boolean).pop() }];
-  u.search = "f=json"; const j = await getJson(u.toString()); const base = raw.trim().split("?")[0].replace(/\/$/, "");
+  u.search = "f=json"; const j = await getJson(u.toString(),signal); const base = raw.trim().split("?")[0].replace(/\/$/, "");
   return [...(j.layers ?? []), ...(j.tables ?? [])].map((l: { id: number; name: string }) => ({ name: base + "/" + l.id, title: l.name }));
 }
-export async function arcgisFetch(layerUrl: string, limit: number): Promise<Fc> {
-  const u = httpUrl(layerUrl.replace(/\/$/, "") + "/query");
-  for (const [k, v] of Object.entries({ where: "1=1", outFields: "*", outSR: "4326", f: "geojson", resultRecordCount: String(Math.min(Math.max(1, limit), MAX)) })) u.searchParams.set(k, v);
-  const j = await getJson(u.toString()); if (j.error) throw Error(j.error.message ?? "ArcGIS báo lỗi"); return j;
+export async function arcgisFetch(layerUrl: string, limit: number,signal?:AbortSignal): Promise<Fc> {
+  const u = httpUrl(layerUrl); u.pathname=u.pathname.replace(/\/$/,"")+"/query";
+  for (const [k, v] of Object.entries({ where: "1=1", outFields: "*", outSR: "4326", f: "geojson", resultRecordCount: String(remoteLimit(limit)) })) u.searchParams.set(k, v);
+  const j = await getJson(u.toString(),signal); if (j.error) throw Error(j.error.message ?? "ArcGIS báo lỗi"); return validateRemoteCollection(j,limit);
 }

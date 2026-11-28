@@ -213,6 +213,75 @@ static CRS_PROFILES: &[CrsProfile] = &[
     ),
 ];
 
+/// Mathematical conversion within Vietnam 2000 only. These bounds and
+/// parameters are the EPSG projected CRS definitions (PROJ database), not a
+/// geodetic datum operation, cadastral certification, or administrative boundary.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct NativeVn2000Zone {
+    pub code: u32,
+    pub central_meridian: f64,
+    pub scale_factor: f64,
+    pub bounds: [f64; 4],
+}
+const fn vn_zone(code: u32, central_meridian: f64, scale_factor: f64, bounds: [f64; 4]) -> NativeVn2000Zone {
+    NativeVn2000Zone { code, central_meridian, scale_factor, bounds }
+}
+pub const NATIVE_VN2000_ZONES: &[NativeVn2000Zone] = &[
+    vn_zone(3405, 105.0, 0.9996, [102.14, 8.33, 108.0, 23.4]),
+    vn_zone(3406, 111.0, 0.9996, [108.0, 10.43, 109.53, 21.56]),
+    vn_zone(5896, 102.0, 0.9999, [102.14, 9.2, 103.51, 22.82]),
+    vn_zone(5897, 105.0, 0.9999, [103.5, 8.33, 106.51, 23.4]),
+    vn_zone(5898, 108.0, 0.9999, [106.5, 8.57, 109.53, 22.95]),
+    vn_zone(5899, 107.75, 0.9999, [106.43, 8.57, 108.76, 21.67]),
+    vn_zone(9205, 103.0, 0.9999, [102.14, 20.89, 103.99, 22.82]),
+    vn_zone(9206, 104.0, 0.9999, [103.21, 20.57, 105.03, 22.04]),
+    vn_zone(9207, 104.5, 0.9999, [103.4, 8.33, 105.54, 10.55]),
+    vn_zone(9208, 104.75, 0.9999, [103.53, 10.18, 105.86, 22.85]),
+    vn_zone(9209, 105.5, 0.9999, [104.33, 9.19, 106.69, 23.4]),
+    vn_zone(9210, 105.75, 0.9999, [105.26, 9.75, 107.8, 23.12]),
+    vn_zone(9211, 106.0, 0.9999, [104.83, 16.92, 107.03, 22.7]),
+    vn_zone(9212, 106.25, 0.9999, [106.41, 11.3, 107.43, 17.22]),
+    vn_zone(9213, 106.5, 0.9999, [105.43, 21.32, 106.25, 22.75]),
+    vn_zone(9214, 107.0, 0.9999, [105.88, 15.99, 108.24, 21.63]),
+    vn_zone(9215, 107.25, 0.9999, [106.09, 21.32, 107.37, 22.47]),
+    vn_zone(9216, 107.5, 0.9999, [107.33, 13.92, 108.55, 15.42]),
+    vn_zone(9217, 108.25, 0.9999, [108.55, 11.25, 109.53, 14.71]),
+    vn_zone(9218, 108.5, 0.9999, [107.2, 10.43, 109.52, 14.61]),
+];
+
+pub fn is_extended_native_vn2000(code: u32) -> bool {
+    matches!(code, 3405 | 3406 | 5896..=5898 | 9205..=9218)
+}
+pub fn is_native_vn2000(code: u32) -> bool {
+    code == 4756 || code == 5899 || is_extended_native_vn2000(code)
+}
+pub fn is_processing_crs(code: u32) -> bool {
+    matches!(code, 4326 | 3857) || is_native_vn2000(code)
+}
+/// Keep the R003 registry contract unchanged. Extended native codes are
+/// readable only through the native storage/processing path, not WGS84 display.
+pub fn native_storage_profile_wire(code: u32) -> Option<Value> {
+    if !is_extended_native_vn2000(code) {
+        return reference_profile_wire(code);
+    }
+    let z=NATIVE_VN2000_ZONES.iter().find(|z|z.code==code)?;
+    let meridian=z.central_meridian;
+    Some(json!({
+        "authority":"EPSG","code":code,
+        "name":format!("VN-2000 / {} {}",if z.scale_factor==0.9996 {"UTM"}else{"TM-3"},meridian),
+        "datum":"Vietnam 2000","native_axes":["easting","northing"],"unit":"metre",
+        "coordinate_order":"xy","x_axis":"easting","y_axis":"northing",
+        "projection_parameters":{"method":"Transverse Mercator (EPSG:9807)","latitude_of_origin":0.0,
+            "central_meridian":meridian,"scale_factor":z.scale_factor,"false_easting":500000.0,"false_northing":0.0},
+        "area_of_use":format!("EPSG geographic rectangle {:?}; same datum native processing only.",z.bounds),
+        "disposition":"readable"
+    }))
+}
+pub fn native_storage_coordinate_wire(code:u32)->Option<Value>{
+    if !is_extended_native_vn2000(code){return reference_coordinate_wire(code);}
+    Some(json!({"authority":"EPSG","code":code,"coordinate_order":"xy","x_axis":"easting","y_axis":"northing","unit":"metre"}))
+}
+
 /// Return all registered CRS profiles.
 #[must_use]
 pub fn all_crs_profiles() -> &'static [CrsProfile] {
@@ -310,6 +379,9 @@ pub enum FixtureRequirement {
     None,
     QuangNinh,
     QuangNinhHvs,
+    DaNangCircular,
+    HaiPhongCircular,
+    DongNaiCircular,
 }
 
 /// Fixed PROJ operation strings, identical to the Python reference. Reads run
@@ -484,6 +556,46 @@ static REFERENCE_TRANSFORMATIONS: &[TransformationProfile] = &[
         ..TM3_FORWARD
     },
 ];
+
+// These narrowly bounded alternatives share the datum operation but not the
+// evidence or permitted region. They are selected only after immutable source
+// verification. Keep the legacy R003 registry shape for existing clients.
+const DA_NANG_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Da Nang bay points DN1-DN3, Circular 46/2025/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-46-2025-tt-bxd-da-nang",
+    geographic_bounds: CoordinateBounds::new(108.20,16.17,108.29,16.24),
+    tolerance: 3.0,
+    fixture_requirement: FixtureRequirement::DaNangCircular,
+    ..DATUM_FORWARD
+};
+const HAI_PHONG_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Hai Phong port points HP1-HP3, Circular 49/2025/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-49-2025-tt-bxd-hai-phong",
+    geographic_bounds: CoordinateBounds::new(106.73,20.62,106.82,20.79),
+    tolerance: 5.0,
+    fixture_requirement: FixtureRequirement::HaiPhongCircular,
+    ..DATUM_FORWARD
+};
+const DONG_NAI_FORWARD: TransformationProfile = TransformationProfile {
+    validated_area: "Trusted Dong Nai river points HD2, HD5, HD6, Circular 02/2026/TT-BXD; not a province boundary or survey claim.",
+    evidence_id: "circular-02-2026-tt-bxd-dong-nai",
+    geographic_bounds: CoordinateBounds::new(106.74, 10.63, 106.87, 10.71),
+    tolerance: 3.0,
+    fixture_requirement: FixtureRequirement::DongNaiCircular,
+    ..DATUM_FORWARD
+};
+static REGIONAL_DATUM_TRANSFORMATIONS: &[TransformationProfile] = &[
+    DA_NANG_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DA_NANG_FORWARD},
+    DONG_NAI_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DONG_NAI_FORWARD},
+    HAI_PHONG_FORWARD,
+    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..HAI_PHONG_FORWARD},
+];
+#[must_use]
+pub fn regional_datum_transformation(source:u32,target:u32,requirement:FixtureRequirement)->Option<&'static TransformationProfile>{
+    REGIONAL_DATUM_TRANSFORMATIONS.iter().find(|p|p.source_code==source&&p.target_code==target&&p.fixture_requirement==requirement)
+}
 
 /// Look up a directed operation. Identity reads and inferred paths are excluded.
 #[must_use]

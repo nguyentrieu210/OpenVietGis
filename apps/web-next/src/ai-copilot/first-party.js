@@ -1,15 +1,20 @@
+import {modeAllows,validSession,pinCommand,assertCommandCurrent,recordHistory} from "./session-guard.js";
 /** First-party panel: mount inside a trusted, authenticated GIS workspace. */
-export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMode=()=>"gis",runCad}) {
+export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMode=()=>"gis",getContextEpoch=()=>0,runCad}) {
   // Explicit session consent is limited to these read-only / temporary commands.
   // All downloads, persisted writes, administration and unknown tools are reviewed individually.
   const SESSION_SAFE=new Set(["map_view","map_selection","map_navigate","gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_raster_layers","gis_processing_job","gis_models","gis_layouts","gis_plugins","gis_plugin_records"]);
   const node=document.createElement("section");
   node.className="ovg-ai-copilot";
-  node.innerHTML='<button type="button" data-ai="toggle"><span aria-hidden="true">✦</span> AI Copilot</button><div data-ai="panel" hidden><header data-ai="header"><div><span data-ai="eyebrow">OPENVIETGIS · AI WORKSPACE</span><h2>Trợ lý bản đồ AI</h2><p>Điều khiển và phân tích GIS bằng ngôn ngữ tự nhiên.</p></div><button type="button" data-ai="dismiss" aria-label="Thu gọn AI Copilot">×</button></header><div data-ai="connection"><p data-ai="status" role="status">Chưa kết nối</p><button type="button" data-ai="connect">Kết nối AI</button><button type="button" data-ai="close" hidden>Ngắt kết nối</button></div><div data-ai="consent" hidden><label><input type="checkbox" data-ai="auto"> <strong>Luôn cho phép lệnh an toàn trong phiên</strong></label><p>Đọc dữ liệu, phân tích xem trước, di chuyển bản đồ và chọn đối tượng. Có thể tắt bất cứ lúc nào. Tạo, sửa, xóa, xuất dữ liệu và quản trị luôn hỏi riêng.</p></div><div data-ai="review" hidden role="region" aria-label="Xác nhận lệnh AI"><span data-ai="risk"></span><h3 data-ai="command"></h3><p data-ai="explain"></p><details data-ai="detailbox" hidden><summary>Thông số và đối tượng liên quan</summary><pre data-ai="details"></pre></details><div data-ai="actions"><button type="button" data-ai="always" hidden>Luôn cho phép trong phiên</button><button type="button" data-ai="accept">Cho phép lần này</button><button type="button" data-ai="deny">Từ chối</button></div></div><footer data-ai="footer"><strong>Kết nối ChatGPT / Claude</strong><p>Đăng nhập cùng tài khoản GIS, chọn dự án rồi kết nối. Phiên có hiệu lực tối đa 15 phút.</p><code data-ai="endpoint"></code></footer></div>';
+  node.innerHTML='<button type="button" data-ai="toggle"><span aria-hidden="true">✦</span> AI Copilot</button><div data-ai="panel" hidden><header data-ai="header"><div><span data-ai="eyebrow">OPENVIETGIS · AI WORKSPACE</span><h2>Trợ lý bản đồ AI</h2><p>Điều khiển và phân tích GIS bằng ngôn ngữ tự nhiên.</p></div><button type="button" data-ai="dismiss" aria-label="Thu gọn AI Copilot">×</button></header><div data-ai="connection"><p data-ai="status" role="status">Chưa kết nối</p><small data-ai="scope"></small><small data-ai="expiry"></small><button type="button" data-ai="connect">Kết nối AI</button><button type="button" data-ai="close" hidden>Ngắt kết nối</button></div><div data-ai="consent" hidden><label><input type="checkbox" data-ai="auto"> <strong>Luôn cho phép lệnh an toàn trong phiên</strong></label><p>Đọc dữ liệu, phân tích xem trước, di chuyển bản đồ và chọn đối tượng. Có thể tắt bất cứ lúc nào. Tạo, sửa, xóa, xuất dữ liệu và quản trị luôn hỏi riêng.</p></div><div data-ai="review" hidden role="region" aria-label="Xác nhận lệnh AI"><span data-ai="risk"></span><h3 data-ai="command"></h3><p data-ai="explain"></p><details data-ai="detailbox" hidden><summary>Thông số và đối tượng liên quan</summary><pre data-ai="details"></pre></details><div data-ai="actions"><button type="button" data-ai="always" hidden>Luôn cho phép trong phiên</button><button type="button" data-ai="accept">Cho phép lần này</button><button type="button" data-ai="deny">Từ chối</button></div></div><details data-ai="history"><summary>Lịch sử lệnh trong phiên mở trang</summary><ol data-ai="history-items"></ol><p>Không lưu thông số, dữ liệu trả về hay token.</p></details><footer data-ai="footer"><strong>Kết nối ChatGPT / Claude</strong><p>Đăng nhập cùng tài khoản GIS, chọn dự án rồi kết nối. Phiên có hiệu lực tối đa 15 phút.</p><code data-ai="endpoint"></code></footer></div>';
   host.append(node);
   const get=name=>node.querySelector('[data-ai="'+name+'"]');
   get("endpoint").textContent=location.origin+"/mcp";
-  let active=null,command=null,epoch=0,disposed=false,polling=false,submitting=false,autoAllowed=false;
+  let active=null,command=null,epoch=0,disposed=false,polling=false,submitting=false,autoAllowed=false,connecting=false,history=[],seen=new Set(),lastContextEpoch=getContextEpoch();
+  const context=()=>{const mode=getMode();let cad="";if(mode==="cad"&&typeof runCad==="function"){try{const state=runCad("cad_state",{});cad=JSON.stringify([state.document_id,state.version,state.dirty,state.saving])}catch{cad="unavailable"}}return {mode,epoch:getContextEpoch(),cad}};
+  const note=(c,label)=>{history=recordHistory(history,{id:c.id,method:c.method,mode:c.scope?.mode??getMode(),status:label,at:Date.now()});const list=get("history-items");list.replaceChildren(...history.map(item=>{const li=document.createElement("li");li.textContent=new Date(item.at).toLocaleTimeString("vi-VN")+" · "+item.mode.toUpperCase()+" · "+item.method+" · "+item.status;return li}))};
+  const updateScope=()=>{get("scope").textContent="Tổ chức "+organizationId+" · Dự án "+projectId+" · "+getMode().toUpperCase();get("expiry").textContent=active?"Phiên còn "+Math.max(0,Math.ceil((active.deadline-performance.now())/1000))+" giây":"";};
+  updateScope();
   function setAutomatic(value){
     autoAllowed=!!value&&!!active;
     get("auto").checked=autoAllowed;
@@ -27,8 +32,8 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
       get("risk").dataset.safe=String(safe);
       get("explain").textContent=safe?"AI yêu cầu thao tác đọc hoặc xem trước trong dự án đang mở. Không thay đổi dữ liệu lưu trữ.":"Thao tác có thể thay đổi dữ liệu, tải tệp hoặc quản trị dự án. Kiểm tra thông số trước khi cho phép.";
       show("always",safe);
-      const details=get("details");details.textContent=JSON.stringify(cmd.params??{},null,2);
-      show("detailbox",Object.keys(cmd.params??{}).length>0);
+      const details=get("details");details.textContent=JSON.stringify({organization_id:organizationId,project_id:projectId,mode:cmd.scope.mode,...(cmd.scope.cad?{cad_context:cmd.scope.cad}:{}),params:cmd.params??{}},null,2);
+      show("detailbox",true);
       get("detailbox").open=!safe;
     }
   };
@@ -43,47 +48,52 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
     return r.json();
   }
   function reset(message){
-    ++epoch;active=null;setAutomatic(false);setReview(null);show("connect",true);show("close",false);show("consent",false);
-    get("connect").disabled=false;status(message);
+    ++epoch;active=null;seen.clear();setAutomatic(false);setReview(null);show("connect",true);show("close",false);show("consent",false);
+    get("connect").disabled=connecting;status(message);updateScope();
   }
   async function close(){
-    const s=active;reset("Đã ngắt kết nối");
+    const s=active;if(command)note(command,submitting?"Đã ngắt khi đang chạy; kiểm tra lịch sử máy chủ":"Đã ngắt trước khi duyệt");reset("Đã ngắt kết nối");
     if(s)try{await req("/"+s.session_id+"/close",s,{},true)}catch{}
   }
   async function start(){
-    if(disposed||active)return;
-    get("connect").disabled=true;
+    if(disposed||active||connecting||submitting)return;
+    connecting=true;const startEpoch=epoch;get("connect").disabled=true;
     try{
       if(!getBridge())throw Error("Bản đồ chưa sẵn sàng");
       const s=await req("",null,{organization_id:organizationId,project_id:projectId,...(typeof getBridge()?.workspace==="function"?{workspace_version:2}:{})});
-      if(disposed){void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});return}
-      active=s;++epoch;setAutomatic(false);show("connect",false);show("close",true);show("consent",true);
-      status("Đã kết nối phiên này · 15 phút");
-    }catch(e){if(!disposed)reset(e.message)}
+      if(!validSession(s))throw Error("Phản hồi phiên không hợp lệ");
+      if(disposed||epoch!==startEpoch){void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});return}
+      active={...s,deadline:performance.now()+s.expires_in*1000};seen.clear();lastContextEpoch=getContextEpoch();++epoch;setAutomatic(false);show("connect",false);show("close",true);show("consent",true);
+      status("Đã kết nối phiên này · tối đa 15 phút");updateScope();
+    }catch(e){if(!disposed)reset(e.message)}finally{connecting=false;if(!disposed)get("connect").disabled=!!active||submitting}
   }
   async function tick(){
-    if(!active||disposed||polling)return;
-    const s=active,e=epoch;
+    if(disposed)return;updateScope();if(getContextEpoch()!==lastContextEpoch){lastContextEpoch=getContextEpoch();setAutomatic(false)}
+    if(!active||polling)return;
+    if(performance.now()>=active.deadline){if(command)note(command,submitting?"Hết hạn khi đang chạy; cần đối chiếu":"Hết hạn");reset("Phiên đã hết hạn");return}
+    const s=active,e=epoch,pollScope=context();
     polling=true;
     try{
       const path="/"+s.session_id+(command||submitting?"/ping":"/poll");
       const data=await req(path,s,{});
       if(active!==s||e!==epoch||disposed)return;
-      if(command&&performance.now()>=command.deadline)setReview(null);
+      if(command&&!submitting){try{assertCommandCurrent(command,context(),performance.now())}catch{note(command,"Hết hạn hoặc đổi workspace");void respond(false);return}}
       if(data.command&&!command&&!submitting){
         const c=data.command;
         const basic=["map_view","map_selection","map_navigate"].includes(c.method);
         const full=["gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_changeset","gis_revert","gis_create_layer","gis_schema","gis_export","gis_raster_layers","gis_raster_process","gis_raster_report","gis_raster_download","gis_processing_run","gis_processing_job","gis_models","gis_model_save","gis_model_run","gis_layouts","gis_layout_save","gis_layout_export","gis_plugins","gis_plugin_activate","gis_plugin_disable","gis_plugin_records","gis_plugin_create","gis_plugin_update"].includes(c.method)&&typeof getBridge()?.workspace==="function";
         const cad=["cad_state","cad_select_handle"].includes(c.method)&&typeof runCad==="function";
-        if((basic||full||cad)&&c.expires_in>2){
-          const next={...c,deadline:performance.now()+c.expires_in*1000};
+        if(seen.has(c.id)||seen.size>=256){reset("Nhận lại mã lệnh hoặc vượt giới hạn phiên; không chạy lại.");void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});return}
+        if((basic||full||cad)&&modeAllows(pollScope.mode,c.method)&&c.expires_in>2){
+          const next=pinCommand(c,pollScope,performance.now());seen.add(next.id);note(next,"Chờ duyệt");
+          try{assertCommandCurrent(next,context(),performance.now())}catch{setReview(next);void respond(false);return}
           if(autoAllowed&&SESSION_SAFE.has(c.method)){
             command=next;
             void respond(true,true);
           }else setReview(next);
-        }
+        }else{reset("Lệnh không hỗ trợ hoặc hết hạn; đã đóng phiên để tránh chạy nhầm.");void req("/"+s.session_id+"/close",s,{},true).catch(()=>{});}
       }
-    }catch{if(active===s)reset("Phiên hết hạn hoặc quyền GIS đã thay đổi")}
+    }catch{if(active===s){if(command)note(command,submitting?"Mất kết nối khi đang chạy; cần đối chiếu":"Mất kết nối trước khi duyệt");reset("Phiên hết hạn hoặc quyền GIS đã thay đổi");void req("/"+s.session_id+"/close",s,{},true).catch(()=>{})}}
     finally{polling=false}
   }
   async function respond(approve,automated=false){
@@ -91,14 +101,16 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
     const s=active,c=command,e=epoch;
     if(automated&&(!autoAllowed||!SESSION_SAFE.has(c.method)))return;
     submitting=true;get("accept").disabled=true;get("deny").disabled=true;get("always").disabled=true;
-    let ok=false,result=null;
+    let ok=false,result=null,dispatched=false,reason="Đã từ chối";
+    const guard=(minSeconds=0)=>{if(disposed||active!==s||e!==epoch||(automated&&!autoAllowed))throw Error("Phiên lệnh không còn hiệu lực");assertCommandCurrent(c,context(),performance.now(),minSeconds)};
     try{
       if(approve){
         // Fresh server authorization immediately before using the host map bridge.
+        guard();note(c,"Đang xác minh quyền");
         const permission=await req("/"+s.session_id+"/commands/"+c.id+"/prepare",s,{});
         if(permission.authorized!==true||permission.expires_in<1)throw Error("Lệnh đã hết hạn");
-        if(disposed||active!==s||e!==epoch||performance.now()>=c.deadline||(automated&&!autoAllowed))throw Error("Lệnh đã hết hạn hoặc quyền tự động đã bị thu hồi");
-        const bridge=getBridge();
+        c.deadline=Math.min(c.deadline,performance.now()+permission.expires_in*1000);guard();
+        const bridge=getBridge();dispatched=true;note(c,"Đang thực hiện");
         if(c.method.startsWith("cad_")){if(getMode()!=="cad"||typeof runCad!=="function")throw Error("Không ở chế độ CAD");result=await runCad(c.method,c.params??{});}
         else if(!bridge||getMode()==="cad"||(c.method.startsWith("map_")&&getMode()!=="gis"))throw Error("Lệnh không phù hợp chế độ đang mở");
         else if(c.method==="map_view")result=bridge.view();
@@ -109,19 +121,19 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
           bridge.navigate({longitude,latitude,zoom});result=null;
         }else if(c.method.startsWith("gis_")&&typeof bridge.workspace==="function"){
           if(permission.expires_in<15)throw Error("Không đủ thời gian thực hiện lệnh; hãy yêu cầu lại");
-          result=await bridge.workspace(c.method,c.params??{},(minSeconds=0)=>{if(disposed||active!==s||e!==epoch||performance.now()+minSeconds*1000>=c.deadline)throw Error("Phiên lệnh AI đã hết hạn, bị ngắt hoặc không đủ thời gian");});
+          result=await bridge.workspace(c.method,c.params??{},guard);
         }else throw Error("Lệnh không hỗ trợ");
-        ok=true;
+        guard();ok=true;reason="Đã thực hiện";
       }
-    }catch{}
+    }catch{result=null;reason=dispatched?"Không xác minh được kết quả; kiểm tra dữ liệu trước khi gửi lại":"Đã chặn trước khi thực thi";}
     try{
       if(active!==s||disposed||e!==epoch)return;
-      await req("/"+s.session_id+"/commands/"+c.id+"/ack",s,{ok,result});
-      if(active===s)status(ok?(automated?"Đã tự động thực hiện lệnh AI":"Đã thực hiện lệnh AI"):"Đã từ chối hoặc không thể thực hiện");
-    }catch{if(active===s)status("Không nhận được xác nhận của bridge")}
+      const receipt=await req("/"+s.session_id+"/commands/"+c.id+"/ack",s,{ok,result});if(receipt.accepted!==true)throw Error("Biên nhận không hợp lệ");
+      if(active===s){note(c,reason);status(ok?(automated?"Đã tự động thực hiện lệnh AI":"Đã thực hiện lệnh AI"):reason)}
+    }catch{if(active===s){note(c,"Không xác nhận được biên nhận; không chạy lại");reset("Không nhận được xác nhận của bridge. Kiểm tra lịch sử trước khi yêu cầu lại.");void req("/"+s.session_id+"/close",s,{},true).catch(()=>{})}}
     finally{
       if(active===s)setReview(null);submitting=false;
-      get("accept").disabled=false;get("deny").disabled=false;get("always").disabled=false;
+      get("accept").disabled=false;get("deny").disabled=false;get("always").disabled=false;if(!disposed&&!active)get("connect").disabled=connecting;
     }
   }
   get("toggle").onclick=()=>{get("panel").hidden=!get("panel").hidden;};

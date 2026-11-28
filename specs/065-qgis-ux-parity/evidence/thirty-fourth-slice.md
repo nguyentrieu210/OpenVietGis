@@ -1,0 +1,6 @@
+# Thirty-fourth implementation slice (GitHub only)
+Base 88b792e0ddfbe836d0476c1d71ab72f96518359c.
+- DOCK-07/08: shared vector visibility policy for exclusive groups (at most one visible descendant, outer path first, deterministic order, explicit-show preference). Live hidden-state setter applies policy to command, locator, theme, saved configuration and plugin requests. Feasible group checkbox can toggle exclusive group off. Theme visibility applied atomically; normalization on topology/option change. Group rename guards collisions/self-nesting and remaps personal exclusive paths. Preference parser bounds paths.
+- Unit cases for nested groups, unrelated visibility, group toggle and rename. Written only, no build/test/browser execution or QGIS acceptance. Personal vector policy, not server enforced; secondary canvas and independent render order remain. No merge/deploy.
+
+Follow-up: independent explicit show/hide-all controls (exclusive groups intentionally leave hidden siblings, so hidden.size is not a valid toggle state). Ungroup discards the removed group's own exclusivity instead of promoting it to its parent; descendant paths still remap. New tests not executed.

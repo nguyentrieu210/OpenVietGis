@@ -31,12 +31,14 @@ export interface Changeset {
 }
 
 export interface QueryResultItem {
+  geometry_state?: "present" | "absent" | "empty" | "invalid" | "unsupported";
   feature_id: string;
   attributes: Record<string, unknown>;
   geometry: Record<string, unknown> | null;
 }
 
 export interface LayerQueryResponse {
+  attribute_only?: true;
   layer_id: string;
   source_id: string;
   content_revision: string;
@@ -67,7 +69,12 @@ export interface SavedQuery {
 }
 
 export interface ProcessingAlgorithm {
-  id: "buffer" | "clip" | "dissolve";
+  id: "buffer" | "clip" | "dissolve" | "difference" | "intersection" | "union" | "reproject" | "spatial_join";
+  /** Provider and capability tags come from the authenticated project registry; they are not permission grants. */
+  provider_id: string;
+  provider_name: string;
+  category: string;
+  capabilities: string[];
   name: string;
   description: string;
   required_inputs: string[];
@@ -76,7 +83,7 @@ export interface ProcessingAlgorithm {
 
 export interface ProcessingJob {
   id: string;
-  algorithm_id: "buffer" | "clip" | "dissolve";
+  algorithm_id: "buffer" | "clip" | "dissolve" | "difference" | "intersection" | "union" | "reproject" | "spatial_join";
   operation_id: string;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   output_name: string;
@@ -88,6 +95,10 @@ export interface ProcessingJob {
   feature_count: number | null;
   created_at: string;
   completed_at: string | null;
+  error_code?: string | null;
+  error_message?: string | null;
+  input_refs?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }
 
 export interface LayerStyle {
@@ -113,7 +124,9 @@ export interface PrintLayout {
   created_at: string;
 }
 
+export interface PrintAtlasRequest { coverage_layer_id: string; feature_ids?: string[] }
 export interface PrintRevisionManifest {
+  atlas?: { coverage_layer_id: string; page_count: number; pages: Array<{feature_id:string; scale_denominator:number; effective_extent:Record<string,number>}> };
   layout_id: string;
   layout_revision: string;
   crs_code: number;
@@ -384,6 +397,7 @@ export function commitChangeset(
   body: {
     base_content_revision: string;
     base_schema_revision?: string;
+    prevent_overlap?: boolean;
     operation_id: string;
     summary: string;
     operations: Array<{
@@ -567,7 +581,7 @@ export function previewPrintExport(
   orgId: string,
   projectId: string,
   layoutId: string,
-  body: { output_format: "png" | "pdf"; dpi: 150 | 300 },
+  body: { output_format: "png" | "pdf"; dpi: 150 | 300; atlas?: PrintAtlasRequest },
   csrf: string
 ): Promise<PrintExportPreview> {
   return client.request<PrintExportPreview>(
@@ -581,7 +595,7 @@ export function exportPrintLayout(
   orgId: string,
   projectId: string,
   layoutId: string,
-  body: { output_format: "png" | "pdf"; dpi: 150 | 300; expected_revision_fingerprint: string },
+  body: { output_format: "png" | "pdf"; dpi: 150 | 300; expected_revision_fingerprint: string; atlas?: PrintAtlasRequest },
   csrf: string
 ): Promise<PrintExport> {
   return client.request<PrintExport>(
@@ -983,7 +997,7 @@ export function syncOfflineOutbox(
   packageId: string,
   body: { operation_id: string; operations: Array<Record<string, unknown>> },
   csrf: string
-): Promise<{ id: string; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts?: OfflineOperationReceipt[] }> {
+): Promise<{ id: string; package_id: string; operation_id: string; submitted_ops_count: number; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts: OfflineOperationReceipt[] }> {
   return client.request(
     `${projBase(orgId, projectId)}/field/packages/${encodeURIComponent(packageId)}/sync`,
     { method: "POST", body: JSON.stringify(body), headers: csrfHeaders(csrf) }
