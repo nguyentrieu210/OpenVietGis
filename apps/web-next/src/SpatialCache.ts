@@ -1,3 +1,4 @@
+import {completeSnapshot} from "./spatial-snapshot-guard";
 import type {SpatialLayer,SpatialFeature} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 import {featureKey} from "./studio-contract";
@@ -5,10 +6,10 @@ import type {CacheScope,CacheEntry,CachedRow} from "./SpatialCacheStorage";
 export type {CacheScope,CacheEntry} from "./SpatialCacheStorage";
 
 export function cacheAuthorized(restricted:boolean,permissions:readonly string[],layer:SpatialLayer){
-  return restricted===false&&permissions.includes("project.read")&&layer.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
+  return layer.lifecycle==="active"&&restricted===false&&permissions.includes("project.read")&&layer.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
 }
 export function cacheMatches(e:CacheEntry,l:SpatialLayer){
-  return e.layer.id===l.id&&e.layer.source_id===l.source_id&&e.layer.layer_revision===l.layer_revision&&e.layer.source.schema_revision===l.source.schema_revision&&e.layer.source.content_revision===l.source.content_revision&&e.rows.length===l.source.feature_count;
+  return e.layer.id===l.id&&e.layer.source_id===l.source_id&&e.layer.layer_revision===l.layer_revision&&e.layer.source.schema_revision===l.source.schema_revision&&e.layer.source.content_revision===l.source.content_revision&&completeSnapshot(e.rows,l.source.feature_count);
 }
 export function restoreRows(entry:CacheEntry,l:SpatialLayer,color:string):StudioRow[]{
   return entry.rows.map(r=>({key:featureKey(l.source_id,r.feature.feature_id),layer:l,feature:r.feature as SpatialFeature,geometry:r.geometry,color}));
@@ -43,7 +44,7 @@ export async function readCache(scope:CacheScope,layerId:string):Promise<CacheEn
   return await execute({kind:"read",scope,layerId}) as CacheEntry|null;
 }
 export async function writeCache(scope:CacheScope,layer:SpatialLayer,rows:StudioRow[]){
-  if(rows.length!==layer.source.feature_count||rows.length>20000)return;
+  if(rows.length>20000||!completeSnapshot(rows,layer.source.feature_count)||rows.some(r=>r.layer.id!==layer.id||r.layer.source_id!==layer.source_id||r.layer.source.content_revision!==layer.source.content_revision||r.layer.source.schema_revision!==layer.source.schema_revision))return;
   await execute({kind:"write",scope,layer,rows:rows.map(({feature,geometry})=>({feature,geometry}))});
 }
 export async function clearSpatialCache(account:string,scope?:CacheScope){

@@ -184,17 +184,17 @@ function ScopedOfflinePage({org,prj}:{org:string;prj:string}) {
         let layerRows: SpatialLayer[] = [];
         if (online) {
           const user = await getCurrentUser(apiClient);
-          if (!live) return;
+          if (!live||generation.current!==seq) return;
           observeOnlineActor(user.id);
           actorId = user.status === "active" ? user.id : null;
           if (!actorId) { lockOfflineActor(); return; }
           const [p,l] = await Promise.all([listOfflinePackages(apiClient, org, prj), listSpatialLayers(apiClient, org, prj, {limit:100})]);
-          if (!live) return;
+          if (!live||generation.current!==seq) return;
           packages = p.items; layerRows = l.items.filter(layer => layer.source.kind !== "reference_fixture" && layer.source.validation_state === "ready" && layer.source.lifecycle === "active" && layer.capabilities.some(c => c.name === "edit" && c.available && c.actor_authorized));
         } else actorId = activeOfflineActor();
         if (!actorId) throw new Error("Thiết bị chưa được mở khóa ngoại tuyến bởi tài khoản hợp lệ.");
         let local = await listLocalPackages(actorId, org, prj);
-        if (!live) return;
+        if (!live||generation.current!==seq) return;
         if (online) {
           local = await Promise.all(local.map(r => {
             const p = packages.find(item => item.id === r.id);
@@ -205,7 +205,7 @@ function ScopedOfflinePage({org,prj}:{org:string;prj:string}) {
         currentActor.current=actorId;setRecords(local); setServer(packages); setLayers(layerRows); setActor(actorId);
         setError("");
       } catch (err) {
-        if (!live) return;
+        if (!live||generation.current!==seq) return;
         if (err instanceof ApiError && [401,403,404].includes(err.status)) {
           lockOfflineActor();
           if (actorId && [403,404].includes(err.status)) {
