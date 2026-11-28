@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 import {
   createOrganization,
+  createProject,
+  selectProject,
   signInOwner
 } from "./frontend-auth-helpers";
 
@@ -59,53 +61,41 @@ test("authenticated shell persists across organization and project navigation", 
     element.setAttribute("data-persistence-marker", "keep");
   });
 
-  await page.getByRole("link", { name: "Dự án", exact: true }).click();
-  await expect(page).toHaveURL(
-    "/app/organizations/" + organizationId + "/projects"
-  );
-  await expect(page.locator(".live-studio")).toHaveAttribute(
-    "data-persistence-marker",
-    "keep"
-  );
-
   const projectName = "Bản đồ UX " + suffix;
-  await page.getByLabel("Tên dự án").fill(projectName);
-  await page.getByLabel("Mã định danh dự án").fill("ban-do-ux-" + suffix);
-  await page.getByRole("button", { name: "Tạo dự án" }).click();
+  const projectId = await createProject(page, projectName, "ban-do-ux-" + suffix);
+  await selectProject(page, projectName);
 
-  await expect(page.getByText(projectName, { exact: true })).toBeVisible();
-  await page
-    .getByTestId("project-list")
-    .locator("li")
-    .filter({ hasText: projectName })
-    .getByRole("link", { name: "Mở Bản đồ" })
-    .click();
-
+  await expect(page).toHaveURL(
+    new RegExp("/app/organizations/" + organizationId + "/projects/" + projectId + "/spatial$")
+  );
   await expect(page.locator(".live-studio")).toHaveAttribute(
     "data-persistence-marker",
     "keep"
   );
-  await expect(page.locator(".ovg-breadcrumbs")).toContainText("Bản đồ");
+  await expect(page.locator(".ovg-ws-trigger")).toContainText(projectName);
 
   await page.goto("/app");
-  await expect(page.getByText(projectName, { exact: true })).toBeVisible();
-  await expect(page.getByText(organizationName, { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Mở bản đồ" }).first()).toBeVisible();
+  await expect(page.locator(".live-studio")).toBeVisible();
+  await expect(page.locator(".ovg-ws-trigger")).toContainText(organizationName);
+  await expect(page.locator(".ovg-ws-trigger")).toContainText(projectName);
 });
 
-test("legacy organization route redirects to canonical /app route", async ({
+test("legacy organization route resolves the canonical workspace", async ({
   page
 }) => {
   await signInOwner(page);
   const suffix = Date.now().toString();
+  const organizationName = "Legacy UX " + suffix;
   const organizationId = await createOrganization(
     page,
-    "Legacy UX " + suffix,
+    organizationName,
     "legacy-ux-" + suffix
   );
 
   await page.goto("/organizations/" + organizationId + "/projects");
+  await expect(page.locator(".live-studio")).toBeVisible();
+  await expect(page.locator(".ovg-ws-trigger")).toContainText(organizationName);
   await expect(page).toHaveURL(
-    "/app/organizations/" + organizationId + "/projects"
+    new RegExp("/organizations/" + organizationId + "/projects$")
   );
 });

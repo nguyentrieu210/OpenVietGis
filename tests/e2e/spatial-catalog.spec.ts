@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInOwner } from "./frontend-auth-helpers";
+import { createOrganization, createProject, signInOwner } from "./frontend-auth-helpers";
 
 // Synthetic OIDC identities and job-local data only; do not retain secret-bearing surfaces.
 test.use({ trace: "off", screenshot: "off", video: "off" });
@@ -12,28 +12,11 @@ async function setup(page: Page, suffix: string) {
   await signIn(page);
 
   const name = "Spatial team " + suffix;
-  await page.goto("/app/organizations");
-  await page.getByLabel("Tên tổ chức").fill(name);
-  await page.getByLabel("Mã định danh tổ chức").fill("spatial-" + suffix);
-  await page.getByRole("button", { name: "Tạo tổ chức", exact: true }).click();
-
-  const organizationLink = page.getByRole("link", { name, exact: true });
-  await expect(organizationLink).toBeVisible();
-  await organizationLink.click();
-  await expect(page).toHaveURL(/\/app\/organizations\/[0-9a-f-]{36}$/);
-
-  const organization = new URL(page.url()).pathname.split("/").at(-1)!;
+  const organization = await createOrganization(page, name, "spatial-" + suffix);
   expect(organization).toMatch(/^[0-9a-f-]{36}$/);
 
-  await page.goto("/app/organizations/" + organization + "/projects");
   const projectName = "Spatial project " + suffix;
-  await page.getByLabel("Tên dự án").fill(projectName);
-  await page.getByLabel("Mã định danh dự án").fill("spatial-project-" + suffix);
-  await page.getByRole("button", { name: "Tạo dự án", exact: true }).click();
-
-  const row = page.locator('li[data-testid^="project-"]').filter({ hasText: projectName });
-  await expect(row).toBeVisible();
-  const project = (await row.getAttribute("data-testid"))!.slice("project-".length);
+  const project = await createProject(page, projectName, "spatial-project-" + suffix);
   expect(project).toMatch(/^[0-9a-f-]{36}$/);
 
   const apiRoot = "/organizations/" + organization + "/projects/" + project;
