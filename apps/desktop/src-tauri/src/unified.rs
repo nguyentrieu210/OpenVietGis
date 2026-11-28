@@ -63,6 +63,71 @@ impl Unified{
  pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();self.assets.lock().map_err(|_|"SESSION_FAILED")?.clear();Ok(())}
  pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);self.assets.lock().map_err(|_|"SESSION_FAILED")?.retain(|(handle,_),_|*handle!=h);Ok(())}
  pub fn with<T>(&self,h:Uuid,f:impl FnOnce(&Store)->UResult<T>)->UResult<T>{let s=self.open.lock().map_err(|_|"SESSION_FAILED")?;f(&s.get(&h).ok_or("STALE_HANDLE")?.1)}
+ pub fn attach_asset(&self,h:Uuid,path:&std::path::Path,kind:&str,epsg:Option<u32>,expected:u64)->UResult<ovg_project_store::asset_store::AssetMeta>{
+  use std::io::Read;
+  self.with(h,|s|{
+   let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+   let p=stage.path().join(crate::unified_assets::filename(kind)?);
+   if kind=="mbtiles"{
+    let snap=crate::gpkg_import::sqlite_snapshot(path,512*1024*1024)?;
+    fs::copy(snap.path(),&p).map_err(|_|"STORAGE_UNAVAILABLE")?;
+   }else{
+    let m=fs::symlink_metadata(path).map_err(|_|"INVALID_FILE")?;
+    if !m.file_type().is_file()||m.len()>512*1024*1024{return Err("RESOURCE_LIMIT")}
+    let mut input=fs::File::open(path).map_err(|_|"INVALID_FILE")?.take(512*1024*1024+1);
+    let mut out=fs::OpenOptions::new().write(true).create_new(true).open(&p).map_err(|_|"STORAGE_UNAVAILABLE")?;
+    if std::io::copy(&mut input,&mut out).map_err(|_|"STORAGE_UNAVAILABLE")?!=m.len(){return Err("SOURCE_CHANGED")}
+    out.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;
+   }
+   // Validate exactly the staged bytes using existing native adapter.
+   let _validated=crate::unified_assets::Entry::open(&p,kind,epsg)?;
+   s.attach_asset(Uuid::new_v4(),kind,epsg,&p,expected,&AtomicBool::new(false)).map_err(err)
+  })
+ }
+ pub fn reopen_asset(&self,h:Uuid,id:Uuid)->UResult<crate::unified_assets::Info>{
+  self.with(h,|s|{
+   let mut a=self.assets.lock().map_err(|_|"SESSION_FAILED")?;
+   if let Some(entry)=a.get(&(h,id)){return Ok(entry.info.clone())}
+   if a.keys().filter(|(k,_)|*k==h).count()>=3||a.len()>=12{return Err("RESOURCE_LIMIT")}
+   let meta=s.assets().map_err(err)?.into_iter().find(|m|m.id==id).ok_or("STALE_HANDLE")?;
+   let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+   let p=stage.path().join(crate::unified_assets::filename(&meta.kind)?);
+   s.materialize_asset(id,&p,&AtomicBool::new(false)).map_err(err)?;
+   let mut entry=crate::unified_assets::Entry::open(&p,&meta.kind,meta.epsg)?;
+   entry.info.id=id;let info=entry.info.clone();a.insert((h,id),entry);Ok(info)
+  })
+ }
+ pub fn detach_asset(&self,h:Uuid,id:Uuid,expected:u64)->UResult<u64>{
+  self.with(h,|s|{let mut a=self.assets.lock().map_err(|_|"SESSION_FAILED")?;
+   let revision=s.detach_asset(id,expected).map_err(err)?;a.remove(&(h,id));Ok(revision)
+  })
+ }
+ pub fn import_ndjson(&self,h:Uuid,path:&std::path::Path,name:&str,expected:u64)->UResult<ovg_project_store::bulk_import::BulkReceipt>{
+  use std::io::{BufRead,BufReader,Read};
+  use ovg_project_store::{bulk_import::BulkRow,Error};
+  let m=fs::symlink_metadata(path).map_err(|_|"INVALID_FILE")?;
+  if !m.file_type().is_file()||m.len()>128*1024*1024{return Err("RESOURCE_LIMIT")}
+  let file=fs::File::open(path).map_err(|_|"INVALID_FILE")?;
+  let mut reader=BufReader::new(file.take(128*1024*1024+1));
+  let mut used=0u64;let mut done=false;
+  let rows=std::iter::from_fn(||{
+   if done{return None}
+   let mut line=Vec::new();
+   let n=match (&mut reader).take(2*1024*1024+1).read_until(b'\n',&mut line){Ok(n)=>n,Err(_)=>{done=true;return Some(Err(Error::Storage))}};
+   if n==0{done=true;return if used==m.len(){None}else{Some(Err(Error::Conflict))}}
+   used+=n as u64;
+   if n>2*1024*1024||used>m.len(){done=true;return Some(Err(Error::Limit))}
+   Some((||{
+    let v:Value=serde_json::from_slice(&line).map_err(|_|Error::Invalid)?;
+    if v["type"]!="Feature"||v.get("crs").is_some(){return Err(Error::Invalid)}
+    let id=match v.get("id"){None=>Uuid::new_v4(),Some(Value::String(s))=>Uuid::parse_str(s).map_err(|_|Error::Invalid)?,_=>return Err(Error::Invalid)};
+    let attributes=if v["properties"].is_null(){serde_json::json!({})}else{v["properties"].clone()};
+    let wkb=geo(v["geometry"].clone()).map_err(|_|Error::Invalid)?;
+    Ok(BulkRow{id,image:Image{wkb,attributes}})
+   })())
+  });
+  self.with(h,|s|s.import_layer_stream(Uuid::new_v4(),Uuid::new_v4(),name,expected,rows,&AtomicBool::new(false)).map_err(err))
+ }
  pub fn open_asset(&self,h:Uuid,path:&std::path::Path,kind:&str,epsg:Option<u32>)->UResult<crate::unified_assets::Info>{
   self.with(h,|_|{
    let mut assets=self.assets.lock().map_err(|_|"SESSION_FAILED")?;
