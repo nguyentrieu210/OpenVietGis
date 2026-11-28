@@ -109,7 +109,6 @@
  .qgis-studio .core-ribbon-group>button{font-size:12px;padding:7px 9px;min-height:36px}
  .qgis-toolrow .qgis-icon-button{min-height:36px;min-width:36px;width:36px;height:36px}
  .qgis-tools-detail{min-height:36px}
- .core-ribbon-menu-fixed .core-menu-items button{min-height:48px}
 }
 .qgis-layer-row.picked{background:#e3eefb;border-color:#9cbbe0}.qgis-layer-row.group.drop-before,.qgis-layer-row.group.drop-after{outline:1px dashed #1565a9}
 .lp-grad{display:grid;gap:8px;margin:8px 0}.lp-swatch{display:inline-block;width:18px;height:12px;border-radius:2px;border:1px solid #0002}
@@ -163,15 +162,6 @@ html[data-ovg-icons=small] .qgis-toolrow .qgis-icon-button svg{width:15px;height
 html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button{width:38px;height:38px;min-width:38px;min-height:38px}
 html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height:24px}
 
-/* QGIS-style dropdown menus: one compact line per command; the search panel stays for "Tìm công cụ". */
-.core-ribbon-menu.is-dropdown{width:auto;min-width:240px;max-width:340px;padding:3px 0;border-radius:3px;box-shadow:0 4px 14px #0003}
-.core-ribbon-menu.is-dropdown>header,.core-ribbon-menu.is-dropdown>.core-menu-search{display:none}
-.core-ribbon-menu.is-dropdown button{min-height:26px!important;padding:3px 10px 3px 14px!important;margin:0!important;border:0!important;border-radius:0!important;background:transparent!important;display:flex;align-items:center;gap:10px}
-.core-ribbon-menu.is-dropdown button:not(:disabled):hover{background:#dfe9f5!important}
-.core-ribbon-menu.is-dropdown .core-menu-command b{font-weight:400;font-size:12.5px;color:#1c2b25}
-.core-ribbon-menu.is-dropdown .core-menu-command small{display:none}
-.core-ribbon-menu.is-dropdown button:disabled .core-menu-command b{color:#9aa6a0}
-.core-ribbon-menu.is-dropdown button :is(kbd,code,.core-menu-alias){margin-left:auto;font-size:10px;color:#7d8b85;background:transparent;border:0}
 .qgis-coord-format{font-size:10px;padding:0 5px;min-height:20px;border:1px solid #b5c2bc;background:#fff;border-radius:3px;cursor:pointer}
 .attribute-server-query{display:flex;flex-direction:column;min-height:0;overflow:auto;padding:6px;gap:5px}.attribute-server-query form{display:flex;flex-wrap:wrap;gap:6px;align-items:end}.attribute-server-query form label{display:grid;gap:3px;font-size:11px}.attribute-server-query select,.attribute-server-query input{max-width:190px}.attribute-server-query .qgis-table-scroll{min-height:80px}.attribute-server-query p{margin:3px 0;font-size:12px}.dock-menu-pop{max-width:calc(100vw - 8px);box-sizing:border-box}
 
@@ -215,3 +205,38 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .ovg-temporal-controls{padding:6px;display:grid;gap:5px;max-height:48%;overflow:auto;border-bottom:1px solid #cbd4ce}.ovg-temporal-controls label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovg-temporal-controls select{max-width:100%;min-width:0;flex:1}.ovg-temporal-controls input[type=range]{flex:1;min-width:80px}.ovg-temporal-buttons{display:flex;align-items:center;gap:5px}.ovg-temporal-controls p{margin:0}.ovg-temporal-controls small{overflow-wrap:anywhere}
 
 .qgis-table .live-table-row{height:30px}.qgis-table .live-table-row td{box-sizing:border-box;height:30px;max-height:30px;padding-top:0;padding-bottom:0;line-height:20px}.qgis-table .live-table-row input{vertical-align:middle}
+
+.ovg-layer-symbol-btn{padding:2px;border:0;background:transparent;display:grid;place-items:center;flex:none;cursor:pointer}.ovg-layer-symbol-btn:hover{background:#dbe9e3}.ovg-layer-selected-count{color:#1469a1;font-style:normal}.ovg-layer-actions-strip{display:flex;align-items:center;gap:4px;padding:3px 5px;border-bottom:1px solid #dae2de;background:#f5f8f6}.ovg-layer-actions-strip button,.ovg-layer-batch button,.ovg-render-order button,.ovg-layer-quick button{font:inherit;font-size:11px;border:1px solid #cbd9d1;background:#fff;border-radius:3px;padding:4px 7px;cursor:pointer}.ovg-layer-actions-strip button[aria-expanded=true]{background:#dbeee4}.ovg-layer-batch,.ovg-render-order{padding:6px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid #cbd9d1;max-height:180px;overflow:auto}.ovg-layer-batch label{display:flex;align-items:center;gap:4px;font-size:11px}.ovg-render-order{display:block}.ovg-render-order div{display:flex;align-items:center;gap:3px}.ovg-render-order div span{flex:1;overflow:hidden;text-overflow:ellipsis}.ovg-layer-quick{position:fixed;z-index:1200;width:274px;max-height:calc(100vh - 12px);overflow:auto;padding:9px;box-shadow:0 4px 18px #0003;border:1px solid #b9cdc1;border-radius:5px;background:#fff;color:#223d35;font-size:12px;display:grid;gap:7px}.ovg-layer-quick header,.ovg-layer-quick label{display:flex;align-items:center;gap:5px;justify-content:space-between}.ovg-layer-quick header b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ovg-layer-quick select{min-width:0;max-width:160px}.ovg-layer-quick input[type=range]{width:110px}.ovg-basemap-collapsed{height:auto!important;max-height:32px!important;min-height:28px}.ovg-basemap-collapsed .qgis-layer-name{width:100%}
+
+.ovg-layer-actions-strip{flex-wrap:wrap}.ovg-layer-actions-strip select{max-width:102px;font-size:11px;border:1px solid #cbd9d1;background:#fff;color:#304837;border-radius:3px;padding:3px}
+
+.ovg-context-group{display:grid;border-top:1px solid #dce5df;padding-top:3px}.ovg-context-group>small{padding:3px 9px;color:#65776c;font-size:10px;font-weight:600}
+
+/* Compact layer actions: stable status columns and contextual multi-selection. */
+.qgis-layer-row .ovg-row-lock{display:grid;place-items:center;width:22px;min-width:22px;padding:0;flex-shrink:0;color:#537061}.qgis-layer-row .ovg-row-lock.unlocked{color:#73857c}.qgis-layer-row .ovg-row-lock.locked{background:#f4e4c5;color:#986111}.qgis-layer-row .ovg-row-lock.editing{background:#2b875c;color:white}.qgis-layer-row .ovg-row-lock.readonly{color:#9aa59f;background:transparent;opacity:.65}.qgis-layer-row .ovg-row-lock:disabled{cursor:default}.ovg-batch-compact{display:flex;align-items:center;gap:3px;padding:3px 6px;min-height:29px;background:#eaf3ed;border-bottom:1px solid #c8d9cf;flex-shrink:0}.ovg-batch-compact>b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:#385849}.ovg-batch-toggle,.ovg-filter-button{display:inline-grid;place-items:center;width:25px;height:23px;border:1px solid transparent;border-radius:3px;background:transparent;color:#657c70;font:600 11px inherit;cursor:pointer;padding:0;flex-shrink:0}.ovg-batch-toggle[data-state=true],.ovg-filter-button.active{background:#d3e9dc;color:#1f7046;border-color:#b0d0bc}.ovg-batch-toggle[data-state=mixed]{background:#e8edf2;color:#376580;border-color:#b5c8d4;border-style:dashed}.ovg-batch-toggle:hover,.ovg-filter-button:hover{background:#dce9e1}.ovg-batch-toggle:disabled{opacity:.35;cursor:default}.ovg-compact-pop-host{position:relative;display:inline-flex;flex-shrink:0}.ovg-compact-pop{position:absolute;z-index:70;top:calc(100% + 3px);right:0;min-width:160px;background:#fff;border:1px solid #bccfc3;border-radius:4px;box-shadow:0 4px 12px #0002;padding:4px;display:grid;gap:2px}.ovg-compact-pop button{background:transparent;border:0;padding:6px 8px;text-align:left;white-space:nowrap;font-size:12px;color:#304837;cursor:pointer}.ovg-compact-pop button:hover,.ovg-compact-pop button[aria-pressed=true]{background:#e3efe7}.ovg-compact-pop button:disabled{opacity:.4;cursor:default}.ovg-compact-pop label{display:grid;font-size:11px;padding:5px;gap:3px}.qgis-filter .ovg-filter-button{height:22px;width:24px}.qgis-filter .ovg-compact-pop button{width:auto;height:auto}.qgis-filter:has(.ovg-compact-pop){overflow:visible}.qgis-layer-row .qgis-layer-name{min-width:0}
+
+/* One shared separator contract for layer dock and subpanels. */
+.qgis-dock.live-left>.ovg-splitter-x{width:12px;z-index:12}.qgis-dock.live-left>.ovg-splitter-end{right:-6px;left:auto}.qgis-dock.live-left>.ovg-splitter-start{left:-6px;right:auto}.qgis-dock.live-left>.ovg-splitter-x::after{content:"";position:absolute;left:4px;top:42%;height:46px;width:4px;border-radius:3px;background:#8fa69b}.ovg-splitter[aria-disabled=true]{display:none}.qgis-dock .qgis-browser:not(.ovg-browser-collapsed):has(.qgis-browser-list){height:var(--ovg-browser-h,auto);max-height:var(--ovg-browser-h,none);box-sizing:border-box;display:flex;flex-direction:column;min-height:0}.qgis-dock .qgis-browser .qgis-browser-list{height:auto;max-height:var(--ovg-browser-h,145px);flex:1;min-height:0;box-sizing:border-box;overflow:auto}.qgis-dock .qgis-browser.ovg-browser-collapsed{height:auto;max-height:none}.qgis-dock .qgis-basemaps{overflow:visible;display:flex;flex-direction:column;box-sizing:border-box}.qgis-dock .qgis-basemap-group{overflow:auto;min-height:0;flex:1}.qgis-dock .qgis-tree{min-height:0}.qgis-dock[data-tabs=browser] .qgis-browser:not(.ovg-browser-collapsed):has(.qgis-browser-list){height:auto;max-height:none;flex:1}.qgis-dock[data-tabs=browser] .qgis-browser .qgis-browser-list{height:auto;max-height:none}.qgis-dock .qgis-layers{min-height:90px}
+
+/* Popup menus are owned by ui-menu.css. */
+/* Independent selectable, edit-session and lock columns. */
+.qgis-studio .qgis-tree{container-type:inline-size}
+.qgis-studio .qgis-layer-row[data-layer-id]{min-width:174px;gap:1px}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-layer-name{min-width:18px}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-row-toggle{flex:0 0 22px!important;width:22px!important;min-width:22px!important;margin:0!important}
+.qgis-studio .qgis-layer-row .ovg-select-control:not(.on){color:#60717c!important;background:#f1f4f5!important;border-color:#cbd3d8!important;opacity:1!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control:not(.on):not(:disabled){color:#526e60!important;background:#f1f6f2!important;border-color:#cbd9cf!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control.on{color:#fff!important;background:#24834d!important;border-color:#24834d!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control:disabled{color:#a6b0b5!important;opacity:.65}
+.qgis-studio .qgis-layer-row .ovg-row-lock.unlocked{color:#637a6a!important;background:#f2f6f3!important;border-color:#cbd9cf!important}
+.qgis-studio .qgis-layer-row .ovg-row-lock.locked{color:#95630b!important;background:#f8e6c0!important;border-color:#dec183!important}
+.qgis-studio .qgis-layer-row .ovg-row-lock.editing{color:#537a61!important;background:#e5f0e8!important}
+@container (max-width:280px){.qgis-layer-row[data-layer-id]>.qgis-layer-count,.qgis-layer-row[data-layer-id]>.qgis-filter-indicator,.qgis-layer-row[data-layer-id]>.ovg-layer-tasks,.qgis-layer-row[data-layer-id]>.ovg-editor-dot{display:none}.qgis-layer-row[data-layer-id]>span.qgis-tree-toggle{width:7px}}
+/* Command palette: readable on the light list, even when the input is dark. */
+.qgis-studio .core-command-list{color:#263c49;background:#fff}
+.qgis-studio .core-command-list button{display:grid;grid-template-columns:minmax(65px,24%) minmax(0,1fr);align-items:center;gap:8px;text-align:left;height:auto;min-height:34px;white-space:normal;color:#263c49;background:#fff}
+.qgis-studio .core-command-list button>code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .core-command-list button>span{display:grid;min-width:0;gap:2px;line-height:1.35;color:#263c49;overflow-wrap:anywhere}
+.qgis-studio .core-command-list button>span>small{position:static;color:#526b79;line-height:1.35;white-space:normal}
+.qgis-studio .core-command-list button:disabled{opacity:1;color:#768893;background:#f7f9fa}
+.qgis-studio .core-command-list button:disabled>span,.qgis-studio .core-command-list button:disabled>span>small{color:#687b86}

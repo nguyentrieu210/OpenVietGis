@@ -276,3 +276,12 @@ Spec 064 engine decomposition: [18 engine scopes](specs/064-rust-platform/engine
 Cross-cutting v1.0 / R001 and R015, preserves R002–R014 contracts. Prerequisites: verified 062, 064 parity and ADR decision, coordination with 065 UX. Status: implementation in progress, slice 01 measured and locally verified, not release certification. [Evidence](specs/066-core-performance-cleanup/evidence/implementation-01.md) · [Spec](specs/066-core-performance-cleanup/spec.md) · [Plan](specs/066-core-performance-cleanup/plan.md) · [Tasks](specs/066-core-performance-cleanup/tasks.md).
 
 - **R004/R006/R012 — Native rendering and interaction**: [SPEC 069](specs/069-native-rendering-engine/spec.md). Candidate; dependencies SPEC 065/066 and GPU labels. [Acceptance checklist](specs/069-native-rendering-engine/tasks.md).
+
+- **R004/R006/R007/R009/R011 — Professional layer and label workspace**: [SPEC 070](specs/070-professional-layer-workspace/spec.md) · [Plan](specs/070-professional-layer-workspace/plan.md) · [Tasks](specs/070-professional-layer-workspace/tasks.md). In progress; dev-only candidate; depends on 056/065/069.
+
+- **R011 — Dynamic Plugin Platform & Industry Workspace**: [SPEC 071](specs/071-dynamic-plugin-workspace/spec.md), dev candidate.
+
+- **Unified UI Framework & Design System**: [SPEC 072](specs/072-unified-ui-framework/spec.md), dev candidate.
+## 070 — Unified Geospatial Search, Places & Navigation
+
+Child slice of R004/R007/R010 (R005/R008 for derived GIS outputs): OSM-backed place search, reverse geocoding and routing, integrated with the existing locator. Depends on configured provider infrastructure and authorization contracts. Stage: implementation candidate; no production qualification. [Spec](specs/070-geospatial-search-navigation/spec.md) · [Plan](specs/070-geospatial-search-navigation/plan.md) · [Tasks](specs/070-geospatial-search-navigation/tasks.md).

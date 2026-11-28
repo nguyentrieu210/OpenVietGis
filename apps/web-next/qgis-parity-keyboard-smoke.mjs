@@ -8,7 +8,7 @@ const server=process.env.OVG_TEST_URL?null:await preview({root:dirname(fileURLTo
 const address=server?.httpServer.address();
 const testUrl=process.env.OVG_TEST_URL??"http://127.0.0.1:"+address.port+"/app";
 if(new URL(testUrl).hostname!=="127.0.0.1")throw Error("Synthetic fixture must stay on loopback");
-const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
  // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
@@ -19,7 +19,7 @@ try{
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,technical_supported:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
  let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
- const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
+ const saved=[],edits=[],processingRequests=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -32,6 +32,7 @@ try{
   else if(p.endsWith("/access/mine"))body={restricted};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
+  else if(p.includes("/modules/house-numbering/")){domainCalls++;body={items:[],next_after_id:null}}
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
   else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
@@ -61,7 +62,138 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_COLUMNS_ONLY==="1"){
+ if(process.env.OVG_PLUGIN071_ONLY==="1"){
+  assert.equal(await page.locator(".qgis-plugin-toolbar").getByText("Quản lý số nhà",{exact:false}).count(),0);
+  assert.equal(domainCalls,0,"no business API before opening plugin");
+  const command=async(label)=>{await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();const root=page.getByRole("region",{name:"Menu Plugin",exact:true});const trigger=root.locator(".ovg-plugin-sub-trigger").first();await trigger.focus();await trigger.press("ArrowRight");const submenu=page.locator(".ovg-plugin-submenu");await submenu.waitFor();assert.equal(await submenu.locator("code").count(),0);const contained=await submenu.evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight});assert.ok(contained,"submenu remains inside viewport");await submenu.getByText(label,{exact:true}).click()};
+  await command("Mở không gian");
+  const workspace=page.getByRole("complementary",{name:"Quản lý số nhà",exact:true});await workspace.waitFor();
+  await workspace.getByRole("button",{name:"Hiện thanh công cụ",exact:true}).click();
+  const palette=page.getByRole("toolbar",{name:"Công cụ plugin"});await palette.waitFor();
+  const grip=palette.getByRole("button",{name:"Di chuyển thanh công cụ plugin"}),b=await grip.boundingBox(),before=await palette.boundingBox();
+  await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+45,b.y+b.height/2+30,{steps:5});await page.mouse.up();
+  assert.ok((await palette.boundingBox()).x>before.x+30,"toolbar moves");
+  await palette.getByLabel("Vị trí thanh công cụ plugin").selectOption("top");assert.ok(await palette.evaluate(el=>el.classList.contains("dock-top")));
+  await palette.getByLabel("Vị trí thanh công cụ plugin").selectOption("bottom");assert.ok(await palette.evaluate(el=>el.classList.contains("dock-bottom")));
+  await palette.getByLabel("Vị trí thanh công cụ plugin").selectOption("float");
+  await workspace.getByLabel("Vị trí khung plugin").selectOption("left");assert.ok(await workspace.evaluate(e=>e.classList.contains("side-left")));
+  await workspace.getByRole("button",{name:"Địa bàn",exact:true}).click();
+  await workspace.getByRole("button",{name:"Đóng plugin",exact:true}).click();
+  await workspace.waitFor({state:"detached"});assert.equal(await palette.count(),0);
+  assert.equal(await first.count(),1);assert.equal(await second.count(),1);
+  await command("Mở không gian");await workspace.waitFor();
+  assert.equal(await workspace.getByLabel("Vị trí khung plugin").inputValue(),"left");
+  await workspace.getByRole("button",{name:"Nghiệp vụ số nhà",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Nghiệp vụ số nhà",exact:true});await dialog.waitFor();
+  await dialog.getByRole("button",{name:"Đóng",exact:true}).click();await dialog.waitFor({state:"detached"});
+  await workspace.getByRole("button",{name:"Đóng plugin",exact:true}).click();
+  await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();
+  await page.getByRole("region",{name:"Menu Plugin"}).getByRole("button",{name:"Quản lý plugin",exact:false}).click();
+  const manager=page.getByRole("dialog",{name:"Chợ ứng dụng"});await manager.waitFor();
+  await manager.getByRole("group",{name:"Danh sách plugin"}).waitFor();
+  await manager.getByRole("tab",{name:"Đã cài",exact:true}).click();
+  assert.ok(await manager.getByRole("button",{name:"Ngừng sử dụng",exact:true}).isVisible());
+  await manager.getByRole("button",{name:"Thẻ",exact:true}).click();assert.ok(await manager.locator(".ovg-market-grid").first().isVisible());
+  await manager.getByRole("button",{name:"Danh sách",exact:true}).click();
+  if(process.env.OVG_DIALOG072_ONLY==="1"){
+   const old=page.viewportSize();
+   for(const width of [1920,1280,768,640,390,360]){
+    await page.setViewportSize({width,height:width<640?720:900});await page.waitForTimeout(100);
+    const layout=await manager.evaluate(el=>{const b=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),buttons=[...el.querySelectorAll(".ovg-plugin-manager-actions button")];return {width:innerWidth,left:b.left,right:b.right,client:body.clientWidth,scroll:body.scrollWidth,padding:parseFloat(getComputedStyle(body).paddingLeft),gap:parseFloat(getComputedStyle(el.querySelector(".ovg-market-top")).gap),buttons:buttons.every(x=>{const r=x.getBoundingClientRect();return r.left>=b.left-1&&r.right<=b.right+1})}});
+    console.log("DIALOG072",JSON.stringify(layout));assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.scroll<=layout.client+1&&layout.buttons,"no clipped action or horizontal overflow");assert.ok(layout.padding>=12&&layout.gap>=10,"shared modal spacing" );
+   }
+   await page.setViewportSize(old);if(process.env.OVG_UI_SCREENSHOTS)await manager.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/plugin-manager.png"});await manager.getByRole("button",{name:"Phóng to cửa sổ"}).click();assert.ok(await manager.evaluate(e=>e.classList.contains("ovg-dialog-maximized")));
+   await manager.getByRole("button",{name:"Khôi phục kích thước"}).click();assert.ok(await manager.evaluate(e=>!e.classList.contains("ovg-dialog-maximized")));
+  }
+  await manager.getByRole("button",{name:"Đóng",exact:true}).click();
+  if(process.env.OVG_DIALOG072_ONLY==="1"){
+    const account=page.getByRole("button",{name:"Menu tài khoản",exact:true});await account.click();
+    await page.getByLabel("Giao diện sáng tối").selectOption("dark");
+    await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="dark");
+    await account.click();await page.reload({waitUntil:"domcontentloaded"});await first.waitFor();
+    await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="dark");
+    await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();
+    const menu=page.getByRole("region",{name:"Menu Plugin"});assert.equal(await menu.evaluate(e=>getComputedStyle(e).backgroundColor),"rgb(32, 43, 52)");
+    await menu.getByRole("button",{name:"Quản lý plugin",exact:false}).click();await manager.waitFor();
+    const themeLayout=await manager.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,body:getComputedStyle(el.querySelector(".live-modal-body")).backgroundColor,ink:getComputedStyle(el).color}));
+    console.log("DARK072",JSON.stringify(themeLayout));assert.equal(themeLayout.bg,"rgb(32, 43, 52)");
+    await manager.getByRole("button",{name:"Đóng",exact:true}).click();
+    await account.click();await page.getByLabel("Giao diện sáng tối").selectOption("light");await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="light");await account.click();
+  }
+  assert.deepEqual(errors,[]);
+  console.log("PASS SPEC 071: hidden default, scoped lazy plugin, movable palette, workspace docking, native workbench, close and restore");
+ }else if(process.env.OVG_LAYER070_ONLY==="1"){
+  const firstRow=page.locator('[data-layer-id="layer1"]'),secondRow=page.locator('[data-layer-id="layer2"]');
+  await first.click();
+  const dock=page.locator(".qgis-dock"),widthHandle=page.getByRole("separator",{name:"Đổi chiều rộng cây layer"});
+  const drag=async(handle,dx,dy)=>{const b=await handle.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+dx,b.y+b.height/2+dy,{steps:6});
+   const scope=await handle.evaluate(e=>{const r=e.parentElement.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,axis:e.getAttribute("aria-orientation")}});
+   const ghost=page.locator(".ovg-split-ghost"),g=await ghost.boundingBox();assert.ok(g,"resize preview is visible");
+   if(scope.axis==="horizontal"){assert.ok(g.x>=scope.left-1&&g.x+g.width<=scope.right+1,"horizontal guide stays within panel width")}else{assert.ok(g.y>=scope.top-1&&g.y+g.height<=scope.bottom+1,"vertical guide stays within panel height")}
+   await page.mouse.up();assert.equal(await ghost.count(),0,"preview removed after pointer release")};
+  const w0=(await dock.boundingBox()).width;await drag(widthHandle,55,0);
+  const w1=(await dock.boundingBox()).width;assert.ok(w1>=w0+45,"dock must grow by pointer delta");
+  const browserPanel=page.locator(".qgis-browser"),browserHandle=page.getByRole("separator",{name:"Chiều cao Trình duyệt"});
+  const h0=(await browserPanel.boundingBox()).height;await drag(browserHandle,0,40);
+  const h1=(await browserPanel.boundingBox()).height;assert.ok(h1>=h0+30,"browser height must grow");
+  await first.dblclick();const props=page.getByRole("dialog",{name:/Thuộc tính layer/});await props.waitFor();
+  const dialogH=page.getByRole("separator",{name:"Chiều cao cửa sổ thuộc tính"}),dialogW=page.getByRole("separator",{name:"Chiều rộng cửa sổ thuộc tính"});
+  const box0=await props.boundingBox();await drag(dialogW,-45,0);await drag(dialogH,0,-40);
+  const box1=await props.boundingBox();assert.ok(box1.width<box0.width-40&&box1.height<box0.height-40,"dialog resize both axes");
+  await props.getByRole("tab",{name:"Nhãn",exact:true}).click();
+  await props.getByLabel("Kiểu nhãn").selectOption("field");
+  assert.ok(await props.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).isVisible());
+  const contained=await props.evaluate(el=>{const b=el.getBoundingClientRect(),foot=el.querySelector(".lp-footer").getBoundingClientRect(),body=el.querySelector(".lp-body");return {bottom:b.bottom,footer:foot.bottom,scroll:body.scrollHeight,client:body.clientHeight,styles:[el,el.querySelector(".live-modal-body"),el.querySelector(".layer-properties"),body].map(x=>({h:x.getBoundingClientRect().height,display:getComputedStyle(x).display,flex:getComputedStyle(x).flex,overflow:getComputedStyle(x).overflow}))}});
+  console.log("DIALOG_LAYOUT",JSON.stringify(contained));assert.ok(contained.footer<=contained.bottom+1&&contained.scroll>contained.client,"footer stays within dialog while content scrolls");
+  await props.getByRole("button",{name:"Hủy",exact:true}).click();
+  assert.equal(await page.getByRole("group",{name:"Thao tác hàng loạt"}).count(),0);
+  const rowLock=firstRow.getByRole("button",{name:"Khóa chỉnh sửa Buildings",exact:true});
+  assert.equal(await rowLock.getAttribute("data-lock-state"),"unlocked");
+  const edit=firstRow.getByRole("button",{name:"Chỉnh sửa Buildings",exact:true}),select=firstRow.getByRole("button",{name:"Cho phép chọn Buildings",exact:true});
+  await select.click();assert.equal(await select.getAttribute("aria-pressed"),"false");await select.click();
+  await edit.click();assert.equal(await edit.getAttribute("aria-pressed"),"true");assert.ok(await rowLock.isDisabled());await edit.click();assert.equal(await edit.getAttribute("aria-pressed"),"false");
+  await rowLock.click();assert.ok(await edit.isDisabled());assert.equal(await rowLock.getAttribute("data-lock-state"),"locked");
+  await second.click({modifiers:["Control"]});
+  const batch=page.getByRole("group",{name:"Thao tác hàng loạt"});
+  await batch.getByRole("button",{name:"Cho phép chọn hàng loạt",exact:true}).click();
+  const bulkLock=batch.getByRole("button",{name:"Khóa / mở khóa hàng loạt"});
+  assert.equal(await bulkLock.getAttribute("aria-pressed"),"mixed");
+  await bulkLock.click();assert.equal(await bulkLock.getAttribute("aria-pressed"),"true");
+  await bulkLock.click();assert.equal(await rowLock.getAttribute("data-lock-state"),"unlocked");
+  assert.equal(await firstRow.getByRole("button",{name:"Cho phép chọn Buildings"}).getAttribute("aria-pressed"),"false");
+  assert.equal(await secondRow.getByRole("button",{name:"Cho phép chọn Second layer"}).getAttribute("aria-pressed"),"false");
+  await batch.getByRole("button",{name:"Cho phép chọn hàng loạt",exact:true}).click();
+  await first.click();assert.equal(await batch.count(),0);
+  const narrowControls=await firstRow.evaluate(el=>{const b=el.getBoundingClientRect();return [...el.querySelectorAll(".qgis-row-toggle")].every(x=>{const r=x.getBoundingClientRect();return r.width>=20&&r.left>=b.left&&r.right<=b.right})});assert.ok(narrowControls);
+  await firstRow.getByRole("button",{name:"Nhãn Buildings",exact:true}).click({button:"right"});
+  const quick=page.getByRole("dialog",{name:"Nhãn nhanh",exact:true});await quick.waitFor();
+  await quick.locator("select").selectOption({index:1});
+  await quick.getByText("Nền nhãn",{exact:true}).click();
+  await quick.getByRole("button",{name:"Thiết lập nhãn…"}).click();
+  const styling=page.getByRole("complementary",{name:"Layer Styling"});await styling.waitFor();
+  const sw0=(await styling.boundingBox()).width;await drag(styling.getByRole("separator",{name:"Chiều rộng Layer Styling"}),-45,0);assert.ok((await styling.boundingBox()).width>=sw0+35);
+  await styling.getByRole("button",{name:"Đóng Layer Styling"}).click();
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  const order=page.locator(".ovg-render-order");await order.getByRole("button",{name:"Đưa lên Second layer",exact:true}).click();
+  assert.ok((await order.locator("div").first().innerText()).includes("Second layer"));
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  const base=page.getByRole("button",{name:/Bản đồ nền/}).filter({hasText:"Bản đồ nền"}).first();
+  await base.click();assert.equal(await base.getAttribute("aria-expanded"),"false");await base.click();
+  const basemapPanel=page.locator(".qgis-basemaps"),baseHandle=page.getByRole("separator",{name:"Chiều cao Bản đồ nền"}),bh0=(await basemapPanel.boundingBox()).height;
+  await drag(baseHandle,0,-35);const bh1=(await basemapPanel.boundingBox()).height;assert.ok(bh1>=bh0+25,"basemap height must grow");
+  await page.getByRole("button",{name:"Lọc trạng thái lớp",exact:true}).click();await page.getByRole("group",{name:"Trạng thái lớp",exact:true}).getByRole("button",{name:"Có nhãn",exact:true}).click();
+  assert.equal(await firstRow.count(),1);assert.equal(await secondRow.count(),0);
+  await page.getByRole("button",{name:"Lọc trạng thái lớp",exact:true}).click();await page.getByRole("group",{name:"Trạng thái lớp",exact:true}).getByRole("button",{name:"Tất cả",exact:true}).click();
+  await page.reload({waitUntil:"domcontentloaded"});await first.waitFor();await second.waitFor();
+  assert.ok(Math.abs((await dock.boundingBox()).width-w1)<=2,"dock width restored");
+  assert.ok(Math.abs((await browserPanel.boundingBox()).height-h1)<=2,"browser height restored");
+  assert.ok(Math.abs((await basemapPanel.boundingBox()).height-bh1)<=2,"basemap height restored");
+  assert.equal(await firstRow.getByRole("button",{name:"Nhãn Buildings",exact:true}).getAttribute("aria-pressed"),"true");
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  assert.ok((await page.locator(".ovg-render-order div").first().innerText()).includes("Second layer"));
+  assert.deepEqual(errors,[]);
+  console.log("PASS SPEC 070: compact batch, lock states, label editor, dock and modal resizing, render order, basemap collapse, filters and persistence");
+ }else if(process.env.OVG_COLUMNS_ONLY==="1"){
   const openTable=async()=>{await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("ATTR");await command.press("Enter");const t=page.locator("section.qgis-table");await t.waitFor();await t.getByLabel("Layer bảng thuộc tính").selectOption("layer1");await t.locator("tbody tr").first().waitFor();return t};
   const table=await openTable();await table.getByRole("button",{name:"Cột",exact:true}).click();
   const width=table.getByLabel("Độ rộng cột height_m");await width.fill("240");await width.press("Enter");

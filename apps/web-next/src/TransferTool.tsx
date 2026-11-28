@@ -7,7 +7,8 @@ import {ExternalPreview} from "./workbench-registry";
 // Spec 058: QGIS-style tools replacing the legacy Import/Export and External sources pages.
 import {apiClient as client} from "./workbenches/app/api";
 const reloadMap=()=>window.dispatchEvent(new CustomEvent("ovg:menu-command",{detail:"RELOAD"}));
-function Tabs<T extends string>({tabs,tab,set}:{tabs:[T,string][];tab:T;set:(t:T)=>void}){return <div className="tool-tabs" role="tablist">{tabs.map(([k,t])=><button key={k} type="button" role="tab" aria-selected={tab===k} className={tab===k?"active":""} onClick={()=>set(k)}>{t}</button>)}</div>}
+import {Tabs as SharedTabs} from "./ui/primitives";
+function Tabs<T extends string>(props:{tabs:[T,string][];tab:T;set:(t:T)=>void}){return <SharedTabs {...props} className="tool-tabs"/>}
 
 export function TransferTool({org,pid}:{org:string;pid:string}){
  const [tab,setTab]=useState<"import"|"export">(()=>{try{const t=sessionStorage.getItem("ovg:transfer-tab");sessionStorage.removeItem("ovg:transfer-tab");return t==="export"?"export":"import"}catch{return "import"}}),[busy,setBusy]=useState(false),[err,setErr]=useState(""),[profile,setProfile]=useState<IntegrationAdapterProfileResponse|null>(null);

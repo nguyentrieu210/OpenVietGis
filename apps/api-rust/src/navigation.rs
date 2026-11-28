@@ -1,0 +1,429 @@
+//! Read-only navigation gateway. Only operator configuration selects destinations.
+mod geoapify;
+use crate::{identity::HumanSession, ApiError, AppState};
+use axum::{extract::Query, routing::get, Json, Router};
+use ovg_core::AppError;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::{process::Stdio, sync::LazyLock, time::Duration};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command,
+    sync::Semaphore,
+};
+use url::Url;
+
+static REQUESTS: LazyLock<Semaphore> = LazyLock::new(|| Semaphore::new(8));
+const MAX_BODY: u64 = 2 * 1024 * 1024;
+fn invalid(message: &str) -> ApiError {
+    AppError::validation("INVALID_NAVIGATION_INPUT", message).into()
+}
+fn unavailable() -> ApiError {
+    AppError::service_unavailable(
+        "NAVIGATION_PROVIDER_UNAVAILABLE",
+        "Navigation provider is not configured or temporarily unavailable.",
+    )
+    .into()
+}
+fn point(lon: f64, lat: f64) -> bool {
+    lon.is_finite() && lat.is_finite() && lon.abs() <= 180.0 && lat.abs() <= 90.0
+}
+fn endpoint(env: &str, path: &str) -> Result<Url, ApiError> {
+    let raw = std::env::var(env).map_err(|_| unavailable())?;
+    let mut url = Url::parse(&raw).map_err(|_| unavailable())?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(unavailable());
+    }
+    url.set_path(path);
+    Ok(url)
+}
+#[derive(Debug)]
+enum UpstreamError {
+    Http(u16),
+    Transport(ApiError),
+}
+impl From<ApiError> for UpstreamError {
+    fn from(e: ApiError) -> Self {
+        Self::Transport(e)
+    }
+}
+impl UpstreamError {
+    fn into_api(self) -> ApiError {
+        match self {
+            Self::Http(429) => AppError::rate_limited(Some(60)).into(),
+            Self::Http(_) => unavailable(),
+            Self::Transport(e) => e,
+        }
+    }
+}
+async fn request(url: Url) -> Result<Value, ApiError> {
+    request_status(url).await.map_err(UpstreamError::into_api)
+}
+async fn request_status(url: Url) -> Result<Value, UpstreamError> {
+    let _permit = REQUESTS
+        .try_acquire()
+        .map_err(|_| ApiError::from(AppError::rate_limited(Some(1))))?;
+    let mut child = Command::new("/usr/bin/curl")
+        .args([
+            "-q",
+            "--silent",
+            "--globoff",
+            "--proto",
+            "=http,https",
+            "--connect-timeout",
+            "2",
+            "--max-time",
+            "8",
+            "--max-filesize",
+            "2097152",
+            "--write-out",
+            "\n%{http_code}",
+            "--config",
+            "-",
+        ])
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|_| unavailable())?;
+    // Feed URLs via a private pipe so hosted credentials never appear in argv.
+    let config = format!(
+        "url = \"{}\"\n",
+        url.as_str().replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    let mut stdin = child.stdin.take().ok_or_else(unavailable)?;
+    stdin
+        .write_all(config.as_bytes())
+        .await
+        .map_err(|_| unavailable())?;
+    drop(stdin);
+    let stdout = child.stdout.take().ok_or_else(unavailable)?;
+    let data = tokio::time::timeout(Duration::from_secs(9), async {
+        let mut body = Vec::new();
+        stdout.take(MAX_BODY + 1).read_to_end(&mut body).await?;
+        if body.len() as u64 > MAX_BODY {
+            return Ok::<_, std::io::Error>(None);
+        }
+        Ok(if child.wait().await?.success() {
+            Some(body)
+        } else {
+            None
+        })
+    })
+    .await
+    .map_err(|_| unavailable())?
+    .map_err(|_| unavailable())?
+    .ok_or_else(unavailable)?;
+    let split = data.len().checked_sub(4).ok_or_else(unavailable)?;
+    if data[split] != b'\n' {
+        return Err(unavailable().into());
+    }
+    let status = std::str::from_utf8(&data[split + 1..])
+        .ok()
+        .and_then(|s| s.parse::<u16>().ok())
+        .ok_or_else(unavailable)?;
+    if !(200..300).contains(&status) {
+        return Err(UpstreamError::Http(status));
+    }
+    serde_json::from_slice(&data[..split]).map_err(|_| unavailable().into())
+}
+#[derive(Deserialize)]
+struct Search {
+    q: String,
+    lon: Option<f64>,
+    lat: Option<f64>,
+}
+#[derive(Deserialize)]
+struct Reverse {
+    lon: f64,
+    lat: f64,
+}
+#[derive(Deserialize)]
+struct Route {
+    from_lon: f64,
+    from_lat: f64,
+    to_lon: f64,
+    to_lat: f64,
+    profile: Option<String>,
+    via: Option<String>,
+    alternatives: Option<u8>,
+}
+fn search_input(q: &Search) -> Result<Option<(f64, f64)>, ApiError> {
+    match (q.lon, q.lat) {
+        (Some(lon), Some(lat)) if point(lon, lat) => Ok(Some((lon, lat))),
+        (None, None) => Ok(None),
+        _ => Err(invalid("Invalid search bias coordinates.")),
+    }
+}
+fn label(p: &Value) -> String {
+    let parts = [
+        "name",
+        "housenumber",
+        "street",
+        "district",
+        "city",
+        "county",
+        "state",
+        "country",
+    ]
+    .iter()
+    .filter_map(|key| p.get(*key).and_then(Value::as_str))
+    .filter(|s| !s.is_empty());
+    let mut values = Vec::new();
+    for part in parts {
+        if !values.contains(&part) {
+            values.push(part);
+        }
+    }
+    values.join(", ")
+}
+fn normalize_places(v: Value) -> Result<Json<Value>, ApiError> {
+    let features = v
+        .get("features")
+        .and_then(Value::as_array)
+        .ok_or_else(unavailable)?;
+    let items: Vec<Value> = features.iter().take(20).filter_map(|f| {
+        let c = f.pointer("/geometry/coordinates")?.as_array()?;
+        let lon = c.first()?.as_f64()?; let lat = c.get(1)?.as_f64()?;
+        if !point(lon,lat) { return None; }
+        let p = f.get("properties")?;
+        Some(json!({"label":label(p),"point":[lon,lat],"extent":p.get("extent"),"osm_id":p.get("osm_id"),"osm_type":p.get("osm_type"),"source":"OpenStreetMap / Photon"}))
+    }).collect();
+    Ok(Json(
+        json!({"items":items,"crs":"EPSG:4326","attribution":"© OpenStreetMap contributors"}),
+    ))
+}
+async fn search(_auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Value>, ApiError> {
+    let term = q.q.trim();
+    if term.chars().count() < 3 || term.chars().count() > 200 || term.chars().any(char::is_control)
+    {
+        return Err(invalid("Suggestions must contain 3–200 characters."));
+    }
+    let bias = search_input(&q)?;
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/autocomplete", Some(term), bias).await;
+    }
+    let mut url = endpoint("OVG_PHOTON_URL", "/api/")?;
+    url.query_pairs_mut()
+        .append_pair("q", term)
+        .append_pair("limit", "10");
+    match (q.lon, q.lat) {
+        (Some(lon), Some(lat)) if point(lon, lat) => {
+            url.query_pairs_mut()
+                .append_pair("lon", &lon.to_string())
+                .append_pair("lat", &lat.to_string());
+        }
+        (None, None) => {}
+        _ => return Err(invalid("Invalid search bias coordinates.")),
+    }
+    normalize_places(request(url).await?)
+}
+fn nominatim_place(v: &Value) -> Option<Value> {
+    let lon = v.get("lon")?.as_str()?.parse::<f64>().ok()?;
+    let lat = v.get("lat")?.as_str()?.parse::<f64>().ok()?;
+    if !point(lon, lat) {
+        return None;
+    }
+    let extent = v
+        .get("boundingbox")
+        .and_then(Value::as_array)
+        .and_then(|b| {
+            if b.len() != 4 {
+                return None;
+            }
+            let nums = b
+                .iter()
+                .map(|n| n.as_str()?.parse::<f64>().ok())
+                .collect::<Option<Vec<_>>>()?;
+            if !point(nums[2], nums[0]) || !point(nums[3], nums[1]) {
+                return None;
+            }
+            Some(json!([nums[2], nums[0], nums[3], nums[1]]))
+        });
+    Some(
+        json!({"label":v.get("display_name")?.as_str()?,"point":[lon,lat],"extent":extent,"osm_id":v.get("osm_id"),"osm_type":v.get("osm_type"),"source":"OpenStreetMap / Nominatim"}),
+    )
+}
+fn place_response(items: Vec<Value>) -> Json<Value> {
+    Json(json!({"items":items,"crs":"EPSG:4326","attribution":"© OpenStreetMap contributors"}))
+}
+async fn geocode(auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Value>, ApiError> {
+    let term = q.q.trim().to_owned();
+    if term.chars().count() < 2 || term.chars().count() > 200 || term.chars().any(char::is_control)
+    {
+        return Err(invalid("Search must contain 2–200 characters."));
+    }
+    let bias = search_input(&q)?;
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/search", Some(&term), bias).await;
+    }
+    let _ = auth;
+    let mut photon = endpoint("OVG_PHOTON_URL", "/api/");
+    if let Ok(url) = &mut photon {
+        url.query_pairs_mut()
+            .append_pair("q", &term)
+            .append_pair("limit", "10");
+        if let Some((lon, lat)) = bias {
+            url.query_pairs_mut()
+                .append_pair("lon", &lon.to_string())
+                .append_pair("lat", &lat.to_string());
+        }
+    }
+    let response = match photon {
+        Ok(url) => request(url).await.and_then(normalize_places),
+        Err(e) => Err(e),
+    };
+    match response {
+        Ok(response)
+            if response.0["items"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty()) =>
+        {
+            Ok(response)
+        }
+        _ => {
+            let mut url = endpoint("OVG_NOMINATIM_URL", "/search")?;
+            url.query_pairs_mut()
+                .append_pair("q", &term)
+                .append_pair("format", "jsonv2")
+                .append_pair("countrycodes", "vn")
+                .append_pair("limit", "10")
+                .append_pair("accept-language", "vi,en");
+            let v = request(url).await?;
+            let items = v
+                .as_array()
+                .ok_or_else(unavailable)?
+                .iter()
+                .take(10)
+                .filter_map(nominatim_place)
+                .collect();
+            Ok(place_response(items))
+        }
+    }
+}
+async fn reverse(_auth: HumanSession, Query(q): Query<Reverse>) -> Result<Json<Value>, ApiError> {
+    if !point(q.lon, q.lat) {
+        return Err(invalid("Invalid coordinates."));
+    }
+    if geoapify::enabled()? {
+        return geoapify::places("geocode/reverse", None, Some((q.lon, q.lat))).await;
+    }
+    if let Ok(mut url) = endpoint("OVG_PHOTON_URL", "/reverse") {
+        url.query_pairs_mut()
+            .append_pair("lon", &q.lon.to_string())
+            .append_pair("lat", &q.lat.to_string())
+            .append_pair("limit", "5");
+        if let Ok(v) = request(url).await {
+            if let Ok(r) = normalize_places(v) {
+                if r.0["items"].as_array().is_some_and(|a| !a.is_empty()) {
+                    return Ok(r);
+                }
+            }
+        }
+    }
+    let mut url = endpoint("OVG_NOMINATIM_URL", "/reverse")?;
+    url.query_pairs_mut()
+        .append_pair("lon", &q.lon.to_string())
+        .append_pair("lat", &q.lat.to_string())
+        .append_pair("format", "jsonv2")
+        .append_pair("accept-language", "vi,en");
+    Ok(place_response(
+        nominatim_place(&request(url).await?).into_iter().collect(),
+    ))
+}
+async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value>, ApiError> {
+    if !point(q.from_lon, q.from_lat) || !point(q.to_lon, q.to_lat) {
+        return Err(invalid("Invalid route coordinates."));
+    }
+    let profile = q.profile.as_deref().unwrap_or("auto");
+    if !matches!(
+        profile,
+        "auto" | "motorcycle" | "motor_scooter" | "pedestrian" | "bicycle" | "truck"
+    ) {
+        return Err(invalid("Unsupported routing profile."));
+    }
+    let mut locations = vec![json!({"lon":q.from_lon,"lat":q.from_lat})];
+    if let Some(via) = q.via {
+        if via.len() > 512 {
+            return Err(invalid("Too many route waypoints."));
+        }
+        for (i, segment) in via.split(';').enumerate() {
+            if i >= 8 {
+                return Err(invalid("At most 8 intermediate stops."));
+            }
+            let (lon, lat) = segment
+                .split_once(',')
+                .ok_or_else(|| invalid("Invalid waypoint."))?;
+            let lon = lon
+                .parse::<f64>()
+                .map_err(|_| invalid("Invalid waypoint longitude."))?;
+            let lat = lat
+                .parse::<f64>()
+                .map_err(|_| invalid("Invalid waypoint latitude."))?;
+            if !point(lon, lat) {
+                return Err(invalid("Invalid waypoint coordinates."));
+            }
+            locations.push(json!({"lon":lon,"lat":lat}));
+        }
+    }
+    locations.push(json!({"lon":q.to_lon,"lat":q.to_lat}));
+    let alternates = q.alternatives.unwrap_or(0);
+    if alternates > 2 {
+        return Err(invalid("At most two alternatives."));
+    }
+    if geoapify::enabled()? {
+        return geoapify::route(&locations, profile, alternates).await;
+    }
+    let mut url = endpoint("OVG_VALHALLA_URL", "/route")?;
+    let payload = json!({"locations":locations,"costing":profile,"units":"kilometers","language":"en-US","shape_format":"polyline6","alternates":alternates});
+    url.query_pairs_mut()
+        .append_pair("json", &payload.to_string());
+    let v = request(url).await?;
+    if !v.get("trip").is_some_and(Value::is_object) {
+        return Err(unavailable());
+    }
+    Ok(Json(
+        json!({"route":v,"crs":"EPSG:4326","shape_format":"polyline6","attribution":"© OpenStreetMap contributors"}),
+    ))
+}
+pub(crate) fn router() -> Router<AppState> {
+    Router::new()
+        .route("/search/suggest", get(search))
+        .route("/search", get(geocode))
+        .route("/geocode", get(geocode))
+        .route("/geocode/reverse", get(reverse))
+        .route("/routing/route", get(route))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn coordinate_bounds() {
+        assert!(point(106.8, 10.9));
+        assert!(!point(181.0, 0.0));
+        assert!(!point(f64::NAN, 0.0));
+    }
+    #[test]
+    fn nominatim_normalization() {
+        let r = nominatim_place(&json!({"lon":"106.8","lat":"10.9","display_name":"Biên Hòa","boundingbox":["10.8","11.0","106.7","106.9"]})).unwrap();
+        assert_eq!(r["point"], json!([106.8, 10.9]));
+        assert_eq!(r["extent"], json!([106.7, 10.8, 106.9, 11.0]));
+        assert!(
+            nominatim_place(&json!({"lon":"NaN","lat":"10.9","display_name":"Invalid"})).is_none()
+        );
+    }
+    #[test]
+    fn place_normalization() {
+        let Json(v)=normalize_places(json!({"features":[{"geometry":{"coordinates":[106.8,10.9]},"properties":{"name":"Biên Hòa","city":"Biên Hòa","country":"Việt Nam"}},{"geometry":{"coordinates":[999,0]},"properties":{}}]})).unwrap();
+        assert_eq!(v["items"].as_array().unwrap().len(), 1);
+        assert_eq!(v["items"][0]["label"], "Biên Hòa, Việt Nam");
+    }
+}

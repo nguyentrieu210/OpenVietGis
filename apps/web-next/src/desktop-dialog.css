@@ -38,3 +38,42 @@
 .ovg-processing-history-head h2{flex:1}
 .ovg-processing-table-scroll{overflow:auto;max-height:300px}
 .ovg-processing-table-scroll th{position:sticky;top:0;background:#eef3f6}
+
+/* Shared dialog contract, after legacy defaults. Specialized workbenches can
+   declare a wider size; ordinary content is not allowed to impose a min width. */
+.live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell{box-sizing:border-box;position:relative;width:min(var(--ovg-dialog-w,var(--ovg-dialog-default-w,640px)),calc(100vw - 24px));max-width:calc(100vw - 24px);min-width:0;max-height:calc(100dvh - 24px);display:flex;flex-direction:column;overflow:hidden}
+.live-shade:not(.partner-docked)>.ovg-dialog-shell>header{flex:none;min-width:0;display:flex;align-items:center;gap:5px}
+.ovg-dialog-shell>header>button{flex:none}
+.live-shade:not(.partner-docked)>.ovg-dialog-shell>.live-modal-body{min-width:0;min-height:0;max-width:100%;flex:1;overflow-y:auto;overflow-x:auto;overscroll-behavior:contain}
+.ovg-dialog-shell>.live-modal-body>*{min-width:0;max-width:100%}
+.ovg-dialog-shell :is(fieldset,form,label,input,select,textarea){min-width:0;max-width:100%}
+.ovg-dialog-shell :is(p,dd,small,legend,h3,h4){overflow-wrap:anywhere}
+.ovg-dialog-shell .ovg-dialog-footer{flex:none;border-top:1px solid var(--ovg-ui-line);padding:8px 12px;justify-content:flex-end;background:var(--ovg-ui-panel)}
+.live-shade:not(.partner-docked)>.ovg-dialog-shell.ovg-resizable-modal{height:min(var(--ovg-dialog-h,640px),calc(100dvh - 24px));min-height:0}
+.live-shade:not(.partner-docked)>.ovg-dialog-shell.ovg-dialog-maximized{width:calc(100vw - 24px)!important;height:calc(100dvh - 24px)!important;max-width:none;max-height:none}
+.ovg-dialog-shell>.ovg-splitter-x{right:0;width:8px;z-index:9}.ovg-dialog-shell>.ovg-splitter-y{bottom:0;height:8px;z-index:9}
+@media(max-width:600px){.live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell{width:calc(100vw - 12px);max-width:calc(100vw - 12px);max-height:calc(100dvh - 12px)}}
+
+.qgis-studio .live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell[data-dialog-size]:not([data-dialog-size=md]){width:min(var(--ovg-dialog-w,var(--ovg-dialog-default-w)),calc(100vw - 24px));max-width:calc(100vw - 24px)}
+.qgis-studio .live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell.ovg-dialog-maximized{width:calc(100vw - 24px)!important;height:calc(100dvh - 24px)!important}
+
+/* Complex workbenches adapt to the dialog rather than viewport width. */
+.ovg-dialog-shell>.live-modal-body{container-type:inline-size}
+.ovg-dialog-shell :is(.acl-bulk,.dev-layout,.survey-grid,.survey-tabs,.pro-print-controls,.ovg-form-row,.dev-row,.acl-panel-head,.acl-matrix-tools){min-width:0;max-width:100%}
+.ovg-dialog-shell :is(.acl-panel-head,.acl-matrix-tools,.dev-row,.ovg-form-row){flex-wrap:wrap}
+.ovg-dialog-shell :is(.acl-matrix-scroll,.acl-existing-scroll,.survey-table){max-width:100%}
+.ovg-dialog-shell :is(.survey-tabs,.pro-print-controls) button{white-space:normal;min-width:0}
+.ovg-dialog-shell .dev-banner span{white-space:normal;overflow-wrap:anywhere}
+@container(max-width:580px){
+ .ovg-dialog-shell :is(.acl-bulk,.dev-layout,.survey-grid,.pro-print-controls){grid-template-columns:minmax(0,1fr)}
+ .ovg-dialog-shell .survey-tabs{grid-template-columns:repeat(auto-fit,minmax(min(110px,100%),1fr))}
+ .ovg-dialog-shell :is(.acl-panel-head,.acl-matrix-tools,.dev-row,.ovg-form-row)>*{min-width:0;max-width:100%}
+ .ovg-dialog-shell .dev-row>label{flex:1 1 100%}
+}
+
+/* Shared dialog density, not a feature-specific override. */
+.qgis-studio .live-shade:not(.partner-docked)>.ovg-dialog-shell:not(:has(.layer-properties))>.live-modal-body {
+ padding:var(--ovg-ui-inset);gap:var(--ovg-ui-section-gap);box-sizing:border-box;
+}
+.qgis-studio .ovg-dialog-shell>header{padding:9px var(--ovg-ui-inset);gap:8px}
+.qgis-studio .ovg-dialog-shell .ovg-dialog-footer{padding:10px var(--ovg-ui-inset);gap:8px}

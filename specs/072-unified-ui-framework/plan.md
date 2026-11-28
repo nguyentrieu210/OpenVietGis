@@ -1,0 +1,2 @@
+# Plan
+Use pinned Tailwind v4 with utilities and theme only, opt-in prefix to avoid collisions. Shared semantic CSS variables bridge legacy theme. Migrate Modal and AppMarket first, then command palette and remaining panels/forms/tables incrementally. Use existing scoped Splitter and dialog focus management. Keep legacy CSS until behavior-equivalent tests pass. Verify exact artifact on dev; live untouched.

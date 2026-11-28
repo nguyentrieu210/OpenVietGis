@@ -1,0 +1,6 @@
+# Provider configuration and rollout (operator checklist)
+- Acquire Vietnam OSM PBF and record its checksum/date; build Photon index and Valhalla routing graph in isolated provider infrastructure. Optional Nominatim index is a later slice. Pin images to immutable digests, benchmark resources, and use an isolated private service network.
+- Set OVG_PHOTON_URL and OVG_VALHALLA_URL to root origins reachable by the API container. Empty settings return controlled 503; internal locator remains usable. Do not use the public Nominatim or demonstration servers for autocomplete/production traffic.
+- Verify Photon /api/?q=... and /reverse?lon=...&lat=... return GeoJSON, and Valhalla /route?json=... returns trip with polyline6. Check Vietnam coverage, motorcycle/truck access constraints and route steps. Route output in this candidate is English.
+- Preserve attribution, provider dataset timestamp and rollback snapshot. Restrict service ports to the gateway; keep upstream destinations operator-controlled, never user-selected.
+- Do not enable on live before authenticating API calls, validating provider responses, measuring latency/capacity, and reviewing security. No provider was provisioned by the initial code slice.

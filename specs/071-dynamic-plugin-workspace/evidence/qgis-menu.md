@@ -1,0 +1,3 @@
+# QGIS-style plugin menu refinement
+Plugin commands now appear in one named cascading menu per selected runtime, without internal aliases displayed in the menu. Mouse hover, click, right/left arrows, Escape and checked states are supported. Menus stay within viewport. Manager offers a list/detail view, installed/uninstalled filters, card view, and session stop distinct from project uninstall. Floating tool palette can be placed at map top or bottom; this is not yet a shared GIS toolbar row. Full concurrent plugin runtime and generic external processing SDK remain open.
+TypeScript, 309 frontend unit tests, production build, offline shell, Chromium SPEC071 and SPEC070 synthetic UI regressions passed. Dev only.

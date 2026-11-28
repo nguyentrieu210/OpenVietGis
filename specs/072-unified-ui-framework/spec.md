@@ -1,0 +1,4 @@
+# SPEC 072 — Unified UI Framework & Design System
+Dev only, extends 070/071. Preserve desktop GIS density and existing semantics.
+E01 Tailwind compiler with exact locked dependencies and no global preflight; E02 semantic tokens; E03 shared UI components; E04 responsive dialog engine with sizes, maximize, restore, resize, keyboard and fixed actions; E05 dock/splitter; E06 responsive layout; E07 menus; E08 forms; E09 table/virtual scroll; E10 light/dark theme; E11 plugin UI SDK; E12 legacy migration; E13 visual regression.
+Acceptance: no outer horizontal scrollbar in ordinary dialogs; no clipped buttons or inaccessible fields; wide datasets scroll only inside designated table regions; 360–1920px viewport tests; preserve map interactions, accessibility, permission guards and scope. No unreviewed backend change. Full acceptance requires all legacy dialogs and themes tested, not only plugin manager.
