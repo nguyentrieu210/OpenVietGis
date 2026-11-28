@@ -13,6 +13,7 @@ pub mod crs;
 pub mod edit;
 pub mod survey;
 pub mod attributes;
+pub mod processing;
 pub use ovg_core::{CrsProfile, Feature, Revision};
 pub use ovg_processing::registry::{algorithm_registry, AlgorithmId};
 pub use ovg_sync::field::{validate_offline_ops, PackageLifecycle};
