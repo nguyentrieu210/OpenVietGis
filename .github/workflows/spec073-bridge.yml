@@ -56,6 +56,8 @@ jobs:
           PY
           flutter pub add material_ui:1.11.1
           flutter_rust_bridge_codegen generate
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-cargokit-gradle.py" rust_builder/cargokit/gradle/plugin.gradle
       - name: Execute Rust and Dart native bridge tests
         run: |
           set -euxo pipefail

@@ -65,6 +65,7 @@ jobs:
           PY
           flutter pub get
           flutter_rust_bridge_codegen generate
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
           python3 "$GITHUB_WORKSPACE/infra/mobile/enable-survey-permissions.py" android/app/src/main/AndroidManifest.xml
           python3 "$GITHUB_WORKSPACE/infra/mobile/patch-cargokit-gradle.py" rust_builder/cargokit/gradle/plugin.gradle
           # Remove only generated example tests; the checked-in real tests replace them.
