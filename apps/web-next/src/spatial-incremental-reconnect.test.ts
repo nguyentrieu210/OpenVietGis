@@ -33,7 +33,7 @@ function client(history= [c2,c1]){
   else if(path.endsWith("/changesets/c1"))body=c1;
   else if(path.endsWith("/changesets/c2"))body=c2;
   else if(path.endsWith("/layers/"+layerId+"/features/f1"))body={
-   context:{organization_id:org,project_id:pid,layer_id:layerId,source_id:source,content_revision:rev2,schema_revision:schema,response_crs:{code:4326},geometry_included:true},
+   context:{organization_id:org,project_id:pid,layer_id:layerId,source_id:source,content_revision:rev2,schema_revision:schema,response_crs:{code:4326},geometry_included:true,transformation:null},
    feature:{feature_id:"f1",attributes:{name:"new"},geometry_state:"present",geometry:{type:"Point",coordinates:[107,23],coordinate_reference:{code:4326}}}
   };
   else return new Response("unexpected "+path,{status:500});
@@ -55,6 +55,11 @@ describe("incremental reconnect convergence",()=>{
   expect(calls.filter(x=>x.includes("/features/"))).toHaveLength(1);
   expect(calls.some(x=>x.includes("/features/f2"))).toBe(false);
   expect(calls.findIndex(x=>x.includes("/changesets/c1"))).toBeLessThan(calls.findIndex(x=>x.includes("/changesets/c2")));
+ });
+ it("rejects an incomplete prior snapshot before reading reconnect history",async()=>{
+  const {api,fetchImpl}=client();
+  await expect(incrementalLayerRows(api,org,pid,baseLayer,nextLayer,rows.slice(0,1),"#123",()=>true)).resolves.toBeNull();
+  expect(fetchImpl).not.toHaveBeenCalled();
  });
  it("requires a full reload when the retained revision chain has a gap",async()=>{
   const {api,fetchImpl}=client([c2]);

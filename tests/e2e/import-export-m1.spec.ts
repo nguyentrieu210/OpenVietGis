@@ -43,7 +43,7 @@ test("M1 end-to-end: import GeoJSON, view/select/save in Map Workspace, export f
   await expect(page.getByTestId("import-notice")).toContainText("Nhập dữ liệu thành công");
 
   // 3. Open Map Workspace, add imported Layer, select feature, inspect, save and reload
-  await page.goto(`${fixture.root}/map`);
+  await page.goto(`${fixture.root}/spatial`);
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   await page
     .getByRole("navigation", { name: "Lệnh bản đồ" })

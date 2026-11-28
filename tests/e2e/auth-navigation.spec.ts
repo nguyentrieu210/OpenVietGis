@@ -25,7 +25,7 @@ test("protected deep link returns to the intended canonical destination", async 
   await expect(page.locator(".ovg-account-popover")).toBeVisible();
 });
 
-test("external return_to is ignored and authentication remains same-origin", async ({ page }) => {
+test("external return_to is ignored and authentication remains same-origin", async ({ page }, testInfo) => {
   await page.goto("/?return_to=" + encodeURIComponent("https://evil.example.test/steal-session"));
   await expect(page.getByRole("heading", { name: /OpenVietGIS.*GIS cho mọi người/i })).toBeVisible();
   const popupPromise = page.waitForEvent("popup");
@@ -38,7 +38,7 @@ test("external return_to is ignored and authentication remains same-origin", asy
 
   await expect(page.locator(".live-studio")).toBeVisible({timeout:20_000});
   await expect(page).toHaveURL("/app");
-  expect(new URL(page.url()).origin).toBe("http://127.0.0.1:5189");
+  expect(new URL(page.url()).origin).toBe(new URL(testInfo.project.use.baseURL as string).origin);
 });
 
 test("sign out from a deep route invalidates the application session", async ({ page }) => {

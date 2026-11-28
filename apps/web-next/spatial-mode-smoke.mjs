@@ -51,7 +51,10 @@ try{
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("BUFFER");
- assert.equal(await page.locator(".core-menu-items button").count(),1);
+ const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
+ const searchResults=activeMenu.locator(".core-menu-items button");
+ assert.ok(await searchResults.count()>=1);
+ assert.ok((await searchResults.locator("code").allTextContents()).some(value=>value.trim().toUpperCase()==="BUFFER"));
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));
@@ -126,6 +129,11 @@ try{
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  assert.equal(await page.locator(".maplibregl-canvas").count(),0);
  await modes.getByRole("button",{name:"GIS",exact:true}).click();
+ // Open the module workspace through its plugin command before checking its tabs.
+ await page.getByRole("button",{name:"Plugin",exact:true}).click();
+ await page.getByRole("button",{name:/Quản lý.*đánh số nhà/}).click();
+ await page.getByRole("menuitemcheckbox",{name:"Mở không gian",exact:true}).click();
+ await page.locator(".ovg-plugin-workspace").waitFor({state:"visible"});
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
@@ -138,9 +146,12 @@ try{
  pluginCompatible=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached"});
  await page.getByRole("button",{name:/Chợ ứng dụng/}).click();
- const mismatch=page.locator(".ovg-app").filter({hasText:"Quản lý và đánh số nhà"});
- await mismatch.getByText("Phiên bản không khớp",{exact:true}).waitFor();
- assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).count(),0);
+ const market=page.getByRole("dialog",{name:"Chợ ứng dụng"});
+ const details=market.locator(".ovg-plugin-details");
+ await details.getByRole("heading",{name:/đánh số nhà/i}).waitFor();
+ await details.getByText("Không tương thích",{exact:true}).waitFor();
+ await details.getByText("Cần phiên bản tương thích.",{exact:true}).waitFor();
+ assert.equal(await details.getByRole("button",{name:"Mở",exact:true}).count(),0);
  await page.getByRole("dialog",{name:"Chợ ứng dụng"}).getByRole("button",{name:"Đóng",exact:true}).click();
  await modes.getByRole("button",{name:"GIS",exact:true}).waitFor();
  console.log("PASS incompatible activation falls back to Core with explicit reason");

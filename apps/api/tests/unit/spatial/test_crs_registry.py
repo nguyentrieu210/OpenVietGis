@@ -250,11 +250,20 @@ def test_projected_native_range_does_not_claim_region_without_inverse_projection
 
 
 def test_domain_and_format_profiles_are_consistent() -> None:
-    from openvietgis_api.adapters.formats.wkt_crs import EPSG_NAMES, EPSG_WKT1
+    from openvietgis_api.adapters.formats.wkt_crs import (
+        EPSG_NAMES,
+        EPSG_WKT1,
+        parse_prj_to_epsg,
+    )
     from openvietgis_api.domains.spatial.domain import KNOWN_CRS_CODES, READABLE_CRS_CODES
 
     assert KNOWN_CRS_CODES == {profile.code for profile in crs.CRS_PROFILES}
     assert READABLE_CRS_CODES == {
         profile.code for profile in crs.CRS_PROFILES if profile.disposition == "readable"
     }
-    assert set(EPSG_WKT1) == set(EPSG_NAMES) == READABLE_CRS_CODES
+    assert set(EPSG_WKT1) == set(EPSG_NAMES)
+    assert READABLE_CRS_CODES <= set(EPSG_WKT1)
+    for code in READABLE_CRS_CODES:
+        assert parse_prj_to_epsg(EPSG_WKT1[code]) == code
+    for code in set(EPSG_WKT1) - READABLE_CRS_CODES:
+        assert parse_prj_to_epsg(EPSG_WKT1[code]) is None

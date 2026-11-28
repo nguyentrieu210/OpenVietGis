@@ -8,6 +8,8 @@ const entry:CacheEntry={key:JSON.stringify(["actor","org","project","layer"]),sc
 describe("spatial cache authorization binding",()=>{
  it("allows only complete same-scope same-revision snapshots",()=>{
   expect(cacheAuthorized(false,permissions,layer)).toBe(true);
+  expect(cacheAuthorized(false,["project.edit"],layer)).toBe(false);
+  expect(cacheAuthorized(false,permissions,{...layer,lifecycle:"retired"})).toBe(false);
   expect(cacheMatches(entry,layer,scope,[...permissions].reverse())).toBe(true);
   expect(cacheMatches(entry,{...layer,source:{...layer.source,content_revision:"c2"}},scope,permissions)).toBe(false);
  });

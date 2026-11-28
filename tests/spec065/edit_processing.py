@@ -26,13 +26,23 @@ from run import scoped_member, verify_database_role
 
 
 def fixture_layers(f):
+    def inverse_mercator(x, y):
+        radius = 6378137.0
+        return math.degrees(x / radius), math.degrees(math.atan(math.sinh(y / radius)))
+
+    def coordinate(x, y):
+        lon, lat = inverse_mercator(x, y)
+        return f"{lon:.17g} {lat:.17g}"
+
     with psycopg.connect(OWNER) as conn:
-        def layer(key, family, rows):
-            data = [(fid, json.dumps({"code": fid, "ward": ward, "metric_val": i, "active": True}), "SRID=3857;" + geom)
+        def layer(key, family, rows, crs=3857):
+            data = [(fid, json.dumps({"code": fid, "ward": ward, "metric_val": i, "active": True}), f"SRID={crs};" + geom)
                     for i, (fid, ward, geom) in enumerate(rows)]
+            extent = ({"min_x":0,"min_y":0,"max_x":300,"max_y":100,"crs_code":3857}
+                      if crs == 3857 else {"min_x":-1,"min_y":-1,"max_x":1,"max_y":1,"crs_code":4326})
             return baseline._seed_layer(conn.cursor(), seed=65002, org_id=UUID(f["org_a_id"]),
-                proj_id=UUID(f["project_a_id"]), ref_key=key, name=key, kind="manual", crs=3857,
-                family=family, count=len(data), extent={"min_x":0,"min_y":0,"max_x":300,"max_y":100,"crs_code":3857},
+                proj_id=UUID(f["project_a_id"]), ref_key=key, name=key, kind="manual", crs=crs,
+                family=family, count=len(data), extent=extent,
                 validation_state="ready", validation_reason=None, rows_iter=data)
         parcels=layer("spec065_parcels","Polygon",[
             ("p1","A","POLYGON((0 0,100 0,100 100,0 100,0 0))"),
@@ -40,11 +50,17 @@ def fixture_layers(f):
             ("p3","B","POLYGON((200 0,300 0,300 100,200 100,200 0))")])
         clip=layer("spec065_clip","Polygon",[("clip","A","POLYGON((50 0,150 0,150 100,50 100,50 0))")])
         point=layer("spec065_point","Point",[("pt","A","POINT(50 50)")])
-    return parcels,clip,point
+        wgs_clip_ring = ",".join(coordinate(x, y) for x, y in ((50,0),(150,0),(150,100),(50,100),(50,0)))
+        wgs_clip=layer("spec065_clip_wgs84","Polygon",[
+            ("clip","A",f"POLYGON(({wgs_clip_ring}))")],crs=4326)
+        wgs_point=layer("spec065_point_wgs84","Point",[
+            ("pt","A",f"POINT({coordinate(50,50)})")],crs=4326)
+    return parcels,clip,point,wgs_clip,wgs_point
 
 
 def check_processing(post,get,foreign,fixtures):
-    parcels,clip,point=fixtures
+    parcels,clip,point=fixtures[:3]
+    wgs_clip,wgs_point=fixtures[3:]
     assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve","difference","intersection","union","reproject","spatial_join"}
     def pin(layer):
         return {k: layer[k] for k in ("source_id", "content_revision", "schema_revision")}
@@ -54,7 +70,22 @@ def check_processing(post,get,foreign,fixtures):
     def result(body,count,area):
         r=post("/processing/jobs",body)
         assert r["status"]=="succeeded",(r.get("error_code"),r.get("error_message"),r)
-        assert r["feature_count"]==count
+        if r["feature_count"] != count:
+            with psycopg.connect(OWNER) as conn:
+                rows = conn.execute(
+                    "SELECT r.attributes, ST_GeometryType(r.geometry), ST_Area(r.geometry), "
+                    "ST_AsText(r.geometry) FROM spatial.reference_features r "
+                    "JOIN spatial.layers l ON l.source_id=r.source_id "
+                    "AND l.organization_id=r.organization_id AND l.project_id=r.project_id "
+                    "WHERE l.id=%s ORDER BY r.feature_id",
+                    (r["output_layer_id"],),
+                ).fetchall()
+            raise AssertionError({
+                "algorithm_id": body["algorithm_id"],
+                "expected_feature_count": count,
+                "actual_feature_count": r.get("feature_count"),
+                "output_rows": rows,
+            })
         assert post("/processing/jobs",body)["id"]==r["id"]
         post("/processing/jobs",body|{"output_name":"changed"},expected=409)
         post("/processing/jobs",body,foreign,404)
@@ -77,11 +108,67 @@ def check_processing(post,get,foreign,fixtures):
         ).fetchall()
         assert overlay_ids == [("clip",)]
     print("PASS Difference/Intersection area and feature provenance",difference_metrics,intersection_metrics,flush=True)
-    union, union_metrics = result(job("union",parcels,{},clip),5,30000)
-    joined, join_metrics = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
+
+    # Mixed-CRS overlays are accepted only through the registered 4326/3857
+    # pipeline; the inverse-Mercator fixtures represent the same 100 m shapes.
+    cross_union, cross_union_metrics = result(job("union",parcels,{},wgs_clip),5,30000)
+    cross_join, _ = result(job("spatial_join",point,{"predicate":"intersects","join_type":"inner","match_mode":"all"},wgs_point),1,0)
+    reverse_cross_join, _ = result(job("spatial_join",wgs_point,{"predicate":"intersects","join_type":"inner","match_mode":"all"},point),1,0)
+    reverse_reproject, _ = result(job("reproject",wgs_point,{"target_srid":3857}),1,0)
+    assert reverse_reproject["output_crs"]==3857
+    with psycopg.connect(OWNER) as conn:
+        def assert_joined_attributes(output_source_id, source_layer, overlay_layer):
+            output = conn.execute(
+                "SELECT attributes FROM spatial.reference_features WHERE source_id=%s",
+                (output_source_id,),
+            ).fetchone()[0]
+            source = conn.execute(
+                "SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",
+                (source_layer["source_id"],),
+            ).fetchone()[0]
+            overlay = conn.execute(
+                "SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",
+                (overlay_layer["source_id"],),
+            ).fetchone()[0]
+            source_fields = conn.execute(
+                "SELECT field_id FROM spatial.source_fields WHERE source_id=%s ORDER BY ordinal,field_id",
+                (source_layer["source_id"],),
+            ).fetchall()
+            overlay_fields = conn.execute(
+                "SELECT field_id FROM spatial.source_fields WHERE source_id=%s ORDER BY ordinal,field_id",
+                (overlay_layer["source_id"],),
+            ).fetchall()
+            for index, (field_id,) in enumerate(source_fields):
+                assert output[f"input_{index}"] == source[field_id]
+            for index, (field_id,) in enumerate(overlay_fields):
+                assert output[f"overlay_{index}"] == overlay[field_id]
+            assert output["source_feature_id"] == "pt"
+            assert output["overlay_feature_id"] == "pt"
+        assert_joined_attributes(cross_join["output_source_id"],point,wgs_point)
+        assert_joined_attributes(reverse_cross_join["output_source_id"],wgs_point,point)
+        x,y,attributes = conn.execute(
+            "SELECT ST_X(geometry),ST_Y(geometry),attributes FROM spatial.reference_features WHERE source_id=%s",
+            (reverse_reproject["output_source_id"],),
+        ).fetchone()
+        assert math.isclose(x,50.0,abs_tol=1e-6) and math.isclose(y,50.0,abs_tol=1e-6)
+        assert attributes["code"]=="pt" and attributes["ward"]=="A"
+
+        union_rows = conn.execute(
+            "SELECT attributes FROM spatial.reference_features WHERE source_id=%s",
+            (cross_union["output_source_id"],),
+        ).fetchall()
+        intersections = [a for (a,) in union_rows
+                        if a["source_feature_id"] in ("p1","p2") and a["overlay_feature_id"]=="clip"]
+        assert len(intersections)==2
+        assert {a["overlay_0"] for a in intersections}=={"clip"}
+        assert all(a["input_0"] in ("p1","p2") for a in intersections)
+    print("PASS mixed-CRS Union and Spatial Join attributes/lineage plus 4326→3857 reproject",
+          cross_union_metrics,flush=True)
+    union, _ = result(job("union",parcels,{},clip),5,30000)
+    joined, _ = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
     result(job("spatial_join",parcels,{"predicate":"contains","join_type":"inner","match_mode":"first"},point),1,10000)
     result(job("spatial_join",point,{"predicate":"within","join_type":"inner","match_mode":"all"},parcels),1,0)
-    reprojected, reproject_metrics = result(job("reproject",point,{"target_srid":4326}),1,0)
+    reprojected, _ = result(job("reproject",point,{"target_srid":4326}),1,0)
     assert reprojected["output_crs"]==4326
     with psycopg.connect(OWNER) as conn:
         union_rows=conn.execute(
@@ -126,9 +213,9 @@ def check_processing(post,get,foreign,fixtures):
             registered=post("/spatial/sources",{"reference_key":f"reference_points_{src}_{region}","name":f"SPEC065 {region} {src}"})
             sid=registered["resource_id"]
             layer=post("/layers",{"source_id":sid,"name":f"SPEC065 {region} {src} layer"})
-            pin=pinned_layer(layer["resource_id"],sid)
-            assert pin["feature_count"]==3
-            transformed,_=result(job("reproject",pin,{"target_srid":dst}),3,0)
+            regional_pin=pinned_layer(layer["resource_id"],sid)
+            assert regional_pin["feature_count"]==3
+            transformed,_=result(job("reproject",regional_pin,{"target_srid":dst}),3,0)
             assert transformed["output_crs"]==dst
     # Whole-layer same-datum projection with attributes and feature IDs unchanged.
     extended,_=result(job("reproject",regional,{"target_srid":3405}),regional["feature_count"],0)
@@ -213,8 +300,55 @@ def check_processing(post,get,foreign,fixtures):
     assert retried["status"]=="succeeded" and retried["id"]==queued["id"]
     post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=409)
     print("PASS queued/cancel/retry/terminal job lifecycle",flush=True)
-    return {"buffer":buffer_metrics,"clip":clip_metrics,
-            "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas}}
+    def processing_rows(output_source_id, source_layer=None, overlay_layer=None):
+        def code_ordinal(layer):
+            if layer is None:
+                return None
+            with psycopg.connect(OWNER) as conn:
+                value = conn.execute(
+                    "SELECT row_number() OVER (ORDER BY ordinal,field_id)-1 FROM spatial.source_fields "
+                    "WHERE source_id=%s AND field_id='code'",
+                    (layer["source_id"],),
+                ).fetchone()
+            return value[0] if value else None
+
+        source_code_ordinal = code_ordinal(source_layer)
+        overlay_code_ordinal = code_ordinal(overlay_layer)
+        with psycopg.connect(OWNER) as conn:
+            rows = conn.execute(
+                "SELECT attributes, ST_GeometryType(geometry), ST_Area(geometry), "
+                "CASE WHEN GeometryType(geometry)='POINT' THEN ST_X(geometry) END, "
+                "CASE WHEN GeometryType(geometry)='POINT' THEN ST_Y(geometry) END "
+                "FROM spatial.reference_features WHERE source_id=%s ORDER BY feature_id",
+                (output_source_id,),
+            ).fetchall()
+        result = []
+        for attributes, geometry_type, area_m2, x, y in rows:
+            row = {
+                "source_feature_id": attributes.get("source_feature_id"),
+                "overlay_feature_id": attributes.get("overlay_feature_id"),
+                "geometry_type": geometry_type,
+                "area_m2": area_m2,
+            }
+            if source_code_ordinal is not None:
+                row["source_code"] = attributes.get(f"input_{source_code_ordinal}")
+            if overlay_code_ordinal is not None:
+                row["overlay_code"] = attributes.get(f"overlay_{overlay_code_ordinal}")
+            if x is not None:
+                row.update({"x": x, "y": y, "code": attributes.get("code")})
+            result.append(row)
+        return result
+
+    return {
+        "buffer":buffer_metrics,
+        "clip":clip_metrics,
+        "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas},
+        "mixed_crs_union":{"features":cross_union_metrics["features"],"area_m2":cross_union_metrics["area_m2"],
+                           "rows":processing_rows(cross_union["output_source_id"],parcels,wgs_clip)},
+        "mixed_crs_spatial_join":{"features":1,"rows":processing_rows(cross_join["output_source_id"],point,wgs_point)},
+        "reverse_mixed_crs_spatial_join":{"features":1,"rows":processing_rows(reverse_cross_join["output_source_id"],wgs_point,point)},
+        "mixed_crs_reproject":{"crs":"EPSG:3857","features":1,"rows":processing_rows(reverse_reproject["output_source_id"],wgs_point)},
+    }
 
 def verify_processing_fixture(fixtures,directory):
     import hashlib
@@ -223,7 +357,7 @@ def verify_processing_fixture(fixtures,directory):
     gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)
     root=directory/"processing-reference";gen.generate(root)
     with psycopg.connect(OWNER) as conn:
-        for name, layer in zip(("parcels","clip","point"),fixtures,strict=True):
+        for name, layer in zip(("parcels","clip","point"),fixtures[:3],strict=True):
             expected=json.loads((root/(name+".geojson")).read_text())["features"]
             n=conn.execute(
                 "SELECT count(*) FROM spatial.reference_features WHERE source_id=%s",
@@ -312,7 +446,7 @@ def check(c,f,second,fixtures,directory):
     print("PASS two distinct authorized editor sessions, one commit/one 409, exact replay, atomic rollback, persisted revert, foreign denial",flush=True)
     check_processing(post,get,foreign,fixtures)
     # Persistent relation rules are tested after processing to keep fixture pins stable.
-    _, target, child=fixtures
+    _, target, child=fixtures[:3]
     relation="/editing/relations"
     definition={"source_id":child["source_id"],"local_field":"ward",
         "target_source_id":target["source_id"],"target_field":"ward","cardinality":"one",

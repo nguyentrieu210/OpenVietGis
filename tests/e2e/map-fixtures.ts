@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { signInIdentity } from "./frontend-auth-helpers";
 import type {
   MapConfiguration, MapViewpoint, ProjectMap, SaveMapInput, MapSaveReceipt,
   SpatialLayer, SpatialSource
@@ -14,17 +15,9 @@ export const referenceFamilies = [
 ] as const;
 
 export async function mapSignIn(page: Page, member = false): Promise<void> {
-  await page.goto("/login");
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill(member ? "member-a" : "owner-a");
-  await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  const username = member ? "member-a" : "owner-a";
+  const password = member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a";
+  await signInIdentity(page, username, password);
   await expect(
     page.locator(".ovg-account-name").filter({
       hasText: member ? "Member Alpha" : "Owner Alpha"
@@ -125,13 +118,22 @@ export async function saveFixtureMap(page: Page, fixture: MapFixture): Promise<v
 
 /** Requires real renderer-idle state after applying the latest authorized viewport payloads. */
 export async function expectUsableMap(page: Page): Promise<void> {
-  await expect(page.getByTestId("map-workspace")).toBeVisible();
-  await expect(page.getByTestId("map-engine-ready")).toHaveAttribute("data-ready", "true");
-  await expect(page.getByTestId("map-status")).toHaveAttribute("data-state", "usable");
+  const mapRegion = page.locator(".qgis-map-region");
+  const canvas = mapRegion.locator(".maplibregl-canvas").first();
+  await expect(mapRegion).toBeVisible();
+  await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveAttribute("tabindex", "0");
+  await expect(
+    page.getByRole("button", { name: "Thu phóng toàn bộ lớp hiển thị", exact: true })
+  ).toBeVisible();
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(".qgis-map-region .maplibregl-canvas");
+    return !!canvas && canvas.width > 0 && canvas.height > 0;
+  });
 }
 
 export async function openFixtureMap(page: Page, fixture: MapFixture): Promise<void> {
-  await page.goto(fixture.root + "/map");
+  await page.goto(fixture.root + "/spatial");
   await expectUsableMap(page);
 }
 

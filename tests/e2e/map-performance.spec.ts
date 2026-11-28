@@ -105,7 +105,7 @@ test("measures 100 actual map-open and select-to-authorized-inspector trials on 
     page.on("response", responseListener);
     try {
       started = performance.now();
-      await page.goto(fixture.root + "/map");
+      await page.goto(fixture.root + "/spatial");
       navigationMs = performance.now() - started;
       phase = "renderer-and-data-ready";
       await expectUsableMap(page);

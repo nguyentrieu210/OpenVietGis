@@ -3,15 +3,14 @@ import {
   createMapProject,
   grantMapCollaborator,
 } from "./map-fixtures";
+import { signInIdentity } from "./frontend-auth-helpers";
 
 
 async function hnSignIn(page: Page, member = false): Promise<void> {
-  await page.goto("/login");
-  await page.getByRole("link", { name: /Đăng nhập với OpenVietGIS Development|Continue with OpenVietGIS Development/ }).click();
-  await page.locator("#username").fill(member ? "member-a" : "owner-a");
-  await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.getByRole("button", { name: "Mở menu tài khoản" }))
+  const username = member ? "member-a" : "owner-a";
+  const password = member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a";
+  await signInIdentity(page, username, password);
+  await expect(page.getByRole("button", { name: "Menu tài khoản" }))
     .toContainText(member ? "Member Alpha" : "Owner Alpha");
 }
 

@@ -53,7 +53,7 @@ test("three real 10000-feature reference layers settle and pick a real rendered 
     external.push(new URL(route.request().url()).origin);await route.abort();
   });
   const opened=performance.now();
-  await page.goto(fixture.root+"/map");
+  await page.goto(fixture.root + "/spatial");
   await expectUsableMap(page);
   const initialOpenMs=Math.round(performance.now()-opened);
   const frames=new Map<string,number>();
