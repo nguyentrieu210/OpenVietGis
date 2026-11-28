@@ -1,0 +1,146 @@
+{
+  "node": "v26.13.1",
+  "chromium": "chromium",
+  "external_requests": [],
+  "page_errors": [],
+  "render_samples": 120,
+  "render_ms": {
+    "median": 90.89999997615814,
+    "p95": 179.30000007152557,
+    "p99": 1029.1999999284744,
+    "max": 1240.7000000476837
+  },
+  "loaded_resources": {
+    "count": 10,
+    "raw_bytes": 5725864,
+    "gzip_bytes": 1623808,
+    "files": [
+      {
+        "path": "/cesium/1.147.0/Assets/IAU2006_XYS/IAU2006_XYS_18.json",
+        "raw_bytes": 65310,
+        "gzip_bytes": 26905
+      },
+      {
+        "path": "/cesium/1.147.0/Assets/Images/ion-credit.png",
+        "raw_bytes": 6028,
+        "gzip_bytes": 6051
+      },
+      {
+        "path": "/cesium/1.147.0/Assets/approximateTerrainHeights.json",
+        "raw_bytes": 299471,
+        "gzip_bytes": 98033
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/chunk-FZYUOFLY.js",
+        "raw_bytes": 489952,
+        "gzip_bytes": 132514
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/chunk-GACOCTFW.js",
+        "raw_bytes": 7675,
+        "gzip_bytes": 2511
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/chunk-MDI2T7LJ.js",
+        "raw_bytes": 1518,
+        "gzip_bytes": 855
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/createVerticesFromHeightmap.js",
+        "raw_bytes": 27703,
+        "gzip_bytes": 10193
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/incrementallyBuildTerrainPicker.js",
+        "raw_bytes": 1892,
+        "gzip_bytes": 1022
+      },
+      {
+        "path": "/cesium/1.147.0/Workers/transferTypedArrayTest.js",
+        "raw_bytes": 979,
+        "gzip_bytes": 587
+      },
+      {
+        "path": "/cesium/1.147.0/index.js",
+        "raw_bytes": 4825336,
+        "gzip_bytes": 1345137
+      }
+    ]
+  },
+  "browser_resource_entries": [
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/index.js",
+      "duration_ms": 2310.7000000476837,
+      "transfer_size": 4825636,
+      "decoded_body_size": 4825336
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Assets/approximateTerrainHeights.json",
+      "duration_ms": 967.8000000715256,
+      "transfer_size": 299771,
+      "decoded_body_size": 299471
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Assets/IAU2006_XYS/IAU2006_XYS_18.json",
+      "duration_ms": 967.5,
+      "transfer_size": 65610,
+      "decoded_body_size": 65310
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Assets/Images/ion-credit.png",
+      "duration_ms": 567,
+      "transfer_size": 6328,
+      "decoded_body_size": 6028
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/createVerticesFromHeightmap.js",
+      "duration_ms": -779.5,
+      "transfer_size": 28003,
+      "decoded_body_size": 27703
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/chunk-GACOCTFW.js",
+      "duration_ms": 141.70000004768372,
+      "transfer_size": 7975,
+      "decoded_body_size": 7675
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/chunk-MDI2T7LJ.js",
+      "duration_ms": 172.29999995231628,
+      "transfer_size": 1818,
+      "decoded_body_size": 1518
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/chunk-FZYUOFLY.js",
+      "duration_ms": 197.39999997615814,
+      "transfer_size": 490252,
+      "decoded_body_size": 489952
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/transferTypedArrayTest.js",
+      "duration_ms": -755.8000000715256,
+      "transfer_size": 1279,
+      "decoded_body_size": 979
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/incrementallyBuildTerrainPicker.js",
+      "duration_ms": -982.7999999523163,
+      "transfer_size": 2192,
+      "decoded_body_size": 1892
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/chunk-MDI2T7LJ.js",
+      "duration_ms": 224.19999992847443,
+      "transfer_size": 1818,
+      "decoded_body_size": 1518
+    },
+    {
+      "url": "http://127.0.0.1:35297/cesium/1.147.0/Workers/chunk-FZYUOFLY.js",
+      "duration_ms": 215.69999992847443,
+      "transfer_size": 490252,
+      "decoded_body_size": 489952
+    }
+  ],
+  "disposed": true,
+  "method": "Self-hosted Cesium 1.147.0 production artifact in a loopback static server; CesiumWidget requestRenderMode; 10 warmup + 120 measured camera rotations timed from request to scene postRender; all external requests blocked; loaded resource bytes recomputed from exact dist files. Headless SwiftShader lab proxy, not field FPS."
+}
