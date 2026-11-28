@@ -43,6 +43,19 @@ All tasks open. Evidence includes exact SHA, OS/architecture, dataset, command/t
 - [ ] T029 Accessibility, localization, documentation, SBOM and release evidence.
 - [ ] T030 Full integrated CI and independent acceptance per release OS; no unchecked platform release.
 
+## Revision 2 — mandatory data-plane and performance work (cross-wave)
+- [ ] T033 [W0] Record exact reference repo commits, licenses, dependency/ABI and provider fit; no copying without approval of compatible license.
+- [ ] T034 [W0] Freeze protocol grammar, authority model, platform mapping and provider capabilities; spike WebView resource requests on each OS.
+- [ ] T035 [W1] Implement typed IPC/control vs local binary read plane separation; shared React transport adapters and unchanged HTTP regression.
+- [ ] T036 [W2] Implement revision-bound TileJSON/MVT/raster data providers and explicit local CRS; qualify spatial query and render-only simplification.
+- [ ] T037 [W2] Implement bounded attribute paging, CAD viewport and qualified point-cloud/3D resource adapters; unqualified routes fail closed.
+- [ ] T038 [W2] Implement byte-bounded queues/cache, priority, cancellation and revision/lease invalidation with concurrency and restart tests.
+- [ ] T039 [W3] Integrate MapLibre custom protocol and Cesium resource mapping, tile streaming and renderer cache lifecycle; no full layer IPC.
+- [ ] T040 [W3] Run performance fixture matrix and record p50/p95/p99, memory, frame times, cold/warm data and regression against browser.
+- [ ] T041 [W4/W5] Fuzz resource parsing, range handling, path traversal, stale handles, cross-window/workspace access and revoked scope; verify no local data egress by default.
+- [ ] T042 [W5] Verify single React build/source and OS-specific capability matrix, signed package and upgrade/recovery.
+- [ ] T043 [W6 optional] Evaluate native compute providers on golden fixtures and benchmarks; document reuse vs clean-room implementation decision.
+
 ## W6 — optional
 - [ ] T031 DuckDB Spatial/GeoParquet read-only analytics spike; benchmark and license review.
 - [ ] T032 Native GPU provider spike with measured benefit; decision before implementation.
