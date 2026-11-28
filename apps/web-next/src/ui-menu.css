@@ -1,0 +1,32 @@
+/* Shared ribbon and plugin popup layout. The shell is a portal, not a map panel. */
+.core-ribbon-menu.core-ribbon-menu-fixed,.ovg-plugin-submenu{
+ position:fixed;z-index:10000;box-sizing:border-box;background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);
+ border:1px solid var(--ovg-ui-line);border-radius:4px;box-shadow:0 5px 16px #142e3630;
+ font:12.5px/1.4 system-ui,sans-serif;padding:5px;min-width:0;max-width:calc(100vw - 16px)
+}
+.core-ribbon-menu.core-ribbon-menu-fixed{display:flex;flex-direction:column;width:min(420px,calc(100vw - 16px));overflow:hidden}
+.core-ribbon-menu.core-ribbon-menu-fixed.is-dropdown{width:min(340px,calc(100vw - 16px))}
+.core-ribbon-menu-fixed>header,.core-ribbon-menu.is-dropdown>.core-menu-search{display:none}
+.core-ribbon-menu-fixed .core-menu-search{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--ovg-ui-line)}
+.core-ribbon-menu-fixed .core-menu-search input{min-width:0;flex:1 1 180px;box-sizing:border-box;padding:6px 8px;min-height:30px;border:1px solid var(--ovg-ui-line);border-radius:4px;background:var(--ovg-ui-panel);color:var(--ovg-ui-ink)}
+.core-ribbon-menu-fixed .core-menu-search small{font-size:11px;color:var(--ovg-ui-muted)}
+.core-ribbon-menu-fixed .core-menu-items{min-width:0;min-height:0;overflow:auto;display:grid;gap:2px;padding:0}
+.core-ribbon-menu-fixed .core-menu-items button,.ovg-plugin-submenu button{
+ appearance:none;display:flex;align-items:center;gap:10px;box-sizing:border-box;width:100%;min-width:0;min-height:30px;
+ padding:5px 8px;margin:0;background:transparent;color:var(--ovg-ui-ink);border:1px solid transparent;border-radius:3px;text-align:left;font:inherit;cursor:pointer;white-space:normal
+}
+.core-ribbon-menu-fixed .core-menu-items button:not(:disabled):hover,.ovg-plugin-submenu button:not(:disabled):hover,.core-ribbon-menu .ovg-plugin-sub-trigger[aria-expanded=true]{background:var(--ovg-ui-panel);border-color:var(--ovg-ui-line)}
+.core-ribbon-menu-fixed .core-menu-items button:disabled,.ovg-plugin-submenu button:disabled{opacity:.58;cursor:default}
+.core-ribbon-menu-fixed .core-menu-command{display:flex;flex:1 1 auto;min-width:0;align-items:center;gap:6px}
+.core-menu-command b{font-weight:500;line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.core-menu-command small{font-size:11px;color:var(--ovg-ui-muted);margin-inline-start:auto;white-space:normal}
+.core-ribbon-menu.is-dropdown .core-menu-command small{display:none}
+.core-ribbon-menu-fixed .core-menu-items code{flex:0 0 86px;max-width:86px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:static;margin:0;text-align:right;color:var(--ovg-ui-muted);font:10px/1.3 ui-monospace,monospace;background:transparent;border:0}
+.core-menu-items p{padding:8px;margin:0;color:var(--ovg-ui-muted)}
+.core-ribbon-menu .ovg-menu-separator{height:1px;background:var(--ovg-ui-line);margin:4px 7px}
+.ovg-plugin-submenu{width:min(280px,calc(100vw - 16px));z-index:10001;overflow:auto}
+.ovg-plugin-submenu .ovg-menu-check{width:15px;flex:0 0 15px;color:var(--ovg-ui-primary);text-align:center}
+.core-ribbon-menu :is(button,input):focus-visible,.ovg-plugin-submenu button:focus-visible{outline:2px solid var(--ovg-ui-primary);outline-offset:-2px}
+@media(max-width:480px){.core-ribbon-menu-fixed .core-menu-items code{flex-basis:64px;max-width:64px}.core-menu-command small{display:none}}
+
+@media(max-width:600px){.core-ribbon-menu-fixed .core-menu-items button,.ovg-plugin-submenu button{min-height:36px}}

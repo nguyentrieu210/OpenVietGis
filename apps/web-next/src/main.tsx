@@ -2,6 +2,7 @@ import React, {lazy, Suspense} from "react";
 import {createRoot} from "react-dom/client";
 import {entryRoute} from "./entry-route";
 import "./style.css";
+import "./design-system.css";
 
 const Workspace = lazy(() => import("./SessionEntry").then(m => ({default:m.LiveApp})));
 const Offline = lazy(() => import("./offline-entry"));

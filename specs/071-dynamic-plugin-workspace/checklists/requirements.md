@@ -1,0 +1,3 @@
+- [x] Scope, user stories and acceptance recorded
+- [x] Core independence and server authorization required
+- [ ] All epics accepted

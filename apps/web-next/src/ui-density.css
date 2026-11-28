@@ -1,0 +1,38 @@
+/* Shared desktop density: keep tools compact, but separate forms and sections.
+   Do not apply spacing to map canvases, printed pages or data-cell contents. */
+.qgis-studio :is(.ovg-dialog-shell,.core-workbench) :is(.live-actions,.ovg-ui-actions,.ovg-plugin-manager-actions){gap:8px;row-gap:8px;flex-wrap:wrap}
+.qgis-studio :is(.ovg-dialog-shell,.core-workbench) .ovg-ui-form{gap:12px}
+.qgis-studio :is(.ovg-dialog-shell,.core-workbench) .ovg-ui-field{gap:6px}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) :is(.ovg-ui-button,.ovg-ui-input){min-height:var(--ovg-ui-control-height);padding:5px 10px}
+.qgis-studio :is(.live-modal-body,.core-workbench-body) fieldset{padding:12px; margin:10px 0}
+.qgis-studio .ovg-market,.qgis-studio .ovg-market-top{gap:12px}
+.qgis-studio .ovg-plugin-manager{grid-template-columns:minmax(0,38%) minmax(0,1fr)}
+.qgis-studio .ovg-plugin-list{padding:6px}
+.qgis-studio .ovg-plugin-details{padding:16px}
+.qgis-studio .ovg-plugin-details dl{gap:8px 12px}
+.qgis-studio .ovg-plugin-details p{line-height:1.5;margin:8px 0 14px}
+.qgis-studio .ovg-plugin-scroll{padding:12px}
+.qgis-studio .hn-plugin-context,.qgis-studio .hn-plugin-section{gap:10px}
+.qgis-studio .hn-plugin-nav{gap:6px;margin:12px 0}
+.qgis-studio .hn-plugin-nav button{padding:8px}
+.qgis-studio .lp-body{padding:16px;gap:12px}
+.qgis-studio .lp-grid{gap:12px 16px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.qgis-studio .lp-footer{padding:10px 12px;gap:8px}
+.qgis-studio .qgis-layer-row[data-layer-id]{gap:3px;padding-inline:4px;min-height:28px}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-row-toggle{flex:0 0 22px!important}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-layer-name{padding-inline:3px}
+.qgis-studio .ovg-ui-tabs{gap:8px}
+.qgis-studio .core-workbench-body .ovg-form-row{grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:12px}
+.qgis-studio .core-workbench-body .ovg-card{padding:14px;margin-block-end:12px}
+.qgis-studio .crs-row{gap:8px}
+.qgis-studio .crs-row>span{min-width:0;overflow-wrap:anywhere}
+@container(max-width:560px){
+ .qgis-studio .ovg-plugin-manager{grid-template-columns:minmax(0,1fr)}
+ .qgis-studio .ovg-plugin-details{padding:12px}
+}
+@container(max-width:440px){.qgis-studio .lp-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){:root{--ovg-ui-inset:12px;--ovg-ui-section-gap:12px}.qgis-studio .lp-body{padding:12px}.qgis-studio .ovg-plugin-scroll{padding:10px}}
+/* Semantic dark colors for legacy controls without recoloring map/print. */
+[data-ovg-theme=dark] .qgis-studio :is(.lp-body,.lp-footer,.lp-tabs,.ovg-dialog-shell,.core-workbench,.ovg-plugin-workspace) :is(label,legend,.lp-label-heading,.hn-plugin-section>small){color:var(--ovg-ui-ink)}
+[data-ovg-theme=dark] .qgis-studio :is(.lp-body,.lp-footer,.lp-tabs,.ovg-dialog-shell,.core-workbench,.ovg-plugin-workspace) :is(input:not([type=color],[type=range],[type=checkbox],[type=radio]),select,textarea){background:var(--ovg-ui-surface)!important;color:var(--ovg-ui-ink)!important;border-color:var(--ovg-ui-line)!important}
+[data-ovg-theme=dark] .qgis-studio :is(.lp-label-heading,.ovg-label-rules,.ovg-label-rule,.hn-plugin-kpis>div,.hn-card,.ovg-tool-loading,.ovg-tool-error){background:var(--ovg-ui-panel);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line)}

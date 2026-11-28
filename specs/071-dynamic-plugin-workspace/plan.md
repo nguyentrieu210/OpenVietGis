@@ -1,0 +1,2 @@
+# Plan
+Extend StudioContribution and official runtime loader, reuse existing marketplace, MapLibre and Splitter. Register commands in the core Plugin menu, use optional toolbar and workspace contributions. Retain existing server permission boundaries and native workflow panels. Scope layout to account/org/project/plugin. Build and verify on runner; deploy exact frontend artifact to dev only. No backend migration or manifest version bump for UI-only changes.

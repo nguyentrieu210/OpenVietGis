@@ -1,3 +1,5 @@
+import {Button,Input,Select,Field} from "./ui/primitives";
+import {Splitter} from "./Splitter";
 import React,{useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import "./desktop-dialog.css";
 
@@ -15,6 +17,7 @@ export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=
   const raf=requestAnimationFrame(()=>{if(top()&&!el.contains(document.activeElement))(el.querySelector<HTMLElement>('[autofocus]')??el).focus({preventScroll:true})});
   const top=()=>modalStack.at(-1)===el&&!Array.from(document.querySelectorAll<HTMLElement>('dialog[open],[aria-modal="true"]')).some(x=>x!==el&&!x.contains(el)&&!el.contains(x)&&!modalStack.includes(x)&&x.getClientRects().length);
   const key=(e:KeyboardEvent)=>{if(!top()||e.isComposing)return;
+   if(e.key==="Escape"&&document.querySelector(".ovg-split-ghost"))return;
    if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();latest.current();return}
    if(e.key!=="Tab")return;const all=items(),first=all[0],last=all.at(-1),current=document.activeElement;
    if(!first||!last){e.preventDefault();el.focus();return}
@@ -26,10 +29,14 @@ export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=
    requestAnimationFrame(()=>{const current=document.activeElement;if(previous?.isConnected&&(!current||current===document.body||el.contains(current))&&!previous.closest("[inert],[hidden]"))previous.focus({preventScroll:true})})};
  },[ref,enabled]);
 }
-export function Modal({title,close,children,docked=false}:{title:string;close:()=>void;children:ReactNode;docked?:boolean}){
- const panel=useRef<HTMLElement>(null);
+export type DialogSize="xs"|"sm"|"md"|"lg"|"xl"|"workbench";
+const dialogWidths:Record<DialogSize,number>={xs:380,sm:480,md:640,lg:960,xl:1100,workbench:1280};
+export function Modal({title,close,children,docked=false,resizeScope,size="md",footer,closeOnBackdrop=true}:{title:string;close:()=>void;children:ReactNode;docked?:boolean;resizeScope?:string;size?:DialogSize;footer?:ReactNode;closeOnBackdrop?:boolean}){
+ const panel=useRef<HTMLElement>(null),[maximized,setMaximized]=useState(false);
+ const width=dialogWidths[size],resizable=!!resizeScope&&!docked;
  useDesktopDialog(panel,close,!docked);
- return <div className={"live-shade"+(docked?" partner-docked":"")} onMouseDown={e=>{if(!docked&&e.target===e.currentTarget)close()}}><section ref={panel} tabIndex={-1} className="live-modal panel" role="dialog" aria-modal={!docked} aria-label={title}><header><div><h2>{title}</h2></div><button type="button" aria-label="Đóng" title="Đóng (Esc)" onClick={close}>✕</button></header><div className="live-modal-body">{children}</div></section></div>
+ return <div className={"live-shade"+(docked?" partner-docked":"")} onMouseDown={e=>{if(closeOnBackdrop&&!docked&&e.target===e.currentTarget)close()}}><section ref={panel} tabIndex={-1} data-dialog-size={size} className={"live-modal panel ovg-dialog-shell"+(resizeScope?" ovg-resizable-modal":"")+(maximized?" ovg-dialog-maximized":"")} style={{"--ovg-dialog-default-w":width+"px"} as React.CSSProperties} role="dialog" aria-modal={!docked} aria-label={title}><header><div><h2>{title}</h2></div>{resizable&&<button type="button" aria-label={maximized?"Khôi phục kích thước":"Phóng to cửa sổ"} title={maximized?"Khôi phục":"Phóng to"} onClick={()=>setMaximized(v=>!v)}>{maximized?"❐":"□"}</button>}<button type="button" aria-label="Đóng" title="Đóng (Esc)" onClick={close}>✕</button></header><div className="live-modal-body ovg:min-w-0 ovg:min-h-0">{children}</div>{footer&&<footer className="ovg-dialog-footer ovg-ui-actions">{footer}</footer>}{resizable&&!maximized&&<><Splitter storageKey={resizeScope+":w"} cssVar="--ovg-dialog-w" axis="x" edge="end" centered min={Math.min(420,width)} max={1400} defaultSize={width} label="Chiều rộng cửa sổ thuộc tính"/><Splitter storageKey={resizeScope+":h"} cssVar="--ovg-dialog-h" axis="y" edge="end" centered min={300} max={1000} defaultSize={640} label="Chiều cao cửa sổ thuộc tính"/></>}</section></div>
 }
+
 type Field={name:string;label:string;optional?:boolean;options?:{value:string;label:string}[]};
-export function SimpleForm({fields,busy,submit}:{fields:Field[];busy:boolean;submit:(v:Record<string,string>)=>void}){const [v,setV]=useState<Record<string,string>>(()=>Object.fromEntries(fields.map(f=>[f.name,f.optional?"":f.options?.[0]?.value??""])));return <form onSubmit={e=>{e.preventDefault();submit(v)}}>{fields.map(f=><label key={f.name}>{f.label}{f.options?<select required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}><option value="">Chọn…</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<input required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}/>}</label>)}<button className="primary" disabled={busy||fields.some(f=>!f.optional&&!v[f.name]?.trim())}>{busy?"Đang lưu…":"Lưu vào dự án"}</button></form>}
+export function SimpleForm({fields,busy,submit}:{fields:Field[];busy:boolean;submit:(v:Record<string,string>)=>void}){const [v,setV]=useState<Record<string,string>>(()=>Object.fromEntries(fields.map(f=>[f.name,f.optional?"":f.options?.[0]?.value??""])));return <form className="ovg-ui-form" onSubmit={e=>{e.preventDefault();submit(v)}}>{fields.map(f=><Field key={f.name} label={f.label}>{f.options?<Select required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}><option value="">Chọn…</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</Select>:<Input required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}/>}</Field>)}<Button type="submit" variant="primary" disabled={busy||fields.some(f=>!f.optional&&!v[f.name]?.trim())}>{busy?"Đang lưu…":"Lưu vào dự án"}</Button></form>}
