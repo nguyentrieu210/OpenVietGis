@@ -1,7 +1,7 @@
 /** Cesium geographic viewer, using validated local scene inputs and no ion/CDN. */
 import type * as Cesium from "cesium";
 import type {FootprintView} from "./footprint3d";
-import type {GeographicCamera,NamedModel,SelectableFootprintEngine,SharedVector} from "./maplibre3d";
+import type {GeographicCamera,NamedModel,SelectableFootprintEngine,SharedVector,CloudPoint} from "./maplibre3d";
 import type {Tile} from "./tileset";
 import type {SelectableTileEngine} from "./tiles3d";
 import type {PlacedModel} from "./mesh-layer";
@@ -264,7 +264,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
  let widget:Cesium.CesiumWidget|undefined,disposed=false,active=false,cleanupNav:(()=>void)|undefined;
  const modelLayers=new Map<string,{primitive:Cesium.Primitive;groups:MeshGroup[]}>();
  const footprintEntities=new Map<string,Cesium.Entity[]>();
- let pointCloud:Cesium.PointPrimitiveCollection|undefined,localMesh:Cesium.Primitive|undefined;let meshVisible=true,updateMeshFrame:((index:number)=>void)|undefined;let terrain:Cesium.Primitive|undefined,footprintsVisible=true,selectedModel="";
+ let pointCloud:Cesium.PointPrimitiveCollection|undefined,localMesh:Cesium.Primitive|undefined;let cloudVisible=true,meshVisible=true,updateMeshFrame:((index:number)=>void)|undefined;let terrain:Cesium.Primitive|undefined,footprintsVisible=true,selectedModel="";
  const vectorEntities=new Map<string,{items:Cesium.Entity[];color:Cesium.Color}>();
  const replaceVectors=(rows:readonly SharedVector[],selected:string)=>{
   if(!widget||disposed)return;
@@ -293,12 +293,32 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
   surface.dataset.ovgVectorCount=String(vectorEntities.size);surface.dataset.ovgVectorLimited=String(rows.length>5000||vertices>=100000);select(selected);
  };
  const render=()=>widget?.scene.requestRender();
+ const replacePointCloud=(points:readonly CloudPoint[])=>{
+  if(!widget||disposed)return;
+  if(!points.length||points.length>100000)throw Error("Point cloud exceeds preview limit");
+  const style=extras?.pointStyle??{colorMode:"intensity",pixelSize:3};
+  if(!["height","intensity","rgb"].includes(style.colorMode)||!Number.isFinite(style.pixelSize)||style.pixelSize<1||style.pixelSize>8)throw Error("Invalid point cloud style");
+  let lo=Infinity,hi=-Infinity;for(const p of points){lo=Math.min(lo,p.height);hi=Math.max(hi,p.height)}
+  const next=new c.PointPrimitiveCollection();
+  try{
+   for(const p of points){
+    if(![p.longitude,p.latitude,p.height,p.intensity].every(Number.isFinite)||Math.abs(p.longitude)>180||Math.abs(p.latitude)>85.051129||p.height< -12000||p.height>100000)throw Error("Invalid point cloud coordinate");
+    const shade=.25+.75*Math.max(0,Math.min(1,p.intensity/65535)),t=hi>lo?(p.height-lo)/(hi-lo):.5;let color=new c.Color(.15,shade,.9,1);
+    if(style.colorMode==="height")color=new c.Color(t,.35,1-t,1);
+    if(style.colorMode==="rgb"){if(!p.rgb||p.rgb.length!==3||p.rgb.some(x=>!Number.isInteger(x)||x<0||x>65535))throw Error("Missing or invalid LAS RGB");color=new c.Color(p.rgb[0]/65535,p.rgb[1]/65535,p.rgb[2]/65535,1)}
+    next.add({position:c.Cartesian3.fromDegrees(p.longitude,p.latitude,p.height),pixelSize:style.pixelSize,color});
+   }
+   next.show=cloudVisible;widget.scene.primitives.add(next);
+  }catch(e){next.destroy();throw e}
+  const previous=pointCloud;pointCloud=next;if(previous)widget.scene.primitives.remove(previous);
+  render();
+ };
  const dispose=()=>{if(disposed)return;disposed=true;active=false;cleanupNav?.();if(widget&&!widget.isDestroyed())widget.destroy();surface.remove()};
  const color=c.Color.fromCssColorString("#326dba"),highlight=c.Color.fromCssColorString("#f59e0b");
  const select=(id:string)=>{for(const [key,entities] of footprintEntities)for(const entity of entities)if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(key===id?highlight:color);for(const [key,v] of vectorEntities)for(const entity of v.items){const tint=key===id?highlight:v.color;if(entity.point)entity.point.color=new c.ConstantProperty(tint);if(entity.polyline)entity.polyline.material=new c.ColorMaterialProperty(tint);if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(tint.withAlpha(.4))}render()};
  const applyModelHighlight=()=>{for(const [id,{primitive,groups}] of modelLayers){if(!primitive.ready)continue;for(const group of groups){const a=primitive.getGeometryInstanceAttributes(group.id);if(a)a.color=c.ColorGeometryInstanceAttribute.toValue(id===selectedModel?highlight:group.color,a.color)}}};
  const selectModel=(id:string)=>{selectedModel=id;applyModelHighlight();render()};
- const setLayerVisible=(id:string,visible:boolean)=>{if(id==="footprints"){footprintsVisible=visible;for(const items of footprintEntities.values())for(const item of items)item.show=visible}else if(id==="terrain"&&terrain)terrain.show=visible;else if(id==="point-cloud"&&pointCloud)pointCloud.show=visible;else if(id==="local-mesh"){meshVisible=visible;if(localMesh)localMesh.show=visible}else{const m=modelLayers.get(id);if(m)m.primitive.show=visible}render()};
+ const setLayerVisible=(id:string,visible:boolean)=>{if(id==="footprints"){footprintsVisible=visible;for(const items of footprintEntities.values())for(const item of items)item.show=visible}else if(id==="terrain"&&terrain)terrain.show=visible;else if(id==="point-cloud"){cloudVisible=visible;if(pointCloud)pointCloud.show=visible}else if(id==="local-mesh"){meshVisible=visible;if(localMesh)localMesh.show=visible}else{const m=modelLayers.get(id);if(m)m.primitive.show=visible}render()};
  try{
   widget=new c.CesiumWidget(surface,{baseLayer:false,terrainProvider:new c.EllipsoidTerrainProvider(),skyBox:false,skyAtmosphere:false,scene3DOnly:true,requestRenderMode:true,maximumRenderTimeChange:Infinity,showRenderLoopErrors:false,shouldAnimate:false,targetFrameRate:60,useBrowserRecommendedResolution:false,msaaSamples:1});
   const scene=widget.scene;scene.backgroundColor=c.Color.fromCssColorString("#dce6e8");scene.globe.baseColor=c.Color.fromCssColorString("#dce6e8");scene.globe.depthTestAgainstTerrain=true;
@@ -339,7 +359,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
    };
    updateMeshFrame=dataset?draw:undefined;draw(0);
   }
-  if(extras?.pointCloud){if(extras.pointCloud.length>100000)throw Error("Point cloud exceeds preview limit");const style=extras.pointStyle??{colorMode:"intensity",pixelSize:3};if(!["height","intensity","rgb"].includes(style.colorMode)||!Number.isFinite(style.pixelSize)||style.pixelSize<1||style.pixelSize>8)throw Error("Invalid point cloud style");let lo=Infinity,hi=-Infinity;for(const p of extras.pointCloud){lo=Math.min(lo,p.height);hi=Math.max(hi,p.height)}pointCloud=new c.PointPrimitiveCollection();scene.primitives.add(pointCloud);for(const p of extras.pointCloud){if(![p.longitude,p.latitude,p.height,p.intensity].every(Number.isFinite)||Math.abs(p.longitude)>180||Math.abs(p.latitude)>85.051129||p.height< -12000||p.height>100000)throw Error("Invalid point cloud coordinate");const shade=.25+.75*Math.max(0,Math.min(1,p.intensity/65535)),t=hi>lo?(p.height-lo)/(hi-lo):.5;let color=new c.Color(.15,shade,.9,1);if(style.colorMode==="height")color=new c.Color(t,.35,1-t,1);if(style.colorMode==="rgb"){if(!p.rgb||p.rgb.length!==3||p.rgb.some(x=>!Number.isInteger(x)||x<0||x>65535))throw Error("Missing or invalid LAS RGB");color=new c.Color(p.rgb[0]/65535,p.rgb[1]/65535,p.rgb[2]/65535,1)}pointCloud.add({position:c.Cartesian3.fromDegrees(p.longitude,p.latitude,p.height),pixelSize:style.pixelSize,color})}}
+  if(extras?.pointCloud)replacePointCloud(extras.pointCloud);
   setCamera(c,widget,camera);
   cleanupNav=addNavigation(c,widget,surface,camera,extras?.imagery,extras?.legacyImagery,extras?.initialBasemap,extras?.onBasemapChange);
   let waitingForModels=true;scene.postRender.addEventListener(()=>{if(waitingForModels&&[...modelLayers.values()].every(v=>v.primitive.ready)){waitingForModels=false;applyModelHighlight();render()}});
@@ -352,7 +372,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
   // Render once before the mode transaction can commit.
   widget.resize();widget.render();
   if(signal.aborted)throw abortError();
-  return {select,selectModel,setLayerVisible,replaceVectors,setMeshFrame(index){if(active&&!disposed)updateMeshFrame?.(index)},getCamera(){if(!widget||disposed)throw Error("Disposed Cesium");return getCamera(c,widget)},activate(){if(disposed||!widget)throw Error("Disposed Cesium");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";widget.resize();render()},dispose};
+  return {select,selectModel,setLayerVisible,replaceVectors,replacePointCloud,onCameraSettled(handler){if(!widget||disposed)return ()=>{};return widget.scene.camera.moveEnd.addEventListener(()=>{if(active&&!disposed&&widget)handler(getCamera(c,widget))})},setMeshFrame(index){if(active&&!disposed)updateMeshFrame?.(index)},getCamera(){if(!widget||disposed)throw Error("Disposed Cesium");return getCamera(c,widget)},activate(){if(disposed||!widget)throw Error("Disposed Cesium");active=true;surface.style.visibility="visible";surface.style.pointerEvents="auto";widget.resize();render()},dispose};
  }catch(e){dispose();throw e}
 }
 
