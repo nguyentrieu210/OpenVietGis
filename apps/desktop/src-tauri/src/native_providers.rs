@@ -65,3 +65,18 @@ pub async fn native_raster_preview(window:WebviewWindow,u:State<'_,Unified>,hand
  }
  #[cfg(not(feature="native-ogr"))]{let _=(u,handle,band);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
 }
+
+#[tauri::command]
+pub async fn native_export_parquet(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,expected:String)->Reply<Option<u64>>{
+ #[cfg(feature="native-ogr")]{
+  let app=window.app_handle().clone();
+  work(window,u.inner().clone(),move|s|{
+   s.with(handle,|_|Ok(()))?;
+   let Some(file)=app.dialog().file().add_filter("GeoParquet",&["parquet"]).set_file_name("layer.parquet").blocking_save_file() else{return Ok(None)};
+   let p=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+   if p.extension().and_then(|x|x.to_str())!=Some("parquet"){return Err("UNSUPPORTED_FORMAT")}
+   s.export_parquet(handle,layer,&p,unified::number(&expected)?).map(Some)
+  }).await
+ }
+ #[cfg(not(feature="native-ogr"))]{let _=(u,handle,layer,expected);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
+}
