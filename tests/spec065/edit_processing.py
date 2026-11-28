@@ -104,6 +104,29 @@ def check_processing(post,get,foreign,fixtures):
             (point["source_id"],)).fetchone()
         assert srid==4326 and attrs==ref_attrs
         assert math.isclose(lon,ref_lon,abs_tol=1e-10) and math.isclose(lat,ref_lat,abs_tol=1e-10)
+    def pinned_layer(layer_id, source_id):
+        with psycopg.connect(OWNER) as conn:
+            content,schema,count=conn.execute(
+                "SELECT content_revision,schema_revision,feature_count FROM spatial.data_sources WHERE id=%s",
+                (source_id,)).fetchone()
+        return {"layer_id":layer_id,"source_id":source_id,"content_revision":content,
+                "schema_revision":schema,"feature_count":count}
+
+    registered=post("/spatial/sources",{"reference_key":"reference_points_4756_hvs","name":"SPEC065 HVS VN2000"})
+    source_id=registered["resource_id"]
+    registered_layer=post("/layers",{"source_id":source_id,"name":"SPEC065 HVS VN2000 layer"})
+    regional=pinned_layer(registered_layer["resource_id"],source_id)
+    projected,_=result(job("reproject",regional,{"target_srid":5899}),regional["feature_count"],0)
+    assert projected["output_crs"]==5899
+    derived=pinned_layer(projected["output_layer_id"],projected["output_source_id"])
+    geographic,_=result(job("reproject",derived,{"target_srid":4326}),regional["feature_count"],0)
+    assert geographic["output_crs"]==4326
+    # A successful ordinary reproject does not establish regional provenance.
+    unverified=pinned_layer(reprojected["output_layer_id"],reprojected["output_source_id"])
+    post("/processing/jobs",job("reproject",unverified,{"target_srid":4756}),expected=422)
+    # Until multi-hop provenance is implemented, never publish an unsupported regional output.
+    post("/processing/jobs",job("reproject",derived,{"target_srid":4756}),expected=422)
+    print("PASS verified VN2000 projection, one-hop derived evidence and unverified-source rejection",flush=True)
     post("/processing/jobs",job("reproject",point,{"target_srid":3405}),expected=422)
     post("/processing/jobs",job("spatial_join",point,{"predicate":"arbitrary_sql"},parcels),expected=422)
     post("/processing/jobs",job("union",point,{},clip),expected=422)

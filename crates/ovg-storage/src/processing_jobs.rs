@@ -821,6 +821,16 @@ async fn approved_reproject(tx:&mut sqlx::Transaction<'_,sqlx::Postgres>,org:Uui
         require_web_domain(tx,org,project,WebDomainCheck{source_id:source,native_srid:native,expression:"geometry",expression_srid:native,margin:0.0}).await?;
         Ok(expr)
     }else{
+        // Regional outputs must remain independently verifiable from an original
+        // fixture. Derived inputs may return to WGS84, but not create another
+        // regional hop whose provenance the catalog cannot yet validate.
+        if matches!(target,4756|5899) {
+            let kind: String=sqlx::query_scalar("SELECT kind FROM spatial.data_sources WHERE organization_id=$1 AND project_id=$2 AND id=$3")
+                .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(edit_db_error)?;
+            if kind!="reference_fixture" {
+                return Err(EditError::validation("TRANSFORMATION_OUT_OF_AREA","Regional output requires original verified reference fixture; multi-hop regional provenance is not supported"));
+            }
+        }
         crate::catalog::regional_crs::verify_regional_source(tx,org,project,source,profile).await
             .map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None})?;
         Ok(crate::catalog::regional_crs::profile_expression(profile,"rf.geometry"))
