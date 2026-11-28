@@ -1,6 +1,6 @@
 """Bounded affine GCP georeferencing of an uploaded, unreferenced TIFF.
 
-Pixel coordinates use GDAL pixel-corner convention; no resampling.
+Pixel coordinates use GDAL pixel-corner convention; optional bounded north-up resampling.
 """
 import base64
 import hashlib
@@ -76,6 +76,50 @@ def spatial_ref(epsg):
     return s
 
 
+def warp_north_up(ds, output, geo, native, s, method):
+    """Warp only homogeneous bands with explicit finite common NoData; fail closed on masks."""
+    bands=[ds.GetRasterBand(i) for i in range(1,ds.RasterCount+1)]
+    nodata=bands[0].GetNoDataValue()
+    if (
+        nodata is None or not math.isfinite(nodata)
+        or any(b.GetNoDataValue()!=nodata or b.DataType!=bands[0].DataType
+               or b.GetMaskFlags()!=gdal.GMF_NODATA
+               or b.GetColorInterpretation()==gdal.GCI_AlphaBand
+               or b.GetColorTable() is not None for b in bands)
+    ):
+        raise ValueError("North-up warp requires equal finite NoData, homogeneous bands and no custom masks or palettes")
+    west,south=native.min(axis=0)
+    east,north=native.max(axis=0)
+    dx=math.hypot(geo[1],geo[4])
+    dy=math.hypot(geo[2],geo[5])
+    width=math.ceil((east-west)/dx)
+    height=math.ceil((north-south)/dy)
+    if width<1 or height<1 or width*height>2_000_000:
+        raise ValueError("Warp output exceeds 2 million pixels")
+    mem=gdal.GetDriverByName("MEM").CreateCopy("",ds,strict=1)
+    if mem is None:
+        raise ValueError("Cannot stage affine raster")
+    mem.SetGeoTransform(geo)
+    mem.SetSpatialRef(s)
+    result=gdal.Warp(output,mem,format="GTiff",dstSRS=s.ExportToWkt(),
+        outputBounds=(float(west),float(south),float(east),float(north)),
+        width=width,height=height,resampleAlg="near" if method=="nearest" else "bilinear",
+        srcNodata=nodata,dstNodata=nodata,multithread=False,warpMemoryLimit=32,
+        creationOptions=["COMPRESS=DEFLATE","TILED=YES"])
+    if result is None:
+        raise ValueError("North-up warp failed")
+    result.FlushCache()
+    result=None
+    check=gdal.OpenEx(output,gdal.OF_RASTER|gdal.OF_READONLY,allowed_drivers=["GTiff"])
+    expected=[float(west),float((east-west)/width),0.0,float(north),0.0,-float((north-south)/height)]
+    if (check is None or check.RasterXSize!=width or check.RasterYSize!=height
+        or check.RasterCount!=ds.RasterCount or not check.GetSpatialRef().IsSame(s)
+        or not np.allclose(check.GetGeoTransform(),expected,rtol=0,atol=1e-9)
+        or any(check.GetRasterBand(i).GetNoDataValue()!=nodata for i in range(1,ds.RasterCount+1))):
+        raise ValueError("Warp output verification failed")
+    return {"method":method,"width":width,"height":height,"transform":list(check.GetGeoTransform())}
+
+
 def run(src, config, output):
     with open(config, encoding="utf-8") as f:
         raw=f.read()
@@ -138,23 +182,29 @@ def run(src, config, output):
         or max(p[0] for p in corners)-min(p[0] for p in corners)>180
     ):
         raise ValueError("Footprint crosses unsupported map domain")
-    out=gdal.GetDriverByName("GTiff").CreateCopy(
-        output, ds, strict=1, options=["COMPRESS=DEFLATE","TILED=YES"]
-    )
-    if out is None:
-        raise ValueError("Failed to copy TIFF")
-    out.SetGeoTransform(geo)
-    out.SetSpatialRef(s)
-    out.FlushCache()
-    out=None
-    check=gdal.OpenEx(output,gdal.OF_RASTER|gdal.OF_READONLY,allowed_drivers=["GTiff"])
-    if (
-        check is None or check.RasterXSize!=w or check.RasterYSize!=h
-        or check.RasterCount!=bands
-        or not np.allclose(check.GetGeoTransform(),geo,rtol=0,atol=1e-12)
-        or not check.GetSpatialRef().IsSame(s)
-    ):
-        raise ValueError("Output georeferencing verification failed")
+    method=request.get("warp","none")
+    if method not in ("none","nearest","bilinear"):
+        raise ValueError("Unsupported warp method")
+    if method!="none":
+        result["warp"]=warp_north_up(ds,output,geo,native,s,method)
+    else:
+        out=gdal.GetDriverByName("GTiff").CreateCopy(
+            output, ds, strict=1, options=["COMPRESS=DEFLATE","TILED=YES"]
+        )
+        if out is None:
+            raise ValueError("Failed to copy TIFF")
+        out.SetGeoTransform(geo)
+        out.SetSpatialRef(s)
+        out.FlushCache()
+        out=None
+        check=gdal.OpenEx(output,gdal.OF_RASTER|gdal.OF_READONLY,allowed_drivers=["GTiff"])
+        if (
+            check is None or check.RasterXSize!=w or check.RasterYSize!=h
+            or check.RasterCount!=bands
+            or not np.allclose(check.GetGeoTransform(),geo,rtol=0,atol=1e-12)
+            or not check.GetSpatialRef().IsSame(s)
+        ):
+            raise ValueError("Output georeferencing verification failed")
     result.update(
         epsg=epsg, transform=geo, corners=corners, residuals=residuals.tolist(),
         pixel_residuals=pixel_residuals.tolist(), rms=float(np.sqrt(np.mean(residuals**2))),

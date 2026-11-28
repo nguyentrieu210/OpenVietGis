@@ -1,6 +1,8 @@
 export type Gcp=[number,number,number,number];
 export type GeorefPreview={mode:"inspect"|"solve";persisted:false;width:number;height:number;bands:number;source_sha256:string;png:string};
-export type GeorefResult=GeorefPreview&{mode:"solve";epsg:number;transform:number[];corners:[number,number][];residuals:number[];pixel_residuals:number[];rms:number;pixel_rms:number;redundant:boolean;sha256:string;byte_size:number;tiff:string};
+export type GeorefWarpMethod="none"|"nearest"|"bilinear";
+export type GeorefWarp={method:Exclude<GeorefWarpMethod,"none">;width:number;height:number;transform:number[]};
+export type GeorefResult=GeorefPreview&{mode:"solve";epsg:number;transform:number[];corners:[number,number][];residuals:number[];pixel_residuals:number[];rms:number;pixel_rms:number;redundant:boolean;sha256:string;byte_size:number;tiff:string;warp?:GeorefWarp};
 const finite=(x:unknown):x is number=>typeof x==="number"&&Number.isFinite(x);
 const integer=(x:unknown):x is number=>finite(x)&&Number.isSafeInteger(x);
 const digest=(s:unknown)=>typeof s==="string"&&/^[a-f0-9]{64}$/.test(s);
@@ -40,7 +42,7 @@ function checkAffine(v:GeorefResult,points:Gcp[]){
   if(!approx(err,v.residuals[i]!,nativeTolerance)||!approx(pixel,v.pixel_residuals[i]!,pixelTolerance))throw Error("Sai số GCP không khớp affine.");
  }
 }
-export function validateGeoref(raw:unknown,p:GeorefPreview,points:Gcp[],epsg:number):GeorefResult{
+export function validateGeoref(raw:unknown,p:GeorefPreview,points:Gcp[],epsg:number,method:GeorefWarpMethod="none"):GeorefResult{
  validateGcps(points,p,epsg);
  const v=validatePreview(raw,p.source_sha256) as GeorefResult;
  const residual=(a:unknown):a is number[]=>Array.isArray(a)&&a.length===points.length&&a.every(x=>finite(x)&&x>=0);
@@ -48,6 +50,17 @@ export function validateGeoref(raw:unknown,p:GeorefPreview,points:Gcp[],epsg:num
  const rms=(a:number[])=>Math.sqrt(a.reduce((sum,n)=>sum+n*n,0)/a.length);
  if(Math.abs(rms(v.residuals)-v.rms)>Math.max(1e-10,v.rms*1e-8)||Math.abs(rms(v.pixel_residuals)-v.pixel_rms)>Math.max(1e-10,v.pixel_rms*1e-8))throw Error("Sai số RMS không nhất quán.");
  checkAffine(v,points);
+ if(method==="none"){if(v.warp!==undefined)throw Error("Phản hồi warp ngoài yêu cầu.");}
+ else {
+  const w=v.warp;
+  if(!w||w.method!==method||!integer(w.width)||!integer(w.height)||w.width<1||w.height<1||w.width*w.height>2_000_000||!Array.isArray(w.transform)||w.transform.length!==6||!w.transform.every(finite))throw Error("Kết quả warp không hợp lệ.");
+  const [x,a,b,y,c,d]=w.transform as [number,number,number,number,number,number];
+  const [x0,sx,rx,y0,ry,sy]=v.transform as [number,number,number,number,number,number];
+  const corners=[[0,0],[p.width,0],[p.width,p.height],[0,p.height]].map(([i,j])=>[x0+sx*i!+rx*j!,y0+ry*i!+sy*j!]);
+  const west=Math.min(...corners.map(q=>q[0]!)),east=Math.max(...corners.map(q=>q[0]!)),south=Math.min(...corners.map(q=>q[1]!)),north=Math.max(...corners.map(q=>q[1]!));
+  const same=(a:number,b:number)=>Math.abs(a-b)<=Math.max(1e-8,Math.abs(b)*1e-10);
+  if(a<=0||d>=0||b!==0||c!==0||!same(x,west)||!same(y,north)||!same(x+a*w.width,east)||!same(y+d*w.height,south))throw Error("Lưới warp không khớp ranh affine.");
+ }
  return v;
 }
 export async function sha256(bytes:ArrayBuffer){

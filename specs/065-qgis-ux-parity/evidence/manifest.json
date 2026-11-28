@@ -691,9 +691,10 @@
         "tests/spec065/georeference_fixture.py",
         "apps/web-next/src/vector-georeference.ts",
         "apps/web-next/src/VectorGeoreferencePanel.tsx",
-        "apps/web-next/src/vector-georeference.test.ts"
+        "apps/web-next/src/vector-georeference.test.ts",
+        "apps/api-rust/src/raster_compute.rs"
       ],
-      "blocker": "TIFF GCP affine preview and verified GeoTIFF; client vector GCP affine conversion of bounded local XY GeoJSON to WGS84, preserving attributes, with residuals and explicit download review. Raster warp/resampling, vector topology checks, persisted project import and authenticated browser/QGIS acceptance remain. New tests written, not yet executed."
+      "blocker": "TIFF GCP affine preview and verified GeoTIFF; optional GDAL north-up nearest/bilinear for bounded homogeneous bands with common finite NoData and no custom masks/palette; client vector XY GeoJSON affine conversion to WGS84, residuals and reviewed download. New tests not executed; vector topology, broader raster profile, persisted project import and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "PROC-10",

@@ -32,6 +32,18 @@ def test():
         ds=gdal.Open(str(out));assert ds.GetSpatialRef().GetAuthorityCode(None)=="3857"
         assert np.array_equal(ds.GetRasterBand(1).ReadAsArray(),pixels)
         assert ds.GetRasterBand(1).GetNoDataValue()==65535;ds=None
+        for method in ("nearest","bilinear"):
+            out.unlink(missing_ok=True)
+            warped=run(base|{"warp":method})
+            assert warped["warp"]["method"]==method
+            ds=gdal.Open(str(out))
+            gt=ds.GetGeoTransform()
+            assert gt[1]>0 and gt[5]<0 and gt[2]==gt[4]==0
+            assert np.allclose([gt[0],gt[3],gt[0]+gt[1]*ds.RasterXSize,gt[3]+gt[5]*ds.RasterYSize],[1000,2005,1023,1970])
+            assert ds.GetRasterBand(1).GetNoDataValue()==65535
+            assert np.any(ds.GetRasterBand(1).ReadAsArray()!=65535)
+            ds=None
+        run(base|{"warp":"unknown"},False)
         run(base|{"points":[[0,0,0,0],[1,1,1,1],[2,2,2,2]]},False)
         run(base|{"source_sha256":"0"*64},False)
         print("PASS affine GCP golden transform, original pixels/NoData, collinear and digest rejection")

@@ -498,7 +498,11 @@ async fn georeference(
         {
             return Err(invalid("Unsupported GCP profile"));
         }
-        json!({"mode":mode,"source_sha256":digest,"points":points,"epsg":epsg})
+        let warp = form.text("warp")?.unwrap_or("none");
+        if !matches!(warp, "none" | "nearest" | "bilinear") {
+            return Err(invalid("Unsupported georeference resampling"));
+        }
+        json!({"mode":mode,"source_sha256":digest,"points":points,"epsg":epsg,"warp":warp})
     } else {
         json!({"mode":mode})
     };

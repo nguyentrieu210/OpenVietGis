@@ -87,8 +87,8 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | PROC-06 | Model Designer | D | ProcessingModeler, Rust processing_models.rs | Graph DAG, parameter mapping, named outputs, revision, cancel/partial results | P2 |
 | PROC-07 | Raster properties, band, nodata, rendering | P | ProjectRaster, RasterWorkbench | Band metadata, stretch, palette, opacity, nodata, CRS; capability từng provider | P2 |
 | PROC-08 | Raster Calculator, NDVI/NDWI, DEM terrain | D | RasterWorkbench, RasterReportWorkbench, TerrainEngineering | Kết quả theo fixture, nodata/CRS/extent, lưu output có lineage | P2 |
-| PROC-09 | Georeferencer raster/vector GCP | P | CadGeorefPanel, native CAD georef; raster chưa xác nhận | GCP raster/vector, transform, residual, preview, xuất raster đã georef | P2 |
-| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView + temporal-plan.ts: phát khung ngày UTC cho lớp vector đã tải đủ ≤5.000 đối tượng, có trường timestamp và quyền đọc; read-only secondary map | Raster temporal series, mesh providers và point cloud LAS/LAZ/COPC/EPT chưa hỗ trợ; acceptance QGIS pending | P3 |
+| PROC-09 | Georeferencer raster/vector GCP | P | Raster affine GCP + north-up nearest/bilinear cho TIFF giới hạn; vector XY GeoJSON affine WGS84, RMS và xuất tệp | Kiểm thử mới, topology vector, mask/palette raster mở rộng, nhập vào project và QGIS acceptance còn thiếu | P2 |
+| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView + temporal-plan.ts: phát khung ngày UTC hoặc khoảng/bước UTC tùy chỉnh, có trường kết thúc tùy chọn, cho lớp vector đã tải đủ ≤5.000 đối tượng, có trường timestamp và quyền đọc; read-only secondary map | Raster temporal series, mesh providers và point cloud LAS/LAZ/COPC/EPT chưa hỗ trợ; acceptance QGIS pending | P3 |
 
 ## Print Layout, CRS & interoperability (OUTPUT)
 

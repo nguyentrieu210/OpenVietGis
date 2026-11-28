@@ -12,6 +12,11 @@ describe("georeferencer contract",()=>{
  it("pins source digest and rejects inconsistent residuals",()=>{
   const r={...p,mode:"solve",epsg:4326,transform:[106,.0001,0,11,0,-.0001],corners:[[106,11],[106.01,11],[106.01,10.99],[106,10.99]],residuals:[0,0,0],pixel_residuals:[0,0,0],rms:0,pixel_rms:0,redundant:false,sha256:"b".repeat(64),byte_size:4,tiff:"SUkqAA=="};
   expect(validateGeoref(r,p,points,4326).epsg).toBe(4326);
+  const warped={...r,warp:{method:"nearest",width:100,height:100,transform:[106,.0001,0,11,0,-.0001]}};
+  expect(validateGeoref(warped,p,points,4326,"nearest").warp?.width).toBe(100);
+  expect(()=>validateGeoref(warped,p,points,4326)).toThrow();
+  expect(()=>validateGeoref(warped,p,points,4326,"bilinear")).toThrow();
+  expect(()=>validateGeoref({...warped,warp:{...warped.warp,transform:[106,.0001,.01,11,0,-.0001]}},p,points,4326,"nearest")).toThrow();
   expect(()=>validateGeoref({...r,rms:1},p,points,4326)).toThrow();
   expect(()=>validateGeoref({...r,source_sha256:"c".repeat(64)},p,points,4326)).toThrow();
   expect(()=>validateGeoref({...r,transform:[106,0,0,11,0,0]},p,points,4326)).toThrow("affine");
