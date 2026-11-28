@@ -2,7 +2,7 @@
 
 Baseline OpenVietGIS: `5bfc83826161acd83b98a925e85690cebde53ae1` (27/11/2026). Đối chiếu source và tài liệu, chưa phải audit bằng ảnh hoặc kiểm thử trình duyệt đăng nhập. Không lấy số lượng file/nút làm bằng chứng parity.
 
-**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Tổng 71 tiêu chí: D 19, P 48, U 4. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
+**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Baseline: D 19, P 48, U 4. Sau đối chiếu source đợt này: D 19, P 52, U 0; V 0. Chỉ ghi nhận implementation, chưa có nghiệm thu. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
 
 Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh QGIS/OVG và kết quả đo trong evidence. Chỉ đổi sang V khi đủ bằng chứng; U phải kiểm tra trước khi phát triển mới, tránh code trùng. P1 = ưu tiên nghiệp vụ nền tảng; P2 = nâng cao; P3 = khảo sát mở rộng. Nguồn QGIS theo chương tại research.md.
 
@@ -70,7 +70,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | EDIT-03 | Edit mode & unsaved changes, save/rollback | P | CoreMapTools, LiveApp, AdvancedEditor | Layer edit state rõ; bản nháp khác shared revision; cảnh báo chuyển project/F5 | P1 |
 | EDIT-04 | Snapping vertex/segment, layer-specific tolerance | P | SnapMath, LayerProperties WorkspacePrefs | Chọn active/all/advanced theo layer, pixel/map unit, chỉ báo snap; fixture CRS | P1 |
 | EDIT-05 | Topology checks, avoid overlap, shared boundary | P | ProfessionalTools topology, Rust editing | Kiểm tra invalid/dangling/overlap/gap; không auto-fix nếu chưa duyệt | P1 |
-| EDIT-06 | Split/merge, reshape, multipart, ring | P | AdvancedEditor split/merge | Hỗ trợ phần còn thiếu theo geometry capability; rollback atomic, giữ ID chính sách | P2 |
+| EDIT-06 | Split/merge, reshape, multipart, ring | P | AdvancedEditor split/merge, vertex, ring, multipart and path reshape | Hỗ trợ phần còn thiếu theo geometry capability; rollback atomic, giữ ID chính sách | P2 |
 | EDIT-07 | Advanced digitizing constraint distance/angle/ortho | P | CoreMapTools, ProfessionalTools, SurveyTerrain | Khóa góc/khoảng cách/trục; đơn vị CRS rõ, không đổi tọa độ âm thầm | P2 |
 | EDIT-08 | Undo/redo, edit history, concurrent conflict | D | CoreMapTools, AdvancedEditor, EditHistoryDetails | Phân biệt draft undo và persisted revert; revision pin, 2 user conflict | P1 |
 | EDIT-09 | Measure distance/area/bearing | D | CoreMapTools, geom-measure.test.mjs | Đơn vị và phương pháp trắc địa/planar rõ; đối chiếu mẫu QGIS | P1 |

@@ -2,7 +2,8 @@
 export type CloudRegion=readonly [number,number,number,number];
 const R=6378137;
 export function cameraRegion(lon:number,lat:number,zoom:number):CloudRegion|undefined{
- if(![lon,lat,zoom].every(Number.isFinite)||Math.abs(lat)>85.051129||Math.abs(lon)>180)throw Error("Invalid camera region");
+ if(![lon,lat,zoom].every(Number.isFinite))return undefined;
+ if(Math.abs(lat)>85.051129||Math.abs(lon)>180)return undefined;
  if(zoom<=4)return undefined;
  const step=360/2**Math.min(20,Math.max(1,Math.floor(zoom)-2)),x=Math.floor((lon+180)/step)*step-180,y=Math.floor((lat+90)/step)*step-90;
  if(x-step< -180||x+2*step>180)return undefined;
