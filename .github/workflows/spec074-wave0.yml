@@ -1,0 +1,42 @@
+name: SPEC 074 Wave 0 qualification
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'infra/desktop/wave0/**'
+      - 'specs/074-cross-platform-native-desktop/**'
+      - '.github/workflows/spec074-wave0.yml'
+permissions:
+  contents: read
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: rustc --edition=2021 --test infra/desktop/wave0/protocol.rs -o /tmp/ovg-protocol-test && /tmp/ovg-protocol-test
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: infra/desktop/wave0/tauri-spike
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: rustc -Vv
+      - run: cargo generate-lockfile
+      - run: cargo check --locked
+      - run: cargo tree --locked
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tauri-spike-lock-${{ matrix.os }}
+          path: infra/desktop/wave0/tauri-spike/Cargo.lock
