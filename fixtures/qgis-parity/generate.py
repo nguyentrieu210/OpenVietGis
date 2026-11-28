@@ -62,7 +62,7 @@ def generate(out):
         feature("p3",rectangle(200,0,100,100),{"code":"p3","source_feature_id":"p3","zone":"B","height":None,"active":True,"note":"Ô thử B"}),
     ]))
     write_json(out/"clip.geojson",collection([feature("clip",rectangle(50,0,100,100),{"code":"clip","overlay_feature_id":"clip","name":"Clip"})],"EPSG:4326"))
-    write_json(out/"point.geojson",collection([feature("point",{"type":"Point","coordinates":[50,50]},{"code":"pt","source_feature_id":"pt","name":"Buffer point"})]))
+    write_json(out/"point.geojson",collection([feature("point",{"type":"Point","coordinates":[50,50]},{"code":"pt","source_feature_id":"pt","overlay_feature_id":"pt","name":"Buffer point"})]))
     # WGS84 counterparts are generated mathematically from the same Web Mercator
     # coordinates used by the Rust/PostGIS fixture. Their bytes are covered by the
     # immutable manifest below, so both engines consume the same source fixture.
@@ -79,7 +79,7 @@ def generate(out):
             {"code":"clip","overlay_feature_id":"clip","name":"Clip"})],"EPSG:4326"))
     write_json(out/"point-wgs84.geojson",collection([
         feature("pt",{"type":"Point","coordinates":wgs_point(50,50)},
-            {"code":"pt","overlay_feature_id":"pt","name":"WGS point"})],"EPSG:4326"))
+            {"code":"pt","source_feature_id":"pt","overlay_feature_id":"pt","name":"WGS point"})],"EPSG:4326"))
     write_json(out/"invalid.geojson",collection([feature("bowtie",{"type":"Polygon","coordinates":[[[0,0],[100,100],[0,100],[100,0],[0,0]]]},{})]))
     (out/"attributes.csv").write_text("fid,zone,height,active,note\np1,A,2,true,Ô thử A\np2,A,10,false,\np3,B,,true,Ô thử B\n",encoding="utf-8")
     (out/"line.dxf").write_text("0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nQA\n10\n0\n20\n0\n30\n0\n11\n100\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n",encoding="ascii")
