@@ -6,7 +6,7 @@ use std::{collections::BTreeMap,fs::File,io::{Read,Seek,SeekFrom},path::PathBuf,
 
 #[derive(Debug)]
 pub enum Error{Invalid,Limit,Cancelled,Io(std::io::Error),Jpeg(super::jpeg::Error),Tile(tiles::Error),
- Render(ortho::Error),Tiff(geotiff::Error),Store(disk_store::Error)}
+ Render(ortho::Error),Seam(super::seam::Error),Tiff(geotiff::Error),Store(disk_store::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 pub struct OwnedImage{pub camera:ortho::Camera,pub width:u32,pub height:u32,pub rgb:Arc<[u8]>}
 pub trait Source{
@@ -25,24 +25,48 @@ fn subgrid(g:ortho::Grid,w:tiles::Window)->ortho::Grid{
 /// objects may remain on disk until a future lease-aware garbage collector.
 pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
- run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,None,cancelled)
 }
 /// The host supplies a trusted digest covering actual source imagery, camera poses,
 /// DEM, alignment, renderer/provider build and immutable input revision.
 pub fn run_resumable(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:&str,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::digest(input_sha256){return Err(Error::Invalid);}
- run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),None,cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),None,None,cancelled)
 }
 /// Parallel pixel rendering inside one admitted tile; source/cache and disk publication remain sequential.
 pub fn run_parallel(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,threads:usize,cancel:&std::sync::atomic::AtomicBool)->Result<ResultSummary,Error>{
  if input_sha256.is_some_and(|h|!super::digest(h)){return Err(Error::Invalid);}
  let renderer=ortho::Renderer::new(threads).map_err(Error::Render)?;
- run_inner(source,store,expected,grid_id,grid,epsg,p,input_sha256,Some((&renderer,cancel)),||cancel.load(std::sync::atomic::Ordering::Acquire))
+ run_inner(source,store,expected,grid_id,grid,epsg,p,input_sha256,Some((&renderer,cancel)),None,||cancel.load(std::sync::atomic::Ordering::Acquire))
+}
+/// Experimental two-view tile seam mode. No resume key reuse with other render modes.
+/// Source must supply exactly two consistently ordered views for each halo.
+/// Local seamlines are not globally continuous across tile boundaries.
+#[derive(Debug,Clone,Copy)]
+pub struct PairSeamPolicy{pub seam:super::seam::SeamPolicy,pub offset:[i16;3]}
+pub fn run_pair_seamed(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
+ grid:ortho::Grid,epsg:u16,p:Policy,seam:PairSeamPolicy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ if seam.offset.iter().any(|v|v.unsigned_abs()>64){return Err(Error::Invalid);}
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,Some(seam),cancelled)
+}
+fn pair_rgba(grid:ortho::Grid,dem:&[f32],views:&[ortho::Image<'_>],max_bytes:u64,max_samples:u64,
+ p:PairSeamPolicy,cancelled:&mut impl FnMut()->bool)->Result<Vec<u8>,Error>{
+ if views.len()!=2{return Err(Error::Invalid);}
+ let n=u64::from(grid.width)*u64::from(grid.height);
+ if n.checked_mul(2).ok_or(Error::Limit)?>max_samples||n.checked_mul(4).ok_or(Error::Limit)?>max_bytes{return Err(Error::Limit);}
+ if cancelled(){return Err(Error::Cancelled);}
+ let a=ortho::render(grid,dem,&views[..1],max_bytes,max_samples).map_err(Error::Render)?;
+ if cancelled(){return Err(Error::Cancelled);}
+ let b=ortho::render(grid,dem,&views[1..],max_bytes,max_samples).map_err(Error::Render)?;
+ let map=|e|if e==super::seam::Error::Cancelled{Error::Cancelled}else{Error::Seam(e)};
+ let path=super::seam::vertical_seam(&a,&b,grid.width,grid.height,p.offset,p.seam,&mut *cancelled).map_err(map)?;
+ let rgba=super::seam::blend_seam(&a,&b,grid.width,grid.height,&path,p.offset,p.seam).map_err(map)?;
+ if cancelled(){return Err(Error::Cancelled);}Ok(rgba)
 }
 fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
- grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,parallel:Option<(&ortho::Renderer,&std::sync::atomic::AtomicBool)>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,parallel:Option<(&ortho::Renderer,&std::sync::atomic::AtomicBool)>,seam:Option<PairSeamPolicy>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::valid_id(grid_id)||epsg==0||epsg>=32767||grid.width==0||grid.height==0||!grid.gsd.is_finite()||
  grid.gsd<=0.||!grid.origin_x.is_finite()||!grid.origin_y.is_finite()||
  p.source_bytes==0||p.source_bytes>2*1024*1024*1024||p.tile_bytes<308||p.output_bytes==0||
@@ -63,6 +87,7 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  let tiff_bytes=core_bytes.checked_add(304).ok_or(Error::Limit)?;
  let working=expected_dem.checked_add(expected_rgba).and_then(|n|n.checked_add(core_bytes))
     .and_then(|n|n.checked_add(tiff_bytes)).ok_or(Error::Limit)?;
+ let working=if let Some(s)=seam{working.checked_add(expected_rgba.checked_mul(2).ok_or(Error::Limit)?).and_then(|v|v.checked_add(s.seam.max_work_bytes as u64)).ok_or(Error::Limit)?}else{working};
  if working>p.tiles.max_working_bytes||tiff_bytes>p.tile_bytes{return Err(Error::Limit);}
  written=written.checked_add(tiff_bytes).ok_or(Error::Limit)?;
  if written>p.output_bytes{return Err(Error::Limit);}
@@ -81,7 +106,8 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  for im in &imgs{source_bytes=source_bytes.checked_add(im.rgb.len() as u64).ok_or(Error::Limit)?;}
  if source_bytes>p.source_bytes{return Err(Error::Limit);}
  let views:Vec<_>=imgs.iter().map(|im|ortho::Image{camera:im.camera,width:im.width,height:im.height,rgb:&im.rgb}).collect();
- let rgba=if views.is_empty(){
+ let rgba=if let Some(s)=seam{pair_rgba(subgrid(grid,h),&dem,&views,expected_rgba,p.max_samples,s,&mut cancelled)?
+ }else if views.is_empty(){
    if expected_rgba>256*1024*1024{return Err(Error::Limit);}vec![0;expected_rgba as usize]
  }else if let Some((renderer,cancel))=parallel{
    renderer.render(subgrid(grid,h),&dem,&views,expected_rgba,p.max_samples,cancel)
@@ -279,6 +305,14 @@ impl Source for RawSource{
  let imgs=source.images(tiles::Window{x:0,y:0,width:3,height:3},1024).unwrap();
  let views:Vec<_>=imgs.iter().map(|im|ortho::Image{camera:im.camera,width:im.width,height:im.height,rgb:&im.rgb}).collect();
  assert_eq!(assembled,ortho::render(g,&[0.;9],&views,36,1000).unwrap());
+ }
+ #[test]fn pair_seam_pipeline_publishes_verified_tile(){
+ let(t,mut source,g)=fixture();
+ let first=&source.images[0];source.images.push(RawImage{path:first.path.clone(),camera:first.camera,width:first.width,height:first.height,footprint:None});
+ let store=disk_store::Store::open(&t.0.join("pair")).unwrap();let mut p=policy();p.tiles.max_working_bytes=32768;
+ let sp=PairSeamPolicy{seam:super::super::seam::SeamPolicy{max_pixels:100,max_work_bytes:4096,step_penalty:1,feather_px:1},offset:[0;3]};
+ let r=run_pair_seamed(&mut source,&store,0,"grid",32648,g,p,sp,||false).unwrap();
+ assert_eq!(r.covered,9);assert_eq!(store.head().unwrap(),1);
  }
  #[test]fn parallel_pipeline_matches_serial_digests(){
  let(t,mut source,g)=fixture();let a=disk_store::Store::open(&t.0.join("a")).unwrap();let b=disk_store::Store::open(&t.0.join("b")).unwrap();
