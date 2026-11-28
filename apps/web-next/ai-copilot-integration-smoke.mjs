@@ -8,6 +8,7 @@ const org="fixture-org",pid="fixture-project",errors=[];
 try{
  const page=await browser.newPage({viewport:{width:Number(process.env.OVG_TEST_WIDTH||1440),height:Number(process.env.OVG_TEST_HEIGHT||900)}});page.on("pageerror",e=>errors.push(e.message));
  let available=false,restricted=false,metadataChecks=0,sessionCalls=0,command=null,acks=[],closing=0;
+ let nativeEnabled=false,nativeRequests=0;
  await page.route("**/.well-known/oauth-protected-resource/mcp",route=>{
    metadataChecks++;
    return available?route.fulfill({json:{resource:origin+"/mcp",authorization_servers:[origin+"/realms/openvietgis"]}}):route.fulfill({status:404,json:{}});
@@ -22,6 +23,17 @@ try{
    if(path.endsWith("/prepare"))return route.fulfill({json:{authorized:true,expires_in:20}});
    if(path.endsWith("/ack")){acks.push(r.postDataJSON());return route.fulfill({json:{accepted:true}})}
    if(path.endsWith("/close")){closing++;return route.fulfill({json:{closed:true}})}
+   return route.fulfill({status:404,json:{}});
+ });
+ await page.route("**/ai-copilot/agent/**",route=>{
+   const r=route.request(),path=new URL(r.url()).pathname;
+   assert.equal(r.headers()["x-ovg-ai"],"1");assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
+   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false}]:[]}});
+   if(path.endsWith("/run")){
+     nativeRequests++;assert.deepEqual(r.postDataJSON(),{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false});
+     return route.fulfill({status:202,json:{run_id:"fixture-run",state:"running"}});
+   }
+   if(path.endsWith("/status")){assert.deepEqual(r.postDataJSON(),{run_id:"fixture-run"});return route.fulfill({json:{state:"done",report:{stop:"complete",answer:"Verified fixture",calls:0,model_steps:1}}})}
    return route.fulfill({status:404,json:{}});
  });
  await page.route("**/api/v1/**",route=>{
@@ -53,5 +65,13 @@ try{
  command={id:"two",method:"map_navigate",params:{longitude:105.8,latitude:21,zoom:12},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.getByText(/Đã thực hiện lệnh AI/).waitFor();await page.waitForTimeout(650);assert.equal(acks[1].ok,true);
  command={id:"three",method:"map_view",params:{},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.waitForFunction(()=>document.querySelector("[data-ai=review]").hidden);assert.equal(acks[2].ok,true);assert.ok(Math.abs(acks[2].result.center[0]-105.8)<.001);assert.ok(Math.abs(acks[2].result.center[1]-21)<.001);assert.ok(Math.abs(acks[2].result.zoom-12)<.01);
  await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();await page.waitForTimeout(300);assert.equal(closing,1);
+ nativeEnabled=true;await page.getByRole("button",{name:"Kết nối AI",exact:true}).click();
+ await page.locator('[data-ai="native"]').waitFor();
+ await page.locator('[data-ai="task"]').fill("Inspect map");
+ await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/xác nhận chia sẻ dữ liệu/).waitFor();assert.equal(nativeRequests,0);
+ await page.locator('[data-ai="provider-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Verified fixture/).waitFor();assert.equal(nativeRequests,1);assert.equal(await page.locator('[data-ai="provider-consent"]').isChecked(),false);
+ await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();
  assert.deepEqual(errors,[]);console.log("PASS integrated GIS Copilot: disabled service, restricted project, no manual token, denial, real MapLibre navigation and view, disconnect");
 }finally{await browser.close()}

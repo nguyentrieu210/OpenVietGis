@@ -108,7 +108,7 @@ impl<'a> Agent<'a> {
                     Err(stop)=>{r.stop=stop;return r},
                     Ok(Ok(reply))=>break reply,
                     Ok(Err(ProviderError::Retryable)) if retries<MAX_RETRIES=>{
-                        let delay=Duration::from_millis(250u64 << retries); retries+=1;
+                        let delay=Duration::from_millis(2000u64 << retries); retries+=1;
                         if let Err(stop)=await_bounded(deadline,&mut cancel,time::sleep(delay)).await {r.stop=stop;return r}
                     }
                     Ok(Err(_))=>{r.stop=Stop::ModelFailed;return r}
@@ -259,7 +259,7 @@ mod tests {
     #[tokio::test]
     async fn retry_provider_not_tool(){
         let registry=Registry::new();let (_tx,rx)=watch::channel(false);
-        let agent=Agent::new(&registry,Uuid::new_v4(),Vec::<String>::new(),Duration::from_secs(5));
+        let agent=Agent::new(&registry,Uuid::new_v4(),Vec::<String>::new(),Duration::from_secs(20));
         let mut n=0;
         let r=agent.run("test".into(),rx,|_|{n+=1;std::future::ready(if n<=3{Err(ProviderError::Retryable)}else{Ok(Reply{text:"done".into(),calls:vec![]})})},|_|std::future::ready(ToolOutcome::Failed)).await;
         assert_eq!(r.stop,Stop::Complete);assert_eq!(n,4);assert_eq!(r.calls,0);

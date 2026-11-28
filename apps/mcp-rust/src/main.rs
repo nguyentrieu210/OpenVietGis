@@ -171,24 +171,27 @@ fn rpc(id:Value,v:Value)->Response{respond(200,json!({"jsonrpc":"2.0","id":id,"r
 fn rpc_error(id:Value,code:i64,msg:&str)->Response{respond(200,json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":msg}}))}
 fn tool_result(v:Value,error:bool)->Value{json!({"content":[{"type":"text","text":v.to_string()}],"structuredContent":v,"isError":error})}
 async fn operate(app:&App,claims:&Claims,name:&str,args:&Value)->Result<Value,Failure>{
+    operate_subject(app,&claims.sub,claims.exp,name,args).await
+}
+async fn operate_subject(app:&App,subject:&str,expires:u64,name:&str,args:&Value)->Result<Value,Failure>{
     let(target,params)=app.registry.call(name,args)?;
-    if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
-    if name=="gis_workspaces"{return Ok(json!({"workspaces":app.store()?.list(&claims.sub,app.now())}))}
+    if expires<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+    if name=="gis_workspaces"{return Ok(json!({"workspaces":app.store()?.list(subject,app.now())}))}
     if name=="gis_operation_status"{
         let ticket=uuid(&params["operation_ticket"])?;let now=app.now();let mut s=app.store()?;
-        let id=s.resolve(&claims.sub,target,now)?;return Ok(json!(s.result(&claims.sub,id,ticket,now)?))
+        let id=s.resolve(subject,target,now)?;return Ok(json!(s.result(subject,id,ticket,now)?))
     }
     let(method,version,ttl)=dispatch(name);let now=app.now();
-    let deadline=now.saturating_add(claims.exp.saturating_sub(unix_now()).saturating_mul(1000));
-    let(id,cid)=app.store()?.submit(&claims.sub,target,method,params,version,ttl,deadline,now)?;
+    let deadline=now.saturating_add(expires.saturating_sub(unix_now()).saturating_mul(1000));
+    let(id,cid)=app.store()?.submit(subject,target,method,params,version,ttl,deadline,now)?;
     if ttl>40_000{return Ok(json!({"state":"queued","session_id":id,"operation_ticket":cid,"expires_in":ttl.min(deadline.saturating_sub(now))/1000,"next":"Wait for browser approval; call gis_operation_status with the same session_id and ticket. Do not resubmit."}))}
     // Cancellation of the HTTP future also cancels an uncompleted command.
     struct Cancel<'a>{app:&'a App,subject:&'a str,id:Uuid,cid:Uuid}
     impl Drop for Cancel<'_>{fn drop(&mut self){if let Ok(mut s)=self.app.store(){let _=s.cancel(self.subject,self.id,self.cid,self.app.now());}}}
-    let _guard=Cancel{app,subject:&claims.sub,id,cid};
+    let _guard=Cancel{app,subject:subject,id,cid};
     loop{
-        if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
-        let r=app.store()?.result(&claims.sub,id,cid,app.now())?;
+        if expires<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+        let r=app.store()?.result(subject,id,cid,app.now())?;
         match r.state{
             CommandState::Done=>return Ok(json!({"acknowledged":true,"result":r.result})),
             CommandState::Denied|CommandState::Expired=>return Err(Failure::new(409,"GIS user declined or command expired")),
@@ -214,6 +217,117 @@ where M:FnMut(openvietgis_mcp_rust::agent::ModelRequest)->MF, MF:std::future::Fu
         }
     }).await)
 }
+
+// Wave 3: opt-in first-party model gateway. Disabled unless the operator allowlists
+// a subject and configures a provider. Never accept a caller-supplied URL or key.
+fn provider_allowed(subject:&str)->bool{
+    std::env::var("OVG_AI_ALLOWED_SUBJECTS").ok().is_some_and(|s|s.split(',').any(|x|x.trim()==subject&&!subject.is_empty()))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool}
+async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    let v=parse(&body,&h)?;if v!=json!({}){return Err(Failure::new(422,"Invalid provider request"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    let providers=if provider_allowed(&owner.subject){openvietgis_mcp_rust::provider::Provider::ALL.into_iter().filter_map(openvietgis_mcp_rust::provider::Config::from_env).map(|c|c.descriptor()).collect::<Vec<_>>()}else{vec![]};
+    Ok(respond(200,json!({"providers":providers})))
+}
+fn active_agents()->&'static Mutex<HashSet<String>>{
+    static ACTIVE:std::sync::OnceLock<Mutex<HashSet<String>>>=std::sync::OnceLock::new();
+    ACTIVE.get_or_init(||Mutex::new(HashSet::new()))
+}
+struct AgentSlot(String);
+impl AgentSlot{
+    fn acquire(subject:&str)->Result<Self,Failure>{let mut a=active_agents().lock().map_err(|_|Failure::new(503,"Agent unavailable"))?;if a.len()>=4||!a.insert(subject.into()){return Err(Failure::new(429,"Agent capacity reached"))}Ok(Self(subject.into()))}
+}
+impl Drop for AgentSlot{fn drop(&mut self){if let Ok(mut a)=active_agents().lock(){a.remove(&self.0);}}}
+// Bounded, process-local jobs. No raw GIS observations or provider-native reasoning are retained.
+struct AgentJob {owner:Owner,session:Uuid,created:Instant,cancel:tokio::sync::watch::Sender<bool>,result:Option<Value>}
+fn agent_jobs()->&'static Mutex<std::collections::HashMap<Uuid,AgentJob>>{
+    static JOBS:std::sync::OnceLock<Mutex<std::collections::HashMap<Uuid,AgentJob>>>=std::sync::OnceLock::new();
+    JOBS.get_or_init(||Mutex::new(std::collections::HashMap::new()))
+}
+fn prune_jobs(j:&mut std::collections::HashMap<Uuid,AgentJob>){
+    j.retain(|_,v|v.result.is_none()||v.created.elapsed()<Duration::from_secs(900));
+    while j.len()>=64{
+        let old=j.iter().filter(|(_,v)|v.result.is_some()).min_by_key(|(_,v)|v.created).map(|(id,_)|*id);
+        if let Some(id)=old{j.remove(&id);}else{break}
+    }
+}
+struct AgentJobGuard(Uuid);
+impl Drop for AgentJobGuard{
+    fn drop(&mut self){if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&self.0){if job.result.is_none(){job.result=Some(json!({"stop":"worker_interrupted","uncertain_call":"unknown","calls":null,"model_steps":null}));}}}}
+}
+async fn agent_job_action(State(app):State<App>,Path((id,action)):Path<(Uuid,String)>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    let v=parse(&body,&h)?;
+    if v.as_object().is_none_or(|o|o.len()!=1||!o.contains_key("run_id")){return Err(Failure::new(422,"Invalid agent job request"))}
+    let run=uuid(&v["run_id"])?;
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+    let job=jobs.get_mut(&run).filter(|j|j.owner==owner&&j.session==id).ok_or(Failure::new(404,"Agent job not found"))?;
+    match action.as_str(){
+        "status"=>Ok(respond(200,job.result.clone().map(|r|json!({"state":"done","report":r})).unwrap_or(json!({"state":"running"})))),
+        "cancel"=>{let _=job.cancel.send(true);Ok(respond(200,json!({"state":"cancel_requested"})))},
+        _=>Err(Failure::new(404,"Unknown agent action"))
+    }
+}
+async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    use openvietgis_mcp_rust::{agent::{Agent,ProviderError,ToolOutcome,from_dispatch},provider::{Provider,Config,Gateway}};
+    let v=parse(&body,&h)?;let input:AgentInput=serde_json::from_value(v).map_err(|_|Failure::new(422,"Invalid agent request"))?;
+    if !input.consent||input.user.trim().is_empty()||input.user.len()>16000{return Err(Failure::new(422,"Explicit provider consent and request required"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    if !provider_allowed(&owner.subject){return Err(Failure::new(403,"Model gateway not enabled for this account"))}
+    let p=Provider::parse(&input.provider).ok_or(Failure::new(422,"Unsupported provider"))?;
+    let cfg=Config::from_env(p).ok_or(Failure::new(503,"Provider not configured"))?;
+    if cfg.descriptor()["model"]!=input.expected_model.as_str(){return Err(Failure::new(409,"Provider model changed; refresh consent"))}
+    let _slot=AgentSlot::acquire(&owner.subject)?;
+    let gateway=Gateway::new(cfg).map_err(|_|Failure::new(503,"Provider unavailable"))?;
+    let allowed=app.registry.list().iter().filter(|t|{
+        let name=t["name"].as_str().unwrap_or("");
+        // Administration remains excluded even when the user permits editing.
+        !["gis_plugin_activate","gis_plugin_disable","gis_plugin_create","gis_plugin_update","gis_plugin_records"].contains(&name)
+        && (input.allow_writes||t["annotations"]["readOnlyHint"]==true)
+    }).filter_map(|t|t["name"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+    // Validate the selected skill before accepting the run.
+    if let Some(skill)=input.skill.as_deref(){if openvietgis_mcp_rust::skills::get(&json!({"name":skill})).is_none(){return Err(Failure::new(422,"Unknown GIS skill"))}}
+    let (cancel_tx,cancel)=tokio::sync::watch::channel(false);
+    let run_id=Uuid::new_v4();
+    {
+        let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+        prune_jobs(&mut jobs);
+        if jobs.len()>=64{return Err(Failure::new(429,"Agent job capacity reached"))}
+        jobs.insert(run_id,AgentJob{owner:owner.clone(),session:id,created:Instant::now(),cancel:cancel_tx,result:None});
+    }
+    let deadline=unix_now().saturating_add(300);
+    // The user explicitly started this job. The worker is bounded and every GIS/model
+    // call revalidates the same browser identity. The slot lives until the worker exits.
+    tokio::spawn(async move{
+        let _slot=_slot;
+        let _job_guard=AgentJobGuard(run_id);
+        let mut agent=Agent::new(&app.registry,id,allowed,Duration::from_secs(300));
+        if let Some(skill)=input.skill.as_deref(){
+            match agent.with_skill(skill){
+                Ok(a)=>agent=a,
+                Err(_)=>{if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(json!({"stop":"invalid_input","calls":0,"model_steps":0}));}}return}
+            }
+        }
+        let app_ref=&app;let headers=&h;let expected=&owner;let model_gateway=&gateway;
+        let report=agent.run(input.user,cancel,|request|async move{
+            if unix_now()>=deadline||!provider_allowed(&expected.subject){return Err(ProviderError::Fatal)}
+            match browser_identity(app_ref,headers,id).await{Ok((fresh,_)) if fresh==*expected=>model_gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
+        },|call|async move{
+            if unix_now()>=deadline||!provider_allowed(&expected.subject){return ToolOutcome::Failed}
+            match browser_identity(app_ref,headers,id).await{
+                Ok((fresh,_)) if fresh==*expected=>match operate_subject(app_ref,&expected.subject,deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
+                _=>ToolOutcome::Failed
+            }
+        }).await;
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":report.model_steps,"calls":report.calls,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
+    });
+    Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
+}
+
 async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     if !trusted_host(&h)||!origin_ok(&h){return respond(403,json!({"error":"Untrusted origin"}))}
     let claims=match verify(&app,&h).await{Ok(c)=>c,Err(_)=>return unauthorized()};
@@ -253,6 +367,9 @@ fn routes(app:App)->Router{
         .route("/mcp",post(mcp).get(mcp_get))
         .route("/ai-copilot/sessions",post(open))
         .route("/ai-copilot/sessions/{id}/{action}",post(browser_action))
+        .route("/ai-copilot/agent/{id}/providers",post(provider_list))
+        .route("/ai-copilot/agent/{id}/run",post(browser_agent))
+        .route("/ai-copilot/agent/{id}/{action}",post(agent_job_action))
         .route("/ai-copilot/sessions/{id}/commands/{cid}/{action}",post(browser_command))
         .layer(DefaultBodyLimit::max(128_000))
         .with_state(app)
@@ -341,6 +458,17 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         let b:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_b,"workspace_version":2})).await.json().await.unwrap();
         let sa=a["session_id"].as_str().unwrap();let sb=b["session_id"].as_str().unwrap();
         let ta=a["browser_token"].as_str().unwrap();let tb=b["browser_token"].as_str().unwrap();
+        // The new provider route must share the same browser identity and explicit consent.
+        let provider_req=|id:&str,token:&str,action:&str,payload:Value|{
+            client.post(format!("{url}/ai-copilot/agent/{id}/{action}")).header("host","openvietgis.cloud").header("origin",ORIGIN).header("x-ovg-ai","1").header("cookie","ovg_session=test-cookie").header("x-ovg-bridge",token).json(&payload)
+        };
+        assert_eq!(provider_req(sa,tb,"providers",json!({})).send().await.unwrap().status(),404);
+        assert_eq!(provider_req(sa,ta,"providers",json!({"url":"http://127.0.0.1"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":false,"allow_writes":false})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":true,"allow_writes":false,"api_key":"not-accepted"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"providers",json!({})).send().await.unwrap().status(),200);
+        assert_eq!(provider_req(sa,ta,"status",json!({"run_id":Uuid::new_v4()})).send().await.unwrap().status(),404);
+
         let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
         assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
         let amb:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_live_view","arguments":{}})).await.json().await.unwrap();
