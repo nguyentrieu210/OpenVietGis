@@ -18,7 +18,7 @@ def upgrade():
     op.execute(
         f"""ALTER TABLE transfers.derived_artifacts ADD CONSTRAINT ck_derived_artifact_crs
         CHECK (output_crs IN ({OLD}) OR (output_crs IN ({EXTRA}) AND output_format IN (
-            'geopackage', 'shapefile_zip'))))"""
+            'geopackage', 'shapefile_zip')))"""
     )
 
 def downgrade():
