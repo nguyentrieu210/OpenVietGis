@@ -282,6 +282,52 @@ impl NativeUnifiedProject{
  pub fn append_survey(&self,layer_id:String,track_id:String,fix_json:String,expected:String)->Result<String,String>{
   self.inner.append_survey(&layer_id,&track_id,&fix_json,&expected).map_err(unified_error)
  }
+ // Native key service: no key material enters or leaves Flutter.
+ pub fn media_key_status(&self,layer_id:String,expected:String)->Result<String,String>{
+  use ovg_project_store::media::MediaKeys;
+  let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let scope=v["scope"].as_str().map(id).transpose()?;
+  let available=crate::media_keys::PlatformKeys::available();
+  let unlocked=scope.is_some_and(|s|crate::media_keys::PlatformKeys.key_for(s).is_ok());
+  Ok(serde_json::json!({"provider_available":available,"scope":scope,"key_available":unlocked}).to_string())
+ }
+ /// Explicit reference manifest, private legacy workspace vault only.
+ /// Source scope must already have a registered key; never provision a source.
+ pub fn migrate_media_manifest(&self,legacy_root:String,manifest_json:String,expected:String)->Result<String,String>{
+  use ovg_project_store::media::{ImportRef,MediaKeys};
+  use ovg_local_storage::media::BlobRef;
+  if manifest_json.len()>64*1024{return Err("RESOURCE_LIMIT".into())}
+  let v:serde_json::Value=serde_json::from_str(&manifest_json).map_err(|_|"INVALID_MANIFEST".to_owned())?;
+  if v["version"]!=1{return Err("INVALID_MANIFEST_VERSION".into())}
+  let parse=|v:&serde_json::Value|id(v.as_str().ok_or("INVALID_MANIFEST_ID")?);
+  let source=parse(&v["source_scope"])?;
+  let items=v["items"].as_array().ok_or("INVALID_MANIFEST")?;
+  if items.is_empty()||items.len()>16{return Err("RESOURCE_LIMIT".into())}
+  let mut refs=Vec::new();
+  for r in items{
+   let sha=r["ciphertext_sha256"].as_str().ok_or("INVALID_DIGEST")?;
+   if sha.len()!=64||!sha.bytes().all(|c|c.is_ascii_hexdigit()){return Err("INVALID_DIGEST".into())}
+   let mut hash=[0u8;32];for (i,b) in hash.iter_mut().enumerate(){*b=u8::from_str_radix(&sha[2*i..2*i+2],16).map_err(|_|"INVALID_DIGEST".to_owned())?;}
+   refs.push(ImportRef{layer:parse(&r["layer"])?,feature:parse(&r["feature"])?,blob:BlobRef{id:parse(&r["blob_id"])?,ciphertext_sha256:hash}});
+  }
+  let root=root(&legacy_root)?;
+  let workspace=root.join(source.to_string());let vault=workspace.join("media");
+  for p in [&workspace,&vault]{if !fs::symlink_metadata(p).is_ok_and(|m|m.is_dir()){return Err("LEGACY_VAULT_UNAVAILABLE".into())}}
+  let keys=crate::media_keys::PlatformKeys;
+  keys.key_for(source).map_err(unified_error)?;
+  let inventory:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&refs[0].layer.to_string(),"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let dest=match inventory["scope"].as_str(){
+   Some(s)=>{let d=id(s)?;keys.key_for(d).map_err(unified_error)?;d},
+   None=>{let d=id(&self.inner.project_id())?;if d==source{return Err("INVALID_SCOPE".into())}crate::media_keys::PlatformKeys::provision(d).map_err(unified_error)?;d}
+  };
+  let (revision,items)=self.inner.migrate_media_native(&vault,source,dest,&refs,&keys,&expected,&std::sync::atomic::AtomicBool::new(false)).map_err(unified_error)?;
+  Ok(serde_json::json!({"revision":revision.to_string(),"count":items.len()}).to_string())
+ }
+ pub fn verify_media_unlock(&self,attachment_id:String,expected:String)->Result<bool,String>{
+  let plain=self.inner.read_media_native(id(&attachment_id)?,&expected,&crate::media_keys::PlatformKeys).map_err(unified_error)?;
+  // Verification only: zeroizing plaintext is dropped in Rust, never exported.
+  Ok(!plain.is_empty())
+ }
  // Locked metadata only. No secret keys or decrypted media cross FRB.
  pub fn media_inventory(&self,layer_id:String,after:String,expected:String)->Result<String,String>{
   self.inner.media_inventory(&layer_id,&after,&expected).map_err(unified_error)
