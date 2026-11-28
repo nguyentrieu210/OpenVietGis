@@ -93,7 +93,7 @@ impl LocalStore {
             tx.pragma_update(None,"application_id",APP_ID)?;
             tx.pragma_update(None,"user_version",VERSION)?;
             tx.commit()?;
-        } else if app!=APP_ID || version!=VERSION || !matches!(db.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get::<_,i32>(0)).ok(),Some(1|2)) {
+        } else if app!=APP_ID || version!=VERSION || !matches!(db.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get::<_,i32>(0)).ok(),Some(1|2|3)) {
             return Err(Error::Unsupported);
         }
         let integrity:String=db.pragma_query_value(None,"quick_check",|r|r.get(0))?;
@@ -103,6 +103,7 @@ impl LocalStore {
         if schema==1{
             tx.execute_batch(include_str!("migration_002.sql"))?;
         }
+        if schema<=2{tx.execute_batch(include_str!("migration_003.sql"))?;}
         tx.commit()?;
         db.pragma_update(None,"journal_mode","WAL")?;
         db.pragma_update(None,"synchronous","FULL")?;

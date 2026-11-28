@@ -71,6 +71,55 @@ impl NativeWorkspace {
         let m=Mutation{operation_id:id(&operation_id)?,feature_id:id(&feature_id)?,expected_revision,wkb,attributes:serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?};
         self.with_state(|s|s.store.apply(&m).map(|r|r.revision).map_err(|e|e.to_string()))
     }
+    pub fn preview_edit(&self,kind:String,xy:Vec<f64>)->Result<Vec<u8>,String>{
+        self.with_state(|_|ovg_mobile_engine::edit::draft(&kind,&xy).map_err(|e|e.to_string()))
+    }
+    pub fn commit_drawing(&self,kind:String,xy:Vec<f64>,attributes_json:String)->Result<String,String>{
+        if attributes_json.len()>256*1024{return Err("RESOURCE_LIMIT".into());}
+        self.with_state(|s|{
+            let wkb=ovg_mobile_engine::edit::draft(&kind,&xy).map_err(|e|e.to_string())?;
+            let feature_id=Uuid::new_v4();
+            let e=ovg_local_storage::editing::Edit{feature_id,expected_revision:0,wkb:Some(wkb),attributes:serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?};
+            s.store.commit_edit(Uuid::new_v4(),&[e]).map_err(|e|e.to_string())?;
+            Ok(feature_id.to_string())
+        })
+    }
+    pub fn undo_redo(&self,redo:bool)->Result<bool,String>{
+        self.with_state(|s|s.store.history_step(redo).map_err(|e|e.to_string()))
+    }
+    pub fn snap_local(&self,x:f64,y:f64,tolerance_m:f64)->Result<String,String>{
+        self.with_state(|s|s.store.snap_local(x,y,tolerance_m).map_err(|e|e.to_string()))
+    }
+    pub fn attribute_page(&self,after:i64,limit:u32,contains:String)->Result<String,String>{
+        self.with_state(|s|s.store.attribute_page(after,limit,&contains).map_err(|e|e.to_string()))
+    }
+    pub fn feature_json(&self,feature_id:String)->Result<String,String>{
+        self.with_state(|s|s.store.feature_json(id(&feature_id)?).map_err(|e|e.to_string()))
+    }
+    pub fn set_attribute_schema(&self,fields_json:String)->Result<(),String>{
+        if fields_json.len()>256*1024{return Err("RESOURCE_LIMIT".into());}
+        self.with_state(|s|{
+            let fields:Vec<ovg_mobile_engine::attributes::Field>=serde_json::from_str(&fields_json).map_err(|_|"INVALID_SCHEMA".to_owned())?;
+            s.store.set_attribute_schema(&fields).map_err(|e|e.to_string())
+        })
+    }
+    pub fn create_track(&self,name:String)->Result<String,String>{
+        self.with_state(|s|s.store.create_track(&name).map(|v|v.to_string()).map_err(|e|e.to_string()))
+    }
+    pub fn track_state(&self,track_id:String,action:String)->Result<(),String>{
+        self.with_state(|s|s.store.track_state(id(&track_id)?,&action).map_err(|e|e.to_string()))
+    }
+    pub fn append_fix(&self,track_id:String,fix_json:String)->Result<u64,String>{
+        if fix_json.len()>4096{return Err("RESOURCE_LIMIT".into());}
+        let fix=serde_json::from_str(&fix_json).map_err(|_|"INVALID_FIX".to_owned())?;
+        self.with_state(|s|s.store.append_fix(id(&track_id)?,&fix).map_err(|e|e.to_string()))
+    }
+    pub fn recover_tracks(&self)->Result<u32,String>{
+        self.with_state(|s|s.store.recover_tracks().map(|v|v as u32).map_err(|e|e.to_string()))
+    }
+    pub fn track_gpx(&self,track_id:String)->Result<String,String>{
+        self.with_state(|s|s.store.track_gpx(id(&track_id)?).map_err(|e|e.to_string()))
+    }
     pub fn viewport_geojson(&self,west:f64,south:f64,east:f64,north:f64)->Result<String,String>{
         self.with_state(|s|s.store.viewport_geojson([west,south,east,north]).map_err(|e|e.to_string()))
     }

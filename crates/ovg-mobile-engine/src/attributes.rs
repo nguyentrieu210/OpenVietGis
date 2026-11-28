@@ -2,7 +2,7 @@
 use serde::{Serialize,Deserialize};
 use serde_json::Value;
 use crate::Error;
-#[derive(Debug,Clone,Serialize,Deserialize)]
+#[derive(Debug,Clone,Copy,Serialize,Deserialize)]
 #[serde(rename_all="snake_case")]
 pub enum Kind{Text,Integer,Number,Boolean}
 #[derive(Debug,Clone,Serialize,Deserialize)]

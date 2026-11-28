@@ -53,7 +53,7 @@ impl LocalStore{
  pub fn commit_edit(&self,command:Uuid,edits:&[Edit])->Result<(),Error>{
     if command.is_nil()||edits.is_empty()||edits.len()>32{return Err(Error::Invalid);}
     let mut db=self.lock()?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    if tx.query_row("SELECT 1 FROM ovg_edit_history WHERE command_id=?1",[command.to_string()],|r|r.get::<_,i32>(0)).optional()?.is_some(){return Err(Error::Reused);}
+    if tx.query_row("SELECT 1 FROM ovg_edit_command WHERE command_id=?1",[command.to_string()],|r|r.get::<_,i32>(0)).optional()?.is_some(){return Err(Error::Reused);}
     let mut ids=std::collections::HashSet::new();let mut before=Vec::new();let mut after=Vec::new();let mut bytes=0usize;
     for e in edits{
       if !ids.insert(e.feature_id)||e.feature_id.is_nil(){return Err(Error::Invalid);}
@@ -67,6 +67,7 @@ impl LocalStore{
       Self::apply_in(&tx,&m)?;
       after.push(Change{id:e.feature_id,image:read(&tx,e.feature_id)?.1});
     }
+    tx.execute("INSERT INTO ovg_edit_command(command_id) VALUES(?1)",[command.to_string()])?;
     tx.execute("DELETE FROM ovg_edit_history WHERE applied=0",[])?;
     tx.execute("INSERT INTO ovg_edit_history(command_id,before_json,after_json,applied) VALUES(?1,?2,?3,1)",params![command.to_string(),serde_json::to_string(&before).map_err(|_|Error::Invalid)?,serde_json::to_string(&after).map_err(|_|Error::Invalid)?])?;
     tx.execute("DELETE FROM ovg_edit_history WHERE seq NOT IN (SELECT seq FROM ovg_edit_history ORDER BY seq DESC LIMIT 64)",[])?;
