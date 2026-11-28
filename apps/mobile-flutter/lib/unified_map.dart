@@ -15,7 +15,7 @@ const _style=<String,Object>{
  {'id':'u-line','type':'line','source':'unified','filter':['in',['geometry-type'],['literal',['Polygon','LineString']]],'paint':{'line-color':['get','display_color'],'line-width':2}},
  {'id':'u-point','type':'circle','source':'unified','filter':['==',['geometry-type'],'Point'],'paint':{'circle-color':['get','display_color'],'circle-radius':6}},
  {'id':'d-line','type':'line','source':'draft','filter':['==',['geometry-type'],'LineString'],'paint':{'line-color':'#e65100','line-width':3}},
- {'id':'d-point','type':'circle','source':'draft','filter':['==',['geometry-type'],'Point'],'paint':{'circle-color':'#e65100','circle-radius':5}}
+ {'id':'d-point','type':'circle','source':'draft','filter':['==',['geometry-type'],'Point'],'paint':{'circle-color':['case',['boolean',['get','chosen'],false],'#f9a825','#e65100'],'circle-radius':['case',['boolean',['get','chosen'],false],9,5]}}
  ]};
 
 class UnifiedMap extends StatefulWidget{
@@ -74,7 +74,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
        final id=f['id'].toString();
        f['id']='$l:$id';
        // Only display metadata crosses the map bridge; attributes loaded on pick.
-       f['properties']={'layer':l,'feature_id':id,'display_color':_colors[i%_colors.length]};
+       f['properties']={'layer':l,'feature_id':id,'display_color':_colors[math.max(0,widget.layers.indexWhere((v)=>v['id']==l)).toInt()%_colors.length]};
        final n=utf8.encode(jsonEncode(f)).length+1;
        if(bytes+n>2*1024*1024-1024){truncated=true;break;}
        bytes+=n;features.add(f);
@@ -103,7 +103,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
   final map=_map;if(map==null||!_loaded)return;
   final p=_vertices.map((v)=>[v.longitude,v.latitude]).toList();
   try{await map.setGeoJsonSource('draft',{'type':'FeatureCollection','features':[
-    for(final xy in p){'type':'Feature','properties':{},'geometry':{'type':'Point','coordinates':xy}},
+    for(var i=0;i<p.length;i++){'type':'Feature','properties':{'chosen':_vertexMode&&i==_vertex},'geometry':{'type':'Point','coordinates':p[i]}},
     if(p.length>=2){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':_kind=='polygon'&&p.length>=3?[...p,p.first]:p}}
   ]});}catch(e){if(mounted)setState(()=>_error=e.toString());}
  }
@@ -202,7 +202,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
     ]else...[
      IconButton(tooltip:'Snapping',icon:Icon(_snap?Icons.my_location:Icons.location_searching),onPressed:_busy?null:()=>setState(()=>_snap=!_snap)),
      if(_vertexMode&&_kind!='point')IconButton(tooltip:'Chèn sau đỉnh chọn',icon:const Icon(Icons.add_location_alt),onPressed:_busy||_vertices.length>=4095?null:()=>setState(()=>_insert=!_insert)),
-     IconButton(tooltip:'Bỏ đỉnh',icon:const Icon(Icons.undo),onPressed:_busy||_vertices.isEmpty?null:(){setState((){if(_vertexMode){if(_vertices.length<=(_kind=='polygon'?3:_kind=='line'?2:1))return;_vertices.removeAt(_vertex);_vertex=math.min(_vertex,_vertices.length-1);_insert=false;}else{_vertices.removeLast();}});unawaited(_preview());}),
+     IconButton(tooltip:'Bỏ đỉnh',icon:const Icon(Icons.undo),onPressed:_busy||_vertices.isEmpty?null:(){setState((){if(_vertexMode){if(_vertices.length<=(_kind=='polygon'?3:_kind=='line'?2:1))return;_vertices.removeAt(_vertex);_vertex=math.min(_vertex,_vertices.length-1).toInt();_insert=false;}else{_vertices.removeLast();}});unawaited(_preview());}),
      IconButton(tooltip:'Lưu',icon:const Icon(Icons.check),onPressed:_busy||_vertices.isEmpty?null:()=>unawaited(_commit())),
      IconButton(tooltip:'Hủy',icon:const Icon(Icons.close),onPressed:_busy?null:(){setState((){_kind=null;_vertexMode=false;_insert=false;_vertices.clear();_selected=null;_featureRevision=null;});unawaited(_preview());}),
     ]
@@ -210,7 +210,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
    Positioned(left:8,right:68,bottom:8,child:Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
     Text('Revision $_revision · ${_kind??"Bản đồ"}'),
     Text('Lớp: '+widget.layers.firstWhere((l)=>l['id']==_active,orElse:()=>{'name':_active})['name'].toString()+' · '+_visible.length.toString()+' hiển thị'),
-    if(_vertexMode&&_vertices.isNotEmpty)Row(children:[IconButton(onPressed:_busy||_vertex==0?null:()=>setState(()=>_vertex--),icon:const Icon(Icons.chevron_left)),Expanded(child:Text('Đỉnh ${_vertex+1}/${_vertices.length} · ${_insert?"chèn":"chạm bản đồ để di chuyển"}')),IconButton(onPressed:_busy||_vertex==_vertices.length-1?null:()=>setState(()=>_vertex++),icon:const Icon(Icons.chevron_right))]),
+    if(_vertexMode&&_vertices.isNotEmpty)Row(children:[IconButton(onPressed:_busy||_vertex==0?null:(){setState(()=>_vertex--);unawaited(_preview());},icon:const Icon(Icons.chevron_left)),Expanded(child:Text('Đỉnh ${_vertex+1}/${_vertices.length} · ${_insert?"chèn":"chạm bản đồ để di chuyển"}')),IconButton(onPressed:_busy||_vertex==_vertices.length-1?null:(){setState(()=>_vertex++);unawaited(_preview());},icon:const Icon(Icons.chevron_right))]),
     if(_busy)const LinearProgressIndicator(),
     if(_error!=null)Text(_error!),
     if(_truncated)const Text('Giới hạn khung nhìn / 2 MiB tổng. Phóng to để xem thêm.'),
