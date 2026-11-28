@@ -13,3 +13,5 @@ Base a4ae85a5e3d956de1870dcf65ff3fb21da7f0367; upstream aea84131974b57ff6359666d
 - Advertise only supported operations in skill descriptions; distinguish manual imports, styling and public publication from executable tools.
 - Check every explicitly referenced GIS/CAD tool against the native registry; test CRLF, folded descriptions and empty bodies.
 - Remove duplicate top-level concurrency keys in Rust MCP and E17 workflows (inherited from main); keep their event-specific concurrency rules and all existing test/build steps.
+
+- Root CI has the same inherited duplicate key; retain the existing event-specific concurrency block and all root acceptance jobs.
