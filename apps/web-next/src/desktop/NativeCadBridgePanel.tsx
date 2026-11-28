@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from "react";
 import {nativeCad,type CadEditorStatus,type CadVersion,type PersistentAsset} from "./transport";
 import CadCanvasPanel from "./CadCanvasPanel";
 import CadPreviewPanel from "./CadPreviewPanel";
-export default function NativeCadBridgePanel({handle,revision,assets,onChanged}:{handle:string;revision:string;assets:PersistentAsset[];onChanged:()=>Promise<void>}){
+export default function NativeCadBridgePanel({handle,revision,assets,layer,onChanged}:{handle:string;revision:string;assets:PersistentAsset[];layer:string;onChanged:()=>Promise<void>}){
  const [status,setStatus]=useState<Awaited<ReturnType<typeof nativeCad.status>>>(),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[editor,setEditor]=useState<CadEditorStatus>();
  const [versions,setVersions]=useState<CadVersion[]>([]);
  useEffect(()=>{let active=true;void nativeCad.versions(handle).then(v=>{if(active)setVersions(v)}).catch(e=>{if(active)setMessage(String(e))});return()=>{active=false}},[handle,revision]);
@@ -34,6 +34,9 @@ export default function NativeCadBridgePanel({handle,revision,assets,onChanged}:
   if(alive.current){setEditor(undefined);setMessage("Đã lưu phiên bản CAD "+r.id);await onChanged();}
  });
  const projectDxf=(id:string)=>run(async()=>{if(!window.confirm("Xác nhận DXF đã dùng WGS84 XY, chỉ POINT/LINE. Tạo lớp GIS độc lập, không sửa ngược bản CAD?"))return;const r=await nativeCad.projectDxf(handle,id,revision,"CAD "+id.slice(0,8));if(alive.current){setMessage("Đã tạo lớp GIS "+r.count+" đối tượng");await onChanged()}});
+ const sync=(asset:string,child:string|null)=>run(async()=>{if(!layer||!window.confirm("Đồng bộ lớp GIS đang chọn với DXF WGS84 POINT/LINE (tối đa 64 entity, giữ nguyên tập Handle). Xung đột sẽ bị từ chối. Tiếp tục?"))return;
+  const r=await nativeCad.syncLayer(handle,layer,asset,child,revision);if(alive.current){setMessage(r.asset?"Tạo phiên bản CAD "+r.asset:"Đã cập nhật "+r.features+" đối tượng");await onChanged()}
+ });
  const save=()=>run(async()=>{if(!editor||editor.state==="editing"||!editor.changed)return;
   if(!window.confirm(editor.state==="recoverable"?"Editor kết thúc bất thường. Xuất bản sao phục hồi chưa được nghiệm thu?":"Xuất bản vẽ đã chỉnh sửa thành file mới?"))return;
   const r=await nativeCad.editSave(handle,editor.session,editor.sha256);if(r&&alive.current){setEditor(undefined);setMessage("Đã lưu bản sao "+r.format.toUpperCase()+" · SHA-256 "+r.sha256)}
@@ -43,7 +46,7 @@ export default function NativeCadBridgePanel({handle,revision,assets,onChanged}:
  <p>{status?.available?"Có sidecar CAD":"Chưa đóng gói sidecar CAD"} · {status?.source_revision.slice(0,12)}</p>
  <p>Editor riêng chỉnh sửa DWG/DXF; GIS quản lý bản sao và xuất kết quả. Không ghi đè file nguồn. Chưa nhúng canvas CAD vào bản đồ.</p>
  <button disabled={!status?.available||busy||!!editor} onClick={()=>void open()}>Mở editor DWG / DXF</button>
- {assets.filter(a=>a.kind==="cad-native-dwg"||a.kind==="cad-native-dxf").map(a=><div key={a.id}><span>{a.kind.endsWith("dwg")?"DWG":"DXF"} · {a.id.slice(0,8)} · cha: {versions.find(v=>v.asset===a.id)?.parent.slice(0,8)??"gốc"}</span> <button disabled={!status?.available||busy||!!editor} onClick={()=>void openStored(a.id)}>Chỉnh sửa phiên bản</button>{a.kind==="cad-native-dxf"&&<button disabled={busy} onClick={()=>void projectDxf(a.id)}>Tạo lớp GIS WGS84</button>}{a.kind==="cad-native-dxf"&&!editor&&<><CadCanvasPanel handle={handle} asset={a} revision={revision} onChanged={onChanged}/><CadPreviewPanel handle={handle} asset={a.id} revision={revision}/></>}</div>)}
+ {assets.filter(a=>a.kind==="cad-native-dwg"||a.kind==="cad-native-dxf").map(a=><div key={a.id}><span>{a.kind.endsWith("dwg")?"DWG":"DXF"} · {a.id.slice(0,8)} · cha: {versions.find(v=>v.asset===a.id)?.parent.slice(0,8)??"gốc"}</span> <button disabled={!status?.available||busy||!!editor} onClick={()=>void openStored(a.id)}>Chỉnh sửa phiên bản</button>{a.kind==="cad-native-dxf"&&<button disabled={busy} onClick={()=>void projectDxf(a.id)}>Tạo lớp GIS WGS84</button>}{a.kind==="cad-native-dxf"&&!editor&&<><CadCanvasPanel handle={handle} asset={a} revision={revision} onChanged={onChanged}/><CadPreviewPanel handle={handle} asset={a.id} revision={revision}/><button disabled={busy||!layer} onClick={()=>void sync(a.id,null)}>Lớp GIS → bản CAD mới</button>{versions.filter(v=>v.parent===a.id).map(v=><button key={v.asset} disabled={busy||!layer} onClick={()=>void sync(a.id,v.asset)}>CAD {v.asset.slice(0,8)} → lớp GIS</button>)}</>}</div>)}
  <button disabled={!status?.available||busy} onClick={()=>void convert()}>Chuyển đổi DWG / DXF</button>
  {request.current&&busy&&<button onClick={()=>{if(request.current)void nativeCad.cancel(request.current).catch(()=>{})}}>Hủy chuyển đổi</button>}
  {editor&&<><p>{editor.state==="editing"?"Đang mở editor. Lưu và đóng cửa sổ CAD để nhận kết quả.":editor.state==="recoverable"?"Editor kết thúc bất thường; chỉ xuất phục hồi khi xác nhận.":editor.changed?"Có bản vẽ đã sửa.":"Bản vẽ chưa thay đổi."}</p>
