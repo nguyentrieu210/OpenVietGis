@@ -14,15 +14,15 @@ pub async fn remote_tiff_inspect(window:WebviewWindow,u:State<'_,Unified>,handle
    let mut source=ovg_native_providers::http_range::RangeSource::open(&url,read.token.flag.clone()).map_err(|_|"REMOTE_OPEN_FAILED")?;
    let identity=source.identity().clone();
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
-   let t=ovg_native_providers::remote_tiff::TiledTiff::open(&mut source,identity.bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
+   let levels=ovg_native_providers::remote_tiff::TiledTiff::pyramid(&mut source,identity.bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
    s.with(handle,|_|Ok(()))?;
-   Ok(serde_json::json!({"identity":identity,"info":t.info}))
+   Ok(serde_json::json!({"identity":identity,"info":levels[0].info,"overviews":levels.iter().map(|d|&d.info).collect::<Vec<_>>() }))
   }).await
  }
  #[cfg(not(feature="remote-range"))]{let _=(u,handle,url,request_id);trusted(&window)?;Err("REMOTE_RANGE_NOT_LINKED".into())}
 }
 #[tauri::command]
-pub async fn remote_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,url:String,etag:String,bytes:u64,col:u32,row:u32,request_id:Uuid)->Reply<tauri::ipc::Response>{
+pub async fn remote_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,url:String,etag:String,bytes:u64,level:usize,col:u32,row:u32,request_id:Uuid)->Reply<tauri::ipc::Response>{
  #[cfg(feature="remote-range")]{
   trusted(&window)?;let read=ReadPermit::acquire(request_id)?;
   let slot=tokio::select!{
@@ -35,7 +35,8 @@ pub async fn remote_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uu
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
    let mut source=ovg_native_providers::http_range::RangeSource::open(&url,read.token.flag.clone()).map_err(|_|"REMOTE_OPEN_FAILED")?;
    source.require_identity(&ovg_native_providers::http_range::Identity{bytes,etag}).map_err(|_|"REMOTE_SOURCE_CHANGED")?;
-   let t=ovg_native_providers::remote_tiff::TiledTiff::open(&mut source,bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
+   let levels=ovg_native_providers::remote_tiff::TiledTiff::pyramid(&mut source,bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
+   let t=levels.get(level).ok_or("INVALID_OVERVIEW")?;
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
    let b=t.tile(&mut source,col,row).map_err(|_|"REMOTE_TILE_FAILED")?;
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
@@ -44,5 +45,5 @@ pub async fn remote_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uu
   }).await?;
   Ok(tauri::ipc::Response::new(result))
  }
- #[cfg(not(feature="remote-range"))]{let _=(u,handle,url,etag,bytes,col,row,request_id);trusted(&window)?;Err("REMOTE_RANGE_NOT_LINKED".into())}
+ #[cfg(not(feature="remote-range"))]{let _=(u,handle,url,etag,bytes,level,col,row,request_id);trusted(&window)?;Err("REMOTE_RANGE_NOT_LINKED".into())}
 }
