@@ -188,3 +188,17 @@ fn unified_export_keeps_original_project_authoritative(){
  assert_eq!(s.query(l.id,[0.,0.,180.,90.],0,10,1).unwrap().rows[0].image.attributes["name"],"new");
  h.close(w.handle).unwrap();
 }
+
+#[test]
+fn csv_import_and_compact_copy_preserve_authoritative_data(){
+ let d=tempfile::tempdir().unwrap();let h=Host::new(d.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();
+ let file=d.path().join("survey.csv");std::fs::write(&file,"lon,lat,name\n106,11,A\n107,12,B\n").unwrap();
+ assert_eq!(h.import_csv(w.handle,&file,"lon","lat",4326,b',').unwrap(),2);
+ let out=d.path().join("compact.gpkg");h.compact_layer_copy(w.handle,&out).unwrap();
+ assert!(h.compact_layer_copy(w.handle,&out).is_err());
+ let copy=LocalStore::open(&out,32*1024*1024).unwrap();
+ assert_eq!(copy.query([105.,10.,108.,13.],0,10).unwrap().len(),2);
+ assert_eq!(h.viewport(w.handle,[105.,10.,108.,13.]).unwrap().data["features"].as_array().unwrap().len(),2);
+ h.close(w.handle).unwrap();
+}
