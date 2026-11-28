@@ -100,6 +100,8 @@ pub fn import_layer(store:&LocalStore,path:&Path,selected:Option<&str>)->Result<
  let l=match selected{Some(name)=>available.into_iter().find(|l|l.table==name).ok_or("LAYER_NOT_FOUND")?,None if available.len()==1=>available.into_iter().next().unwrap(),_=>return Err("SELECT_LAYER_REQUIRED")};
  let Layer{table,column,epsg:srid,z,m}=l;
  if srid<=0||z!=0||m!=0{return Err("UNSUPPORTED_CRS_OR_DIMENSIONS")}
+ let registered:i64=sql(tx.query_row("SELECT count(*) FROM gpkg_spatial_ref_sys WHERE srs_id=?1 AND upper(organization)='EPSG' AND organization_coordsys_id=?1",[srid],|r|r.get(0)))?;
+ if registered!=1{return Err("UNSUPPORTED_CRS_METADATA")}
  let genuine:i64=sql(tx.query_row("SELECT count(*) FROM sqlite_master WHERE name=?1 AND type='table' AND upper(ltrim(sql)) LIKE 'CREATE TABLE%'",[&table],|r|r.get(0)))?;
  if genuine!=1{return Err("UNSUPPORTED_TABLE")}
  let own:i64=sql(tx.query_row("SELECT count(*) FROM sqlite_master WHERE name='ovg_local_metadata' AND type='table'",[],|r|r.get(0)))?;
