@@ -16,7 +16,7 @@ pub struct Policy{pub iterations:u32,pub huber:f64,pub min_gain:f64}
 #[derive(Debug,Clone,Copy)]
 pub struct Report{pub initial_cost:f64,pub final_cost:f64,pub sweeps:u32,pub accepted:u64}
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
-pub enum Error{Invalid,Limit,Unanchored,Cancelled}
+pub enum Error{Invalid,Limit,Unanchored,Cancelled,NonConverged}
 fn dot(a:[f64;3],b:[f64;3])->f64{(0..3).map(|i|a[i]*b[i]).sum()}
 fn norm(a:[f64;3])->f64{a[0].hypot(a[1]).hypot(a[2])}
 fn sub(a:[f64;3],b:[f64;3])->[f64;3]{std::array::from_fn(|i|a[i]-b[i])}
@@ -91,10 +91,7 @@ fn update_pose(p:Pose,points:&[Point],marks:&[Mark],ids:&[usize],h:f64)->Option<
  if pose_cost(q,points,marks,ids,h).is_some_and(|v|v<old){return Some(q);}
  }}}None
 }
-/// Transactional: cancellation or invalid input leaves caller buffers unchanged.
-/// Every connected component must have two distinct fixed camera centers.
-/// This is necessary, not sufficient, for full geometric observability.
-pub fn optimize(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:Policy,mut cancelled:impl FnMut()->bool)->Result<Report,Error>{
+fn validate_network(poses:&[Pose],points:&[Point],marks:&[Mark],p:Policy)->Result<(Vec<Vec<usize>>,Vec<Vec<usize>>),Error>{
  if poses.len()>4096||points.len()>100_000||marks.len()>500_000||p.iterations>50{return Err(Error::Limit);}
  if poses.len()<2||points.is_empty()||marks.is_empty()||p.iterations==0||!p.huber.is_finite()||p.huber<=0.||!p.min_gain.is_finite()||p.min_gain<0.{return Err(Error::Invalid);}
  if !poses.iter().all(|p|p.camera.valid()&&p.prior.is_none_or(|q|q.center.iter().all(|v|v.is_finite())&&q.sigma.iter().all(|v|v.is_finite()&&*v>=1e-6)))||
@@ -114,6 +111,14 @@ pub fn optimize(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:Policy,mut c
  for &j in &by_pt[t]{let n=marks[j].camera;if !visited_c[n]{visited_c[n]=true;queue.push_back(n);}}}
  }if !baseline{return Err(Error::Unanchored);}
  }
+
+ Ok((by_cam,by_pt))
+}
+/// Transactional: cancellation or invalid input leaves caller buffers unchanged.
+/// Every connected component must have two distinct fixed camera centers.
+/// This is necessary, not sufficient, for full geometric observability.
+pub fn optimize(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:Policy,mut cancelled:impl FnMut()->bool)->Result<Report,Error>{
+ let (by_cam,by_pt)=validate_network(poses,points,marks,p)?;
  let(mut cameras,mut xyz)=(poses.to_vec(),points.to_vec());let initial=cost(&cameras,&xyz,marks,p.huber).ok_or(Error::Invalid)?;
  let(mut prev,mut accepted,mut sweeps)=(initial,0u64,0u32);
  for _ in 0..p.iterations{
@@ -125,6 +130,105 @@ pub fn optimize(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:Policy,mut c
  let next=cost(&cameras,&xyz,marks,p.huber).ok_or(Error::Invalid)?;sweeps+=1;
  if next>prev+1e-10*prev.max(1.){return Err(Error::Invalid);}
  let gain=prev-next;prev=next;if gain<=p.min_gain{break;}
+ }
+ if cancelled(){return Err(Error::Cancelled);}
+ poses.copy_from_slice(&cameras);points.copy_from_slice(&xyz);
+ Ok(Report{initial_cost:initial,final_cost:prev,sweeps,accepted})
+}
+
+/// Coupled nonlinear LM candidate using matrix-free Schur elimination.
+/// The reference network limits and gauge checks remain in force.
+#[derive(Debug,Clone,Copy)]
+pub struct SparsePolicy{pub nonlinear:Policy,pub linear:super::schur::Policy,pub max_work_bytes:u64}
+fn damp<const N:usize>(a:&mut[[f64;N];N],lambda:f64){
+ let scale=(0..N).map(|i|a[i][i]).fold(0.,f64::max).max(1e-12);
+ for i in 0..N{a[i][i]+=lambda*a[i][i].max(scale*1e-9);}
+}
+fn identity<const N:usize>()->[[f64;N];N]{
+ std::array::from_fn(|i|std::array::from_fn(|j|if i==j{1.}else{0.}))
+}
+fn linearize(poses:&[Pose],points:&[Point],marks:&[Mark],by_pt:&[Vec<usize>],huber:f64,lambda:f64,
+ cancelled:&mut impl FnMut()->bool)->Result<(Vec<super::schur::M6>,Vec<super::schur::C6>,Vec<super::schur::Landmark>),Error>{
+ use super::schur::{Landmark,Link};
+ let mut u=vec![[[0.;6];6];poses.len()];
+ let mut bc=vec![[0.;6];poses.len()];
+ let mut landmarks=Vec::with_capacity(points.len());
+ for (i,ids) in by_pt.iter().enumerate(){
+ if i%128==0&&cancelled(){return Err(Error::Cancelled);}
+ let mut v=[[0.;3];3];let mut bp=[0.;3];let mut links=Vec::new();
+ for &id in ids{
+ let m=&marks[id];let pose=poses[m.camera];let point=points[i];let c=pose.camera;
+ let(e,j,[x,y,z])=projection(c,point.xyz,m).ok_or(Error::Invalid)?;
+ let rot=[[0.,z,-y],[-z,0.,x],[y,-x,0.]];let w=weight(e,huber);
+ let mut cross=[[0.;3];6];
+ for k in 0..2{
+ let jp:[f64;3]=std::array::from_fn(|l|(0..3).map(|a|j[k][a]*c.world_to_camera[a][l]).sum());
+ let jc:[f64;6]=std::array::from_fn(|l|if l<3{-jp[l]}else{(0..3).map(|a|j[k][a]*rot[a][l-3]).sum()});
+ // Accumulate negative gradient, as required by Schur solver.
+ if !point.fixed{accumulate(&mut v,&mut bp,jp,-e[k],w);}
+ if !pose.fixed{accumulate(&mut u[m.camera],&mut bc[m.camera],jc,-e[k],w);}
+ if !point.fixed&&!pose.fixed{for a in 0..6{for b in 0..3{cross[a][b]+=w*jc[a]*jp[b];}}}
+ }
+ if !point.fixed&&!pose.fixed{links.push(Link{camera:m.camera,cross});}
+ }
+ links.sort_unstable_by_key(|v|v.camera);
+ if points[i].fixed{v=identity();}else{damp(&mut v,lambda);}
+ landmarks.push(Landmark{normal:v,rhs:bp,links});
+ }
+ for(i,p)in poses.iter().enumerate(){
+ if p.fixed{u[i]=identity();continue;}
+ if let Some(pr)=p.prior{for k in 0..3{let mut row=[0.;6];row[k]=1./pr.sigma[k];
+ accumulate(&mut u[i],&mut bc[i],row,-(p.camera.center[k]-pr.center[k])/pr.sigma[k],1.);}}
+ damp(&mut u[i],lambda);
+ }
+ Ok((u,bc,landmarks))
+}
+/// Transactional optimization. Rejects non-decreasing trial steps and increases damping.
+/// Reports failure if no acceptable step is found before convergence.
+pub fn optimize_sparse(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:SparsePolicy,
+ mut cancelled:impl FnMut()->bool)->Result<Report,Error>{
+ use super::schur;
+ // Conservative working estimate including input blocks, adjacency, clones and PCG.
+ let estimate=(poses.len() as u64).checked_mul(2048)
+ .and_then(|v|v.checked_add((points.len() as u64).checked_mul(768)?))
+ .and_then(|v|v.checked_add((marks.len() as u64).checked_mul(512)?)).ok_or(Error::Limit)?;
+ if estimate.checked_add(p.linear.max_bytes).ok_or(Error::Limit)?>p.max_work_bytes{return Err(Error::Limit);}
+ if p.linear.max_iterations==0||p.linear.max_iterations>2000||!p.linear.relative_tolerance.is_finite()||
+ p.linear.relative_tolerance<=0.||p.linear.relative_tolerance>=1.||p.linear.max_bytes==0{return Err(Error::Invalid);}
+ let(_,by_pt)=validate_network(poses,points,marks,p.nonlinear)?;
+ if cancelled(){return Err(Error::Cancelled);}
+ let(mut cameras,mut xyz)=(poses.to_vec(),points.to_vec());
+ let initial=cost(&cameras,&xyz,marks,p.nonlinear.huber).ok_or(Error::Invalid)?;
+ let(mut prev,mut lambda,mut accepted,mut sweeps)=(initial,1e-3,0u64,0u32);
+ for _ in 0..p.nonlinear.iterations{
+ if cancelled(){return Err(Error::Cancelled);}
+ if prev<=p.nonlinear.min_gain{break;}
+ let mut improved=false;let mut converged=false;
+ for _ in 0..8{
+ let(u,b,landmarks)=linearize(&cameras,&xyz,marks,&by_pt,p.nonlinear.huber,lambda,&mut cancelled)?;
+ let solution=match schur::solve_system(schur::System{camera:&u,rhs:&b,landmarks:&landmarks},p.linear,&mut cancelled){
+ Ok(s)=>s,Err(schur::Error::Cancelled)=>return Err(Error::Cancelled),
+ Err(schur::Error::Limit)=>return Err(Error::Limit),Err(schur::Error::Invalid)=>return Err(Error::Invalid),
+ Err(_)=>{lambda*=10.;continue;}
+ };
+ let step=solution.camera.iter().flatten().chain(solution.landmark.iter().flatten()).map(|x|x.abs()).fold(0.,f64::max);
+ if step<=1e-12{converged=true;break;}
+ let mut next_c=cameras.clone();let mut next_p=xyz.clone();let mut valid=true;
+ for(i,c)in next_c.iter_mut().enumerate(){if !c.fixed{
+ if let Some(v)=move_pose(*c,solution.camera[i]){*c=v;}else{valid=false;break;}
+ }}
+ if valid{
+ for(i,q)in next_p.iter_mut().enumerate(){if !q.fixed{for k in 0..3{q.xyz[k]+=solution.landmark[i][k];}}}
+ if let Some(next)=cost(&next_c,&next_p,marks,p.nonlinear.huber){if next<prev{
+ let gain=prev-next;prev=next;cameras=next_c;xyz=next_p;accepted+=1;improved=true;
+ lambda=(lambda*0.3).max(1e-12);converged=gain<=p.nonlinear.min_gain;break;
+ }}
+ }
+ lambda*=10.;
+ }
+ sweeps+=1;
+ if converged{break;}
+ if !improved{return Err(Error::NonConverged);}
  }
  if cancelled(){return Err(Error::Cancelled);}
  poses.copy_from_slice(&cameras);points.copy_from_slice(&xyz);
@@ -148,6 +252,21 @@ pub fn optimize(poses:&mut[Pose],points:&mut[Point],marks:&[Mark],p:Policy,mut c
  let r=optimize(&mut p,&mut x,&m,policy(),||false).unwrap();
  assert!(r.final_cost<r.initial_cost*0.02);assert!(r.accepted>0);assert_eq!(p[0].camera.center,fixed);
  assert!(norm(p[2].camera.center)<0.1);
+ }
+ fn sparse_policy()->SparsePolicy{SparsePolicy{nonlinear:policy(),linear:super::super::schur::Policy{max_iterations:100,relative_tolerance:1e-9,max_bytes:1_000_000},max_work_bytes:2_000_000}}
+ #[test]fn sparse_joint_step_converges_and_matches_reference(){
+ let(mut p,mut x,m)=fixture();let(mut q,mut y)=(p.clone(),x.clone());
+ let a=optimize(&mut q,&mut y,&m,policy(),||false).unwrap();
+ let b=optimize_sparse(&mut p,&mut x,&m,sparse_policy(),||false).unwrap();
+ assert!(b.final_cost<b.initial_cost*0.001);assert!(b.final_cost<=a.final_cost+1e-7);
+ assert_eq!(p[0].camera.center,q[0].camera.center);assert!(norm(p[2].camera.center)<0.05);
+ }
+ #[test]fn sparse_cancel_and_budget_transactional(){
+ let(mut p,mut x,m)=fixture();let before=x[0].xyz;
+ let mut s=sparse_policy();s.max_work_bytes=1;
+ assert!(matches!(optimize_sparse(&mut p,&mut x,&m,s,||false),Err(Error::Limit)));
+ assert!(matches!(optimize_sparse(&mut p,&mut x,&m,sparse_policy(),||true),Err(Error::Cancelled)));
+ assert_eq!(x[0].xyz,before);
  }
  #[test]fn unanchored_and_cancelled_leave_input_unchanged(){
  let(mut p,mut x,m)=fixture();let old=x[0].xyz;p[1].fixed=false;
