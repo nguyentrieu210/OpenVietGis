@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from "react";
-import LocalWorkbench from "./LocalWorkbench";
+import DesktopProject from "./DesktopProject";
 import {desktop,type Capabilities,type Project,type Opened} from "./transport";
 import "./desktop.css";
 
@@ -72,12 +72,12 @@ export default function DesktopEntry(){
         <ul>{projects.map(p=><li key={p.id}><button title={p.id} disabled={busy} aria-current={opened?.id===p.id} onClick={()=>void execute(()=>open(p.id))}>{p.id.slice(0,8)}</button></li>)}</ul>
         <button disabled={!opened||busy} onClick={()=>void execute(close)}>Đóng dự án</button>
         <h2>Khả năng</h2>
-        <p>Cloud, đồng bộ và MVT/raster tile: chưa kích hoạt.</p>
+        <p>Cloud và đồng bộ chưa kích hoạt. Local MVT/raster ở chế độ thử nghiệm.</p>
         <button disabled={!opened||busy||!caps?.transform} onClick={()=>void transform()}>Thử chuyển CRS 4326 → 3857</button>
         <button disabled={!jobActive} onClick={()=>void cancel()}>Hủy tác vụ</button>
         {result&&<output>{result}</output>}
       </aside>
-      <main>{opened&&caps?.local_edit&&caps.viewport?<LocalWorkbench key={opened.handle} handle={opened.handle}/>:<p>Chọn hoặc tạo dự án để mở bản đồ cục bộ.</p>}</main>
+      <main>{opened&&caps?.local_edit&&caps.viewport?<DesktopProject key={opened.handle} rootHandle={opened.handle}/>:<p>Chọn hoặc tạo dự án để mở bản đồ cục bộ.</p>}</main>
     </div>
     <footer role="status">{message|| (busy?"Đang xử lý…":opened? "Đang mở "+opened.id:"Chọn hoặc tạo dự án, không cần tài khoản.")}</footer>
   </div>;
