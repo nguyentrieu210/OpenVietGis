@@ -80,3 +80,20 @@ pub async fn native_export_parquet(window:WebviewWindow,u:State<'_,Unified>,hand
  }
  #[cfg(not(feature="native-ogr"))]{let _=(u,handle,layer,expected);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
 }
+
+#[tauri::command]
+pub async fn native_import_ogr_stream(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,index:usize,name:String,expected:String,request_id:Uuid)->Reply<Option<Value>>{
+ #[cfg(feature="native-ogr")]{
+  trusted(&window)?;
+  if index>=64||name.trim().is_empty()||name.len()>256{return Err("INVALID_LAYER".into())}
+  let read=ReadPermit::acquire(request_id)?;
+  let app=window.app_handle().clone();
+  work(window,u.inner().clone(),move|s|{
+   let Some(file)=app.dialog().file().add_filter("Stream SHP / FGB / GeoParquet",&["shp","fgb","parquet"]).blocking_pick_file() else{return Ok(None)};
+   let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+   let r=s.import_ogr_stream(handle,&path,index,&name,unified::number(&expected)?,&read.token.flag)?;
+   Ok(Some(serde_json::json!({"layer":r.layer,"revision":r.revision.to_string(),"count":r.count,"digest":r.digest})))
+  }).await
+ }
+ #[cfg(not(feature="native-ogr"))]{let _=(u,handle,index,name,expected,request_id);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
+}
