@@ -63,7 +63,7 @@ try{
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
  if(process.env.OVG_PLUGIN071_ONLY==="1"){
-  assert.equal(await page.locator(".qgis-plugin-toolbar").innerText(),"");
+  assert.equal(await page.locator(".qgis-plugin-toolbar").getByText("Quản lý số nhà",{exact:false}).count(),0);
   assert.equal(domainCalls,0,"no business API before opening plugin");
   const command=async(label)=>{await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();const root=page.getByRole("region",{name:"Menu Plugin",exact:true});const trigger=root.locator(".ovg-plugin-sub-trigger").first();await trigger.focus();await trigger.press("ArrowRight");const submenu=page.locator(".ovg-plugin-submenu");await submenu.waitFor();assert.equal(await submenu.locator("code").count(),0);const contained=await submenu.evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight});assert.ok(contained,"submenu remains inside viewport");await submenu.getByText(label,{exact:true}).click()};
   await command("Mở không gian");

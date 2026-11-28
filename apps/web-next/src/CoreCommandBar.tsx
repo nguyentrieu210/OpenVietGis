@@ -1,3 +1,4 @@
+import "./ui-menu.css";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
 import {normalizeCommand as normalize,searchCommands,resolveCommand,searchRibbonCommands} from "./command-search";
@@ -105,7 +106,7 @@ export function CoreRibbon({commands,enabled=true}:{commands:CoreCommand[];enabl
   e.preventDefault();options[next]?.focus();
  };
  const items=searchRibbonCommands(commands.filter(c=>group==="Tìm lệnh"||c.group===group),query,aliases);
- const open=(e:React.MouseEvent<HTMLButtonElement>,g:string)=>{if(!enabled||document.querySelector('[aria-modal="true"]'))return;if(group===g){close(true);return}trigger.current=e.currentTarget;const r=e.currentTarget.getBoundingClientRect();setPos({x:Math.max(8,Math.min(r.left,innerWidth-Math.min(370,innerWidth-16)-8)),y:r.bottom+5});setSub(null);setQuery("");setGroup(g)};
+ const open=(e:React.MouseEvent<HTMLButtonElement>,g:string)=>{if(!enabled||document.querySelector('[aria-modal="true"]'))return;if(group===g){close(true);return}trigger.current=e.currentTarget;const r=e.currentTarget.getBoundingClientRect();setPos({x:Math.max(8,Math.min(r.left,innerWidth-Math.min(g==="Tìm lệnh"?420:340,innerWidth-16)-8)),y:r.bottom+5});setSub(null);setQuery("");setGroup(g)};
  const pluginGroups=new Map<string,{name:string;commands:CoreCommand[]}>();
  if(group==="Plugin")for(const c of items){if(!c.pluginMenu)continue;const p=c.pluginMenu,g=pluginGroups.get(p.id)??{name:p.name,commands:[]};g.commands.push(c);pluginGroups.set(p.id,g)}
  const current=sub?pluginGroups.get(sub.id):undefined;

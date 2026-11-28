@@ -1,10 +1,5 @@
 /* Shared desktop density: keep tools compact, but separate forms and sections.
    Do not apply spacing to map canvases, printed pages or data-cell contents. */
-.qgis-studio .live-shade:not(.partner-docked)>.ovg-dialog-shell:not(:has(.layer-properties))>.live-modal-body {
- padding:var(--ovg-ui-inset);gap:var(--ovg-ui-section-gap);box-sizing:border-box;
-}
-.qgis-studio .ovg-dialog-shell>header{padding:9px var(--ovg-ui-inset);gap:8px}
-.qgis-studio .ovg-dialog-shell .ovg-dialog-footer{padding:10px var(--ovg-ui-inset);gap:8px}
 .qgis-studio :is(.ovg-dialog-shell,.core-workbench) :is(.live-actions,.ovg-ui-actions,.ovg-plugin-manager-actions){gap:8px;row-gap:8px;flex-wrap:wrap}
 .qgis-studio :is(.ovg-dialog-shell,.core-workbench) .ovg-ui-form{gap:12px}
 .qgis-studio :is(.ovg-dialog-shell,.core-workbench) .ovg-ui-field{gap:6px}
