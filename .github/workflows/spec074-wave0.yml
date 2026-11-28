@@ -52,3 +52,32 @@ jobs:
           node-version: '26'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @openvietgis/web-next build
+  shared-native-graph:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-apple-darwin, x86_64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: a746778f7b09ad691f4fe68e21a973174b46c51a
+          path: mobile-baseline
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: |
+          for crate in ovg-mobile-engine ovg-local-storage; do
+            cargo metadata --manifest-path "mobile-baseline/crates/$crate/Cargo.toml" --filter-platform "${{ matrix.target }}" --format-version 1 > "$crate.json"
+            python3 infra/desktop/wave0/check_native_graph.py "$crate.json"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-graph-${{ matrix.target }}
+          path: |
+            ovg-mobile-engine.json
+            ovg-local-storage.json
+            mobile-baseline/crates/ovg-mobile-engine/Cargo.lock
+            mobile-baseline/crates/ovg-local-storage/Cargo.lock
