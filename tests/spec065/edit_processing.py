@@ -248,6 +248,21 @@ def check(c,f,second,fixtures,directory):
         "base_schema_revision":target["schema_revision"],"summary":"delete referenced target",
         "operations":[{"op_type":"delete","feature_id":"clip"}]}
     post(target_endpoint,remove,expected=409)
+    # Even a separate write path bypassing the changeset service must be rejected.
+    try:
+        with psycopg.connect(OWNER) as conn:
+            conn.execute("UPDATE spatial.reference_features SET attributes=jsonb_set(attributes,'{ward}',to_jsonb('MISSING'::text)) WHERE source_id=%s AND feature_id='pt'",(child["source_id"],))
+            conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        raise AssertionError("database accepted invalid relation key")
+    except psycopg.Error as exc:
+        assert exc.sqlstate=="OV409",(exc.sqlstate,str(exc))
+    try:
+        with psycopg.connect(OWNER) as conn:
+            conn.execute("DELETE FROM spatial.reference_features WHERE source_id=%s AND feature_id='clip'",(target["source_id"],))
+            conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        raise AssertionError("database accepted orphaned relation")
+    except psycopg.Error as exc:
+        assert exc.sqlstate=="OV409",(exc.sqlstate,str(exc))
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",(child["source_id"],)).fetchone()[0]==child_attrs
         assert conn.execute("SELECT count(*) FROM spatial.reference_features WHERE source_id=%s AND feature_id='clip'",(target["source_id"],)).fetchone()[0]==1

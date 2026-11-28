@@ -845,8 +845,8 @@ impl<'a> EditScope<'a> {
     }
 
     // Project write guards serialize changesets and relation configuration.
-    // Scoped changesets already enter internal ACL mode after source authorization;
-    // return only a generic conflict, never another source's keys or identifiers.
+    // Scoped relation-bound edits are denied before entering internal ACL mode.
+    // Return only a generic conflict, never another source's keys or identifiers.
     async fn validate_relations(&mut self, source: Uuid) -> Result<(), EditError> {
         let org=self.organization_id();
         let project=self.project_id();
@@ -918,6 +918,17 @@ impl<'a> EditScope<'a> {
             .await
             .map_err(db_error)?;
             if !allowed {
+                return Err(gis_denied());
+            }
+            // No hidden-key oracle: scoped users cannot mutate a relation-bound
+            // source until both sides have a dedicated scoped relation policy.
+            let relation_bound: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM editing.relations
+                  WHERE organization_id=$1 AND project_id=$2
+                  AND (source_id=$3 OR target_source_id=$3))")
+                .bind(org).bind(proj).bind(source_id)
+                .fetch_one(&mut **self.tx.tx_mut()).await.map_err(db_error)?;
+            if relation_bound {
                 return Err(gis_denied());
             }
             sqlx::query("SELECT set_config('openvietgis.acl_internal','on',true)")

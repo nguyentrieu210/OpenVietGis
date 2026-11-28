@@ -1349,7 +1349,7 @@ async fn prepare_inside_savepoint(
             ];
             for (prefix, original) in [("input", &input_fields), ("overlay", &overlay_fields)] {
                 for (i, (_, name, kind, _)) in original.iter().enumerate() {
-                    fields.push((format!("{prefix}_{i}"), format!("{prefix}: {name}").chars().take(200).collect(), kind.clone(), true));
+                    fields.push((format!("{prefix}_{i}"), format!("{prefix} {}: {name}", i+1).chars().take(200).collect(), kind.clone(), true));
                 }
             }
             if fields.len()>100 {

@@ -52,7 +52,7 @@ def upgrade():
     # Metadata guards do not expose the related layer or key in their error.
     op.execute("""
         CREATE FUNCTION editing.guard_relation_metadata() RETURNS trigger
-        LANGUAGE plpgsql SET search_path=pg_catalog AS $
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
         BEGIN
           IF TG_TABLE_NAME='source_fields' THEN
             IF NEW.type IS DISTINCT FROM OLD.type AND EXISTS (
@@ -69,10 +69,122 @@ def upgrade():
             ) THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Source has an active relation constraint'; END IF;
           END IF;
           RETURN NEW;
-        END $
+        END $$
     """)
     op.execute("CREATE TRIGGER relation_field_type_guard BEFORE UPDATE OF type ON spatial.source_fields FOR EACH ROW EXECUTE FUNCTION editing.guard_relation_metadata()")
     op.execute("CREATE TRIGGER relation_source_state_guard BEFORE UPDATE OF lifecycle,validation_state ON spatial.data_sources FOR EACH ROW EXECUTE FUNCTION editing.guard_relation_metadata()")
+
+    # All feature writes serialize with relation-definition edits on the existing project row.
+    # Revision-only and geometry-only updates cannot change relation keys.
+    op.execute("""
+        CREATE FUNCTION editing.lock_relation_write() RETURNS trigger
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        DECLARE org uuid; project uuid; source uuid;
+        BEGIN
+          IF TG_OP='UPDATE' THEN
+            IF NEW.attributes IS NOT DISTINCT FROM OLD.attributes THEN RETURN NEW; END IF;
+          END IF;
+          IF TG_OP='DELETE' THEN
+            org:=OLD.organization_id; project:=OLD.project_id; source:=OLD.source_id;
+          ELSE
+            org:=NEW.organization_id; project:=NEW.project_id; source:=NEW.source_id;
+          END IF;
+          PERFORM 1 FROM workspace.projects p WHERE p.organization_id=org AND p.id=project FOR UPDATE;
+          IF NOT FOUND THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation write scope unavailable';
+          END IF;
+          IF current_user='openvietgis_runtime' AND gis_access.scoped(org,project)
+            AND EXISTS (SELECT 1 FROM editing.relations r
+               WHERE r.organization_id=org AND r.project_id=project
+               AND (r.source_id=source OR r.target_source_id=source))
+          THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation-bound writes require unrestricted project access';
+          END IF;
+          IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+          RETURN NEW;
+        END $$
+    """)
+    op.execute("CREATE TRIGGER relation_write_lock BEFORE INSERT OR UPDATE OF attributes OR DELETE ON spatial.reference_features FOR EACH ROW EXECUTE FUNCTION editing.lock_relation_write()")
+
+    # Evaluate only the changed key against the final transaction state, so valid
+    # multi-operation edits and deletes/reinserts are not rejected midway.
+    op.execute("""
+        CREATE FUNCTION editing.assert_relation_key(rule editing.relations, k text)
+        RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        DECLARE n integer;
+        BEGIN
+          IF k IS NULL THEN RETURN; END IF;
+          SELECT count(*) INTO n FROM (
+            SELECT 1 FROM spatial.reference_features f
+            WHERE (f.organization_id,f.project_id,f.source_id)=
+                  (rule.organization_id,rule.project_id,rule.target_source_id)
+              AND editing.relation_key(f.attributes->rule.target_field,rule.field_type)=k COLLATE "C"
+            LIMIT 2
+          ) target;
+          IF (rule.cardinality='one' AND n>1)
+             OR (n=0 AND EXISTS (
+                SELECT 1 FROM spatial.reference_features f
+                WHERE (f.organization_id,f.project_id,f.source_id)=
+                      (rule.organization_id,rule.project_id,rule.source_id)
+                  AND editing.relation_key(f.attributes->rule.local_field,rule.field_type)=k COLLATE "C"
+             ))
+          THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation constraint would be violated';
+          END IF;
+        END $$
+    """)
+    op.execute("""
+        CREATE FUNCTION editing.check_relation_write() RETURNS trigger
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        DECLARE org uuid; project uuid; source uuid; rule editing.relations;
+                before_attrs jsonb; after_attrs jsonb; before_key text; after_key text;
+        BEGIN
+          IF TG_OP='DELETE' THEN
+            org:=OLD.organization_id; project:=OLD.project_id; source:=OLD.source_id;
+            before_attrs:=OLD.attributes;
+          ELSE
+            org:=NEW.organization_id; project:=NEW.project_id; source:=NEW.source_id;
+            after_attrs:=NEW.attributes;
+            IF TG_OP='UPDATE' THEN before_attrs:=OLD.attributes; END IF;
+          END IF;
+          FOR rule IN SELECT r.* FROM editing.relations r
+            WHERE r.organization_id=org AND r.project_id=project
+              AND (r.source_id=source OR r.target_source_id=source)
+          LOOP
+            IF rule.source_id=source THEN
+              before_key:=editing.relation_key(before_attrs->rule.local_field,rule.field_type);
+              after_key:=editing.relation_key(after_attrs->rule.local_field,rule.field_type);
+              IF before_key IS DISTINCT FROM after_key THEN
+                PERFORM editing.assert_relation_key(rule,after_key);
+              END IF;
+            END IF;
+            IF rule.target_source_id=source THEN
+              before_key:=editing.relation_key(before_attrs->rule.target_field,rule.field_type);
+              after_key:=editing.relation_key(after_attrs->rule.target_field,rule.field_type);
+              IF before_key IS DISTINCT FROM after_key THEN
+                PERFORM editing.assert_relation_key(rule,before_key);
+                PERFORM editing.assert_relation_key(rule,after_key);
+              END IF;
+            END IF;
+          END LOOP;
+          RETURN NULL;
+        END $$
+    """)
+    op.execute("""
+        CREATE CONSTRAINT TRIGGER relation_feature_insert_delete
+        AFTER INSERT OR DELETE ON spatial.reference_features
+        DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+        EXECUTE FUNCTION editing.check_relation_write()
+    """)
+    op.execute("""
+        CREATE CONSTRAINT TRIGGER relation_feature_update
+        AFTER UPDATE ON spatial.reference_features
+        DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+        WHEN (OLD.attributes IS DISTINCT FROM NEW.attributes)
+        EXECUTE FUNCTION editing.check_relation_write()
+    """)
+    op.execute("REVOKE ALL ON FUNCTION editing.assert_relation_key(editing.relations,text) FROM PUBLIC")
+    op.execute("GRANT EXECUTE ON FUNCTION editing.assert_relation_key(editing.relations,text) TO openvietgis_runtime")
 
 
 def downgrade():
@@ -86,5 +198,11 @@ def downgrade():
     op.execute("DROP TRIGGER relation_field_type_guard ON spatial.source_fields")
     op.execute("DROP TRIGGER relation_source_state_guard ON spatial.data_sources")
     op.execute("DROP FUNCTION editing.guard_relation_metadata()")
+    op.execute("DROP TRIGGER relation_feature_update ON spatial.reference_features")
+    op.execute("DROP TRIGGER relation_feature_insert_delete ON spatial.reference_features")
+    op.execute("DROP TRIGGER relation_write_lock ON spatial.reference_features")
+    op.execute("DROP FUNCTION editing.check_relation_write()")
+    op.execute("DROP FUNCTION editing.lock_relation_write()")
+    op.execute("DROP FUNCTION editing.assert_relation_key(editing.relations,text)")
     op.execute("DROP TABLE editing.relations")
     op.execute("DROP FUNCTION editing.relation_key(jsonb,text)")

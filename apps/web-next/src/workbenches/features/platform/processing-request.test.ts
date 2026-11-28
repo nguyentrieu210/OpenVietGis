@@ -59,3 +59,14 @@ it("validates and restores union, reproject and spatial join options",()=>{
  expect(readPendingProcessing(JSON.stringify(j))).toEqual(j);
  expect(readPendingProcessing(JSON.stringify({...j,parameters:{...j.parameters,predicate:"sql"}}))).toBeNull();
 });
+
+it("rejects altered persisted parameters and mismatched reprojection receipt",()=>{
+ const a=layer("a","Polygon"), b=layer("b","Polygon");
+ const u=build("union",a,b);
+ expect(readPendingProcessing(JSON.stringify({...u,parameters:{unsupported:true}}))).toBeNull();
+ expect(readPendingProcessing(JSON.stringify({...u,expected_overlay:u.expected_input}))).toBeNull();
+ const r=processingRequest("reproject",a,undefined,"","","","Projected",op,{targetSrid:3857});
+ const job={id:"job",operation_id:op,algorithm_id:"reproject",output_name:"Projected",status:"queued",output_crs:3857,input_refs:{input_source_id:r.expected_input!.source_id,input_content_revision:r.expected_input!.content_revision,input_schema_revision:r.expected_input!.schema_revision}} as ProcessingJob;
+ expect(verifyProcessingReceipt(job,r)).toBe(job);
+ expect(()=>verifyProcessingReceipt({...job,output_crs:4326},r)).toThrow();
+});

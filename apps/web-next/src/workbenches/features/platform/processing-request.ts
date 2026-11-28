@@ -45,6 +45,7 @@ export function verifyProcessingReceipt(job:ProcessingJob,request:ProcessingRequ
  if(!job.id||job.operation_id!==request.operation_id||job.algorithm_id!==request.algorithm_id||job.output_name!==request.output_name||!["queued","running","succeeded","failed","cancelled"].includes(job.status))throw Error("Biên nhận tác vụ không khớp. Thử lại cùng mã thao tác.");
  const matches=(p:ProcessingSourcePin|undefined,prefix:string)=>!p||!!job.input_refs&&job.input_refs[prefix+"_source_id"]===p.source_id&&job.input_refs[prefix+"_content_revision"]===p.content_revision&&job.input_refs[prefix+"_schema_revision"]===p.schema_revision;
  if(!matches(request.expected_input,"input")||!matches(request.expected_overlay,"overlay"))throw Error("Biên nhận không khớp revision nguồn.");
+ if(request.algorithm_id==="reproject"&&job.output_crs!==request.parameters.target_srid)throw Error("Biên nhận không khớp CRS đích.");
  return job;
 }
 export function readPendingProcessing(raw:string|null):ProcessingRequest|null{
@@ -55,9 +56,11 @@ export function readPendingProcessing(raw:string|null):ProcessingRequest|null{
   if(x.algorithm_id==="dissolve"){if(p.group_by_field!==null&&typeof p.group_by_field!=="string")return null;parameters={group_by_field:p.group_by_field}}
   if(x.algorithm_id==="reproject"){if(![4326,3857].includes(p.target_srid))return null;parameters={target_srid:p.target_srid}}
   if(x.algorithm_id==="spatial_join"){if(!["intersects","within","contains","touches","overlaps","crosses","equals"].includes(p.predicate)||!["left","inner"].includes(p.join_type)||!["all","first"].includes(p.match_mode))return null;parameters={predicate:p.predicate,join_type:p.join_type,match_mode:p.match_mode}}
+  if(Object.keys(p).length!==Object.keys(parameters).length||Object.keys(p).some(k=>!Object.hasOwn(parameters,k)))return null;
   if(overlayAlgorithm(x.algorithm_id)&&(typeof x.overlay_layer_id!=="string"||!x.overlay_layer_id||x.overlay_layer_id===x.input_layer_id))return null;
+  if(!overlayAlgorithm(x.algorithm_id)&&x.overlay_layer_id!==null)return null;
   const input=readPin(x.expected_input),overlay=readPin(x.expected_overlay);
-  if(x.expected_input!==undefined&&!input||x.expected_overlay!==undefined&&!overlay||overlay&&(!input||!overlayAlgorithm(x.algorithm_id))||input&&overlayAlgorithm(x.algorithm_id)&&!overlay)return null;
+  if(x.expected_input!==undefined&&!input||x.expected_overlay!==undefined&&!overlay||overlay&&(!input||!overlayAlgorithm(x.algorithm_id)||overlay.source_id===input.source_id)||input&&overlayAlgorithm(x.algorithm_id)&&!overlay)return null;
   return {algorithm_id:x.algorithm_id,input_layer_id:x.input_layer_id,overlay_layer_id:overlayAlgorithm(x.algorithm_id)?x.overlay_layer_id:null,parameters,output_name:x.output_name,operation_id:x.operation_id,...(input?{expected_input:input}:{}),...(overlay?{expected_overlay:overlay}:{})};
  }catch{return null}
 }
