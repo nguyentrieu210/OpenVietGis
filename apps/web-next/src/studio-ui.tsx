@@ -15,7 +15,11 @@ export function useDesktopDialog(ref:React.RefObject<HTMLElement|null>,close:()=
   modalStack.push(el);
   const items=()=>Array.from(el.querySelectorAll<HTMLElement>(focusable)).filter(x=>x.tabIndex>=0&&!x.matches(":disabled")&&!x.closest('[inert],[hidden],[aria-hidden="true"]')&&x.getClientRects().length>0&&getComputedStyle(x).visibility!=="hidden").sort((a,b)=>(a.tabIndex||Number.MAX_SAFE_INTEGER)-(b.tabIndex||Number.MAX_SAFE_INTEGER));
   const raf=requestAnimationFrame(()=>{if(top()&&!el.contains(document.activeElement))(el.querySelector<HTMLElement>('[autofocus]')??el).focus({preventScroll:true})});
-  const top=()=>modalStack.at(-1)===el&&!Array.from(document.querySelectorAll<HTMLElement>('dialog[open],[aria-modal="true"]')).some(x=>x!==el&&!x.contains(el)&&!el.contains(x)&&!modalStack.includes(x)&&x.getClientRects().length);
+  // Some product dialogs (for example exports) manage their own focus. They
+  // suppress this trap only while focus is inside them; an unrelated visible
+  // modal elsewhere in the tree must not disable this dialog's Tab loop.
+  const foreignDialogOwnsFocus=()=>{const active=document.activeElement;return active instanceof Node&&Array.from(document.querySelectorAll<HTMLElement>('dialog[open],[aria-modal="true"]')).some(x=>x!==el&&!x.contains(el)&&!el.contains(x)&&!modalStack.includes(x)&&x.getClientRects().length>0&&x.contains(active))};
+  const top=()=>modalStack.at(-1)===el&&!foreignDialogOwnsFocus();
   const key=(e:KeyboardEvent)=>{if(!top()||e.isComposing)return;
    if(e.key==="Escape"&&document.querySelector(".ovg-split-ghost"))return;
    if(e.key==="Escape"){e.preventDefault();e.stopImmediatePropagation();latest.current();return}
