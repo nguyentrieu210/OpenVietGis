@@ -138,7 +138,9 @@ def run(src, config, output):
         or max(p[0] for p in corners)-min(p[0] for p in corners)>180
     ):
         raise ValueError("Footprint crosses unsupported map domain")
-    out=gdal.GetDriverByName("GTiff").CreateCopy(output,ds,strict=1,options=["COMPRESS=DEFLATE","TILED=YES"])
+    out=gdal.GetDriverByName("GTiff").CreateCopy(
+        output, ds, strict=1, options=["COMPRESS=DEFLATE","TILED=YES"]
+    )
     if out is None:
         raise ValueError("Failed to copy TIFF")
     out.SetGeoTransform(geo)
@@ -148,7 +150,8 @@ def run(src, config, output):
     check=gdal.OpenEx(output,gdal.OF_RASTER|gdal.OF_READONLY,allowed_drivers=["GTiff"])
     if (
         check is None or check.RasterXSize!=w or check.RasterYSize!=h
-        or check.RasterCount!=bands or not np.allclose(check.GetGeoTransform(),geo,rtol=0,atol=1e-12)
+        or check.RasterCount!=bands
+        or not np.allclose(check.GetGeoTransform(),geo,rtol=0,atol=1e-12)
         or not check.GetSpatialRef().IsSame(s)
     ):
         raise ValueError("Output georeferencing verification failed")
