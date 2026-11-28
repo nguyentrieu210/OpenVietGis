@@ -129,9 +129,9 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 8] {
             category: "vector",
             capabilities: &["vector.read", "geometry.reproject"],
             name: "Reproject",
-            description: "Transforms geometries using approved directed CRS pipelines; regional VN-2000 edges require trusted Quang Ninh evidence. Retains attributes.",
+            description: "Transforms geometries using approved directed CRS pipelines or bounded native VN-2000 projections. Datum changes require trusted regional evidence. Retains attributes.",
             required_inputs: &["input_layer_id"],
-            parameters_schema: json!({"target_srid":{"type":"integer","enum":[4326,3857,4756,5899]}}),
+            parameters_schema: json!({"target_srid":{"type":"integer","enum":[4326,3857,4756,3405,3406,5896,5897,5898,5899,9205,9206,9207,9208,9209,9210,9211,9212,9213,9214,9215,9216,9217,9218]}}),
         },
         AlgorithmDescriptor {
             id: AlgorithmId::SpatialJoin,
@@ -174,8 +174,8 @@ pub fn validate_algorithm_parameters(
         ),
         AlgorithmId::Reproject => {
             let srid = parameters.get("target_srid").and_then(Value::as_i64);
-            if parameters.len() != 1 || !matches!(srid, Some(4326 | 3857 | 4756 | 5899)) {
-                return Err(AppError::validation("INVALID_PARAMETERS", "target_srid must be 4326, 3857, 4756 or 5899; regional evidence is checked at execution"));
+            if parameters.len() != 1 || !srid.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_processing_crs) {
+                return Err(AppError::validation("INVALID_PARAMETERS", "target_srid must be an approved web or native VN-2000 CRS; regional evidence is checked at execution"));
             }
             Ok(json!({"target_srid": srid}))
         }
@@ -361,7 +361,8 @@ mod tests {
             json!({"target_srid":3857})
         );
         assert!(validate(AlgorithmId::Reproject, json!({"target_srid":"3857"})).is_err());
-        assert!(validate(AlgorithmId::Reproject, json!({"target_srid":3405})).is_err());
+        assert!(validate(AlgorithmId::Reproject, json!({"target_srid":3405})).is_ok());
+        assert!(validate(AlgorithmId::Reproject, json!({"target_srid":9999})).is_err());
         assert_eq!(
             validate(AlgorithmId::Reproject, json!({"target_srid":5899})).unwrap(),
             json!({"target_srid":5899})

@@ -3,9 +3,10 @@ export type Algorithm=ProcessingAlgorithm["id"];
 export type ProcessingSourcePin={source_id:string;content_revision:string;schema_revision:string};
 export type ProcessingRequest={algorithm_id:Algorithm;input_layer_id:string;overlay_layer_id:string|null;parameters:Record<string,unknown>;output_name:string;operation_id:string;expected_input?:ProcessingSourcePin;expected_overlay?:ProcessingSourcePin};
 export const supportedAlgorithm=(id:unknown):id is Algorithm=>id==="buffer"||id==="clip"||id==="dissolve"||id==="difference"||id==="intersection"||id==="union"||id==="reproject"||id==="spatial_join";
-export const REPROJECT_CRSS=[4326,3857,4756,5899] as const;
+export const NATIVE_VN2000_CRSS=[4756,3405,3406,5896,5897,5898,5899,9205,9206,9207,9208,9209,9210,9211,9212,9213,9214,9215,9216,9217,9218] as const;
+export const REPROJECT_CRSS=[4326,3857,...NATIVE_VN2000_CRSS] as const;
 export function reprojectTargets(native:number|undefined):number[]{
- switch(native){case 4326:return [4326,3857,4756,5899];case 3857:return [4326,3857];case 4756:return [4326,5899];case 5899:return [4326,4756];default:return []}
+ if(native===4326)return [4326,3857,4756,5899];if(native===3857)return [4326,3857];if(native===4756||native===5899)return [4326,...NATIVE_VN2000_CRSS.filter(c=>c!==native)];if(NATIVE_VN2000_CRSS.some(c=>c===native))return NATIVE_VN2000_CRSS.filter(c=>c!==native);return [];
 }
 export const overlayAlgorithm=(id:Algorithm)=>id==="clip"||id==="difference"||id==="intersection"||id==="union"||id==="spatial_join";
 export const processingLayer=(l:SpatialLayer)=>l.lifecycle==="active"&&l.source.lifecycle==="active"&&l.source.validation_state==="ready"&&!!l.source.stored_crs?.code&&l.source.feature_count!=null&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
@@ -26,7 +27,7 @@ export function processingRequest(algo:Algorithm,layer:SpatialLayer|undefined,ov
  if(overlayAlgorithm(algo)&&(!overlay||!processingLayer(overlay)||overlay.id===layer.id||overlay.source_id===layer.source_id||(algo!=="spatial_join"&&overlay.source.schema.geometry_family!=="Polygon")))throw Error("Chọn lớp phủ Polygon có nguồn khác đầu vào.");
  if(algo==="union"&&layer.source.schema.geometry_family!=="Polygon")throw Error("Union cần hai lớp Polygon.");
  if(algo==="reproject"){
-  if(!reprojectTargets(layer.source.stored_crs?.code).includes(options.targetSrid??0))throw Error("Chọn cặp CRS có phép chuyển đổi được duyệt. VN-2000 cần dữ liệu kiểm chứng Quảng Ninh.");
+  if(!reprojectTargets(layer.source.stored_crs?.code).includes(options.targetSrid??0))throw Error("Chọn cặp CRS có phép chuyển đổi được duyệt. Đổi datum cần dữ liệu kiểm chứng; đổi phép chiếu trong cùng datum phải nằm trong vùng EPSG.");
   parameters={target_srid:options.targetSrid};
  }
  if(algo==="spatial_join"){

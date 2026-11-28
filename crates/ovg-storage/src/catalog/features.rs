@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 use ovg_core::crs::{
-    reference_coordinate_wire, reference_transformation, CoordinateBounds, FixtureRequirement,
+    native_storage_coordinate_wire, reference_transformation, CoordinateBounds, FixtureRequirement,
     TransformationProfile,
 };
 use ovg_core::AppError;
@@ -42,6 +42,7 @@ struct Snapshot {
     fields: HashSet<String>,
     target: Option<(u32, Value)>,
     edge: Option<&'static TransformationProfile>,
+    native_projection:Option<crate::native_projection::NativeProjection>,
 }
 
 impl ProjectRead<'_> {
@@ -136,11 +137,18 @@ impl ProjectRead<'_> {
             .ok_or_else(|| AppError::internal("ready source requires native CRS"))?;
         let mut target = None;
         let mut edge = None;
+        let mut native_projection=None;
         if request.include_geometry {
             let code = request.response_crs.unwrap_or(native);
             let reference =
-                reference_coordinate_wire(code).ok_or_else(|| AppError::unsupported_crs(code))?;
-            if code != native {
+                native_storage_coordinate_wire(code).ok_or_else(|| AppError::unsupported_crs(code))?;
+            if code != native && crate::native_projection::is_native_pair(native,code) {
+                if self.gis_scoped{return Err(out_of_area())}
+                let projection=crate::native_projection::NativeProjection::new(native,code)?;
+                let org=self.tx.organization_id();
+                projection.verify_source(self.tx.tx_mut(),org,self.project_id,source_id).await?;
+                native_projection=Some(projection);
+            } else if code != native {
                 edge = Some(
                     reference_transformation(native, code)
                         .ok_or_else(|| AppError::unsupported_transformation(native, code))?,
@@ -170,7 +178,7 @@ impl ProjectRead<'_> {
             "schema_revision": schema,
             "geometry_included": request.include_geometry,
             "response_crs": target.as_ref().map(|(_, reference)| reference.clone()),
-            "transformation": edge.map(TransformationProfile::to_wire),
+            "transformation": edge.map(TransformationProfile::to_wire).or_else(||native_projection.as_ref().map(|p|p.wire())),
         });
         Ok(Snapshot {
             context,
@@ -183,6 +191,7 @@ impl ProjectRead<'_> {
             fields,
             target,
             edge,
+            native_projection,
         })
     }
 
@@ -211,6 +220,7 @@ impl ProjectRead<'_> {
                 step.target_code
             );
         }
+        if let Some(projection)=&snapshot.native_projection{response=projection.expression("f.geometry");}
         let (filter, key, maximum) = match selection {
             Selection::Page { after, limit } => (
                 r#"($4::text IS NULL OR f.feature_id COLLATE "C" > $4)"#,
@@ -252,7 +262,7 @@ impl ProjectRead<'_> {
             .fetch_all(&mut **self.tx.tx_mut())
             .await
             .map_err(|error| {
-                if steps.is_empty() {
+                if steps.is_empty() && snapshot.native_projection.is_none() {
                     db_error(error)
                 } else {
                     transformation_unavailable()
@@ -313,6 +323,13 @@ impl ProjectRead<'_> {
                     if matches!(*code, 4326 | 4756) && !within(&output["coordinates"], bounds) {
                         return Err(out_of_area());
                     }
+                }
+                if snapshot.native_projection.is_some(){
+                    let response_srid:Option<i32>=row.try_get("response_srid").map_err(db_error)?;
+                    let valid:bool=row.try_get("response_valid").map_err(db_error)?;
+                    let wkb:Option<Vec<u8>>=row.try_get("response_wkb").map_err(db_error)?;
+                    if !valid||response_srid!=i32::try_from(*code).ok(){return Err(transformation_unavailable());}
+                    output=geometry(wkb.as_deref(),&snapshot.family).ok_or_else(transformation_unavailable)?;
                 }
                 output["coordinate_reference"] = reference.clone();
                 item["geometry"] = output;

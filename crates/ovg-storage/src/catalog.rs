@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use ovg_core::crs::{reference_coordinate_wire, reference_profile_wire};
+use ovg_core::crs::{native_storage_coordinate_wire, native_storage_profile_wire, reference_profile_wire};
 use ovg_core::{ActorContext, ActorType, AppError, TenantScope};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -849,8 +849,8 @@ impl<'a> ProjectRead<'a> {
             "lifecycle": row.try_get::<&str, _>("lifecycle").map_err(db_error)?,
             "validation_state": validation_state,
             "validation_reason": row.try_get::<Option<Value>, _>("validation_reason").map_err(db_error)?,
-            "source_crs": profile_wire(source_crs)?,
-            "stored_crs": profile_wire(stored_crs)?,
+            "source_crs": profile_wire(source_crs,validation_state=="ready")?,
+            "stored_crs": profile_wire(stored_crs,validation_state=="ready")?,
             "schema": {
                 "schema_revision": schema_revision,
                 "fields": fields,
@@ -1088,11 +1088,11 @@ fn render_supported(
         && display_extent
 }
 
-fn profile_wire(crs: Option<i32>) -> Result<Option<Value>, AppError> {
+fn profile_wire(crs: Option<i32>, ready:bool) -> Result<Option<Value>, AppError> {
     crs.map(|code| {
         u32::try_from(code)
             .ok()
-            .and_then(reference_profile_wire)
+            .and_then(|code|if ready {native_storage_profile_wire(code)}else{reference_profile_wire(code).or_else(||native_storage_profile_wire(code))})
             .ok_or_else(|| AppError::internal("unrecognized persisted CRS definition"))
     })
     .transpose()
@@ -1105,7 +1105,7 @@ fn extent_wire(extent: Option<Value>) -> Result<Option<Value>, AppError> {
                 .get("crs_code")
                 .and_then(Value::as_u64)
                 .and_then(|code| u32::try_from(code).ok())
-                .and_then(reference_coordinate_wire)
+                .and_then(native_storage_coordinate_wire)
                 .ok_or_else(|| AppError::internal("persisted extent has no readable CRS"))?;
             Ok(json!({
                 "min_x": e["min_x"],

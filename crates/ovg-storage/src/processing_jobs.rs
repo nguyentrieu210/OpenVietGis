@@ -590,6 +590,9 @@ pub async fn submit_job_pinned(
     }
 
     let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
+    if algorithm_id!="reproject" && u32::try_from(input_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
+        return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 layers currently support only Reproject; convert to an existing analysis CRS first"));
+    }
     if expected_input.is_some_and(|p| !p.matches_source(&input_source)) {
         return Err(EditError::conflict(
             "STALE_INPUT_PIN",
@@ -617,6 +620,7 @@ pub async fn submit_job_pinned(
             ));
         };
         let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
+        if u32::try_from(overlay_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 overlay must be reprojected first"));}
         if expected_overlay.is_some_and(|p| !p.matches_source(&overlay_source)) {
             return Err(EditError::conflict(
                 "STALE_INPUT_PIN",
@@ -661,7 +665,7 @@ pub async fn submit_job_pinned(
             .get("target_srid")
             .and_then(Value::as_i64)
             .and_then(|v| i32::try_from(v).ok())
-            .filter(|v| matches!(v, 4326 | 3857 | 4756 | 5899))
+            .filter(|v|u32::try_from(*v).ok().is_some_and(ovg_core::crs::is_processing_crs))
             .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
         approved_reproject(
             scope.tx_mut(),
@@ -839,6 +843,13 @@ async fn approved_reproject(
     native: i32,
     target: i32,
 ) -> Result<String, EditError> {
+    if let (Ok(a),Ok(b))=(u32::try_from(native),u32::try_from(target)) {
+        if crate::native_projection::is_native_pair(a,b) {
+            let projection=crate::native_projection::NativeProjection::new(a,b)?;
+            projection.verify_source(tx,org,project,source).await?;
+            return Ok(projection.expression("rf.geometry"));
+        }
+    }
     if native == target && matches!(native, 4326 | 3857) {
         return Ok("rf.geometry".to_owned());
     }
@@ -1408,7 +1419,7 @@ async fn prepare_inside_savepoint(
                 .get("target_srid")
                 .and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
-                .filter(|v| matches!(v, 4326 | 3857 | 4756 | 5899))
+                .filter(|v|u32::try_from(*v).ok().is_some_and(ovg_core::crs::is_processing_crs))
                 .ok_or_else(|| {
                     EditError::validation("INVALID_PARAMETERS", "unsupported target CRS")
                 })?;
