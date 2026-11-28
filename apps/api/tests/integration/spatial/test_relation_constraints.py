@@ -5,6 +5,8 @@ runtime role to prove constraints do not depend on the Rust changeset path.
 """
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -16,13 +18,6 @@ from tests.integration.spatial.test_sources import _client, _get, _register
 from tests.integration.spatial.test_sources import _path as _source_path
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
-
-
-def _relation_path(world) -> str:
-    return (
-        f"/api/v1/organizations/{world.organization_id}/projects/"
-        f"{world.project_id}/editing/relations"
-    )
 
 
 def _bind(connection, world) -> None:
@@ -71,18 +66,29 @@ def test_relation_constraints_reject_direct_runtime_writes_and_rollback() -> Non
             _set_feature_code(connection, world, local_id, "point-000001", "ward-001")
             _set_feature_code(connection, world, target_id, "polygon-000001", "ward-001")
 
-        request = {
-            "source_id": local_id,
-            "local_field": "fld_feature_code",
-            "target_source_id": target_id,
-            "target_field": "fld_feature_code",
-            "cardinality": "one",
-            "source_schema_revision": local["schema_revision"],
-            "target_schema_revision": target["schema_revision"],
-        }
-        response = client.post(_relation_path(world), json=request)
-        assert response.status_code == 200, response.text
-        rule_id = response.json()["id"]
+        # Seed a valid rule as fixture data. The production relation management
+        # endpoint belongs to the Rust API; this FastAPI integration test focuses
+        # on the independent database write triggers.
+        relation_id = uuid4()
+        with get_admin_engine().begin() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO editing.relations (
+                        id, organization_id, project_id, source_id, local_field,
+                        target_source_id, target_field, cardinality, field_type
+                    ) VALUES (
+                        :id, :org, :project, :source, 'fld_feature_code',
+                        :target, 'fld_feature_code', 'one', 'text'
+                    )
+                """),
+                {
+                    "id": relation_id,
+                    "org": world.organization_id,
+                    "project": world.project_id,
+                    "source": local_id,
+                    "target": target_id,
+                },
+            )
 
     def runtime_write(statement: str, values: dict) -> None:
         with pytest.raises(DBAPIError) as caught:
@@ -153,7 +159,11 @@ def test_relation_constraints_reject_direct_runtime_writes_and_rollback() -> Non
             {"org": world.organization_id, "project": world.project_id, "source": target_id},
         ).scalar_one() == "polygon-000002"
 
-    with _client(world.owner_user_id) as client:
-        response = client.get(_relation_path(world))
-        assert response.status_code == 200, response.text
-        assert rule_id in {item["id"] for item in response.json()["items"]}
+    with get_admin_engine().connect() as connection:
+        assert connection.execute(
+            text("""
+                SELECT id FROM editing.relations
+                WHERE organization_id=:org AND project_id=:project AND id=:id
+            """),
+            {"org": world.organization_id, "project": world.project_id, "id": relation_id},
+        ).scalar_one() == relation_id
