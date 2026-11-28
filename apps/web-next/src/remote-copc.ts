@@ -59,8 +59,8 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
  if(!Number.isInteger(depth)||depth<0||depth>12)throw Error("COPC depth must be 0–12");
  const reader=boundedRangeReader(copcUrl(raw),signal,fetcher),first=await reader.read(0,589),d=new DataView(first);
  if(ascii(d,0,4)!=="LASF"||d.getUint8(24)!==1||d.getUint8(25)!==4||d.getUint16(94,true)!==375||ascii(d,377,16)!=="copc"||d.getUint16(393,true)!==1||d.getUint16(395,true)!==160||!(d.getUint16(6,true)&16))throw Error("Invalid COPC 1.0 header");
- const format=d.getUint8(104)&63,length=d.getUint16(105,true),offset=d.getUint32(96,true),datasetCount=safe64(d,247);
- if(![6,7,8].includes(format)||d.getUint8(104)!==(128|format)||length<({6:30,7:36,8:38} as Record<number,number>)[format]!||length>512||offset<589||offset>1024*1024||offset>=reader.size||d.getUint32(107,true)!==0||datasetCount<1)throw Error("Unsupported COPC records");
+ const format=d.getUint8(104)&63,length=d.getUint16(105,true),offset=d.getUint32(96,true),legacyCount=d.getUint32(107,true),datasetCount=safe64(d,247);
+ if(![6,7,8].includes(format)||d.getUint8(104)!==(128|format)||length<({6:30,7:36,8:38} as Record<number,number>)[format]!||length>512||offset<589||offset>1024*1024||offset>=reader.size||legacyCount!==0&&legacyCount!==datasetCount||datasetCount<1)throw Error("Unsupported COPC records");
  const rootOffset=safe64(d,469),rootBytes=safe64(d,477),evlr=safe64(d,235),evlrCount=d.getUint32(243,true);
  const info=[429,437,445,453,461].map(at=>d.getFloat64(at,true));
  if(!info.every(Number.isFinite)||info[3]!<=0||info[4]!<=0||evlr<=offset||evlr>=reader.size||!evlrCount||evlrCount>64)throw Error("Invalid COPC info or EVLR");
@@ -116,7 +116,7 @@ export async function readRemoteCopc(raw:string,crs:4326|3857,depth:number,signa
  }
  const records=new Uint8Array(count*length);let pos=0;for(const chunk of chunks){records.set(chunk,pos);pos+=chunk.byteLength}
  // Preserve all original VLRs/scale/offset, pin the actual decoded subset.
- const h=new DataView(prefix.buffer);h.setBigUint64(235,0n,true);h.setUint32(243,0,true);h.setBigUint64(247,BigInt(count),true);
+ const h=new DataView(prefix.buffer);h.setBigUint64(235,0n,true);h.setUint32(243,0,true);h.setUint32(107,count,true);h.setBigUint64(247,BigInt(count),true);
  const cloud=parseLasRecords(prefix.buffer,crs,records.buffer);
  return {...cloud,datasetCount,nodeCount,complete:complete&&count===datasetCount};
 }

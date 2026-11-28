@@ -6,6 +6,12 @@ import {readRemoteCopc} from "./remote-copc";
 const fixture=(name:string)=>{const b=readFileSync(new URL("./fixtures/point-cloud/"+name,import.meta.url));return new Uint8Array(b).buffer};
 const module=async()=>await (createLazPerf as unknown as ()=>Promise<LazModule>)();
 describe("real LAZ and COPC fixtures",()=>{
+ it("accepts consistent LAS 1.4 legacy counts and rejects conflicting counts",()=>{
+  const bytes=fixture("ellipsoid-1.4.laz"),view=new DataView(bytes);
+  expect(lazHeader(bytes).count).toBe(100000);
+  view.setUint32(107,99999,true);
+  expect(()=>lazHeader(bytes)).toThrow("Invalid LAZ count");
+ });
  it("decodes lossless LAZ 1.4 and COPC using the locked native WASM codec",async()=>{
   const mod=await module();
   for(const name of ["ellipsoid-1.4.laz","ellipsoid.copc.laz"]){

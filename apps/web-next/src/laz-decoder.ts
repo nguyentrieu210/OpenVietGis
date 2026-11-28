@@ -16,7 +16,7 @@ export function lazHeader(bytes:ArrayBuffer){
  const minLengths:Record<number,number>={0:20,1:28,2:26,3:34,6:30,7:36,8:38};
  if(header<(minor===4?375:minor===3?235:227)||header>offset||offset>=bytes.byteLength||!(raw&128)||raw&64||!Object.hasOwn(minLengths,format)||length<minLengths[format]!||length>512||format>=6&&minor!==4)throw Error("Unsupported LAZ point records");
  const extended=minor===4?d.getBigUint64(247,true):0n;
- if(extended>2000000n||extended&&legacy&&extended!==BigInt(legacy)||format>=6&&(legacy!==0||extended===0n))throw Error("Invalid LAZ count");
+ if(extended>2000000n||extended&&legacy&&extended!==BigInt(legacy)||format>=6&&extended===0n)throw Error("Invalid LAZ count");
  const count=extended?Number(extended):legacy;
  if(count<1||count>2000000||count*length>LAS_MAX_BYTES)throw Error("LAZ decompressed point budget");
  return {count,format,length,offset};
