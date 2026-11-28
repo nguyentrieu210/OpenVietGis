@@ -1,8 +1,9 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState} from "react";
 import {nativeCad,type CadStroke} from "./transport";
 export default function CadPreviewPanel({handle,asset,revision}:{handle:string;asset:string;revision:string}){
  const [data,setData]=useState<CadStroke[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(""),[selected,setSelected]=useState(""),[hidden,setHidden]=useState<Set<string>>(new Set());
- useEffect(()=>{setData([]);setSelected("");setHidden(new Set());setError("")},[handle,asset,revision]);
+ const generation=useRef(0);
+ useEffect(()=>{generation.current++;setBusy(false);setData([]);setSelected("");setHidden(new Set());setError("");return()=>{generation.current++}},[handle,asset,revision]);
  const layers=useMemo(()=>[...new Set(data.map(s=>s.layer))].sort(),[data]);
  const bounds=useMemo(()=>{
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -11,7 +12,7 @@ export default function CadPreviewPanel({handle,asset,revision}:{handle:string;a
   return {x:(minX+maxX)/2,y:(minY+maxY)/2,s:Math.min(560/Math.max(maxX-minX,1e-9),340/Math.max(maxY-minY,1e-9))};
  },[data]);
  const point=([x,y]:[number,number])=>[300+(x-bounds.x)*bounds.s,190-(y-bounds.y)*bounds.s];
- const load=async()=>{if(busy)return;setBusy(true);setError("");try{const r=await nativeCad.preview(handle,asset,revision);setData(r.strokes)}catch(e){setData([]);setError(String(e))}finally{setBusy(false)}};
+ const load=async()=>{if(busy)return;const g=++generation.current;setBusy(true);setError("");try{const r=await nativeCad.preview(handle,asset,revision);if(g===generation.current)setData(r.strokes)}catch(e){if(g===generation.current){setData([]);setError(String(e))}}finally{if(g===generation.current)setBusy(false)}};
  const entity=data.find(s=>s.handle===selected);
  return <details><summary>Xem trước CAD mở rộng</summary><p>Toạ độ CAD gốc, chưa gán CRS. Arc/Circle được lấy mẫu để hiển thị; hatch đặc và block có giới hạn. Không dùng hình xem trước để ghi ngược bản vẽ.</p>
  <button disabled={busy} onClick={()=>void load()}>Đọc DXF</button>
