@@ -107,9 +107,12 @@ def test_processing_and_print_fail_closed_for_unapproved_crs(migrated_database):
         before = _derived_counts(world)
         failed = _job(client, base, "buffer", vn, {"distance_meters": 100})
         assert failed["status"] == "failed" and failed["error_code"] == "UNSUPPORTED_TRANSFORMATION"
+        # The 4326↔4756 edge is approved only for trusted Quang Ninh fixture
+        # provenance; this GeoJSON import has no such evidence, so it fails closed
+        # as out of area rather than being treated as an unavailable CRS edge.
         assert (
             _job(client, base, "clip", wgs, {}, overlay_layer_id=overlay)["error_code"]
-            == "UNSUPPORTED_TRANSFORMATION"
+            == "TRANSFORMATION_OUT_OF_AREA"
         )
         assert _derived_counts(world) == before
         print_rejected = _print(client, base, vn, 4326)
