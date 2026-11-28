@@ -38,6 +38,8 @@ pub fn restore(source:&Path,stage:&Path)->Result<()>{
  let version:i64=a.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get(0)).map_err(|_|"INVALID_SNAPSHOT")?;
  let current:i64=b.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get(0)).map_err(|_|"INVALID_SNAPSHOT")?;
  if app!=0x47504b47||version!=current||schema(&a)?!=schema(&b)?{return Err("UNSUPPORTED_SNAPSHOT_SCHEMA")}
+ // Shared schema has functions in constraints/triggers; use trusted schema only AFTER exact schema equality.
+ a.pragma_update(None,"trusted_schema","ON").map_err(|_|"INVALID_SNAPSHOT")?;
  let integrity:String=a.pragma_query_value(None,"integrity_check",|r|r.get(0)).map_err(|_|"INVALID_SNAPSHOT")?;
  if integrity!="ok"{return Err("INVALID_SNAPSHOT")}
  let foreign:i64=a.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0)).map_err(|_|"INVALID_SNAPSHOT")?;
