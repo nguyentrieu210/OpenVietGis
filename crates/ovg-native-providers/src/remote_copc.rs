@@ -58,7 +58,7 @@ impl Copc{
   // Layered chunked compressor 3, arithmetic coder 0, one Point14 item v3.
   if u16v(&vlr)!=3||u16v(&vlr[2..])!=0||u16v(&vlr[32..])!=1||u16v(&vlr[34..])!=10||u16v(&vlr[36..])!=30||u16v(&vlr[38..])!=3{return Err(bad())}
   let center=std::array::from_fn(|i|f64v(&c[i*8..]));let halfsize=f64v(&c[24..]);let spacing=f64v(&c[32..]);let root=u64v(&c[40..]);let root_size=u64v(&c[48..]);
-  if center.iter().any(|v|!v.is_finite())||!halfsize.is_finite()||halfsize<=0.||!spacing.is_finite()||spacing<=0.||center.iter().any(|v|!(v+halfsize).is_finite()||!(v-halfsize).is_finite())||root<point_start||root_size==0||root_size>MAX_PAGE||root_size%32!=0||root.checked_add(root_size).is_none_or(|e|e>len){return Err(bad())}
+  if center.iter().any(|v|!v.is_finite())||!halfsize.is_finite()||!(2.*halfsize).is_finite()||halfsize<=0.||!spacing.is_finite()||spacing<=0.||center.iter().any(|v|!(v+halfsize).is_finite()||!(v-halfsize).is_finite())||root<point_start||root_size==0||root_size>MAX_PAGE||root_size%32!=0||root.checked_add(root_size).is_none_or(|e|e>len){return Err(bad())}
   Ok(Self{info:Info{center,halfsize,spacing,points,point_format:6},scale,offset,root,root_size,point_start,len,vlr})
  }
  fn intersects(&self,k:Key,b:[f64;6])->bool{
