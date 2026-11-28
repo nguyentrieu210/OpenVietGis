@@ -1,11 +1,11 @@
 //! Bounded E15 codec/render subprocess. Never pass database credentials or
 //! authorize an operation here; only Rust handlers can publish an artifact.
 
+use ovg_core::AppError;
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
-use ovg_core::AppError;
-use serde_json::Value;
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
@@ -21,7 +21,10 @@ impl Drop for Scratch {
 }
 
 fn unavailable() -> AppError {
-    AppError::service_unavailable("FORMAT_ENGINE_UNAVAILABLE", "House-numbering format engine unavailable")
+    AppError::service_unavailable(
+        "FORMAT_ENGINE_UNAVAILABLE",
+        "House-numbering format engine unavailable",
+    )
 }
 
 fn error_code(code: &str) -> &'static str {
@@ -44,14 +47,21 @@ fn error_code(code: &str) -> &'static str {
     }
 }
 
-pub(super) async fn run(req: &Value, input: Option<&[u8]>, result_json: bool) -> Result<Vec<u8>, AppError> {
+pub(super) async fn run(
+    req: &Value,
+    input: Option<&[u8]>,
+    result_json: bool,
+) -> Result<Vec<u8>, AppError> {
     if !crate::raster_compute::worker_nonroot() {
         return Err(unavailable());
     }
     let _slot = SLOTS.try_acquire().map_err(|_| unavailable())?;
     let request = serde_json::to_vec(req).map_err(|_| unavailable())?;
     if request.len() > LIMIT || input.is_some_and(|v| v.len() > LIMIT) {
-        return Err(AppError::validation("REPORT_SIZE_EXCEEDED", "Format payload exceeds byte limit"));
+        return Err(AppError::validation(
+            "REPORT_SIZE_EXCEEDED",
+            "Format payload exceeds byte limit",
+        ));
     }
     let path = std::env::temp_dir().join(format!("ovg-hn-{}", Uuid::new_v4()));
     let mut builder = std::fs::DirBuilder::new();
@@ -62,10 +72,16 @@ pub(super) async fn run(req: &Value, input: Option<&[u8]>, result_json: bool) ->
     }
     builder.create(&path).map_err(|_| unavailable())?;
     let scratch = Scratch(path);
-    tokio::fs::write(scratch.0.join("driver.py"), DRIVER).await.map_err(|_| unavailable())?;
-    tokio::fs::write(scratch.0.join("request.json"), request).await.map_err(|_| unavailable())?;
+    tokio::fs::write(scratch.0.join("driver.py"), DRIVER)
+        .await
+        .map_err(|_| unavailable())?;
+    tokio::fs::write(scratch.0.join("request.json"), request)
+        .await
+        .map_err(|_| unavailable())?;
     if let Some(input) = input {
-        tokio::fs::write(scratch.0.join("input.bin"), input).await.map_err(|_| unavailable())?;
+        tokio::fs::write(scratch.0.join("input.bin"), input)
+            .await
+            .map_err(|_| unavailable())?;
     }
     let python = std::env::var_os("OPENVIETGIS_CAD_PYTHON")
         .map(PathBuf::from)
@@ -96,14 +112,22 @@ pub(super) async fn run(req: &Value, input: Option<&[u8]>, result_json: bool) ->
     let reply: Value = serde_json::from_slice(&out.stdout).map_err(|_| unavailable())?;
     if reply["ok"].as_bool() != Some(true) {
         let code = error_code(reply["code"].as_str().unwrap_or_default());
-        let message = reply["message"].as_str().unwrap_or("Format processing failed");
+        let message = reply["message"]
+            .as_str()
+            .unwrap_or("Format processing failed");
         if reply["conflict"].as_bool() == Some(true) {
             return Err(AppError::conflict(code, message));
         }
         return Err(AppError::validation(code, message));
     }
-    let output = scratch.0.join(if result_json { "result.json" } else { "output.bin" });
-    let meta = tokio::fs::metadata(&output).await.map_err(|_| unavailable())?;
+    let output = scratch.0.join(if result_json {
+        "result.json"
+    } else {
+        "output.bin"
+    });
+    let meta = tokio::fs::metadata(&output)
+        .await
+        .map_err(|_| unavailable())?;
     if meta.len() == 0 || meta.len() > LIMIT as u64 {
         return Err(unavailable());
     }

@@ -1012,7 +1012,10 @@ mod tests {
             }
         }
         let nonfinite = Geometry::MultiLineString(MultiLineString(vec![LineString(vec![
-            Coord { x: f64::NAN, y: 0.0 },
+            Coord {
+                x: f64::NAN,
+                y: 0.0,
+            },
             Coord { x: 1.0, y: 1.0 },
         ])]));
         assert_eq!(

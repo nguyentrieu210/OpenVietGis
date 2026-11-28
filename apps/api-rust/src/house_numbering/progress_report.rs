@@ -26,7 +26,10 @@ const COLUMNS: [&str; 6] = [
 ];
 
 fn limit() -> AppError {
-    AppError::validation("REPORT_SIZE_EXCEEDED", "Progress workbook exceeds safe byte limit.")
+    AppError::validation(
+        "REPORT_SIZE_EXCEEDED",
+        "Progress workbook exceeds safe byte limit.",
+    )
 }
 
 fn xml_text(value: &str) -> String {
@@ -51,7 +54,11 @@ fn cell(sheet: &mut String, col: usize, row: usize, value: &Value) {
     let col = ["A", "B", "C", "D", "E", "F"][col];
     match value {
         Value::Bool(flag) => {
-            let _ = write!(sheet, "<c r=\"{col}{row}\" t=\"b\"><v>{}</v></c>", u8::from(*flag));
+            let _ = write!(
+                sheet,
+                "<c r=\"{col}{row}\" t=\"b\"><v>{}</v></c>",
+                u8::from(*flag)
+            );
         }
         Value::Number(number) => {
             let _ = write!(sheet, "<c r=\"{col}{row}\"><v>{number}</v></c>");
@@ -143,14 +150,26 @@ pub(super) fn build(summary: &Value, rows: &[Value]) -> Result<Vec<u8>, AppError
     let mut sheet = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>",
     );
-    row(&mut sheet, 1, &[Value::from("Chỉ số"), Value::from("Giá trị")])?;
+    row(
+        &mut sheet,
+        1,
+        &[Value::from("Chỉ số"), Value::from("Giá trị")],
+    )?;
     for (index, key) in SUMMARY.iter().enumerate() {
-        row(&mut sheet, index + 2, &[Value::from(*key), summary[*key].clone()])?;
+        row(
+            &mut sheet,
+            index + 2,
+            &[Value::from(*key), summary[*key].clone()],
+        )?;
     }
     row(&mut sheet, 9, &[])?;
     row(&mut sheet, 10, &COLUMNS.map(Value::from))?;
     for (index, item) in rows.iter().enumerate() {
-        row(&mut sheet, index + 11, &COLUMNS.map(|key| item[key].clone()))?;
+        row(
+            &mut sheet,
+            index + 11,
+            &COLUMNS.map(|key| item[key].clone()),
+        )?;
     }
     sheet.push_str("</sheetData></worksheet>");
     let content_types = br#"<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#;

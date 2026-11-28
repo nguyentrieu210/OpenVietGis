@@ -1686,13 +1686,19 @@ pub(super) fn build_binary_inspection(
                 if first_error.is_none() && finding["severity"].as_str() == Some("error") {
                     first_error = Some((
                         finding_code(finding["code"].as_str().unwrap_or("")),
-                        finding["message"].as_str().ok_or_else(invalid_report)?.to_owned(),
+                        finding["message"]
+                            .as_str()
+                            .ok_or_else(invalid_report)?
+                            .to_owned(),
                     ));
                 }
                 findings.push(finding.clone());
             }
             if let Some(detected) = data["detected_crs"].as_i64() {
-                if opts.declared_source_crs.is_some_and(|declared| declared != detected) {
+                if opts
+                    .declared_source_crs
+                    .is_some_and(|declared| declared != detected)
+                {
                     add_finding(
                         &mut findings,
                         &mut first_error,
@@ -1762,7 +1768,9 @@ pub(super) fn build_binary_inspection(
                             &mut findings,
                             &mut first_error,
                             "UNSUPPORTED_TRANSFORMATION",
-                            format!("No verified transformation from EPSG:{stored} to EPSG:{dest}."),
+                            format!(
+                                "No verified transformation from EPSG:{stored} to EPSG:{dest}."
+                            ),
                         ),
                     }
                 }
@@ -1800,7 +1808,10 @@ pub(super) fn build_binary_inspection(
                 let mut typed_fields = Vec::with_capacity(wire_fields.len());
                 for field in wire_fields {
                     let text = |key: &str| {
-                        field[key].as_str().map(str::to_owned).ok_or_else(invalid_report)
+                        field[key]
+                            .as_str()
+                            .map(str::to_owned)
+                            .ok_or_else(invalid_report)
                     };
                     let field_type = match field["type"].as_str() {
                         Some("text") => "text",
@@ -1831,7 +1842,9 @@ pub(super) fn build_binary_inspection(
                     let coordinates: J = serde_json::from_value(geometry["coordinates"].clone())
                         .map_err(|_| invalid_report())?;
                     let geom = to_geom(&coordinates, geometry_family).ok_or_else(invalid_report)?;
-                    let attributes = feature["attributes"].as_object().ok_or_else(invalid_report)?;
+                    let attributes = feature["attributes"]
+                        .as_object()
+                        .ok_or_else(invalid_report)?;
                     records.push(Record {
                         feature_id: feature["feature_id"]
                             .as_str()

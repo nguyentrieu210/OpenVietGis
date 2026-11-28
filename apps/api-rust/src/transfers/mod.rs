@@ -1430,9 +1430,7 @@ async fn cancel_transfer_job(
     let Some(update) = cancellation_update(&job.status) else {
         return Ok(Json(job.wire).into_response());
     };
-    let updated = scope
-        .update_job(job.id, update)
-        .await?;
+    let updated = scope.update_job(job.id, update).await?;
     scope.commit().await?;
     Ok(Json(updated.wire).into_response())
 }
