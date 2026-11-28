@@ -97,3 +97,29 @@ async fn sandbox_commerce_disabled_without_dedicated_key() {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
+
+#[tokio::test]
+async fn graph_routes_disabled_by_default() {
+    let app = Router::new()
+        .nest("/api/v1", routes::api_v1_router())
+        .with_state(AppState::new(AppConfig::default(), None).unwrap());
+    for path in [
+        "/organizations/o/marketplace/v2/graph/preview",
+        "/organizations/o/marketplace/v2/graph/install",
+        "/organizations/o/projects/p/extensions/v2-graph/preview",
+        "/organizations/o/projects/p/extensions/v2-graph/apply",
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/v1{path}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}

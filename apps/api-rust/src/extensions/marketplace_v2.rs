@@ -59,6 +59,7 @@ pub(super) struct Profile {
 pub(super) struct VerifiedRelease {
     pub metadata: Value,
     pub document: Vec<u8>,
+    pub manifest: Value,
 }
 pub(crate) fn router() -> Router<AppState> {
     Router::new().route("/marketplace/v2/catalog", get(catalog))
@@ -198,7 +199,7 @@ fn verified_items(
         // A signature is not runtime qualification. Only expose metadata;
         // contribution and assets remain server-side until broker/host integration.
         items.push(VerifiedRelease { metadata: json!({"envelope":e,"release_digest":digest,"catalog_epoch":epoch,"runtime_available":false,
-            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}), document: contribution });
+            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}), document: contribution, manifest:legacy.manifest.clone() });
     }
     items.sort_by(|a, b| {
         a.metadata["envelope"]["extension_key"]

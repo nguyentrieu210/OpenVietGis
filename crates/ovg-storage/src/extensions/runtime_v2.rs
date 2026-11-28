@@ -26,7 +26,7 @@ pub async fn active_pin(
       FROM extensions.project_activations a JOIN extensions.manifests m
         ON m.organization_id=a.organization_id AND m.id=a.manifest_id
       WHERE a.organization_id=$1 AND a.project_id=$2 AND a.manifest_id=$3 AND a.status='active' AND m.enabled
-      FOR SHARE OF a,m")
+      FOR SHARE OF a")
         .bind(read.organization_id()).bind(read.project_id()).bind(manifest_id)
         .fetch_optional(&mut **read.transaction()).await.map_err(db_error)?
         .ok_or_else(||AppError::not_found("active plugin not found"))?;
@@ -240,7 +240,7 @@ pub async fn dependency_candidates(
         FROM extensions.project_activations a JOIN extensions.manifests m
           ON m.organization_id=a.organization_id AND m.id=a.manifest_id
         WHERE a.organization_id=$1 AND a.project_id=$2 AND a.status='active' AND m.enabled
-          AND m.extension_key=ANY($3) ORDER BY m.extension_key FOR SHARE OF a,m",
+          AND m.extension_key=ANY($3) ORDER BY m.extension_key FOR SHARE OF a",
     )
     .bind(read.organization_id())
     .bind(read.project_id())

@@ -122,3 +122,18 @@ export function getPluginSandboxOrder(client:ApiClient,org:string,id:string){
 export function submitPluginSandboxEvent(client:ApiClient,event:PluginSandboxEvent,signature:string){
  return client.request<{sandbox:true;replayed:boolean;receipt:unknown;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number}>(sandboxOrderPath(event.organization_id)+"/"+encodeURIComponent(event.order_id)+"/events",{method:"POST",body:JSON.stringify({event,signature})});
 }
+
+export type PluginGraphSelection={root:string;version:string;rollback_of?:string};
+export type PluginActivationPin={key:string;manifest_id:string;activation_id:string;revision:number;status:"active"|"disabled"};
+export type PluginGraphPreview={plan:{catalog_epoch:number;pins:{key:string;version:string;release_digest:string;permissions:string[]}[];expected:PluginActivationPin[]|null;rollback_of:string|null};plan_digest:string;grants_created:false};
+const graphPath=(org:string,project?:string)=>"/organizations/"+encodeURIComponent(org)+(project?"/projects/"+encodeURIComponent(project)+"/extensions/v2-graph":"/marketplace/v2/graph");
+export function previewPluginGraph(client:ApiClient,org:string,selection:PluginGraphSelection,project?:string){
+ return client.request<PluginGraphPreview>(graphPath(org,project)+"/preview",{method:"POST",body:JSON.stringify(selection)});
+}
+export function installPluginGraph(client:ApiClient,org:string,selection:PluginGraphSelection,preview:PluginGraphPreview,requestId:string){
+ return client.request<{request_id:string;plan_digest:string;items:{manifest_id:string;key:string;version:string;release_digest:string;reused:boolean}[];activated:false}>(graphPath(org)+"/install",{method:"POST",body:JSON.stringify({selection,request_id:requestId,plan_digest:preview.plan_digest})});
+}
+export function applyPluginGraph(client:ApiClient,org:string,project:string,selection:PluginGraphSelection,preview:PluginGraphPreview,requestId:string){
+ if(!preview.plan.expected)throw new Error("PROJECT_PREVIEW_REQUIRED");
+ return client.request<{request_id:string;plan_digest:string;before:PluginActivationPin[];after:PluginActivationPin[];rollback_of:string|null;grants_created:false}>(graphPath(org,project)+"/apply",{method:"POST",body:JSON.stringify({selection,request_id:requestId,plan_digest:preview.plan_digest,expected:preview.plan.expected})});
+}
