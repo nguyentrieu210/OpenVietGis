@@ -34,13 +34,9 @@ test("background /me revalidation keeps authenticated shell mounted", async ({
   });
 
   await request;
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await expect(page.locator(".live-studio")).toBeVisible();
   await expect(page.locator(".ovg-session-bootstrap")).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", {
-      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
-    })
-  ).toHaveCount(0);
+  await expect(page.locator(".landing-page")).toHaveCount(0);
 
   release();
   await page.unroute((url) => url.pathname === "/api/v1/me");
@@ -59,7 +55,7 @@ test("authenticated shell persists across organization and project navigation", 
     "ux-shell-" + suffix
   );
 
-  await page.locator(".ovg-app-shell").evaluate((element) => {
+  await page.locator(".live-studio").evaluate((element) => {
     element.setAttribute("data-persistence-marker", "keep");
   });
 
@@ -67,7 +63,7 @@ test("authenticated shell persists across organization and project navigation", 
   await expect(page).toHaveURL(
     "/app/organizations/" + organizationId + "/projects"
   );
-  await expect(page.locator(".ovg-app-shell")).toHaveAttribute(
+  await expect(page.locator(".live-studio")).toHaveAttribute(
     "data-persistence-marker",
     "keep"
   );
@@ -85,7 +81,7 @@ test("authenticated shell persists across organization and project navigation", 
     .getByRole("link", { name: "Mở Bản đồ" })
     .click();
 
-  await expect(page.locator(".ovg-app-shell")).toHaveAttribute(
+  await expect(page.locator(".live-studio")).toHaveAttribute(
     "data-persistence-marker",
     "keep"
   );
