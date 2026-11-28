@@ -141,7 +141,7 @@ impl Store{
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let old=tx.query_row("SELECT digest,reply FROM receipt WHERE operation=?1",[b.operation.to_string()],|r|Ok((r.get::<_,Vec<u8>>(0)?,r.get::<_,String>(1)?))).optional()?;
   if let Some((hash,reply))=old{if hash.as_slice()!=&digest[..]{return Err(Error::Reused)}return decode(&reply)}
-  for e in &b.edits{if tx.query_row("SELECT EXISTS(SELECT 1 FROM legacy_receipt WHERE operation=?1 AND layer=?2)",params![b.operation.to_string(),e.layer.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}}
+  if tx.query_row("SELECT EXISTS(SELECT 1 FROM legacy_receipt WHERE operation=?1 UNION ALL SELECT 1 FROM legacy_command WHERE command=?1)",[b.operation.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}
   let n=next(&tx,b.expected_project)?;
   let mut seen=HashSet::new();let mut before=Vec::new();let mut features=Vec::new();
   let mut bytes=0usize;
@@ -180,7 +180,7 @@ impl Store{
   let receipt=Receipt{revision:n,features};
   tx.execute("INSERT INTO receipt VALUES(?1,?2,?3,?4)",params![b.operation.to_string(),&digest[..],n,json(&receipt)?])?;
   tx.execute("INSERT INTO journal VALUES(?1,?2,?3,?4)",params![n,b.operation.to_string(),json(&(before,link_before))?,json(b)?])?;
-  tx.commit().map_err(|_|Error::Relation)?;Ok(receipt)
+  tx.commit().map_err(|e|match e{rusqlite::Error::SqliteFailure(ref info,_) if info.code==rusqlite::ErrorCode::ConstraintViolation=>Error::Relation,_=>Error::Storage})?;Ok(receipt)
  }
  // Undo the last feature/link batch via a new transaction. Undoing the
  // compensating batch redoes it; never rewind feature or project revisions.
