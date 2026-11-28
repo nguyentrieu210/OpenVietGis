@@ -175,6 +175,10 @@ async fn desktop_import_gpkg(window:WebviewWindow,host:State<'_,Host>,handle:Uui
 async fn desktop_generation(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<String>{
     run(window,host.inner().clone(),move|h|h.generation(handle)).await
 }
+#[tauri::command]
+async fn desktop_reshape(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,revision:String,geometry:Value)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.reshape(handle,id,revision,geometry)).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -210,6 +214,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
