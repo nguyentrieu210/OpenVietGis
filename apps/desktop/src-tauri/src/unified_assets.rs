@@ -68,7 +68,11 @@ pub async fn unified_asset_read(window:WebviewWindow,u:State<'_,Unified>,handle:
    Asset::Glb(a)=>a.bytes(),
    Asset::Raster(a,_)=>{
     let [z,x,y]=tile.ok_or("TILE_REQUIRED")?;
-    a.tile(u8::try_from(z).map_err(|_|"INVALID_TILE")?,x,y).map_err(|_|"INVALID_TILE")?.ok_or("TILE_NOT_FOUND")?
+    if z>22||x>=(1u32<<z)||y>=(1u32<<z){return Err("INVALID_TILE")}
+    let b=a.tile(z as u8,x,y).map_err(|_|"INVALID_TILE")?.ok_or("TILE_NOT_FOUND")?;
+    if b.len()<33||b.len()>4*1024*1024||b[..8]!=[137,80,78,71,13,10,26,10]||&b[12..16]!=b"IHDR"{return Err("INVALID_TILE")}
+    let w=u32::from_be_bytes(b[16..20].try_into().map_err(|_|"INVALID_TILE")?);let h=u32::from_be_bytes(b[20..24].try_into().map_err(|_|"INVALID_TILE")?);
+    if !matches!(w,256|512)||h!=w{return Err("INVALID_TILE")}b
    },
    #[cfg(feature="native-ogr")]
    Asset::Tiff(a)=>a.window(band.ok_or("BAND_REQUIRED")?,pixel.ok_or("WINDOW_REQUIRED")?,shape.ok_or("SHAPE_REQUIRED")?)?
@@ -76,4 +80,19 @@ pub async fn unified_asset_read(window:WebviewWindow,u:State<'_,Unified>,handle:
   if b.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}Ok(b)
  })).await?;
  Ok(tauri::ipc::Response::new(b))
+}
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ #[test]fn cad_grant_scope_and_close(){
+  let d=tempfile::tempdir().unwrap();let path=d.path().join("point.dxf");
+  std::fs::write(&path,"0\nSECTION\n2\nENTITIES\n0\nPOINT\n5\nAB\n8\nSurvey\n10\n106\n20\n11\n0\nENDSEC\n0\nEOF\n").unwrap();
+  let u=Unified::new(d.path().join("projects")).unwrap();
+  let a=u.open(u.create().unwrap().id).unwrap();let b=u.open(u.create().unwrap().id).unwrap();
+  let info=u.open_asset(a.handle,&path,"cad",Some(4326)).unwrap();assert_eq!(info.count,1);
+  assert!(u.with_asset(b.handle,info.id,|_|Ok(())).is_err());
+  assert!(u.with_asset(a.handle,info.id,|e|match &e.asset{Asset::Cad(c)=>c.viewport([105.,10.,107.,12.]),_=>Err("INVALID_ASSET")}).is_ok());
+  u.close(a.handle).unwrap();assert!(u.with_asset(a.handle,info.id,|_|Ok(())).is_err());u.shutdown().unwrap();
+ }
 }
