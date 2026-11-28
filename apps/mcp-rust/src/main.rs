@@ -268,6 +268,7 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
         if unix_now()>=deadline||!provider_allowed(&expected.subject){return Err(ProviderError::Fatal)}
         match browser_identity(app_ref,headers,id).await{Ok((fresh,_)) if fresh==*expected=>model_gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
     },|call|async move{
+        if unix_now()>=deadline||!provider_allowed(&expected.subject){return ToolOutcome::Failed}
         match browser_identity(app_ref,headers,id).await{
             Ok((fresh,_)) if fresh==*expected=>match operate_subject(app_ref,&expected.subject,deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
             _=>ToolOutcome::Failed
@@ -407,6 +408,16 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         let b:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_b,"workspace_version":2})).await.json().await.unwrap();
         let sa=a["session_id"].as_str().unwrap();let sb=b["session_id"].as_str().unwrap();
         let ta=a["browser_token"].as_str().unwrap();let tb=b["browser_token"].as_str().unwrap();
+        // The new provider route must share the same browser identity and explicit consent.
+        let provider_req=|id:&str,token:&str,action:&str,payload:Value|{
+            client.post(format!("{url}/ai-copilot/agent/{id}/{action}")).header("host","openvietgis.cloud").header("origin",ORIGIN).header("x-ovg-ai","1").header("cookie","ovg_session=test-cookie").header("x-ovg-bridge",token).json(&payload)
+        };
+        assert_eq!(provider_req(sa,tb,"providers",json!({})).send().await.unwrap().status(),404);
+        assert_eq!(provider_req(sa,ta,"providers",json!({"url":"http://127.0.0.1"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":false,"allow_writes":false})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":true,"allow_writes":false,"api_key":"not-accepted"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"providers",json!({})).send().await.unwrap().status(),200);
+
         let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
         assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
         let amb:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_live_view","arguments":{}})).await.json().await.unwrap();

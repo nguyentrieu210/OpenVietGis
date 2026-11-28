@@ -100,7 +100,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
     }catch(e){if(!disposed)reset(e.message)}finally{connecting=false;if(!disposed)get("connect").disabled=!!active||submitting}
   }
   async function tick(){
-    if(disposed)return;updateScope();if(getContextEpoch()!==lastContextEpoch){lastContextEpoch=getContextEpoch();setAutomatic(false)}
+    if(disposed)return;updateScope();if(getContextEpoch()!==lastContextEpoch){lastContextEpoch=getContextEpoch();setAutomatic(false);if(nativeRun){void close();return}}
     if(!active||polling)return;
     if(performance.now()>=active.deadline){if(command)note(command,submitting?"Hết hạn khi đang chạy; cần đối chiếu":"Hết hạn");reset("Phiên đã hết hạn");return}
     const s=active,e=epoch,pollScope=context();

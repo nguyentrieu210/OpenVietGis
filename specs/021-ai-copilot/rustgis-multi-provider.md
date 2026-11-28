@@ -13,3 +13,5 @@ Base Wave 2 PR #106 at 2065ae72c4f4988915278748fae82a1f9982a91e; provider wire f
 
 ## Acceptance
 Compile and run native MCP tests; provider fixture roundtrips, invalid responses and fixed destinations; run frontend smoke with disabled provider configuration and with a controlled mock before live release. Real provider tests need explicit operator credentials and authorized non-sensitive fixture data. No live rollout or real model invocation is claimed.
+
+Wave 3 hardening: candidate nginx include, same-instance routing requirement, signed-browser fixture rejects cross-workspace tokens, missing consent and client-supplied keys/URLs. Browser smoke covers disabled provider, mock configured provider, per-run consent and response text. Context changes terminate active native run; revoked operator allowlist blocks further tool dispatch. Proxy/CDN timeout compatibility remains a deployment gate.
