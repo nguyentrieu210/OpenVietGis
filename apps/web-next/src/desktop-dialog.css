@@ -56,3 +56,17 @@
 
 .qgis-studio .live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell[data-dialog-size]:not([data-dialog-size=md]){width:min(var(--ovg-dialog-w,var(--ovg-dialog-default-w)),calc(100vw - 24px));max-width:calc(100vw - 24px)}
 .qgis-studio .live-shade:not(.partner-docked)>.live-modal.ovg-dialog-shell.ovg-dialog-maximized{width:calc(100vw - 24px)!important;height:calc(100dvh - 24px)!important}
+
+/* Complex workbenches adapt to the dialog rather than viewport width. */
+.ovg-dialog-shell>.live-modal-body{container-type:inline-size}
+.ovg-dialog-shell :is(.acl-bulk,.dev-layout,.survey-grid,.survey-tabs,.pro-print-controls,.ovg-form-row,.dev-row,.acl-panel-head,.acl-matrix-tools){min-width:0;max-width:100%}
+.ovg-dialog-shell :is(.acl-panel-head,.acl-matrix-tools,.dev-row,.ovg-form-row){flex-wrap:wrap}
+.ovg-dialog-shell :is(.acl-matrix-scroll,.acl-existing-scroll,.survey-table){max-width:100%}
+.ovg-dialog-shell :is(.survey-tabs,.pro-print-controls) button{white-space:normal;min-width:0}
+.ovg-dialog-shell .dev-banner span{white-space:normal;overflow-wrap:anywhere}
+@container(max-width:580px){
+ .ovg-dialog-shell :is(.acl-bulk,.dev-layout,.survey-grid,.pro-print-controls){grid-template-columns:minmax(0,1fr)}
+ .ovg-dialog-shell .survey-tabs{grid-template-columns:repeat(auto-fit,minmax(min(110px,100%),1fr))}
+ .ovg-dialog-shell :is(.acl-panel-head,.acl-matrix-tools,.dev-row,.ovg-form-row)>*{min-width:0;max-width:100%}
+ .ovg-dialog-shell .dev-row>label{flex:1 1 100%}
+}

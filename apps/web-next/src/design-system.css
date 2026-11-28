@@ -20,3 +20,10 @@
 .ovg-ui-actions{display:flex;flex-wrap:wrap;gap:var(--ovg-ui-gap);align-items:center;min-width:0}
 .ovg-ui-actions>button{min-width:0;max-width:100%;white-space:normal}
 .ovg-ui-input{min-width:0;max-width:100%;box-sizing:border-box}
+/* The account theme applies to application chrome, not imagery, maps or print sheets. */
+:root[data-ovg-theme=dark]{--ovg-ui-surface:#202b34;--ovg-ui-panel:#26343e;--ovg-ui-ink:#e2eaf0;--ovg-ui-muted:#aebfca;--ovg-ui-line:#425461;--ovg-ui-primary:#62a9e5}
+.ovg-ui-form{display:grid;gap:var(--ovg-ui-gap);min-width:0}
+.ovg-ui-form>label{display:grid;gap:4px;min-width:0}
+.ovg-ui-form :is(input:not([type=checkbox],[type=radio]),select,textarea){width:100%;min-width:0;max-width:100%}
+.ovg-theme-picker{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px;font-size:12px}
+.ovg-theme-picker select{min-width:0;max-width:150px}

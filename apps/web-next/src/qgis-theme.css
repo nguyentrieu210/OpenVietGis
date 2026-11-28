@@ -820,3 +820,24 @@
 .qgis-studio .qgis-map-region .core-sketch{max-height:calc(100% - 135px);overflow:auto;overscroll-behavior:contain;min-height:0;z-index:16}
 .qgis-studio .core-sketch-coords label{display:block;min-width:0;width:100%}
 .qgis-studio .core-sketch-coords>div>button{white-space:normal}
+
+/* SPEC072 shared theme tokens. The map and document/print content are excluded. */
+[data-ovg-theme=dark] .qgis-studio{
+ --ovg-primary:#62a9e5;--ovg-primary-hover:#83bbeb;--ovg-primary-soft:#304e65;
+ --ovg-ink:#e2eaf0;--ovg-muted:#aebfca;--ovg-line:#425461;--ovg-line-soft:#354752;
+ --ovg-surface:#202b34;--ovg-panel:#26343e;--ovg-header:#31414c;--ovg-danger:#ff9c94;--ovg-warn:#f3cd88;--ovg-ok:#8bd5a9;
+ --q-select-border:#628eae;color-scheme:dark;
+}
+[data-ovg-theme=dark] :is(.qgis-studio .live-modal,.qgis-studio .core-workbench,.qgis-studio .qgis-dock,.qgis-studio .qgis-layers,.qgis-studio .qgis-tree,.qgis-studio .qgis-browser,.qgis-studio .qgis-basemaps,.qgis-studio .qgis-table,.qgis-studio .qgis-status,.qgis-studio .ovg-plugin-workspace,.qgis-studio .ovg-styling-dock,.qgis-studio .ovg-account-popover,.core-ribbon-menu,.ovg-plugin-submenu,.qgis-context,.ovg-layer-quick,.ovg-compact-pop,.ovg-plugin-palette){
+ background:var(--ovg-ui-surface);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line);color-scheme:dark
+}
+[data-ovg-theme=dark] :is(.qgis-studio .qgis-dock,.qgis-studio .qgis-table,.qgis-studio .ovg-plugin-workspace,.qgis-studio .ovg-styling-dock,.qgis-studio .ovg-account-popover,.core-ribbon-menu,.ovg-plugin-submenu,.qgis-context,.ovg-layer-quick,.ovg-compact-pop,.ovg-plugin-palette,.qgis-studio .ovg-market) :is(button:not(.primary):not(.on),input:not([type=color],[type=checkbox],[type=radio]),select,textarea){
+ background:var(--ovg-ui-panel);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line)
+}
+[data-ovg-theme=dark] :is(.qgis-studio .qgis-dock,.qgis-studio .qgis-table,.qgis-studio .ovg-market,.qgis-studio .ovg-plugin-workspace,.qgis-studio .ovg-styling-dock) :is(header,.group,.qgis-filter,.qgis-layer-actions,.ovg-plugin-list,.ovg-plugin-details,.lp-tabs,.lp-body,.lp-footer,.hn-plugin-kpis>div){background:var(--ovg-ui-panel);color:var(--ovg-ui-ink);border-color:var(--ovg-ui-line)}
+[data-ovg-theme=dark] :is(.qgis-studio .qgis-dock,.qgis-studio .qgis-table,.qgis-studio .ovg-market,.qgis-studio .ovg-plugin-workspace,.qgis-studio .ovg-styling-dock) :is(small,dd,dt,label,h3,h4,b){color:inherit}
+[data-ovg-theme=dark] :is(.qgis-studio .qgis-dock,.qgis-studio .qgis-table,.qgis-studio .ovg-market,.qgis-studio .ovg-plugin-workspace,.qgis-studio .ovg-styling-dock) :is(button[aria-pressed=true],.qgis-layer-row.active,.qgis-layer-row.selected,.live-table-row.selected){background:#304e65;color:#eef7ff}
+[data-ovg-theme=dark] .qgis-studio .core-command-list,[data-ovg-theme=dark] .qgis-studio .core-command-list button{background:var(--ovg-ui-surface);color:var(--ovg-ui-ink)}
+[data-ovg-theme=dark] .qgis-studio .core-command-list button>span,[data-ovg-theme=dark] .qgis-studio .core-command-list button>span>small{color:var(--ovg-ui-muted)}
+[data-ovg-theme=dark] .qgis-studio .core-command-list button[data-highlight=true]{background:#304e65}
+[data-ovg-theme=dark] .qgis-studio .core-command-list code,[data-ovg-theme=dark] .core-ribbon-menu code{color:#8ad8e2}

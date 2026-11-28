@@ -1,3 +1,4 @@
+import {ScrollArea} from "./ui/primitives";
 import React,{useEffect,useRef,useState,type ReactNode} from "react";
 import {Splitter} from "./Splitter";
 import type {PluginAction} from "./plugin-ui-registry";
@@ -12,7 +13,7 @@ export function PluginWorkspace({scope,title,close,children}:{scope:string;title
  return <aside className={"ovg-plugin-workspace side-"+side+(collapsed?" collapsed":"")} aria-label={title}>
  {!collapsed&&<Splitter storageKey={scope+":width"} cssVar="--ovg-plugin-width" axis="x" edge={side==="left"?"end":"start"} min={270} max={760} defaultSize={380} label="Chiều rộng không gian plugin"/>}
  <header><b>{title}</b><select aria-label="Vị trí khung plugin" value={side} onChange={e=>change(e.target.value as Side)}><option value="right">Phải</option><option value="left">Trái</option><option value="float">Nổi</option></select><button aria-label={collapsed?"Mở rộng plugin":"Thu gọn plugin"} onClick={()=>setCollapsed(x=>!x)}>{collapsed?"+":"−"}</button><button aria-label="Đóng plugin" onClick={close}>×</button></header>
- {!collapsed&&<div className="ovg-plugin-scroll">{children}</div>}
+ {!collapsed&&<ScrollArea className="ovg-plugin-scroll">{children}</ScrollArea>}
  </aside>
 }
 export function PluginToolPalette({scope,actions,close}:{scope:string;actions:readonly PluginAction[];close:()=>void}){

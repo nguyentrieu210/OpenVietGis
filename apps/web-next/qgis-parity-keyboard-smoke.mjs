@@ -106,6 +106,20 @@ try{
    await manager.getByRole("button",{name:"Khôi phục kích thước"}).click();assert.ok(await manager.evaluate(e=>!e.classList.contains("ovg-dialog-maximized")));
   }
   await manager.getByRole("button",{name:"Đóng",exact:true}).click();
+  if(process.env.OVG_DIALOG072_ONLY==="1"){
+    const account=page.getByRole("button",{name:"Menu tài khoản",exact:true});await account.click();
+    await page.getByLabel("Giao diện sáng tối").selectOption("dark");
+    await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="dark");
+    await account.click();await page.reload({waitUntil:"domcontentloaded"});await first.waitFor();
+    await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="dark");
+    await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();
+    const menu=page.getByRole("region",{name:"Menu Plugin"});assert.equal(await menu.evaluate(e=>getComputedStyle(e).backgroundColor),"rgb(32, 43, 52)");
+    await menu.getByRole("button",{name:"Quản lý plugin",exact:false}).click();await manager.waitFor();
+    const themeLayout=await manager.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,body:getComputedStyle(el.querySelector(".live-modal-body")).backgroundColor,ink:getComputedStyle(el).color}));
+    console.log("DARK072",JSON.stringify(themeLayout));assert.equal(themeLayout.bg,"rgb(32, 43, 52)");
+    await manager.getByRole("button",{name:"Đóng",exact:true}).click();
+    await account.click();await page.getByLabel("Giao diện sáng tối").selectOption("light");await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="light");await account.click();
+  }
   assert.deepEqual(errors,[]);
   console.log("PASS SPEC 071: hidden default, scoped lazy plugin, movable palette, workspace docking, native workbench, close and restore");
  }else if(process.env.OVG_LAYER070_ONLY==="1"){

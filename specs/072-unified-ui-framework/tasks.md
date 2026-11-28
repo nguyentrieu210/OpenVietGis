@@ -1,4 +1,4 @@
-- [ ] E01 — implementation and acceptance evidence required
+- [x] E01 — Tailwind compiler, locked dependencies, frozen install and production build verified
 - [ ] E02 — implementation and acceptance evidence required
 - [ ] E03 — implementation and acceptance evidence required
 - [ ] E04 — implementation and acceptance evidence required
@@ -13,3 +13,5 @@
 - [ ] E13 — implementation and acceptance evidence required
 
 [Wave 1 evidence](evidence/dev-wave-1.md).
+
+[Wave 2 evidence](evidence/dev-wave-2.md) · [First-party UI contract](ui-contract.md).

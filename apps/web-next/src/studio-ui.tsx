@@ -1,4 +1,4 @@
-import {Button,Input} from "./ui/primitives";
+import {Button,Input,Select,Actions} from "./ui/primitives";
 import {Splitter} from "./Splitter";
 import React,{useEffect,useLayoutEffect,useRef,useState,type ReactNode} from "react";
 import "./desktop-dialog.css";
@@ -38,4 +38,4 @@ export function Modal({title,close,children,docked=false,resizeScope,size="md",f
 }
 
 type Field={name:string;label:string;optional?:boolean;options?:{value:string;label:string}[]};
-export function SimpleForm({fields,busy,submit}:{fields:Field[];busy:boolean;submit:(v:Record<string,string>)=>void}){const [v,setV]=useState<Record<string,string>>(()=>Object.fromEntries(fields.map(f=>[f.name,f.optional?"":f.options?.[0]?.value??""])));return <form onSubmit={e=>{e.preventDefault();submit(v)}}>{fields.map(f=><label key={f.name}>{f.label}{f.options?<select required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}><option value="">Chọn…</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>:<Input required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}/>}</label>)}<Button type="submit" variant="primary" disabled={busy||fields.some(f=>!f.optional&&!v[f.name]?.trim())}>{busy?"Đang lưu…":"Lưu vào dự án"}</Button></form>}
+export function SimpleForm({fields,busy,submit}:{fields:Field[];busy:boolean;submit:(v:Record<string,string>)=>void}){const [v,setV]=useState<Record<string,string>>(()=>Object.fromEntries(fields.map(f=>[f.name,f.optional?"":f.options?.[0]?.value??""])));return <form className="ovg-ui-form" onSubmit={e=>{e.preventDefault();submit(v)}}>{fields.map(f=><label key={f.name}>{f.label}{f.options?<Select required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}><option value="">Chọn…</option>{f.options.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</Select>:<Input required={!f.optional} value={v[f.name]} onChange={e=>setV(w=>({...w,[f.name]:e.target.value}))}/>}</label>)}<Button type="submit" variant="primary" disabled={busy||fields.some(f=>!f.optional&&!v[f.name]?.trim())}>{busy?"Đang lưu…":"Lưu vào dự án"}</Button></form>}
