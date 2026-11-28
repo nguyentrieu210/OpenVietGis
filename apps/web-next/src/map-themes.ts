@@ -2,9 +2,9 @@ import type {LayerView,MapTheme} from "./LayerProperties";
 type LayerPin={id:string;source_id:string;lifecycle:string;source:{schema_revision:string};capabilities:readonly {name:string;available:boolean;actor_authorized:boolean}[]};
 const readable=(l:LayerPin)=>l.lifecycle==="active"&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
 export function themeNameAllowed(name:string,themes:Record<string,unknown>){return !!name.trim()&&name.length<=60&&!["__proto__","constructor","prototype"].includes(name)&&!Object.hasOwn(themes,name)&&Object.keys(themes).length<20}
-export function snapshotTheme(layers:readonly LayerPin[],hidden:ReadonlySet<string>,views:Record<string,LayerView>):MapTheme{
+export function snapshotTheme(layers:readonly LayerPin[],hidden:ReadonlySet<string>,views:Record<string,LayerView>,fallback:LayerView):MapTheme{
  const pins:NonNullable<MapTheme["pins"]>=Object.create(null),saved:Record<string,LayerView>=Object.create(null);
- for(const l of layers.filter(readable).slice(0,100)){pins[l.id]={source:l.source_id,schema:l.source.schema_revision};if(Object.hasOwn(views,l.id))saved[l.id]={...views[l.id]!,savedStyles:{},styleName:""}}
+ for(const l of layers.filter(readable).slice(0,100)){pins[l.id]={source:l.source_id,schema:l.source.schema_revision};saved[l.id]={...(Object.hasOwn(views,l.id)?views[l.id]!:fallback),savedStyles:{},styleName:""}}
  return {hidden:Object.keys(pins).filter(id=>hidden.has(id)),views:saved,pins};
 }
 export function applyThemeSnapshot(theme:MapTheme,layers:readonly LayerPin[],hidden:ReadonlySet<string>,current:Record<string,LayerView>){
