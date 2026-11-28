@@ -1,6 +1,6 @@
 import {uiConfirm,uiPrompt} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import React,{useCallback,useEffect,useMemo,useState,type ReactNode} from "react";
-import {ApiClient,ApiError,commitChangeset,loadCsrfToken,getMyModulePolicy,getModuleBindings,type ModulePermissionPolicy,type ModuleLayerBindings} from "@openvietgis/client-sdk";
+import {ApiClient,ApiError,commitChangeset,loadCsrfToken,getMyModulePolicy,getModuleBindings,subscribeModuleChanges,type ModulePermissionPolicy,type ModuleLayerBindings} from "@openvietgis/client-sdk";
 import type {StudioFeatureCollection as FeatureCollection,StudioPosition as Position} from "@openvietgis/spatial-workspace/plugin/studio-contract";
 import {featureKey,type StudioHost,type StudioPlugin,type StudioRow as Row,type StudioData,type StudioContribution} from "@openvietgis/spatial-workspace/plugin/studio-contract";
 import {Modal,SimpleForm} from "@openvietgis/spatial-workspace/plugin/studio-ui";
@@ -31,6 +31,7 @@ function useStudio(host:StudioHost):StudioContribution{
  const draft=host.editing;
  const [policy,setPolicy]=useState<ModulePermissionPolicy|null>(null),[bindings,setBindings]=useState<ModuleLayerBindings|null>(null),[configError,setConfigError]=useState("");
  const [policyTick,setPolicyTick]=useState(0);
+ useEffect(()=>subscribeModuleChanges(client,org,pid,"house_numbering",()=>setPolicyTick(v=>v+1)),[client,org,pid]);
  useEffect(()=>{const tick=()=>setPolicyTick(v=>v+1);const timer=window.setInterval(tick,30000);window.addEventListener("focus",tick);return()=>{clearInterval(timer);window.removeEventListener("focus",tick)}},[]);
  useEffect(()=>{let live=true;if(host.data.restricted!==false){setPolicy(null);setBindings(null);return}getMyModulePolicy(client,org,pid,"house_numbering").then(p=>{if(!live)return;setPolicy(p);if(p.permissions!==null&&!p.permissions.includes("ext.house_numbering.read")){setBindings(null);return}return getModuleBindings(client,org,pid,"house_numbering").then(b=>{if(live){setBindings(b);setConfigError("")}})}).catch(e=>{if(live){setPolicy(null);setBindings(null);setConfigError("Không xác minh được quyền hoặc liên kết lớp: "+String(e))}});return()=>{live=false}},[client,org,pid,host.data.restricted,host.revision,policyTick]);
  const allows=(suffix:string)=>!!policy&&(policy.permissions===null||policy.permissions.includes("ext.house_numbering."+suffix));

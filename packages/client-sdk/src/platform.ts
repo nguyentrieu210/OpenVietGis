@@ -1,4 +1,5 @@
 import { ApiClient, projectApiPath } from "./http";
+import { notifyModuleChange } from "./module-events";
 
 export interface ChangesetOperation {
   id: string;
@@ -1012,27 +1013,31 @@ export function registerOfficialExtension(
   );
 }
 
-export function activateProjectExtension(
+export async function activateProjectExtension(
   client: ApiClient,
   orgId: string,
   projectId: string,
   manifestId: string,
   csrf: string
 ): Promise<ExtensionActivation> {
-  return activateExtension(client, orgId, projectId, manifestId, csrf);
+  const result=await activateExtension(client, orgId, projectId, manifestId, csrf);
+  notifyModuleChange(client,{organizationId:orgId,projectId,extensionKey:result.extension_key,kind:"activation"});
+  return result;
 }
 
-export function disableProjectExtension(
+export async function disableProjectExtension(
   client: ApiClient,
   orgId: string,
   projectId: string,
   extensionKey: string,
   csrf: string
 ): Promise<ExtensionActivation> {
-  return client.request<ExtensionActivation>(
+  const result=await client.request<ExtensionActivation>(
     `${projBase(orgId, projectId)}/extensions/${encodeURIComponent(extensionKey)}/disable`,
     { method: "POST", headers: csrfHeaders(csrf) }
   );
+  notifyModuleChange(client,{organizationId:orgId,projectId,extensionKey,kind:"activation"});
+  return result;
 }
 
 export function listExtensionManifests(

@@ -59,12 +59,12 @@ try{
  assert.ok(pluginCalls>=4);
  await page.getByRole("button",{name:"Địa bàn",exact:true}).click();
  await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();
- await page.getByRole("button",{name:"Đóng địa bàn"}).click();
  await openMarket();await page.locator(".ovg-app").filter({hasText:"GIS Core"}).getByRole("button",{name:"Mở",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached",timeout:15000});
  assert.ok(await sameMap(),"map/canvas remounted on switching to Core");
  await openMarket();await house().getByRole("button",{name:"Mở",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({timeout:30000});assert.ok(await sameMap(),"map/canvas remounted on reopening plugin");
+ await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();await page.getByRole("button",{name:"Đóng địa bàn"}).click();
  await openMarket();await house().getByRole("button",{name:"Gỡ",exact:true}).click();
  await page.getByRole("dialog",{name:"Xác nhận"}).getByRole("button",{name:"Gỡ",exact:true}).click();
  await house().getByRole("button",{name:"Cài vào dự án"}).waitFor();await closeMarket();
