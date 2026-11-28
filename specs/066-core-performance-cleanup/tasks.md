@@ -13,10 +13,10 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [x] T007 [P0] Finish 062 parity; retire old SPA only after offline/route coverage — paths: `apps/web; apps/web-next; pnpm-workspace.yaml`. Acceptance: Canonical build independent of old app; route matrix PASS.
 - [ ] T008 [P0] Complete 064 route/migration/ops parity and ADR decision before retirement — paths: `apps/api; apps/api-rust; docs/adr/ADR-015-rust-platform.md`. Acceptance: All contracts and independent oracle evidence retained.
 - [x] T009 [P0] Converge MCP implementations after protocol and security parity — paths: `apps/mcp; apps/mcp-rust; crates/ovg-mcp-policy`. Acceptance: Tool schema/OAuth/client compatibility PASS.
-- [ ] T010 [P1] Repair stale commands, lockfiles, workspace members after gates — paths: `package.json; Cargo.toml; pnpm-lock.yaml; pnpm-workspace.yaml`. Acceptance: Clean checkout bootstrap/build/test reproducible.
-- [ ] T011 [P1] Organize domain folders incrementally, remove proven duplicates — paths: `apps/web-next/src; crates; packages`. Acceptance: Architecture/import guards and affected tests PASS.
-- [ ] T012 [P1] Retain independent checks, archive obsolete docs with link map — paths: `tools; tests; docs; specs`. Acceptance: No broken links or lost evidence.
-- [ ] T013 [P1] Remove committed generated artifacts only if reproducible/licensed — paths: `.gitignore; .dockerignore; apps/web-next/public`. Acceptance: Clean build output and correct ignores.
+- [x] T010 [P1] Repair stale commands, lockfiles, workspace members after gates — paths: `package.json; Cargo.toml; pnpm-lock.yaml; pnpm-workspace.yaml`. Acceptance: Clean checkout bootstrap/build/test reproducible.
+- [x] T011 [P1] Organize domain folders incrementally, remove proven duplicates — paths: `apps/web-next/src; crates; packages`. Acceptance: Architecture/import guards and affected tests PASS.
+- [x] T012 [P1] Retain independent checks, archive obsolete docs with link map — paths: `tools; tests; docs; specs`. Acceptance: No broken links or lost evidence.
+- [x] T013 [P1] Remove committed generated artifacts only if reproducible/licensed — paths: `.gitignore; .dockerignore; apps/web-next/public`. Acceptance: Clean build output and correct ignores.
 
 ## W3 startup
 - [x] T014 [P0] Route-first bootstrap and lazy auth/marketplace/QGIS paths — paths: `apps/web-next/src/main.tsx; route-compat.ts; workbench-registry.ts`. Acceptance: F5 each deep link initializes only target.
