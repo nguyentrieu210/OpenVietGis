@@ -5,3 +5,5 @@ export 'src/managed.dart';
 export 'src/events.dart';
 
 export 'src/collaboration.dart';
+
+export 'src/mobile_transport.dart';
