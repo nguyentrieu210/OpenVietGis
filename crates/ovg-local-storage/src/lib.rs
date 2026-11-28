@@ -143,6 +143,7 @@ impl LocalStore {
     }
     fn apply_in(tx:&rusqlite::Transaction<'_>,m:&Mutation)->Result<Receipt,Error>{
         if m.feature_id.is_nil()||m.operation_id.is_nil()||m.expected_revision>=i64::MAX as u64||!m.attributes.is_object(){return Err(Error::Invalid);}
+        if m.wkb.is_some(){Self::validate_attributes_in(tx,&m.attributes)?;}
         let attrs=serde_json::to_string(&m.attributes).map_err(|_|Error::Invalid)?;
         if attrs.len()>MAX_ATTRIBUTES{return Err(Error::Limit);}
         let geometry=match &m.wkb{Some(w)=>Some(pack(&parse_geometry(w)?.0)),None=>None};
