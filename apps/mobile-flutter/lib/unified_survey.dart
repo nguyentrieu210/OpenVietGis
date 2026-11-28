@@ -26,7 +26,7 @@ class _UnifiedSurveyState extends State<UnifiedSurvey> with WidgetsBindingObserv
  @override void dispose(){WidgetsBinding.instance.removeObserver(this);_foreground=false;_epoch++;unawaited(_stream?.cancel()??Future<void>.value());super.dispose();}
  @override void didChangeAppLifecycleState(AppLifecycleState state){
   _foreground=state==AppLifecycleState.resumed;
-  if(!_foreground){_epoch++;if(_recording)unawaited(_stop(false));}
+  if(!_foreground){_epoch++;if(mounted)setState(()=>_last=null);if(_recording)unawaited(_stop(false));}
  }
  void _fail(Object e){if(mounted)setState(()=>_error=e.toString());}
  Future<void> _reload()async{
@@ -48,7 +48,7 @@ class _UnifiedSurveyState extends State<UnifiedSurvey> with WidgetsBindingObserv
   return p==LocationPermission.whileInUse||p==LocationPermission.always;
  }
  Future<void> _start(String? track)async{
-  if(_busy||_recording||!_foreground)return;
+  if(_busy||_recording||_stopping!=null||!_foreground)return;
   setState((){_busy=true;_error=null;});
   try{
    if(!await _permission()||!mounted||!_foreground)throw StateError('LOCATION_UNAVAILABLE');
@@ -68,7 +68,7 @@ class _UnifiedSurveyState extends State<UnifiedSurvey> with WidgetsBindingObserv
    },onError:(Object e){_fail(e);unawaited(_stop(false));},onDone:(){if(_recording)unawaited(_stop(false));});
    await _reload();
   }catch(e){_fail(e);if(_recording)await _stop(false);}
-  finally{if(mounted)setState(()=>_busy=false);}
+  finally{if(mounted&&_stopping==null)setState(()=>_busy=false);}
  }
  Future<void> _append(String id,Position p,int epoch)async{
   try{
@@ -85,7 +85,7 @@ class _UnifiedSurveyState extends State<UnifiedSurvey> with WidgetsBindingObserv
   final id=_track!;
   final future=_doStop(id,finish);
   _stopping=future;
-  return future.whenComplete(()=>_stopping=null);
+  return future.whenComplete((){_stopping=null;if(mounted)setState(()=>_busy=false);});
  }
  Future<void> _doStop(String id,bool finish)async{
   try{
@@ -95,7 +95,6 @@ class _UnifiedSurveyState extends State<UnifiedSurvey> with WidgetsBindingObserv
    _receipt(await widget.project.surveyState(layerId:widget.layer,trackId:id,action:finish?'finish':'pause',expected:_revision));
    await _reload();
   }catch(e){_fail(e);}
-  finally{if(mounted)setState(()=>_busy=false);}
  }
  Future<void> _finishPaused(String id)async{
   if(_busy||_recording)return;setState(()=>_busy=true);
