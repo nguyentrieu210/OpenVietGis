@@ -1,5 +1,5 @@
 import {describe,it,expect} from "vitest";
-import {snapshotTheme,applyThemeSnapshot,themeNameAllowed} from "./map-themes";
+import {snapshotTheme,applyThemeSnapshot,themeNameAllowed,MAP_THEME_LAYER_LIMIT} from "./map-themes";
 import {emptyLayerView} from "./LayerProperties";
 const l={id:"a",source_id:"s",lifecycle:"active",source:{schema_revision:"v1"},capabilities:[{name:"feature_read",available:true,actor_authorized:true}]};
 describe("personal map themes",()=>{
@@ -15,4 +15,14 @@ describe("personal map themes",()=>{
   expect(applyThemeSnapshot({hidden:["a"],views:{}},[l],new Set(),{}).hide).toEqual([]);
   expect(themeNameAllowed("__proto__",{})).toBe(false);expect(themeNameAllowed("A",{A:{}})).toBe(false);expect(themeNameAllowed("A",{})).toBe(true);
  });
+});
+
+it("rejects ambiguous names and never silently truncates theme membership",()=>{
+ expect(themeNameAllowed(" A ",{})).toBe(false);
+ expect(themeNameAllowed("A\nB",{})).toBe(false);
+ expect(()=>snapshotTheme([l,l],new Set(),{},emptyLayerView)).toThrow();
+ const oversized=Array.from({length:MAP_THEME_LAYER_LIMIT+1},(_,i)=>({...l,id:"l"+i}));
+ expect(()=>snapshotTheme(oversized,new Set(),{},emptyLayerView)).toThrow();
+ const valid=snapshotTheme(oversized.slice(0,MAP_THEME_LAYER_LIMIT),new Set(),{},emptyLayerView);
+ expect(Object.keys(valid.pins??{})).toHaveLength(MAP_THEME_LAYER_LIMIT);
 });
