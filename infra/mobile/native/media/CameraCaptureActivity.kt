@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Button
@@ -24,6 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** One still image directly from CameraX, no gallery or plaintext file. */
 class CameraCaptureActivity : ComponentActivity() {
     private val finished = AtomicBoolean(false)
+    private val timer = Handler(Looper.getMainLooper())
+    private val deadline = Runnable { complete(null) }
     private var provider: ProcessCameraProvider? = null
     private var capture: ImageCapture? = null
     private lateinit var preview: PreviewView
@@ -51,6 +55,7 @@ class CameraCaptureActivity : ComponentActivity() {
         controls.addView(message); controls.addView(button); controls.addView(cancel)
         frame.addView(controls, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         setContentView(frame)
+        timer.postDelayed(deadline, 85000)
         button.setOnClickListener { takePhoto() }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) startCamera()
         else requestPermissions(arrayOf(Manifest.permission.CAMERA), 100)
@@ -109,11 +114,13 @@ class CameraCaptureActivity : ComponentActivity() {
     }
     private fun complete(bytes: ByteArray?) {
         if (!finished.compareAndSet(false, true)) { bytes?.fill(0); return }
+        timer.removeCallbacks(deadline)
         provider?.unbindAll()
         MediaKeys.completeCapture(requestCodeId, bytes)
         finish()
     }
     override fun onDestroy() {
+        timer.removeCallbacks(deadline)
         if (finished.compareAndSet(false, true)) MediaKeys.completeCapture(requestCodeId, null)
         super.onDestroy()
     }
