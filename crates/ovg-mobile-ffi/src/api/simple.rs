@@ -254,6 +254,30 @@ impl NativeUnifiedProject{
   let b=serde_json::json!({"operation":operation,"expected_project":rev,"edits":[{"layer":layer,"feature":feature,"expected":0,"image":{"wkb":wkb,"attributes":attributes}}],"links":[]});
   self.inner.apply(&b.to_string()).map_err(unified_error)
  }
+ pub fn viewport(&self,layer_id:String,west:f64,south:f64,east:f64,north:f64,expected:String)->Result<String,String>{
+  self.inner.viewport(&layer_id,[west,south,east,north],&expected).map_err(unified_error)
+ }
+ pub fn feature_detail(&self,layer_id:String,feature_id:String,expected:String)->Result<String,String>{
+  self.inner.feature(&layer_id,&feature_id,&expected).map_err(unified_error)
+ }
+ pub fn edit_attributes(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,attributes_json:String)->Result<String,String>{
+  self.inner.edit_attributes(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&attributes_json).map_err(unified_error)
+ }
+ pub fn commit_geometry(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,kind:String,xy:Vec<f64>,attributes_json:String)->Result<String,String>{
+  if attributes_json.len()>256*1024||xy.len()>8192{return Err("RESOURCE_LIMIT".into())}
+  let layer=id(&layer_id)?;let feature=id(&feature_id)?;let operation=id(&operation_id)?;
+  let rev=expected.parse::<u64>().map_err(|_|"INVALID_REVISION".to_owned())?;
+  let fr=feature_revision.parse::<u64>().map_err(|_|"INVALID_REVISION".to_owned())?;
+  let wkb=ovg_mobile_engine::edit::draft(&kind,&xy).map_err(|e|e.to_string())?;
+  let attributes:serde_json::Value=serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?;
+  self.inner.apply(&serde_json::json!({"operation":operation,"expected_project":rev,"edits":[{"layer":layer,"feature":feature,"expected":fr,"image":{"wkb":wkb,"attributes":attributes}}],"links":[]}).to_string()).map_err(unified_error)
+ }
+ pub fn delete_feature(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String)->Result<String,String>{
+  let layer=id(&layer_id)?;let feature=id(&feature_id)?;let operation=id(&operation_id)?;
+  let rev=expected.parse::<u64>().map_err(|_|"INVALID_REVISION".to_owned())?;
+  let fr=feature_revision.parse::<u64>().map_err(|_|"INVALID_REVISION".to_owned())?;
+  self.inner.apply(&serde_json::json!({"operation":operation,"expected_project":rev,"edits":[{"layer":layer,"feature":feature,"expected":fr,"image":null}],"links":[]}).to_string()).map_err(unified_error)
+ }
  pub fn compensate(&self,operation_id:String,expected:String)->Result<String,String>{self.inner.compensate(&operation_id,&expected).map_err(unified_error)}
  pub fn query(&self,layer_id:String,west:f64,south:f64,east:f64,north:f64,after:String,limit:u32,expected:String)->Result<String,String>{
   self.inner.query(&layer_id,[west,south,east,north],&after,limit,&expected).map_err(unified_error)
