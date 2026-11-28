@@ -53,5 +53,26 @@ try{
  await command("EDIT");await page.getByText(/Đang chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();await command("EDIT");await page.getByText(/Đã thôi chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();console.log("PASS direct edit toggle");
  await command("PLOT");const layout=page.getByRole("dialog",{name:"Layout Designer"});await layout.waitFor();await page.getByRole("button",{name:"Đóng Layout Designer"}).click();await layout.waitFor({state:"detached"});console.log("PASS layout designer");
  for(const cmd of ["LA","IMPORT","QUERY","BUFFER","CLIP","DISSOLVE","DXF","WMS","FIELD","REVIEW","OPS"]){await command(cmd);await page.locator(".core-workbench").waitFor();await page.locator(".core-workbench-body").waitFor();await page.waitForTimeout(350);if(["BUFFER","CLIP","DISSOLVE"].includes(cmd)){const titles={BUFFER:"Vùng đệm (Buffer)",CLIP:"Cắt lớp (Clip)",DISSOLVE:"Gộp vùng (Dissolve)"};await page.getByRole("dialog",{name:titles[cmd]}).waitFor();await page.getByTestId("processing-workbench").waitFor()}await page.getByRole("button",{name:"Đóng công cụ GIS"}).click();await page.locator(".core-workbench").waitFor({state:"detached"});console.log("PASS panel "+cmd)}
+ await command("WORKSPACE");const settings=page.getByRole("dialog",{name:"Tùy chỉnh workspace"});await settings.waitFor();
+ await settings.getByLabel("Bật snapping",{exact:true}).check();
+ await settings.getByText("Dung sai riêng từng lớp (pixel)",{exact:true}).click();
+ const layerName="Khảo sát số nhà · Phần 01";
+ await settings.getByLabel("Dung sai snapping "+layerName,{exact:true}).selectOption("15");
+ await settings.getByLabel("Đơn vị snapping",{exact:true}).selectOption("mercator");
+ await settings.getByLabel("Dung sai bản đồ",{exact:true}).selectOption("20");
+ await settings.getByText("Dung sai bản đồ từng lớp",{exact:true}).click();
+ await settings.getByLabel("Dung sai bản đồ "+layerName,{exact:true}).selectOption("5");
+ await settings.getByRole("button",{name:"Xong",exact:true}).click();await settings.waitFor({state:"detached"});
+ await page.reload({waitUntil:"domcontentloaded"});await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await command("WORKSPACE");await settings.waitFor();
+ assert.equal(await settings.getByLabel("Đơn vị snapping",{exact:true}).inputValue(),"mercator");
+ assert.equal(await settings.getByLabel("Dung sai bản đồ",{exact:true}).inputValue(),"20");
+ await settings.getByText("Dung sai bản đồ từng lớp",{exact:true}).click();
+ assert.equal(await settings.getByLabel("Dung sai bản đồ "+layerName,{exact:true}).inputValue(),"5");
+ await settings.getByLabel("Đơn vị snapping",{exact:true}).selectOption("pixel");
+ await settings.getByText("Dung sai riêng từng lớp (pixel)",{exact:true}).click();
+ assert.equal(await settings.getByLabel("Dung sai snapping "+layerName,{exact:true}).inputValue(),"15");
+ await settings.getByRole("button",{name:"Xong",exact:true}).click();
+ console.log("PASS scoped pixel and projected snapping preferences persist independently across reload (synthetic)");
  await page.screenshot({path:"/tmp/ovg-core-toolkit-smoke.png"});assert.equal(errors.length,0,errors.join("\n"));console.log("PASS command, measurement, layer visibility, map save, create feature, edit toggle, layout designer, and 11 workbench commands");
 }finally{await browser.close()}
