@@ -1,9 +1,8 @@
 """Authenticated R029 and collaboration assertions against the Rust API."""
 from uuid import uuid4
-import psycopg
-from attribute_query import OWNER, project_path
+
+from attribute_query import baseline, project_path, session_headers
 from openvietgis_api.security.csrf import make_csrf_token
-from attribute_query import baseline, session_headers
 
 
 def check_realtime_collaboration(c,f,second):
