@@ -310,6 +310,8 @@ def test_project_rls_write_checks_and_composite_foreign_keys(
                 }
                 _assert_denied(connection, statement, foreign_values, "42501")
             # Scoped child rows cannot reference a source in a different project.
+            # The reference-feature BEFORE trigger must defer out-of-scope writes to RLS,
+            # preserving the established 42501 denial instead of masking it as OV409.
             for statement in (FIELD_SQL, FEATURE_SQL, LAYER_SQL, CHANGE_SQL):
                 foreign_reference = {
                     **a.values(),
