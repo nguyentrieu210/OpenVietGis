@@ -160,6 +160,11 @@ jobs:
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
 
+      - name: Test approved processing overlay CRS expressions
+        run: |
+          cargo test --locked -p ovg-storage --lib overlay_transform_expression_preserves_the_overlay_geometry_alias
+          cargo test --locked -p ovg-storage --lib fixed_native_pipeline_and_no_cross_datum
+
       - name: Test parity harness
         run: uv run --project apps/api python -m unittest discover -s tests/rust-parity -p "test_*.py"
 
