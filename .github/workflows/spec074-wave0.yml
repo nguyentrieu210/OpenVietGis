@@ -40,3 +40,15 @@ jobs:
         with:
           name: tauri-spike-lock-${{ matrix.os }}
           path: infra/desktop/wave0/tauri-spike/Cargo.lock
+  shared-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next build
