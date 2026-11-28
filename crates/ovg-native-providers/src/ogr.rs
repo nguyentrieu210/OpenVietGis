@@ -11,10 +11,13 @@ const MAX_BATCH:usize=64;
 struct Offline;
 impl Offline{
  fn new()->Result<Self>{
+  // Explicit GDAL PROJ network switch. No operation enables it in this crate.
+  // SAFETY: GDAL 3.4+ public C API; integer 0 disables remote grids.
+  unsafe { gdal_sys::OSRSetPROJEnableNetwork(0); }
   // Scope these native library settings to this blocking worker.
   gdal::config::set_thread_local_config_option("PROJ_NETWORK","OFF").map_err(|_|"GDAL_CONFIG")?;
   gdal::config::set_thread_local_config_option("GDAL_PAM_ENABLED","NO").map_err(|_|"GDAL_CONFIG")?;
-  gdal::config::set_thread_local_config_option("GDAL_DISABLE_READDIR_ON_OPEN","EMPTY_DIR").map_err(|_|"GDAL_CONFIG")?;
+  gdal::config::set_thread_local_config_option("GDAL_DISABLE_READDIR_ON_OPEN","TRUE").map_err(|_|"GDAL_CONFIG")?;
   Ok(Self)
  }
 }
@@ -95,7 +98,7 @@ fn field(v:Option<FieldValue>)->Result<Value>{
 pub fn read_atomic(path:&Path,index:usize)->Result<Vec<Value>>{
  let _guard=Offline::new()?;let src=Source::vector(path)?;let ds=src.dataset()?;
  let mut l=ds.layer(index).map_err(|_|"OGR_LAYER_FAILED")?;
- let s=l.spatial_ref().ok_or("SOURCE_CRS_REQUIRED")?;let code=epsg(&s)?;
+ let mut s=l.spatial_ref().ok_or("SOURCE_CRS_REQUIRED")?;if s.auth_name().is_none(){s.auto_identify_epsg().map_err(|_|"EXPLICIT_2D_EPSG_REQUIRED")?;}let code=epsg(&s)?;
  let tx=if code==4326{None}else{Some(transformer(s,SpatialRef::from_epsg(4326).map_err(|_|"UNSUPPORTED_CRS")?)?)};
  let mut rows=Vec::new();let mut bytes=0usize;
  for f in l.features(){
