@@ -89,3 +89,9 @@ describe("processing toolbox registry", () => {
     expect(searchProcessingToolboxEntries(entries, "PostGIS").map(x => x.command.alias)).toEqual([]);
   });
 });
+
+it("routes all native processing commands only when advertised",()=>{
+ const commands=["UNION","REPROJECT","SPATIALJOIN"].map(x=>command(x));
+ expect(processingToolboxEntries(commands,[algorithm("union"),algorithm("reproject"),algorithm("spatial_join")]).map(e=>e.command.alias)).toEqual(["UNION","REPROJECT","SPATIALJOIN"]);
+ expect(processingToolboxEntries(commands,[algorithm("union")]).map(e=>e.command.alias)).toEqual(["UNION"]);
+});

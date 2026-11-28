@@ -45,7 +45,7 @@ def fixture_layers(f):
 
 def check_processing(post,get,foreign,fixtures):
     parcels,clip,point=fixtures
-    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve","difference","intersection"}
+    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve","difference","intersection","union","reproject","spatial_join"}
     def pin(layer):
         return {k: layer[k] for k in ("source_id", "content_revision", "schema_revision")}
     def job(algorithm,layer,parameters,overlay=None,execute=True,op=None):
@@ -77,6 +77,37 @@ def check_processing(post,get,foreign,fixtures):
         ).fetchall()
         assert overlay_ids == [("clip",)]
     print("PASS Difference/Intersection area and feature provenance",difference_metrics,intersection_metrics,flush=True)
+    union, union_metrics = result(job("union",parcels,{},clip),5,30000)
+    joined, join_metrics = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
+    result(job("spatial_join",parcels,{"predicate":"contains","join_type":"inner","match_mode":"first"},point),1,10000)
+    result(job("spatial_join",point,{"predicate":"within","join_type":"inner","match_mode":"all"},parcels),1,0)
+    reprojected, reproject_metrics = result(job("reproject",point,{"target_srid":4326}),1,0)
+    assert reprojected["output_crs"]==4326
+    with psycopg.connect(OWNER) as conn:
+        union_rows=conn.execute(
+            "SELECT attributes FROM spatial.reference_features WHERE source_id=%s",
+            (union["output_source_id"],)).fetchall()
+        assert sum(a["overlay_feature_id"] is not None for (a,) in union_rows)==2
+        assert all(a["source_feature_id"] is not None for (a,) in union_rows)
+        joined_rows=conn.execute(
+            "SELECT attributes FROM spatial.reference_features WHERE source_id=%s",
+            (joined["output_source_id"],)).fetchall()
+        assert sum(a["overlay_feature_id"]=="pt" for (a,) in joined_rows)==1
+        assert sum(a["overlay_feature_id"] is None for (a,) in joined_rows)==2
+        for sid in (union["output_source_id"],joined["output_source_id"]):
+            assert conn.execute("SELECT count(*) FROM spatial.source_fields WHERE source_id=%s",(sid,)).fetchone()[0]==10
+        srid,lon,lat,attrs=conn.execute(
+            "SELECT ST_SRID(geometry),ST_X(geometry),ST_Y(geometry),attributes FROM spatial.reference_features WHERE source_id=%s",
+            (reprojected["output_source_id"],)).fetchone()
+        ref_lon,ref_lat,ref_attrs=conn.execute(
+            "SELECT ST_X(ST_Transform(geometry,4326)),ST_Y(ST_Transform(geometry,4326)),attributes FROM spatial.reference_features WHERE source_id=%s",
+            (point["source_id"],)).fetchone()
+        assert srid==4326 and attrs==ref_attrs
+        assert math.isclose(lon,ref_lon,abs_tol=1e-10) and math.isclose(lat,ref_lat,abs_tol=1e-10)
+    post("/processing/jobs",job("reproject",point,{"target_srid":3405}),expected=422)
+    post("/processing/jobs",job("spatial_join",point,{"predicate":"arbitrary_sql"},parcels),expected=422)
+    post("/processing/jobs",job("union",point,{},clip),expected=422)
+    print("PASS Union coverage, Spatial Join cardinality and attribute schema, approved CRS transform",flush=True)
     dissolved, dissolve_metrics = result(job("dissolve",parcels,{"group_by_field":"ward"}),2,30000)
     with psycopg.connect(OWNER) as conn:
         areas = dict(conn.execute(
@@ -194,6 +225,36 @@ def check(c,f,second,fixtures,directory):
         assert conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id=%s",(source,fid)).fetchone()[0]==attrs
     print("PASS two distinct authorized editor sessions, one commit/one 409, exact replay, atomic rollback, persisted revert, foreign denial",flush=True)
     check_processing(post,get,foreign,fixtures)
+    # Persistent relation rules are tested after processing to keep fixture pins stable.
+    _, target, child=fixtures
+    relation="/editing/relations"
+    definition={"source_id":child["source_id"],"local_field":"ward",
+        "target_source_id":target["source_id"],"target_field":"ward","cardinality":"one",
+        "source_schema_revision":child["schema_revision"],"target_schema_revision":target["schema_revision"]}
+    rule=post(relation,definition,expected=200)
+    assert post(relation,definition,expected=200)["id"]==rule["id"]
+    assert rule["id"] in {r["id"] for r in get(relation)["items"]}
+    post(relation,definition,foreign,404)
+    get(relation,foreign,404)
+    child_endpoint="/sources/"+child["source_id"]+"/changesets"
+    target_endpoint="/sources/"+target["source_id"]+"/changesets"
+    with psycopg.connect(OWNER) as conn:
+        child_attrs=conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",(child["source_id"],)).fetchone()[0]
+    bad={"operation_id":str(uuid4()),"base_content_revision":child["content_revision"],
+        "base_schema_revision":child["schema_revision"],"summary":"invalid relation",
+        "operations":[{"op_type":"update","feature_id":"pt","properties":child_attrs|{"ward":"MISSING"}}]}
+    post(child_endpoint,bad,expected=409)
+    remove={"operation_id":str(uuid4()),"base_content_revision":target["content_revision"],
+        "base_schema_revision":target["schema_revision"],"summary":"delete referenced target",
+        "operations":[{"op_type":"delete","feature_id":"clip"}]}
+    post(target_endpoint,remove,expected=409)
+    with psycopg.connect(OWNER) as conn:
+        assert conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",(child["source_id"],)).fetchone()[0]==child_attrs
+        assert conn.execute("SELECT count(*) FROM spatial.reference_features WHERE source_id=%s AND feature_id='clip'",(target["source_id"],)).fetchone()[0]==1
+        assert conn.execute("SELECT content_revision FROM spatial.data_sources WHERE id=%s",(child["source_id"],)).fetchone()[0]==child["content_revision"]
+    assert post(relation+"/"+rule["id"]+"/delete",{},expected=200)["deleted"]
+    assert rule["id"] not in {r["id"] for r in get(relation)["items"]}
+    print("PASS persistent relation create/replay, cross-tenant denial, orphan update/delete rollback",flush=True)
     # Real GDAL worker, candidate runs under unprivileged uid.
     spec=importlib.util.spec_from_file_location("spec065_fixtures",ROOT/"fixtures/qgis-parity/generate.py")
     gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)

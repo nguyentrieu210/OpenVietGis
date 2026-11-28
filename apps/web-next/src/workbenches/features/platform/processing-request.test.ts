@@ -8,7 +8,8 @@ describe("processing job request",()=>{
  it("uses authorized ready layers and supported registry IDs",()=>{
   expect(processingLayer(layer("a"))).toBe(true);
   expect(processingLayer({...layer("a"),capabilities:[]})).toBe(false);
-  expect(supportedAlgorithm("union")).toBe(false);
+  expect(supportedAlgorithm("union")).toBe(true);
+  expect(supportedAlgorithm("unimplemented")).toBe(false);
   expect(()=>processingRequest("buffer",undefined,undefined,"100","8","","Output",op)).toThrow();
  });
  it("validates buffer, polygon clip and schema dissolve",()=>{
@@ -44,4 +45,17 @@ it("requires both source pins for Difference and Intersection",()=>{
   expect(readPendingProcessing(JSON.stringify(r))).toEqual(r);
   expect(readPendingProcessing(JSON.stringify({...r,expected_overlay:undefined}))).toBeNull();
  }
+});
+
+it("validates and restores union, reproject and spatial join options",()=>{
+ const a=layer("a","Polygon"), b=layer("b","Polygon");
+ const u=build("union",a,b);expect(readPendingProcessing(JSON.stringify(u))).toEqual(u);
+ expect(()=>build("union",layer("a"),b)).toThrow();
+ const r=processingRequest("reproject",a,undefined,"","","","Projected",op,{targetSrid:3857});
+ expect(readPendingProcessing(JSON.stringify(r))).toEqual(r);
+ expect(()=>processingRequest("reproject",a,undefined,"","","","Projected",op,{targetSrid:3405})).toThrow();
+ const j=processingRequest("spatial_join",a,layer("b"),"","","","Joined",op,{predicate:"contains",joinType:"inner",matchMode:"first"});
+ expect(j.parameters).toEqual({predicate:"contains",join_type:"inner",match_mode:"first"});
+ expect(readPendingProcessing(JSON.stringify(j))).toEqual(j);
+ expect(readPendingProcessing(JSON.stringify({...j,parameters:{...j.parameters,predicate:"sql"}}))).toBeNull();
 });

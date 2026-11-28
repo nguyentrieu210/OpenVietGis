@@ -48,6 +48,31 @@ def upgrade():
     """)
     op.execute("REVOKE ALL ON FUNCTION editing.relation_key(jsonb,text) FROM PUBLIC")
     op.execute("GRANT EXECUTE ON FUNCTION editing.relation_key(jsonb,text) TO openvietgis_runtime")
+    # Prevent removal/type changes from invalidating a persistent definition.
+    # Metadata guards do not expose the related layer or key in their error.
+    op.execute("""
+        CREATE FUNCTION editing.guard_relation_metadata() RETURNS trigger
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $
+        BEGIN
+          IF TG_TABLE_NAME='source_fields' THEN
+            IF NEW.type IS DISTINCT FROM OLD.type AND EXISTS (
+              SELECT 1 FROM editing.relations r
+              WHERE r.organization_id=OLD.organization_id AND r.project_id=OLD.project_id
+              AND ((r.source_id=OLD.source_id AND r.local_field=OLD.field_id)
+                OR (r.target_source_id=OLD.source_id AND r.target_field=OLD.field_id))
+            ) THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation field type is locked'; END IF;
+          ELSE
+            IF (NEW.lifecycle<>'active' OR NEW.validation_state<>'ready') AND EXISTS (
+              SELECT 1 FROM editing.relations r
+              WHERE r.organization_id=OLD.organization_id AND r.project_id=OLD.project_id
+              AND (r.source_id=OLD.id OR r.target_source_id=OLD.id)
+            ) THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Source has an active relation constraint'; END IF;
+          END IF;
+          RETURN NEW;
+        END $
+    """)
+    op.execute("CREATE TRIGGER relation_field_type_guard BEFORE UPDATE OF type ON spatial.source_fields FOR EACH ROW EXECUTE FUNCTION editing.guard_relation_metadata()")
+    op.execute("CREATE TRIGGER relation_source_state_guard BEFORE UPDATE OF lifecycle,validation_state ON spatial.data_sources FOR EACH ROW EXECUTE FUNCTION editing.guard_relation_metadata()")
 
 
 def downgrade():
@@ -58,5 +83,8 @@ def downgrade():
           END IF;
         END $$
     """)
+    op.execute("DROP TRIGGER relation_field_type_guard ON spatial.source_fields")
+    op.execute("DROP TRIGGER relation_source_state_guard ON spatial.data_sources")
+    op.execute("DROP FUNCTION editing.guard_relation_metadata()")
     op.execute("DROP TABLE editing.relations")
     op.execute("DROP FUNCTION editing.relation_key(jsonb,text)")

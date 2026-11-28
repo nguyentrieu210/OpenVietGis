@@ -649,6 +649,11 @@ pub async fn submit_job_pinned(
         .await
         .map_err(edit_db_error)?;
     let engine_version = format!("PostGIS/{pg_ver}");
+    let output_crs = if algorithm_id=="reproject" {
+        clean_params.get("target_srid").and_then(Value::as_i64).and_then(|v| i32::try_from(v).ok())
+            .filter(|v| matches!(v,4326|3857))
+            .ok_or_else(|| EditError::validation("INVALID_PARAMETERS","unsupported target CRS"))?
+    } else { input_source.stored_crs };
     let now = now_micros();
     let job_id = Uuid::new_v4();
     let actor_type = scope.actor_kind();
@@ -675,7 +680,7 @@ pub async fn submit_job_pinned(
     .bind(Value::Object(input_refs))
     .bind(clean_params)
     .bind(&clean_out_name)
-    .bind(input_source.stored_crs)
+    .bind(output_crs)
     .bind(&engine_version)
     .bind(now)
     .fetch_one(&mut **scope.tx_mut())

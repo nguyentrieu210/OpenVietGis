@@ -752,7 +752,7 @@ impl<'a> EditScope<'a> {
         let rows: Vec<Value> = sqlx::query_scalar(
             "SELECT to_jsonb(r) FROM editing.relations r
              WHERE organization_id=$1 AND project_id=$2 ORDER BY id")
-            .bind(org).bind(project).fetch_all(self.tx_mut().as_mut()).await.map_err(db_error)?;
+            .bind(org).bind(project).fetch_all(&mut **self.tx_mut()).await.map_err(db_error)?;
         Ok(json!({"items": rows}))
     }
 
@@ -776,7 +776,7 @@ impl<'a> EditScope<'a> {
              ORDER BY f.source_id,f.field_id FOR SHARE OF f,s")
              .bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
              .bind(request.target_source_id).bind(&request.target_field)
-             .fetch_all(tx.as_mut()).await.map_err(db_error)?;
+             .fetch_all(&mut **tx).await.map_err(db_error)?;
         let local = fields.iter().find(|f| f.0==request.source_id && f.1==request.local_field);
         let target = fields.iter().find(|f| f.0==request.target_source_id && f.1==request.target_field);
         let (Some(local),Some(target)) = (local,target) else {
@@ -790,7 +790,7 @@ impl<'a> EditScope<'a> {
              AND source_id=$3 AND local_field=$4 AND target_source_id=$5 AND target_field=$6")
             .bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
             .bind(request.target_source_id).bind(&request.target_field)
-            .fetch_optional(tx.as_mut()).await.map_err(db_error)?;
+            .fetch_optional(&mut **tx).await.map_err(db_error)?;
         if let Some(row)=existing {
             if row["cardinality"].as_str()==Some(request.cardinality.as_str()) {
                 return Ok(row);
@@ -798,14 +798,14 @@ impl<'a> EditScope<'a> {
             return Err(EditError::conflict("RELATION_EXISTS","remove existing relation before changing cardinality"));
         }
         let count: i64 = sqlx::query_scalar("SELECT count(*) FROM editing.relations WHERE organization_id=$1 AND project_id=$2")
-            .bind(org).bind(project).fetch_one(tx.as_mut()).await.map_err(db_error)?;
+            .bind(org).bind(project).fetch_one(&mut **tx).await.map_err(db_error)?;
         if count>=100 { return Err(EditError::validation("RELATION_LIMIT","at most 100 constraints per project")); }
         let row: Value = sqlx::query_scalar(
             "INSERT INTO editing.relations AS r (id,organization_id,project_id,source_id,local_field,target_source_id,target_field,cardinality,field_type)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING to_jsonb(r)")
             .bind(Uuid::new_v4()).bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
             .bind(request.target_source_id).bind(&request.target_field).bind(&request.cardinality).bind(&local.2)
-            .fetch_one(tx.as_mut()).await.map_err(db_error)?;
+            .fetch_one(&mut **tx).await.map_err(db_error)?;
         self.validate_relations(request.source_id).await?;
         Ok(row)
     }
@@ -816,7 +816,7 @@ impl<'a> EditScope<'a> {
         let org=self.organization_id();
         let project=self.project_id();
         let result=sqlx::query("DELETE FROM editing.relations WHERE organization_id=$1 AND project_id=$2 AND id=$3")
-            .bind(org).bind(project).bind(id).execute(self.tx_mut().as_mut()).await.map_err(db_error)?;
+            .bind(org).bind(project).bind(id).execute(&mut **self.tx_mut()).await.map_err(db_error)?;
         Ok(json!({"id":id,"deleted":result.rows_affected()==1}))
     }
 
@@ -853,7 +853,7 @@ impl<'a> EditScope<'a> {
                        AND t.k IS NULL
                   ))
             )")
-            .bind(org).bind(project).bind(source).fetch_one(tx.as_mut()).await.map_err(db_error)?;
+            .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(db_error)?;
         if bad {
             return Err(EditError::conflict("RELATION_CONSTRAINT","relation constraint would be violated; no data saved")
                 .with_details(json!({"draft_preserved":true})));
