@@ -13,9 +13,11 @@ for i in $(seq 1 40); do
   if docker exec "$name" pg_isready -h 127.0.0.1 -U openvietgis -d openvietgis_bench_spec065_query >/dev/null 2>&1; then break; fi
   sleep 1
 done
+extra=()
 case "${1:-attribute}" in
   attribute) suite=attribute_query ;;
   integrated) suite=edit_processing ;;
+  collaboration) suite=edit_processing; extra=(--suite collaboration) ;;
   *) echo "Unknown fixture suite" >&2; exit 2 ;;
 esac
-PYTHONPATH="$PWD/apps/api:$PWD" "$OVG_SPEC065_PYTHON" "tests/spec065/$suite.py" --candidate "$OVG_SPEC065_BINARY"
+PYTHONPATH="$PWD/apps/api:$PWD" "$OVG_SPEC065_PYTHON" "tests/spec065/$suite.py" --candidate "$OVG_SPEC065_BINARY" "${extra[@]}"

@@ -738,9 +738,11 @@
         "apps/api-rust/src/managed_sync.rs",
         "apps/web-next/src/IntegrationCatalog.tsx",
         "apps/web-next/src/transfer-verification.ts",
-        "tests/spec065/edit_processing.py"
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/realtime_collaboration.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Authenticated Rust GeoPackage file sync preview/push tested: create/update, omitted ID protected, wrong hash/stale replay rejected. UI verifies preview and receipt and blocks uncertain resend within current panel. No actual QGIS Desktop/plugin or R029 realtime acceptance, durable cross-panel reconciliation."
+      "blocker": "Actual R029 authenticated two-user managed sessions, bootstrap pages, exact commit receipt replay, durable delta pull/reset, allowlisted desktop commands and revoked session tested. GeoPackage file sync previously tested. Native QGIS Desktop/plugin, SSE reconnection and permission-epoch reset remain."
     },
     {
       "id": "COLLAB-01",
@@ -790,15 +792,20 @@
     {
       "id": "COLLAB-05",
       "task": "T089",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/MapChat.tsx",
         "apps/web-next/src/OrgChat.tsx",
         "apps/web-next/src/TeamCollaboration.tsx",
         "apps/web-next/src/TaskReminder.tsx",
-        "apps/api-rust/src/org_chat.rs"
+        "apps/api-rust/src/org_chat.rs",
+        "tests/spec065/realtime_collaboration.py",
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/chat-draft-store.ts",
+        "apps/web-next/src/chat-draft-store.test.ts",
+        "apps/web-next/org-chat-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Actual authenticated project chat public/private separation, task assignment/notification/revision conflict, org group mentions/reply/reaction/pin/read/member removal; memory-only per-room drafts survive switching and chat panel reopen, 503 keeps draft, single in-flight claim and stale callback guard; Chromium chat fixture passed. Cross-engine draft continuity and live SSE dedup/reconnect still need acceptance."
     },
     {
       "id": "COLLAB-06",

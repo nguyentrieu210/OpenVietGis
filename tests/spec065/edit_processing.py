@@ -232,7 +232,7 @@ def check(c,f,second,fixtures,directory):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration"],default="integrated");args=p.parse_args()
     baseline.assert_safe_bench_db(OWNER,isolated_port=54332)
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT to_regclass('spatial.reference_features')").fetchone()[0] is None,"refusing nonfresh DB"
@@ -252,7 +252,15 @@ def main():
         wrapper.write_text("#!/bin/sh\nexec /usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups "+str(binary)+"\n")
         wrapper.chmod(0o755);os.chown(directory,65534,65534);directory.chmod(0o700)
         with rust_client(wrapper,RUNTIME,directory) as c:
-            check(c,f,second,fixtures,directory)
+            try:
+                if args.suite=="integrated":
+                    check(c,f,second,fixtures,directory)
+                else:
+                    from realtime_collaboration import check_realtime_collaboration
+                    check_realtime_collaboration(c,f,second)
+            except Exception:
+                print((directory/"rust.log").read_text()[-8000:],flush=True)
+                raise
 
 
 if __name__=="__main__":
