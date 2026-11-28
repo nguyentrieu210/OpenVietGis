@@ -17,14 +17,16 @@ use tauri::{Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
 use std::sync::{Arc,Mutex,OnceLock,atomic::{AtomicBool,AtomicUsize, Ordering}};
 use std::collections::HashMap;
-type Requests=HashMap<Uuid,Arc<AtomicBool>>;
+struct CancelToken{flag:AtomicBool,notify:tokio::sync::Notify}
+type Requests=HashMap<Uuid,Arc<CancelToken>>;
+static READ_SLOTS:OnceLock<tokio::sync::Semaphore>=OnceLock::new();
 static READS:OnceLock<Mutex<Requests>>=OnceLock::new();
-struct ReadPermit{ id:Uuid, token:Arc<AtomicBool> }
+struct ReadPermit{ id:Uuid, token:Arc<CancelToken> }
 impl ReadPermit{
     fn acquire(id:Uuid)->Reply<Self>{
         let mut r=READS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|"SESSION_FAILED".to_owned())?;
-        if r.len()>=4||r.contains_key(&id){return Err("RESOURCE_LIMIT".into())}
-        let token=Arc::new(AtomicBool::new(false));r.insert(id,token.clone());Ok(Self{id,token})
+        if r.len()>=64||r.contains_key(&id){return Err("RESOURCE_LIMIT".into())}
+        let token=Arc::new(CancelToken{flag:AtomicBool::new(false),notify:tokio::sync::Notify::new()});r.insert(id,token.clone());Ok(Self{id,token})
     }
 }
 impl Drop for ReadPermit{fn drop(&mut self){if let Ok(mut r)=READS.get_or_init(||Mutex::new(HashMap::new())).lock(){r.remove(&self.id);}}}
@@ -32,7 +34,7 @@ impl Drop for ReadPermit{fn drop(&mut self){if let Ok(mut r)=READS.get_or_init(|
 fn desktop_cancel_resource(window:WebviewWindow,request_id:Uuid)->Reply<()>{
     trusted(&window)?;
     let r=READS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|"SESSION_FAILED".to_owned())?;
-    if let Some(token)=r.get(&request_id){token.store(true,Ordering::Release);}
+    if let Some(token)=r.get(&request_id){token.flag.store(true,Ordering::Release);token.notify.notify_one();}
     Ok(())
 }
 
@@ -180,16 +182,22 @@ async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String,re
     let source=Uuid::parse_str(req.source).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let revision=req.revision;
     let resource=req.resource;
+    // A separate FIFO read lane leaves control commands outside its queue.
+    let slot=tokio::select!{
+        p=READ_SLOTS.get_or_init(||tokio::sync::Semaphore::new(4)).acquire()=>p.map_err(|_|"SESSION_FAILED".to_owned())?,
+        _=read.token.notify.notified()=>return Err("CANCELLED".into())
+    };
     let b=run(window,host.inner().clone(),move|h|{
-        if read.token.load(Ordering::Acquire){return Err("CANCELLED")}
+        let _slot=slot;
+        if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
         let data=match resource{
         protocol::Resource::RasterTile{z,x,y} if revision==0=>h.raster_tile(handle,source,z,x,y),
-        protocol::Resource::VectorTile{z,x,y}=>h.vector_tile_cancel(handle,source,revision,z,x,y,&read.token),
+        protocol::Resource::VectorTile{z,x,y}=>h.vector_tile_cancel(handle,source,revision,z,x,y,&read.token.flag),
         protocol::Resource::TileJson=>h.tilejson(handle,source,revision),
         protocol::Resource::CadChunk(_) | protocol::Resource::PointNode(_) | protocol::Resource::Asset if revision==0=>h.asset_resource(handle,source,resource),
         _=>Err("NOT_AVAILABLE")
         }?;
-        if read.token.load(Ordering::Acquire){return Err("CANCELLED")}
+        if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
         Ok(data)
     }).await?;
     Ok(tauri::ipc::Response::new(b))
