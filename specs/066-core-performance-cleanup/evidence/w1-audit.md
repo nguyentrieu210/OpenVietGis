@@ -18,3 +18,7 @@ Baseline code parent: main 5bfc83826161acd83b98a925e85690cebde53ae1; the baselin
 - HTTP: isolated PostGIS benchmark, same seeded DB/payloads and real Python/Rust servers. At concurrency 20 Rust/Python p95 ratio is 0.395 for attribute 1k and 0.524 for 30k bbox, response parity true and errors 0%.
 - Build: cold Rust release 11m38s; exact warm rebuild 0.93s Cargo / 1.908s whole Docker command; binary 21 MiB. This validates caching value but is not a GHA build result.
 - Bundle/offline/build-size, PostGIS SQL, WKB and render-diff baselines remain in prior evidence files.
+
+## Repository protection observation refresh
+- GitHub branches/main metadata at 2026-11-28 records protected=false and required status checks enforcement=off with no contexts/checks. The normalized snapshot is github-main-protection.json.
+- This removes the earlier observability blocker only; final merge must re-read the setting because repository policy is external mutable state.

@@ -5,7 +5,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [x] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
 - [x] T002 [P0] Inventory all tracked paths, sizes, imports, Cargo/pnpm dependency graph — paths: `apps; crates; packages; modules; integrations`. Acceptance: Machine-readable inventory with consumers and owners.
 - [x] T003 [P0] Map API routes, tool schemas, runtime profiles, migrations and tests — paths: `apps/api-rust/src/routes.rs; apps/api; apps/mcp-rust; apps/mcp`. Acceptance: Every active contract mapped; unknowns explicit.
-- [ ] T004 [P0] Inventory dev/build/CI scripts, required checks, duplicate jobs — paths: `package.json; pnpm-workspace.yaml; Cargo.toml; .github/workflows`. Acceptance: Complete command/status matrix.
+- [x] T004 [P0] Inventory dev/build/CI scripts, required checks, duplicate jobs — paths: `package.json; pnpm-workspace.yaml; Cargo.toml; .github/workflows`. Acceptance: Complete command/status matrix.
 - [x] T005 [P0] Measure cold/warm browser, API, GIS/CAD/3D, resources/build baseline — paths: `tools/benchmark; tests/e17; tests/rust-parity`. Acceptance: Raw baseline with profile and SHA.
 - [x] T006 [P0] Read-only runtime/image/worktree/cache inventory and rollback map — paths: `infra/prod; infra/rust-platform; VPS /opt`. Acceptance: Active ownership and retention recorded.
 
