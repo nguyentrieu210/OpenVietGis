@@ -8,6 +8,8 @@ pub mod batch;
 pub mod measure;
 pub mod viewport;
 pub mod staging;
+pub mod pmtiles;
+pub mod crs;
 pub use ovg_core::{CrsProfile, Feature, Revision};
 pub use ovg_processing::registry::{algorithm_registry, AlgorithmId};
 pub use ovg_sync::field::{validate_offline_ops, PackageLifecycle};

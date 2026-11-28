@@ -40,3 +40,27 @@ fn zip_traversal_cancel_and_required_companions(){
  let cancelled=AtomicBool::new(true);let stop=dir.join("stop");assert!(matches!(staging::unpack_zip(&zip,&stop,&cancelled,1024*1024),Err(Error::Cancelled)));assert!(!stop.exists());
  std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn pmtiles_local_ranges_and_hilbert(){
+ use ovg_mobile_engine::pmtiles::{Archive,tile_id};
+ assert_eq!([tile_id(1,0,0).unwrap(),tile_id(1,0,1).unwrap(),tile_id(1,1,1).unwrap(),tile_id(1,1,0).unwrap()],[1,2,3,4]);
+ let dir=std::env::temp_dir().join(format!("ovg-pm-{}",Uuid::new_v4()));std::fs::create_dir(&dir).unwrap();let p=dir.join("a.pmtiles");
+ let root=[1,0,1,3,1];let meta=br#"{"attribution":"independent fixture"}"#;let tile=[1,2,3];
+ let mut h=vec![0u8;127];h[..7].copy_from_slice(b"PMTiles");h[7]=3;h[97]=1;h[98]=1;h[99]=1;
+ let off=127u64+root.len()as u64;let end=off+meta.len()as u64;
+ for (idx,num) in [(8,127u64),(16,root.len()as u64),(24,off),(32,meta.len()as u64),(40,end),(48,0),(56,end),(64,3)]{h[idx..idx+8].copy_from_slice(&num.to_le_bytes());}
+ h.extend(root);h.extend(meta);h.extend(tile);std::fs::write(&p,&h).unwrap();
+ let mut a=Archive::open(&p).unwrap();assert_eq!(a.tile(0,0,0).unwrap().unwrap(),tile);assert!(a.tile(1,0,0).unwrap().is_none());drop(a);
+ h[7]=2;std::fs::write(&p,&h).unwrap();assert!(Archive::open(&p).is_err());std::fs::remove_dir_all(dir).unwrap();
+}
+#[test]
+fn crs_registry_and_native_vn2000_oracle(){
+ use ovg_mobile_engine::crs;
+ assert_eq!(crs::registry_version(),"r003-v1");assert!(crs::profile(4326).is_ok());
+ assert!(crs::transform(4326,999999,106.7,10.8).is_err());
+ let expected=[344618.7886181846,2378231.2005045055];
+ let p=crs::vn2000_native(4756,3405,103.5,21.5).unwrap();
+ assert!((p[0]-expected[0]).hypot(p[1]-expected[1])<0.01);
+ assert!(crs::vn2000_native(4326,3405,103.5,21.5).is_err()); // no implicit datum transform
+}
