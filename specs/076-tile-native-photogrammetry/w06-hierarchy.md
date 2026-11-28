@@ -1,0 +1,2 @@
+# W06 hierarchical coarse alignment checkpoint
+Builds bounded shared-track index, pairwise 3D similarity, deterministic strongest-overlap tree rooted in one common frame, and verifies residuals of every eligible edge including loops. Disconnected, degenerate or inconsistent models fail closed. Track IDs and common frame must be externally verified; thresholds are in root-frame units, not automatically metres. This does not solve the global pose graph or run global BA, and keeps the bounded index in memory. No real dataset or CI execution.
