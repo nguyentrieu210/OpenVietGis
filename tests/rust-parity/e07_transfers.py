@@ -299,7 +299,16 @@ def main():
                             start = time.monotonic()
                             actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
                             rust_ms = (time.monotonic() - start) * 1000
-                            require(actual == expected, f"semantic or revision mismatch: {fmt}")
+                            differences = {
+                                key: {"expected": expected[key], "actual": actual.get(key)}
+                                for key in expected
+                                if actual.get(key) != expected[key]
+                            }
+                            require(
+                                actual == expected,
+                                f"semantic or revision mismatch: {fmt}: "
+                                f"{json.dumps(differences, ensure_ascii=False, sort_keys=True)}",
+                            )
                             print(
                                 f"PASS E07 {fmt} roundtrip; "
                                 f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
