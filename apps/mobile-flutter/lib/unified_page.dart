@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'src/rust/api/simple.dart';
 import 'unified_map.dart';
+import 'unified_survey.dart';
 
 String _uuid(){
   final r=Random.secure();
@@ -99,6 +100,11 @@ class _UnifiedPageState extends State<UnifiedPage>{
     if(!mounted)return;setState(()=>_ids=projects);await _open(project);
     if(mounted)setState(()=>_message='Đã sao chép vector và GPS Survey; media mã hóa vẫn ở nguồn.');
   }
+  Future<void> _captureSurvey()async{
+    final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedSurvey(project:p,layer:l,revision:r,uuid:_uuid)));
+    if(mounted)await _refresh();
+  }
   Future<void> _survey()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
     final tracks=<Map<String,dynamic>>[];var after='';
@@ -186,6 +192,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
           Text('Revision ${_revision??"?"}'),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
           OutlinedButton(onPressed:edit?()=>unawaited(_run(_survey)):null,child:const Text('GPS Survey đã lưu')),
+          FilledButton.icon(onPressed:edit?()=>unawaited(_run(_captureSurvey)):null,icon:const Icon(Icons.gps_fixed),label:const Text('Khảo sát GPS Unified')),
           for(final l in _layers)ListTile(title:Text(l['name'].toString()),leading:Icon(l['id']==_layer?Icons.check_circle:Icons.layers),enabled:ready,onTap:()=>setState((){_layer=l['id'].toString();_rows=[];_cursor=null;})),
           TextField(controller:_name,enabled:ready,maxLength:256,decoration:const InputDecoration(labelText:'Tên lớp')),
           OutlinedButton(onPressed:ready&&_revision!=null?()=>unawaited(_run(_add)):null,child:const Text('Thêm lớp')),
