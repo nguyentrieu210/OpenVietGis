@@ -44,7 +44,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
-| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, RelationValuePicker, editing.relations/changesets và deferred DB triggers; có code chọn khóa và ràng buộc dùng chung, chờ nghiệm thu | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
+| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, RelationValuePicker, editing.relations/changesets và deferred DB triggers; có code chọn khóa và ràng buộc dùng chung, chờ nghiệm thu; personal form designer + atomic multi-field editor | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
 | STYLE-08 | Metadata, diagrams, actions, map tips | U | Metadata cơ bản; phần còn lại chưa xác nhận | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
 | STYLE-09 | Layer styling panel live preview | P | LayerProperties modal, LayerLabels | Panel styling preview và apply rõ ràng; cancel không ghi đè dữ liệu | P2 |
 
@@ -55,7 +55,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | TABLE-01 | Table gắn với active layer, map/table selection | D | QgisAttributeTable | Một selection store theo layer/revision; chọn ở map/table/inspector khớp | P1 |
 | TABLE-02 | Tìm kiếm, phân trang, sort/filter toàn bộ nguồn | P | QgisAttributeTable lọc inputRows/cursor | Server-side filter/sort trên toàn nguồn; ghi rõ loaded vs total; không lọc riêng trang gây hiểu nhầm | P1 |
 | TABLE-03 | Chọn theo biểu thức, vị trí, vùng chọn | P | ProfessionalTools, CoreMapTools query | Select/add/remove/intersect/invert trên toàn tập hợp có permission và count | P1 |
-| TABLE-04 | Form view / editor widget theo kiểu trường | P | FeatureInfo, AdvancedEditor | Table/form toggle, typed date/enum/relation/null, validation field-level | P1 |
+| TABLE-04 | Form view / editor widget theo kiểu trường | P | FeatureInfo, AdvancedEditor; typed grouped multi-field forms with relation keys | Table/form toggle, typed date/enum/relation/null, validation field-level | P1 |
 | TABLE-05 | Inline cell edit, multi-edit, save/rollback | P | AdvancedEditor bulkSave | Chỉnh sửa dòng/cột trong transaction ngắn, conflict, undo có receipt | P1 |
 | TABLE-06 | Field Calculator / add field / virtual field | P | ProfessionalTools Field Calculator | Preview công thức, phạm vi selected/all, nullable/kiểu dữ liệu, atomic update | P1 |
 | TABLE-07 | Copy/paste, export selected, cấu hình cột | P | ExportDialog, ProfessionalTools tsv | Copy dữ liệu đúng phạm vi; cột/width/order cá nhân, export selected có cảnh báo | P2 |
