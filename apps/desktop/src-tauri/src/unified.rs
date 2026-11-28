@@ -102,7 +102,18 @@ impl Unified{
    let revision=s.detach_asset(id,expected).map_err(err)?;a.remove(&(h,id));Ok(revision)
   })
  }
+ #[cfg(feature="native-ogr")]
+ pub fn import_ogr_stream(&self,h:Uuid,path:&std::path::Path,index:usize,name:&str,expected:u64,cancel:&AtomicBool)->UResult<ovg_project_store::bulk_import::BulkReceipt>{
+  self.with(h,|s|{if s.revision().map_err(err)?!=expected{return Err("REVISION_CONFLICT")}Ok(())})?;
+  let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let spool=stage.path().join("source.ndjson");
+  ovg_native_providers::ogr::stage_ndjson(path,index,&spool,cancel)?;
+  self.import_ndjson_cancel(h,&spool,name,expected,cancel)
+ }
  pub fn import_ndjson(&self,h:Uuid,path:&std::path::Path,name:&str,expected:u64)->UResult<ovg_project_store::bulk_import::BulkReceipt>{
+  self.import_ndjson_cancel(h,path,name,expected,&AtomicBool::new(false))
+ }
+ fn import_ndjson_cancel(&self,h:Uuid,path:&std::path::Path,name:&str,expected:u64,cancel:&AtomicBool)->UResult<ovg_project_store::bulk_import::BulkReceipt>{
   use std::io::{BufRead,BufReader,Read};
   use ovg_project_store::{bulk_import::BulkRow,Error};
   let m=fs::symlink_metadata(path).map_err(|_|"INVALID_FILE")?;
@@ -126,7 +137,7 @@ impl Unified{
     Ok(BulkRow{id,image:Image{wkb,attributes}})
    })())
   });
-  self.with(h,|s|s.import_layer_stream(Uuid::new_v4(),Uuid::new_v4(),name,expected,rows,&AtomicBool::new(false)).map_err(err))
+  self.with(h,|s|s.import_layer_stream(Uuid::new_v4(),Uuid::new_v4(),name,expected,rows,cancel).map_err(err))
  }
  pub fn open_asset(&self,h:Uuid,path:&std::path::Path,kind:&str,epsg:Option<u32>)->UResult<crate::unified_assets::Info>{
   self.with(h,|_|{
