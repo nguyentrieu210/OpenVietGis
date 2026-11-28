@@ -1,14 +1,22 @@
 name: E06 retention and E08 native integration
-
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 
 on:
   workflow_dispatch:
   push:
-    branches: ["064-**"]
+    branches: ["main", "064-**"]
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "tests/rust-parity/**"
+      - "specs/064-rust-platform/contracts/engines/**"
       - ".github/workflows/e06-e08-retention.yml"
       - "apps/api/**"
       - "infra/dev/**"
@@ -16,6 +24,14 @@ on:
       - "tools/test_database.py"
   pull_request:
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - ".cargo/**"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "tests/rust-parity/**"
+      - "specs/064-rust-platform/contracts/engines/**"
       - ".github/workflows/e06-e08-retention.yml"
       - "apps/api/**"
       - "infra/dev/**"

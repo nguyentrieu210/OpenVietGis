@@ -1,4 +1,8 @@
 name: Rust Platform CI
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 
 on:
   workflow_dispatch:
@@ -41,10 +45,6 @@ on:
       - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
       - "specs/064-rust-platform/contracts/engines/**"
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

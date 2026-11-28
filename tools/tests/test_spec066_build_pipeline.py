@@ -82,3 +82,41 @@ def test_ci_builds_native_binary_once_and_verifies_both_consumers() -> None:
         assert not any("cargo build --locked" in s.get("run", "") for s in steps)
         assert any(s.get("uses") == "actions/download-artifact@v4" for s in steps)
         assert any("sha256sum --check" in s.get("run", "") for s in steps)
+
+
+def test_every_workflow_has_one_pr_only_concurrency_policy() -> None:
+    workflows = sorted((ROOT / ".github/workflows").glob("*.yml"))
+    workflows += sorted((ROOT / ".github/workflows").glob("*.yaml"))
+    assert workflows
+    for path in workflows:
+        text = path.read_text()
+        # PyYAML accepts duplicate keys silently, so inspect the top-level key too.
+        assert text.splitlines().count("concurrency:") == 1, path.name
+        workflow = yaml.load(text, Loader=yaml.BaseLoader)
+        policy = workflow["concurrency"]
+        assert policy["group"] == (
+            "${{ github.workflow }}-${{ github.event_name }}-"
+            "${{ github.event.pull_request.number || github.run_id }}"
+        ), path.name
+        assert policy["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}", path.name
+
+
+def test_full_ci_is_not_path_filtered_for_prs_or_main() -> None:
+    ci = yaml.load((ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader)
+    triggers = ci["on"]
+    assert triggers["pull_request"] in (None, "")
+    assert "main" in triggers["push"]["branches"]
+
+
+def test_native_postgis_qualification_runs_for_rust_source_changes() -> None:
+    for name in ("e06-e08-retention.yml", "e11-outbox.yml"):
+        workflow = yaml.load((ROOT / ".github/workflows" / name).read_text(), Loader=yaml.BaseLoader)
+        triggers = workflow["on"]
+        for event in ("push", "pull_request"):
+            paths = triggers[event]["paths"]
+            assert "Cargo.toml" in paths, (name, event)
+            assert "Cargo.lock" in paths, (name, event)
+            assert "rust-toolchain.toml" in paths, (name, event)
+            assert "apps/api-rust/**" in paths, (name, event)
+            assert "crates/**" in paths, (name, event)
+        assert "main" in triggers["push"]["branches"], name
