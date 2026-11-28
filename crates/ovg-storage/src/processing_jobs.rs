@@ -28,6 +28,10 @@ use crate::spatial_pins::{
 };
 
 pub const MAX_PROCESSING_FEATURES: i64 = 50_000;
+
+fn overlay_algorithm(algorithm: &str) -> bool {
+    matches!(algorithm, "clip" | "difference" | "intersection")
+}
 pub const MAX_PROCESSING_POSITIONS: i64 = 1_000_000;
 const PROCESSING_STATEMENT_TIMEOUT: &str = "30s";
 
@@ -515,8 +519,8 @@ pub async fn submit_job_pinned(
 ) -> Result<SubmitJobResult, EditError> {
     if expected_input.is_some_and(|p| !p.valid())
         || expected_overlay.is_some_and(|p| !p.valid())
-        || expected_overlay.is_some() && (algorithm_id != "clip" || expected_input.is_none())
-        || expected_input.is_some() && algorithm_id == "clip" && expected_overlay.is_none()
+        || expected_overlay.is_some() && (!overlay_algorithm(algorithm_id) || expected_input.is_none())
+        || expected_input.is_some() && overlay_algorithm(algorithm_id) && expected_overlay.is_none()
     {
         return Err(EditError::validation(
             "INVALID_INPUT_PIN",
@@ -533,10 +537,10 @@ pub async fn submit_job_pinned(
         stripped_name.chars().take(200).collect()
     };
 
-    if algorithm_id != "clip" && overlay_layer_id.is_some() {
+    if !overlay_algorithm(algorithm_id) && overlay_layer_id.is_some() {
         return Err(EditError::validation(
             "INVALID_PARAMETERS",
-            "only clip accepts overlay_layer_id",
+            "only polygon overlay algorithms accept overlay_layer_id",
         ));
     }
 
@@ -601,11 +605,11 @@ pub async fn submit_job_pinned(
     );
     input_refs.insert("input_stored_crs".into(), json!(input_source.stored_crs));
 
-    if algorithm_id == "clip" {
+    if overlay_algorithm(algorithm_id) {
         let Some(ov_layer_id) = overlay_layer_id else {
             return Err(EditError::validation(
                 "MISSING_OVERLAY_LAYER",
-                "clip requires overlay_layer_id",
+                "polygon overlay algorithm requires overlay_layer_id",
             ));
         };
         let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
@@ -966,7 +970,7 @@ async fn prepare_inside_savepoint(
         .map_err(edit_db_error)?;
 
     let input_source = validate_pinned_source(sp, org_id, project_id, &input_refs, "input").await?;
-    if algorithm_id == "clip" {
+    if overlay_algorithm(&algorithm_id) {
         let overlay_source =
             validate_pinned_source(sp, org_id, project_id, &input_refs, "overlay").await?;
         if overlay_source.geometry_family != "Polygon" {
@@ -1126,7 +1130,7 @@ async fn prepare_inside_savepoint(
                 });
             }
         }
-        "clip" => {
+        "clip" | "difference" | "intersection" => {
             let overlay_src_id = Uuid::parse_str(
                 input_refs
                     .get("overlay_source_id")
@@ -1139,8 +1143,8 @@ async fn prepare_inside_savepoint(
                 .and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
                 .ok_or_else(|| EditError::conflict("STALE_INPUT_PIN", "invalid overlay crs pin"))?;
-            let mask_expr = if overlay_srid == input_srid {
-                "ST_Union(ov.geometry)".to_owned()
+            let transformed = if overlay_srid == input_srid {
+                "ov.geometry".to_owned()
             } else {
                 let (transformed, _, _) =
                     web_transform_expr("ov.geometry", overlay_srid, input_srid)?;
@@ -1157,29 +1161,58 @@ async fn prepare_inside_savepoint(
                     },
                 )
                 .await?;
-                format!("ST_Union({transformed})")
+                transformed
             };
-            let sql = format!(
-                "WITH mask AS (
-                    SELECT {mask_expr} AS mgeom
-                    FROM spatial.reference_features ov
-                    WHERE ov.organization_id = $1 AND ov.project_id = $2
-                      AND ov.source_id = $4
-                 ),
-                 clipped AS (
-                    SELECT rf.feature_id, part.geom, part.path
-                    FROM spatial.reference_features rf CROSS JOIN mask
-                    CROSS JOIN LATERAL ST_Dump(ST_Intersection(rf.geometry, mask.mgeom)) AS part
-                    WHERE rf.organization_id = $1 AND rf.project_id = $2
-                      AND rf.source_id = $3
-                      AND mask.mgeom IS NOT NULL
-                      AND ST_Intersects(rf.geometry, mask.mgeom)
-                 )
-                 SELECT feature_id, {geom_cols}
-                 FROM clipped
-                 WHERE ST_GeometryType(geom) = $5 AND NOT ST_IsEmpty(geom)
-                 ORDER BY feature_id, path LIMIT $6"
-            );
+            let sql = if algorithm_id == "intersection" {
+                format!(
+                    "WITH mask AS (
+                        SELECT ov.feature_id AS overlay_id, {transformed} AS mgeom
+                        FROM spatial.reference_features ov
+                        WHERE ov.organization_id = $1 AND ov.project_id = $2
+                          AND ov.source_id = $4
+                     ), clipped AS (
+                        SELECT rf.feature_id, mask.overlay_id, part.geom, part.path
+                        FROM spatial.reference_features rf JOIN mask
+                          ON ST_Intersects(rf.geometry, mask.mgeom)
+                        CROSS JOIN LATERAL ST_Dump(ST_Intersection(rf.geometry, mask.mgeom)) AS part
+                        WHERE rf.organization_id = $1 AND rf.project_id = $2
+                          AND rf.source_id = $3
+                     )
+                     SELECT feature_id, overlay_id, {geom_cols}
+                     FROM clipped
+                     WHERE ST_GeometryType(geom) = $5 AND NOT ST_IsEmpty(geom)
+                     ORDER BY feature_id, overlay_id, path LIMIT $6"
+                )
+            } else {
+                let geom = if algorithm_id == "difference" {
+                    "CASE WHEN mask.mgeom IS NULL THEN rf.geometry ELSE ST_Difference(rf.geometry, mask.mgeom) END"
+                } else {
+                    "ST_Intersection(rf.geometry, mask.mgeom)"
+                };
+                let condition = if algorithm_id == "difference" {
+                    "TRUE"
+                } else {
+                    "mask.mgeom IS NOT NULL AND ST_Intersects(rf.geometry, mask.mgeom)"
+                };
+                format!(
+                    "WITH mask AS (
+                        SELECT ST_Union({transformed}) AS mgeom
+                        FROM spatial.reference_features ov
+                        WHERE ov.organization_id = $1 AND ov.project_id = $2
+                          AND ov.source_id = $4
+                     ), clipped AS (
+                        SELECT rf.feature_id, part.geom, part.path
+                        FROM spatial.reference_features rf CROSS JOIN mask
+                        CROSS JOIN LATERAL ST_Dump({geom}) AS part
+                        WHERE rf.organization_id = $1 AND rf.project_id = $2
+                          AND rf.source_id = $3 AND ({condition})
+                     )
+                     SELECT feature_id, NULL::text AS overlay_id, {geom_cols}
+                     FROM clipped
+                     WHERE ST_GeometryType(geom) = $5 AND NOT ST_IsEmpty(geom)
+                     ORDER BY feature_id, path LIMIT $6"
+                )
+            };
             let qrows = sqlx::query(&sql)
                 .bind(org_id)
                 .bind(project_id)
@@ -1196,17 +1229,32 @@ async fn prepare_inside_savepoint(
                     )
                 })?;
 
-            output_fields = vec![(
+            let mut fields = vec![(
                 "source_feature_id".into(),
                 "Source Feature ID".into(),
                 "text".into(),
                 false,
             )];
+            if algorithm_id == "intersection" {
+                fields.push((
+                    "overlay_feature_id".into(),
+                    "Overlay Feature ID".into(),
+                    "text".into(),
+                    false,
+                ));
+            }
+            output_fields = fields;
             for (idx, qr) in qrows.iter().enumerate() {
                 let src_fid: String = qr.try_get("feature_id").map_err(edit_db_error)?;
+                let attributes = if algorithm_id == "intersection" {
+                    let overlay_fid: String = qr.try_get("overlay_id").map_err(edit_db_error)?;
+                    json!({ "source_feature_id": src_fid, "overlay_feature_id": overlay_fid })
+                } else {
+                    json!({ "source_feature_id": src_fid })
+                };
                 raw_rows.push(RawOutputRow {
-                    feature_id: format!("clip_{}", idx + 1),
-                    attributes: json!({ "source_feature_id": src_fid }),
+                    feature_id: format!("{algorithm_id}_{}", idx + 1),
+                    attributes,
                     srid: qr.try_get("srid").map_err(edit_db_error)?,
                     total_count: qr
                         .try_get::<Option<i64>, _>("total_count")

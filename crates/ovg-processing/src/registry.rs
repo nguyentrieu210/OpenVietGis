@@ -18,6 +18,8 @@ pub enum AlgorithmId {
     Buffer,
     Clip,
     Dissolve,
+    Difference,
+    Intersection,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -35,7 +37,7 @@ pub struct AlgorithmDescriptor {
 
 /// Descriptors in the order returned by the existing processing catalog.
 #[must_use]
-pub fn algorithm_registry() -> [AlgorithmDescriptor; 3] {
+pub fn algorithm_registry() -> [AlgorithmDescriptor; 5] {
     [
         AlgorithmDescriptor {
             id: AlgorithmId::Buffer,
@@ -84,6 +86,28 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 3] {
                 "group_by_field": {"type": "string", "nullable": true}
             }),
         },
+        AlgorithmDescriptor {
+            id: AlgorithmId::Difference,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.difference", "vector.overlay"],
+            name: "Difference",
+            description: "Subtracts the union of polygon overlay geometries; output includes source feature lineage.",
+            required_inputs: &["input_layer_id", "overlay_layer_id"],
+            parameters_schema: json!({}),
+        },
+        AlgorithmDescriptor {
+            id: AlgorithmId::Intersection,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.intersection", "vector.overlay"],
+            name: "Intersection",
+            description: "Intersects each input feature with each overlapping polygon; output includes both feature IDs, not a full attribute join.",
+            required_inputs: &["input_layer_id", "overlay_layer_id"],
+            parameters_schema: json!({}),
+        },
     ]
 }
 
@@ -100,6 +124,13 @@ pub fn validate_algorithm_parameters(
             "unknown clip parameter",
         )),
         AlgorithmId::Dissolve => validate_dissolve(parameters),
+        AlgorithmId::Difference | AlgorithmId::Intersection if parameters.is_empty() => {
+            Ok(json!({}))
+        }
+        AlgorithmId::Difference | AlgorithmId::Intersection => Err(AppError::validation(
+            "INVALID_PARAMETERS",
+            "unknown overlay parameter",
+        )),
     }
 }
 
@@ -177,7 +208,7 @@ mod tests {
     #[test]
     fn matches_the_legacy_catalog_wire_shape_and_order() {
         assert_eq!(
-            json!({ "items": algorithm_registry() }),
+            json!({ "items": &algorithm_registry()[..3] }),
             json!({
                 "items": [
                     {
@@ -226,6 +257,17 @@ mod tests {
             AlgorithmId::Clip
         );
         assert!(serde_json::from_value::<AlgorithmId>(json!("Clip")).is_err());
+    }
+
+    #[test]
+    fn expanded_overlay_catalog() {
+        let catalog = algorithm_registry();
+        assert_eq!(catalog[3].id, AlgorithmId::Difference);
+        assert_eq!(catalog[4].id, AlgorithmId::Intersection);
+        for algorithm in [AlgorithmId::Difference, AlgorithmId::Intersection] {
+            assert_eq!(validate(algorithm, json!({})).unwrap(), json!({}));
+            assert!(validate(algorithm, json!({"unexpected": 1})).is_err());
+        }
     }
 
     #[test]

@@ -15,6 +15,6 @@ describe("selected GeoJSON export",()=>{
  it("rejects missing FID, revision changes and invalid coordinates",async()=>{
   await expect(exportSelectedGeoJSON(layer,"o","p",new Set(["s:x"]),async c=>page(c),()=>true,()=>{})).rejects.toThrow();
   await expect(exportSelectedGeoJSON(layer,"o","p",new Set(["s:a"]),async()=>({...page(null),context:{...page(null).context,content_revision:"other"}}),()=>true,()=>{})).rejects.toThrow();
-  await expect(exportSelectedGeoJSON(layer,"o","p",new Set(["s:a"]),async()=>({...page(null),items:[{...a,geometry:{...a.geometry!,coordinates:[181,0]}}]}),()=>true,()=>{})).rejects.toThrow();
+  await expect(exportSelectedGeoJSON(layer,"o","p",new Set(["s:a"]),async()=>({...page(null),items:[{...a,geometry:{...a.geometry!,coordinates:[181,0]}} as unknown as SpatialFeature]}),()=>true,()=>{})).rejects.toThrow();
  });
 });

@@ -53,6 +53,8 @@ enum Algorithm {
     Buffer,
     Clip,
     Dissolve,
+    Difference,
+    Intersection,
     Band,
     Ndvi,
     Ndwi,
@@ -69,13 +71,18 @@ enum Algorithm {
 
 impl Algorithm {
     const fn vector(self) -> bool {
-        matches!(self, Self::Buffer | Self::Clip | Self::Dissolve)
+        matches!(
+            self,
+            Self::Buffer | Self::Clip | Self::Dissolve | Self::Difference | Self::Intersection
+        )
     }
 
     const fn always_two_inputs(self) -> bool {
         matches!(
             self,
             Self::Clip
+                | Self::Difference
+                | Self::Intersection
                 | Self::Ndvi
                 | Self::Ndwi
                 | Self::Ndbi
@@ -393,6 +400,8 @@ fn validate_node(node: &mut Node) -> Result<(), ()> {
             Algorithm::Buffer => VectorAlgorithm::Buffer,
             Algorithm::Clip => VectorAlgorithm::Clip,
             Algorithm::Dissolve => VectorAlgorithm::Dissolve,
+            Algorithm::Difference => VectorAlgorithm::Difference,
+            Algorithm::Intersection => VectorAlgorithm::Intersection,
             _ => unreachable!(),
         };
         let normalized =

@@ -45,7 +45,7 @@ def fixture_layers(f):
 
 def check_processing(post,get,foreign,fixtures):
     parcels,clip,point=fixtures
-    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve"}
+    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve","difference","intersection"}
     def pin(layer):
         return {k: layer[k] for k in ("source_id", "content_revision", "schema_revision")}
     def job(algorithm,layer,parameters,overlay=None,execute=True,op=None):
@@ -67,6 +67,16 @@ def check_processing(post,get,foreign,fixtures):
     post("/processing/jobs",stale,expected=409)
     _, buffer_metrics = result(job("buffer",point,{"distance_meters":10,"quad_segs":8}),1,1600*math.sin(math.pi/16))
     _, clip_metrics = result(job("clip",parcels,{},clip),2,10000)
+    _, difference_metrics = result(job("difference",parcels,{},clip),3,20000)
+    intersection, intersection_metrics = result(job("intersection",parcels,{},clip),2,10000)
+    with psycopg.connect(OWNER) as conn:
+        overlay_ids = conn.execute(
+            "SELECT DISTINCT attributes->>'overlay_feature_id' "
+            "FROM spatial.reference_features WHERE source_id=%s",
+            (intersection["output_source_id"],),
+        ).fetchall()
+        assert overlay_ids == [("clip",)]
+    print("PASS Difference/Intersection area and feature provenance",difference_metrics,intersection_metrics,flush=True)
     dissolved, dissolve_metrics = result(job("dissolve",parcels,{"group_by_field":"ward"}),2,30000)
     with psycopg.connect(OWNER) as conn:
         areas = dict(conn.execute(
