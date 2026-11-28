@@ -12,7 +12,7 @@ impl PlatformKeys{
  pub fn available()->bool{platform::available()}
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{platform::capture_preview()}
  pub fn show_preview(raw:&[u8])->Result<bool,Error>{platform::show_preview(raw)}
- pub fn camera_available()->bool{cfg!(target_os="android")&&Self::available()}
+ pub fn camera_available()->bool{platform::camera_available()}
 }
 #[cfg(target_os="android")]
 mod platform{
@@ -29,6 +29,7 @@ mod platform{
   match result{Ok(p)=>{let _=PROVIDER.set(p);1},Err(_)=>0}
  }
  pub fn available()->bool{PROVIDER.get().is_some()}
+ pub fn camera_available()->bool{available()}
  pub fn install(scope:Uuid,raw:&[u8;32])->Result<(),Error>{
   let p=PROVIDER.get().ok_or(Error::Unsupported)?;
   let mut e=p.vm.attach_current_thread().map_err(|_|Error::Storage)?;
@@ -143,6 +144,7 @@ mod platform{
   unsafe{ptr::copy_nonoverlapping(bytes,k.as_mut_ptr(),32)};Ok(Some(k))
  }
  pub fn available()->bool{true}
+ pub fn camera_available()->bool{IO.get().is_some()}
  pub fn install(scope:Uuid,raw:&[u8;32])->Result<(),Error>{
   let service=string("org.openvietgis.media.v1")?;let account=string(&scope.to_string())?;
   let base=unsafe{[(kSecClass,kSecClassGenericPassword),(kSecAttrService,service.0),(kSecAttrAccount,account.0)]};
@@ -152,8 +154,23 @@ mod platform{
   let q=dict(&pairs)?;match unsafe{SecItemAdd(q.0,ptr::null_mut())}{
    SUCCESS=>Ok(()),DUPLICATE=>if lookup(&base)?.is_some_and(|k|k[..]==raw[..]){Ok(())}else{Err(Error::Conflict)},_=>Err(Error::Storage)}
  }
- pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
- pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
+ type Capture=unsafe extern "C" fn(*mut u8,usize)->i32;
+ type View=unsafe extern "C" fn(*const u8,usize)->i32;
+ static IO:std::sync::OnceLock<(Capture,View)>=std::sync::OnceLock::new();
+ #[no_mangle]
+ pub extern "C" fn ovg_ios_media_install(capture:Capture,view:View){let _=IO.set((capture,view));}
+ pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{
+  let (capture,_)=IO.get().ok_or(Error::Unsupported)?;
+  let mut b=Zeroizing::new(vec![0u8;16*1024*1024]);
+  let n=unsafe{capture(b.as_mut_ptr(),b.len())};
+  if n<=0||n as usize>b.len(){return Err(Error::Conflict)}
+  b.truncate(n as usize);Ok(b)
+ }
+ pub fn show_preview(raw:&[u8])->Result<bool,Error>{
+  if raw.is_empty()||raw.len()>16*1024*1024{return Err(Error::Limit)}
+  let (_,view)=IO.get().ok_or(Error::Unsupported)?;
+  Ok(unsafe{view(raw.as_ptr(),raw.len())}==1)
+ }
  pub fn get(scope:Uuid,create:bool)->Result<Zeroizing<[u8;32]>,Error>{
   if scope.is_nil(){return Err(Error::Invalid)}
   let service=string("org.openvietgis.media.v1")?;let account=string(&scope.to_string())?;
@@ -169,6 +186,7 @@ mod platform{
 mod platform{
  use super::*;
  pub fn available()->bool{false}
+ pub fn camera_available()->bool{false}
  pub fn install(_:Uuid,_:&[u8;32])->Result<(),Error>{Err(Error::Unsupported)}
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
  pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
