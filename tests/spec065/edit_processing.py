@@ -77,11 +77,11 @@ def check_processing(post,get,foreign,fixtures):
         ).fetchall()
         assert overlay_ids == [("clip",)]
     print("PASS Difference/Intersection area and feature provenance",difference_metrics,intersection_metrics,flush=True)
-    union, union_metrics = result(job("union",parcels,{},clip),5,30000)
-    joined, join_metrics = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
+    union, _ = result(job("union",parcels,{},clip),5,30000)
+    joined, _ = result(job("spatial_join",parcels,{"predicate":"contains","join_type":"left","match_mode":"all"},point),3,30000)
     result(job("spatial_join",parcels,{"predicate":"contains","join_type":"inner","match_mode":"first"},point),1,10000)
     result(job("spatial_join",point,{"predicate":"within","join_type":"inner","match_mode":"all"},parcels),1,0)
-    reprojected, reproject_metrics = result(job("reproject",point,{"target_srid":4326}),1,0)
+    reprojected, _ = result(job("reproject",point,{"target_srid":4326}),1,0)
     assert reprojected["output_crs"]==4326
     with psycopg.connect(OWNER) as conn:
         union_rows=conn.execute(
