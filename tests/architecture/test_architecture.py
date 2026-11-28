@@ -144,3 +144,11 @@ def test_rust_module_can_use_core_ports_but_not_http_app(tmp_path: Path) -> None
 def test_rust_legacy_storage_location_cannot_return(tmp_path: Path) -> None:
     write_source(tmp_path, "crates/ovg-storage/src/house_numbering/mod.rs", "// old code")
     assert any("module-owned persistence in Core" in v for v in find_violations(tmp_path))
+
+
+def test_rust_http_sdk_allowed_but_legacy_handler_path_rejected(tmp_path: Path) -> None:
+    write_source(tmp_path, "crates/ovg-core/Cargo.toml", "ovg-module-http = { workspace = true }")
+    write_source(tmp_path, "modules/example/http/src/lib.rs", "use ovg_module_http::ModuleSession;")
+    assert find_violations(tmp_path) == []
+    write_source(tmp_path, "apps/api-rust/src/house_numbering/mod.rs", "// legacy")
+    assert any("module-owned HTTP adapter in Core" in v for v in find_violations(tmp_path))

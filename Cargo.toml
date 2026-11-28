@@ -8,8 +8,10 @@ members = [
     "crates/ovg-sync",
     "crates/ovg-processing",
     "crates/ovg-module-sdk",
+    "crates/ovg-module-http",
     "modules/house_numbering/rust",
     "modules/house_numbering/storage",
+    "modules/house_numbering/http",
 ]
 
 [workspace.package]
@@ -49,6 +51,8 @@ ovg-spatial = { path = "crates/ovg-spatial" }
 ovg-sync = { path = "crates/ovg-sync" }
 ovg-processing = { path = "crates/ovg-processing" }
 ovg-module-sdk = { path = "crates/ovg-module-sdk" }
+ovg-module-http = { path = "crates/ovg-module-http" }
+ovg-module-house-numbering-http = { path = "modules/house_numbering/http" }
 ovg-module-house-numbering = { path = "modules/house_numbering/rust" }
 ovg-module-house-numbering-storage = { path = "modules/house_numbering/storage" }
 

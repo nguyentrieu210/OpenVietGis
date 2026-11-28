@@ -1014,7 +1014,8 @@ dependencies = [
  "miniz_oxide",
  "ovg-core",
  "ovg-module-house-numbering",
- "ovg-module-house-numbering-storage",
+ "ovg-module-house-numbering-http",
+ "ovg-module-http",
  "ovg-module-sdk",
  "ovg-processing",
  "ovg-spatial",
@@ -1058,6 +1059,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "ovg-module-house-numbering-http"
+version = "0.2.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "ovg-core",
+ "ovg-module-house-numbering",
+ "ovg-module-house-numbering-storage",
+ "ovg-module-http",
+ "ovg-module-sdk",
+ "ovg-storage",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tower",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "ovg-module-house-numbering-storage"
 version = "0.2.0"
 dependencies = [
@@ -1070,6 +1092,18 @@ dependencies = [
  "sqlx",
  "sqlx-postgres",
  "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "ovg-module-http"
+version = "0.2.0"
+dependencies = [
+ "axum",
+ "ovg-core",
+ "ovg-module-sdk",
+ "ovg-storage",
+ "serde_json",
  "uuid",
 ]
 

@@ -20,8 +20,8 @@ use super::{
     audit_actor, csrf, decode, module_manage, module_read, path_id, scope_ids,
     HnResult, HouseNumberingError, BASE,
 };
-use crate::identity::HumanSession;
-use crate::AppState;
+use ovg_module_http::ModuleSession as HumanSession;
+use ovg_module_http::ModuleHttpState as AppState;
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -255,7 +255,7 @@ async fn sync_surveys(
         &mut edit,
         audit_actor(&auth),
         can_manage,
-        &state.config.artifact_store_dir,
+        &state.artifact_store_dir,
         &operations,
     )
     .await?;
@@ -413,7 +413,7 @@ async fn upload_photo(
     let result = store::upload_photo(
         &mut edit,
         audit_actor(&auth),
-        &state.config.artifact_store_dir,
+        &state.artifact_store_dir,
         &content_type,
         &data,
     )

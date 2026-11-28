@@ -124,10 +124,10 @@ def domain_framework_violations(relative: str, content: str) -> list[str]:
     return errors
 
 
-RUST_VERTICAL_IMPORT = re.compile(r"\bovg_module_(?!sdk\b)[a-zA-Z0-9_]+\b")
-RUST_VERTICAL_DEP = re.compile(r"(?m)^\s*ovg-module-(?!sdk\s*=)[a-zA-Z0-9_-]+\s*=")
+RUST_VERTICAL_IMPORT = re.compile(r"\bovg_module_(?!(?:sdk|http)\b)[a-zA-Z0-9_]+\b")
+RUST_VERTICAL_DEP = re.compile(r"(?m)^\s*ovg-module-(?!(?:sdk|http)\s*=)[a-zA-Z0-9_-]+\s*=")
 RUST_APP_IMPORT = re.compile(r"\bopenvietgis_api_rust\b|(?:path\s*=\s*\x22[^\x22]*apps/api-rust)")
-RUST_COMPOSITION = {"apps/api-rust/src/state.rs", "apps/api-rust/src/routes.rs", "apps/api-rust/src/lib.rs"}
+RUST_COMPOSITION = {"apps/api-rust/src/state.rs", "apps/api-rust/src/routes.rs", "apps/api-rust/src/lib.rs", "apps/api-rust/src/module_http_host.rs"}
 
 
 def rust_boundary_violations(root: Path) -> list[str]:
@@ -145,10 +145,12 @@ def rust_boundary_violations(root: Path) -> list[str]:
                 errors.append(f"{rel} Core Rust depends on vertical module")
             if rel.startswith("modules/") and RUST_APP_IMPORT.search(content):
                 errors.append(f"{rel} Rust module depends on HTTP application internals")
-            if rel.startswith("apps/api-rust/src/") and rel not in RUST_COMPOSITION and not rel.startswith("apps/api-rust/src/house_numbering/") and RUST_VERTICAL_IMPORT.search(content):
-                errors.append(f"{rel} Rust vertical import outside composition or legacy adapter")
+            if rel.startswith("apps/api-rust/src/") and rel not in RUST_COMPOSITION and RUST_VERTICAL_IMPORT.search(content):
+                errors.append(f"{rel} Rust vertical import outside composition")
     if (root / "crates/ovg-storage/src/house_numbering").exists():
         errors.append("crates/ovg-storage/src/house_numbering is module-owned persistence in Core")
+    if (root / "apps/api-rust/src/house_numbering").exists():
+        errors.append("apps/api-rust/src/house_numbering is module-owned HTTP adapter in Core")
     return errors
 
 

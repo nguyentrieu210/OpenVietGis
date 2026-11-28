@@ -18,8 +18,8 @@ use super::{
     audit_actor, csrf, decode, module_edit, module_manage, module_read, opt_text_len, path_id,
     query_positive, scope_ids, text_len, HnResult, HouseNumberingError, BASE,
 };
-use crate::identity::HumanSession;
-use crate::AppState;
+use ovg_module_http::ModuleSession as HumanSession;
+use ovg_module_http::ModuleHttpState as AppState;
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()

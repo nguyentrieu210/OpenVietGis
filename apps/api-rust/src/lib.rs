@@ -16,15 +16,7 @@ pub(crate) mod external_sources;
 pub(crate) mod field_offline;
 mod field_worker;
 pub(crate) mod gis_access;
-#[cfg(feature = "house-numbering")]
-pub(crate) mod house_numbering;
-/// Without the official module compiled in, Core mounts no house-numbering routes.
-#[cfg(not(feature = "house-numbering"))]
-pub(crate) mod house_numbering {
-    pub(crate) fn router() -> axum::Router<crate::AppState> {
-        axum::Router::new()
-    }
-}
+mod module_http_host;
 pub(crate) mod identity;
 mod invitation_mail;
 pub(crate) mod managed_sync;
@@ -110,7 +102,7 @@ pub fn build_router(state: AppState) -> Router {
         ]);
 
     Router::new()
-        .nest("/api/v1", routes::api_v1_router())
+        .nest("/api/v1", routes::api_v1_router().merge(module_http_host::routes(&state)))
         .fallback(routes::fallback_not_found)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -134,6 +126,15 @@ mod tests {
             .await
             .unwrap();
         serde_json::from_slice(&bytes).unwrap()
+    }
+
+    #[tokio::test]
+    async fn official_module_routes_are_mounted_only_when_enabled() {
+        let app=build_router(AppState::new(AppConfig::default(),None).unwrap());
+        let response=app.oneshot(Request::builder()
+            .uri("/api/v1/organizations/00000000-0000-4000-8000-000000000001/projects/00000000-0000-4000-8000-000000000002/modules/house-numbering/rules")
+            .body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(),if cfg!(feature="house-numbering"){StatusCode::UNAUTHORIZED}else{StatusCode::NOT_FOUND});
     }
 
     #[tokio::test]

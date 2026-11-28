@@ -25,14 +25,14 @@ use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::catalog::{project_read, CatalogError};
-use crate::identity::{require_csrf, HumanSession};
-use crate::AppState;
+use ovg_module_http::project_read;
+use ovg_module_http::ModuleSession as HumanSession;
+use ovg_module_http::ModuleHttpState as AppState;
 
 pub(super) const BASE: &str =
     "/organizations/{organization_id}/projects/{project_id}/modules/house-numbering";
 
-pub(crate) fn router() -> Router<AppState> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{BASE}/rules"), get(list_rules).post(create_rule))
         .route(&format!("{BASE}/areas"), get(list_areas).post(create_area))
@@ -112,7 +112,7 @@ struct BuildingQuery {
 const MODULE_KEY: &str = "house_numbering";
 
 async fn ensure_module_active(state:&AppState,read:&mut ProjectRead<'_>)->HnResult<()> {
-    crate::extensions::module_permissions::verified_manifest(state,read,MODULE_KEY).await?;
+    ovg_module_http::verified_manifest(&state.modules,read,MODULE_KEY).await?;
     Ok(())
 }
 
@@ -212,8 +212,8 @@ async fn create_rule(
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<RuleCreateBody>,
 ) -> Result<(StatusCode, Json<Value>), HouseNumberingError> {
-    require_csrf(&state, &auth, &headers)
-        .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))?;
+    auth.require_csrf(&headers)
+        .map_err(|error| HouseNumberingError::Access(error))?;
     if body.version.is_empty()
         || body.version.chars().count() > 64
         || body
@@ -256,8 +256,8 @@ async fn create_area(
     Path((organization_id, project_id)): Path<(Uuid, Uuid)>,
     Json(body): Json<AreaCreateBody>,
 ) -> Result<(StatusCode, Json<Value>), HouseNumberingError> {
-    require_csrf(&state, &auth, &headers)
-        .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))?;
+    auth.require_csrf(&headers)
+        .map_err(|error| HouseNumberingError::Access(error))?;
     if body.name.is_empty()
         || body.name.chars().count() > 200
         || !matches!(body.kind.as_str(), "current" | "historic" | "custom")
@@ -345,7 +345,7 @@ pub(super) enum HouseNumberingError {
     InvalidRequest,
     Permission(&'static str),
     Detail(StatusCode, String),
-    Access(CatalogError),
+    Access(Response),
     Domain(AppError),
 }
 
@@ -390,11 +390,7 @@ pub(super) fn service_auth_error(error: EditError) -> HouseNumberingError {
         EditError::InvalidRequest => HouseNumberingError::InvalidRequest,
         EditError::Internal(detail) => HouseNumberingError::Domain(AppError::internal(detail)),
         EditError::Spatial(status, code, detail) => {
-            HouseNumberingError::Access(CatalogError::Spatial(
-                StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                code,
-                detail.into(),
-            ))
+            HouseNumberingError::Access((StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR), Json(serde_json::json!({"code":code,"detail":detail}))).into_response())
         }
         EditError::Platform {
             status,
@@ -434,17 +430,11 @@ impl From<AppError> for HouseNumberingError {
     }
 }
 
-impl From<CatalogError> for HouseNumberingError {
-    fn from(error: CatalogError) -> Self {
-        Self::Access(error)
-    }
-}
-
 pub(super) type HnResult<T> = Result<T, HouseNumberingError>;
 
-pub(super) fn csrf(state: &AppState, auth: &HumanSession, headers: &HeaderMap) -> HnResult<()> {
-    require_csrf(state, auth, headers)
-        .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))
+pub(super) fn csrf(_state: &AppState, auth: &HumanSession, headers: &HeaderMap) -> HnResult<()> {
+    auth.require_csrf(headers)
+        .map_err(|error| HouseNumberingError::Access(error))
 }
 
 /// FastAPI validates path UUIDs together with the body (422 after auth).

@@ -1,0 +1,29 @@
+[package]
+name = "ovg-module-house-numbering-http"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+axum.workspace = true
+ovg-core.workspace = true
+ovg-module-http.workspace = true
+ovg-module-house-numbering.workspace = true
+ovg-module-house-numbering-storage.workspace = true
+ovg-storage.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+ovg-module-sdk.workspace = true

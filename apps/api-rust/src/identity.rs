@@ -124,7 +124,7 @@ impl FromRequestParts<AppState> for HumanSession {
     }
 }
 
-async fn authenticate_cookie_session(
+pub(crate) async fn authenticate_cookie_session(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Result<HumanSession, IdentityError> {

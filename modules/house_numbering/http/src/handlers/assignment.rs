@@ -29,8 +29,8 @@ use super::{
     audit_actor, csrf, decode, module_read, scope_ids, text_len, HnResult,
     HouseNumberingError, BASE,
 };
-use crate::identity::HumanSession;
-use crate::AppState;
+use ovg_module_http::ModuleSession as HumanSession;
+use ovg_module_http::ModuleHttpState as AppState;
 
 pub(super) fn router() -> Router<AppState> {
     let at = |path: &str| format!("{BASE}/building-assignment{path}");

@@ -27,9 +27,8 @@ use super::{
     opt_text_len, path_id, scope_ids, service_auth_error, text_len, HnResult, HouseNumberingError,
     BASE,
 };
-use crate::catalog::CatalogError;
-use crate::identity::HumanSession;
-use crate::AppState;
+use ovg_module_http::ModuleSession as HumanSession;
+use ovg_module_http::ModuleHttpState as AppState;
 
 pub(super) fn router() -> Router<AppState> {
     Router::new()
@@ -115,7 +114,7 @@ async fn integration_addresses(
     } else {
         let auth = HumanSession::from_request_parts(&mut parts, &state)
             .await
-            .map_err(|error| HouseNumberingError::Access(CatalogError::Identity(error)))?;
+            .map_err(|error| HouseNumberingError::Access(error))?;
         module_read(&state, &auth, organization_id, project_id).await?
     };
 
@@ -186,7 +185,7 @@ async fn download_document(
     let artifact = store::download_document(
         &mut read,
         audit_actor(&auth),
-        &state.config.artifact_store_dir,
+        &state.artifact_store_dir,
         document_id,
     )
     .await?;
@@ -210,7 +209,7 @@ async fn download_export(
     let (artifact, _) = store::download_export(
         &mut read,
         audit_actor(&auth),
-        &state.config.artifact_store_dir,
+        &state.artifact_store_dir,
         artifact_id,
         can_manage,
     )

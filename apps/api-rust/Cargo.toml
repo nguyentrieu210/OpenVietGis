@@ -16,7 +16,7 @@ path = "src/main.rs"
 [features]
 default = ["house-numbering"]
 e11-candidate = []
-house-numbering = ["dep:ovg-module-house-numbering", "dep:ovg-module-house-numbering-storage"]
+house-numbering = ["dep:ovg-module-house-numbering", "dep:ovg-module-house-numbering-http"]
 
 [dependencies]
 ab_glyph = { version = "0.2.32", default-features = false, features = ["std"] }
@@ -35,7 +35,8 @@ jpeg-decoder = { version = "=0.3.2", default-features = false }
 miniz_oxide = "0.8"
 ovg-core.workspace = true
 ovg-module-house-numbering = { workspace = true, optional = true }
-ovg-module-house-numbering-storage = { workspace = true, optional = true }
+ovg-module-house-numbering-http = { workspace = true, optional = true }
+ovg-module-http.workspace = true
 ovg-module-sdk.workspace = true
 ovg-processing.workspace = true
 ovg-spatial.workspace = true

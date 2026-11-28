@@ -21,11 +21,7 @@ pub(crate) fn router()->Router<AppState>{Router::new().route(BASE,get(get_policy
 struct Replace{permissions:Option<Vec<String>>,expected_revision:i64}
 
 pub(crate) async fn verified_manifest(state:&AppState,read:&mut ProjectRead<'_>,key:&str)->Result<ModuleManifest,AppError>{
-    let shipped=state.modules.manifest(key).ok_or_else(||AppError::not_found("official module runtime not registered"))?;
-    let stored=extensions::active_manifest(read,key).await?;
-    let contract=serde_json::from_value::<ModuleManifest>(stored.contract()).map_err(|_|AppError::not_found("official module activation does not match shipped runtime"))?;
-    if !shipped.runtime_contract_matches(&contract,stored.enabled){return Err(AppError::not_found("official module activation does not match shipped runtime"));}
-    Ok(contract)
+    ovg_module_http::verified_manifest(&state.modules,read,key).await
 }
 
 fn target(actor_type:&str,actor:&str)->Result<Uuid,ExtensionError>{

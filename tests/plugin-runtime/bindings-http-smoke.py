@@ -41,7 +41,7 @@ def main():
             assert snapshot['mode']=='snapshot_required' and not snapshot['items']
             cursor=snapshot['cursor']
             response=api.get(event_path,headers=outsider);assert response.status_code in (403,404)
-            expect(api.get(event_path,params={'cursor':'bad'},headers=h),400)
+            expect(api.get(event_path,params={'cursor':'bad'},headers=h),422)
           manifest=expect(api.post(org+'/extensions/official/house_numbering/register',headers=h),201)
           expect(api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
           cmd=ext+'/commands/preview_numbering';payload={'payload':{'street_name':'Đường A','side':'left_odd','start_number':1,'step':2,'count':3}}
@@ -52,6 +52,15 @@ def main():
             expect(api.post(ext+'/commands/apply_numbering',json=payload,headers=h),404)
             denied=api.post(cmd,json=payload,headers=outsider);assert denied.status_code in (403,404)
             expect(api.post(cmd,json=payload,headers=parity.session_headers(fixture['session_a_token'])),403)
+          # Exercise write + audit through the relocated HTTP and storage crates.
+          area=expect(api.post(root+'/areas',json={'name':'Fixture hamlet','kind':'current'},headers=h),201)
+          rule=expect(api.post(root+'/rules',json={'version':'fixture-v1','status':'draft'},headers=h),201)
+          assert any(x['id']==area['id'] for x in expect(api.get(root+'/areas',headers=h),200)['items'])
+          assert any(x['id']==rule['id'] for x in expect(api.get(root+'/rules',headers=h),200)['items'])
+          with psycopg.connect(owner) as db:
+            rows=db.execute("SELECT actor_id::text,actor_type,resource_id::text FROM audit.audit_events WHERE resource_id IN (%s,%s)",(area['id'],rule['id'])).fetchall()
+            assert set(rows)=={(fixture['user_a_id'],'human',area['id']),(fixture['user_a_id'],'human',rule['id'])},rows
+          expect(api.post(root+'/areas',json={'name':'CSRF denied'},headers=parity.session_headers(fixture['session_a_token'])),403)
           assert expect(api.get(bindings,headers=h),200)=={'configured':False,'revision':0,'items':[]}
           layer=expect(api.post(project+'/layers/manual',json={'operation_id':str(uuid4()),'name':'Original survey','geometry_family':'Point','fields':[{'field_id':f,'name':f,'type':'text','nullable':True} for f in ['ap','ten_duong','xu_ly']]},headers=h),201)
           source=layer['source_id'];layer_id=layer['layer_id'];schema=expect(api.get(project+'/layers/'+layer_id,headers=h),200)['source']['schema_revision']
