@@ -20,7 +20,7 @@ test("opens a real empty grid and arranges, renders, selects and saves catalog L
     }
     await route.continue();
   });
-  await page.goto(fixture.root + "/map");
+  await page.goto(fixture.root + "/spatial");
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   await expect(page.getByTestId("map-status")).toHaveAttribute("data-state", "empty");
   await expect(page.getByTestId("map-status")).toHaveText("Không có dữ liệu");
@@ -574,7 +574,7 @@ test("warns only for unsaved shared configuration changes", async ({ page }) => 
   });
   await expect(blocker).toBeVisible();
   await blocker.getByRole("button", { name: "Ở lại", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(fixture.root + "/map$"));
+  await expect(page).toHaveURL(new RegExp(fixture.root + "/spatial$"));
   await expect(indicator).toHaveAttribute("data-save-state", "dirty");
 
   await indicator.click();
@@ -649,7 +649,7 @@ test("keeps technical identifiers secondary and returns focus after closing the 
     page,
     Date.now().toString() + "-technical-scope-change"
   );
-  await page.goto(otherFixture.root + "/map");
+  await page.goto(otherFixture.root + "/spatial");
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   await expect(
     page.getByRole("dialog", { name: "Thông tin kỹ thuật" })

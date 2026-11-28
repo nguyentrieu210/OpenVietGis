@@ -4,22 +4,29 @@ export async function signInIdentity(
   page: Page,
   username: string,
   password: string,
-  startPath = "/app"
+  startPath = "/"
 ): Promise<void> {
   await page.goto(startPath);
-  await page.getByRole("link", { name: /Đăng nhập với/ }).waitFor();
-  await page.getByRole("link", { name: /Đăng nhập với/ }).click();
-  await page.locator("#username").fill(username);
-  await page.locator("#password").fill(password);
-  await page.locator("#kc-login").click();
+  await expect(page.locator(".landing-page")).toBeVisible();
 
-  await expect(page.getByText("Owner Alpha", { exact: true })).toBeVisible({ timeout: 30_000 });
+  const dialog = page.getByRole("dialog", { name: "Tài khoản OpenVietGIS" });
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await expect(dialog).toBeVisible();
+
+  const popupPromise = page.waitForEvent("popup");
+  await dialog.getByRole("button", { name: "Mở cửa sổ đăng nhập", exact: true }).click();
+  const auth = await popupPromise;
+  await auth.locator("#username").fill(username);
+  await auth.locator("#password").fill(password);
+  await auth.locator("#kc-login").click();
+
+  await expect(page.getByText(username === "owner-a" ? "Owner Alpha" : username === "member-a" ? "Member Alpha" : "Member Beta", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".live-studio")).toBeVisible({ timeout: 20_000 });
 }
 
 export async function signInOwner(
   page: Page,
-  startPath = "/app"
+  startPath = "/"
 ): Promise<void> {
   await signInIdentity(page, "owner-a", "openvietgis-test-owner-a", startPath);
 }

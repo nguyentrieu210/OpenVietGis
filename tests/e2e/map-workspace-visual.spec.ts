@@ -22,7 +22,7 @@ test("empty GIS workspace visual baseline", async ({ page }) => {
     Date.now().toString() + "-visual-empty"
   );
 
-  await page.goto(fixture.root + "/map");
+  await page.goto(fixture.root + "/spatial");
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   await expect(page.getByTestId("map-status")).toHaveAttribute(
     "data-state",

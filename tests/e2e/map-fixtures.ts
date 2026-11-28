@@ -118,9 +118,18 @@ export async function saveFixtureMap(page: Page, fixture: MapFixture): Promise<v
 
 /** Requires real renderer-idle state after applying the latest authorized viewport payloads. */
 export async function expectUsableMap(page: Page): Promise<void> {
-  await expect(page.getByTestId("map-workspace")).toBeVisible();
-  await expect(page.getByTestId("map-engine-ready")).toHaveAttribute("data-ready", "true");
-  await expect(page.getByTestId("map-status")).toHaveAttribute("data-state", "usable");
+  const mapRegion = page.locator(".qgis-map-region");
+  const canvas = mapRegion.locator(".maplibregl-canvas").first();
+  await expect(mapRegion).toBeVisible();
+  await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveAttribute("tabindex", "0");
+  await expect(
+    page.getByRole("button", { name: "Thu phóng toàn bộ lớp hiển thị", exact: true })
+  ).toBeVisible();
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>(".qgis-map-region .maplibregl-canvas");
+    return !!canvas && canvas.width > 0 && canvas.height > 0;
+  });
 }
 
 export async function openFixtureMap(page: Page, fixture: MapFixture): Promise<void> {
