@@ -133,3 +133,36 @@ export function reshapeGeometryPath(g:Geometry,part:number,ring:number,start:num
  const result=withGeometryVertices(g,part,ring,next),error=draftError(result);
  if(error)throw Error(error);return result;
 }
+
+/** Insert a node into all exactly matching edges of a complete pinned source.
+ * Endpoint order does not matter. No tolerance or intersection inference. */
+export function sharedEdgeNodeChanges(features:readonly SharedFeature[],selectedId:string,a:XY,b:XY){
+ if(!validXY(a)||!validXY(b)||sameXY(a,b)||Math.abs(a[0]-b[0])>180||features.length<1||features.length>5000||new Set(features.map(f=>f.id)).size!==features.length)throw Error("Cạnh chung không hợp lệ.");
+ const mid:XY=[a[0]+(b[0]-a[0])/2,a[1]+(b[1]-a[1])/2];
+ if(sameXY(a,mid)||sameXY(b,mid))throw Error("Cạnh quá ngắn để chèn đỉnh.");
+ let count=0;const changes:{id:string;geometry:Geometry}[]=[];
+ for(const f of features){
+  const g=f.geometry;if(!g)throw Error("Nguồn có hình học chưa xác minh.");
+  let changed=false;
+  const insert=(line:Position[])=>{
+   count+=line.length;if(count>200000)throw Error("Nguồn vượt 200.000 đỉnh.");
+   const result:Position[]=[];
+   for(let i=0;i<line.length;i++){
+    const p=line[i]!,q=line[i+1];result.push(p);
+    if(q&&((sameXY(p,a)&&sameXY(q,b))||(sameXY(p,b)&&sameXY(q,a)))){result.push([...mid]);changed=true}
+   }
+   return result;
+  };
+  let next:Geometry;
+  switch(g.type){
+   case "LineString":next={...g,coordinates:insert(g.coordinates)};break;
+   case "MultiLineString":next={...g,coordinates:g.coordinates.map(insert)};break;
+   case "Polygon":next={...g,coordinates:g.coordinates.map(insert)};break;
+   case "MultiPolygon":next={...g,coordinates:g.coordinates.map(p=>p.map(insert))};break;
+   default:throw Error("Kiểu hình học không hỗ trợ cạnh chung.");
+  }
+  if(changed){const e=draftError(next);if(e)throw Error(f.id+": "+e);changes.push({id:f.id,geometry:next});if(changes.length>100)throw Error("Tối đa 100 đối tượng mỗi changeset.")}
+ }
+ if(!changes.some(c=>c.id===selectedId))throw Error("Cạnh không thuộc đối tượng đã chọn.");
+ return changes;
+}

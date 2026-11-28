@@ -1,6 +1,6 @@
 import {describe,expect,it} from "vitest";
 import type {Geometry} from "geojson";
-import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices,addPolygonHole,removePolygonHole,sharedVertexChanges,addGeometryPart,removeGeometryPart,reshapeGeometryPath} from "./advanced-geometry";
+import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices,addPolygonHole,removePolygonHole,sharedVertexChanges,sharedEdgeNodeChanges,addGeometryPart,removeGeometryPart,reshapeGeometryPath} from "./advanced-geometry";
 
 describe("multipart vertex editing",()=>{
  it("exposes editable multipart lines while keeping split and merge capability scoped",()=>{
@@ -83,5 +83,20 @@ describe("multipart and path reshape",()=>{
   const p:Geometry={type:"Polygon",coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]]]};
   expect(reshapeGeometryPath(p,0,0,0,1,[[2,1]])).toMatchObject({coordinates:[[[0,0],[2,1],[4,0],[4,4],[0,4],[0,0]]]});
   expect(()=>reshapeGeometryPath(p,0,0,0,3,[])).toThrow();
+ });
+});
+
+describe("shared edge node insertion",()=>{
+ it("nodes both directions of a matching edge without mutating the source",()=>{
+  const a:Geometry={type:"Polygon",coordinates:[[[0,0],[1,0],[1,1],[0,1],[0,0]]]};
+  const b:Geometry={type:"Polygon",coordinates:[[[1,0],[2,0],[2,1],[1,1],[1,0]]]};
+  const rows=[{id:"a",geometry:a},{id:"b",geometry:b}];
+  const result=sharedEdgeNodeChanges(rows,"a",[1,0],[1,1]);
+  expect(result.map(x=>x.id)).toEqual(["a","b"]);
+  expect(result[0]!.geometry).toMatchObject({coordinates:[[[0,0],[1,0],[1,.5],[1,1],[0,1],[0,0]]]});
+  expect(result[1]!.geometry).toMatchObject({coordinates:[[[1,0],[2,0],[2,1],[1,1],[1,.5],[1,0]]]});
+  expect(a.coordinates[0]).toHaveLength(5);
+  expect(()=>sharedEdgeNodeChanges(rows,"a",[0,0],[1,1])).toThrow();
+  expect(()=>sharedEdgeNodeChanges([...rows,{id:"missing",geometry:null}],"a",[1,0],[1,1])).toThrow();
  });
 });

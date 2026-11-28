@@ -550,7 +550,7 @@
         "apps/api-rust/src/editing.rs",
         "packages/client-sdk/src/platform.ts"
       ],
-      "blocker": "Rust/PostGIS topology review and exact shared vertex move; opt-in transaction-level polygon interior overlap rejection on final changeset state, source lock, bounded complete geometry scan, replay digest and rollback fixture. Edge touching permitted. Automatic noding, cross-source persistent policy and paired QGIS acceptance remain. New tests not executed."
+      "blocker": "Rust/PostGIS topology review and exact shared vertex move; opt-in transaction-level polygon interior overlap rejection on final changeset state, source lock, bounded complete geometry scan, replay digest and rollback fixture. Edge touching permitted. Automatic noding, cross-source persistent policy and paired QGIS acceptance remain. New tests not executed. Atomic node insertion on exact matching edges (either direction), validated and bounded across the complete pinned source. No arbitrary intersection noding or cross-source topology; new regression tests not executed."
     },
     {
       "id": "EDIT-06",
@@ -564,7 +564,7 @@
         "apps/web-next/src/advanced-geometry.ts",
         "apps/web-next/src/advanced-geometry.test.ts"
       ],
-      "blocker": "Authenticated split/merge; existing vertex editor now supports polygon holes, multipart member add/delete (preserves declared family) and endpoint-preserving forward path reshape, draft undo/redo and authoritative changeset/PostGIS validation. New tests not executed; unrestricted QGIS reshape, topology-aware segment noding and authenticated browser/QGIS acceptance remain."
+      "blocker": "Authenticated split/merge; existing vertex editor now supports polygon holes, multipart member add/delete (preserves declared family) and endpoint-preserving forward path reshape, draft undo/redo and authoritative changeset/PostGIS validation. New tests not executed; unrestricted QGIS reshape, topology-aware segment noding and authenticated browser/QGIS acceptance remain. Atomic node insertion on exact matching edges (either direction), validated and bounded across the complete pinned source. No arbitrary intersection noding or cross-source topology; new regression tests not executed."
     },
     {
       "id": "EDIT-07",
