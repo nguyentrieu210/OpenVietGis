@@ -28,6 +28,7 @@ pub mod disk_store;
 pub mod pipeline;
 pub mod colmap_model;
 pub mod ingest;
+pub mod local_worker;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
