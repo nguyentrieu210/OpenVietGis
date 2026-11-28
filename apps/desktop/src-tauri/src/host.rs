@@ -145,9 +145,8 @@ impl Host {
         if info.id!=layer||info.name.is_empty()||info.name.len()>256{return Err("INVALID_LAYER")}
         Ok(info)
     }
-    pub fn list_layers(&self,handle:Uuid)->Result<Vec<LayerInfo>>{
-        self.read(handle,|w|{
-            let dir=self.layers_dir(w.project);match fs::symlink_metadata(&dir){
+    fn list_layers_for(&self,project:Uuid)->Result<Vec<LayerInfo>>{
+            let dir=self.layers_dir(project);match fs::symlink_metadata(&dir){
               Err(e) if e.kind()==std::io::ErrorKind::NotFound=>return Ok(Vec::new()),
               Err(_)=>return Err("STORAGE_UNAVAILABLE"),Ok(_)=>real_dir(&dir)?
             }
@@ -158,11 +157,11 @@ impl Host {
                 let Ok(id)=Uuid::parse_str(&name)else{continue};
                 if name!=id.to_string(){continue}
                 if out.len()>=32{return Err("RESOURCE_LIMIT")}
-                out.push(self.layer_info(w.project,id)?);
+                out.push(self.layer_info(project,id)?);
             }
             out.sort_by(|a,b|a.name.cmp(&b.name));Ok(out)
-        })
     }
+    pub fn list_layers(&self,handle:Uuid)->Result<Vec<LayerInfo>>{self.read(handle,|w|self.list_layers_for(w.project))}
     pub fn create_layer(&self,handle:Uuid,name:String,catalog:Option<(Uuid,String)>)->Result<LayerInfo>{
         if name.trim().is_empty()||name.len()>256{return Err("INVALID_LAYER_NAME")}
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
@@ -391,6 +390,42 @@ impl Host {
         }
         out.sort_by_key(|p|p.id);
         Ok(out)
+    }
+    pub fn backup_project(&self,handle:Uuid,dest:&Path)->Result<()>{
+        let s=self.lock()?;let w=s.open.get(&handle).ok_or("STALE_HANDLE")?;
+        if w.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
+        let project=w.project;let layers=self.list_layers_for(project)?;
+        let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+        w._store.export_snapshot(&stage.path().join("workspace.gpkg")).map_err(store_err)?;
+        let mut total=fs::metadata(stage.path().join("workspace.gpkg")).map_err(|_|"STORAGE_UNAVAILABLE")?.len();
+        for layer in &layers{
+            let dir=stage.path().join("layers").join(layer.id.to_string());
+            fs::create_dir_all(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?;
+            let snapshot=dir.join("workspace.gpkg");
+            if let Some(open)=s.open.values().find(|o|o.project==project&&o.layer==Some(layer.id)){
+                open._store.export_snapshot(&snapshot).map_err(store_err)?;
+            }else{
+                let p=self.layer_path(project,layer.id);
+                for suffix in ["-wal","-shm","-journal"]{
+                    let mut side=p.as_os_str().to_os_string();side.push(suffix);
+                    match fs::symlink_metadata(side){Ok(m) if !m.file_type().is_file()=>return Err("INVALID_STORAGE"),Err(e) if e.kind()!=std::io::ErrorKind::NotFound=>return Err("INVALID_STORAGE"),_=>{}}
+                }
+                let store=LocalStore::open(&p,QUOTA).map_err(store_err)?;
+                store.export_snapshot(&snapshot).map_err(store_err)?;
+            }
+            total=total.checked_add(fs::metadata(&snapshot).map_err(|_|"STORAGE_UNAVAILABLE")?.len()).ok_or("RESOURCE_LIMIT")?;
+            if total>2*1024*1024*1024{return Err("RESOURCE_LIMIT")}
+        }
+        crate::project_backup::write_bundle(stage.path(),&layers,dest)
+    }
+    pub fn restore_project(&self,path:&Path)->Result<Project>{
+        let _guard=self.lock()?;
+        real_dir(&self.root)?;
+        if self.list()?.len()>=MAX_PROJECTS{return Err("RESOURCE_LIMIT")}
+        let id=Uuid::new_v4();let stage=tempfile::tempdir_in(&self.root).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        crate::project_backup::restore_bundle(path,stage.path())?;
+        fs::rename(stage.path(),self.root.join(id.to_string())).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        Ok(Project{id})
     }
     pub fn restore_snapshot(&self,path:&Path)->Result<Project>{
         let _guard=self.lock()?;
