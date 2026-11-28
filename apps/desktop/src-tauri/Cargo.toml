@@ -11,6 +11,7 @@ license = "AGPL-3.0-or-later"
 tauri-build = { version = "2", features = [] }
 
 [features]
+native-cad = []
 remote-range = ["ovg-native-providers/remote-range"]
 remote-copc = ["remote-range", "ovg-native-providers/remote-copc"]
 default = []
@@ -39,3 +40,5 @@ zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 ovg-project-store = { path = "../../../crates/ovg-project-store" }
 
 ovg-native-providers = { path = "../../../crates/ovg-native-providers" }
+
+sha2 = "0.10"
