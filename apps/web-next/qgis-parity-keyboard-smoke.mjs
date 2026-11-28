@@ -29,12 +29,13 @@ try{
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
-  else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer"}],next_after_id:null};
+  else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer",source:{...layer.source,feature_count:1001}}],next_after_id:null};
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
   else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
   else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
-  else if(p.endsWith("/features"))body={context:{source_id:p.includes("layer2")?"source2":"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
+  else if(p.endsWith("/features")){const second=p.includes("layer2");body={context:{organization_id:org,project_id:pid,layer_id:second?"layer2":"layer1",source_id:second?"source2":"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,response_crs:{code:4326},geometry_included:true},items:[feature],next_after_feature_id:null};}
+  else if(p.includes("/pro/tiles/"))return route.fulfill({status:200,contentType:"application/vnd.mapbox-vector-tile",body:Buffer.alloc(0)});
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
     if(m==="POST"){if(holdSave)await new Promise(resolve=>{releaseSave=resolve});const x=ver();saved.unshift(x);body=x}
     else body={items:p.endsWith("/versions")?saved:saved.slice(0,1)};
@@ -175,6 +176,20 @@ try{
  assert.equal(processingRequests.length,5);assert.deepEqual(processingRequests[3],processingRequests[4]);assert.notEqual(processingRequests[2].operation_id,processingRequests[3].operation_id);
  await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
  console.log("PASS synthetic Chromium: batch row recovery without replaying received jobs");
+ await page.keyboard.press("Control+k");await command.fill("TILES");await command.press("Enter");
+ await page.locator(".qgis-footer-message").filter({hasText:"đã tải · Tiles"}).waitFor();
+ await page.locator('[data-layer-id="layer2"]').waitFor();
+ await page.waitForTimeout(800);
+ if(!await table.isVisible()){await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");await table.waitFor();}
+ await table.getByLabel("Layer bảng thuộc tính").selectOption("layer2");
+ const remoteRow=table.locator("tbody tr").first();await remoteRow.waitFor();
+ assert.equal(await remoteRow.getByRole("checkbox").isEnabled(),false);
+ await remoteRow.click();await page.waitForFunction(()=>!document.querySelector("section.qgis-table tbody input")?.disabled);
+ assert.equal(await remoteRow.getByRole("checkbox").isChecked(),true);
+ await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("TILES");await command.press("Enter");
+ await page.locator(".qgis-footer-message").filter({hasText:"đang hiển thị"}).waitFor();await page.waitForTimeout(800);
+ console.log("PASS synthetic Chromium: unloaded tile rows cannot be selected before hydration");
  await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
  const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();
  await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).waitFor();

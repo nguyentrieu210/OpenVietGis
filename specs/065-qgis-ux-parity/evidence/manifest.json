@@ -302,9 +302,11 @@
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
-        "apps/web-next/src/table-columns.test.ts"
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
     },
     {
       "id": "TABLE-02",
@@ -315,9 +317,12 @@
         "apps/web-next/src/AttributeServerQuery.tsx",
         "apps/web-next/src/table-query.test.ts",
         "apps/web-next/src/table-columns.ts",
-        "apps/web-next/src/table-columns.test.ts"
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
     },
     {
       "id": "TABLE-03",
@@ -351,9 +356,12 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
     },
     {
       "id": "TABLE-06",
@@ -415,9 +423,12 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/src/LiveApp.tsx"
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains; remote tile row selection now requires matching hydrated row, stale page discarded, incomplete bulk selection blocked; synthetic browser only."
     },
     {
       "id": "EDIT-04",
@@ -628,9 +639,11 @@
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/LayoutRender.ts",
         "apps/web-next/core-toolkit-smoke.mjs",
-        "apps/web-next/layout-smoke.mjs"
+        "apps/web-next/layout-smoke.mjs",
+        "apps/web-next/src/layout-legend.ts",
+        "apps/web-next/src/layout-legend.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Scale/north linked; legend is current visible-layer list, not complete per-frame categorized symbol legend."
+      "blocker": "Classified legend uses currently loaded features, renderer, hidden categories and first-frame zoom; unit tests pass. Independent per-frame layer/style snapshots and paired QGIS still missing."
     },
     {
       "id": "OUTPUT-04",
