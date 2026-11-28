@@ -83,7 +83,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
   Future<void> _openMap()async{
     final p=_project,l=_layer,r=_revision;
     if(p==null||l==null||r==null)return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedMap(project:p,layer:l,revision:r,uuid:_uuid)));
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedMap(project:p,layer:l,revision:r,layers:List.unmodifiable(_layers),uuid:_uuid)));
     if(mounted)await _refresh();
   }
   Future<void> _draw()async{
