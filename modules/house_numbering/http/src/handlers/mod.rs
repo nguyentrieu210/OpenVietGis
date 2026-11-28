@@ -11,6 +11,7 @@ mod numbering;
 mod parcels;
 mod proposals;
 mod records;
+mod score_review;
 mod route_import;
 
 use std::collections::HashMap;
@@ -58,6 +59,7 @@ pub fn router() -> Router<AppState> {
         .merge(issuance::router())
         .merge(field::router())
         .merge(records::router())
+        .merge(score_review::router())
         .merge(numbering::router())
         .merge(route_import::router())
 }

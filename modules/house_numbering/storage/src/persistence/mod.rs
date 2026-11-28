@@ -22,6 +22,7 @@ mod numbering;
 mod parcels;
 mod proposals;
 mod records;
+mod score_review;
 mod route_import;
 
 pub use assignment::*;
@@ -35,6 +36,7 @@ pub use numbering::*;
 pub use parcels::*;
 pub use proposals::*;
 pub use records::*;
+pub use score_review::*;
 pub use route_import::*;
 
 /// Read the `wire` jsonb column that every module query projects, with Python

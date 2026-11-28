@@ -1113,3 +1113,10 @@ export function retireAddress(client:ApiClient,org:string,project:string,id:stri
 export function linkAddressSuccessor(client:ApiClient,org:string,project:string,id:string,input:{new_number_id:string;proposal_id:string;effective_date:string;decision_ref:string}){
  return jsonMutation<unknown>(client,base(org,project)+"/addresses/"+encodeURIComponent(id)+"/successor","POST",input);
 }
+
+export type ScoreStatus="khop"|"lech_vi_tri"|"sai_so"|"khong_co"|"thieu_so"|"chua_vi_tri";
+export type ScorePreviewInput={point_source:string;grid_source:string;point_number_field:string;point_road_field:string;grid_number_field:string;grid_road_field:string;metric_crs:number;offset?:number;status?:ScoreStatus};
+export type ScorePreview={total:number;counts:Record<ScoreStatus,number>;duplicate_points:number;grid_usable:number;filtered_total:number;next_offset:number|null;point_revision:number;grid_revision:number;items:{id:string;number:string|null;road:string|null;status:ScoreStatus;grid_id:string|null;grid_number:string|null;distance_m:number|null;duplicate_peers:number}[]};
+export function previewScoreReview(client:ApiClient,org:string,project:string,input:ScorePreviewInput){
+ return jsonMutation<ScorePreview>(client,base(org,project)+"/score-review/preview","POST",input);
+}

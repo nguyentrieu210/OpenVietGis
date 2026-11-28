@@ -8,6 +8,7 @@ pub mod numbering;
 pub mod planning;
 pub mod prefix;
 pub mod recovery;
+pub mod score_review;
 pub mod route_import;
 
 pub use module::HouseNumberingModule;

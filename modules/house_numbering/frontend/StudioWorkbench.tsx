@@ -2,6 +2,7 @@ import {useState} from "react";
 import {RegistryPanel} from "./Workspace";
 import {NumberingPanel} from "./NumberingPanel";
 import {ProposalPanel} from "./ProposalPanel";
+import {ScoreReviewPanel} from "./ScoreReviewPanel";
 import {ReconcilePanel} from "./ReconcilePanel";
 import {LifecycleKpi} from "./LifecycleKpi";
 import {SurveyPanel} from "./SurveyPanel";
@@ -30,7 +31,7 @@ export function StudioWorkbench({organizationId,projectId,initialTab="registry",
   {tab==="registry"&&<RegistryPanel {...shared} handoffSource={handoffSource} handoffFeature={handoffFeature} onGoto={onGoto}/>}
   {tab==="numbering"&&<NumberingPanel {...shared}/>}
   {tab==="proposal"&&<ProposalPanel {...shared}/>}
-  {tab==="reconcile"&&<ReconcilePanel {...shared}/>}
+  {tab==="reconcile"&&<><ScoreReviewPanel key={organizationId+":"+projectId} {...shared} onGoto={onGoto}/><ReconcilePanel {...shared}/></>}
   {tab==="survey"&&<><LifecycleKpi {...shared}/><SurveyPanel {...shared}/></>}
   {tab==="documents"&&<DocumentsPanel {...shared}/>}
   {tab==="search"&&<SearchExportPanel {...shared}/>}
