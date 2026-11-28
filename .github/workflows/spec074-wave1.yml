@@ -28,11 +28,14 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next exec vitest run src/desktop/transport.test.ts
       - run: pnpm --filter @openvietgis/web-next build
       - run: pnpm --filter @openvietgis/web-next build
         env:
           VITE_OVG_DESKTOP: '1'
       - run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo metadata --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 > desktop-metadata.json
+      - run: python infra/desktop/wave0/check_native_graph.py desktop-metadata.json
       - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: cargo build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
       - uses: actions/upload-artifact@v4
