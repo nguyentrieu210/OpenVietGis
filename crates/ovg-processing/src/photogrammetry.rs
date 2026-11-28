@@ -23,6 +23,8 @@ pub mod streaming;
 pub mod incremental;
 pub mod multispectral;
 pub mod distributed;
+pub mod geotiff;
+pub mod disk_store;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
