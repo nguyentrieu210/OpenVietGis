@@ -433,9 +433,12 @@ try:
     else:
         raise ValueError(f"unsupported action: {action}")
 except TransferLimitExceededError as exc:
-    print(json.dumps({"ok":False,"status":413,"message":exc.message}))
+    print(json.dumps({"ok":False,"status":413,"code":exc.code,"message":exc.message}))
     sys.exit(2)
-except (PlatformValidationError, TransferFormatError) as exc:
+except TransferFormatError as exc:
+    print(json.dumps({"ok": False, "status": 422, "code": exc.code, "message": exc.message}))
+    sys.exit(2)
+except PlatformValidationError as exc:
     print(json.dumps({"ok": False, "status": 422, "message": exc.message}))
     sys.exit(2)
 except ValueError as exc:
@@ -452,6 +455,7 @@ static SEM: Semaphore = Semaphore::const_new(WORKERS);
 
 #[derive(Debug)]
 pub(crate) struct WorkerError {
+    pub(crate) code: Option<&'static str>,
     pub(crate) status: StatusCode,
     pub(crate) message: String,
 }
@@ -478,6 +482,7 @@ pub(crate) async fn run_export(mut req: Value) -> Result<ExportArtifact, WorkerE
     let bytes = tokio::fs::read(&out_path)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("read export artifact failed: {err}"),
         })?;
@@ -498,6 +503,7 @@ pub(crate) async fn run_sync_diff(
 ) -> Result<Value, WorkerError> {
     let work = WorkDir(std::env::temp_dir().join(format!("ovg-e12-diff-{}", Uuid::new_v4())));
     std::fs::create_dir_all(&work.0).map_err(|err| WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("create worker dir failed: {err}"),
     })?;
@@ -505,6 +511,7 @@ pub(crate) async fn run_sync_diff(
     tokio::fs::write(&upload_path, upload_bytes)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write upload artifact failed: {err}"),
         })?;
@@ -515,6 +522,7 @@ pub(crate) async fn run_sync_diff(
 pub(crate) async fn run_import(upload: &[u8], mut req: Value) -> Result<Value, WorkerError> {
     let work = WorkDir(std::env::temp_dir().join(format!("ovg-e07-import-{}", Uuid::new_v4())));
     let error = |message: &str| WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: message.to_owned(),
     };
@@ -542,6 +550,7 @@ pub(crate) async fn run_import(upload: &[u8], mut req: Value) -> Result<Value, W
         .len();
     if size > 32 * 1024 * 1024 {
         return Err(WorkerError {
+            code: None,
             status: StatusCode::PAYLOAD_TOO_LARGE,
             message: "Import decoded result exceeds budget".into(),
         });
@@ -554,6 +563,7 @@ pub(crate) async fn run_import(upload: &[u8], mut req: Value) -> Result<Value, W
 
 async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let _permit = SEM.acquire().await.map_err(|_| WorkerError {
+        code: None,
         status: StatusCode::SERVICE_UNAVAILABLE,
         message: "worker semaphore closed".to_owned(),
     })?;
@@ -561,6 +571,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     tokio::fs::create_dir_all(work_dir)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("create worker root: {err}"),
         })?;
@@ -570,6 +581,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
         tokio::fs::set_permissions(work_dir, std::fs::Permissions::from_mode(0o700))
             .await
             .map_err(|_| WorkerError {
+                code: None,
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: "secure worker directory failed".into(),
             })?;
@@ -580,11 +592,13 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|err| WorkerError {
+                    code: None,
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     message: format!("create pkg dir: {err}"),
                 })?;
         }
         tokio::fs::write(&p, b"").await.map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write pkg init: {err}"),
         })?;
@@ -595,6 +609,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|err| WorkerError {
+                    code: None,
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     message: format!("create mod dir: {err}"),
                 })?;
@@ -602,6 +617,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
         tokio::fs::write(&p, body)
             .await
             .map_err(|err| WorkerError {
+                code: None,
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: format!("write module: {err}"),
             })?;
@@ -610,18 +626,21 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let req_path = work_dir.join("req.json");
     let drv_path = work_dir.join("driver.py");
     let req_bytes = serde_json::to_vec(&request).map_err(|err| WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("serialize worker request: {err}"),
     })?;
     tokio::fs::write(&req_path, req_bytes)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write req.json: {err}"),
         })?;
     tokio::fs::write(&drv_path, DRIVER)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write driver.py: {err}"),
         })?;
@@ -647,10 +666,12 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let out = tokio::time::timeout(TIMEOUT, cmd.output())
         .await
         .map_err(|_| WorkerError {
+            code: None,
             status: StatusCode::SERVICE_UNAVAILABLE,
             message: "transfer worker timed out".to_owned(),
         })?
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("spawn transfer worker: {err}"),
         })?;
@@ -670,6 +691,14 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
                 .unwrap_or("transfer worker failed")
                 .to_owned();
             return Err(WorkerError {
+                code: match val.get("code").and_then(Value::as_str) {
+                    Some("ARCHIVE_PATH_TRAVERSAL") => Some("ARCHIVE_PATH_TRAVERSAL"),
+                    Some("ARCHIVE_SYMLINK_REJECTED") => Some("ARCHIVE_SYMLINK_REJECTED"),
+                    Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED") => Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED"),
+                    Some("INVALID_ZIP") => Some("INVALID_ZIP"),
+                    Some("INVALID_GEOPACKAGE") => Some("INVALID_GEOPACKAGE"),
+                    _ => None,
+                },
                 status,
                 message: msg,
             });
@@ -678,6 +707,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     Err(WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("transfer worker error: {stderr}"),
     })
