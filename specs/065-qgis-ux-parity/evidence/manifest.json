@@ -495,9 +495,11 @@
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/digitizing.ts",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "packages/spatial-workspace/src/snap-math.ts",
+        "apps/web-next/src/digitizing.test.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; shared pixel tolerance; no per-layer tolerance/map-unit mode; no scoped geometry fixture yet"
+      "blocker": "Per-layer personal pixel tolerance (4–25 px) now validated, persisted and applied to rendered, authorized geometry candidates, including both segments of an intersection. Targeted vertex/edge/intersection tests added; not yet executed. Map-unit mode, scoped geometry browser fixture and paired QGIS acceptance remain."
     },
     {
       "id": "EDIT-05",
@@ -803,9 +805,10 @@
         "tests/spec065/native_import.py",
         "infra/rust-platform/Dockerfile.api-rust",
         "apps/web-next/src/binary-export.ts",
-        "apps/web-next/src/binary-export.test.ts"
+        "apps/web-next/src/binary-export.test.ts",
+        "tests/rust-parity/e07_transfers.py"
       ],
-      "blocker": "Direct GPKG/SHP/GeoJSON import and durable binary export tested with explicit disclosure approval, pinned CRS/revisions, SHA256, replay and tenant denial; GDAL independent reader and re-import inspection pass, including polygon holes and decimal/name disclosures. Bounded XY single-part profile, Python codec worker, no full lossless/CRS/type matrix, retry-job execution, runtime image or paired desktop acceptance."
+      "blocker": "Rust Platform CI run 46111207590 at a3f5aae9074b4004fa30ce800a101dc6f4ed1268 passed E07 strict roundtrip for GeoJSON/GPKG/SHP with semantic and revision parity, digest/replay/tenant checks and archive negative cases (zero failures). Earlier native fixtures cover independent GDAL reading and polygon holes. Bounded XY single-part profile, Python codec worker; full lossless/CRS/type matrix, retry-job execution, runtime image and paired desktop acceptance remain."
     },
     {
       "id": "OUTPUT-08",
