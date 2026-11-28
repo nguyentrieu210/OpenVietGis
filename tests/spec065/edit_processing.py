@@ -130,6 +130,30 @@ def check_processing(post,get,foreign,fixtures):
             assert pin["feature_count"]==3
             transformed,_=result(job("reproject",pin,{"target_srid":dst}),3,0)
             assert transformed["output_crs"]==dst
+    # Whole-layer same-datum projection with attributes and feature IDs unchanged.
+    extended,_=result(job("reproject",regional,{"target_srid":3405}),regional["feature_count"],0)
+    assert extended["output_crs"]==3405
+    extended_pin=pinned_layer(extended["output_layer_id"],extended["output_source_id"])
+    wire=get("/layers/"+extended_pin["layer_id"])
+    assert wire["source"]["stored_crs"]["code"]==3405
+    assert not next(x for x in wire["capabilities"] if x["name"]=="render")["available"]
+    query=("/layers/"+extended_pin["layer_id"]+"/features?content_revision="+extended_pin["content_revision"]
+           +"&schema_revision="+extended_pin["schema_revision"]+"&response_crs=4756")
+    page=get(query)
+    assert page["context"]["response_crs"]["code"]==4756
+    assert page["context"]["transformation"]["operation_id"]=="native-vn2000-projection"
+    assert len(page["items"])==regional["feature_count"]
+    recovered,_=result(job("reproject",extended_pin,{"target_srid":4756}),regional["feature_count"],0)
+    with psycopg.connect(OWNER) as conn:
+        diff=conn.execute("""SELECT max(ST_Distance(a.geometry,b.geometry)),
+            bool_and(a.attributes=b.attributes) FROM spatial.reference_features a
+            JOIN spatial.reference_features b ON b.feature_id=a.feature_id
+            WHERE a.source_id=%s AND b.source_id=%s""",(regional["source_id"],recovered["output_source_id"])).fetchone()
+        assert diff[0]<1e-8 and diff[1]
+    post("/processing/jobs",job("reproject",regional,{"target_srid":3406}),expected=422)
+    post("/processing/jobs",job("reproject",extended_pin,{"target_srid":4326}),expected=422)
+    post("/processing/jobs",job("buffer",extended_pin,{"distance_meters":10,"quad_segs":8}),expected=422)
+    print("PASS same-datum whole-layer UTM, native feature reads, round trip and out-of-zone rejection",flush=True)
     # A successful ordinary reproject does not establish regional provenance.
     unverified=pinned_layer(reprojected["output_layer_id"],reprojected["output_source_id"])
     post("/processing/jobs",job("reproject",unverified,{"target_srid":4756}),expected=422)

@@ -1147,6 +1147,9 @@ impl<'a> EditScope<'a> {
         }
         let stored_crs: i32 = get::<Option<i32>>(&source, "stored_crs")?
             .ok_or_else(|| EditError::Internal("ready source without stored CRS".into()))?;
+        if u32::try_from(stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
+            return Err(EditError::validation("UNSUPPORTED_CRS","Extended native VN-2000 layers are read-only; use Reproject first"));
+        }
         let family: String = get(&source, "geometry_family")?;
         let catalog_revision: i64 = get(&source, "catalog_revision")?;
         let content_revision: String = get(&source, "content_revision")?;

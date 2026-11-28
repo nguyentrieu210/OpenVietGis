@@ -590,6 +590,7 @@ pub async fn submit_job_pinned(
     }
 
     let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
+    if input_source.feature_count>MAX_PROCESSING_FEATURES {return Err(EditError::validation("PROCESSING_LIMIT","processing input exceeds feature bounds"));}
     if algorithm_id!="reproject" && u32::try_from(input_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
         return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 layers currently support only Reproject; convert to an existing analysis CRS first"));
     }
@@ -845,8 +846,11 @@ async fn approved_reproject(
 ) -> Result<String, EditError> {
     if let (Ok(a),Ok(b))=(u32::try_from(native),u32::try_from(target)) {
         if crate::native_projection::is_native_pair(a,b) {
-            let projection=crate::native_projection::NativeProjection::new(a,b)?;
-            projection.verify_source(tx,org,project,source).await?;
+            let map_error=|error:ovg_core::AppError|EditError::Platform{
+                status:error.status_code(),code:error.code(),message:error.to_string(),details:None
+            };
+            let projection=crate::native_projection::NativeProjection::new(a,b).map_err(map_error)?;
+            projection.verify_source(tx,org,project,source).await.map_err(map_error)?;
             return Ok(projection.expression("rf.geometry"));
         }
     }

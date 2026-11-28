@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import type {SpatialLayer,ProcessingJob} from "@openvietgis/client-sdk";
-import {processingRequest,processingLayer,readPendingProcessing,verifyProcessingReceipt,supportedAlgorithm,type Algorithm} from "./processing-request";
+import {processingRequest,processingLayer,readPendingProcessing,verifyProcessingReceipt,supportedAlgorithm,reprojectTargets,type Algorithm} from "./processing-request";
 const layer=(id:string,family="Point")=>({id,source_id:"source-"+id,lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",stored_crs:{code:4326},feature_count:12,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),schema:{geometry_family:family,fields:[{field_id:"zone",name:"Zone"}]}}}) as unknown as SpatialLayer;
 const op="12345678-1234-1234-1234-123456789abc";
 const build=(algo:Algorithm,a=layer("a"),b?:SpatialLayer,d="100",s="8",g="")=>processingRequest(algo,a,b,d,s,g,"Output",op);
@@ -69,4 +69,14 @@ it("rejects altered persisted parameters and mismatched reprojection receipt",()
  const job={id:"job",operation_id:op,algorithm_id:"reproject",output_name:"Projected",status:"queued",output_crs:3857,engine_version:"PostGIS/test",attempt_count:1,output_source_id:null,output_layer_id:null,feature_count:null,created_at:"2026-11-28T00:00:00Z",completed_at:null,input_refs:{input_source_id:r.expected_input!.source_id,input_content_revision:r.expected_input!.content_revision,input_schema_revision:r.expected_input!.schema_revision}} as ProcessingJob;
  expect(verifyProcessingReceipt(job,r)).toBe(job);
  expect(()=>verifyProcessingReceipt({...job,output_crs:4326},r)).toThrow();
+});
+
+it("supports native VN-2000 projection targets but not unsupported datum transitions",()=>{
+ const a=layer("a");const native={...a,source:{...a.source,stored_crs:{...a.source.stored_crs!,code:4756}}};
+ expect(reprojectTargets(4756)).toContain(3405);expect(reprojectTargets(4756)).toContain(9218);
+ const req=processingRequest("reproject",native,undefined,"","","","Projected",op,{targetSrid:3405});
+ expect(readPendingProcessing(JSON.stringify(req))).toEqual(req);
+ const projected={...native,source:{...native.source,stored_crs:{...native.source.stored_crs!,code:3405}}};
+ expect(reprojectTargets(3405)).not.toContain(4326);
+ expect(()=>processingRequest("buffer",projected,undefined,"100","8","","Buffer",op)).toThrow();
 });

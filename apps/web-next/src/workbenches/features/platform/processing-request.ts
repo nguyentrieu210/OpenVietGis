@@ -5,6 +5,7 @@ export type ProcessingRequest={algorithm_id:Algorithm;input_layer_id:string;over
 export const supportedAlgorithm=(id:unknown):id is Algorithm=>id==="buffer"||id==="clip"||id==="dissolve"||id==="difference"||id==="intersection"||id==="union"||id==="reproject"||id==="spatial_join";
 export const NATIVE_VN2000_CRSS=[4756,3405,3406,5896,5897,5898,5899,9205,9206,9207,9208,9209,9210,9211,9212,9213,9214,9215,9216,9217,9218] as const;
 export const REPROJECT_CRSS=[4326,3857,...NATIVE_VN2000_CRSS] as const;
+export const extendedNativeCrs=(code:number|undefined)=>code!==4756&&code!==5899&&NATIVE_VN2000_CRSS.some(c=>c===code);
 export function reprojectTargets(native:number|undefined):number[]{
  if(native===4326)return [4326,3857,4756,5899];if(native===3857)return [4326,3857];if(native===4756||native===5899)return [4326,...NATIVE_VN2000_CRSS.filter(c=>c!==native)];if(NATIVE_VN2000_CRSS.some(c=>c===native))return NATIVE_VN2000_CRSS.filter(c=>c!==native);return [];
 }
@@ -22,6 +23,7 @@ function readPin(raw:unknown):ProcessingSourcePin|null{
 }
 export function processingRequest(algo:Algorithm,layer:SpatialLayer|undefined,overlay:SpatialLayer|undefined,distance:string,segments:string,group:string,name:string,operation:string,options:{targetSrid?:number;predicate?:string;joinType?:string;matchMode?:string}={}):ProcessingRequest{
  if(!layer||!processingLayer(layer))throw Error("Chọn lớp đầu vào đang hoạt động và dữ liệu sẵn sàng.");
+ if(algo!=="reproject"&&(extendedNativeCrs(layer.source.stored_crs?.code)||extendedNativeCrs(overlay?.source.stored_crs?.code)))throw Error("Lớp VN-2000 mở rộng hiện chỉ hỗ trợ Reproject.");
  if(!name.trim()||Array.from(name.trim()).length>200)throw Error("Tên lớp kết quả phải có 1–200 ký tự.");
  let parameters:Record<string,unknown>={};
  if(overlayAlgorithm(algo)&&(!overlay||!processingLayer(overlay)||overlay.id===layer.id||overlay.source_id===layer.source_id||(algo!=="spatial_join"&&overlay.source.schema.geometry_family!=="Polygon")))throw Error("Chọn lớp phủ Polygon có nguồn khác đầu vào.");

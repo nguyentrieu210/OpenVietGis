@@ -39,6 +39,11 @@ impl NativeProjection{
         let w=a[0].max(b[0]);let s=a[1].max(b[1]);let e=a[2].min(b[2]);let n=a[3].min(b[3]);
         let outside=||AppError::transformation_out_of_area("VN-2000 layer is outside the intersection of the source and target projection zones.");
         if w>e||s>n{return Err(outside());}
+        let stats: (i64,i64,Option<i32>)=sqlx::query_as("SELECT count(*)::bigint,COALESCE(sum(ST_NPoints(f.geometry)),0)::bigint,(SELECT feature_count FROM spatial.data_sources s WHERE s.organization_id=$1 AND s.project_id=$2 AND s.id=$3 AND s.validation_state='ready' AND s.lifecycle='active' AND s.stored_crs=$4) FROM spatial.reference_features f WHERE f.organization_id=$1 AND f.project_id=$2 AND f.source_id=$3")
+            .bind(org).bind(project).bind(source).bind(self.source as i32).fetch_one(&mut **tx).await.map_err(crate::catalog::db_error)?;
+        if stats.2.map(i64::from)!=Some(stats.0)||stats.0>crate::processing_jobs::MAX_PROCESSING_FEATURES||stats.1>crate::processing_jobs::MAX_PROCESSING_POSITIONS{
+            return Err(AppError::validation("PROCESSING_LIMIT","Native projection input exceeds bounds or source count disagrees with stored rows"));
+        }
         let geographic=self.geographic("f.geometry");
         let output=self.expression("f.geometry");
         let src_domain=if self.src.is_some(){"ST_CoveredBy(f.geometry,ST_MakeEnvelope(100000,0,900000,3000000,ST_SRID(f.geometry)))"}else{"true"};
