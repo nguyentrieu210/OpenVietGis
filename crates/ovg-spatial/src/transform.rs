@@ -508,7 +508,7 @@ fn native_vn2000_bounds(c: Coord2D, zone: Option<&NativeVn2000Zone>) -> Result<(
         && c.x <= e + 1e-8
         && c.y >= s - 1e-8
         && c.y <= n + 1e-8;
-    let in_zone = zone.map_or(true, |z| {
+    let in_zone = zone.is_none_or(|z| {
         (c.x - z.central_meridian).abs()
             <= if z.scale_factor == 0.9996 {
                 3.0 + 1e-8
