@@ -99,12 +99,12 @@ def run(root: Path, out: Path) -> dict:
             raise ValueError("Invalid WGS84 processing fixtures")
 
         mixed_union = process("native:union", {"INPUT": parcels, "OVERLAY": wgs_clip})
-        mixed_join = process("native:joinattributesbylocations", {
+        mixed_join = process("native:joinattributesbylocation", {
             "INPUT": point, "JOIN": wgs_point, "PREDICATE": [0],
             "JOIN_FIELDS": [], "METHOD": 1, "DISCARD_NONMATCHING": True,
             "PREFIX": "join_",
         })
-        reverse_mixed_join = process("native:joinattributesbylocations", {
+        reverse_mixed_join = process("native:joinattributesbylocation", {
             "INPUT": wgs_point, "JOIN": point, "PREDICATE": [0],
             "JOIN_FIELDS": [], "METHOD": 1, "DISCARD_NONMATCHING": True,
             "PREFIX": "join_",
