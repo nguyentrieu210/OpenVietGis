@@ -20,7 +20,7 @@ fn encode<T: serde::Serialize>(v: &T) -> Result<Value, AppError> {
 }
 
 impl OrgExtensionScope<'_> {
-    async fn sandbox_admin(&mut self) -> Result<(), AppError> {
+    pub(super) async fn sandbox_admin(&mut self) -> Result<(), AppError> {
         if self.is_service {
             return Err(AppError::forbidden("human administrator required"));
         }

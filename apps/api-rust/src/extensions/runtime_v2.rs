@@ -252,6 +252,9 @@ async fn document(
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
         .map_err(ExtensionError::Domain)?;
+    super::entitlement::require_graph_license(&state, &mut read, &lock.pins, &catalog)
+        .await
+        .map_err(ExtensionError::Domain)?;
     let grant = grant_status(&mut read, &pin, &ready.digest)
         .await
         .map_err(ExtensionError::Domain)?;
@@ -317,6 +320,9 @@ async fn change_grant(
             )));
         }
         let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
+            .await
+            .map_err(ExtensionError::Domain)?;
+        super::entitlement::require_graph_license(&state, &mut read, &lock.pins, &catalog)
             .await
             .map_err(ExtensionError::Domain)?;
         if lock.digest != body.lock_digest {
@@ -494,6 +500,9 @@ async fn invoke(
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
         .map_err(ExtensionError::Domain)?;
+    super::entitlement::require_graph_license(&state, &mut read, &lock.pins, &catalog)
+        .await
+        .map_err(ExtensionError::Domain)?;
     let grant = grant_status(&mut read, &pin, &ready.digest)
         .await
         .map_err(ExtensionError::Domain)?;
@@ -590,6 +599,9 @@ async fn confirm_processing(
     let catalog = releases(&state).await?;
     let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    super::entitlement::require_graph_license(&state, &mut read, &lock.pins, &catalog)
         .await
         .map_err(ExtensionError::Domain)?;
     let grant = grant_status(&mut read, &pin, &ready.digest)

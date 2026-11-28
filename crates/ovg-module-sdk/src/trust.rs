@@ -32,6 +32,8 @@ pub struct TrustPolicy {
     pub revoked_release_digests: Vec<String>,
     pub revoked_publisher_keys: Vec<String>,
     pub revoked_operator_keys: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commercial: Option<crate::entitlement::CommercialPolicy>,
 }
 fn valid_list(values: &[String]) -> bool {
     values.len() <= 4096
@@ -79,6 +81,10 @@ impl VerifiedTrust {
             || (p.sequence == prior.sequence && self.digest != prior_digest)
             || (p.catalog_epoch == prior.catalog_epoch
                 && p.catalog_membership_digest != prior.catalog_membership_digest)
+            || prior
+                .commercial
+                .as_ref()
+                .is_some_and(|old| p.commercial.as_ref().is_none_or(|new| !new.preserves(old)))
             || !includes(&prior.revoked_release_digests, &p.revoked_release_digests)
             || !includes(&prior.revoked_publisher_keys, &p.revoked_publisher_keys)
             || !includes(&prior.revoked_operator_keys, &p.revoked_operator_keys)
@@ -125,6 +131,11 @@ pub fn verify_policy(
         || expires <= now
         || expires <= issued
         || expires.signed_duration_since(issued) > Duration::days(30)
+        || p.commercial.as_ref().is_some_and(|c| {
+            !c.validate()
+                || c.authority_key_id == p.operator_key_id
+                || c.authority_key_id == fingerprint(root.as_bytes())
+        })
         || !valid_list(&p.revoked_release_digests)
         || !valid_list(&p.revoked_publisher_keys)
         || !valid_list(&p.revoked_operator_keys)
@@ -165,6 +176,7 @@ mod tests {
             revoked_release_digests: vec![],
             revoked_publisher_keys: vec![],
             revoked_operator_keys: vec![],
+            commercial: None,
         };
         let verify = |p: &TrustPolicy, op: &SigningKey| {
             verify_policy(

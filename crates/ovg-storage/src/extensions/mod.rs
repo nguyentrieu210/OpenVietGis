@@ -2,6 +2,7 @@
 
 pub mod marketplace;
 pub mod trust;
+pub mod entitlement;
 pub mod commerce;
 pub mod installation;
 pub mod processing;

@@ -296,6 +296,22 @@ fn load(
                 .unwrap_or_default(),
         )
     });
+    if let Some(policy) = &trust.policy().commercial {
+        // The root pins the license authority, and it must not double as a publisher.
+        if legacy.iter().any(|r| {
+            decode_ed25519_public_key(&r.publisher_public_key)
+                .ok()
+                .is_some_and(|k| hash(k.as_bytes()) == policy.authority_key_id)
+        }) {
+            return Err(invalid());
+        }
+        for item in &mut items {
+            if policy.requires(item.metadata["release_digest"].as_str().unwrap_or_default()) {
+                item.metadata["commercial_policy"] =
+                    serde_json::to_value(policy).map_err(|_| invalid())?;
+            }
+        }
+    }
     Ok((items, Some(trust)))
 }
 pub(super) async fn load_verified(
@@ -354,7 +370,15 @@ async fn catalog(
     let items: Vec<Value> = load_verified(&state, profile)
         .await?
         .into_iter()
-        .map(|r| r.metadata)
+        .map(|r| {
+            let mut m = r.metadata;
+            let required = m
+                .as_object_mut()
+                .and_then(|v| v.remove("commercial_policy"))
+                .is_some();
+            m["license_required"] = json!(required);
+            m
+        })
         .collect();
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
@@ -503,6 +527,7 @@ mod tests {
             revoked_release_digests: vec![hash(&canonical(&c.releases[0].envelope).unwrap())],
             revoked_publisher_keys: vec![],
             revoked_operator_keys: vec![],
+            commercial: None,
         };
         let save = |p: &TrustPolicy| {
             std::fs::write(&trust,serde_json::to_vec(&json!({"policy":p,"signature":STANDARD.encode(root.sign(&canonical(p).unwrap()).to_bytes())})).unwrap()).unwrap()
@@ -510,8 +535,37 @@ mod tests {
         save(&policy);
         let (rows, proof) = load(&cfg, &p).unwrap();
         assert_eq!(rows.len(), 3);
-        assert!(proof.is_some());
+        let old = proof.unwrap();
+        let license_key = SigningKey::from_bytes(&[104; 32]);
         policy.sequence = 2;
+        policy.commercial = Some(ovg_module_sdk::entitlement::CommercialPolicy {
+            audience: "fixture-installation".into(),
+            authority_key_id: hash(license_key.verifying_key().as_bytes()),
+            licensed_release_digests: vec![hash(&canonical(&c.releases[1].envelope).unwrap())],
+        });
+        save(&policy);
+        let (licensed, proof) = load(&cfg, &p).unwrap();
+        assert_eq!(
+            licensed
+                .iter()
+                .filter(|r| r.metadata.get("commercial_policy").is_some())
+                .count(),
+            1
+        );
+        let proof = proof.unwrap();
+        assert!(proof
+            .ensure_successor(old.policy(), old.digest(), old.root_key_id())
+            .is_ok());
+        let mut stripped = policy.clone();
+        stripped.sequence = 3;
+        stripped.commercial = None;
+        save(&stripped);
+        let (_, next) = load(&cfg, &p).unwrap();
+        assert!(next
+            .unwrap()
+            .ensure_successor(proof.policy(), proof.digest(), proof.root_key_id())
+            .is_err());
+        policy.sequence = 3;
         policy.revoked_publisher_keys = vec![c.releases[0].envelope.key_id.clone()];
         save(&policy);
         assert!(load(&cfg, &p).unwrap().0.is_empty());

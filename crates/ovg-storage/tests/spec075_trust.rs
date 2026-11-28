@@ -40,6 +40,7 @@ async fn global_checkpoint_survives_restart_and_denies_rollback() {
         revoked_release_digests: vec![],
         revoked_publisher_keys: vec![],
         revoked_operator_keys: vec![],
+            commercial:None,
     };
     let old = signed(&p, &root, &op);
     let (a, b) = tokio::join!(admit_policy(&pool, &old), admit_policy(&pool, &old));

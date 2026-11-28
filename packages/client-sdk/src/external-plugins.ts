@@ -79,6 +79,7 @@ export function searchMarketplace(client: ApiClient, query: string, offset = 0, 
 /** V2 metadata is cryptographically verified by the configured server.
  * This is not an installed or executable plugin. */
 export type MarketplaceV2Metadata = {
+ license_required?:boolean;
   envelope: {
     schema_version: 2; publisher_id: string; extension_key: string; version: string;
     manifest_digest: string; host_api_range: string; platforms: string[];
@@ -141,4 +142,14 @@ export function applyPluginGraph(client:ApiClient,org:string,project:string,sele
 export type PluginProcessingProposal={proposal_id:string;plan_digest:string;plan:unknown;requires_human_confirmation:true};
 export function confirmPluginProcessing(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,proposal:PluginProcessingProposal,signal?:AbortSignal){
  return client.request<{proposal_id:string;job:{id:string;status:string};execution:"manual_core_job"}>(pluginV2Path(org,project,runtime.manifest_id)+"/processing/confirm",{method:"POST",signal:signal??null,body:JSON.stringify({proposal_id:proposal.proposal_id,plan_digest:proposal.plan_digest})});
+}
+
+
+export type PluginLicenseState="pending"|"trial"|"active"|"grace"|"expired"|"revoked"|"missing";
+const licensePath=(org:string)=>"/organizations/"+encodeURIComponent(org)+"/marketplace/v2/licenses";
+export function importPluginLicense(client:ApiClient,org:string,body:unknown){
+ return client.request<{grant_id:string;sequence:number;state:PluginLicenseState;replayed:boolean}>(licensePath(org),{method:"POST",body:JSON.stringify(body)});
+}
+export function getPluginLicense(client:ApiClient,org:string,digest:string){
+ return client.request<{release_digest:string;state:PluginLicenseState;allowed:boolean}>(licensePath(org)+"/"+encodeURIComponent(digest),{cache:"no-store"});
 }

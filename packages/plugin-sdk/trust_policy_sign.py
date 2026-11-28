@@ -53,12 +53,28 @@ def sign_policy(args):
     policy={"schema":"openvietgis.trust.policy.v1","sequence":args.sequence,"catalog_epoch":epoch,
         "catalog_membership_digest":sha(canonical(membership)),"operator_key_id":sha(op_raw),"issued_at":args.issued,"expires_at":args.expires,**revocations}
     if policy["operator_key_id"] in policy["revoked_operator_keys"]:raise ValueError("operator revoked")
+    commercial=getattr(args,"commercial",None)
+    if commercial:
+        c=load_json(commercial,1024*1024)
+        if set(c)!={"audience","authority_key_id","licensed_release_digests"} or not re.fullmatch("[A-Za-z0-9_.-]{1,128}",c["audience"]):
+            raise ValueError("invalid commercial policy")
+        ids=c["licensed_release_digests"]
+        if not isinstance(ids,list) or not 1<=len(ids)<=4096 or len(set(ids))!=len(ids) or any(not re.fullmatch("[a-f0-9]{64}",v) for v in ids):
+            raise ValueError("invalid licensed releases")
+        if not re.fullmatch("[a-f0-9]{64}",c["authority_key_id"]) or c["authority_key_id"] in (sha(op_raw),sha(public(root.public_key()))):
+            raise ValueError("independent license authority required")
+        c["licensed_release_digests"]=sorted(ids)
+        policy["commercial"]=c
     if args.previous:
         previous=load_json(args.previous,1024*1024)
         old=previous["policy"]
         root.public_key().verify(decode(previous["signature"],64),canonical(old))
         if policy["sequence"]<=old["sequence"] or epoch<old["catalog_epoch"] or (epoch==old["catalog_epoch"] and policy["catalog_membership_digest"]!=old["catalog_membership_digest"]):
             raise ValueError("policy rollback or reused catalog epoch")
+        if old.get("commercial"):
+            new=policy.get("commercial")
+            if not new or new["audience"]!=old["commercial"]["audience"] or not set(old["commercial"]["licensed_release_digests"]).issubset(new["licensed_release_digests"]):
+                raise ValueError("commercial classification removal")
         if any(not set(old[k]).issubset(policy[k]) for k in FIELDS):raise ValueError("revocation removal")
         if policy["operator_key_id"]!=old["operator_key_id"] and (epoch<=old["catalog_epoch"] or old["operator_key_id"] not in policy["revoked_operator_keys"]):raise ValueError("old operator must be revoked")
     elif args.sequence!=1:
@@ -70,6 +86,6 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root_private");parser.add_argument("operator_public");parser.add_argument("catalog");parser.add_argument("revocations")
     parser.add_argument("sequence",type=int);parser.add_argument("issued");parser.add_argument("expires");parser.add_argument("output")
-    parser.add_argument("--previous")
+    parser.add_argument("--previous");parser.add_argument("--commercial")
     sign_policy(parser.parse_args())
 if __name__=="__main__":main()
