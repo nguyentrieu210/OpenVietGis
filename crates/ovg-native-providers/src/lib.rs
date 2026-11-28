@@ -7,3 +7,5 @@ pub type Result<T>=std::result::Result<T,&'static str>;
 
 #[cfg(feature="remote-range")]
 pub mod http_range;
+
+pub mod remote_tiff;
