@@ -14,6 +14,7 @@ on:
       - ".cargo/**"
       - "infra/rust-platform/e11/**"
       - "apps/api-rust/**"
+      - "crates/**"
       - "crates/ovg-storage/**"
       - "crates/ovg-sync/**"
       - "tests/rust-parity/e11/**"
