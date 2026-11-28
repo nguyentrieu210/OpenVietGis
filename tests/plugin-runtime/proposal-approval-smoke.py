@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Independent reviewer, immutable submission pin, stale geometry and quality gate."""
+import argparse
+import os
+import sys
+import tempfile
+from pathlib import Path
+from uuid import uuid4
+import psycopg
+import re
+
+ROOT=Path(__file__).resolve().parents[2]
+sys.path.insert(0,str(ROOT/'tests/rust-parity'))
+sys.path.insert(0,str(ROOT/'tools/benchmark/rust-platform'))
+import run as parity
+import benchmark_runner as baseline
+from e15_full_parity import make_member,seed_source
+
+def expect(res,status):
+    assert res.status_code==status,(res.status_code,res.text)
+    return res.json()
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--candidate',type=Path,required=True);p.add_argument('--sql-only',action='store_true',help='Validate exact new SQL on an existing compatible candidate, not the new transition API');args=p.parse_args()
+    with tempfile.TemporaryDirectory(prefix='ovg-approval-') as d, parity.database(os.environ.get('OVG_PARITY_PG_ADMIN_URL',baseline.DEFAULT_ADMIN_PG_URL)) as (owner,runtime):
+        work=Path(d);artifacts=work/'artifacts';artifacts.mkdir()
+        parity.configure_python(owner,runtime,artifacts);baseline.run_alembic_upgrade(owner,runtime)
+        from modules.house_numbering.migrate import upgrade
+        upgrade()
+        fx=baseline.seed_benchmark_database(owner,seed=20261128,scales=['1k'],csrf_secret=baseline.DEFAULT_CSRF_SECRET)
+        org,project,actor=(fx[k] for k in ('org_a_id','project_a_id','user_a_id'))
+        base=f'/api/v1/organizations/{org}';proj=f'{base}/projects/{project}';root=proj+'/modules/house-numbering'
+        h=parity.session_headers(fx['session_a_token'],**{'x-openvietgis-csrf':fx['csrf_a_token']})
+        reviewer=make_member(owner,fx,'manager','Independent reviewer')
+        editor=make_member(owner,fx,'editor','Editor')
+        points=seed_source(owner,fx,'Point',{'p1':'POINT(10 10)','p2':'POINT(20 10)'})
+        lines=seed_source(owner,fx,'LineString',{'r1':'LINESTRING(0 0,100 0)'})
+        with parity.rust_client(args.candidate.resolve(),runtime,work) as api:
+            manifest=expect(api.post(base+'/extensions/official/house_numbering/register',headers=h),201)
+            expect(api.post(proj+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
+            rule=expect(api.post(root+'/rules',json={'version':'fixture-authority','status':'authoritative','authority_ref':'TEST-ONLY'},headers=h),201)
+            route=expect(api.post(root+'/routes',json={'name':'Fixture road','source_id':lines,'feature_id':'r1','status':'confirmed'},headers=h),201)
+            building=expect(api.post(root+'/buildings',json={'source_id':points,'feature_id':'p1','route_id':route['id'],'eligibility':'eligible'},headers=h),201)
+            number=str(uuid4())
+            with psycopg.connect(owner) as db:
+                db.execute("""INSERT INTO house_numbering.address_numbers(id,organization_id,project_id,building_id,route_id,number_text,kind,side,measure_m,rule_id,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+                VALUES(%s,%s,%s,%s,%s,'1','proposed','left',10,%s,%s,%s,now(),now())""",(number,org,project,building['id'],route['id'],rule['id'],actor,actor))
+            proposal=expect(api.post(root+'/proposals',json={'scope_kind':'route','scope_id':route['id'],'rule_id':rule['id'],'building_ids':[building['id']]},headers=h),201)['proposal']
+            url=root+'/proposals/'+proposal['id']+'/transition'
+            def move(action,rev,headers=h,status=200,comment=None):
+                return expect(api.post(url,json={'action':action,'expected_revision':rev,'comment':comment},headers=headers),status)
+            if args.sql_only:
+                source=(ROOT/'modules/house_numbering/storage/src/persistence/proposals.rs').read_text()
+                queries=[re.search(pattern,source,re.S).group(1) for pattern in [
+                    r'"(SELECT DISTINCT link FROM \(.*?refs WHERE link->>.*?IS NOT NULL)"',
+                    r'"(WITH items AS \(.*?END FROM items)"',
+                    r'"(SELECT EXISTS\(SELECT 1 FROM house_numbering.proposal_items i JOIN house_numbering.reconcile_cases c.*?matched\x27\))"']]
+                def run(db,query):
+                    args=[org,project,proposal['id']]
+                    order=[int(x)-1 for x in re.findall(r'\$(\d+)',query)]
+                    return db.execute(re.sub(r'\$\d+','%s',query),[args[i] for i in order]).fetchall()
+                def scoped(db):
+                    db.execute("SELECT set_config('openvietgis.organization_id',%s,true),set_config('openvietgis.project_id',%s,true),set_config('openvietgis.actor_user_id',%s,true),set_config('app.current_organization_id',%s,true),set_config('app.current_user_id',%s,true)",(org,project,actor,org,actor))
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    assert len(run(db,queries[0]))==2
+                    pin=run(db,queries[1])[0][0];assert len(pin)==64
+                    assert run(db,queries[2])[0][0] is False
+                    db.execute("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES(%s,%s,%s,2,%s,%s)",(org,project,proposal['id'],actor,pin))
+                    assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.proposal_submission_pins','UPDATE')").fetchone()[0]
+                    assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.proposal_submission_pins','DELETE')").fetchone()[0]
+                with psycopg.connect(owner) as db:
+                    db.execute("UPDATE spatial.reference_features SET geometry=ST_GeomFromText('POINT(11 10)',3857) WHERE source_id=%s AND feature_id='p1'",(points,))
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    assert run(db,queries[1])[0][0]!=pin
+                    assert db.execute("SELECT count(*) FROM house_numbering.proposal_submission_pins").fetchone()[0]==1
+                    db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                    assert db.execute("SELECT count(*) FROM house_numbering.proposal_submission_pins").fetchone()[0]==0
+                with psycopg.connect(owner) as db:
+                    db.execute("""INSERT INTO house_numbering.reconcile_cases(id,organization_id,project_id,building_id,evidence_ids,case_class,status,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+                    VALUES(%s,%s,%s,%s,'[]','number_mismatch','open',%s,%s,now(),now())""",(uuid4(),org,project,building['id'],actor,actor))
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    assert run(db,queries[2])[0][0] is True
+                print('PASS exact proposal SQL, geometry digest invalidation, quality gate, append-only grants and cross-project RLS; transition API not tested')
+                return
+            move('submit',1)
+            move('approve',2,status=403)
+            move('approve',2,headers=editor['csrf'],status=403)
+            with psycopg.connect(owner) as db:
+                db.execute("UPDATE spatial.reference_features SET geometry=ST_GeomFromText('POINT(11 10)',3857) WHERE source_id=%s AND feature_id='p1'",(points,))
+            move('approve',2,headers=reviewer['csrf'],status=409)
+            move('withdraw',2,comment='changed geometry')
+            move('submit',3)
+            with psycopg.connect(owner) as db:
+                db.execute("""INSERT INTO house_numbering.reconcile_cases(id,organization_id,project_id,building_id,evidence_ids,case_class,status,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+                VALUES(%s,%s,%s,%s,'[]','number_mismatch','open',%s,%s,now(),now())""",(uuid4(),org,project,building['id'],actor,actor))
+            move('approve',4,headers=reviewer['csrf'],status=409)
+            with psycopg.connect(owner) as db:
+                db.execute("UPDATE house_numbering.reconcile_cases SET status='resolved',revision=revision+1,resolution='fixture verified' WHERE building_id=%s",(building['id'],))
+            move('approve',4,headers=reviewer['csrf'],status=409)
+            move('withdraw',4,comment='reviewed evidence')
+            move('submit',5)
+            result=move('approve',6,headers=reviewer['csrf'])
+            assert result['status']=='approved'
+            move('approve',6,headers=reviewer['csrf'],status=409)
+            with psycopg.connect(owner) as db:
+                assert db.execute("SELECT kind FROM house_numbering.address_numbers WHERE id=%s",(number,)).fetchone()[0]=='approved'
+                pins=db.execute("SELECT submitted_revision,submitted_by::text,input_digest FROM house_numbering.proposal_submission_pins WHERE proposal_id=%s ORDER BY submitted_revision",(proposal['id'],)).fetchall()
+                assert [p[0] for p in pins]==[2,4,6] and all(p[1]==actor and len(p[2])==64 for p in pins)
+                assert len({p[2] for p in pins})==3
+            print('PASS proposal: independent reviewer, stale geometry, unresolved case, changed evidence, resubmission, approved number, retained pins')
+if __name__=='__main__':main()

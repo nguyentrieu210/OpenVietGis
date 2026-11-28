@@ -414,11 +414,68 @@ fn blank(comment: Option<&str>) -> bool {
     comment.is_none_or(|value| value.trim().is_empty())
 }
 
-fn invalid_items(items: &[Value], kind: &str) -> bool {
-    items.iter().any(|item| {
-        item["eligibility"].as_str() == Some("ineligible")
-            || item["number_kind"].as_str() != Some(kind)
-    })
+// Bind the decision to the exact submitted domain revisions, resolved route
+// geometry, linked feature content and evidence/case state, without storing PII.
+async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<String,AppError>{
+    let org=edit.organization_id();let project=edit.project_id();
+    let links:Vec<Value>=sqlx::query_scalar(
+        "SELECT DISTINCT link FROM (
+           SELECT jsonb_build_object('source_id',b.linked_source_id,'feature_id',b.linked_feature_id) AS link
+           FROM house_numbering.proposal_items i JOIN house_numbering.buildings b
+             ON (b.organization_id,b.project_id,b.id)=(i.organization_id,i.project_id,i.building_id)
+           WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+           UNION ALL
+           SELECT segment FROM house_numbering.proposal_items i JOIN house_numbering.address_numbers n
+             ON (n.organization_id,n.project_id,n.id)=(i.organization_id,i.project_id,i.source_number_id)
+           JOIN house_numbering.routes r ON (r.organization_id,r.project_id,r.id)=(n.organization_id,n.project_id,n.route_id)
+           CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_array_length(r.segments)>0 THEN r.segments
+             ELSE jsonb_build_array(jsonb_build_object('source_id',r.linked_source_id,'feature_id',r.linked_feature_id)) END) segment
+           WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+         ) refs WHERE link->>'source_id' IS NOT NULL AND link->>'feature_id' IS NOT NULL"
+    ).bind(org).bind(project).bind(proposal_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    let refs:Vec<ovg_storage::module_ports::SpatialFeatureRef>=serde_json::from_value(Value::Array(links))
+        .map_err(|_|AppError::internal("invalid proposal feature reference"))?;
+    let locked=ovg_storage::module_ports::lock_linked_features(edit,&refs,true).await?;
+    if refs.iter().any(|r|!locked.contains(r)){
+        return Err(AppError::conflict("STALE_PROPOSAL_GEOMETRY","proposal references a missing GIS feature"));
+    }
+    let digest:String=sqlx::query_scalar(
+        "WITH items AS (
+          SELECT i.id,i.building_id,n.route_id,
+            jsonb_build_array(i.id,b.id,b.revision,n.id,n.revision,r.id,r.revision,
+              rule.id,rule.revision,rule.status,rule.authority_ref,
+              encode(sha256(ST_AsEWKB(line.geometry)),'hex'),
+              encode(sha256(convert_to(jsonb_build_array(f.attributes,encode(ST_AsEWKB(f.geometry),'hex'),f.geometry_state,f.schema_revision,s.lifecycle,s.validation_state)::text,'UTF8')),'hex'),
+              (SELECT coalesce(jsonb_agg(jsonb_build_array(c.id,c.revision,c.status) ORDER BY c.id),'[]'::jsonb)
+                 FROM house_numbering.reconcile_cases c WHERE (c.organization_id,c.project_id,c.building_id)=(b.organization_id,b.project_id,b.id)),
+              (SELECT coalesce(jsonb_agg(encode(sha256(convert_to(to_jsonb(e)::text,'UTF8')),'hex') ORDER BY e.id),'[]'::jsonb)
+                 FROM house_numbering.evidence e WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id))
+            ) AS pin,
+            line.geometry IS NOT NULL AND f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready' AS ready
+          FROM house_numbering.proposal_items i JOIN house_numbering.buildings b
+            ON (b.organization_id,b.project_id,b.id)=(i.organization_id,i.project_id,i.building_id)
+          JOIN house_numbering.address_numbers n ON (n.organization_id,n.project_id,n.id)=(i.organization_id,i.project_id,i.source_number_id)
+          JOIN house_numbering.routes r ON (r.organization_id,r.project_id,r.id)=(n.organization_id,n.project_id,n.route_id)
+          JOIN house_numbering.rules rule ON (rule.organization_id,rule.project_id,rule.id)=(n.organization_id,n.project_id,n.rule_id)
+          LEFT JOIN house_numbering.route_lines line ON (line.organization_id,line.project_id,line.route_id)=(r.organization_id,r.project_id,r.id)
+          LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(b.organization_id,b.project_id,b.linked_source_id,b.linked_feature_id)
+          LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+          WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+        ) SELECT CASE WHEN count(*)>0 AND bool_and(coalesce(ready,false)) THEN
+          encode(sha256(convert_to(jsonb_agg(pin ORDER BY id)::text,'UTF8')),'hex') ELSE '' END FROM items"
+    ).bind(org).bind(project).bind(proposal_id).fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
+    if digest.is_empty(){return Err(AppError::conflict("PROPOSAL_GEOMETRY_UNVERIFIED","every item requires a ready linked building and resolved route geometry"));}
+    Ok(digest)
+}
+
+async fn check_quality(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<(),AppError>{
+    let open:bool=sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM house_numbering.proposal_items i JOIN house_numbering.reconcile_cases c
+          ON (c.organization_id,c.project_id,c.building_id)=(i.organization_id,i.project_id,i.building_id)
+          WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3 AND c.status='open' AND c.case_class<>'matched')"
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
+    if open{return Err(AppError::conflict("PROPOSAL_RECONCILIATION_PENDING","resolve outstanding address conflicts before approval"));}
+    Ok(())
 }
 
 pub async fn transition_proposal(
@@ -430,7 +487,7 @@ pub async fn transition_proposal(
     comment: Option<&str>,
     reviewer: bool,
 ) -> Result<Value, AppError> {
-    let (proposal, items) = load_proposal(edit, proposal_id, true).await?;
+    let (proposal, _) = load_proposal(edit, proposal_id, true).await?;
     if proposal["revision"].as_i64() != Some(expected_revision) {
         return Err(AppError::conflict(
             "STALE_PROPOSAL",
@@ -439,12 +496,6 @@ pub async fn transition_proposal(
     }
     let state = proposal["status"].as_str().unwrap_or_default().to_owned();
     let now = chrono::Utc::now();
-    let invalid_item = || {
-        AppError::conflict(
-            "INVALID_PROPOSAL_ITEM",
-            "proposal contains ineligible or stale items",
-        )
-    };
     let (new_state, submitted_at, keep_submitted, decided_at): (
         &str,
         Option<chrono::DateTime<chrono::Utc>>,
@@ -453,29 +504,6 @@ pub async fn transition_proposal(
     ) = match (action, state.as_str(), reviewer) {
         ("submit", "draft", _) => {
             validate_transition_items(edit, proposal_id, &proposal, "proposed", false).await?;
-            if invalid_items(&items, "proposed") {
-                return Err(invalid_item());
-            }
-            let mut route_ids: Vec<Uuid> = items
-                .iter()
-                .filter_map(|item| item["route_id"].as_str())
-                .filter_map(|value| Uuid::parse_str(value).ok())
-                .collect();
-            route_ids.sort();
-            route_ids.dedup();
-            if !route_ids.is_empty() {
-                sqlx::query(
-                    "SELECT id FROM house_numbering.routes
-                         WHERE organization_id=$1 AND project_id=$2 AND id = ANY($3)
-                         ORDER BY id FOR UPDATE",
-                )
-                .bind(edit.organization_id())
-                .bind(edit.project_id())
-                .bind(&route_ids)
-                .fetch_all(&mut **edit.transaction())
-                .await
-                .map_err(db_error)?;
-            }
             let duplicate = sqlx::query(
                 "SELECT n.number_text
                      FROM house_numbering.proposal_items i
@@ -527,6 +555,10 @@ pub async fn transition_proposal(
                 ));
             }
             move_numbers(edit, actor, proposal_id, "proposed", "submitted", now).await?;
+            let digest=submission_digest(edit,proposal_id).await?;
+            sqlx::query("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES($1,$2,$3,$4,$5,$6)")
+              .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).bind(expected_revision+1).bind(actor.id).bind(digest)
+              .execute(&mut **edit.transaction()).await.map_err(db_error)?;
             ("submitted", Some(now), false, None)
         }
         ("withdraw", "submitted", false) => {
@@ -563,8 +595,14 @@ pub async fn transition_proposal(
                     "approval requires authoritative rule",
                 ));
             }
-            if invalid_items(&items, "submitted") {
-                return Err(invalid_item());
+            check_quality(edit,proposal_id).await?;
+            let pin:Option<(Uuid,String)>=sqlx::query_as("SELECT submitted_by,input_digest::text FROM house_numbering.proposal_submission_pins WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3 AND submitted_revision=$4")
+                .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id).bind(expected_revision)
+                .fetch_optional(&mut **edit.transaction()).await.map_err(db_error)?;
+            let (submitter,digest)=pin.ok_or_else(||AppError::conflict("PROPOSAL_REVIEW_REQUIRED","withdraw and resubmit the legacy proposal before approval"))?;
+            if submitter==actor.id{return Err(AppError::forbidden("proposal approver must be independent from submitter"));}
+            if submission_digest(edit,proposal_id).await?!=digest{
+                return Err(AppError::conflict("STALE_PROPOSAL_REVIEW","proposal inputs changed; withdraw and resubmit"));
             }
             move_numbers(edit, actor, proposal_id, "submitted", "approved", now).await?;
             ("approved", None, true, Some(now))
