@@ -27,10 +27,10 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use self::codec::{
-    build_geojson_inspection, build_native_inspection, canonical_attribute, content_digest, detect_format, extent_value,
-    fingerprint, is_ready, plan_export_mapping, push_geojson_feature, sanitize_filename,
-    schema_digest, sorted_unique, Field, InspectOptions, Inspection, Mapping, SchemaField,
-    Transform, GEOJSON_HEAD, GEOJSON_TAIL, MAX_TRANSFER_FEATURES, MAX_UPLOAD_BYTES,
+    build_geojson_inspection, build_native_inspection, canonical_attribute, content_digest,
+    detect_format, extent_value, fingerprint, is_ready, plan_export_mapping, push_geojson_feature,
+    sanitize_filename, schema_digest, sorted_unique, Field, InspectOptions, Inspection, Mapping,
+    SchemaField, Transform, GEOJSON_HEAD, GEOJSON_TAIL, MAX_TRANSFER_FEATURES, MAX_UPLOAD_BYTES,
 };
 use self::store::{Staged, Store};
 use crate::identity::HumanSession;
@@ -226,11 +226,17 @@ fn py_strip(value: &str) -> &str {
     value.trim_matches(|c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c))
 }
 
-async fn inspect_payload(payload: &[u8], format: &str, opts: &InspectOptions<'_>) -> Result<Inspection, TransferError> {
-    if format == "geojson" { return build_geojson_inspection(payload, opts); }
+async fn inspect_payload(
+    payload: &[u8],
+    format: &str,
+    opts: &InspectOptions<'_>,
+) -> Result<Inspection, TransferError> {
+    if format == "geojson" {
+        return build_geojson_inspection(payload, opts);
+    }
     let decoded = crate::connectors::transfer_worker::run_import(payload,json!({"action":"inspect_import","format":format,"member":opts.selected_member,"encoding":opts.declared_encoding})).await
         .map_err(|e| TransferError::coded(e.status.as_u16(),"VECTOR_CODEC_FAILED", if e.status.is_server_error() {"Vector decoder unavailable or resource budget exceeded.".into()} else {e.message}))?;
-    build_native_inspection(decoded,format,opts)
+    build_native_inspection(decoded, format, opts)
 }
 
 fn too_large() -> TransferError {
@@ -312,7 +318,19 @@ async fn upload_import_asset(
         uploaded_by_display: scope.display_name().to_string(),
         created_at: now_micros(),
     };
-    let inspection=match inspect_payload(payload,format,&inspect_options(&asset,None,None,None,None)).await {Ok(v)=>v,Err(e)=>{store.delete(&storage_key).await;return Err(e.into())}};
+    let inspection = match inspect_payload(
+        payload,
+        format,
+        &inspect_options(&asset, None, None, None, None),
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            store.delete(&storage_key).await;
+            return Err(e.into());
+        }
+    };
     let wire = scope.asset_wire(&asset);
     let persisted = match scope.create_source_asset(&asset).await {
         Ok(()) => scope.commit().await,
@@ -381,7 +399,8 @@ async fn inspect_import_asset(
     )
     .await?;
     let inspection = inspect_payload(
-        &payload, &asset.detected_format,
+        &payload,
+        &asset.detected_format,
         &inspect_options(
             &asset,
             request.selected_member.as_deref(),
@@ -389,7 +408,8 @@ async fn inspect_import_asset(
             request.target_crs,
             request.declared_encoding.as_deref(),
         ),
-    ).await?;
+    )
+    .await?;
     Ok(
         Json(json!({"asset": scope.asset_wire(&asset), "inspection": inspection.wire}))
             .into_response(),
@@ -422,7 +442,8 @@ async fn confirm_import(
     )
     .await?;
     let inspection = inspect_payload(
-        &payload, &asset.detected_format,
+        &payload,
+        &asset.detected_format,
         &inspect_options(
             &asset,
             Some(&request.selected_member),
@@ -430,7 +451,8 @@ async fn confirm_import(
             request.target_crs,
             request.declared_encoding.as_deref(),
         ),
-    ).await?;
+    )
+    .await?;
     if inspection.fingerprint != request.inspection_fingerprint {
         return Err(TransferError::conflict(
             "STALE_INSPECTION",
@@ -615,7 +637,10 @@ async fn run_import(
     layer_name: &str,
 ) -> Result<Value, TransferError> {
     let spatial = || TransferError::internal("imported value failed spatial domain validation");
-    let native = inspection.wire["resolved_source_crs"].as_i64().and_then(|v|i32::try_from(v).ok()).ok_or_else(||TransferError::internal("confirmed import has no source CRS"))?;
+    let native = inspection.wire["resolved_source_crs"]
+        .as_i64()
+        .and_then(|v| i32::try_from(v).ok())
+        .ok_or_else(|| TransferError::internal("confirmed import has no source CRS"))?;
     let target = inspection
         .target_crs
         .and_then(|t| i32::try_from(t).ok())
@@ -760,7 +785,10 @@ async fn run_import(
         id: source_id,
         name: source_name.to_string(),
         reference_key: format!("imp_{}_{}", short(asset.id), short(source_id)),
-        fixture_version: format!("{}:{member}",asset.detected_format).chars().take(100).collect(),
+        fixture_version: format!("{}:{member}", asset.detected_format)
+            .chars()
+            .take(100)
+            .collect(),
         manifest_digest: asset.sha256.clone(),
         source_crs: native,
         stored_crs: target,
@@ -844,7 +872,11 @@ async fn build_preview(
         TransferError::validation("MISSING_CRS", "Source has no verified stored CRS.")
     })?;
     if format != "geojson" && source.feature_count > MAX_TRANSFER_FEATURES as i64 {
-        return Err(TransferError::coded(413,"FEATURE_LIMIT_EXCEEDED","Binary export supports up to 50000 features."));
+        return Err(TransferError::coded(
+            413,
+            "FEATURE_LIMIT_EXCEEDED",
+            "Binary export supports up to 50000 features.",
+        ));
     }
     let fields: Vec<SchemaField<'_>> = source
         .fields
@@ -1064,32 +1096,61 @@ async fn run_export(
         )
     })?;
     let artifact_id = Uuid::new_v4();
-    let (format,ext,media) = match request.output_format.as_str() {
-        "geojson"=>("geojson","geojson","application/geo+json"),
-        "geopackage"=>("geopackage","gpkg","application/geopackage+sqlite3"),
-        "shapefile_zip"=>("shapefile_zip","zip","application/zip"),
-        _=>return Err(TransferError::validation("UNSUPPORTED_FORMAT","Unsupported export format.")),
+    let (format, ext, media) = match request.output_format.as_str() {
+        "geojson" => ("geojson", "geojson", "application/geo+json"),
+        "geopackage" => ("geopackage", "gpkg", "application/geopackage+sqlite3"),
+        "shapefile_zip" => ("shapefile_zip", "zip", "application/zip"),
+        _ => {
+            return Err(TransferError::validation(
+                "UNSUPPORTED_FORMAT",
+                "Unsupported export format.",
+            ))
+        }
     };
     let storage_key = format!("artifacts/{}/{}/{artifact_id}.{ext}", ids.0, ids.1);
     let store = Store::new(state);
-    let (sha256,byte_size,null_counts) = if format=="geojson" {
-        let mut staged=store.stage(&storage_key).await?;
-        let counts=match stream_geojson(&mut scope,&source,content,schema,transform.as_ref(),&preview.mappings,&mut staged).await {
-            Ok(v)=>v,Err(e)=>{staged.abort().await;return Err(e)}
+    let (sha256, byte_size, null_counts) = if format == "geojson" {
+        let mut staged = store.stage(&storage_key).await?;
+        let counts = match stream_geojson(
+            &mut scope,
+            &source,
+            content,
+            schema,
+            transform.as_ref(),
+            &preview.mappings,
+            &mut staged,
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                staged.abort().await;
+                return Err(e);
+            }
         };
-        let (sha,size)=staged.finish().await?;
-        (sha,size,counts)
+        let (sha, size) = staged.finish().await?;
+        (sha, size, counts)
     } else {
-        let (features,counts)=collect_binary_features(&mut scope,&source,content,schema,transform.as_ref()).await?;
+        let (features, counts) =
+            collect_binary_features(&mut scope, &source, content, schema, transform.as_ref())
+                .await?;
         let mappings=preview.mappings.iter().map(|m|json!({"field_id":m.field_id,"source_name":m.source_name,"output_name":m.output_name,"field_type":m.field_type})).collect::<Vec<_>>();
         let artifact=crate::connectors::transfer_worker::run_export(json!({"action":"export","format":format,"crs_code":output_crs,"geometry_family":source.geometry_family,"layer_name":source.layer_name,"field_mappings":mappings,"features":features,"bounded_transfer":true})).await
             .map_err(|e|TransferError::coded(e.status.as_u16(),"VECTOR_CODEC_FAILED",if e.status.is_server_error(){"Vector export worker failed.".into()}else{e.message}))?;
-        if artifact.ext!=ext || artifact.media_type!=media || artifact.bytes.is_empty() || artifact.bytes.len()>64*1024*1024 || detect_format(&artifact.bytes)?!=format {
+        if artifact.ext != ext
+            || artifact.media_type != media
+            || artifact.bytes.is_empty()
+            || artifact.bytes.len() > 64 * 1024 * 1024
+            || detect_format(&artifact.bytes)? != format
+        {
             return Err(TransferError::internal("Unexpected binary artifact"));
         }
-        let (sha,size)=store.put(&storage_key,&artifact.bytes).await?;
-        if sha!=artifact.sha256 {store.delete(&storage_key).await;return Err(TransferError::internal("Artifact digest mismatch"))}
-        (sha,size,counts)
+        let (sha, size) = store.put(&storage_key, &artifact.bytes).await?;
+        if sha != artifact.sha256 {
+            store.delete(&storage_key).await;
+            return Err(TransferError::internal("Artifact digest mismatch"));
+        }
+        (sha, size, counts)
     };
     let published = async {
         let done_at = now_micros();
@@ -1150,40 +1211,107 @@ async fn run_export(
 
 /// Bound decoded binary export request before invoking the file codec.
 async fn collect_binary_features(
-    scope:&mut TransferScope<'_>,source:&ovg_storage::transfers::ExportSource,
-    content:&str,schema:&str,transform:Option<&Transform>,
-)->Result<(Vec<Value>,Map<String,Value>),TransferError>{
-    let stored=source.stored_crs.unwrap_or_default();
-    let family=source.geometry_family.as_str();
-    let steps=transform.map_or(&[][..],|t|t.steps.as_slice());
-    let mut features=Vec::new();
-    let mut bytes=0usize;
-    let mut nulls=vec![0_i64;source.fields.len()];
-    let mut after=None;
-    if source.feature_count>MAX_TRANSFER_FEATURES as i64{return Err(TransferError::coded(413,"FEATURE_LIMIT_EXCEEDED","Binary export exceeds feature limit."))}
+    scope: &mut TransferScope<'_>,
+    source: &ovg_storage::transfers::ExportSource,
+    content: &str,
+    schema: &str,
+    transform: Option<&Transform>,
+) -> Result<(Vec<Value>, Map<String, Value>), TransferError> {
+    let stored = source.stored_crs.unwrap_or_default();
+    let family = source.geometry_family.as_str();
+    let steps = transform.map_or(&[][..], |t| t.steps.as_slice());
+    let mut features = Vec::new();
+    let mut bytes = 0usize;
+    let mut nulls = vec![0_i64; source.fields.len()];
+    let mut after = None;
+    if source.feature_count > MAX_TRANSFER_FEATURES as i64 {
+        return Err(TransferError::coded(
+            413,
+            "FEATURE_LIMIT_EXCEEDED",
+            "Binary export exceeds feature limit.",
+        ));
+    }
     loop {
-        let rows=scope.fetch_export_rows(source.source_id,content,schema,steps,after.as_deref(),PAGE_ROWS).await?;
-        for row in &rows{
-            let native=row.geometry.wkb.first().and_then(|b|b.as_ref()).and_then(|b|codec::decode_wkb(b))
-                .filter(|g|row.present&&row.geometry.valid&&row.native_srid==Some(stored)&&is_ready(g,Some(family),stored,false))
-                .ok_or_else(||TransferError::validation("INVALID_GEOMETRY","Binary export encountered invalid geometry."))?;
-            let geom=match transform{None=>native,Some(t)=>t.apply(&native,family,&row.geometry.wkb,&row.geometry.step_valid)?};
-            let mut attrs=Map::new();
-            for (count,f) in nulls.iter_mut().zip(&source.fields){
-                let v=row.attributes.get(&f.field_id).cloned().unwrap_or(Value::Null);
-                if v.is_null(){*count+=1;}
-                attrs.insert(f.field_id.clone(),v);
+        let rows = scope
+            .fetch_export_rows(
+                source.source_id,
+                content,
+                schema,
+                steps,
+                after.as_deref(),
+                PAGE_ROWS,
+            )
+            .await?;
+        for row in &rows {
+            let native = row
+                .geometry
+                .wkb
+                .first()
+                .and_then(|b| b.as_ref())
+                .and_then(|b| codec::decode_wkb(b))
+                .filter(|g| {
+                    row.present
+                        && row.geometry.valid
+                        && row.native_srid == Some(stored)
+                        && is_ready(g, Some(family), stored, false)
+                })
+                .ok_or_else(|| {
+                    TransferError::validation(
+                        "INVALID_GEOMETRY",
+                        "Binary export encountered invalid geometry.",
+                    )
+                })?;
+            let geom = match transform {
+                None => native,
+                Some(t) => t.apply(&native, family, &row.geometry.wkb, &row.geometry.step_valid)?,
+            };
+            let mut attrs = Map::new();
+            for (count, f) in nulls.iter_mut().zip(&source.fields) {
+                let v = row
+                    .attributes
+                    .get(&f.field_id)
+                    .cloned()
+                    .unwrap_or(Value::Null);
+                if v.is_null() {
+                    *count += 1;
+                }
+                attrs.insert(f.field_id.clone(), v);
             }
-            let value=json!({"feature_id":row.feature_id,"attributes":attrs,"geometry":{"type":family,"coordinates":geom.coordinates_value()}});
-            bytes=bytes.saturating_add(serde_json::to_vec(&value).map_err(|_|TransferError::internal("Serialize export row"))?.len()+1);
-            if bytes>32*1024*1024||features.len()>=MAX_TRANSFER_FEATURES{return Err(TransferError::coded(413,"EXPORT_BUDGET_EXCEEDED","Binary export decoded data exceeds bounded worker budget."))}
+            let value = json!({"feature_id":row.feature_id,"attributes":attrs,"geometry":{"type":family,"coordinates":geom.coordinates_value()}});
+            bytes = bytes.saturating_add(
+                serde_json::to_vec(&value)
+                    .map_err(|_| TransferError::internal("Serialize export row"))?
+                    .len()
+                    + 1,
+            );
+            if bytes > 32 * 1024 * 1024 || features.len() >= MAX_TRANSFER_FEATURES {
+                return Err(TransferError::coded(
+                    413,
+                    "EXPORT_BUDGET_EXCEEDED",
+                    "Binary export decoded data exceeds bounded worker budget.",
+                ));
+            }
             features.push(value);
         }
-        if rows.len()<PAGE_ROWS as usize{break}
-        after=rows.last().map(|r|r.feature_id.clone());
+        if rows.len() < PAGE_ROWS as usize {
+            break;
+        }
+        after = rows.last().map(|r| r.feature_id.clone());
     }
-    if features.len() as i64!=source.feature_count{return Err(TransferError::internal("Pinned feature count changed during export"))}
-    Ok((features,source.fields.iter().zip(nulls).map(|(f,n)|(f.field_id.clone(),Value::from(n))).collect()))
+    if features.len() as i64 != source.feature_count {
+        return Err(TransferError::internal(
+            "Pinned feature count changed during export",
+        ));
+    }
+    Ok((
+        features,
+        source
+            .fields
+            .iter()
+            .zip(nulls)
+            .map(|(f, n)| (f.field_id.clone(), Value::from(n)))
+            .collect(),
+    ))
 }
 
 /// Write the RFC 7946 document page by page; returns null counts per source field.
@@ -1410,7 +1538,8 @@ async fn retry_transfer_job(
     let opts = &job.options;
     let text = |key: &str| opts.get(key).and_then(Value::as_str);
     let inspection = inspect_payload(
-        &payload, &asset.detected_format,
+        &payload,
+        &asset.detected_format,
         &inspect_options(
             &asset,
             text("selected_member"),
@@ -1418,7 +1547,8 @@ async fn retry_transfer_job(
             opts.get("target_crs").and_then(Value::as_i64),
             text("declared_encoding"),
         ),
-    ).await?;
+    )
+    .await?;
     let source_name = text("source_name").unwrap_or_default().to_string();
     let layer_name = text("layer_name").unwrap_or_default().to_string();
     let job = execute_import(
