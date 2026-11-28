@@ -137,7 +137,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
         for(final item in _layers)CheckboxListTile(title:Text(item['name'].toString()),value:selected.contains(item['id'].toString()),onChanged:(v)=>update((){final id=item['id'].toString();if(v==true&&selected.length<8)selected.add(id);else if(v==false&&selected.length>1)selected.remove(id);}))
       ])),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mở'))])));
     if(ok!=true||!mounted)return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedOnDemandMap(project:p,revision:r,layers:selected.toList())));
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedOnDemandMap(project:p,revision:r,layers:selected.toList(),catalogLayers:List.unmodifiable(_layers),uuid:_uuid)));
     if(mounted)await _refresh();
   }
   Future<void> _openMvt()async{
