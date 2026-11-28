@@ -30,7 +30,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [x] T020 [P0] Unify cache classification and scoped keys — paths: `SpatialCache.ts; SpatialCacheStorage.ts; protected-query.ts`. Acceptance: Two-tenant, revocation and logout tests PASS.
 - [x] T021 [P0] Integrate revision invalidation and gap recovery — paths: `SpatialIncremental.ts; SpatialSyncCore.ts; crates/ovg-sync`. Acceptance: Mutation visible without full layer reload.
 - [x] T022 [P0] Version assets, safe SW migration, public-only edge policy — paths: `apps/web-next/src/main.tsx; offline shell service worker; infra/prod/nginx.conf`. Acceptance: No protected cache entry; offline draft preservation.
-- [ ] T023 [P1] Add bounded cache/singleflight only for profiled paths — paths: `apps/api-rust/src/state.rs; map_render.rs; crates/ovg-storage`. Acceptance: Memory cap, stampede, auth-before-hit tests. Route-level project-grant revocation test is evidenced in implementation-22; cache capacity unit tests still require execution.
+- [x] T023 [P1] Add bounded cache/singleflight only for profiled paths — paths: `apps/api-rust/src/state.rs; map_render.rs; crates/ovg-storage`. Acceptance: Memory cap, stampede, auth-before-hit tests; verified on candidate `d4bb428` in evidence/implementation-22.md.
 - [x] T024 [P1] Cache hit/miss, bytes, invalidation and startup metrics — paths: `apps/api-rust/src/metrics.rs; apps/web-next/src/SpatialPerformance.ts`. Acceptance: Scoped aggregate telemetry without sensitive data.
 - [x] T025 [P1] Verify cache headers/ETag/304, provider restrictions and versioning — paths: `infra/prod; CDN configuration inventory`. Acceptance: Public hash immutable; private no-store as classified.
 
