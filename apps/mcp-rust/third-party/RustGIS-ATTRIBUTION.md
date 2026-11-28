@@ -13,3 +13,5 @@ Wave 4: assistant/agent.rs subagent delegation, separate conversation and shared
 Wave 5: visual map observation and native image-block design adapted from RustGIS assistant/tools.rs and provider.rs at the pinned revision; OpenVietGIS uses its own bounded canvas capture and explicit consent.
 
 Wave 6: completed-group compaction, UTF-8 trimming and overflow classification concepts adapted from assistant/compact.rs at the pinned upstream. OpenVietGIS uses a deterministic receipt projection and stable provider-native call keys.
+
+Wave 7: ACP v1 initialize/session/prompt/permission state-machine design adapted from RustGIS assistant/acp.rs at the pinned revision. Dedicated remote advisory runner is OpenVietGIS-specific.
