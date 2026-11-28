@@ -42,7 +42,7 @@ fn row(i:u64)->BulkRow{
   let (schema,_)=include_str!("../src/schema.sql").split_once("-- V3 additive assets and bulk import").unwrap();
   db.execute_batch(schema).unwrap();db.pragma_update(None,"application_id",0x4f564750i64).unwrap();db.pragma_update(None,"user_version",2).unwrap();}
  let s=Store::reopen(&p).unwrap();assert_eq!(s.revision().unwrap(),0);assert!(s.assets().unwrap().is_empty());assert!(s.integrity().unwrap());drop(s);
- let db=rusqlite::Connection::open(&p).unwrap();let v:i64=db.pragma_query_value(None,"user_version",|r|r.get(0)).unwrap();assert_eq!(v,5);
+ let db=rusqlite::Connection::open(&p).unwrap();let v:i64=db.pragma_query_value(None,"user_version",|r|r.get(0)).unwrap();assert_eq!(v,6);
 }
 #[test]fn detects_tampered_resource_chunk(){
  let d=tempfile::tempdir().unwrap();let p=d.path().join("p.sqlite");let src=d.path().join("src");std::fs::write(&src,b"original").unwrap();
