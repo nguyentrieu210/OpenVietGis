@@ -63,6 +63,10 @@ try{
  await page.keyboard.press("Control+k");
  await input.fill("POINT");await input.press("Enter");
  const pointTool=page.getByRole("button",{name:/POINT/}).first();await pointTool.waitFor();
+ // Dismiss the command palette so the next Space key targets the map, then focus its canvas.
+ await page.keyboard.press("Escape");
+ await canvas.focus();
+ assert.equal(await canvas.evaluate(node=>node===document.activeElement),true,"map canvas should receive Space-pan input");
  await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==null);
  assert.equal(await pointTool.getAttribute("aria-pressed"),"true","Point digitizing tool should be active before Space");
  const panTool=page.getByRole("button",{name:/Di chuyển bản đồ/}).first();
