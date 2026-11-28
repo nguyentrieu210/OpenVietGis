@@ -45,7 +45,6 @@ RENDERER_OWNERS = {
     "packages/spatial-workspace/tests/browser/worker.ts",
 }
 RENDERER_MANIFESTS = {
-    "apps/web/package.json",
     "apps/web-next/package.json",
     "apps/web-next/tsconfig.json",
     "packages/spatial-workspace/package.json",

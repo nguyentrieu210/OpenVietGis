@@ -6,7 +6,6 @@ COPY tools/check_node_runtime.mjs ./tools/check_node_runtime.mjs
 # Dependency layer changes only when a workspace manifest or lockfile changes.
 COPY packages/client-sdk/package.json ./packages/client-sdk/package.json
 COPY packages/spatial-workspace/package.json ./packages/spatial-workspace/package.json
-COPY apps/web/package.json ./apps/web/package.json
 COPY apps/web-next/package.json ./apps/web-next/package.json
 COPY modules/house_numbering/frontend/package.json ./modules/house_numbering/frontend/package.json
 RUN pnpm validate:runtime && pnpm install --frozen-lockfile

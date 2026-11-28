@@ -167,7 +167,7 @@ def generate(commit: str, out: Path) -> dict[str, object]:
         )
         scan_ui = (
             path.endswith((".tsx", ".jsx"))
-            and path.startswith(("apps/web/", "apps/web-next/", "modules/"))
+            and path.startswith(("apps/web-next/", "modules/"))
             and not is_test(path)
         )
         if not (scan_py or scan_ui):

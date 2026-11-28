@@ -10,7 +10,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [x] T006 [P0] Read-only runtime/image/worktree/cache inventory and rollback map — paths: `infra/prod; infra/rust-platform; VPS /opt`. Acceptance: Active ownership and retention recorded.
 
 ## W2 cleanup
-- [ ] T007 [P0] Finish 062 parity; retire old SPA only after offline/route coverage — paths: `apps/web; apps/web-next; pnpm-workspace.yaml`. Acceptance: Canonical build independent of old app; route matrix PASS.
+- [x] T007 [P0] Finish 062 parity; retire old SPA only after offline/route coverage — paths: `apps/web; apps/web-next; pnpm-workspace.yaml`. Acceptance: Canonical build independent of old app; route matrix PASS.
 - [ ] T008 [P0] Complete 064 route/migration/ops parity and ADR decision before retirement — paths: `apps/api; apps/api-rust; docs/adr/ADR-015-rust-platform.md`. Acceptance: All contracts and independent oracle evidence retained.
 - [x] T009 [P0] Converge MCP implementations after protocol and security parity — paths: `apps/mcp; apps/mcp-rust; crates/ovg-mcp-policy`. Acceptance: Tool schema/OAuth/client compatibility PASS.
 - [ ] T010 [P1] Repair stale commands, lockfiles, workspace members after gates — paths: `package.json; Cargo.toml; pnpm-lock.yaml; pnpm-workspace.yaml`. Acceptance: Clean checkout bootstrap/build/test reproducible.
