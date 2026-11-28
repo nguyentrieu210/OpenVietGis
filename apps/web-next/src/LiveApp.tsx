@@ -3,7 +3,7 @@ import {TerrainEngineering} from "./TerrainEngineering";
 import React,{useEffect,useLayoutEffect,useRef,useState,useMemo,useCallback,type FormEvent,type ReactNode} from "react";
 import * as ml from "./map-surface";
 import type {FeatureCollection,Geometry,Position} from "geojson";
-import {renameSpatialLayer,ApiError,projectApiPath,getCurrentUser,listIdentityProviders,loadCsrfToken,logout,listMyOrganizations,listProjects,createOrganization,createProject,updateProject,updateOrganization,listOrganizationMembers,listSpatialLayers,readSpatialFeatures,listSpatialSources,createSpatialLayer,retireSpatialLayer,listProjectActivations,registerOfficialExtension,listExtensionManifests,activateProjectExtension,commitChangeset,getEffectivePermissions,uploadImportAsset,inspectImportAsset,confirmImport,type ImportInspectionResponse,type CurrentUser,type MyOrganization,type Project,type SpatialLayer,type SpatialFeature,type SpatialFeatureDetail,type SpatialSource,type IdentityProviderSummary} from "@openvietgis/client-sdk";
+import {replayModuleChanges,consumeModuleChanges,notifyModuleChange,renameSpatialLayer,ApiError,projectApiPath,getCurrentUser,listIdentityProviders,loadCsrfToken,logout,listMyOrganizations,listProjects,createOrganization,createProject,updateProject,updateOrganization,listOrganizationMembers,listSpatialLayers,readSpatialFeatures,listSpatialSources,createSpatialLayer,retireSpatialLayer,listProjectActivations,registerOfficialExtension,listExtensionManifests,activateProjectExtension,commitChangeset,getEffectivePermissions,uploadImportAsset,inspectImportAsset,confirmImport,type ImportInspectionResponse,type CurrentUser,type MyOrganization,type Project,type SpatialLayer,type SpatialFeature,type SpatialFeatureDetail,type SpatialSource,type IdentityProviderSummary} from "@openvietgis/client-sdk";
 import "./live.css";
 import {CoreCommandBar,CoreRibbon} from "./CoreCommandBar";
 import {SpatialWorkspace} from "./SpatialWorkspace";
@@ -136,6 +136,32 @@ function ProjectStudio({org,project,expire,accountId,openAccess,openIntegrations
  const [permissionModule,setPermissionModule]=useState<Manifest|null>(null);
  const refreshModules=async()=>{const generation=++moduleGeneration.current;try{const [a,p,access]=await Promise.all([listProjectActivations(client,org,pid),getEffectivePermissions(client,org,{project_id:pid}),client.request<{restricted:boolean}>("/organizations/"+org+"/projects/"+pid+"/access/mine").catch(()=>({restricted:true}))]);if(generation!==moduleGeneration.current)return;setScopedProject(access.restricted);setActivations(a.items);setPermissions(p.permissions);if(access.restricted||!p.permissions.includes("project.read")){setSavedContributions([]);setPartnerTools([])}else{const saved=await listPartnerContributions(client,org,pid).catch(()=>({items:[]}));if(generation!==moduleGeneration.current)return;setSavedContributions(saved.items.filter(c=>a.items.some(x=>x.manifest_id===c.manifest_id&&x.status==="active")))}setChoice(old=>old===undefined?a.items.find(x=>installed.some(m=>compatibleActivation(m,x)))?.extension_key??"":old&&a.items.some(x=>installed.some(m=>m.extension_key===old&&compatibleActivation(m,x)))?old:"");}catch(e){if(generation===moduleGeneration.current){setSavedContributions([]);setPartnerTools([]);setScopedProject(true);setPermissions([]);setActivations([]);setChoice("")}throw e}};
  useEffect(()=>{let live=true;refreshModules().catch(e=>{if(live){setChoice("");setError(msg(e));if(e instanceof ApiError&&e.status===401)expire()}}).finally(()=>{if(live)setLoading(false)});const timer=window.setInterval(()=>{if(live)void refreshModules().catch(()=>{})},30000);const focus=()=>{if(live)void refreshModules().catch(()=>{})};window.addEventListener("focus",focus);return()=>{live=false;clearInterval(timer);window.removeEventListener("focus",focus)}},[org,pid]);
+ // One bounded durable replay loop per authorized project. Existing 30s refresh
+ // remains a fallback for older servers, role changes and network failures.
+ const refreshModulesRef=useRef(refreshModules);refreshModulesRef.current=refreshModules;
+ useEffect(()=>{
+  if(loading||scopedProject||!permissions.includes("project.read"))return;
+  const abort=new AbortController();let cursor:string|undefined;let timer:number|undefined;let running=false;
+  const refresh=async()=>{if(!abort.signal.aborted)await refreshModulesRef.current()};
+  const snapshot=async()=>{await refresh();if(!abort.signal.aborted)for(const module of installed)notifyModuleChange(client,{organizationId:org,projectId:pid,extensionKey:module.extension_key,kind:"permissions"})};
+  const poll=async()=>{
+   if(running||abort.signal.aborted)return;running=true;let delay=5000;
+   try{
+    for(let pageNo=0;pageNo<5&&!abort.signal.aborted;pageNo++){
+     const page=await replayModuleChanges(client,org,pid,cursor,abort.signal);
+     if(abort.signal.aborted)return;
+     cursor=await consumeModuleChanges(client,org,pid,page,snapshot,refresh);
+     if(!page.has_more)break;
+     if(pageNo===4)delay=500;
+    }
+   }catch(e){if(!abort.signal.aborted){delay=15000;if(e instanceof ApiError&&(e.status===401||e.status===403))await refresh().catch(()=>{});}}
+   finally{running=false;if(!abort.signal.aborted)timer=window.setTimeout(()=>void poll(),delay)}
+  };
+  void poll();
+  const online=()=>{if(timer!==undefined)clearTimeout(timer);void poll()};
+  window.addEventListener("online",online);
+  return()=>{abort.abort();if(timer!==undefined)clearTimeout(timer);window.removeEventListener("online",online)};
+ },[org,pid,accountId,loading,scopedProject,permissions.includes("project.read")]);
  const activationKeys=installed.flatMap(m=>{const a=activations.find(a=>compatibleActivation(m,a));return a?[{id:m.extension_key,key:m.extension_key+":"+m.version+":"+a.id+":"+String(a.revision??0)}]:[]}).sort((a,b)=>a.id.localeCompare(b.id));
  const activationIdentity=activationKeys.map(a=>a.key).join("|");
  useEffect(()=>{let live=true;const valid=new Set(activationKeys.map(a=>a.key));setLoadedPlugins(old=>Object.fromEntries(Object.entries(old).filter(([k])=>valid.has(k))));

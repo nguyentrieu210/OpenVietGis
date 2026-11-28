@@ -18,3 +18,23 @@ describe("module invalidation notices",()=>{
  });
  it("isolates listener exceptions",()=>{const c=mock(),fn=vi.fn();const error=vi.spyOn(console,"error").mockImplementation(()=>{});try{subscribeModuleChanges(c,"o","p","mod",()=>{throw Error("fixture")});subscribeModuleChanges(c,"o","p","mod",fn);expect(()=>notifyModuleChange(c,notice)).not.toThrow();expect(fn).toHaveBeenCalledOnce();}finally{error.mockRestore()}});
 });
+
+import {consumeModuleChanges,replayModuleChanges} from "../src/module-events";
+describe("durable event pages",()=>{
+ it("coalesces hints and refreshes activation before notifying",async()=>{
+  const c=mock(),order:string[]=[];subscribeModuleChanges(c,"o","p","mod",e=>order.push(e.kind));
+  const page={mode:"delta" as const,cursor:"cursor-3",has_more:false,items:[
+   {sequence:"1",extension_key:"mod",kind:"permissions" as const},{sequence:"2",extension_key:"mod",kind:"permissions" as const},{sequence:"3",extension_key:"mod",kind:"activation" as const}]};
+  expect(await consumeModuleChanges(c,"o","p",page,async()=>{},async()=>{order.push("refresh")})).toBe("cursor-3");
+  expect(order).toEqual(["refresh","permissions","activation"]);
+ });
+ it("requires snapshot before advancing and retries on failure",async()=>{
+  const c=mock();const page={mode:"snapshot_required" as const,cursor:"new-epoch",items:[],has_more:false};
+  await expect(consumeModuleChanges(c,"o","p",page,async()=>{throw Error("offline")},async()=>{})).rejects.toThrow("offline");
+  expect(await consumeModuleChanges(c,"o","p",page,async()=>{},async()=>{})).toBe("new-epoch");
+ });
+ it("uses scoped replay URL and opaque cursor",async()=>{
+  let url="";const c=new ApiClient({baseUrl:"https://example.test/api/v1",fetchImpl:(async(input)=>{url=String(input);return new Response(JSON.stringify({mode:"delta",cursor:"x",items:[],has_more:false}),{status:200})}) as typeof fetch});
+  await replayModuleChanges(c,"o","p","epoch:99");expect(url).toContain("/organizations/o/projects/p/extensions/change-events?limit=100&cursor=epoch%3A99");
+ });
+});

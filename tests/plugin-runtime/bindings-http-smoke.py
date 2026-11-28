@@ -21,6 +21,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--candidate',type=Path,required=True)
     parser.add_argument('--pure-commands',action='store_true',help='Also test Wave 04 runtime command gateway')
+    parser.add_argument('--module-events',action='store_true',help='Also test Wave 06 durable module change stream')
     args=parser.parse_args();binary=args.candidate.resolve();assert binary.is_file()
     with tempfile.TemporaryDirectory(prefix='ovg-067-binding-http-') as d:
       work=Path(d)
@@ -34,6 +35,13 @@ def main():
         h=parity.session_headers(fixture['session_a_token'],**{'x-openvietgis-csrf':fixture['csrf_a_token']})
         outsider=parity.session_headers(fixture['session_b_token'],**{'x-openvietgis-csrf':fixture['csrf_b_token']})
         with parity.rust_client(binary,runtime,work) as api:
+          event_path=project+'/extensions/change-events'
+          if args.module_events:
+            snapshot=expect(api.get(event_path,headers=h),200)
+            assert snapshot['mode']=='snapshot_required' and not snapshot['items']
+            cursor=snapshot['cursor']
+            response=api.get(event_path,headers=outsider);assert response.status_code in (403,404)
+            expect(api.get(event_path,params={'cursor':'bad'},headers=h),400)
           manifest=expect(api.post(org+'/extensions/official/house_numbering/register',headers=h),201)
           expect(api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
           cmd=ext+'/commands/preview_numbering';payload={'payload':{'street_name':'Đường A','side':'left_odd','start_number':1,'step':2,'count':3}}
@@ -74,5 +82,22 @@ def main():
           p=expect(api.put(bindings,json={'expected_revision':1,'items':[]},headers=h),200);assert p['configured'] and p['revision']==2 and not p['items']
           expect(api.post(ext+'/disable',headers=h),200);expect(api.get(bindings,headers=h),404)
           if args.pure_commands:expect(api.post(cmd,json=payload,headers=h),404)
+          if args.module_events:
+            # First activation creates the stream; epoch mismatch requires a fresh snapshot.
+            page=expect(api.get(event_path,params={'cursor':cursor},headers=h),200)
+            assert page['mode']=='snapshot_required'
+            epoch=page['cursor'].split(':')[0]
+            head=int(page['cursor'].split(':')[1])
+            cursor=epoch+':0';events=[]
+            while True:
+              page=expect(api.get(event_path,params={'cursor':cursor,'limit':2},headers=h),200)
+              assert page['mode']=='delta';events.extend(page['items']);cursor=page['cursor']
+              if not page['has_more']:break
+            assert [e['kind'] for e in events]==['activation','bindings','permissions','permissions','permissions','bindings','activation'],events
+            assert [int(e['sequence']) for e in events]==list(range(1,head+1))
+            assert all(set(e)=={'sequence','extension_key','kind'} for e in events)
+            assert not expect(api.get(event_path,params={'cursor':cursor},headers=h),200)['items']
+            assert expect(api.get(event_path,params={'cursor':epoch+':'+str(head+1)},headers=h),200)['mode']=='snapshot_required'
+            print('PASS real HTTP: durable event replay, scoped access, page cursors and invalidation privacy')
           print('PASS real HTTP: bindings, role/schema validation, revision conflict, rename/retire, cross-tenant access, permission read/deny/restore, Core unchanged, disabled runtime')
 if __name__=='__main__':main()

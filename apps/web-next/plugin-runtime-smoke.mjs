@@ -6,6 +6,8 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
  const org="fixture-org",pid="fixture-project",layer=(i)=>({id:"layer"+i,source_id:"source"+i,name:"Khảo sát số nhà · Phần 0"+i,lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:100,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),schema:{geometry_family:"Point",fields:[{field_id:"ap"},{field_id:"ten_duong"},{field_id:"xu_ly"}]},stored_crs:{code:4326}}});
  const features=part=>Array.from({length:100},(_,i)=>({feature_id:"f"+i,geometry_state:"present",attributes:{name:"Điểm "+i,ap:"Ấp "+part,ten_duong:i<50?"Đường A":"Đường B",hem:i%2===0?"12":"",so_nha:String(1000+i),hien_trang:"Nhà ở",trang_thai:"khop"},geometry:{type:"Point",coordinates:[106.60+(i%10)*.006,10.58+part*.03+Math.floor(i/10)*.006],coordinate_reference:{code:4326}}}));
+ let streamSequence=0,remoteEvents=[],replayCalls=0;
+ const remoteNotice=kind=>remoteEvents.push({sequence:String(++streamSequence),extension_key:"house_numbering",kind});
  let active=false,pluginCalls=0,chunkCalls=0,featureCalls=0,policy=null,binding={revision:0,configured:false,items:[]};
  page.on("request",r=>{if(/\/assets\/studio-[^/]+\.js/.test(r.url()))chunkCalls++});
  await page.route("**/api/v1/**",async route=>{
@@ -20,6 +22,10 @@ try{
   else if(p.endsWith("/extensions/activations")&&method==="POST"){active=true;body={id:"activation",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}}
   else if(p.endsWith("/extensions/manifests"))body={items:[{id:"manifest",extension_key:"house_numbering",version:"2.0.0",api_compatibility:"1.x",enabled:true}]};
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
+  else if(p.endsWith("/extensions/change-events")){
+   replayCalls++;const cursor=new URL(route.request().url()).searchParams.get("cursor");const after=cursor===null?streamSequence:Number(cursor.split(":").at(-1));
+   body={mode:cursor===null?"snapshot_required":"delta",cursor:"fixture:"+streamSequence,items:cursor===null?[]:remoteEvents.filter(e=>Number(e.sequence)>after),has_more:false};
+  }
   else if(p.endsWith("/permissions/self"))body={permissions:policy,revision:0};
   else if(p.endsWith("/layer-bindings")&&method==="PUT"){
    const payload=route.request().postDataJSON();assert.equal(payload.expected_revision,binding.revision);binding={revision:binding.revision+1,configured:true,items:payload.items.map(b=>({...b,current_schema_revision:b.schema_revision,status:"ready"}))};body=binding;
@@ -53,9 +59,9 @@ try{
  // A configured empty/nonmatching source set must not fall back to its legacy layer name.
  await page.getByRole("button",{name:"Địa bàn",exact:true}).click();await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();
  await page.getByRole("button",{name:"Đóng địa bàn"}).click();
- policy=[];await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ policy=[];remoteNotice("permissions");
  await page.getByText("Không có quyền plugin số nhà",{exact:true}).waitFor();assert.ok(await sameMap(),"policy revocation remounted Core");
- policy=null;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
+ policy=null;remoteNotice("permissions");await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  assert.ok(pluginCalls>=4);
  await page.getByRole("button",{name:"Địa bàn",exact:true}).click();
  await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();
@@ -69,7 +75,7 @@ try{
  await page.getByRole("dialog",{name:"Xác nhận"}).getByRole("button",{name:"Gỡ",exact:true}).click();
  await house().getByRole("button",{name:"Cài vào dự án"}).waitFor();await closeMarket();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached",timeout:15000});
- assert.equal(active,false);assert.ok(await sameMap(),"map/canvas remounted on removal");
+ assert.ok(replayCalls>=2);assert.equal(active,false);assert.ok(await sameMap(),"map/canvas remounted on removal");
  assert.equal(errors.length,0,errors.join("\n"));
  console.log(`PASS activation, binding save, policy revoke/restore, switch, reopen, disable preserved map/canvas identity; ${featureCalls} feature API requests`);
 }finally{await browser.close()}
