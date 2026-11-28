@@ -967,7 +967,7 @@ impl SourceRecord {
             ("feature_read", true, self.ready, "project.read"),
             ("render", self.render_supported, self.ready, "project.read"),
             ("style", self.render_supported, self.ready, "project.read"),
-            ("export", self.render_supported && !self.extended_native, self.ready, "project.read"),
+            ("export", self.render_supported, self.ready, "project.read"),
             ("query", self.render_supported && !self.extended_native, self.ready, "project.read"),
             ("edit", self.edit_supported, self.ready, "project.edit"),
             (
