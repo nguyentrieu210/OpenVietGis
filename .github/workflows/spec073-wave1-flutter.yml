@@ -64,7 +64,7 @@ jobs:
           root=os.environ["GITHUB_WORKSPACE"]
           deps='\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage"])
           text=p.read_text().replace("[dependencies]", "[dependencies]\n"+deps+'\nuuid = { version = "1", features = ["v4"] }\nserde_json = "1"',1)
-          text=text.replace("[dependencies]", '[dependencies]\novg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "eaf651f3fc4d67ac3c6c601766084329fba8946d" }',1)
+          text=text.replace("[dependencies]", '[dependencies]\novg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "5ded07daaf9caabbee5b6d9faf8a820235886bf1" }',1)
           text+='\n[patch."https://github.com/nguyentrieu210/OpenVietGis"]\n'+'\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage","ovg-spatial"])+'\n'
           p.write_text(text)
           PY
