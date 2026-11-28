@@ -9,7 +9,7 @@ bool token(Object? s)=>s is String&&RegExp(r'^[A-Za-z0-9_.:-]{1,128}$').hasMatch
 void exact(Json m,Set<String> keys){if(m.length!=keys.length||!m.keys.every(keys.contains))deny('UNKNOWN_FIELDS');}
 Object? _sorted(Object? v,int depth){
  if(depth>24)deny('DEPTH');
- if(v is Map){if(v.length>500||v.keys.any((k)=>!token(k)))deny('KEYS');return SplayTreeMap<String,Object?>.fromEntries(v.entries.map((e)=>MapEntry(e.key as String,_sorted(e.value,depth+1))));}
+ if(v is Map){if(v.length>500||v.keys.any((k)=>!token(k)))deny('KEYS');return SplayTreeMap<String,Object?>.from(Map<String,Object?>.fromEntries(v.entries.map((e)=>MapEntry(e.key as String,_sorted(e.value,depth+1)))));}
  if(v is List){if(v.length>500)deny('ARRAY_LIMIT');return v.map((x)=>_sorted(x,depth+1)).toList();}
  if(v is int){if(v.abs()>9007199254740991)deny('INTEGER_LIMIT');return v;}
  if(v is String){if(utf8.encode(v).length>65536||v.runes.any((r)=>r<32||(r>=127&&r<=159)))deny('STRING_LIMIT');return v;}
