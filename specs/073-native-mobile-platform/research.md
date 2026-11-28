@@ -24,3 +24,6 @@ D10 AGPL workspace baseline; review plugin boundary, combined works, source offe
 - R08 Release license/legal review and independent security review; every candidate dependency gets provenance and justification.
 
 No research spike marked complete in this specification.
+
+## Revision 2 review follow-up
+See [review-resolution.md](review-resolution.md). W0 freezes actual dependencies, auth route mapping, v1/v2 signing compatibility, encrypted internal storage, Android 4K/16K ABI, resource budgets and independent fixtures. Existing web/server behavior remains authoritative. I1 iOS and optional engine research are separate from Android acceptance. No spike executed by this document.
