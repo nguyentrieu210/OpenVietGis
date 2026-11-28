@@ -302,6 +302,19 @@ pub async fn native_cad_versions(window:WebviewWindow,u:State<'_,Unified>,handle
 
 // Explicit WGS84 read-only projection. This never rewrites the CAD document;
 // unsupported entities, Z/OCS or duplicate handles reject the entire snapshot.
+fn cad_root(store:&ovg_project_store::Store,asset:Uuid)->R<Uuid>{
+ let ancestry=store.cad_versions().map_err(|_|"STORE_QUERY_FAILED")?;
+ let mut root=asset;let mut seen=std::collections::HashSet::new();
+ while let Some(parent)=ancestry.iter().find(|v|v.asset==root){
+  if !seen.insert(root)||seen.len()>32{return Err("INVALID_CAD_ANCESTRY")}root=parent.parent;
+ }
+ Ok(root)
+}
+fn cad_feature_id(root:Uuid,handle:&str)->Uuid{
+ let mut hash=Sha256::new();hash.update(b"OVG-CAD-ENTITY-1");hash.update(root.as_bytes());hash.update(handle.as_bytes());
+ let digest=hash.finalize();let mut raw=[0;16];raw.copy_from_slice(&digest[..16]);raw[6]=(raw[6]&15)|0x80;raw[8]=(raw[8]&63)|0x80;
+ Uuid::from_bytes(raw)
+}
 fn project_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64,operation:Uuid,layer:Uuid,name:&str)->R<ovg_project_store::bulk_import::BulkReceipt>{
  use ovg_project_store::{Error,Image,bulk_import::BulkRow};
  if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=revision{return Err("REVISION_CONFLICT")}
@@ -312,17 +325,10 @@ fn project_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64,operation
  let cancel=AtomicBool::new(false);
  store.materialize_asset(asset,&path,&cancel).map_err(|_|"CAD_ASSET_READ_FAILED")?;
  let cad=crate::resource_files::Cad::open(&path)?;
- let ancestry=store.cad_versions().map_err(|_|"STORE_QUERY_FAILED")?;
- let mut root=asset;let mut seen=std::collections::HashSet::new();
- while let Some(parent)=ancestry.iter().find(|v|v.asset==root){
-  if !seen.insert(root)||seen.len()>32{return Err("INVALID_CAD_ANCESTRY")}
-  root=parent.parent;
- }
+ let root=cad_root(store,asset)?;
  let rows=cad.features().iter().map(|v|{
   let handle=v["properties"]["handle"].as_str().ok_or(Error::Invalid)?;
-  let mut hash=Sha256::new();hash.update(b"OVG-CAD-ENTITY-1");hash.update(root.as_bytes());hash.update(handle.as_bytes());
-  let digest=hash.finalize();let mut raw=[0;16];raw.copy_from_slice(&digest[..16]);raw[6]=(raw[6]&15)|0x80;raw[8]=(raw[8]&63)|0x80;
-  let id=Uuid::from_bytes(raw);
+  let id=cad_feature_id(root,handle);
   let g=ovg_spatial::parse_geojson(&v["geometry"],&ovg_spatial::ValidationLimits::default()).map_err(|_|Error::Invalid)?;
   let wkb=ovg_spatial::encode_wkb(&g,None).map_err(|_|Error::Invalid)?;
   Ok(BulkRow{id,image:Image{wkb,attributes:serde_json::json!({"cad_root":root,"cad_asset":asset,"cad_sha256":a.sha256,"cad_handle":handle,"cad_layer":v["properties"]["layer"],"cad_entity":v["properties"]["entity"]})}})
@@ -350,5 +356,121 @@ mod projection_tests{
   assert_eq!(r.count,1);let page=s.query(l,[105.,10.,107.,12.],0,10,2).unwrap();
   assert_eq!(page.rows[0].image.attributes["cad_handle"],"AB");assert_eq!(page.rows[0].image.attributes["cad_asset"],a.to_string());
   assert_eq!(s.assets().unwrap()[0].sha256,h);assert!(s.integrity().unwrap());
+ }
+}
+
+// Narrow embedded editor profile: ASCII DXF POINT/LINE, WGS84 XY, no
+// entity creation/deletion or CRS transformation. Exact non-coordinate lines
+// remain untouched, including handles, layers, styles and unsupported sections.
+fn load_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64)->R<(tempfile::TempDir,PathBuf,ovg_project_store::asset_store::AssetMeta,crate::resource_files::Cad)>{
+ if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=revision{return Err("REVISION_CONFLICT")}
+ let a=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
+ if a.kind!="cad-native-dxf"||a.bytes>4*1024*1024{return Err("DXF_PROFILE_REQUIRED")}
+ let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;let p=dir.path().join("source.dxf");
+ store.materialize_asset(asset,&p,&AtomicBool::new(false)).map_err(|_|"CAD_ASSET_READ_FAILED")?;
+ let cad=crate::resource_files::Cad::open(&p)?;Ok((dir,p,a,cad))
+}
+fn replacement(g:&Value)->R<Vec<(u16,f64)>>{
+ let xy=|v:&Value|->R<(f64,f64)>{
+  let a=v.as_array().filter(|a|a.len()==2).ok_or("XY_REQUIRED")?;
+  let x=a[0].as_f64().filter(|v|v.is_finite()&&v.abs()<=180.).ok_or("INVALID_X")?;
+  let y=a[1].as_f64().filter(|v|v.is_finite()&&v.abs()<=90.).ok_or("INVALID_Y")?;Ok((x,y))
+ };
+ let a=&g["coordinates"];
+ match g["type"].as_str(){
+  Some("Point")=>{let(x,y)=xy(a)?;Ok(vec![(10,x),(20,y)])},
+  Some("LineString")=>{let a=a.as_array().filter(|a|a.len()==2).ok_or("TWO_ENDPOINTS_REQUIRED")?;let(x,y)=xy(&a[0])?;let(u,v)=xy(&a[1])?;if (x,y)==(u,v){return Err("DEGENERATE_LINE")}Ok(vec![(10,x),(20,y),(11,u),(21,v)])},
+  _=>Err("UNSUPPORTED_DXF_ENTITY")
+ }
+}
+fn patch_dxf(src:&Path,out:&Path,old:&crate::resource_files::Cad,handle:&str,g:&Value)->R<()>{
+ let target=old.features().iter().find(|f|f["properties"]["handle"]==handle).ok_or("STALE_ENTITY")?;
+ if target["geometry"]["type"]!=g["type"]{return Err("CAD_ENTITY_TYPE_MISMATCH")}
+ let values=replacement(g)?;
+ let bytes=fs::read(src).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ if bytes.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}
+ let raw=std::str::from_utf8(&bytes).map_err(|_|"UNSUPPORTED_DXF")?;
+ let lines:Vec<&str>=raw.split_inclusive('\n').collect();
+ if lines.len()%2!=0{return Err("INVALID_DXF")}
+ let codes:Vec<u16>=lines.chunks_exact(2).map(|p|p[0].trim().parse::<u16>().map_err(|_|"INVALID_DXF")).collect::<R<_>>()?;
+ let field=|i:usize|lines[i*2+1].trim();
+ let mut found=0;let mut edits=std::collections::HashMap::<usize,String>::new();
+ let mut i=0;let mut entities=false;
+ while i<codes.len(){
+  if codes[i]==0&&field(i)=="SECTION"&&codes.get(i+1)==Some(&2)&&field(i+1)=="ENTITIES"{entities=true;i+=2;continue}
+  if codes[i]==0&&field(i)=="ENDSEC"{entities=false;i+=1;continue}
+  if !entities{i+=1;continue}
+  if codes[i]!=0{return Err("INVALID_DXF")}
+  let start=i+1;i=start;while i<codes.len()&&codes[i]!=0{i+=1;}
+  if !(start..i).any(|j|codes[j]==5&&field(j).eq_ignore_ascii_case(handle)){continue}
+  found+=1;
+  for (code,n) in &values{
+   let hits:Vec<usize>=(start..i).filter(|j|codes[*j]==*code).collect();if hits.len()!=1{return Err("INVALID_DXF")}
+   let at=hits[0]*2+1;let line=lines[at];
+   let end=if line.ends_with("\r\n"){"\r\n"}else if line.ends_with('\n'){"\n"}else{""};
+   edits.insert(at,format!("{n}{end}"));
+  }
+ }
+ if found!=1{return Err("STALE_ENTITY")}
+ let mut b=String::new();for(i,line)in lines.iter().enumerate(){b.push_str(edits.get(&i).map(String::as_str).unwrap_or(line));}
+ if b.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}
+ fs::write(out,b).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let after=crate::resource_files::Cad::open(out)?;
+ if after.features().len()!=old.features().len(){return Err("CAD_FIDELITY_FAILED")}
+ for (a,b) in old.features().iter().zip(after.features()){
+  if a["properties"]!=b["properties"]{return Err("CAD_FIDELITY_FAILED")}
+  if a["properties"]["handle"]==handle{
+   if replacement(&b["geometry"])?!=values{return Err("CAD_FIDELITY_FAILED")}
+  }else if a!=b{return Err("CAD_FIDELITY_FAILED")}
+ }
+ Ok(())
+}
+fn adopt_entity(store:&ovg_project_store::Store,asset:Uuid,revision:u64,expected_sha:&str,handle:&str,g:&Value)->R<ovg_project_store::asset_store::AssetMeta>{
+ let (dir,src,a,cad)=load_dxf(store,asset,revision)?;
+ if a.sha256!=expected_sha{return Err("CAD_PARENT_DIGEST_CHANGED")}
+ let out=dir.path().join("edited.dxf");patch_dxf(&src,&out,&cad,handle,g)?;
+ let sha=digest(&out,MAX)?.1;
+ store.attach_cad_version(Uuid::new_v4(),"cad-native-dxf",&out,revision,&sha,Some((asset,&a.sha256)),&AtomicBool::new(false)).map_err(|e|match e{ovg_project_store::Error::Conflict=>"REVISION_OR_PARENT_CONFLICT",ovg_project_store::Error::Limit=>"RESOURCE_LIMIT",_=>"CAD_ADOPTION_FAILED"})
+}
+#[tauri::command]
+pub async fn native_cad_canvas(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,asset:Uuid,expected:String,assert_wgs84:bool)->Reply<Value>{
+ if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  let(_dir,_path,a,cad)=load_dxf(store,asset,unified::number(&expected)?)?;
+  if cad.features().len()>512{return Err("CANVAS_ENTITY_LIMIT")}
+  let result=serde_json::json!({"sha256":a.sha256,"features":cad.features()});
+  if serde_json::to_vec(&result).map_err(|_|"INVALID_DXF")?.len()>1024*1024{return Err("RESOURCE_LIMIT")}Ok(result)
+ })).await
+}
+#[tauri::command]
+pub async fn native_cad_canvas_commit(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,asset:Uuid,expected:String,sha256:String,entity:String,geometry:Value,assert_wgs84:bool)->Reply<ovg_project_store::asset_store::AssetMeta>{
+ if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|adopt_entity(store,asset,unified::number(&expected)?,&sha256,&entity,&geometry))).await
+}
+#[tauri::command]
+pub async fn native_cad_gis_to_dxf(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,feature:Uuid,expected:String,assert_wgs84:bool)->Reply<ovg_project_store::asset_store::AssetMeta>{
+ if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  let rev=unified::number(&expected)?;
+  let(_,image)=store.feature(layer,feature,rev).map_err(|_|"STALE_FEATURE")?;
+  let props=&image.attributes;
+  let attr=|k:&str|props[k].as_str().ok_or("CAD_PROVENANCE_REQUIRED");
+  let asset=Uuid::parse_str(attr("cad_asset")?).map_err(|_|"CAD_PROVENANCE_REQUIRED")?;
+  let root=cad_root(store,asset)?;let entity=attr("cad_handle")?;
+  if attr("cad_root")?!=root.to_string()||cad_feature_id(root,entity)!=feature{return Err("CAD_PROVENANCE_MISMATCH")}
+  let parsed=ovg_spatial::parse_xy_wkb(&image.wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+  let g=ovg_spatial::to_geojson(&parsed.geometry);
+  adopt_entity(store,asset,rev,attr("cad_sha256")?,entity,&g)
+ })).await
+}
+#[cfg(test)]mod canvas_tests{
+ use super::*;
+ #[test]fn coordinate_patch_preserves_non_coordinate_records(){
+  let d=tempfile::tempdir().unwrap();let src=d.path().join("a.dxf");let dst=d.path().join("b.dxf");
+  let original="0\r\nSECTION\r\n2\r\nENTITIES\r\n0\r\nLINE\r\n5\r\nAB\r\n8\r\nSurvey\r\n62\r\n3\r\n10\r\n106\r\n20\r\n11\r\n11\r\n107\r\n21\r\n12\r\n0\r\nENDSEC\r\n0\r\nEOF\r\n";
+  fs::write(&src,original).unwrap();let cad=crate::resource_files::Cad::open(&src).unwrap();
+  let g=serde_json::json!({"type":"LineString","coordinates":[[106.5,11.5],[107.,12.]]});
+  patch_dxf(&src,&dst,&cad,"AB",&g).unwrap();
+  let edited=fs::read_to_string(dst).unwrap();assert_eq!(edited,original.replace("106\r\n","106.5\r\n").replace("20\r\n11\r\n","20\r\n11.5\r\n"));assert_eq!(fs::read_to_string(src).unwrap(),original);
  }
 }
