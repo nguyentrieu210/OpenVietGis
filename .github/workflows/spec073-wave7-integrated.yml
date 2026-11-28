@@ -3,7 +3,23 @@ on:
   workflow_dispatch:
   push:
     branches: ["073-native-mobile-platform"]
-    paths: ["specs/073-native-mobile-platform/evidence/w7-implementation-checkpoint.md"]
+    paths:
+      - "apps/mobile-flutter/**"
+      - "apps/api-rust/**"
+      - "crates/**"
+      - "packages/**"
+      - "modules/**"
+      - "infra/mobile/**"
+      - "tools/mobile/**"
+      - "tools/benchmark/mobile/**"
+      - "tests/mobile/**"
+      - "specs/073-native-mobile-platform/**"
+      - ".github/workflows/spec073-*.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+concurrency:
+  group: spec073-integrated-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
