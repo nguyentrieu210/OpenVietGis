@@ -34,6 +34,7 @@ it("rejects malformed attribute row identity and payload before use",()=>{
  }
  expect(()=>verifyTableQuery(layer,{...result,query_fingerprint:"x".repeat(513)},100)).toThrow();
  expect(()=>tableQueryBody(layer,filter,"name","asc",100,"x".repeat(513))).toThrow();
+});
 describe("local attribute table pagination",()=>{
  it("bounds DOM rows to 100 even for one million records",()=>{
   const rows=Array.from({length:1_000_000},(_,i)=>i);
