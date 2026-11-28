@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "base": "a4ae85a5e3d956de1870dcf65ff3fb21da7f0367",
+  "scopes": [
+    {
+      "name": "web",
+      "commit": "a4ae85a5e3d956de1870dcf65ff3fb21da7f0367",
+      "path": "apps/web-next/src",
+      "tree": "187fc00126c4b17d7aeb1bae5f172365dafc8b81",
+      "blobs": 387,
+      "tsx": 102,
+      "css": 50,
+      "cssGroups": {
+        "foundation": [
+          "design-system.css",
+          "ui-density.css",
+          "ui-menu.css",
+          "desktop-dialog.css",
+          "studio-shell.css",
+          "workbenches/ui/tokens.css"
+        ],
+        "gis-domain": [
+          "access-rules.css",
+          "advanced-editor.css",
+          "attribute-form-layout.css",
+          "basemap.css",
+          "core-toolkit.css",
+          "feature-info.css",
+          "layer-properties.css",
+          "layout-designer.css",
+          "navigation.css",
+          "processing-modeler.css",
+          "processing-toolbox.css",
+          "professional.css",
+          "qgis-theme.css",
+          "qgis-workspace.css",
+          "raster-workbench.css",
+          "sentinel-month.css",
+          "spatial-workspace.css",
+          "survey.css"
+        ],
+        "product-surface": [
+          "ai-copilot/first-party.css",
+          "brand.css",
+          "developer-portal.css",
+          "external-plugin-hub.css",
+          "header-status.css",
+          "integration-catalog.css",
+          "live-presence.css",
+          "live.css",
+          "marketplace-page.css",
+          "org-chat.css",
+          "plugin-workspace.css",
+          "publisher-portal.css",
+          "team-access.css",
+          "team-collaboration.css",
+          "workbenches/features/offline/offline.css",
+          "workbenches/features/platform/platform.css",
+          "workspace-picker.css"
+        ],
+        "landing": [
+          "landing.css",
+          "qgis-donate-inline.css",
+          "qgis-founders.css",
+          "qgis-home-fidelity.css",
+          "qgis-landing.css",
+          "qgis-motion.css",
+          "qgis-poster-hero.css",
+          "swarm-landing.css"
+        ],
+        "mixed-root": [
+          "style.css"
+        ]
+      }
+    },
+    {
+      "name": "mobile",
+      "commit": "245651a016bb0fa059205516d5dedad8ed43f003",
+      "path": "apps/mobile-flutter",
+      "tree": "c91e9081e19637348da9f57188be0821f3e75f21",
+      "blobs": 17,
+      "tsx": 0,
+      "css": 0
+    },
+    {
+      "name": "desktop",
+      "commit": "f9227652a1ecdf0ded2391e96d718af4ff7d84fc",
+      "path": "apps/desktop",
+      "tree": "33ec3084b942fe7f20bd029efac0f5a9d498f8ac",
+      "blobs": 20,
+      "tsx": 0,
+      "css": 0
+    },
+    {
+      "name": "plugin-sdk",
+      "commit": "697d9c746b9d7cc3943c9ed3bc08e71e8991a552",
+      "path": "packages/plugin-sdk",
+      "tree": "fa83a759d7f758953b512429b1f351eb22320c92",
+      "blobs": 14,
+      "tsx": 0,
+      "css": 0
+    },
+    {
+      "name": "flutter-plugin-sdk",
+      "commit": "697d9c746b9d7cc3943c9ed3bc08e71e8991a552",
+      "path": "packages/flutter-plugin-sdk",
+      "tree": "ec36cc7d5bbd7faf7c1c390222d7617be33dd74f",
+      "blobs": 4,
+      "tsx": 0,
+      "css": 0
+    },
+    {
+      "name": "photo-desktop",
+      "commit": "24adb36c4924d6884cec6400c020d8e2bda33ed4",
+      "path": "apps/desktop",
+      "tree": "c46ebe87d8c64d508cfa2562687aa981851a4795",
+      "blobs": 20,
+      "tsx": 0,
+      "css": 0
+    }
+  ]
+}

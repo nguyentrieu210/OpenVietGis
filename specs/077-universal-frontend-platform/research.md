@@ -1,0 +1,10 @@
+# W0 architecture decisions
+- ADR077-01 ACCEPT: extend SPEC072 rather than duplicate. Existing design-system.css imports Tailwind theme/utilities with ovg prefix and no preflight; ui/primitives.tsx, ui/theme.ts, studio-ui.tsx, desktop-dialog.css and ui-menu.css are compatibility boundary.
+- ADR077-02 ACCEPT: one web React build (Tauri README says sole frontend build source); mobile Flutter routes and Material3 theme are distinct renderer. Generate shared semantic tokens, not cross-compile CSS.
+- ADR077-03 CANDIDATE: shadcn source + Base UI as primary headless adapter, preserve native HTML where appropriate; no multiple competing headless libraries for same primitive. Dockview OSS must pass map lifecycle, accessibility and persistence spike before replacing current docks. TanStack Table/Virtual, Lucide and optional Motion reviewed individually.
+- ADR077-04 ACCEPT: plugin-sdk and flutter-plugin-sdk on SPEC075 are canonical schema/session/renderer boundary; extend versioned contract, not a fresh runtime. Existing plugin-ui-registry.ts validates names and command aliases for first-party commands; this is not third-party sandbox authorization.
+- ADR077-05 ACCEPT: no production CSS deletion in W0; classify by intended owner, not evidence of dead code. Reference VS Code/Theia/Calcite/QGIS architecture; do not copy code before license review.
+- ADR077-06 ACCEPT: AGPL-3.0 repository; third-party dependency versions/licenses/transitives and copied-source notices required before adoption; candidate versions not yet selected.
+- ADR077-07 ACCEPT: maintain one canonical web entry, preserve offline shell, map canvas vendor CSS and print layout; no global resets.
+## References (candidate evaluation, not completed qualification)
+https://ui.shadcn.com/ ; https://base-ui.com/ ; https://dockview.dev/ ; https://tanstack.com/table/ ; https://tanstack.com/virtual/ ; https://lucide.dev/ ; https://www.designtokens.org/ ; https://amzn.github.io/style-dictionary/ ; https://pub.dev/packages/shadcn_flutter ; https://github.com/Esri/calcite-design-system .
