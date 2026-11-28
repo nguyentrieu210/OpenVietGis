@@ -1,0 +1,9 @@
+# T044 acceptance workflow and protocol — partial
+
+This commit adds a manual Node 26 GitHub Actions comparison of pinned baseline 5bfc83826161acd83b98a925e85690cebde53ae1 against an explicitly supplied exact candidate SHA. It builds both canonical web applications, runs the existing frontend/E17 regression and lifecycle soak profiles, retains machine-readable cold/warm/browser/PostGIS samples, and uploads artifacts on success or failure.
+
+The browser harness now requires at least 30 samples and uses that count for cold GIS, shell and mode transitions. The PostGIS fixture script requires at least 30 executions per query and retains p95/p99 with raw timings. PostGIS uses a synthetic SQL fixture in a disposable, network-isolated container; browser data is synthetic and external provider traffic is blocked. No production endpoint or deployment is used.
+
+Local verification on the development host used Node 24.22.2, so it is not the required Node 26 acceptance run. Frozen dependency installs and canonical web builds completed for both checkouts. spatial-workspace tests passed 54/54 on each checkout; web-next passed 55 Vitest plus 24 Node tests on baseline and 108 Vitest plus 41 Node tests on candidate; E17 contract tests passed 5/5 on both. E17 raw microbenchmarks reported 30 cold subprocess samples and 100 warm samples on each exact SHA. Lifecycle soak passed 5,000 switches on each checkout with 5,000 activations and disposals; measured final retained heap was 74,864 bytes on this host.
+
+The local Playwright browser download failed because the development host ran out of disk space, and the PostGIS fixture was not run locally. No GitHub Actions run of the exact merged candidate was performed from this feature branch. The performance targets remain provisional, so T044 remains unchecked and partial. The Node 26 workflow artifacts, final target assessment, and any reviewed exception are still outstanding.

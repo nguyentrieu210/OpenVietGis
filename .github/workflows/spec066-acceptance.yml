@@ -1,0 +1,258 @@
+name: Spec 066 exact baseline acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: "Exact 40-character candidate commit to compare with the pinned baseline"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spec066-acceptance-${{ inputs.candidate_sha }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Baseline and exact candidate (Node 26)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      BASELINE_SHA: 5bfc83826161acd83b98a925e85690cebde53ae1
+      CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      ARTIFACT_DIR: ${{ github.workspace }}/dist/spec066-acceptance
+
+    steps:
+      - name: Check out exact candidate
+        id: checkout_candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: acceptance/candidate
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out pinned baseline
+        id: checkout_baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 5bfc83826161acd83b98a925e85690cebde53ae1
+          path: acceptance/baseline
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prepare raw artifact directory
+        run: mkdir -p "$ARTIFACT_DIR"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "12.21.0"
+          run_install: false
+
+      - name: Set up Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: Verify exact revisions and record runner profile
+        id: profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git -C acceptance/candidate rev-parse HEAD)" == "$CANDIDATE_SHA" ]]
+          [[ "$(git -C acceptance/baseline rev-parse HEAD)" == "$BASELINE_SHA" ]]
+          node --input-type=module <<'NODE' > "$ARTIFACT_DIR/runner-profile.json"
+          import os from "node:os";
+          import {execFileSync} from "node:child_process";
+          const root = process.env.GITHUB_WORKSPACE;
+          const commit = (path) => execFileSync("git", ["-C", path, "show", "-s", "--format=%cI", "HEAD"], {encoding:"utf8"}).trim();
+          const cpus = os.cpus();
+          console.log(JSON.stringify({
+            schema: 1,
+            created_at: new Date().toISOString(),
+            workflow: {run_id: process.env.GITHUB_RUN_ID, run_attempt: Number(process.env.GITHUB_RUN_ATTEMPT)},
+            baseline: {sha: process.env.BASELINE_SHA, committed_at: commit(root + "/acceptance/baseline")},
+            candidate: {sha: process.env.CANDIDATE_SHA, committed_at: commit(root + "/acceptance/candidate")},
+            runtime: {node: process.version, pnpm: execFileSync("pnpm", ["--version"], {encoding:"utf8"}).trim()},
+            runner: {os: process.env.RUNNER_OS, arch: process.env.RUNNER_ARCH, platform: process.platform, release: os.release(), cpu_model: cpus[0]?.model, cpu_count: cpus.length, total_memory_bytes: os.totalmem(), free_memory_at_start_bytes: os.freemem(), viewport: {width:1280,height:850}},
+            policy: {synthetic_data_only: true, production_access: false, provisional_budgets_are_passed: false, task_status: "partial"}
+          }, null, 2));
+          NODE
+          uname -a > "$ARTIFACT_DIR/uname.txt"
+          lscpu > "$ARTIFACT_DIR/lscpu.txt"
+          free -b > "$ARTIFACT_DIR/memory-at-start.txt"
+
+      - name: Install baseline dependencies
+        id: install_baseline
+        continue-on-error: true
+        working-directory: acceptance/baseline
+        run: pnpm install --frozen-lockfile > "$ARTIFACT_DIR/baseline-install.log" 2>&1 || { cat "$ARTIFACT_DIR/baseline-install.log"; exit 1; }
+
+      - name: Install candidate dependencies
+        id: install_candidate
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        run: pnpm install --frozen-lockfile > "$ARTIFACT_DIR/candidate-install.log" 2>&1 || { cat "$ARTIFACT_DIR/candidate-install.log"; exit 1; }
+
+      - name: Build baseline canonical web app
+        id: build_baseline
+        if: ${{ steps.install_baseline.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: acceptance/baseline
+        run: pnpm build:web > "$ARTIFACT_DIR/baseline-build.log" 2>&1 || { cat "$ARTIFACT_DIR/baseline-build.log"; exit 1; }
+
+      - name: Build candidate canonical web app
+        id: build_candidate
+        if: ${{ steps.install_candidate.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        run: pnpm build:web > "$ARTIFACT_DIR/candidate-build.log" 2>&1 || { cat "$ARTIFACT_DIR/candidate-build.log"; exit 1; }
+
+      - name: Run existing baseline frontend and E17 contract regression suites
+        id: regressions_baseline
+        if: ${{ steps.install_baseline.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: acceptance/baseline
+        shell: bash
+        run: |
+          set +e
+          status=0
+          pnpm --filter @openvietgis/spatial-workspace test > "$ARTIFACT_DIR/baseline-spatial-workspace-test.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/baseline-spatial-workspace-test.log"; (( code == 0 )) || status=1
+          pnpm --filter @openvietgis/web-next test > "$ARTIFACT_DIR/baseline-web-next-test.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/baseline-web-next-test.log"; (( code == 0 )) || status=1
+          node --test tests/e17/contract.mjs > "$ARTIFACT_DIR/baseline-e17-contract.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/baseline-e17-contract.log"; (( code == 0 )) || status=1
+          exit "$status"
+
+      - name: Run existing candidate frontend and E17 contract regression suites
+        id: regressions_candidate
+        if: ${{ steps.install_candidate.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        shell: bash
+        run: |
+          set +e
+          status=0
+          pnpm --filter @openvietgis/spatial-workspace test > "$ARTIFACT_DIR/candidate-spatial-workspace-test.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/candidate-spatial-workspace-test.log"; (( code == 0 )) || status=1
+          pnpm --filter @openvietgis/web-next test > "$ARTIFACT_DIR/candidate-web-next-test.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/candidate-web-next-test.log"; (( code == 0 )) || status=1
+          node --test tests/e17/contract.mjs > "$ARTIFACT_DIR/candidate-e17-contract.log" 2>&1
+          code=$?; cat "$ARTIFACT_DIR/candidate-e17-contract.log"; (( code == 0 )) || status=1
+          exit "$status"
+
+      - name: Run baseline E17 raw performance profile
+        id: e17_baseline
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        run: node tools/benchmark/spec066/e17-acceptance.mjs "$GITHUB_WORKSPACE/acceptance/baseline" baseline > "$ARTIFACT_DIR/e17-baseline.json" 2> "$ARTIFACT_DIR/e17-baseline.stderr.log"
+
+      - name: Run candidate E17 raw performance profile
+        id: e17_candidate
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        run: node tools/benchmark/spec066/e17-acceptance.mjs "$GITHUB_WORKSPACE/acceptance/candidate" candidate > "$ARTIFACT_DIR/e17-candidate.json" 2> "$ARTIFACT_DIR/e17-candidate.stderr.log"
+
+      - name: Run baseline and candidate lifecycle soak
+        id: lifecycle_soak
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --expose-gc tools/benchmark/spec066/lifecycle-soak.mjs "$GITHUB_WORKSPACE/acceptance/baseline" > "$ARTIFACT_DIR/lifecycle-baseline.json" 2> "$ARTIFACT_DIR/lifecycle-baseline.stderr.log"
+          node --expose-gc tools/benchmark/spec066/lifecycle-soak.mjs "$GITHUB_WORKSPACE/acceptance/candidate" > "$ARTIFACT_DIR/lifecycle-candidate.json" 2> "$ARTIFACT_DIR/lifecycle-candidate.stderr.log"
+
+      - name: Run >=30 sample browser profiles for baseline and candidate
+        id: browser_profiles
+        if: ${{ steps.build_baseline.outcome == 'success' && steps.build_candidate.outcome == 'success' && steps.install_candidate.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec playwright install --with-deps chromium > "$ARTIFACT_DIR/chromium-install.log" 2>&1
+          node tools/benchmark/spec066/browser-runtime.mjs "$GITHUB_WORKSPACE/acceptance/baseline/apps/web-next/dist" baseline "$BASELINE_SHA" 30 > "$ARTIFACT_DIR/browser-baseline.json" 2> "$ARTIFACT_DIR/browser-baseline.stderr.log"
+          node tools/benchmark/spec066/browser-runtime.mjs "$GITHUB_WORKSPACE/acceptance/candidate/apps/web-next/dist" candidate "$CANDIDATE_SHA" 30 > "$ARTIFACT_DIR/browser-candidate.json" 2> "$ARTIFACT_DIR/browser-candidate.stderr.log"
+
+      - name: Run synthetic isolated PostGIS benchmark with 30 samples per query
+        id: postgis_benchmark
+        continue-on-error: true
+        working-directory: acceptance/candidate
+        shell: bash
+        env:
+          POSTGIS_IMAGE: postgis/postgis:18-3.7
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f ovg066-postgis-fixture >/dev/null 2>&1 || true' EXIT
+          docker pull "$POSTGIS_IMAGE"
+          docker run --detach --name ovg066-postgis-fixture --network none --cpus=2 --memory=1g --memory-swap=1g \
+            --env POSTGRES_PASSWORD=fixture-only --env POSTGRES_DB=ovg066 "$POSTGIS_IMAGE" > "$ARTIFACT_DIR/postgis-container-id.txt"
+          for attempt in $(seq 1 60); do
+            if docker exec ovg066-postgis-fixture pg_isready --username postgres --dbname ovg066 >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          docker exec ovg066-postgis-fixture pg_isready --username postgres --dbname ovg066
+          image_id="$(docker image inspect --format '{{.Id}}' "$POSTGIS_IMAGE")"
+          repo_digests="$(docker image inspect --format '{{json .RepoDigests}}' "$POSTGIS_IMAGE")"
+          printf '{"image_ref":"%s","image_id":"%s","repo_digests":%s}\n' "$POSTGIS_IMAGE" "$image_id" "$repo_digests" > "$ARTIFACT_DIR/postgis-image.json"
+          docker exec ovg066-postgis-fixture psql -X -v ON_ERROR_STOP=1 -U postgres -d ovg066 \
+            -c 'CREATE EXTENSION IF NOT EXISTS postgis' \
+            -c 'CREATE ROLE openvietgis_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS'
+          docker exec -i ovg066-postgis-fixture psql -X -v ON_ERROR_STOP=1 -U postgres -d ovg066 < tools/benchmark/spec066/postgis-viewport.sql
+          python3 tools/benchmark/spec066/postgis-viewport.py --disposable-fixture 30 > "$ARTIFACT_DIR/postgis-viewport.json"
+
+      - name: Write acceptance run status (targets remain provisional)
+        id: run_status
+        if: always()
+        env:
+          CHECKOUT_CANDIDATE: ${{ steps.checkout_candidate.outcome }}
+          CHECKOUT_BASELINE: ${{ steps.checkout_baseline.outcome }}
+          INSTALL_BASELINE: ${{ steps.install_baseline.outcome }}
+          INSTALL_CANDIDATE: ${{ steps.install_candidate.outcome }}
+          BUILD_BASELINE: ${{ steps.build_baseline.outcome }}
+          BUILD_CANDIDATE: ${{ steps.build_candidate.outcome }}
+          REGRESSIONS_BASELINE: ${{ steps.regressions_baseline.outcome }}
+          REGRESSIONS_CANDIDATE: ${{ steps.regressions_candidate.outcome }}
+          E17_BASELINE: ${{ steps.e17_baseline.outcome }}
+          E17_CANDIDATE: ${{ steps.e17_candidate.outcome }}
+          LIFECYCLE_SOAK: ${{ steps.lifecycle_soak.outcome }}
+          BROWSER_PROFILES: ${{ steps.browser_profiles.outcome }}
+          POSTGIS_BENCHMARK: ${{ steps.postgis_benchmark.outcome }}
+        run: |
+          mkdir -p "$ARTIFACT_DIR"
+          node --input-type=module <<'NODE' > "$ARTIFACT_DIR/acceptance-run-status.json"
+          const stepNames = ["CHECKOUT_CANDIDATE","CHECKOUT_BASELINE","INSTALL_BASELINE","INSTALL_CANDIDATE","BUILD_BASELINE","BUILD_CANDIDATE","REGRESSIONS_BASELINE","REGRESSIONS_CANDIDATE","E17_BASELINE","E17_CANDIDATE","LIFECYCLE_SOAK","BROWSER_PROFILES","POSTGIS_BENCHMARK"];
+          const steps = Object.fromEntries(stepNames.map(name => [name.toLowerCase(), process.env[name] || "not-run"]));
+          const complete = Object.values(steps).every(value => value === "success");
+          console.log(JSON.stringify({schema:1,created_at:new Date().toISOString(),candidate_sha:process.env.CANDIDATE_SHA,baseline_sha:process.env.BASELINE_SHA,steps,all_steps_succeeded:complete,provisional_budgets:"not_marked_pass",task_status:"partial",reason:"An exact merged candidate workflow run is still required; provisional targets need review before any pass claim."},null,2));
+          NODE
+
+      - name: Upload raw acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec066-acceptance-${{ inputs.candidate_sha }}-${{ github.run_id }}
+          path: dist/spec066-acceptance/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail if any required profile or regression did not complete
+        if: always()
+        env:
+          STATUS_FILE: dist/spec066-acceptance/acceptance-run-status.json
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from "node:fs";
+          const status = JSON.parse(readFileSync(process.env.STATUS_FILE,"utf8"));
+          if (!status.all_steps_succeeded) {
+            console.error("Acceptance evidence is incomplete; inspect acceptance-run-status.json and raw logs.");
+            process.exit(1);
+          }
+          NODE

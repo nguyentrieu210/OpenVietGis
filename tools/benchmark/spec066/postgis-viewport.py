@@ -1,9 +1,13 @@
 """Isolated PostGIS query experiment. Run only against the disposable fixture."""
 import hashlib
 import json
+import math
+import platform
 import statistics
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 
 CONTAINER = "ovg066-postgis-fixture"
 TABLE = "ovg066_fixture.features"
@@ -12,6 +16,10 @@ PROJECT = "00000000-0000-0000-0000-000000000002"
 BOX = "ST_MakeEnvelope(105.51,20.51,105.52,20.52,4326)"
 DOMAIN = "ST_CoveredBy(geometry, ST_MakeEnvelope(-180,-85.0511287798066,180,85.0511287798066,4326))"
 VALID = f"content_revision=repeat('a',64) AND schema_revision=repeat('b',64) AND geometry_state='present' AND ST_SRID(geometry)=4326 AND ST_GeometryType(geometry)='ST_Point' AND {DOMAIN}"
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat()
 
 
 def psql(sql):
@@ -72,31 +80,50 @@ def indexes(plan):
     ]
 
 
-def measure(query, mode, count=5):
+def percentile(values, quantile):
+    ordered = sorted(values)
+    return ordered[math.ceil(quantile * len(ordered)) - 1]
+
+
+def measure(query, mode, count):
     plans = [json.loads(scoped("EXPLAIN (ANALYZE,BUFFERS,FORMAT JSON) " + query, mode))[0]
              for _ in range(count)]
-    times = [p["Execution Time"] for p in plans]
-    return {"samples_ms": times, "median_ms": statistics.median(times),
+    times = [plan["Execution Time"] for plan in plans]
+    return {"sample_count": len(times), "samples_ms": times,
+            "median_ms": statistics.median(times), "p95_ms": percentile(times, .95),
+            "p99_ms": percentile(times, .99),
             "index_names": sorted(set(indexes(plans[-1]["Plan"]))),
-            "plan": plans[-1]}
+            "representative_plan": plans[-1]}
 
 
 def main():
-    if sys.argv[1:] != ["--disposable-fixture"]:
-        raise SystemExit("Explicit disposable fixture flag required")
-    assert psql("SELECT current_database()") == "ovg066"
-    assert psql("SELECT count(*) FROM ovg066_fixture.features") == "1230000"
-    report = {"database": psql("SELECT version() || ' / PostGIS ' || PostGIS_Lib_Version()"),
-              "method": "SQL only, five EXPLAIN ANALYZE executions per query, synthetic point data, 2 CPU/1GiB, simplified RLS; no HTTP/production claim",
+    args = sys.argv[1:]
+    if not args or args[0] != "--disposable-fixture" or len(args) > 2:
+        raise SystemExit("Usage: postgis-viewport.py --disposable-fixture [SAMPLES>=30]")
+    count = int(args[1]) if len(args) == 2 else 30
+    if not 30 <= count <= 100:
+        raise SystemExit("SAMPLES must be an integer from 30 to 100 for p95 reporting")
+    if psql("SELECT current_database()") != "ovg066":
+        raise SystemExit("Refusing to run outside the ovg066 disposable database")
+    if psql("SELECT count(*) FROM ovg066_fixture.features") != "1230000":
+        raise SystemExit("Disposable fixture row-count check failed")
+    source_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    started_at = utc_now()
+    started = time.perf_counter()
+    report = {"source_sha": source_sha,
+              "database": psql("SELECT version() || ' / PostGIS ' || PostGIS_Lib_Version()"),
+              "runtime": {"python": platform.python_version(), "platform": platform.platform()},
+              "sample_count_per_query": count,
+              "method": f"SQL only, {count} EXPLAIN ANALYZE executions per query, synthetic point data, 2 CPU/1GiB, simplified RLS; no HTTP/production claim",
+              "started_at": started_at,
               "tile": {}, "viewport": {}}
-    # Compare the existing migration 0045 effect only inside this disposable DB.
     for leakproof in (False, True):
         psql("ALTER FUNCTION geometry_overlaps(geometry,geometry) " + ("LEAKPROOF" if leakproof else "NOT LEAKPROOF"))
         for scale in (30000, 100000, 1000000):
             for mode in ("full", "restricted"):
                 key = f"{scale}/{mode}/{leakproof}"
                 query = tile(scale)
-                report["tile"][key] = measure(query, mode)
+                report["tile"][key] = measure(query, mode, count)
                 result = scoped(query, mode)
                 report["tile"][key]["returned_rows"] = len(result.splitlines()) if result else 0
                 report["tile"][key]["ordered_ids_sha256"] = hashlib.sha256(result.encode()).hexdigest()
@@ -111,13 +138,15 @@ def main():
                 invalid_base = scoped(viewport(30000, mode, False, True), mode)
                 assert invalid_base == scoped(viewport(30000, mode, True, True), mode)
                 assert invalid_base.endswith("|f|{}"), invalid_base
-                report["viewport"][mode] = {"baseline": measure(base, mode), "candidate": measure(new, mode)}
+                report["viewport"][mode] = {"baseline": measure(base, mode, count),
+                                            "candidate": measure(new, mode, count)}
     assert not scoped(tile(100000), org="00000000-0000-0000-0000-000000000008")
     assert not scoped(tile(100000), org="")
-    # Restore the extension's original setting in this disposable database.
     psql("ALTER FUNCTION geometry_overlaps(geometry,geometry) NOT LEAKPROOF")
     report["checks"] = {"viewport_result_parity": True, "invalid_outside_bbox_fails_closed": True,
                         "other_tenant_empty": True, "missing_tenant_empty": True}
+    report["completed_at"] = utc_now()
+    report["duration_seconds"] = time.perf_counter() - started
     print(json.dumps(report, indent=2))
 
 
