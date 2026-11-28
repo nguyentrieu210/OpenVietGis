@@ -117,6 +117,7 @@ try{
     await menu.getByRole("button",{name:"Quản lý plugin",exact:false}).click();await manager.waitFor();
     const themeLayout=await manager.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,body:getComputedStyle(el.querySelector(".live-modal-body")).backgroundColor,ink:getComputedStyle(el).color}));
     console.log("DARK072",JSON.stringify(themeLayout));assert.equal(themeLayout.bg,"rgb(32, 43, 52)");
+    if(process.env.OVG_UI_SCREENSHOTS)await manager.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/plugin-manager-dark.png",animations:"disabled"});
     await manager.getByRole("button",{name:"Đóng",exact:true}).click();
     await account.click();await page.getByLabel("Giao diện sáng tối").selectOption("light");await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="light");await account.click();
   }
@@ -215,6 +216,7 @@ try{
     const layout=await xp.evaluate(el=>{const r=el.getBoundingClientRect(),footer=el.querySelector("footer"),opts=el.querySelector(".xp-opts");return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,viewportHeight:innerHeight,scroll:opts.scrollWidth,client:opts.clientWidth,bg:getComputedStyle(el).backgroundColor,buttons:[...footer.querySelectorAll("button")].every(b=>{const v=b.getBoundingClientRect();return v.left>=r.left-1&&v.right<=r.right+1&&v.bottom<=r.bottom+1})}});
     assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.top>=-1&&layout.bottom<=layout.viewportHeight+1&&layout.scroll<=layout.client+1&&layout.buttons,JSON.stringify({theme,width,layout}));
     assert.equal(layout.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+    if(process.env.OVG_UI_SCREENSHOTS)await xp.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/export-"+theme+"-"+width+".png",animations:"disabled"});
    }
   }
   await page.evaluate(()=>{document.documentElement.dataset.ovgTheme="light"});await page.setViewportSize(originalViewport);
