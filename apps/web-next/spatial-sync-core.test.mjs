@@ -34,6 +34,7 @@ test('one selection / edit among 35000 points produces one render update',async(
   assert.deepEqual(dropped.update[0].removeProperties,['color']);
   console.log('35k render diff ms:',(performance.now()-start).toFixed(1));
   assert.equal(renderDiff(rows,[...rows,rows[0]]),null);
+  assert.equal(renderDiff([{...rows[0],id:'dup'},{...rows[1],id:'dup'}],[{...rows[0],id:'dup'},{...rows[1],id:'dup'}]),null);
 });
 
 test('render property fast path preserves serialized comparison semantics',async()=>{

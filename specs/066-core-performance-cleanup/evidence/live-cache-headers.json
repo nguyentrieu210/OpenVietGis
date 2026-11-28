@@ -1,0 +1,32 @@
+{
+  "observed_scope": "read-only public HTTPS requests to openvietgis.cloud; no credentials",
+  "root": {
+    "status": "HTTP/2 200 ",
+    "headers": {
+      "last-modified": "Fri, 27 Nov 2026 14:41:28 GMT",
+      "content-type": "text/html",
+      "cf-cache-status": "DYNAMIC",
+      "vary": "accept-encoding"
+    }
+  },
+  "hashed_asset_path": "/assets/index-CFqcKeyk.js",
+  "hashed_asset": {
+    "status": "HTTP/2 200 ",
+    "headers": {
+      "cache-control": "public, max-age=31536000, immutable",
+      "etag": "\"6b099698-238d77\"",
+      "last-modified": "Fri, 27 Nov 2026 14:41:28 GMT",
+      "content-type": "application/javascript",
+      "cf-cache-status": "HIT"
+    }
+  },
+  "conditional_etag_status": "304",
+  "private_me": {
+    "status": "HTTP/2 401 ",
+    "headers": {
+      "content-type": "application/json",
+      "cf-cache-status": "DYNAMIC",
+      "vary": "origin, access-control-request-method, access-control-request-headers"
+    }
+  }
+}

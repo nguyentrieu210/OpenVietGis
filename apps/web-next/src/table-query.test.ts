@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
-import {tableQueryBody,verifyTableQuery} from "./table-query";
+import {localTablePage,tableQueryBody,verifyTableQuery} from "./table-query";
 const layer={id:"layer",source_id:"source",source:{content_revision:"c",schema_revision:"s",schema:{fields:[{field_id:"name",name:"Name",type:"text",nullable:true}]}}} as unknown as SpatialLayer;
 const filter={field:"name",op:"contains" as const,value:"%_';",negate:false};
 const result={layer_id:"layer",source_id:"source",content_revision:"c",schema_revision:"s",offset:100,limit:100,query_fingerprint:"pin"} as LayerQueryResponse;
@@ -22,5 +22,15 @@ describe("multiple server filters",()=>{
  it("preserves AND/OR and NOT with literal values",()=>{
   const second={...filter,value:"a",negate:true};
   expect(tableQueryBody(layer,[filter,second],"","asc",0,undefined,"or").attribute_filter).toEqual({op:"or",conditions:[{field:"name",op:"contains",value:"%_';"},{op:"not",condition:{field:"name",op:"contains",value:"a"}}]});
+ });
+});
+
+describe("local attribute table pagination",()=>{
+ it("bounds DOM rows to 100 even for one million records",()=>{
+  const rows=Array.from({length:1_000_000},(_,i)=>i);
+  expect(localTablePage(rows,0)).toEqual(Array.from({length:100},(_,i)=>i));
+  expect(localTablePage(rows,9_999)).toHaveLength(100);
+  expect(localTablePage(rows,10_000)).toHaveLength(0);
+  expect(()=>localTablePage(rows,-1)).toThrow();
  });
 });

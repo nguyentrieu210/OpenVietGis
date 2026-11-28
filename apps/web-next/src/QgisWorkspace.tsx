@@ -11,6 +11,7 @@ import {Modal} from "./studio-ui";
 import {RasterLayerList,type RasterCatalog} from "./ProjectRaster";
 import {Splitter} from "./Splitter";
 import {AttributeServerQuery} from "./AttributeServerQuery";
+import {localTablePage} from "./table-query";
 import {formatDms} from "./locator";
 import {FeatureInfo} from "./FeatureInfo";
 import {readHiddenColumns,togglePageSelection,tableTsv,compareTableValue} from "./table-columns";
@@ -268,7 +269,7 @@ export function QgisAttributeTable({preferenceScope,executeServerQuery,openServe
  const sorted=useMemo(()=>!sort?scoped:[...scoped].sort((a,b)=>compareTableValue(sort.field==="__fid"?a.feature.feature_id:a.feature.attributes[sort.field],sort.field==="__fid"?b.feature.feature_id:b.feature.attributes[sort.field],sortType,sort.direction)||a.key.localeCompare(b.key)),[scoped,sort,sortType]);
  useEffect(()=>{setSort(null);setFormKey("");setFormMode(false);setPage(0)},[columnKey]);
  const maxPage=Math.max(0,Math.ceil(sorted.length/100)-1),current=remoteLayer?page:Math.min(page,maxPage);
- const pageRows=remoteLayer?sorted:sorted.slice(current*100,current*100+100);
+ const pageRows=remoteLayer?sorted:localTablePage(sorted,current);
  const formIndex=Math.max(0,pageRows.findIndex(r=>r.key===formKey)),formRow=pageRows[formIndex];
  const sortHeader=(field:string,text:string)=><th aria-sort={sort?.field===field?(sort.direction==="asc"?"ascending":"descending"):"none"}><button type="button" onClick={()=>{setSort(old=>({field,direction:old?.field===field&&old.direction==="asc"?"desc":"asc"}));if(!remoteLayer)setPage(0)}}>{text}{sort?.field===field?(sort.direction==="asc"?" ↑":" ↓"):""}</button></th>;
  const copyPage=async()=>{try{const header=["FID","Tên / Nhãn",...displayedFields];await navigator.clipboard.writeText(tableTsv(header,pageRows.map(r=>[r.feature.feature_id,label(r),...displayedFields.map(f=>r.feature.attributes[f])])));setCopyStatus("Đã sao chép "+pageRows.length+" dòng của trang hiện tại.")}catch{setCopyStatus("Không sao chép được. Kiểm tra quyền clipboard.")}};
