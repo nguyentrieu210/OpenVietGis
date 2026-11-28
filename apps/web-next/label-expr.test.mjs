@@ -40,3 +40,8 @@ test("bounded AST expressions retain legacy labels and implement typed null logi
  assert.throws(()=>run('"n"+2'));
  for(const x of ['qgis: system(1)','qgis: "missing"','qgis: 1; SELECT','qgis: constructor()','qgis: 1 +','qgis: '+ '('.repeat(50)+'1'+')'.repeat(50)])assert.notEqual(validateLabel(x,fields),null);
 });
+
+test("declared but missing row values resolve as NULL during evaluation",()=>{
+ assert.equal(evalLabel('qgis: coalesce("missing", \'fallback\')',{}),"fallback");
+ assert.notEqual(validateLabel('qgis: "missing"',[]),null);
+});

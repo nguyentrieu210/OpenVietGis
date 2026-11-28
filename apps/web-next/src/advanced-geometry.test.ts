@@ -1,6 +1,6 @@
 import {describe,expect,it} from "vitest";
 import type {Geometry} from "geojson";
-import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices,addPolygonHole,removePolygonHole,sharedVertexChanges} from "./advanced-geometry";
+import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices,addPolygonHole,removePolygonHole,sharedVertexChanges,addGeometryPart,removeGeometryPart,reshapeGeometryPath} from "./advanced-geometry";
 
 describe("multipart vertex editing",()=>{
  it("exposes editable multipart lines while keeping split and merge capability scoped",()=>{
@@ -62,5 +62,26 @@ describe("exact shared vertex changes",()=>{
   expect(a.coordinates[0]![1]).toEqual([1,0]);
   expect(()=>sharedVertexChanges(rows,"a",[1,0],[1,1])).toThrow();
   expect(()=>sharedVertexChanges(rows,"a",[3,0],[3,1])).toThrow();
+ });
+});
+
+describe("multipart and path reshape",()=>{
+ it("adds and removes multipart members, retaining source family",()=>{
+  const g:Geometry={type:"MultiLineString",coordinates:[[[0,0],[1,1]]]};
+  const next=addGeometryPart(g,[[2,2],[3,3]]);
+  expect(geometryPartCount(next)).toBe(2);expect(removeGeometryPart(next,1)).toEqual(g);
+  expect(()=>removeGeometryPart(g,0)).toThrow();
+  expect(()=>addGeometryPart({type:"LineString",coordinates:[[0,0],[1,1]]},[[2,2],[3,3]])).toThrow();
+  const polygon:Geometry={type:"MultiPolygon",coordinates:[[[[0,0],[1,0],[1,1],[0,0]]]]};
+  const added=addGeometryPart(polygon,[[3,3],[4,3],[4,4]]);
+  expect(geometryPartCount(added)).toBe(2);expect(removeGeometryPart(added,1)).toEqual(polygon);
+ });
+ it("replaces only selected forward path, preserves endpoints and rejects invalid shape",()=>{
+  const g:Geometry={type:"LineString",coordinates:[[0,0],[1,1],[2,0],[3,0]]};
+  expect(reshapeGeometryPath(g,0,0,0,2,[[1,2]])).toEqual({type:"LineString",coordinates:[[0,0],[1,2],[2,0],[3,0]]});
+  expect(()=>reshapeGeometryPath(g,0,0,2,1,[])).toThrow();
+  const p:Geometry={type:"Polygon",coordinates:[[[0,0],[4,0],[4,4],[0,4],[0,0]]]};
+  expect(reshapeGeometryPath(p,0,0,0,1,[[2,1]])).toMatchObject({coordinates:[[[0,0],[2,1],[4,0],[4,4],[0,4],[0,0]]]});
+  expect(()=>reshapeGeometryPath(p,0,0,0,3,[])).toThrow();
  });
 });

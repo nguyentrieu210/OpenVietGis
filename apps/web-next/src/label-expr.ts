@@ -78,7 +78,7 @@ function tokens(source:string):Token[]{
  }
  return [...out,{kind:"eof",text:""}];
 }
-export function parseExpression(source:string,fields:readonly string[]):Ast{
+export function parseExpression(source:string,fields?:readonly string[]):Ast{
  const ts=tokens(source),known=new Set(fields);let i=0,nodes=0;
  const peek=()=>ts[i]??ts.at(-1)!;
  const take=()=>{const t=peek();i++;return t};
@@ -92,7 +92,7 @@ export function parseExpression(source:string,fields:readonly string[]):Ast{
   else if(op==="+"||op==="-"||op==="NOT"){left={kind:"unary",op,arg:expression(op==="NOT"?3:7,depth+1)}}
   else if(t.kind==="number"){const value=Number(t.text);if(!Number.isFinite(value))throw Error("Số ngoài phạm vi.");left={kind:"literal",value}}
   else if(t.kind==="string")left={kind:"literal",value:t.text};
-  else if(t.kind==="field"){if(!known.has(t.text))throw Error("Trường không tồn tại: "+t.text);left={kind:"field",name:t.text}}
+  else if(t.kind==="field"){if(fields&&!known.has(t.text))throw Error("Trường không tồn tại: "+t.text);left={kind:"field",name:t.text}}
   else if(["NULL","TRUE","FALSE"].includes(op))left={kind:"literal",value:op==="NULL"?null:op==="TRUE"};
   else if(t.kind==="word"){
    const name=t.text.toLowerCase(),sig=Object.hasOwn(signatures,name)?signatures[name]:undefined;if(!sig)throw Error("Hàm không hỗ trợ: "+name);
@@ -160,8 +160,8 @@ export function evaluateExpression(ast:Ast,attrs:Attrs):ExpressionValue{
 }
 const expressionCache=new Map<string,Ast>();
 export function evalQgisLabel(expr:string,attrs:Attrs):string{
- const fields=Object.keys(attrs).sort(),key=JSON.stringify([expr,fields]);
+ const key=expr;
  let ast=expressionCache.get(key);
- if(!ast){ast=parseExpression(expr,fields);if(expressionCache.size>=128)expressionCache.delete(expressionCache.keys().next().value!);expressionCache.set(key,ast)}
+ if(!ast){ast=parseExpression(expr);if(expressionCache.size>=128)expressionCache.delete(expressionCache.keys().next().value!);expressionCache.set(key,ast)}
  const result=evaluateExpression(ast,attrs);return result===null?"":String(result);
 }

@@ -536,7 +536,7 @@
         "apps/web-next/src/advanced-geometry.ts",
         "apps/web-next/src/advanced-geometry.test.ts"
       ],
-      "blocker": "Authenticated split/merge preview and changeset; polygon hole add/remove in existing vertex editor, local containment and boundary intersection checks, undo/redo, authoritative PostGIS commit. Reshape and multipart part creation/deletion, browser/QGIS acceptance remain. New tests unexecuted."
+      "blocker": "Authenticated split/merge; existing vertex editor now supports polygon holes, multipart member add/delete (preserves declared family) and endpoint-preserving forward path reshape, draft undo/redo and authoritative changeset/PostGIS validation. New tests not executed; unrestricted QGIS reshape, topology-aware segment noding and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "EDIT-07",

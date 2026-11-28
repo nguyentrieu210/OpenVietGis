@@ -102,3 +102,34 @@ export function sharedVertexChanges(features:readonly SharedFeature[],selectedId
  if(!changes.some(f=>f.id===selectedId))throw Error("Đỉnh nguồn không khớp đối tượng đã chọn.");
  return changes;
 }
+
+/** Add/remove parts without changing the declared multipart geometry family. */
+export function addGeometryPart(g:Geometry,points:XY[]):Geometry{
+ if(points.length>512||points.some(p=>!validXY(p)))throw Error("Phần mới vượt giới hạn hoặc tọa độ sai.");
+ let next:Geometry;
+ if(g.type==="MultiLineString"){
+  if(points.length<2)throw Error("Tuyến mới cần ít nhất hai đỉnh.");
+  next={...g,coordinates:[...g.coordinates,points.map(p=>[...p])]};
+ }else if(g.type==="MultiPolygon"){
+  const open=points.length&&sameXY(points[0]!,points.at(-1)!)?points.slice(0,-1):points;
+  if(open.length<3)throw Error("Vùng mới cần ít nhất ba đỉnh.");
+  next={...g,coordinates:[...g.coordinates,[[...open.map(p=>[...p]),[...open[0]!]]]]};
+ }else throw Error("Chỉ thêm phần vào hình học multipart; không đổi loại nguồn.");
+ const e=draftError(next);if(e)throw Error(e);return next;
+}
+export function removeGeometryPart(g:Geometry,part:number):Geometry{
+ if(g.type!=="MultiLineString"&&g.type!=="MultiPolygon")throw Error("Chọn hình học multipart.");
+ if(!Number.isInteger(part)||part<0||part>=g.coordinates.length||g.coordinates.length<=1)throw Error("Không được xóa phần cuối cùng.");
+ return g.type==="MultiLineString"?{...g,coordinates:g.coordinates.filter((_,i)=>i!==part)}:{...g,coordinates:g.coordinates.filter((_,i)=>i!==part)};
+}
+/** Replace the forward path between two existing vertices; endpoints are retained.
+ * For closed rings, the other path is retained and the ring is reclosed. */
+export function reshapeGeometryPath(g:Geometry,part:number,ring:number,start:number,end:number,interior:XY[]):Geometry{
+ if(!vertexEditable(g)||!Number.isInteger(part)||part<0||part>=geometryPartCount(g)||!Number.isInteger(ring)||ring<0||ring>=geometryRingCount(g,part))throw Error("Phần hoặc vòng không hợp lệ.");
+ const p=geometryVertices(g,part,ring),closed=g.type==="Polygon"||g.type==="MultiPolygon";
+ if(!Number.isInteger(start)||!Number.isInteger(end)||start<0||end>=p.length||start>=end||interior.length>512||interior.some(q=>!validXY(q)))throw Error("Chọn đỉnh đầu nhỏ hơn đỉnh cuối và tọa độ trung gian hợp lệ.");
+ const next=[...p.slice(0,start+1),...interior,...p.slice(end)];
+ if(next.length<(closed?3:2))throw Error("Hình học còn quá ít đỉnh.");
+ const result=withGeometryVertices(g,part,ring,next),error=draftError(result);
+ if(error)throw Error(error);return result;
+}
