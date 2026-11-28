@@ -38,6 +38,8 @@ class MediaKeys(context: Context) {
             var bytes: ByteArray? = null
         }
         private var pending: Capture? = null
+        private var viewer: AlertDialog? = null
+        fun dismissPreview() { synchronized(guard) { viewer }?.dismiss() }
         fun attach(a: Activity) { synchronized(guard) { activity = WeakReference(a) } }
         fun cameraResult(code: Int, result: Int, data: Intent?): Boolean {
             val p = synchronized(guard) { pending?.takeIf { it.code == code } } ?: return false
@@ -103,17 +105,18 @@ class MediaKeys(context: Context) {
         var shown = false
         val closed = java.util.concurrent.atomic.AtomicBoolean(false)
         a.runOnUiThread {
-            if (closed.get() || a.isFinishing || a.isDestroyed) { bitmap.recycle(); done.countDown(); return@runOnUiThread }
+            if (closed.get() || a.isFinishing || a.isDestroyed || synchronized(guard) { viewer != null }) { bitmap.recycle(); done.countDown(); return@runOnUiThread }
             val view = ImageView(a).apply { setImageBitmap(bitmap); adjustViewBounds = true; contentDescription = "Encrypted photo preview" }
             val dialog = AlertDialog.Builder(a).setTitle("Media preview").setView(view).setPositiveButton("Close", null).create()
-            dialog.setOnDismissListener { view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
+            dialog.setOnDismissListener { synchronized(guard) { if (viewer === dialog) viewer = null }; view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
             dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            try { dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE); shown = true }
-            catch (_: Exception) { view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
+            try { synchronized(guard) { viewer = dialog }; dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE); shown = true }
+            catch (_: Exception) { synchronized(guard) { if (viewer === dialog) viewer = null }; view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
         }
         // A displayed dialog owns its bitmap until dismissal, not until a
         // timeout that would leave a dangling native image reference.
-        try { done.await() } catch (_: InterruptedException) { closed.set(true); return false }
+        val completed = try { done.await(120, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
+        if (!completed) { closed.set(true); a.runOnUiThread { dismissPreview() }; return false }
         return shown
     }
     private val root = File(context.applicationContext.noBackupFilesDir, "ovg-media-keys-v1")
