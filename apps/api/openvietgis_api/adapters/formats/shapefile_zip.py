@@ -402,7 +402,9 @@ def parse_shapefile_member(
             )
             continue
         if shp.shapeType != reader.shapeType:
-            findings.append(ValidationFinding("error", "UNSUPPORTED_GEOMETRY", "Shape type disagrees with member.", idx))
+            findings.append(ValidationFinding(
+                "error", "UNSUPPORTED_GEOMETRY", "Shape type disagrees with member.", idx
+            ))
             continue
         for pt in shp.points:
             if not (math.isfinite(pt[0]) and math.isfinite(pt[1])):
@@ -558,7 +560,7 @@ def write_shapefile_zip(
             rings=[]
             for index,ring in enumerate(gcoords):
                 pts=[[float(p[0]),float(p[1])] for p in ring]
-                signed=sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(pts,pts[1:]))
+                signed=sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(pts,pts[1:],strict=False))
                 if (signed>0)==(index==0):
                     pts.reverse()
                 rings.append(pts)
@@ -573,7 +575,10 @@ def write_shapefile_zip(
                     ctx.prec=50
                     fixed=format(Decimal(str(v)).quantize(Decimal("0.000001")),"f")
                 if len(fixed)>19:
-                    raise TransferFormatError("DBF_NUMERIC_OVERFLOW","Decimal exceeds DBF width; export GeoPackage or GeoJSON.")
+                    raise TransferFormatError(
+                        "DBF_NUMERIC_OVERFLOW",
+                        "Decimal exceeds DBF width; export GeoPackage or GeoJSON.",
+                    )
                 # pyshp formats numeric through float. Reject width overflow after formatting too.
                 numeric=float(fixed)
                 if len(format(numeric,".6f"))>19:
