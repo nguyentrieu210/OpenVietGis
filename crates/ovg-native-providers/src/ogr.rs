@@ -340,3 +340,44 @@ impl RasterSource{
   }Ok(bytes)
  }
 }
+
+#[cfg(test)]
+mod streaming_tests{
+ use super::*;
+ use std::sync::atomic::AtomicBool;
+ #[test]fn ogr_spool_exceeds_small_import_limit(){
+  use gdal::{DriverManager,vector::{Geometry,LayerOptions,OGRwkbGeometryType}};
+  let dir=tempfile::tempdir().unwrap();let src=dir.path().join("points.shp");
+  let driver=DriverManager::get_driver_by_name("ESRI Shapefile").unwrap();
+  let mut ds=driver.create_vector_only(&src).unwrap();let sr=SpatialRef::from_epsg(4326).unwrap();
+  {let mut l=ds.create_layer(LayerOptions{name:"points",srs:Some(&sr),ty:OGRwkbGeometryType::wkbPoint,options:None}).unwrap();
+   for i in 0..130{let wkt=format!("POINT ({} 11)",106.+i as f64/10000.);l.create_feature(Geometry::from_wkt(&wkt).unwrap()).unwrap();}}
+  drop(ds);
+  assert!(read_atomic(&src,0).is_err());
+  let out=dir.path().join("stream.ndjson");
+  assert_eq!(stage_ndjson(&src,0,&out,&AtomicBool::new(false)).unwrap(),130);
+  let data=fs::read_to_string(&out).unwrap();assert_eq!(data.lines().count(),130);
+  for line in data.lines(){let v:Value=serde_json::from_str(line).unwrap();assert_eq!(v["geometry"]["type"],"Point");}
+  assert!(stage_ndjson(&src,0,&out,&AtomicBool::new(false)).is_err());
+  let cancelled=dir.path().join("cancelled.ndjson");assert!(stage_ndjson(&src,0,&cancelled,&AtomicBool::new(true)).is_err());assert!(!cancelled.exists());
+ }
+ #[test]fn mercator_tile_uses_fixed_stretch_and_transparent_nodata(){
+  let d=tempfile::tempdir().unwrap();let path=d.path().join("world.tif");
+  let driver=gdal::DriverManager::get_driver_by_name("GTiff").unwrap();
+  let mut ds=driver.create_with_band_type::<f32,_>(&path,4,4,1).unwrap();
+  let m=6378137.*std::f64::consts::PI;
+  ds.set_geo_transform(&[-m,m/2.,0.,m,0.,-m/2.]).unwrap();ds.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
+  {let mut b=ds.rasterband(1).unwrap();b.set_no_data_value(Some(-9999.)).unwrap();b.fill(7.,None).unwrap();}
+  ds.flush_cache().unwrap();drop(ds);
+  let src=RasterSource::open(&path).unwrap();let c=AtomicBool::new(false);
+  let png=src.map_tile(1,0,0,0,[0.,14.],&c).unwrap();
+  let mut r=png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap();let mut out=vec![0;r.output_buffer_size()];
+  let info=r.next_frame(&mut out).unwrap();assert_eq!((info.width,info.height),(256,256));assert_eq!(&out[..4],&[128,128,128,255]);
+  assert!(src.map_tile(1,0,1,0,[0.,14.],&c).is_err());assert!(src.map_tile(1,0,0,0,[14.,0.],&c).is_err());
+  assert!(src.map_tile(1,0,0,0,[0.,14.],&AtomicBool::new(true)).is_err());
+  let nd=d.path().join("nodata.tif");let mut ds=driver.create_with_band_type::<f32,_>(&nd,4,4,1).unwrap();ds.set_geo_transform(&[-m,m/2.,0.,m,0.,-m/2.]).unwrap();ds.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
+  {let mut b=ds.rasterband(1).unwrap();b.set_no_data_value(Some(-9999.)).unwrap();b.fill(-9999.,None).unwrap();}ds.flush_cache().unwrap();drop(ds);
+  let tile=RasterSource::open(&nd).unwrap().map_tile(1,0,0,0,[0.,14.],&c).unwrap();
+  let mut r=png::Decoder::new(std::io::Cursor::new(tile)).read_info().unwrap();let mut out=vec![0;r.output_buffer_size()];r.next_frame(&mut out).unwrap();assert!(out.chunks_exact(4).all(|p|p[3]==0));
+ }
+}
