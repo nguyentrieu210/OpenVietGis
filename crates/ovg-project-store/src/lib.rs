@@ -6,6 +6,7 @@ use serde_json::Value;
 use sha2::{Digest,Sha256};
 use std::{collections::HashSet,path::Path,sync::Mutex};
 use uuid::Uuid;
+pub mod catalog;
 pub mod migration;
 pub mod maintenance;
 pub mod virtual_query;
@@ -115,6 +116,7 @@ impl Store{
  pub fn add_layer(&self,id:Uuid,name:&str,expected:u64)->Result<u64>{
   if id.is_nil()||name.trim().is_empty()||name.len()>256{return Err(Error::Invalid)}
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  if tx.query_row("SELECT count(*) FROM layer",[],|r|r.get::<_,u64>(0))?>=256{return Err(Error::Limit)}
   let n=next(&tx,expected)?;
   tx.execute("INSERT INTO layer VALUES(?1,?2,NULL)",params![id.to_string(),name])?;
   tx.commit()?;Ok(n)
@@ -130,7 +132,7 @@ impl Store{
  pub fn add_relation(&self,id:Uuid,source:Uuid,target:Uuid,kind:&str,expected:u64)->Result<u64>{
   if id.is_nil()||!matches!(kind,"one_one"|"one_many"|"many_many"){return Err(Error::Invalid)}
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
-  known_layer(&tx,source)?;known_layer(&tx,target)?;let n=next(&tx,expected)?;
+  known_layer(&tx,source)?;known_layer(&tx,target)?;if tx.query_row("SELECT count(*) FROM relation",[],|r|r.get::<_,u64>(0))?>=1024{return Err(Error::Limit)}let n=next(&tx,expected)?;
   tx.execute("INSERT INTO relation VALUES(?1,?2,?3,?4)",params![id.to_string(),source.to_string(),target.to_string(),kind])?;tx.commit()?;Ok(n)
  }
  pub fn apply(&self,b:&Batch)->Result<Receipt>{
