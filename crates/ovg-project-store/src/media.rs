@@ -37,8 +37,34 @@ fn meta(r:&rusqlite::Row<'_>)->Result<MediaMeta>{
 fn valid(m:&MediaMeta,data:&[u8])->bool{
  data.len()>48&&data.len()<=MAX+48&&data.len() as u64==m.cipher_bytes&&data.starts_with(MAGIC)&&<[u8;32]>::from(Sha256::digest(data))==m.cipher_sha
 }
+fn capture_ref(scope:Uuid,id:Uuid)->[u8;32]{
+ let mut h=Sha256::new();h.update(b"OVG-NATIVE-CAPTURE-1");h.update(scope.as_bytes());h.update(id.as_bytes());h.finalize().into()
+}
+fn jpeg(data:&[u8])->bool{data.len()>=4&&data.len()<=MAX&&data.starts_with(&[0xff,0xd8,0xff])&&data.ends_with(&[0xff,0xd9])}
 const COLS:&str="id,scope,layer,feature,source_scope,source_id,source_sha,cipher_sha,cipher_bytes";
 impl Store{
+ /// Only a trusted native camera supplies this buffer. No plaintext staging.
+ /// JPEG framing check is not an image decoder; the platform must validate
+ /// dimensions/decodability before presenting media.
+ pub fn capture_jpeg(&self,scope:Uuid,layer:Uuid,feature:Uuid,id:Uuid,data:&[u8],expected:u64,keys:&impl MediaKeys)->Result<(u64,MediaMeta)>{
+  if scope.is_nil()||id.is_nil()||!jpeg(data){return Err(Error::Invalid)}
+  let k=key(keys,scope)?;let c=XChaCha20Poly1305::new_from_slice(&k[..]).map_err(|_|Error::Invalid)?;
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  if current(&tx,layer,feature)?.1.is_none(){return Err(Error::Invalid)}
+  match domain(&tx)?{Some(s) if s!=scope=>return Err(Error::Conflict),None=>{tx.execute("INSERT INTO media_domain VALUES(1,?1)",[scope.to_string()])?;},_=>{}}
+  let(count,used):(u64,u64)=tx.query_row("SELECT count(*),coalesce(sum(cipher_bytes),0) FROM encrypted_media",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
+  if count>=COUNT||used.saturating_add(data.len()as u64+48)>TOTAL{return Err(Error::Limit)}
+  if tx.query_row("SELECT EXISTS(SELECT 1 FROM encrypted_media WHERE id=?1)",[id.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}
+  let revision=next(&tx,expected)?;
+  let mut m=MediaMeta{id,scope,layer,feature,source_scope:scope,source_id:id,source_sha:capture_ref(scope,id),cipher_sha:[0;32],cipher_bytes:0};
+  let mut nonce=[0;24];OsRng.fill_bytes(&mut nonce);
+  let body=c.encrypt(XNonce::from_slice(&nonce),Payload{msg:data,aad:&aad(&m)}).map_err(|_|Error::Invalid)?;
+  let mut encrypted=MAGIC.to_vec();encrypted.extend(nonce);encrypted.extend(body);
+  m.cipher_sha=Sha256::digest(&encrypted).into();m.cipher_bytes=encrypted.len()as u64;
+  tx.execute("INSERT INTO encrypted_media VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",params![id.to_string(),scope.to_string(),layer.to_string(),feature.to_string(),scope.to_string(),id.to_string(),m.source_sha.as_slice(),m.cipher_sha.as_slice(),m.cipher_bytes,encrypted])?;
+  tx.execute("INSERT INTO media_capture VALUES(?1,'image/jpeg')",[id.to_string()])?;
+  tx.commit()?;Ok((revision,m))
+ }
  pub fn media_domain(&self)->Result<Option<Uuid>>{domain(&*self.db.lock().map_err(lock_err)?)}
  /// Import an explicitly authorized list of legacy references into a distinct
  /// destination key domain. The caller provisions that domain in secure key
@@ -103,6 +129,10 @@ pub(crate) fn verify(db:&Connection)->Result<bool>{
  if count>COUNT||bytes>TOTAL{return Ok(false)}
  let mut q=db.prepare(&format!("SELECT {COLS},ciphertext FROM encrypted_media WHERE length(ciphertext)<=?1 ORDER BY id"))?;
  let mut rows=q.query([(MAX+48)as u64])?;let mut n=0;
- while let Some(r)=rows.next()?{let m=meta(r)?;let b:Vec<u8>=r.get(9)?;if scope!=Some(m.scope)||m.source_scope==m.scope||!valid(&m,&b){return Ok(false)}n+=1;}
+ while let Some(r)=rows.next()?{let m=meta(r)?;let b:Vec<u8>=r.get(9)?;let captured:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM media_capture WHERE id=?1)",[m.id.to_string()],|r|r.get(0))?;
+  if scope!=Some(m.scope)||!valid(&m,&b){return Ok(false)}
+  if captured{if m.source_scope!=m.scope||m.source_id!=m.id||m.source_sha!=capture_ref(m.scope,m.id){return Ok(false)}}
+  else if m.source_scope==m.scope{return Ok(false)}
+  n+=1;}
  Ok(n==count)
 }
