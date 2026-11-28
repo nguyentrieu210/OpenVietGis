@@ -14,5 +14,14 @@ describe("georeferencer contract",()=>{
   expect(validateGeoref(r,p,points,4326).epsg).toBe(4326);
   expect(()=>validateGeoref({...r,rms:1},p,points,4326)).toThrow();
   expect(()=>validateGeoref({...r,source_sha256:"c".repeat(64)},p,points,4326)).toThrow();
+  expect(()=>validateGeoref({...r,transform:[106,0,0,11,0,0]},p,points,4326)).toThrow("affine");
+  expect(()=>validateGeoref({...r,corners:[[105,11],...r.corners.slice(1)]},p,points,4326)).toThrow("Ranh ảnh");
+  expect(()=>validateGeoref({...r,residuals:[1,1,1],rms:1},p,points,4326)).toThrow("Sai số GCP");
+  expect(()=>validateGeoref({...r,pixel_residuals:[2,2,2],pixel_rms:2},p,points,4326)).toThrow("Sai số GCP");
+  const mercatorPoints:Gcp[]=[[0,0,1000,2000],[100,0,1200,2050],[0,100,1030,1700]];
+  const projected={...r,epsg:3857,transform:[1000,2,.3,2000,.5,-3],
+   corners:[[1000,2000],[1200,2050],[1230,1750],[1030,1700]].map(([x,y])=>[x!/6378137*180/Math.PI,(2*Math.atan(Math.exp(y!/6378137))-Math.PI/2)*180/Math.PI])};
+  expect(validateGeoref(projected,p,mercatorPoints,3857).epsg).toBe(3857);
+
  });
 });
