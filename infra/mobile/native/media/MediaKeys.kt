@@ -4,13 +4,10 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Looper
-import android.provider.MediaStore
 import android.view.WindowManager
 import android.widget.ImageView
-import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -49,29 +46,7 @@ class MediaKeys(context: Context) {
                 else bytes?.fill(0)
             }
         }
-        fun cameraResult(code: Int, result: Int, data: Intent?): Boolean {
-            val p = synchronized(guard) { pending?.takeIf { it.code == code } } ?: return false
-            var bytes: ByteArray? = null
-            try {
-                if (result == Activity.RESULT_OK) {
-                    @Suppress("DEPRECATION")
-                    val bitmap = data?.extras?.get("data") as? Bitmap
-                    if (bitmap != null && bitmap.width in 1..4096 && bitmap.height in 1..4096 &&
-                        bitmap.width.toLong() * bitmap.height <= 4_000_000L) {
-                        val out = ByteArrayOutputStream()
-                        if (bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) {
-                            val raw = out.toByteArray()
-                            if (raw.size <= 16 * 1024 * 1024) bytes = raw else raw.fill(0)
-                        }
-                    }
-                }
-            } catch (_: Exception) { bytes?.fill(0); bytes = null }
-            synchronized(guard) {
-                if (pending === p) { p.bytes = bytes; p.done.countDown() }
-                else bytes?.fill(0)
-            }
-            return true
-        }
+
     }
     // In-app CameraX capture; JPEG bytes stay in native process memory.
     fun capturePreview(): ByteArray? {
