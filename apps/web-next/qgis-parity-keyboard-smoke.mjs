@@ -508,11 +508,15 @@ try{
  await xp.getByText(/Lớp chưa nạp đầy đủ/).waitFor();
  assert.equal(await xp.getByRole("button",{name:/⬇ Xuất/}).isEnabled(),false);
  await xp.getByRole("radio",{name:/GeoJSON/}).click();
+ const exportFirst=xp.locator("header").getByRole("button",{name:"Đóng",exact:true});
+ const exportLast=xp.getByRole("button",{name:/⬇ Xuất/});
+ await exportFirst.focus();await page.keyboard.press("Shift+Tab");assert.ok(await exportLast.evaluate(e=>document.activeElement===e));
+ await page.keyboard.press("Tab");assert.ok(await exportFirst.evaluate(e=>document.activeElement===e));
  const [download]=await Promise.all([page.waitForEvent("download"),xp.getByRole("button",{name:/⬇ Xuất/}).click()]);
  assert.ok(download.suggestedFilename().endsWith(".geojson"));
  await xp.getByText(/Đã tải 1 tệp/).waitFor();
- await xp.getByRole("button",{name:"Đóng",exact:true}).last().click();
- console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified");
+ await page.keyboard.press("Escape");await xp.waitFor({state:"detached"});
+ console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified, export dialog keyboard focus trapped and Escape closes");
 
  await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
  const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();

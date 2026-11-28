@@ -7,6 +7,7 @@ import {zipFiles} from "./zip";
 import {safeName,toCsv,toGeoJson,toKml,type Feat} from "./export-formats";
 import type {StudioRow} from "./studio-contract";
 import {extendedNativeCrs} from "./workbenches/features/platform/processing-request";
+import {useDesktopDialog} from "./studio-ui";
 
 // Spec 058: new export (QGIS "Save Features As" + batch): pick layers, format and scope, then download.
 // Whole layers go through the server export (validated, project CRS rules); selected / in-view features
@@ -68,9 +69,12 @@ export function ExportDialog({client,org,pid,projectName,layers,rows,selection,i
   setDone(files.length?"Đã tải "+files.length+" tệp"+(errs.length?" · lỗi: "+errs.join("; "):""):errs.length?"Lỗi: "+errs.join("; "):"Không có đối tượng trong phạm vi đã chọn")
   }catch(e){if(mounted.current)setDone(String(e))}finally{running.current=false;if(mounted.current)setBusy("")}};
 
+ const panel=useRef<HTMLDivElement>(null);
+ const requestClose=()=>{if(!running.current&&!busy)close()};
+ useDesktopDialog(panel,requestClose);
  const shown=layers.filter(l=>canRead(l)&&l.name.toLocaleLowerCase("vi").includes(q.toLocaleLowerCase("vi")));
- return createPortal(<div className="qgis-studio ovg-ws-shade" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)close()}}><div className="xp" role="dialog" aria-modal="true" aria-label="Xuất dữ liệu" onKeyDown={e=>{if(e.key==="Escape"&&!busy)close()}}>
-  <header><div><b>Xuất dữ liệu</b><small>{projectName}</small></div><button type="button" aria-label="Đóng" disabled={!!busy} onClick={close}>×</button></header>
+ return createPortal(<div className="qgis-studio ovg-ws-shade" onMouseDown={e=>{if(e.target===e.currentTarget)requestClose()}}><div ref={panel} tabIndex={-1} className="xp" role="dialog" aria-modal="true" aria-label="Xuất dữ liệu" aria-busy={!!busy}>
+  <header><div><b>Xuất dữ liệu</b><small>{projectName}</small></div><button type="button" aria-label="Đóng" disabled={!!busy} onClick={requestClose}>×</button></header>
   <div className="xp-body">
    <section inert={!!busy} className="xp-layers" aria-label="Lớp">
     <div className="xp-col-head"><b>Lớp</b><button type="button" onClick={()=>setPicked(picked.size===layers.length?new Set():new Set(layers.filter(canRead).map(l=>l.id)))}>{picked.size===layers.length?"Bỏ chọn":"Chọn tất cả"}</button></div>
@@ -89,6 +93,6 @@ export function ExportDialog({client,org,pid,projectName,layers,rows,selection,i
     <p className="xp-note">{serverWhole?"Hệ tọa độ theo định dạng (GeoJSON WGS84; các định dạng khác theo lớp gốc (DXF tự chuyển sang UTM khi cần).":"Tọa độ WGS 84 (EPSG:4326)."}</p>
    </section>
   </div>
-  <footer><span role="status">{busy||done||(chosen.length?chosen.length+" lớp · "+total.toLocaleString("vi-VN")+" đối tượng · "+f.ext:"Chọn ít nhất một lớp")}</span><button type="button" onClick={close} disabled={!!busy}>Đóng</button><button type="button" className="primary" disabled={!!busy||!chosen.length||nativeBlocked||serverOnlyWhole||incomplete||missingSelected||(scope!=="all"&&total===0)||planReady&&required.some(d=>!approved.has(d.key))} onClick={()=>void (f.transfer&&!planReady?prepare():run())}>{busy?"Đang xuất…":f.transfer&&!planReady?"Kiểm tra trước khi xuất":"⬇ Xuất "+(chosen.length>1?chosen.length+" lớp":"")}</button></footer>
+  <footer><span role="status">{busy||done||(chosen.length?chosen.length+" lớp · "+total.toLocaleString("vi-VN")+" đối tượng · "+f.ext:"Chọn ít nhất một lớp")}</span><button type="button" onClick={requestClose} disabled={!!busy}>Đóng</button><button type="button" className="primary" disabled={!!busy||!chosen.length||nativeBlocked||serverOnlyWhole||incomplete||missingSelected||(scope!=="all"&&total===0)||planReady&&required.some(d=>!approved.has(d.key))} onClick={()=>void (f.transfer&&!planReady?prepare():run())}>{busy?"Đang xuất…":f.transfer&&!planReady?"Kiểm tra trước khi xuất":"⬇ Xuất "+(chosen.length>1?chosen.length+" lớp":"")}</button></footer>
  </div></div>,document.body);
 }
