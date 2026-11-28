@@ -1,8 +1,4 @@
 """Actual Rust/PostGIS edit, vector processing and raster acceptance on disposable fixtures."""
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from uuid import UUID, uuid4
 import argparse
 import base64
 import importlib.util
@@ -10,6 +6,10 @@ import json
 import math
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from uuid import UUID, uuid4
 
 import psycopg
 
@@ -37,7 +37,7 @@ def fixture_layers(f):
 
 def check(c,f,second,fixtures,directory):
     from openvietgis_api.security.csrf import make_csrf_token
-    uid,_,token=second
+    _uid,_,token=second
     auth=session_headers(f["session_a_token"], **{"x-openvietgis-csrf":f["csrf_a_token"]})
     other=session_headers(token, **{"x-openvietgis-csrf":make_csrf_token(token,baseline.DEFAULT_CSRF_SECRET)})
     foreign=session_headers(f["session_b_token"], **{"x-openvietgis-csrf":f["csrf_b_token"]})
@@ -140,7 +140,7 @@ def check(c,f,second,fixtures,directory):
     assert index["stats"]["valid"]==8 and index["stats"]["nodata"]==1 and math.isclose(index["stats"]["mean"],.5,abs_tol=1e-6)
     rasters=get("/raster/layers")
     items=rasters["items"] if isinstance(rasters,dict) else rasters
-    assert {nir["id"],red["id"],index["id"]}<=set(r["id"] for r in items)
+    assert {nir["id"],red["id"],index["id"]}<={r["id"] for r in items}
     download=c.get(path+"/raster/layers/"+index["id"]+"/file",headers=auth)
     assert download.status_code==200 and download.content[:4] in (b"II*\x00",b"MM\x00*")
     assert c.get(path+"/raster/layers/"+index["id"]+"/file",headers=foreign).status_code==404
@@ -169,7 +169,9 @@ def check(c,f,second,fixtures,directory):
     get(layout,foreign,404)
     print("PASS authenticated two-frame layout persistence, invalid map link and stale revision conflict",flush=True)
     # Reuse the existing transfer oracle on the Rust binary only.
-    from e07_transfers import fixtures as transfer_fixtures, roundtrip
+    from e07_transfers import fixtures as transfer_fixtures
+    from e07_transfers import roundtrip
+
     fmt,filename,content=next(transfer_fixtures())
     rt=roundtrip(c,f,"Spec065",fmt,filename,content)
     assert rt["stored_crs"]==4326
@@ -180,9 +182,10 @@ def check(c,f,second,fixtures,directory):
     import hashlib
     import io
     import sqlite3
+
     import ezdxf
     from e12_adapter_transfer import _seed_layer, _mutate_gpkg_for_sync
-    lid,sid,src=_seed_layer(c,path,auth,"Spec065 QGIS")
+    lid,_sid,src=_seed_layer(c,path,auth,"Spec065 QGIS")
     root="/integration-hub/adapters/qgis/layers/"+lid
     gpkg=c.get(path+root+"/export?format=geopackage",headers=auth,timeout=60)
     assert gpkg.status_code==200,(gpkg.status_code,gpkg.text[:500])
