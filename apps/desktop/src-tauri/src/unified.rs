@@ -18,7 +18,7 @@ pub struct GeometryEdit{layer:Uuid,feature:Uuid,expected:String,geometry:Option<
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Input{operation:Uuid,expected_project:String,edits:Vec<GeometryEdit>,links:Vec<Link>}
-fn number(s:&str)->UResult<u64>{s.parse().map_err(|_|"INVALID_REVISION")}
+pub(crate) fn number(s:&str)->UResult<u64>{s.parse().map_err(|_|"INVALID_REVISION")}
 fn geo(v:Value)->UResult<Vec<u8>>{
  let kind=v["type"].as_str().ok_or("INVALID_GEOMETRY")?;
  if !matches!(kind,"Point"|"MultiPoint"|"LineString"|"MultiLineString"|"Polygon"|"MultiPolygon"){return Err("UNSUPPORTED_GEOMETRY")}
@@ -75,6 +75,12 @@ impl Unified{
   self.with(h,|s|{let r=s.apply(&Batch{operation:input.operation,expected_project:number(&input.expected_project)?,edits,links:input.links}).map_err(err)?;
    Ok(serde_json::json!({"revision":r.revision.to_string(),"features":r.features.iter().map(|(l,f,r)|serde_json::json!([l,f,r.to_string()])).collect::<Vec<_>>() }))})
  }
+ #[cfg(feature="native-ogr")]
+ pub fn import_ogr(&self,h:Uuid,layer:Uuid,path:&std::path::Path,index:usize,expected:String)->UResult<Value>{
+  let features=ovg_native_providers::ogr::read_atomic(path,index)?;
+  let edits=features.into_iter().map(|f|GeometryEdit{layer,feature:Uuid::new_v4(),expected:"0".into(),geometry:Some(f["geometry"].clone()),attributes:f["properties"].clone()}).collect();
+  self.apply(h,Input{operation:Uuid::new_v4(),expected_project:expected,edits,links:vec![]})
+ }
  pub fn import_geojson(&self,h:Uuid,layer:Uuid,path:&std::path::Path,expected:String,operation:Uuid)->UResult<Value>{
   use std::io::Read;
   let meta=fs::symlink_metadata(path).map_err(|_|"INVALID_STORAGE")?;
@@ -130,7 +136,7 @@ impl Unified{
   })
  }
 }
-async fn work<T:Send+'static>(window:WebviewWindow,u:Unified,f:impl FnOnce(Unified)->UResult<T>+Send+'static)->Reply<T>{
+pub(crate) async fn work<T:Send+'static>(window:WebviewWindow,u:Unified,f:impl FnOnce(Unified)->UResult<T>+Send+'static)->Reply<T>{
  trusted(&window)?;let permit=Permit::acquire()?;
  tauri::async_runtime::spawn_blocking(move||{let _p=permit;f(u)}).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
