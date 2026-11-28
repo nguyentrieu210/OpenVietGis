@@ -66,8 +66,9 @@ pub async fn replace(edit:&mut ProjectRead<'_>,key:&str,expected_revision:i64,it
             .bind(org).bind(project).bind(item.source_id).fetch_optional(&mut **edit.transaction()).await.map_err(db_error)?;
         if schema.as_deref()!=Some(item.schema_revision.as_str()){return Err(AppError::conflict("STALE_BINDING_SOURCE","source missing, retired or schema changed"));}
     }
-    sqlx::query("INSERT INTO extensions.module_binding_sets(organization_id,project_id,extension_key,revision,updated_by_actor_id) VALUES($1,$2,$3,1,$4) ON CONFLICT(organization_id,project_id,extension_key) DO UPDATE SET revision=extensions.module_binding_sets.revision+1,updated_by_actor_id=EXCLUDED.updated_by_actor_id,updated_at=now()")
-        .bind(org).bind(project).bind(key).bind(actor).execute(&mut **edit.transaction()).await.map_err(db_error)?;
+    let changed=sqlx::query("INSERT INTO extensions.module_binding_sets(organization_id,project_id,extension_key,revision,updated_by_actor_id) SELECT $1,$2,$3,1,$4 WHERE $5=0 OR EXISTS (SELECT 1 FROM extensions.module_binding_sets WHERE organization_id=$1 AND project_id=$2 AND extension_key=$3 AND revision=$5) ON CONFLICT(organization_id,project_id,extension_key) DO UPDATE SET revision=extensions.module_binding_sets.revision+1,updated_by_actor_id=EXCLUDED.updated_by_actor_id,updated_at=now() WHERE extensions.module_binding_sets.revision=$5")
+        .bind(org).bind(project).bind(key).bind(actor).bind(expected_revision).execute(&mut **edit.transaction()).await.map_err(db_error)?.rows_affected();
+    if changed!=1{return Err(AppError::conflict("STALE_LAYER_BINDINGS","module layer bindings changed"));}
     sqlx::query("DELETE FROM extensions.module_layer_bindings WHERE organization_id=$1 AND project_id=$2 AND extension_key=$3")
         .bind(org).bind(project).bind(key).execute(&mut **edit.transaction()).await.map_err(db_error)?;
     for i in items{

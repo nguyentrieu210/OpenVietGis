@@ -31,11 +31,12 @@ pub async fn replace_policy(edit:&mut ProjectRead<'_>, key:&str, target_type:&st
     if old["revision"].as_i64()!=Some(expected_revision){return Err(AppError::conflict("STALE_MODULE_PERMISSION_POLICY","module permission policy changed"));}
     let actor=edit.actor_id();let org=edit.organization_id();let project=edit.project_id();
     // Preserve a monotonic revision when restoring inheritance; never reset a row to revision zero.
-    sqlx::query("INSERT INTO extensions.module_permission_policies(organization_id,project_id,extension_key,actor_type,actor_id,permissions,updated_by_actor_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(organization_id,project_id,extension_key,actor_type,actor_id)
-        DO UPDATE SET permissions=EXCLUDED.permissions,revision=extensions.module_permission_policies.revision+1,updated_by_actor_id=EXCLUDED.updated_by_actor_id,updated_at=now()")
-        .bind(org).bind(project).bind(key).bind(target_type).bind(target).bind(permissions).bind(actor)
-        .execute(&mut **edit.transaction()).await.map_err(db_error)?;
+    let changed=sqlx::query("INSERT INTO extensions.module_permission_policies(organization_id,project_id,extension_key,actor_type,actor_id,permissions,updated_by_actor_id)
+        SELECT $1,$2,$3,$4,$5,$6,$7 WHERE $8=0 OR EXISTS (SELECT 1 FROM extensions.module_permission_policies WHERE organization_id=$1 AND project_id=$2 AND extension_key=$3 AND actor_type=$4 AND actor_id=$5 AND revision=$8) ON CONFLICT(organization_id,project_id,extension_key,actor_type,actor_id)
+        DO UPDATE SET permissions=EXCLUDED.permissions,revision=extensions.module_permission_policies.revision+1,updated_by_actor_id=EXCLUDED.updated_by_actor_id,updated_at=now() WHERE extensions.module_permission_policies.revision=$8")
+        .bind(org).bind(project).bind(key).bind(target_type).bind(target).bind(permissions).bind(actor).bind(expected_revision)
+        .execute(&mut **edit.transaction()).await.map_err(db_error)?.rows_affected();
+    if changed!=1{return Err(AppError::conflict("STALE_MODULE_PERMISSION_POLICY","module permission policy changed"));}
     let new=policy(edit,key,target_type,target).await?;
     append_project_audit(edit,actor,actor_display,"extension.permissions.replace","project",project,
         json!({"extension_key":key,"actor_type":target_type,"actor_id":target,"previous":old,"current":new}),chrono::Utc::now()).await?;

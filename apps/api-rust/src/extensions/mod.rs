@@ -5,6 +5,7 @@ pub mod manifests;
 pub mod marketplace;
 pub(crate) mod module_permissions;
 mod module_bindings;
+mod module_commands;
 pub mod marketplace_developers;
 pub mod partner_platform;
 pub mod records;
@@ -34,6 +35,7 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(activations::router())
         .merge(module_permissions::router())
         .merge(module_bindings::router())
+        .merge(module_commands::router())
         .merge(manifests::router())
         .merge(records::router())
         .merge(marketplace::router())

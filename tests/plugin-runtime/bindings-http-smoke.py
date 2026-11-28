@@ -20,6 +20,7 @@ def expect(response,status):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--candidate',type=Path,required=True)
+    parser.add_argument('--pure-commands',action='store_true',help='Also test Wave 04 runtime command gateway')
     args=parser.parse_args();binary=args.candidate.resolve();assert binary.is_file()
     with tempfile.TemporaryDirectory(prefix='ovg-067-binding-http-') as d:
       work=Path(d)
@@ -35,6 +36,14 @@ def main():
         with parity.rust_client(binary,runtime,work) as api:
           manifest=expect(api.post(org+'/extensions/official/house_numbering/register',headers=h),201)
           expect(api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
+          cmd=ext+'/commands/preview_numbering';payload={'payload':{'street_name':'Đường A','side':'left_odd','start_number':1,'step':2,'count':3}}
+          if args.pure_commands:
+            result=expect(api.post(cmd,json=payload,headers=h),200)
+            assert [v['house_number'] for v in result['output']['proposals']]==['1','3','5']
+            expect(api.post(cmd,json={'payload':{**payload['payload'],'step':1}},headers=h),422)
+            expect(api.post(ext+'/commands/apply_numbering',json=payload,headers=h),404)
+            denied=api.post(cmd,json=payload,headers=outsider);assert denied.status_code in (403,404)
+            expect(api.post(cmd,json=payload,headers=parity.session_headers(fixture['session_a_token'])),403)
           assert expect(api.get(bindings,headers=h),200)=={'configured':False,'revision':0,'items':[]}
           layer=expect(api.post(project+'/layers/manual',json={'operation_id':str(uuid4()),'name':'Original survey','geometry_family':'Point','fields':[{'field_id':f,'name':f,'type':'text','nullable':True} for f in ['ap','ten_duong','xu_ly']]},headers=h),201)
           source=layer['source_id'];layer_id=layer['layer_id'];schema=expect(api.get(project+'/layers/'+layer_id,headers=h),200)['source']['schema_revision']
@@ -48,12 +57,13 @@ def main():
           # Change the display name without changing source identity. Test real SQL persistence.
           with psycopg.connect(owner) as db:db.execute('UPDATE spatial.layers SET name=%s WHERE id=%s',('Renamed survey',layer_id))
           after=expect(api.get(bindings,headers=h),200);assert after['items'][0]['source_id']==source and after['items'][0]['status']=='ready'
-          with psycopg.connect(owner) as db:db.execute("UPDATE spatial.layers SET lifecycle='retired',retired_at=now() WHERE id=%s",(layer_id,))
+          with psycopg.connect(owner) as db:db.execute("UPDATE spatial.layers SET lifecycle='retired',retired_at=now(),updated_at=now() WHERE id=%s",(layer_id,))
           assert expect(api.get(bindings,headers=h),200)['items'][0]['status']=='unavailable'
           # Module restrictions cannot alter Core access and take effect on next HTTP request.
           p=expect(api.get(policy,headers=h),200);assert p['revision']==0 and p['permissions'] is None
           p=expect(api.put(policy,json={'expected_revision':0,'permissions':['ext.house_numbering.read']},headers=h),200);assert p['revision']==1
           expect(api.get(root+'/rules',headers=h),200)
+          if args.pure_commands:expect(api.post(cmd,json=payload,headers=h),403)
           expect(api.post(root+'/rules',json={'version':'denied','status':'draft'},headers=h),403)
           expect(api.put(bindings,json={'expected_revision':1,'items':[]},headers=h),403)
           p=expect(api.put(policy,json={'expected_revision':1,'permissions':[]},headers=h),200);assert p['revision']==2
@@ -63,5 +73,6 @@ def main():
           expect(api.put(policy,json={'expected_revision':2,'permissions':[]},headers=h),409)
           p=expect(api.put(bindings,json={'expected_revision':1,'items':[]},headers=h),200);assert p['configured'] and p['revision']==2 and not p['items']
           expect(api.post(ext+'/disable',headers=h),200);expect(api.get(bindings,headers=h),404)
+          if args.pure_commands:expect(api.post(cmd,json=payload,headers=h),404)
           print('PASS real HTTP: bindings, role/schema validation, revision conflict, rename/retire, cross-tenant access, permission read/deny/restore, Core unchanged, disabled runtime')
 if __name__=='__main__':main()

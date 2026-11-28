@@ -9,3 +9,6 @@ export function getModulePolicy(client:ApiClient,org:string,project:string,key:s
 export function replaceModulePolicy(client:ApiClient,org:string,project:string,key:string,type:"human"|"service_principal",id:string,policy:ModulePermissionPolicy){return client.request<ModulePermissionPolicy>(`${base(org,project,key)}/permissions/${type}/${encodeURIComponent(id)}`,{method:"PUT",body:JSON.stringify({permissions:policy.permissions,expected_revision:policy.revision})});}
 export function getModuleBindings(client:ApiClient,org:string,project:string,key:string){return client.request<ModuleLayerBindings>(`${base(org,project,key)}/layer-bindings`);}
 export function replaceModuleBindings(client:ApiClient,org:string,project:string,key:string,expected_revision:number,items:ModuleLayerBindingInput[]){return client.request<ModuleLayerBindings>(`${base(org,project,key)}/layer-bindings`,{method:"PUT",body:JSON.stringify({expected_revision,items})});}
+
+/** Pure calculation only; never substitutes for persisted proposal preview/apply. */
+export function dispatchModuleCommand<T>(client:ApiClient,org:string,project:string,key:string,command:string,payload:unknown){return client.request<{command_id:string;output:T}>(`${base(org,project,key)}/commands/${encodeURIComponent(command)}`,{method:"POST",body:JSON.stringify({payload})});}

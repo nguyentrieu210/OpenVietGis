@@ -1,8 +1,8 @@
 //! `HouseNumberingModule` implementing `ovg_module_sdk::OvgModule`.
 
-use ovg_core::AppError;
+use ovg_core::{AppError, Permission};
 use ovg_module_sdk::{
-    ModuleCommandRequest, ModuleCommandResult, ModuleExecutionContext, ModuleLayerRole, ModuleManifest, OvgModule,
+    ModuleCommandRequest, ModuleCommandResult, ModuleExecutionContext, ModuleLayerRole, ModuleManifest, OvgModule, PureModuleCommand,
 };
 use serde_json::json;
 
@@ -15,6 +15,10 @@ impl OvgModule for HouseNumberingModule {
     fn manifest(&self) -> ModuleManifest {
         serde_json::from_str(include_str!("../../manifest.json"))
             .expect("shipped house-numbering manifest must satisfy Rust SDK schema")
+    }
+
+    fn pure_commands(&self) -> &'static [PureModuleCommand] {
+        &[PureModuleCommand { id: "preview_numbering", core_permission: Permission::ProjectEdit }]
     }
 
     fn layer_roles(&self) -> &'static [ModuleLayerRole] {

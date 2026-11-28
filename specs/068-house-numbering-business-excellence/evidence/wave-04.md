@@ -1,0 +1,3 @@
+# Wave 04 — bounded SDK numbering preview
+
+Deterministic numbering sequence preview is registered as a pure runtime command requiring verified active HN module, Core project.edit and module read/assign permissions. It performs no database numbering write and is not the existing persisted preview/apply workflow. Street names bounded to 200 characters; parity and prefix validation retained. 44 HN and 9 SDK unit tests passed; full HTTP test for bindings and permissions on Wave 03 candidate passed. New pure gateway HTTP cases remain unexecuted. No claim of legal approval, restored Bình Hưng dataset or full business acceptance.

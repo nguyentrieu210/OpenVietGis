@@ -6,7 +6,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use ovg_core::{AppError, TenantScope};
+use ovg_core::{AppError, Permission, TenantScope};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -333,9 +333,19 @@ pub struct ModuleLayerRole {
     pub required_fields: &'static [&'static str],
 }
 
+/// Pure commands are explicitly exposed by trusted modules. Persistent operations
+/// must use a transactional service adapter, not a caller-supplied payload alone.
+#[derive(Debug, Clone, Copy)]
+pub struct PureModuleCommand {
+    pub id: &'static str,
+    pub core_permission: Permission,
+}
+
 /// Contract implemented by every isolated vertical module.
 pub trait OvgModule: Send + Sync {
     fn manifest(&self) -> ModuleManifest;
+
+    fn pure_commands(&self) -> &'static [PureModuleCommand] { &[] }
 
     fn layer_roles(&self) -> &'static [ModuleLayerRole] { &[] }
 
@@ -349,6 +359,7 @@ pub trait OvgModule: Send + Sync {
 #[derive(Clone)]
 struct RegisteredModule {
     manifest: ModuleManifest,
+    pure_commands: Vec<PureModuleCommand>,
     runtime: Arc<dyn OvgModule>,
 }
 
@@ -367,6 +378,13 @@ impl ModuleRegistry {
     pub fn register(&mut self, module: Arc<dyn OvgModule>) -> Result<(), AppError> {
         let manifest = module.manifest();
         manifest.validate()?;
+        let mut exposed = HashSet::new();
+        for command in module.pure_commands() {
+            if !exposed.insert(command.id) || !manifest.commands.iter().any(|c| c.id == command.id)
+                || !matches!(command.core_permission, Permission::ProjectRead | Permission::ProjectEdit | Permission::ProjectManage) {
+                return Err(AppError::validation("INVALID_MODULE_MANIFEST", "invalid pure command registration"));
+            }
+        }
         if self.modules.contains_key(&manifest.extension_key) {
             return Err(AppError::conflict(
                 "MODULE_ALREADY_REGISTERED",
@@ -377,6 +395,7 @@ impl ModuleRegistry {
             manifest.extension_key.clone(),
             RegisteredModule {
                 manifest,
+                pure_commands: module.pure_commands().to_vec(),
                 runtime: module,
             },
         );
@@ -411,6 +430,19 @@ impl ModuleRegistry {
             self.modules.values().map(|m| m.manifest.clone()).collect();
         manifests.sort_by(|a, b| a.extension_key.cmp(&b.extension_key));
         manifests
+    }
+
+    /// Pinned pure command contract. Never dispatch unexposed persistent operations.
+    pub fn pure_command(&self, key: &str, command_id: &str) -> Option<PureModuleCommand> {
+        self.modules.get(key)?.pure_commands.iter().find(|c| c.id == command_id).copied()
+    }
+
+    pub fn dispatch_pure(&self, key: &str, ctx: &ModuleExecutionContext, request: &ModuleCommandRequest) -> Result<ModuleCommandResult, AppError> {
+        let command = self.pure_command(key, &request.command_id).ok_or_else(|| AppError::not_found("pure module command not found"))?;
+        if !ctx.tenant.has_permission(command.core_permission) {
+            return Err(AppError::forbidden("missing core command permission"));
+        }
+        self.dispatch(key, ctx, request)
     }
 
     /// Dispatch a command after validating tenant scope and command-level permission.
@@ -636,6 +668,32 @@ mod tests {
         assert_eq!(moved.disable().revision, 8);
         assert_eq!(moved.disable().disable().revision, 8);
         assert_eq!(moved.disable().reactivate().revision, 9);
+    }
+
+    struct PureFixture;
+    impl OvgModule for PureFixture {
+        fn manifest(&self) -> ModuleManifest { DummyModule.manifest() }
+        fn pure_commands(&self) -> &'static [PureModuleCommand] {
+            &[PureModuleCommand { id: "ping", core_permission: Permission::ProjectRead }]
+        }
+        fn execute_command(&self, ctx: &ModuleExecutionContext, request: &ModuleCommandRequest) -> Result<ModuleCommandResult, AppError> {
+            DummyModule.execute_command(ctx, request)
+        }
+    }
+
+    #[test]
+    fn pure_dispatch_requires_core_and_extension_permissions() {
+        let mut registry=ModuleRegistry::new();
+        registry.register(Arc::new(PureFixture)).unwrap();
+        let mut ctx=ModuleExecutionContext{tenant:TenantScope{organization_id:Uuid::new_v4(),workspace_id:None,project_id:Some(Uuid::new_v4()),actor:ActorContext{actor_type:ActorType::Human,actor_id:Uuid::new_v4(),credential_id:None,email:None},permissions:vec![]},granted_extension_permissions:vec!["ext.dummy_mod.read".into()]};
+        let req=ModuleCommandRequest{command_id:"ping".into(),payload:json!({})};
+        assert_eq!(registry.dispatch_pure("dummy_mod",&ctx,&req).unwrap_err().status_code(),403);
+        ctx.tenant.permissions.push(Permission::ProjectRead);
+        assert!(registry.dispatch_pure("dummy_mod",&ctx,&req).is_ok());
+        ctx.granted_extension_permissions.clear();
+        assert_eq!(registry.dispatch_pure("dummy_mod",&ctx,&req).unwrap_err().status_code(),403);
+        let mut unexposed=ModuleRegistry::new();unexposed.register(Arc::new(DummyModule)).unwrap();
+        assert_eq!(unexposed.dispatch_pure("dummy_mod",&ctx,&req).unwrap_err().status_code(),404);
     }
 
     struct ChangingManifest(std::sync::atomic::AtomicUsize);

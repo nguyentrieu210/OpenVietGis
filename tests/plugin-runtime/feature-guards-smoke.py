@@ -4,6 +4,7 @@ Requires disposable PostgreSQL connection supplied explicitly by OVG_GUARD_TEST_
 """
 import importlib.util
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -120,6 +121,30 @@ with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'], autocommit=True) as conn:
     conn.execute("INSERT INTO extensions.module_binding_sets(organization_id,project_id,extension_key,revision,updated_by_actor_id) VALUES (%s,%s,'house_numbering',1,%s)",(ORG,PROJECT,ACTOR))
     conn.execute("INSERT INTO extensions.module_layer_bindings VALUES (%s,%s,'house_numbering',%s,'survey_points',%s)",(ORG,PROJECT,SOURCE,'a'*64))
     conn.execute('INSERT INTO extensions.module_permission_policies(organization_id,project_id,extension_key,actor_type,actor_id,permissions,updated_by_actor_id) VALUES (%s,%s,%s,%s,%s,%s,%s)',(ORG,PROJECT,'house_numbering','human',ACTOR,['ext.house_numbering.read'],ACTOR))
+    # Run the exact Rust CAS statement, including the initial-row race. Each
+    # contender has its own connection and sends the same expected revision.
+    def cas_race(file,table,parameters):
+        rust=(ROOT/file).read_text()
+        statement=re.search(r'let changed=sqlx::query\("(INSERT INTO extensions\.'+table+r'.*?)"\)',rust,re.S).group(1)
+        order=[int(v)-1 for v in re.findall(r'\$(\d+)',statement)]
+        query=re.sub(r'\$\d+','%s',statement)
+        from psycopg import ClientCursor
+        results=[];start=threading.Barrier(2)
+        def writer():
+            try:
+                with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'],autocommit=True,cursor_factory=ClientCursor) as c:
+                    start.wait(timeout=5)
+                    results.append(c.execute(query,[parameters[i] for i in order]).rowcount)
+            except Exception as e:results.append(str(e))
+        threads=[threading.Thread(target=writer,daemon=True) for _ in range(2)]
+        for t in threads:t.start()
+        for t in threads:t.join(10)
+        assert sorted(results)==[0,1],(table,results)
+    for expected in (0,1):
+        cas_race('crates/ovg-storage/src/extensions/permissions.rs','module_permission_policies',[ORG,PROJECT,'fixture_cas','human',ACTOR,['ext.fixture_cas.read'],ACTOR,expected])
+        cas_race('crates/ovg-storage/src/extensions/bindings.rs','module_binding_sets',[ORG,PROJECT,'fixture_cas',ACTOR,expected])
+    conn.execute("DELETE FROM extensions.module_permission_policies WHERE extension_key='fixture_cas'")
+    conn.execute("DELETE FROM extensions.module_binding_sets WHERE extension_key='fixture_cas'")
     conn.execute('SET ROLE openvietgis_runtime')
     conn.execute("SELECT set_config('openvietgis.organization_id',%s,false),set_config('openvietgis.project_id',%s,false)",(ORG,OTHER))
     assert conn.execute('SELECT count(*) FROM extensions.module_permission_policies').fetchone()[0]==0
@@ -145,4 +170,4 @@ with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'], autocommit=True) as conn:
         run_migration(conn, CORE, 'downgrade')
     blocked(conn,"DELETE FROM spatial.reference_features WHERE feature_id='locked'")
     assert conn.execute('SELECT count(*) FROM house_numbering.survey_signoffs').fetchone()[0]==3
-    print('PASS real PostGIS: legacy backfill, old/new scope, writes, additive null, runtime privilege, second provider, disable/revoke, concurrent signoff, permission/binding RLS and downgrade, signoff retention')
+    print('PASS real PostGIS: legacy backfill, old/new scope, writes, additive null, runtime privilege, second provider, disable/revoke, concurrent signoff, permission/binding concurrent CAS, RLS and downgrade, signoff retention')

@@ -33,10 +33,10 @@ pub struct NumberingProposal {
 /// Generate deterministic Vietnamese street/alley house numbers according to parity rules.
 pub fn generate_street_numbers(rule: &NumberingRule) -> Result<Vec<NumberingProposal>, AppError> {
     let street = rule.street_name.trim();
-    if street.is_empty() {
+    if street.is_empty() || street.chars().count() > 200 {
         return Err(AppError::validation(
             "INVALID_STREET_NAME",
-            "street_name must not be empty",
+            "street_name must contain 1..200 characters",
         ));
     }
     if rule.start_number == 0 || rule.step == 0 || rule.count == 0 || rule.count > 10_000 {
