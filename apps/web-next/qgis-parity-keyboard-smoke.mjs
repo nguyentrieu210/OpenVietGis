@@ -256,8 +256,11 @@ try{
   await page.waitForFunction(()=>document.activeElement?.closest('[aria-label="Hiệu năng GIS · phiên hiện tại"]')!==null);
   await menuTrigger.evaluate(e=>e.focus());
   assert.ok(await perf.evaluate(e=>e.contains(document.activeElement)));
-  const firstControl=perf.getByRole("button",{name:"Đóng",exact:true}).first(),lastControl=perf.getByRole("button",{name:"Đóng",exact:true}).last();
+  const tabbable=perf.locator('button:not([disabled]):visible,a[href]:visible,input:not([disabled]):not([type=hidden]):visible,select:not([disabled]):visible,textarea:not([disabled]):visible,[tabindex]:not([tabindex="-1"]):visible');
+  const firstControl=tabbable.first(),lastControl=tabbable.last();
+  assert.ok(await firstControl.count()>0);assert.ok(await lastControl.count()>0);
   await firstControl.focus();await page.keyboard.press("Shift+Tab");assert.ok(await lastControl.evaluate(e=>document.activeElement===e));
+  await page.keyboard.press("Tab");assert.ok(await firstControl.evaluate(e=>document.activeElement===e));
   await page.keyboard.press("Escape");await perf.waitFor({state:"detached"});
   await page.waitForFunction(()=>document.activeElement?.getAttribute("aria-label")==="Xem hiệu năng GIS");
   const sizes=[];
