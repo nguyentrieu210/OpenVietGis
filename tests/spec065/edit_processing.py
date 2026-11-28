@@ -98,6 +98,7 @@ def check_processing(post,get,foreign,fixtures):
     # pipeline; the inverse-Mercator fixtures represent the same 100 m shapes.
     cross_union, cross_union_metrics = result(job("union",parcels,{},wgs_clip),5,30000)
     cross_join, _ = result(job("spatial_join",point,{"predicate":"intersects","join_type":"inner","match_mode":"all"},wgs_point),1,0)
+    reverse_cross_join, _ = result(job("spatial_join",wgs_point,{"predicate":"intersects","join_type":"inner","match_mode":"all"},point),1,0)
     reverse_reproject, _ = result(job("reproject",wgs_point,{"target_srid":3857}),1,0)
     assert reverse_reproject["output_crs"]==3857
     with psycopg.connect(OWNER) as conn:
@@ -129,6 +130,7 @@ def check_processing(post,get,foreign,fixtures):
             assert output["source_feature_id"] == "pt"
             assert output["overlay_feature_id"] == "pt"
         assert_joined_attributes(cross_join["output_source_id"],point,wgs_point)
+        assert_joined_attributes(reverse_cross_join["output_source_id"],wgs_point,point)
         x,y,attributes = conn.execute(
             "SELECT ST_X(geometry),ST_Y(geometry),attributes FROM spatial.reference_features WHERE source_id=%s",
             (reverse_reproject["output_source_id"],),
