@@ -151,15 +151,28 @@ def check_processing(post,get,foreign,fixtures):
             WHERE a.source_id=%s AND b.source_id=%s""",(regional["source_id"],recovered["output_source_id"])).fetchone()
         assert diff[0]<1e-8 and diff[1]
     post("/processing/jobs",job("reproject",regional,{"target_srid":3406}),expected=422)
+    extended_wgs,_=result(job("reproject",extended_pin,{"target_srid":4326}),regional["feature_count"],0)
+    assert extended_wgs["output_crs"]==4326
+    recovered_pin=pinned_layer(recovered["output_layer_id"],recovered["output_source_id"])
+    chained_wgs,_=result(job("reproject",recovered_pin,{"target_srid":4326}),regional["feature_count"],0)
+    assert chained_wgs["output_crs"]==4326
+    with psycopg.connect(OWNER) as conn:
+        distance=conn.execute("""SELECT max(ST_Distance(a.geometry::geography,b.geometry::geography))
+            FROM spatial.reference_features a JOIN spatial.reference_features b ON a.feature_id=b.feature_id
+            WHERE a.source_id=%s AND b.source_id=%s""",(extended_wgs["output_source_id"],chained_wgs["output_source_id"])).fetchone()[0]
+        assert distance<0.001
+        conn.execute("UPDATE spatial.reference_features SET geometry=ST_Translate(geometry,1,0) WHERE source_id=%s",(extended_pin["source_id"],))
+    # Pin hashes alone cannot hide altered coordinates: the actual replay must agree.
     post("/processing/jobs",job("reproject",extended_pin,{"target_srid":4326}),expected=422)
+    with psycopg.connect(OWNER) as conn:
+        conn.execute("UPDATE spatial.reference_features SET geometry=ST_Translate(geometry,-1,0) WHERE source_id=%s",(extended_pin["source_id"],))
     post("/processing/jobs",job("buffer",extended_pin,{"distance_meters":10,"quad_segs":8}),expected=422)
     print("PASS same-datum whole-layer UTM, native feature reads, round trip and out-of-zone rejection",flush=True)
     # A successful ordinary reproject does not establish regional provenance.
     unverified=pinned_layer(reprojected["output_layer_id"],reprojected["output_source_id"])
     post("/processing/jobs",job("reproject",unverified,{"target_srid":4756}),expected=422)
-    # Until multi-hop provenance is implemented, never publish an unsupported regional output.
-    post("/processing/jobs",job("reproject",derived,{"target_srid":4756}),expected=422)
-    print("PASS verified VN2000 projection, one-hop derived evidence and unverified-source rejection",flush=True)
+    result(job("reproject",derived,{"target_srid":4756}),regional["feature_count"],0)
+    print("PASS verified VN2000 projection, bounded multi-hop replay and tampered/unverified-source rejection",flush=True)
     post("/processing/jobs",job("reproject",point,{"target_srid":3405}),expected=422)
     post("/processing/jobs",job("spatial_join",point,{"predicate":"arbitrary_sql"},parcels),expected=422)
     post("/processing/jobs",job("union",point,{},clip),expected=422)

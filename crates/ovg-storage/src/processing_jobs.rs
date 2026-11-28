@@ -845,6 +845,9 @@ async fn approved_reproject(
     target: i32,
 ) -> Result<String, EditError> {
     if let (Ok(a),Ok(b))=(u32::try_from(native),u32::try_from(target)) {
+        if ovg_core::crs::is_extended_native_vn2000(a)&&b==4326{
+            return crate::catalog::regional_crs::verify_extended_datum_source(tx,org,project,source,a,"rf.geometry").await.map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None});
+        }
         if crate::native_projection::is_native_pair(a,b) {
             let map_error=|error:ovg_core::AppError|EditError::Platform{
                 status:error.status_code(),code:error.code(),message:error.to_string(),details:None
@@ -884,16 +887,7 @@ async fn approved_reproject(
         .await?;
         Ok(expr)
     } else {
-        // Regional outputs must remain independently verifiable from an original
-        // fixture. Derived inputs may return to WGS84, but not create another
-        // regional hop whose provenance the catalog cannot yet validate.
-        if matches!(target, 4756 | 5899) {
-            let kind: String=sqlx::query_scalar("SELECT kind FROM spatial.data_sources WHERE organization_id=$1 AND project_id=$2 AND id=$3")
-                .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(edit_db_error)?;
-            if kind != "reference_fixture" {
-                return Err(EditError::validation("TRANSFORMATION_OUT_OF_AREA","Regional output requires original verified reference fixture; multi-hop regional provenance is not supported"));
-            }
-        }
+        // The immutable source chain is replayed before each datum operation.
         let profile=crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
             .await
             .map_err(|error| EditError::Platform {

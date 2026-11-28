@@ -1,5 +1,5 @@
 //! Regional CRS evidence is derived from immutable reference fixtures and
-//! independently checked one-hop reprojections, never caller assertions.
+//! independently replayed bounded reprojection chains, never caller assertions.
 use super::db_error;
 use super::fixtures::{materialize_fixture, regional_controls, Provenance};
 use crate::editing::domain::sha256_py_json;
@@ -212,99 +212,22 @@ async fn verify_reference(
         count,
     })
 }
-pub(crate) async fn verify_regional_source(
-    tx: &mut Transaction<'_, Postgres>,
-    org: Uuid,
-    project: Uuid,
-    source: Uuid,
-    profile: &'static TransformationProfile,
-) -> Result<&'static TransformationProfile, AppError> {
-    if profile.fixture_requirement == FixtureRequirement::None {
-        return Ok(profile);
-    }
-    let row = sqlx::query(
-        "SELECT kind,stored_crs,content_revision,schema_revision,manifest_digest,feature_count
-      FROM spatial.data_sources WHERE organization_id=$1 AND project_id=$2 AND id=$3
-      AND lifecycle='active' AND validation_state='ready' FOR SHARE",
-    )
-    .bind(org)
-    .bind(project)
-    .bind(source)
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(db_error)?
-    .ok_or_else(outside)?;
-    let crs: i32 = row.try_get("stored_crs").map_err(db_error)?;
-    if u32::try_from(crs).ok() != Some(profile.source_code) {
-        return Err(outside());
-    }
-    let kind: String = row.try_get("kind").map_err(db_error)?;
-    let provenance = if kind == "reference_fixture" {
-        verify_reference(tx, org, project, source).await?.provenance
-    } else if kind == "derived_processing" {
-        let content: String = row.try_get("content_revision").map_err(db_error)?;
-        let schema: String = row.try_get("schema_revision").map_err(db_error)?;
-        let manifest: String = row.try_get("manifest_digest").map_err(db_error)?;
-        let count: i32 = row.try_get("feature_count").map_err(db_error)?;
-        let jobs = sqlx::query(
-            "SELECT id,input_refs,parameters,output_content_revision,feature_count
-        FROM processing.jobs WHERE organization_id=$1 AND project_id=$2 AND output_source_id=$3
-        AND status='succeeded' AND algorithm_id='reproject' AND output_crs=$4 LIMIT 2",
-        )
-        .bind(org)
-        .bind(project)
-        .bind(source)
-        .bind(crs)
-        .fetch_all(&mut **tx)
-        .await
-        .map_err(db_error)?;
-        if jobs.len() != 1 {
-            return Err(outside());
-        }
-        let job = &jobs[0];
-        let id: Uuid = job.try_get("id").map_err(db_error)?;
-        let refs: Value = job.try_get("input_refs").map_err(db_error)?;
-        let params: Value = job.try_get("parameters").map_err(db_error)?;
-        if job
-            .try_get::<Option<String>, _>("output_content_revision")
-            .map_err(db_error)?
-            .as_deref()
-            != Some(content.as_str())
-            || job
-                .try_get::<Option<i32>, _>("feature_count")
-                .map_err(db_error)?
-                != Some(count)
-            || params != json!({"target_srid":crs})
-            || manifest
-                != sha256_py_json(&json!({"job_id":id.to_string(),"refs":refs,"params":params}))
-        {
-            return Err(outside());
-        }
-        let origin = refs["input_source_id"]
-            .as_str()
-            .and_then(|v| Uuid::parse_str(v).ok())
-            .ok_or_else(outside)?;
-        if origin == source {
-            return Err(outside());
-        }
-        let verified = verify_reference(tx, org, project, origin).await?;
-        if refs["input_content_revision"].as_str() != Some(verified.content.as_str())
-            || refs["input_schema_revision"].as_str() != Some(verified.schema.as_str())
-            || refs["input_stored_crs"].as_i64() != Some(i64::from(verified.crs))
-            || count != verified.count
-            || schema != verified.schema
-        {
-            return Err(outside());
-        }
-        let prior = reference_transformation(
-            u32::try_from(verified.crs).map_err(|_| outside())?,
-            profile.source_code,
-        )
-        .ok_or_else(outside)?;
-        let prior=effective_profile(verified.provenance,prior)?;
-        check_independent_controls(tx,verified.provenance,prior).await?;
-        check_domain(tx, org, project, origin, prior).await?;
-        let expr = profile_expression(prior, "f.geometry");
+// A chain is verified from its immutable root forward. Each hop must be a
+// succeeded, pinned Reproject job, with exact manifest, feature and schema
+// equality. No imported/manual/edited intermediate is trusted. A hard depth
+// limit and cycle rejection bound the work even for malformed database rows.
+struct ReprojectHop {
+    source:Uuid,
+    parent:Uuid,
+    crs:i32,
+    content:String,
+    schema:String,
+    count:i32,
+    refs:Value,
+}
+async fn check_replay(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,
+    hop:&ReprojectHop,expr:&str)->Result<(),AppError>{
+    let source=hop.source;let origin=hop.parent;let content=&hop.content;let schema=&hop.schema;
         let sql=format!("WITH expected AS(SELECT f.feature_id,f.attributes,{expr} AS geometry FROM spatial.reference_features f
         WHERE f.organization_id=$1 AND f.project_id=$2 AND f.source_id=$4),
         actual AS(SELECT feature_id,attributes,geometry,geometry_state,content_revision,schema_revision FROM spatial.reference_features
@@ -330,13 +253,100 @@ pub(crate) async fn verify_regional_source(
         if !valid {
             return Err(outside());
         }
-        verified.provenance
-    } else {
-        return Err(outside());
-    };
-    let profile=effective_profile(provenance,profile)?;
+
+    Ok(())
+}
+async fn datum_expression_from_native(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,
+    source:Uuid,native:u32,provenance:Provenance,geometry:&str)->Result<String,AppError>{
+    let projection=crate::native_projection::NativeProjection::new(native,4756)?;
+    projection.verify_source(tx,org,project,source).await?;
+    let profile=effective_profile(provenance,reference_transformation(4756,4326).ok_or_else(outside)?)?;
     check_independent_controls(tx,provenance,profile).await?;
-    check_domain(tx, org, project, source, profile).await?;
+    let geo=projection.expression("f.geometry");
+    let predicate=domain_expression(profile,&geo);
+    let sql=format!("SELECT NOT EXISTS(SELECT 1 FROM spatial.reference_features f WHERE f.organization_id=$1 AND f.project_id=$2 AND f.source_id=$3 AND ({predicate}) IS NOT TRUE)");
+    let valid:bool=sqlx::query_scalar(&sql).bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(db_error)?;
+    if !valid{return Err(outside());}
+    Ok(profile_expression(profile,&projection.expression(geometry)))
+}
+async fn replay_expression(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,
+    source:Uuid,a:u32,b:u32,provenance:Provenance)->Result<String,AppError>{
+    if crate::native_projection::is_native_pair(a,b){
+        let projection=crate::native_projection::NativeProjection::new(a,b)?;
+        projection.verify_source(tx,org,project,source).await?;
+        return Ok(projection.expression("f.geometry"));
+    }
+    if ovg_core::crs::is_extended_native_vn2000(a)&&b==4326 {
+        return datum_expression_from_native(tx,org,project,source,a,provenance,"f.geometry").await;
+    }
+    let profile=effective_profile(provenance,reference_transformation(a,b).ok_or_else(outside)?)?;
+    // Do not confer regional provenance on ordinary WGS84/web copies.
+    if profile.fixture_requirement==FixtureRequirement::None{return Err(outside());}
+    check_independent_controls(tx,provenance,profile).await?;
+    check_domain(tx,org,project,source,profile).await?;
+    Ok(profile_expression(profile,"f.geometry"))
+}
+async fn verify_chain(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,
+    source:Uuid)->Result<Evidence,AppError>{
+    let mut current=source;
+    let mut seen=std::collections::HashSet::new();
+    let mut hops=Vec::new();
+    let root=loop{
+        if !seen.insert(current){return Err(outside());}
+        let row=sqlx::query("SELECT kind,stored_crs,content_revision,schema_revision,manifest_digest,feature_count FROM spatial.data_sources
+            WHERE organization_id=$1 AND project_id=$2 AND id=$3 AND lifecycle='active' AND validation_state='ready' FOR SHARE")
+            .bind(org).bind(project).bind(current).fetch_optional(&mut **tx).await.map_err(db_error)?.ok_or_else(outside)?;
+        let kind:String=row.try_get("kind").map_err(db_error)?;
+        if kind=="reference_fixture"{break verify_reference(tx,org,project,current).await?;}
+        if kind!="derived_processing"||hops.len()>=8{return Err(outside());}
+        let crs:i32=row.try_get("stored_crs").map_err(db_error)?;
+        let content:String=row.try_get("content_revision").map_err(db_error)?;
+        let schema:String=row.try_get("schema_revision").map_err(db_error)?;
+        let manifest:String=row.try_get("manifest_digest").map_err(db_error)?;
+        let count:i32=row.try_get("feature_count").map_err(db_error)?;
+        if !(1..=100).contains(&count){return Err(outside());}
+        let jobs=sqlx::query("SELECT id,input_refs,parameters,output_content_revision,feature_count FROM processing.jobs WHERE organization_id=$1 AND project_id=$2 AND output_source_id=$3 AND status='succeeded' AND algorithm_id='reproject' AND output_crs=$4 LIMIT 2 FOR SHARE")
+            .bind(org).bind(project).bind(current).bind(crs).fetch_all(&mut **tx).await.map_err(db_error)?;
+        if jobs.len()!=1{return Err(outside());}
+        let job=&jobs[0];
+        let id:Uuid=job.try_get("id").map_err(db_error)?;
+        let refs:Value=job.try_get("input_refs").map_err(db_error)?;
+        let params:Value=job.try_get("parameters").map_err(db_error)?;
+        if job.try_get::<Option<String>,_>("output_content_revision").map_err(db_error)?.as_deref()!=Some(content.as_str())
+          ||job.try_get::<Option<i32>,_>("feature_count").map_err(db_error)?!=Some(count)
+          ||params!=json!({"target_srid":crs})
+          ||manifest!=sha256_py_json(&json!({"job_id":id.to_string(),"refs":refs,"params":params})){return Err(outside());}
+        let parent=refs["input_source_id"].as_str().and_then(|s|Uuid::parse_str(s).ok()).ok_or_else(outside)?;
+        hops.push(ReprojectHop{source:current,parent,crs,content,schema,count,refs});
+        current=parent;
+    };
+    let mut verified=root;
+    for hop in hops.iter().rev(){
+        if hop.refs["input_content_revision"].as_str()!=Some(verified.content.as_str())
+            ||hop.refs["input_schema_revision"].as_str()!=Some(verified.schema.as_str())
+            ||hop.refs["input_stored_crs"].as_i64()!=Some(i64::from(verified.crs))
+            ||hop.count!=verified.count||hop.schema!=verified.schema{return Err(outside());}
+        let expr=replay_expression(tx,org,project,hop.parent,u32::try_from(verified.crs).map_err(|_|outside())?,
+            u32::try_from(hop.crs).map_err(|_|outside())?,verified.provenance).await?;
+        check_replay(tx,org,project,hop,&expr).await?;
+        verified=Evidence{provenance:verified.provenance,content:hop.content.clone(),schema:hop.schema.clone(),crs:hop.crs,count:hop.count};
+    }
+    Ok(verified)
+}
+pub(crate) async fn verify_extended_datum_source(tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,source:Uuid,native:u32,geometry:&str)->Result<String,AppError>{
+    let evidence=verify_chain(tx,org,project,source).await?;
+    if !ovg_core::crs::is_extended_native_vn2000(native)||u32::try_from(evidence.crs).ok()!=Some(native){return Err(outside());}
+    datum_expression_from_native(tx,org,project,source,native,evidence.provenance,geometry).await
+}
+pub(crate) async fn verify_regional_source(
+    tx:&mut Transaction<'_,Postgres>,org:Uuid,project:Uuid,source:Uuid,profile:&'static TransformationProfile
+)->Result<&'static TransformationProfile,AppError>{
+    if profile.fixture_requirement==FixtureRequirement::None{return Ok(profile);}
+    let verified=verify_chain(tx,org,project,source).await?;
+    if u32::try_from(verified.crs).ok()!=Some(profile.source_code){return Err(outside());}
+    let profile=effective_profile(verified.provenance,profile)?;
+    check_independent_controls(tx,verified.provenance,profile).await?;
+    check_domain(tx,org,project,source,profile).await?;
     Ok(profile)
 }
 #[cfg(test)]

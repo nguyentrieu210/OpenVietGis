@@ -77,6 +77,6 @@ it("supports native VN-2000 projection targets but not unsupported datum transit
  const req=processingRequest("reproject",native,undefined,"","","","Projected",op,{targetSrid:3405});
  expect(readPendingProcessing(JSON.stringify(req))).toEqual(req);
  const projected={...native,source:{...native.source,stored_crs:{...native.source.stored_crs!,code:3405}}};
- expect(reprojectTargets(3405)).not.toContain(4326);
+ expect(reprojectTargets(3405)).toContain(4326); // server still requires verified regional provenance
  expect(()=>processingRequest("buffer",projected,undefined,"100","8","","Buffer",op)).toThrow();
 });

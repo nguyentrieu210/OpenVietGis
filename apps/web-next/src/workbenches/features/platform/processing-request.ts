@@ -7,7 +7,7 @@ export const NATIVE_VN2000_CRSS=[4756,3405,3406,5896,5897,5898,5899,9205,9206,92
 export const REPROJECT_CRSS=[4326,3857,...NATIVE_VN2000_CRSS] as const;
 export const extendedNativeCrs=(code:number|undefined)=>code!==4756&&code!==5899&&NATIVE_VN2000_CRSS.some(c=>c===code);
 export function reprojectTargets(native:number|undefined):number[]{
- if(native===4326)return [4326,3857,4756,5899];if(native===3857)return [4326,3857];if(native===4756||native===5899)return [4326,...NATIVE_VN2000_CRSS.filter(c=>c!==native)];if(NATIVE_VN2000_CRSS.some(c=>c===native))return NATIVE_VN2000_CRSS.filter(c=>c!==native);return [];
+ if(native===4326)return [4326,3857,4756,5899];if(native===3857)return [4326,3857];if(native===4756||native===5899)return [4326,...NATIVE_VN2000_CRSS.filter(c=>c!==native)];if(NATIVE_VN2000_CRSS.some(c=>c===native))return [4326,...NATIVE_VN2000_CRSS.filter(c=>c!==native)];return [];
 }
 export const overlayAlgorithm=(id:Algorithm)=>id==="clip"||id==="difference"||id==="intersection"||id==="union"||id==="spatial_join";
 export const processingLayer=(l:SpatialLayer)=>l.lifecycle==="active"&&l.source.lifecycle==="active"&&l.source.validation_state==="ready"&&!!l.source.stored_crs?.code&&l.source.feature_count!=null&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
