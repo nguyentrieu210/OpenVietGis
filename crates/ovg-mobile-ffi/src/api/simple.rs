@@ -346,3 +346,26 @@ mod unified_map_tests{
   assert!(w.integrity().unwrap());w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
  }
 }
+
+#[cfg(test)]
+mod unified_snap_tests{
+ use super::*;
+ #[test]fn snap_across_layers_exclusion_and_vertex_move(){
+  let dir=std::env::temp_dir().join(format!("ovg-unified-snap-{}",Uuid::new_v4()));let root=dir.to_string_lossy().to_string();
+  let p=create_unified_project(root.clone()).unwrap();let w=open_unified_project(root,p).unwrap();
+  let c:serde_json::Value=serde_json::from_str(&w.catalog().unwrap()).unwrap();
+  let l=c["layers"][0]["id"].as_str().unwrap().to_owned();let other=Uuid::new_v4().to_string();
+  let op=||Uuid::new_v4().to_string();let f=op();let g=op();
+  w.add_layer(other.clone(),"reference".into(),"1".into()).unwrap();
+  w.commit_geometry(l.clone(),f.clone(),op(),"2".into(),"0".into(),"line".into(),vec![106.,11.,106.001,11.],"{}".into()).unwrap();
+  w.draw_point(other.clone(),g.clone(),op(),"3".into(),106.0005,11.0001,"{}".into()).unwrap();
+  let snap=|r:&str,exclude:bool|w.snap_unified(vec![l.clone(),other.clone()],106.0005,11.,30.,r.into(),exclude.then(||l.clone()),exclude.then(||f.clone()));
+  let hit:serde_json::Value=serde_json::from_str(&snap("4",false).unwrap()).unwrap();assert_eq!(hit["feature"],f);assert_eq!(hit["vertex"],false);
+  let hit:serde_json::Value=serde_json::from_str(&snap("4",true).unwrap()).unwrap();assert_eq!(hit["feature"],g);assert_eq!(hit["layer"],other);assert_eq!(hit["vertex"],true);
+  assert!(snap("3",true).is_err());
+  w.commit_geometry(l.clone(),f.clone(),op(),"4".into(),"1".into(),"line".into(),vec![106.,11.,106.0005,11.0001,106.001,11.],"{}".into()).unwrap();
+  let view:serde_json::Value=serde_json::from_str(&w.feature_detail(l,f,"5".into()).unwrap()).unwrap();
+  assert_eq!(view["geometry"]["coordinates"].as_array().unwrap().len(),3);
+  assert_eq!(view["revision"],"2");assert!(w.integrity().unwrap());w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
+ }
+}
