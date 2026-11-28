@@ -246,7 +246,7 @@ try{
  await table.getByRole("button",{name:"Hiện tất cả cột",exact:true}).click();
  await table.getByRole("button",{name:"height_m",exact:true}).click();
  assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"ascending");
- await table.getByRole("button",{name:/height_m/}).click();
+ await table.getByRole("columnheader").filter({hasText:"height_m"}).getByRole("button",{name:/^height_m(?:\s+[↑↓])?$/}).click();
  assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"descending");
  await table.getByRole("button",{name:"Biểu mẫu",exact:true}).click();
  await table.getByLabel("Thông tin đối tượng",{exact:true}).waitFor();
