@@ -9,6 +9,7 @@ mod processing_plan;
 pub mod marketplace_v2;
 pub mod runtime_v2;
 pub mod marketplace_developers;
+mod developer_v2;
 pub mod partner_platform;
 pub mod records;
 pub mod validation;
@@ -43,6 +44,7 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(marketplace_v2::router())
         .merge(runtime_v2::router())
         .merge(marketplace_developers::router())
+        .merge(developer_v2::router())
         .merge(partner_platform::router())
 }
 
