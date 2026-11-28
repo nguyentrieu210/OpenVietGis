@@ -65,3 +65,29 @@ export function installMarketplaceRelease(client:ApiClient,org:string,release:Ma
  const m=release.manifest;
  return client.request<ExtensionManifest>(`/organizations/${encodeURIComponent(org)}/marketplace/install/${encodeURIComponent(release.publisher_id)}/${encodeURIComponent(m.extension_key)}/${encodeURIComponent(m.version)}`,{method:"POST",headers:{"x-openvietgis-csrf":csrf}});
 }
+
+
+/** Paginated search of the same reviewed, signed v1 catalog. */
+export function searchMarketplace(client: ApiClient, query: string, offset = 0, limit = 50) {
+  if ([...query].length > 200 || !Number.isInteger(offset) || offset < 0 || offset > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid marketplace search");
+  const params = new URLSearchParams({q: query, offset: String(offset), limit: String(limit)});
+  return client.request<{items: MarketplaceRelease[]; total: number; next_offset: number | null}>("/marketplace/search?" + params.toString(), {cache:"no-store"});
+}
+
+
+/** V2 metadata is cryptographically verified by the configured server.
+ * This is not an installed or executable plugin. */
+export type MarketplaceV2Metadata = {
+  envelope: {
+    schema_version: 2; publisher_id: string; extension_key: string; version: string;
+    manifest_digest: string; host_api_range: string; platforms: string[];
+    permissions: string[]; contribution_digest: string;
+    assets: {id:string;media_type:string;size:number;sha256:string}[];
+    issued_at: string; key_id: string;
+  };
+  release_digest: string; catalog_epoch: number; runtime_available: false;
+  publisher_signature: string; operator_signature: string;
+};
+export function listMarketplaceV2(client: ApiClient, host: "web"|"android"|"ios"|"windows"|"macos"|"linux"|"server", api: string) {
+  return client.request<{items:MarketplaceV2Metadata[];profile:"metadata_only"}>("/marketplace/v2/catalog?" + new URLSearchParams({host,api}).toString(), {cache:"no-store"});
+}

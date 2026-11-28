@@ -1019,6 +1019,7 @@ dependencies = [
  "ovg-spatial",
  "ovg-storage",
  "ovg-sync",
+ "semver",
  "serde",
  "serde_json",
  "sha1",
@@ -1060,9 +1061,14 @@ dependencies = [
 name = "ovg-module-sdk"
 version = "0.2.0"
 dependencies = [
+ "chrono",
+ "ed25519-dalek",
+ "hex",
  "ovg-core",
+ "semver",
  "serde",
  "serde_json",
+ "sha2",
  "uuid",
 ]
 
