@@ -26,7 +26,7 @@ impl Cad{
    let b=small(path)?;let s=std::str::from_utf8(&b).map_err(|_|"UNSUPPORTED_DXF")?;
    let lines:Vec<_>=s.lines().collect();if lines.len()%2!=0||lines.len()>200_000{return Err("INVALID_DXF")}
    let mut pairs=Vec::new();for p in lines.chunks_exact(2){pairs.push((p[0].trim().parse::<u16>().map_err(|_|"INVALID_DXF")?,p[1].trim()));}
-   let mut entities=false;let mut found=false;let mut out=Vec::new();let mut i=0;
+   let mut entities=false;let mut found=false;let mut out=Vec::new();let mut handles=std::collections::HashSet::new();let mut i=0;
    while i<pairs.len(){
      if pairs[i]==(0,"SECTION")&&pairs.get(i+1)==Some(&(2,"ENTITIES")){entities=true;found=true;i+=2;continue}
      if pairs[i]==(0,"ENDSEC"){entities=false;i+=1;continue}
@@ -42,7 +42,9 @@ impl Cad{
      // Reject non-default OCS extrusion rather than silently changing geometry.
      for (c,default) in [(210,0.),(220,0.),(230,1.)]{if let Some((_,v))=fields.iter().find(|p|p.0==c){if v.parse::<f64>().ok()!=Some(default){return Err("UNSUPPORTED_DXF_OCS")}}}
      let geom=if kind=="POINT"{json!({"type":"Point","coordinates":a})}else{let z=[num(11)?,num(21)?];if !xy(z[0],z[1]){return Err("INVALID_CRS_COORDINATE")}json!({"type":"LineString","coordinates":[a,z]})};
-     out.push(json!({"type":"Feature","geometry":geom,"properties":{"handle":field(5)?,"layer":field(8)?,"entity":kind}}));
+     let handle=field(5)?.to_ascii_uppercase();let layer=field(8)?;
+     if handle.is_empty()||handle.len()>16||!handle.bytes().all(|b|b.is_ascii_hexdigit())||!handles.insert(handle.clone())||layer.is_empty()||layer.len()>256||layer.chars().any(char::is_control){return Err("INVALID_DXF_IDENTITY")}
+     out.push(json!({"type":"Feature","geometry":geom,"properties":{"handle":handle,"layer":layer,"entity":kind}}));
      if out.len()>8192{return Err("RESOURCE_LIMIT")}
    }
    if !found||out.is_empty(){return Err("INVALID_DXF")}Ok(Self{features:out})
@@ -62,6 +64,7 @@ impl Cad{
    let out=serde_json::to_vec(&json!({"type":"FeatureCollection","features":rows})).map_err(|_|"INVALID_DXF")?;
    if out.len()>2*1024*1024{return Err("RESOURCE_LIMIT")}Ok(out)
  }
+ pub fn features(&self)->&[Value]{&self.features}
  pub fn count(&self)->u64{self.features.len()as u64}
  pub fn chunk(&self,n:u32)->Result<Vec<u8>>{
   let start=(n as usize).checked_mul(CHUNK as usize).ok_or("INVALID_CHUNK")?;
