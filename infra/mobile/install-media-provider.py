@@ -96,3 +96,26 @@ rules = host / "android/app/proguard-rules.pro"
 if rules.parent.exists():
     with rules.open("a") as f:
         f.write("\n-keep class org.openvietgis.secure.MediaKeys { *; }\n")
+
+# Compile Swift callbacks as part of the existing Runner target. Use the C
+# bridging header, not an unchecked dynamic symbol or Flutter channel.
+ios=host/"ios/Runner"
+if ios.is_dir():
+    import plistlib
+    delegate=ios/"AppDelegate.swift"
+    header=ios/"Runner-Bridging-Header.h"
+    if not delegate.is_file() or not header.is_file():
+        raise SystemExit("unexpected iOS Runner template")
+    s=delegate.read_text()
+    anchor="return super.application(application, didFinishLaunchingWithOptions: launchOptions)"
+    if s.count(anchor)!=1:
+        raise SystemExit("AppDelegate startup anchor changed")
+    s=s.replace(anchor,"OVGMediaIO.install()\n    "+anchor)
+    s+="\n"+(repo/"infra/mobile/native/media/MediaIO.swift").read_text()
+    delegate.write_text(s)
+    with header.open("a") as f:
+        f.write("\n#include <stdint.h>\n#include <stddef.h>\nvoid ovg_ios_media_install(int32_t (*capture)(uint8_t *, size_t), int32_t (*view)(const uint8_t *, size_t));\n")
+    plist=ios/"Info.plist"
+    d=plistlib.loads(plist.read_bytes())
+    d["NSCameraUsageDescription"]="Capture a survey photo when you choose to attach it to a GIS feature."
+    plist.write_bytes(plistlib.dumps(d))
