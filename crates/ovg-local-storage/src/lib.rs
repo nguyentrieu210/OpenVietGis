@@ -38,6 +38,8 @@ pub struct Receipt { pub revision: u64, pub replayed: bool }
 pub struct Feature { pub feature_id: Uuid, pub revision: u64, pub wkb: Vec<u8>, pub attributes: serde_json::Value }
 pub struct LocalStore { db: Mutex<Connection> }
 
+pub mod vector;
+pub mod mbtiles;
 const SCHEMA: &str = include_str!("schema.sql");
 fn parse_geometry(blob: &[u8]) -> Result<(Vec<u8>,BBox),Error> {
     if blob.len()>MAX_GEOMETRY {return Err(Error::Limit);}
@@ -108,14 +110,34 @@ impl LocalStore {
     /// Single ACID transaction for feature, spatial index, revision and local journal.
     /// Local journal never grants server permissions and is never automatically uploaded.
     pub fn apply(&self,m:&Mutation)->Result<Receipt,Error>{
+        let mut db=self.lock()?;
+        let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let result=Self::apply_in(&tx,m)?;
+        tx.commit()?;
+        Ok(result)
+    }
+    /// Bounded import transaction. No partial feature/journal mutation on failure.
+    pub fn apply_batch(&self, mutations:&[Mutation])->Result<Vec<Receipt>,Error>{
+        if mutations.is_empty() || mutations.len()>4096 {return Err(Error::Limit);}
+        let mut bytes=0usize;
+        for m in mutations {
+            bytes=bytes.checked_add(m.wkb.as_ref().map_or(0,Vec::len)).and_then(|n|n.checked_add(m.attributes.to_string().len())).ok_or(Error::Limit)?;
+            if bytes>16*1024*1024{return Err(Error::Limit);}
+        }
+        let mut db=self.lock()?;
+        let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let mut out=Vec::with_capacity(mutations.len());
+        for m in mutations {out.push(Self::apply_in(&tx,m)?);}
+        tx.commit()?;
+        Ok(out)
+    }
+    fn apply_in(tx:&rusqlite::Transaction<'_>,m:&Mutation)->Result<Receipt,Error>{
         if m.feature_id.is_nil()||m.operation_id.is_nil()||m.expected_revision>=i64::MAX as u64||!m.attributes.is_object(){return Err(Error::Invalid);}
         let attrs=serde_json::to_string(&m.attributes).map_err(|_|Error::Invalid)?;
         if attrs.len()>MAX_ATTRIBUTES{return Err(Error::Limit);}
         let geometry=match &m.wkb{Some(w)=>Some(pack(&parse_geometry(w)?.0)),None=>None};
         let payload=serde_json::to_vec(m).map_err(|_|Error::Invalid)?;
         let digest=Sha256::digest(&payload).to_vec();
-        let mut db=self.lock()?;
-        let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let previous:Option<(Vec<u8>,u64)>=tx.query_row("SELECT payload_hash,revision FROM ovg_journal WHERE operation_id=?1",[m.operation_id.to_string()],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
         if let Some((old,revision))=previous{
             if old!=digest{return Err(Error::Reused);}
@@ -132,7 +154,6 @@ impl LocalStore {
         tx.execute("INSERT INTO ovg_feature_revision(stable_id,revision,deleted) VALUES(?1,?2,?3) ON CONFLICT(stable_id) DO UPDATE SET revision=excluded.revision,deleted=excluded.deleted",params![id,rev,m.wkb.is_none()])?;
         tx.execute("INSERT INTO ovg_journal(operation_id,stable_id,payload_hash,revision,payload) VALUES(?1,?2,?3,?4,?5)",params![m.operation_id.to_string(),id,digest,rev,payload])?;
         tx.execute("UPDATE gpkg_contents SET last_change=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE table_name='features'",[])?;
-        tx.commit()?;
         Ok(Receipt{revision:rev,replayed:false})
     }
     pub fn query(&self,bbox:[f64;4],after_fid:i64,limit:u32)->Result<Vec<(i64,Feature)>,Error>{

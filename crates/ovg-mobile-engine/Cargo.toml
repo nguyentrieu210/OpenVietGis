@@ -16,3 +16,6 @@ ovg-sync = { path = "../ovg-sync" }
 serde = { version = "1", features = ["derive"] }
 uuid = { version = "1", features = ["v4"] }
 thiserror = "2"
+
+geographiclib-rs = "=0.2.5"
+zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
