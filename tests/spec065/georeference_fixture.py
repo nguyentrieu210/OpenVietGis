@@ -5,8 +5,10 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+
 import numpy as np
 from osgeo import gdal
+
 worker=pathlib.Path(__file__).resolve().parents[2]/"apps/api/openvietgis_api/adapters/formats/georeference_worker.py"
 
 def test():
@@ -17,7 +19,7 @@ def test():
         ds.GetRasterBand(1).WriteArray(pixels);ds.GetRasterBand(1).SetNoDataValue(65535);ds=None
         def run(body,success=True):
             cfg.write_text(json.dumps(body))
-            p=subprocess.run([sys.executable,str(worker),str(src),str(cfg),str(out)],capture_output=True,text=True,timeout=30)
+            p=subprocess.run([sys.executable,str(worker),str(src),str(cfg),str(out)],capture_output=True,text=True,timeout=30,check=False)
             result=json.loads(p.stdout)
             assert (p.returncode==0)==success,(p.stdout,p.stderr)
             return result
