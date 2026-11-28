@@ -781,9 +781,12 @@
         "apps/web-next/src/LayoutRender.ts",
         "apps/web-next/src/layout-history.ts",
         "apps/web-next/src/layout-history.test.ts",
-        "apps/web-next/layout-smoke.mjs"
+        "apps/web-next/layout-smoke.mjs",
+        "apps/api-rust/src/cartography/designer.rs",
+        "apps/api/openvietgis_api/adapters/http/layout_designer.py",
+        "apps/api/tests/integration/spatial/test_layout_designer.py"
       ],
-      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Align/distribute, bounded document undo/redo, nonprinting guides and session-local direct-edit lock; no persisted lock or multi-item drag."
+      "blocker": "Align/distribute, bounded undo/redo, nonprinting guides, persisted per-item direct-edit lock (optional backward-compatible Rust/Python JSON), group drag with common page-bounded delta and pointer cancellation rollback. Lock is layout editing metadata, not access control. New tests unexecuted; authenticated browser/QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-03",

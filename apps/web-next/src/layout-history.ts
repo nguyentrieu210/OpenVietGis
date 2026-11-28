@@ -27,3 +27,14 @@ export function alignLayout<T extends LayoutRect>(items:T[],selection:ReadonlySe
  }
  return items.map(i=>{const d=result.get(i.id);return d?{...i,x:Math.max(0,Math.min(pageWidth-i.w,d.x??i.x)),y:Math.max(0,Math.min(pageHeight-i.h,d.y??i.y))}:i});
 }
+
+/** Translate a group by one common bounded delta; preserve relative distances. */
+export function moveLayoutGroup<T extends LayoutRect>(items:readonly T[],selection:ReadonlySet<string>,dx:number,dy:number,pageWidth:number,pageHeight:number,snap:boolean):T[]{
+ const chosen=items.filter(i=>selection.has(i.id));
+ if(!chosen.length||![dx,dy,pageWidth,pageHeight].every(Number.isFinite)||pageWidth<=0||pageHeight<=0)return [...items];
+ const minX=Math.min(...chosen.map(i=>i.x)),minY=Math.min(...chosen.map(i=>i.y)),maxX=Math.max(...chosen.map(i=>i.x+i.w)),maxY=Math.max(...chosen.map(i=>i.y+i.h));
+ if(minX<0||minY<0||maxX>pageWidth+.0001||maxY>pageHeight+.0001)throw Error("Nhóm ngoài khổ trang.");
+ const q=(v:number)=>snap?Math.round(v):Math.round(v*10)/10;
+ const x=Math.max(-minX,Math.min(pageWidth-maxX,q(minX+dx)-minX)),y=Math.max(-minY,Math.min(pageHeight-maxY,q(minY+dy)-minY));
+ return items.map(i=>selection.has(i.id)?{...i,x:i.x+x,y:i.y+y}:i);
+}

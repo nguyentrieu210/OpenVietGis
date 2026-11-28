@@ -70,6 +70,8 @@ struct Element {
     border: bool,
     #[serde(default)]
     grid: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    locked: bool,
     #[serde(default)]
     camera: Option<Camera>,
     #[serde(default)]
@@ -82,6 +84,10 @@ const fn default_font_size() -> f64 {
 
 fn default_color() -> String {
     "#15383b".to_owned()
+}
+
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 const fn default_true() -> bool {
