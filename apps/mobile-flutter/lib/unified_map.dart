@@ -76,10 +76,10 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  Future<void> _preview()async{
   final map=_map;if(map==null||!_loaded)return;
   final p=_vertices.map((v)=>[v.longitude,v.latitude]).toList();
-  await map.setGeoJsonSource('draft',{'type':'FeatureCollection','features':[
+  try{await map.setGeoJsonSource('draft',{'type':'FeatureCollection','features':[
     for(final xy in p){'type':'Feature','properties':{},'geometry':{'type':'Point','coordinates':xy}},
     if(p.length>=2){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':_kind=='polygon'&&p.length>=3?[...p,p.first]:p}}
-  ]});
+  ]});}catch(e){if(mounted)setState(()=>_error=e.toString());}
  }
  Future<void> _tap(dynamic point,LatLng coordinate)async{
   if(_busy||!_loaded)return;
@@ -89,7 +89,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
    await _preview();return;
   }
   final map=_map;if(map==null)return;
-  final epoch=_epoch;
+  final epoch=++_epoch;
   try{
    final hits=await map.queryRenderedFeatures(point,['u-fill','u-line','u-point'],null);
    if(!mounted||epoch!=_epoch)return;
@@ -128,7 +128,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  Future<void> _compensate()async{
   await _run(()async{final r=jsonDecode(await widget.project.compensate(operationId:widget.uuid(),expected:_revision)) as Map;if(mounted)setState((){_revision=r['revision'].toString();_selected=null;_featureRevision=null;});});
  }
- @override Widget build(BuildContext context)=>Scaffold(
+ @override Widget build(BuildContext context)=>PopScope(canPop:!_busy&&_kind==null,child:Scaffold(
   appBar:AppBar(title:const Text('Unified Map'),actions:[IconButton(tooltip:'Đọc lại revision',onPressed:_busy||_kind!=null?null:()=>unawaited(_run(_refreshRevision)),icon:const Icon(Icons.refresh))]),
   body:Stack(children:[
    Positioned.fill(child:MapLibreMap(styleString:jsonEncode(_style),initialCameraPosition:const CameraPosition(target:LatLng(11,106.7),zoom:8),onMapCreated:(m)=>_map=m,onStyleLoadedCallback:(){_loaded=true;_schedule();},onCameraIdle:_schedule,trackCameraPosition:true,onMapClick:(p,c)=>unawaited(_tap(p,c)))),
@@ -149,9 +149,9 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
     if(_truncated)const Text('Giới hạn 512 đối tượng / 1 MiB. Phóng to để xem thêm.'),
     if(_selected!=null&&_kind==null)...[
      Text('ID: $_selected'),
-     Wrap(children:[TextButton(onPressed:_busy?null:()=>unawaited(_editAttrs()),child:const Text('Thuộc tính')),TextButton(onPressed:_busy?null:()=>unawaited(_delete()),child:const Text('Xóa')),PopupMenuButton<String>(tooltip:'Vẽ lại hình học',onSelected:(k)=>_start(k,replace:true),itemBuilder:(_)=>[for(final k in ['point','line','polygon'])PopupMenuItem(value:k,child:Text('Vẽ lại $k'))])])
+     Wrap(children:[TextButton(onPressed:_busy?null:()=>unawaited(_editAttrs()),child:const Text('Thuộc tính')),TextButton(onPressed:_busy?null:()=>unawaited(_delete()),child:const Text('Xóa')),PopupMenuButton<String>(tooltip:'Vẽ lại hình học',enabled:!_busy,onSelected:(k)=>_start(k,replace:true),itemBuilder:(_)=>[for(final k in ['point','line','polygon'])PopupMenuItem(value:k,child:Text('Vẽ lại $k'))])])
     ]
    ]))))
   ])
- );
+ ));
 }
