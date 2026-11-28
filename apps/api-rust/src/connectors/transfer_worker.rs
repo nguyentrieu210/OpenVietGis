@@ -679,22 +679,28 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let stdout = String::from_utf8_lossy(&out.stdout);
     if let Some(last_line) = stdout.lines().rfind(|l| !l.trim().is_empty()) {
         if let Ok(val) = serde_json::from_str::<Value>(last_line) {
-            if val.get("ok").and_then(Value::as_bool) == Some(true) {
+            if val.get("ok").and_then(Value::as_bool) == Some(true) && out.status.success() {
                 return Ok(val);
             }
-            let code = val.get("status").and_then(Value::as_u64).unwrap_or(500);
-            let status =
-                StatusCode::from_u16(code as u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = match val.get("status").and_then(Value::as_u64) {
+                Some(422) => StatusCode::UNPROCESSABLE_ENTITY,
+                Some(413) => StatusCode::PAYLOAD_TOO_LARGE,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
             let msg = val
                 .get("message")
                 .and_then(Value::as_str)
                 .unwrap_or("transfer worker failed")
                 .to_owned();
             return Err(WorkerError {
-                code: match val.get("code").and_then(Value::as_str) {
+                code: match val.get("code").and_then(Value::as_str).filter(|_| !status.is_server_error()) {
                     Some("ARCHIVE_PATH_TRAVERSAL") => Some("ARCHIVE_PATH_TRAVERSAL"),
                     Some("ARCHIVE_SYMLINK_REJECTED") => Some("ARCHIVE_SYMLINK_REJECTED"),
                     Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED") => Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED"),
+                    Some("ARCHIVE_ENCRYPTED") => Some("ARCHIVE_ENCRYPTED"),
+                    Some("ARCHIVE_DUPLICATE_ENTRY") => Some("ARCHIVE_DUPLICATE_ENTRY"),
+                    Some("ARCHIVE_SIZE_EXCEEDED") => Some("ARCHIVE_SIZE_EXCEEDED"),
+                    Some("ARCHIVE_BOMB_REJECTED") => Some("ARCHIVE_BOMB_REJECTED"),
                     Some("INVALID_ZIP") => Some("INVALID_ZIP"),
                     Some("INVALID_GEOPACKAGE") => Some("INVALID_GEOPACKAGE"),
                     _ => None,
