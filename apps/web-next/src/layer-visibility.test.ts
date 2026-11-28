@@ -18,6 +18,7 @@ describe("exclusive layer visibility",()=>{
   expect(p.mixed).toBe(true);expect(p.show).toEqual(["a","b"]);expect(p.hide).toEqual(["c"]);
   expect(remapExclusivePaths(["A","A/B","Other"],"A","New")).toEqual(["New","New/B","Other"]);
   expect(remapExclusivePaths(["A","A/B"],"A",null)).toEqual(["B"]);
+  expect(remapExclusivePaths(["A/B","A/B/C"],"A/B","A",false)).toEqual(["A/C"]);
   expect(cleanExclusivePaths(["A","A","A//B",1])).toEqual(["A"]);
  });
 });

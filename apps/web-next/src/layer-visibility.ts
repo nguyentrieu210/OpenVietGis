@@ -27,6 +27,6 @@ export function groupVisibilityState(ids:readonly string[],hidden:ReadonlySet<st
  const complete=ids.length>0&&ids.every(id=>hidden.has(id)===want.has(id))&&current.length>0;
  return {checked:complete,mixed:!complete&&current.length>0,show:complete?[]:ids.filter(id=>!want.has(id)),hide:complete?[...ids]:ids.filter(id=>want.has(id))};
 }
-export function remapExclusivePaths(paths:readonly string[],from:string,to:string|null){
- return cleanExclusivePaths(paths.flatMap(p=>p===from?(to?[to]:[]):p.startsWith(from+"/")?[to?to+p.slice(from.length):p.slice(from.length+1)]:[p]));
+export function remapExclusivePaths(paths:readonly string[],from:string,to:string|null,keepRoot=true){
+ return cleanExclusivePaths(paths.flatMap(p=>p===from?(to&&keepRoot?[to]:[]):p.startsWith(from+"/")?[to?to+p.slice(from.length):p.slice(from.length+1)]:[p]));
 }
