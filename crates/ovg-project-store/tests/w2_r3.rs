@@ -48,4 +48,6 @@ fn virtual_filters_and_maintenance_preserve_data(){
  let copy=d.path().join("compact.sqlite");s.compact_copy(&copy,2).unwrap();
  assert!(s.compact_copy(&copy,2).is_err());
  let c=Store::reopen(&copy).unwrap();assert!(c.integrity().unwrap());assert_eq!(c.report().unwrap().features,3);
+ let rebuild=d.path().join("rebuild.sqlite");s.rebuilt_copy(&rebuild,2,&AtomicBool::new(false)).unwrap();
+ let r=Store::reopen(&rebuild).unwrap();assert!(r.integrity().unwrap());assert_eq!(r.report().unwrap().features,3);
 }
