@@ -61,6 +61,10 @@ class MainActivity : FlutterActivity() {{
             // Provider remains unavailable.
         }}
     }}
+    override fun onStop() {{
+        MediaKeys.dismissPreview()
+        super.onStop()
+    }}
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {{
         if (!MediaKeys.cameraResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }}
