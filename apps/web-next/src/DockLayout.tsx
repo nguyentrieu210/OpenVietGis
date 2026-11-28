@@ -43,12 +43,12 @@ export function DockLayoutMenu({layout,set,panels,toggleLayers,toggleTable}:{lay
 // Floating panel: drag the title strip to move, drag the corner to resize (CSS resize), ⤓ docks it back.
 export function FloatHandle({storageKey,title,dock}:{storageKey:string;title:string;dock:()=>void}){
  const ref=useRef<HTMLDivElement>(null);
- const place=(x:number,y:number)=>{const p=ref.current?.parentElement;if(!p)return;const r=p.getBoundingClientRect();const {x:nx,y:ny}=fitFloatingPanel(x,y,r.width,r.height,innerWidth,innerHeight);p.style.setProperty("--ovg-fx",nx+"px");p.style.setProperty("--ovg-fy",ny+"px");return [nx,ny,r.width,r.height]};
+ const place=(x:number,y:number)=>{const p=ref.current?.parentElement;if(!p)return;const r=p.getBoundingClientRect();if(!r.width||!r.height)return;const {x:nx,y:ny}=fitFloatingPanel(x,y,r.width,r.height,innerWidth,innerHeight);p.style.setProperty("--ovg-fx",nx+"px");p.style.setProperty("--ovg-fy",ny+"px");return [nx,ny,r.width,r.height]};
  useEffect(()=>{const p=ref.current?.parentElement;if(!p)return;
   try{const v=JSON.parse(localStorage.getItem(storageKey)??"null");if(Array.isArray(v)&&v.length===4&&v.every(Number.isFinite)&&v[2]>120&&v[3]>80){p.style.width=Math.min(v[2],innerWidth)+"px";p.style.height=Math.min(v[3],innerHeight)+"px";place(v[0],v[1])}}catch{/* ignore */}
   const resize=()=>{const r=p.getBoundingClientRect();place(r.left,r.top)};resize();window.addEventListener("resize",resize);return()=>window.removeEventListener("resize",resize)
  },[storageKey]);
- const save=()=>{const p=ref.current?.parentElement;if(!p)return;const r=p.getBoundingClientRect();try{localStorage.setItem(storageKey,JSON.stringify([r.left,r.top,r.width,r.height]))}catch{/* storage unavailable */}};
+ const save=()=>{const p=ref.current?.parentElement;if(!p)return;const r=p.getBoundingClientRect();if(!r.width||!r.height)return;try{localStorage.setItem(storageKey,JSON.stringify([r.left,r.top,r.width,r.height]))}catch{/* storage unavailable */}};
  // On dock-back the same element stays mounted: drop the floating size/position it carried.
  useEffect(()=>{const p=ref.current?.parentElement;if(!p)return;const o=new ResizeObserver(()=>{const r=p.getBoundingClientRect();place(r.left,r.top);save()});o.observe(p);return()=>{o.disconnect();for(const k of ["width","height","--ovg-fx","--ovg-fy"])p.style.removeProperty(k);requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")))}},[storageKey]);
  const start=(e:React.PointerEvent<HTMLDivElement>)=>{if((e.target as HTMLElement).closest("button"))return;e.preventDefault();const p=ref.current?.parentElement;if(!p)return;const r=p.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top,el=e.currentTarget;el.setPointerCapture(e.pointerId);
