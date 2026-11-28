@@ -96,6 +96,16 @@ impl NativeWorkspace {
     pub fn feature_json(&self,feature_id:String)->Result<String,String>{
         self.with_state(|s|s.store.feature_json(id(&feature_id)?).map_err(|e|e.to_string()))
     }
+    pub fn update_attributes(&self,feature_id:String,expected_revision:String,attributes_json:String)->Result<(),String>{
+        if attributes_json.len()>256*1024{return Err("RESOURCE_LIMIT".into());}
+        self.with_state(|s|s.store.update_attributes(id(&feature_id)?,expected_revision.parse().map_err(|_|"INVALID_REVISION".to_owned())?,serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?).map_err(|e|e.to_string()))
+    }
+    pub fn split_feature(&self,feature_id:String,expected_revision:String,vertex_index:u32)->Result<String,String>{
+        self.with_state(|s|s.store.split_feature(id(&feature_id)?,expected_revision.parse().map_err(|_|"INVALID_REVISION".to_owned())?,vertex_index as usize).map(|v|v.to_string()).map_err(|e|e.to_string()))
+    }
+    pub fn merge_features(&self,first_id:String,first_revision:String,second_id:String,second_revision:String)->Result<(),String>{
+        self.with_state(|s|s.store.merge_features(id(&first_id)?,first_revision.parse().map_err(|_|"INVALID_REVISION".to_owned())?,id(&second_id)?,second_revision.parse().map_err(|_|"INVALID_REVISION".to_owned())?).map_err(|e|e.to_string()))
+    }
     pub fn set_attribute_schema(&self,fields_json:String)->Result<(),String>{
         if fields_json.len()>256*1024{return Err("RESOURCE_LIMIT".into());}
         self.with_state(|s|{

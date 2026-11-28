@@ -7,7 +7,7 @@ fn blob_vault_scope_and_tamper(){
  let v=Vault::open(&dir,scope,Zeroizing::new([9;32])).unwrap();
  let r=v.put(b"private-survey-photo-fixture").unwrap();assert_eq!(&**v.read(&r).unwrap(),b"private-survey-photo-fixture");
  let p=dir.join(format!("{}.enc",r.id));let mut bytes=std::fs::read(&p).unwrap();
- assert!(!bytes.windows(28).any(|w|w==b"private-survey-photo-fixture"));
+ assert!(!bytes.windows(b"private-survey-photo-fixture".len()).any(|w|w==b"private-survey-photo-fixture"));
  let other=Vault::open(&dir,Uuid::new_v4(),Zeroizing::new([9;32])).unwrap();assert!(other.read(&r).is_err());
  let wrong=Vault::open(&dir,scope,Zeroizing::new([8;32])).unwrap();assert!(wrong.read(&r).is_err());
  bytes[40]^=1;std::fs::write(&p,&bytes).unwrap();assert!(v.read(&r).is_err());

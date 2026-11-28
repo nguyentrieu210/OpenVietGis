@@ -24,12 +24,23 @@ class _AttributePageState extends State<AttributePage>{
    }catch(e){if(mounted)setState(()=>_error=e.toString());}
    finally{if(mounted)setState(()=>_busy=false);}
  }
+ Future<void> _edit(Map<String,dynamic> row)async{
+   final text=TextEditingController(text:const JsonEncoder.withIndent('  ').convert(row['attributes']));
+   final value=await showDialog<String>(context:context,builder:(d)=>AlertDialog(
+      title:Text(widget.controller.vi?'Sửa thuộc tính JSON':'Edit JSON attributes'),
+      content:TextField(controller:text,maxLines:10,minLines:3,decoration:const InputDecoration(labelText:'JSON object')),
+      actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(d,text.text),child:const Text('Save'))]));
+   text.dispose();if(value==null||!mounted)return;
+   try{if(jsonDecode(value) is! Map)throw StateError('JSON_OBJECT_REQUIRED');
+     await widget.controller.updateAttributes(row['id'].toString(),row['revision'].toString(),value);await _load(true);
+   }catch(e){if(mounted)setState(()=>_error=e.toString());}
+ }
  @override Widget build(BuildContext context){
    final vi=widget.controller.vi;
    return Scaffold(appBar:AppBar(title:Text(vi?'Bảng thuộc tính':'Attributes')),body:Column(children:[
      Padding(padding:const EdgeInsets.all(12),child:TextField(controller:_search,maxLength:128,onSubmitted:(_)=>_load(true),decoration:InputDecoration(labelText:vi?'Tìm thuộc tính':'Filter attributes',suffixIcon:IconButton(icon:const Icon(Icons.search),onPressed:_busy?null:()=>_load(true))))),
      if(_error!=null)Text(_error!),if(_busy)const LinearProgressIndicator(),
-     Expanded(child:ListView.builder(itemCount:_rows.length,itemBuilder:(context,i){final row=_rows[i];return ListTile(title:Text(row['id'].toString()),subtitle:Text(jsonEncode(row['attributes'])),onTap:()=>showDialog<void>(context:context,builder:(d)=>AlertDialog(title:Text(row['id'].toString()),content:SingleChildScrollView(child:SelectableText(const JsonEncoder.withIndent('  ').convert(row['attributes']))),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('OK'))])));})),
+     Expanded(child:ListView.builder(itemCount:_rows.length,itemBuilder:(context,i){final row=_rows[i];return ListTile(title:Text(row['id'].toString()),subtitle:Text(jsonEncode(row['attributes'])),onTap:()=>_edit(row));})),
      if(!_end)TextButton(onPressed:_busy?null:()=>_load(false),child:Text(vi?'Tải thêm':'Load more')),
    ]));
  }

@@ -79,6 +79,11 @@ class WorkspaceController extends ChangeNotifier{
     try{final id=await w.commitDrawing(kind:kind,xy:Float64List.fromList(xy),attributesJson:jsonEncode(attributes));dataEpoch++;return id;}
     finally{busy=false;_notify();}
   }
+  Future<void> updateAttributes(String id,String revision,String attributes)async{
+    if(busy)throw StateError('BUSY');final w=local;busy=true;_notify();
+    try{await w.updateAttributes(featureId:id,expectedRevision:revision,attributesJson:attributes);dataEpoch++;}
+    finally{busy=false;_notify();}
+  }
   Future<void> history(bool redo)async{
     if(busy)return;final w=local;busy=true;_notify();
     try{if(await w.undoRedo(redo:redo))dataEpoch++;}

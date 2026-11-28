@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:geolocator/geolocator.dart';
 import 'workspaces.dart';
@@ -102,6 +105,13 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
    catch(e){if(mounted)setState(()=>_error=e.toString());}
    if(mounted)setState((){});
  }
+ Future<void> _exportTrack(String id)async{
+   final allow=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Export GPX'),content:Text(widget.controller.vi?'Chia sẻ vị trí và thời gian track. GPX này không giữ metadata độ chính xác/RTK.':'Share track locations and timestamps. This GPX omits accuracy/RTK metadata.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),TextButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Export'))]));
+   if(allow!=true||!mounted)return;
+   try{final xml=await widget.controller.local.trackGpx(trackId:id);final dir=await (await getTemporaryDirectory()).createTemp('ovg-gpx-');
+     final file=await File('${dir.path}/track.gpx').writeAsString(xml,flush:true);await Share.shareXFiles([XFile(file.path,mimeType:'application/gpx+xml')]);
+   }catch(e){if(mounted)setState(()=>_error=e.toString());}
+ }
  @override Widget build(BuildContext context){
    final vi=widget.controller.vi;final p=_fix;
    return Scaffold(appBar:AppBar(title:Text(vi?'Khảo sát GPS':'GPS survey')),body:ListView(padding:const EdgeInsets.all(16),children:[
@@ -111,7 +121,7 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
      const Divider(),
      FilledButton(onPressed:_busy||_recording?null:()=>_start(null),child:Text(vi?'Bắt đầu track (màn hình mở)':'Start foreground track')),
      if(_recording)Row(children:[TextButton(onPressed:()=>_stop(false),child:Text(vi?'Tạm dừng':'Pause')),TextButton(onPressed:()=>_stop(true),child:Text(vi?'Kết thúc':'Finish'))]),
-     for(final track in _tracks)ListTile(title:Text(track['name'].toString()),subtitle:Text(track['state'].toString()),trailing:track['state']=='paused'?TextButton(onPressed:_busy||_recording?null:()=>_start(track['id'].toString()),child:Text(vi?'Tiếp tục':'Resume')):null),
+     for(final track in _tracks)ListTile(title:Text(track['name'].toString()),subtitle:Text(track['state'].toString()),trailing:track['state']=='paused'?TextButton(onPressed:_busy||_recording?null:()=>_start(track['id'].toString()),child:Text(vi?'Tiếp tục':'Resume')):track['state']=='finished'?IconButton(tooltip:'GPX',icon:const Icon(Icons.share),onPressed:()=>_exportTrack(track['id'].toString())):null),
      if(p!=null)...[
        Text('XY: ${p.longitude.toStringAsFixed(7)}, ${p.latitude.toStringAsFixed(7)}'),
        Text('Accuracy: ${p.accuracy.toStringAsFixed(1)} m · OS fix, RTK unknown'),

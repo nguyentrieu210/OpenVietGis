@@ -73,6 +73,39 @@ impl LocalStore{
     tx.execute("DELETE FROM ovg_edit_history WHERE seq NOT IN (SELECT seq FROM ovg_edit_history ORDER BY seq DESC LIMIT 64)",[])?;
     tx.commit()?;Ok(())
  }
+ /// Update attributes only, preserving authoritative geometry and requiring the displayed revision.
+ pub fn update_attributes(&self,id:Uuid,expected:u64,attrs:Value)->Result<(),Error>{
+    let (revision,image)={let mut db=self.lock()?;let tx=db.transaction()?;read(&tx,id)?};
+    if revision!=expected{return Err(Error::Conflict);}
+    let image=image.ok_or(Error::Conflict)?;
+    self.commit_edit(Uuid::new_v4(),&[Edit{feature_id:id,expected_revision:expected,wkb:Some(image.wkb),attributes:attrs}])
+ }
+ /// Both children are committed atomically; source retains its ID.
+ pub fn split_feature(&self,id:Uuid,expected:u64,index:usize)->Result<Uuid,Error>{
+    let (revision,image)={let mut db=self.lock()?;let tx=db.transaction()?;read(&tx,id)?};
+    if revision!=expected{return Err(Error::Conflict);}
+    let image=image.ok_or(Error::Conflict)?;
+    let (a,b)=edit::split_line(&image.wkb,index).map_err(|_|Error::Invalid)?;
+    let child=Uuid::new_v4();
+    self.commit_edit(Uuid::new_v4(),&[
+        Edit{feature_id:id,expected_revision:expected,wkb:Some(a),attributes:image.attributes.clone()},
+        Edit{feature_id:child,expected_revision:0,wkb:Some(b),attributes:image.attributes}
+    ])?;
+    Ok(child)
+ }
+ /// Explicitly choose survivor ID and reject unequal attributes rather than lose fields.
+ pub fn merge_features(&self,a:Uuid,ar:u64,b:Uuid,br:u64)->Result<(),Error>{
+    if a==b{return Err(Error::Invalid);}
+    let ((ra,ia),(rb,ib))={let mut db=self.lock()?;let tx=db.transaction()?;(read(&tx,a)?,read(&tx,b)?)};
+    if ra!=ar||rb!=br{return Err(Error::Conflict);}
+    let ia=ia.ok_or(Error::Conflict)?;let ib=ib.ok_or(Error::Conflict)?;
+    if ia.attributes!=ib.attributes{return Err(Error::Conflict);}
+    let wkb=edit::merge_lines(&ia.wkb,&ib.wkb).map_err(|_|Error::Invalid)?;
+    self.commit_edit(Uuid::new_v4(),&[
+        Edit{feature_id:a,expected_revision:ar,wkb:Some(wkb),attributes:ia.attributes},
+        Edit{feature_id:b,expected_revision:br,wkb:None,attributes:json!({})}
+    ])
+ }
  pub fn history_step(&self,redo:bool)->Result<bool,Error>{
     let mut db=self.lock()?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let sql=if redo{"SELECT seq,before_json,after_json FROM ovg_edit_history WHERE applied=0 ORDER BY seq ASC LIMIT 1"}else{"SELECT seq,before_json,after_json FROM ovg_edit_history WHERE applied=1 ORDER BY seq DESC LIMIT 1"};
