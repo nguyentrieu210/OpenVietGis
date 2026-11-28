@@ -2,7 +2,7 @@ import NativeCadBridgePanel from "./NativeCadBridgePanel";
 import RemoteCopcPanel from "./RemoteCopcPanel";
 import RemoteTiffPanel from "./RemoteTiffPanel";
 import {useEffect,useRef,useState} from "react";
-import {unified,nativeProviders,unifiedAssets,type UnifiedAsset,type UnifiedAssetKind,type AssetRead,type PersistentAsset,type NativeProviderStatus,type Opened,type Project,type UnifiedCatalog,type UnifiedPlan,type UnifiedCursor,type UnifiedBatch,type AttributeField} from "./transport";
+import {unified,nativeProviders,unifiedAssets,nativeCad,type UnifiedAsset,type UnifiedAssetKind,type AssetRead,type PersistentAsset,type NativeProviderStatus,type Opened,type Project,type UnifiedCatalog,type UnifiedPlan,type UnifiedCursor,type UnifiedBatch,type AttributeField} from "./transport";
 import maplibregl,{type GeoJSONSource} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 export default function UnifiedWorkbench(){
@@ -188,7 +188,7 @@ export default function UnifiedWorkbench(){
  <button disabled={busy||!layer||!native?.analytics_linked} onClick={()=>void run(async()=>setNativeOutput(JSON.stringify(await nativeProviders.pointSummary(opened.handle,layer,catalog.revision,true),null,2)))}>DuckDB Spatial (extension cục bộ)</button>
  {nativeOutput&&<pre>{nativeOutput}</pre>}</details>
  <details><summary>Schema thuộc tính</summary><button disabled={!layer} onClick={()=>setSchema(JSON.stringify(catalog.layers.find(l=>l.id===layer)?.fields??[],null,2))}>Đọc schema</button><textarea aria-label="Schema JSON" rows={4} value={schema} onChange={e=>setSchema(e.target.value)}/><button disabled={busy||!layer} onClick={()=>void run(async()=>{await unified.schema(opened.handle,layer,JSON.parse(schema) as AttributeField[],catalog.revision);await refresh(opened.handle)})}>Áp dụng</button></details>
- <table><thead><tr><th>Feature ID</th><th>Revision / thuộc tính</th><th>Chỉnh sửa</th></tr></thead><tbody>{rows.map(r=><tr key={String(r.id)}><td>{String(r.id)}</td><td>{JSON.stringify(r.properties)}</td><td><button onClick={()=>setBatch(JSON.stringify({edits:[{layer,feature:r.id,expected:r.properties?.revision,geometry:r.geometry,attributes:r.properties?.attributes}],links:[]},null,2))}>Đưa vào batch</button></td></tr>)}</tbody></table>
+ <table><thead><tr><th>Feature ID</th><th>Revision / thuộc tính</th><th>Chỉnh sửa</th></tr></thead><tbody>{rows.map(r=><tr key={String(r.id)}><td>{String(r.id)}</td><td>{JSON.stringify(r.properties)}</td><td><button onClick={()=>setBatch(JSON.stringify({edits:[{layer,feature:r.id,expected:r.properties?.revision,geometry:r.geometry,attributes:r.properties?.attributes}],links:[]},null,2))}>Đưa vào batch</button>{r.properties?.attributes?.cad_asset&&<button disabled={busy} onClick={()=>void run(async()=>{if(!window.confirm("Tạo phiên bản DXF từ hình học GIS hiện tại? Chỉ POINT/LINE WGS84, không sửa bản cha."))return;await nativeCad.gisToDxf(opened.handle,layer,String(r.id),catalog.revision);await refresh(opened.handle)})}>GIS → CAD phiên bản mới</button>}</td></tr>)}</tbody></table>
  </div>}
  <div role="status">{message}</div>
  </section>
