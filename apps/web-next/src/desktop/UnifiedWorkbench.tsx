@@ -1,3 +1,4 @@
+import RemoteCopcPanel from "./RemoteCopcPanel";
 import RemoteTiffPanel from "./RemoteTiffPanel";
 import {useEffect,useRef,useState} from "react";
 import {unified,nativeProviders,unifiedAssets,type UnifiedAsset,type UnifiedAssetKind,type AssetRead,type PersistentAsset,type NativeProviderStatus,type Opened,type Project,type UnifiedCatalog,type UnifiedPlan,type UnifiedCursor,type UnifiedBatch,type AttributeField} from "./transport";
@@ -169,6 +170,7 @@ export default function UnifiedWorkbench(){
  <pre>{assetPreview}</pre>{rasterImage&&<img src={rasterImage} alt="Mẫu cửa sổ pixel GeoTIFF" width={256} height={256}/>}</>}
  </details>
  <RemoteTiffPanel key={opened.handle} handle={opened.handle}/>
+ <RemoteCopcPanel key={"copc-"+opened.handle} handle={opened.handle}/>
  <details><summary>Native Data Providers (GDAL / PROJ / DuckDB)</summary>
  <p>GDAL/PROJ: {native?.ogr_linked?"đã liên kết · thử nghiệm":"chưa liên kết"} · DuckDB: {native?.analytics_linked?"đã liên kết · thử nghiệm":"chưa liên kết"}</p>
  <label>Chỉ số lớp OGR <input value={ogrIndex} onChange={e=>setOgrIndex(e.target.value)} maxLength={2}/></label><button disabled={busy||!native?.ogr_linked||!layer} onClick={()=>void run(async()=>{const i=Number(ogrIndex);if(!Number.isInteger(i)||i<0||i>=64)throw Error("INVALID_LAYER");const r=await nativeProviders.importOGR(opened.handle,layer,i,catalog.revision);if(r){await refresh(opened.handle);setMessage("Đã nhập OGR revision "+r.revision)}})}>Nhập SHP / FGB / GeoParquet</button>
