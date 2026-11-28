@@ -9,7 +9,7 @@ import {CadDraftExport,supportsCadDraft} from "./CadDraftExport";
 import {CadDraftImport} from "./CadDraftImport";
 export type CadFileVersion={id:string;filename:string;format:"dwg"|"dxf";version:number;byte_size:number;sha256:string;created_at:string};
 async function digest(bytes:ArrayBuffer){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),v=>v.toString(16).padStart(2,"0")).join("")}
-export function CadEditorPanel({client,path,document,origin,writable,canEdit,close,expire,focusHandle,onNavigate,onBusy,onVerified}:{client:ApiClient;path:string;document:CadFileVersion;origin:string;writable:boolean;canEdit:boolean;close:(savedId?:string)=>void;onBusy?:(busy:boolean)=>void;onVerified?:(doc:CadFileVersion)=>void;expire:()=>void;focusHandle?:string|null;onNavigate?:(link:CadLink,mode:"gis"|"3d")=>void}){
+export function CadEditorPanel({client,path,document,origin,writable,canEdit,close,expire,focusHandle,onNavigate,onBusy,onVerified}:{client:ApiClient;path:string;document:CadFileVersion;origin:string;writable:boolean;canEdit:boolean;close:(savedId?:string)=>void;onBusy?:(busy:boolean)=>void;onVerified?:(doc:CadFileVersion)=>void;expire:()=>void;focusHandle?:string|null;onNavigate?:(link:CadLink,mode:"gis"|"3d")=>Promise<boolean>}){
  const mount=useRef<HTMLDivElement>(null),handle=useRef<CadEditorHandle|null>(null),current=useRef(document),permit=useRef(canEdit);
  permit.current=canEdit;
  const callbacks=useRef({onBusy,onVerified});callbacks.current={onBusy,onVerified};const engineStatus=useRef({dirty:false,saving:false});
@@ -19,7 +19,10 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  const root=path+"/"+document.id+"/versions";
  const [filename,setFilename]=useState(document.filename),filenameRef=useRef(filename);filenameRef.current=filename;
  useEffect(()=>{onBusy?.(dirty||saving)},[dirty,saving,onBusy]);
- const lookup=useRef<AbortController|null>(null),selectionSerial=useRef(0);
+ const lookup=useRef<AbortController|null>(null),selectionSerial=useRef(0),navigationFlight=useRef(false),mounted=useRef(true);
+ const [navigating,setNavigating]=useState(false);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[]);
+ const navigate=async(link:CadLink,mode:"gis"|"3d")=>{if(navigationFlight.current||engineStatus.current.dirty||engineStatus.current.saving||current.current.version!==link.version||!onNavigate)return;navigationFlight.current=true;setNavigating(true);try{if(!await onNavigate(link,mode)&&mounted.current)setLookupMessage("Không chuyển được đối tượng. Bản vẽ vẫn mở; kiểm tra phiên bản nguồn và quyền truy cập.")}catch{if(mounted.current)setLookupMessage("Không chuyển được đối tượng.")}finally{navigationFlight.current=false;if(mounted.current)setNavigating(false)}};
  const [supported,setSupported]=useState(false),[selectedHandle,setSelectedHandle]=useState<string|null>(null),[links,setLinks]=useState<CadLink[]>([]),[lookupMessage,setLookupMessage]=useState("");
  const aiState=useRef<CadAiState>({document_id:document.id,filename:document.filename,version:document.version,dirty:false,saving:false,writable:false,selected_handle:null});
  aiState.current={document_id:current.current.id,filename,version,dirty,saving,writable:writable&&canEdit,selected_handle:selectedHandle};
@@ -90,8 +93,8 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  <small>{selectedHandle?"Handle đã chọn: "+selectedHandle:"Chọn một đối tượng trên bản vẽ CAD để tra liên kết GIS."}</small>}
  {lookupMessage&&<small role="status">{lookupMessage}</small>}
  {links.map(l=><div key={l.document_id+":"+l.version+":"+l.layer_id+":"+l.handle+":"+l.feature_id}><span>{l.layer_name} · {l.feature_id} · {l.handle}{!l.original_revision?" · dữ liệu GIS đã thay đổi":""}</span>
- <button disabled={dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>onNavigate?.(l,"gis")}>Mở trên GIS</button>
- <button disabled={dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>onNavigate?.(l,"3d")}>Mở trên 3D</button>{canEdit&&ready&&!dirty&&!saving&&version===l.version&&current.current.format==="dxf"&&supportsCadDraft(l)&&<CadDraftExport key={[l.conversion_id,l.content_revision,l.schema_revision].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}
+ <button disabled={navigating||dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>void navigate(l,"gis")}>Mở trên GIS</button>
+ <button disabled={navigating||dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>void navigate(l,"3d")}>Mở trên 3D</button>{canEdit&&ready&&!dirty&&!saving&&version===l.version&&current.current.format==="dxf"&&supportsCadDraft(l)&&<CadDraftExport key={[l.conversion_id,l.content_revision,l.schema_revision].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}
  {canEdit&&ready&&!dirty&&!saving&&version===l.version+1&&current.current.format==="dxf"&&l.original_revision&&supportsCadDraft(l)&&<CadDraftImport key={[l.conversion_id,current.current.sha256].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}</div>)}
  {(dirty||saving)&&!!links.length&&<small>Cần lưu hoặc hủy thay đổi CAD trước khi chuyển chế độ.</small>}
  </aside>}</section>
