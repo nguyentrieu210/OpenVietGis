@@ -261,6 +261,40 @@ class Ctx:
         self.data["r"][key] = r.json()[field] if field else r.json()
 
 
+@case
+def check_progress_workbook(label: str, ctx: Ctx) -> None:
+    import io
+    import zipfile
+    from xml.etree import ElementTree
+
+    def cells(response):
+        req(response.status_code == 200, "progress XLSX unavailable")
+        req("spreadsheetml.sheet" in response.headers["content-type"], "wrong XLSX media type")
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            req(archive.testzip() is None, "progress XLSX CRC failure")
+            tree = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        rows = []
+        for row in tree.iter(namespace + "row"):
+            values = []
+            for cell in row:
+                req(cell.find(namespace + "f") is None, "unexpected spreadsheet formula")
+                value = cell.find(namespace + "v")
+                text = cell.find(".//" + namespace + "t")
+                if value is not None:
+                    values.append(float(value.text))
+                else:
+                    values.append(norm(text.text or "") if text is not None else "")
+            rows.append(values)
+        return rows
+
+    oracle = cells(ctx.call("o", "GET", "/progress/report.xlsx", headers=ctx.h))
+    rust = cells(ctx.call("r", "GET", "/progress/report.xlsx", headers=ctx.h))
+    req(oracle == rust, f"{label}: logical cells differ")
+    PASSED.append(label)
+    print(f"PASS {label}", flush=True)
+
+
 def batch_hierarchy(ctx: Ctx) -> None:
     for side in SIDES:
         d = ctx.data[side]
@@ -1258,6 +1292,7 @@ def batch_field(ctx: Ctx) -> None:
         lambda d: [op(d, "c5", building_id=d["b2"]["id"], condition="vacant")],
     )
     ctx.pair("E15 progress", "GET", "/progress", headers=ctx.h)
+    check_progress_workbook("E15 progress XLSX", ctx)
 
     attrs = {
         "s-1": {"ap": "Ấp 1", "ten_duong": "Đường A", "xu_ly": "da_xu_ly", "trang_thai": "lech"},

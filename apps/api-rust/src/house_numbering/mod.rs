@@ -5,6 +5,7 @@ mod buildings;
 mod field;
 mod hierarchy;
 mod numbering;
+mod progress_report;
 mod proposals;
 mod records;
 mod route_import;
