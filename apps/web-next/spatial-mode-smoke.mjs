@@ -24,7 +24,7 @@ try{
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/layers"))body={items:[layer],next_after_id:null};
-  else if(p.endsWith("/features"))body={context:{source_id:"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
+  else if(p.endsWith("/features"))body={context:{organization_id:org,source_id:"source1",layer_id:layer.id,project_id:pid,content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,geometry_included:true,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
     if(m==="POST"){if(holdSave)await new Promise(resolve=>{releaseSave=resolve});const x=ver();saved.unshift(x);body=x}
     else body={items:p.endsWith("/versions")?saved:saved.slice(0,1)};
