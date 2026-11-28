@@ -25,21 +25,21 @@ fn subgrid(g:ortho::Grid,w:tiles::Window)->ortho::Grid{
 /// objects may remain on disk until a future lease-aware garbage collector.
 pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
- run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,None,cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,None,cancelled,|_,_|{})
 }
 /// The host supplies a trusted digest covering actual source imagery, camera poses,
 /// DEM, alignment, renderer/provider build and immutable input revision.
 pub fn run_resumable(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:&str,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::digest(input_sha256){return Err(Error::Invalid);}
- run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),None,None,cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),None,None,cancelled,|_,_|{})
 }
 /// Parallel pixel rendering inside one admitted tile; source/cache and disk publication remain sequential.
 pub fn run_parallel(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,threads:usize,cancel:&std::sync::atomic::AtomicBool)->Result<ResultSummary,Error>{
  if input_sha256.is_some_and(|h|!super::digest(h)){return Err(Error::Invalid);}
  let renderer=ortho::Renderer::new(threads).map_err(Error::Render)?;
- run_inner(source,store,expected,grid_id,grid,epsg,p,input_sha256,Some((&renderer,cancel)),None,||cancel.load(std::sync::atomic::Ordering::Acquire))
+ run_inner(source,store,expected,grid_id,grid,epsg,p,input_sha256,Some((&renderer,cancel)),None,||cancel.load(std::sync::atomic::Ordering::Acquire),|_,_|{})
 }
 /// Experimental two-view tile seam mode. No resume key reuse with other render modes.
 /// Source must supply exactly two consistently ordered views for each halo.
@@ -49,7 +49,7 @@ pub struct PairSeamPolicy{pub seam:super::seam::SeamPolicy,pub offset:[i16;3]}
 pub fn run_pair_seamed(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,seam:PairSeamPolicy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if seam.offset.iter().any(|v|v.unsigned_abs()>64){return Err(Error::Invalid);}
- run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,Some(seam),cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,Some(seam),cancelled,|_,_|{})
 }
 fn pair_rgba(grid:ortho::Grid,dem:&[f32],views:&[ortho::Image<'_>],max_bytes:u64,max_samples:u64,
  p:PairSeamPolicy,cancelled:&mut impl FnMut()->bool)->Result<Vec<u8>,Error>{
@@ -65,8 +65,13 @@ fn pair_rgba(grid:ortho::Grid,dem:&[f32],views:&[ortho::Image<'_>],max_bytes:u64
  let rgba=super::seam::blend_seam(&a,&b,grid.width,grid.height,&path,p.offset,p.seam).map_err(map)?;
  if cancelled(){return Err(Error::Cancelled);}Ok(rgba)
 }
+/// Progress reports verified staged tile counts, not committed mosaic status.
+pub fn run_controlled(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
+ grid:ortho::Grid,epsg:u16,p:Policy,cancelled:impl FnMut()->bool,progress:impl FnMut(usize,usize))->Result<ResultSummary,Error>{
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,None,cancelled,progress)
+}
 fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
- grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,parallel:Option<(&ortho::Renderer,&std::sync::atomic::AtomicBool)>,seam:Option<PairSeamPolicy>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,parallel:Option<(&ortho::Renderer,&std::sync::atomic::AtomicBool)>,seam:Option<PairSeamPolicy>,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(usize,usize))->Result<ResultSummary,Error>{
  if !super::valid_id(grid_id)||epsg==0||epsg>=32767||grid.width==0||grid.height==0||!grid.gsd.is_finite()||
  grid.gsd<=0.||!grid.origin_x.is_finite()||!grid.origin_y.is_finite()||
  p.source_bytes==0||p.source_bytes>2*1024*1024*1024||p.tile_bytes<308||p.output_bytes==0||
@@ -76,6 +81,7 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  let checkpoint=input_sha256.map(|hash|super::checkpoint::Checkpoint::open(store,expected,grid_id,grid,epsg,p,hash))
     .transpose().map_err(Error::Store)?;
  let mut refs=BTreeMap::new();let mut covered=0u64;let mut written=0u64;
+ progress(0,ts.len());
  for t in &ts{
  if cancelled(){return Err(Error::Cancelled);}
  let h=t.halo;let c=t.core;
@@ -95,7 +101,7 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  if let Some(cp)=&checkpoint{
     if let Some(record)=cp.load(store,&id,c,tiff_bytes).map_err(Error::Store)?{
         covered=covered.checked_add(record.covered).ok_or(Error::Limit)?;
-        refs.insert(id,record.tile);continue;
+        refs.insert(id,record.tile);progress(refs.len(),ts.len());continue;
     }
  }
  let dem=source.dem(h,expected_dem)?;
@@ -127,7 +133,7 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  if let Some(cp)=&checkpoint{
     cp.save(store,&id,super::checkpoint::Record{tile:tile.clone(),covered:tile_covered}).map_err(Error::Store)?;
  }
- refs.insert(id,tile);
+ refs.insert(id,tile);progress(refs.len(),ts.len());
  }
  if cancelled(){return Err(Error::Cancelled);}
  if covered==0{return Err(Error::Invalid);}
