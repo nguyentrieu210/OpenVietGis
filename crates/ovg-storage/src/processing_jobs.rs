@@ -675,6 +675,7 @@ pub async fn submit_job_pinned(
             input_source.id,
             input_source.stored_crs,
             target,
+            "rf.geometry",
         )
         .await?;
         target
@@ -843,10 +844,20 @@ async fn approved_reproject(
     source: Uuid,
     native: i32,
     target: i32,
+    geometry_expression: &str,
 ) -> Result<String, EditError> {
     if let (Ok(a),Ok(b))=(u32::try_from(native),u32::try_from(target)) {
         if ovg_core::crs::is_extended_native_vn2000(a)&&b==4326{
-            return crate::catalog::regional_crs::verify_extended_datum_source(tx,org,project,source,a,"rf.geometry").await.map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None});
+            return crate::catalog::regional_crs::verify_extended_datum_source(
+                tx, org, project, source, a, geometry_expression,
+            )
+            .await
+            .map_err(|error| EditError::Platform {
+                status: error.status_code(),
+                code: error.code(),
+                message: error.to_string(),
+                details: None,
+            });
         }
         if crate::native_projection::is_native_pair(a,b) {
             let map_error=|error:ovg_core::AppError|EditError::Platform{
@@ -854,11 +865,11 @@ async fn approved_reproject(
             };
             let projection=crate::native_projection::NativeProjection::new(a,b).map_err(map_error)?;
             projection.verify_source(tx,org,project,source).await.map_err(map_error)?;
-            return Ok(projection.expression("rf.geometry"));
+            return Ok(projection.expression(geometry_expression));
         }
     }
     if native == target && matches!(native, 4326 | 3857) {
-        return Ok("rf.geometry".to_owned());
+        return Ok(geometry_expression.to_owned());
     }
     let profile = u32::try_from(native)
         .ok()
@@ -871,7 +882,7 @@ async fn approved_reproject(
             )
         })?;
     if profile.fixture_requirement == FixtureRequirement::None {
-        let (expr, _, _) = web_transform_expr("rf.geometry", native, target)?;
+        let (expr, _, _) = web_transform_expr(geometry_expression, native, target)?;
         require_web_domain(
             tx,
             org,
@@ -898,7 +909,7 @@ async fn approved_reproject(
             })?;
         Ok(crate::catalog::regional_crs::profile_expression(
             profile,
-            "rf.geometry",
+            geometry_expression,
         ))
     }
 }
@@ -1428,6 +1439,7 @@ async fn prepare_inside_savepoint(
                 input_src_id,
                 input_srid,
                 output_srid,
+                "rf.geometry",
             )
             .await?;
             output_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
@@ -1471,21 +1483,16 @@ async fn prepare_inside_savepoint(
             let transformed = if overlay_srid == input_srid {
                 "ov.geometry".to_owned()
             } else {
-                let (expr, _, _) = web_transform_expr("ov.geometry", overlay_srid, input_srid)?;
-                require_web_domain(
+                approved_reproject(
                     sp,
                     org_id,
                     project_id,
-                    WebDomainCheck {
-                        source_id: overlay_src_id,
-                        native_srid: overlay_srid,
-                        expression: "geometry",
-                        expression_srid: overlay_srid,
-                        margin: 0.0,
-                    },
+                    overlay_src_id,
+                    overlay_srid,
+                    input_srid,
+                    "ov.geometry",
                 )
-                .await?;
-                expr
+                .await?
             };
             let input_fields =
                 processing_source_fields(sp, org_id, project_id, input_src_id).await?;
@@ -2303,6 +2310,16 @@ pub fn failure_code_message(err: &EditError) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_transform_expression_preserves_the_overlay_geometry_alias() {
+        for (source_srid, target_srid) in [(4326, 3857), (3857, 4326)] {
+            let (expression, _, _) =
+                web_transform_expr("ov.geometry", source_srid, target_srid).unwrap();
+            assert!(expression.contains("ov.geometry"), "{expression}");
+            assert!(!expression.contains("rf.geometry"), "{expression}");
+        }
+    }
 
     #[test]
     fn cancel_semantics_match_python_repository() {
