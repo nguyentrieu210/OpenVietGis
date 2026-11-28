@@ -8,6 +8,8 @@ use std::{collections::HashSet,path::Path,sync::Mutex};
 use uuid::Uuid;
 pub mod catalog;
 pub mod mobile;
+pub mod mvt;
+pub mod tile_archive;
 pub mod survey;
 pub mod asset_store;
 pub mod bulk_import;
