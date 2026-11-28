@@ -9,7 +9,7 @@ mod snapshot_restore;
 mod recovery_tests;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
 mod protocol;
-use host::{Host, Opened, Poll, Project, Raster, AssetInfo};
+use host::{Host, Opened, Poll, Project, Raster, AssetInfo, LayerInfo};
 use serde::Serialize;
 use serde_json::Value;
 use tauri_plugin_dialog::DialogExt;
@@ -261,6 +261,19 @@ async fn desktop_copc_query(window:WebviewWindow,host:State<'_,Host>,handle:Uuid
     let b=run(window,host.inner().clone(),move|h|h.copc_query(handle,id,bounds,level)).await?;
     Ok(tauri::ipc::Response::new(b))
 }
+#[tauri::command]
+async fn desktop_list_layers(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Vec<LayerInfo>>{
+    run(window,host.inner().clone(),move|h|h.list_layers(handle)).await
+}
+#[tauri::command]
+async fn desktop_create_layer(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,name:String,grant:Option<Uuid>,table:Option<String>)->Reply<LayerInfo>{
+    let catalog=match(grant,table){(Some(g),Some(t)) if t.len()<=128=>Some((g,t)),(None,None)=>None,_=>return Err("INVALID_LAYER".into())};
+    run(window,host.inner().clone(),move|h|h.create_layer(handle,name,catalog)).await
+}
+#[tauri::command]
+async fn desktop_open_layer(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,layer:Uuid)->Reply<Opened>{
+    run(window,host.inner().clone(),move|h|h.open_layer(handle,layer)).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -296,6 +309,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
