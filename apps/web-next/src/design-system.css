@@ -2,14 +2,14 @@
 @layer theme, utilities;
 @import "tailwindcss/theme.css" layer(theme) prefix(ovg);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(ovg);
-@theme {
- --color-ui-surface: #ffffff;
- --color-ui-panel: #f2f5f6;
- --color-ui-ink: #263c49;
- --color-ui-muted: #526b79;
- --color-ui-line: #ccd8df;
- --color-ui-primary: #1565a9;
- --radius-ui: 4px;
+@theme inline {
+ --color-ui-surface: var(--ovg-ui-surface);
+ --color-ui-panel: var(--ovg-ui-panel);
+ --color-ui-ink: var(--ovg-ui-ink);
+ --color-ui-muted: var(--ovg-ui-muted);
+ --color-ui-line: var(--ovg-ui-line);
+ --color-ui-primary: var(--ovg-ui-primary);
+ --radius-ui: var(--ovg-ui-radius);
 }
 :root{
  --ovg-ui-surface:#fff;--ovg-ui-panel:#f2f5f6;--ovg-ui-ink:#263c49;--ovg-ui-muted:#526b79;--ovg-ui-line:#ccd8df;--ovg-ui-primary:#1565a9;--ovg-ui-radius:4px;--ovg-ui-gap:8px;--ovg-ui-inset:16px;--ovg-ui-section-gap:16px;--ovg-ui-field-gap:6px;--ovg-ui-control-height:32px;--ovg-ui-toolbar-gap:4px;
@@ -29,3 +29,7 @@
 .ovg-theme-picker select{min-width:0;max-width:150px}
 
 .ovg-ui-tabs{display:flex;flex-wrap:wrap;gap:var(--ovg-ui-gap);min-width:0}.ovg-ui-field{display:grid;gap:var(--ovg-ui-field-gap);min-width:0}.ovg-ui-field>span{font-weight:500}
+
+/* Focus indication for opted-in controls, including legacy portal dialogs. */
+.ovg-ui-button:focus-visible,.ovg-ui-input:focus-visible{outline:2px solid var(--ovg-ui-primary);outline-offset:2px}
+@media(forced-colors:active){.ovg-ui-button:focus-visible,.ovg-ui-input:focus-visible{outline-color:Highlight}}
