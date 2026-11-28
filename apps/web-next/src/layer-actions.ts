@@ -10,3 +10,6 @@ export function soloVisibility(ids:readonly string[],target:string,previous:Read
  return {show:[target],hide:ids.filter(id=>id!==target),restore:new Set(hidden)};
 }
 export function batchLabelVisibility(v:LayerView,show:boolean):Partial<LayerView>{return v.labelField||v.labelRules?.length?{labelHidden:!show}:{}}
+
+export function mixedState(values:readonly boolean[]):boolean|"mixed"{return values.length&&values.some(Boolean)?values.every(Boolean)?true:"mixed":false}
+export function layerLockState(canEdit:boolean,locked:boolean,editing:boolean):"readonly"|"editing"|"locked"|"unlocked"{return !canEdit?"readonly":editing?"editing":locked?"locked":"unlocked"}

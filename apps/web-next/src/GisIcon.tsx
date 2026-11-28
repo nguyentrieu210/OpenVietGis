@@ -1,6 +1,7 @@
 import React from "react";
-export type IconName="add"|"save"|"reload"|"undo"|"redo"|"hand"|"select"|"plus"|"minus"|"extent"|"layer"|"up"|"down"|"settings"|"table"|"edit"|"point"|"line"|"polygon"|"ruler"|"area"|"query"|"buffer"|"clip"|"export"|"plugin"|"chevron"|"folder"|"database"|"eye"|"close"|"search"|"more"|"globe"|"lock"|"layers"|"info"|"eye-off";
+export type IconName="add"|"save"|"reload"|"undo"|"redo"|"hand"|"select"|"plus"|"minus"|"extent"|"layer"|"up"|"down"|"settings"|"table"|"edit"|"point"|"line"|"polygon"|"ruler"|"area"|"query"|"buffer"|"clip"|"export"|"plugin"|"chevron"|"folder"|"database"|"eye"|"close"|"search"|"more"|"globe"|"lock"|"layers"|"info"|"eye-off"|"unlock"|"order";
 const paths:Record<IconName,React.ReactNode>={
+unlock:<><rect x="5" y="9" width="12" height="11" rx="2"/><path d="M8 9V6a3 3 0 0 1 6 0"/></>,order:<><path d="M5 18V4m-3 3 3-3 3 3M17 4v14m-3-3 3 3 3-3M10 5h3M10 11h3M10 17h3"/></>,
 "eye-off":<><path d="M3 3l16 16M4 7c-2 2-3 4-3 4s4 7 10 7c2 0 4-1 6-2M8 4c1-.4 2-.5 3-.5 6 0 10 7.5 10 7.5s-1 2-3 4"/></>,
 add:<><rect x="3" y="4" width="13" height="13" rx="2"/><path d="M13 7h5M15.5 4.5v5M6 13l3-3 3 3 2-2"/></>,
 save:<><path d="M3 3h13l3 3v13H3z"/><path d="M7 3v6h8V3M7 19v-7h8v7"/></>,

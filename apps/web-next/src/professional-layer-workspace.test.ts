@@ -48,3 +48,9 @@ it("label override pin changes presentation only and is revision bound",()=>{
  const stale={...r,layer:{...r.layer,source:{...r.layer.source,content_revision:"new"}}};expect(overrideFor(stale,next)).toBeUndefined();
  expect(planGpuLabels([r],{l:v},()=>"auto",()=>null,changeLabelOverride(r,next,{hidden:true})).data.features).toHaveLength(0);
 });
+
+import {mixedState,layerLockState} from "./layer-actions";
+it("uses deterministic mixed states and distinguishes readonly from editable locks",()=>{
+ expect(mixedState([])).toBe(false);expect(mixedState([true,false])).toBe("mixed");expect(mixedState([true,true])).toBe(true);
+ expect(layerLockState(false,false,false)).toBe("readonly");expect(layerLockState(true,false,true)).toBe("editing");expect(layerLockState(true,true,false)).toBe("locked");expect(layerLockState(true,false,false)).toBe("unlocked");
+});
