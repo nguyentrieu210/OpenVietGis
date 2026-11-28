@@ -48,7 +48,7 @@ export function georeferenceVector(raw:unknown,points:readonly VectorGcp[]){
    default:throw Error("Kiểu hình học không hỗ trợ.");
   }
  };
- const collection:FeatureCollection={type:"FeatureCollection",features:raw.features.map(f=>{
+ const collection:FeatureCollection<Geometry|null>={type:"FeatureCollection",features:raw.features.map(f=>{
   if(!record(f)||f.type!=="Feature"||!(f.properties===null||record(f.properties))||!(f.id===undefined||typeof f.id==="string"||finite(f.id)))throw Error("Feature hoặc thuộc tính không hợp lệ.");
   return {type:"Feature",geometry:geometry(f.geometry),properties:f.properties,...(f.id===undefined?{}:{id:f.id})};
  })};

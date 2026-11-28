@@ -32,7 +32,7 @@ describe("temporal vector frames",()=>{
 
 describe("custom temporal ranges",()=>{
  it("includes interval overlaps and uses exclusive right boundary for events",()=>{
-  const l={...layer,source:{...layer.source,schema:{...layer.source.schema,fields:[...layer.source.schema.fields,{field_id:"until",type:"timestamp"}]}}} as SpatialLayer;
+  const l={...layer,source:{...layer.source,schema:{...layer.source.schema,fields:[...layer.source.schema.fields,{field_id:"until",type:"timestamp"}]}}} as unknown as SpatialLayer;
   const r=rows.map((x,i)=>({...x,layer:l,feature:{...x.feature,attributes:{...x.feature.attributes,until:i===0?"2026-11-28T01:00:00Z":i===1?"2026-11-28T00:00:00Z":null}}}));
   const start=Date.parse("2026-11-28T00:00:00Z");
   const p=temporalWindowPopulation(l,r,"time","until",{start,end:start+7200000,stepMs:3600000});

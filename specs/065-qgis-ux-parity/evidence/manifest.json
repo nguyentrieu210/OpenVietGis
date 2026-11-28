@@ -688,9 +688,12 @@
         "apps/web-next/src/georeference-contract.ts",
         "apps/web-next/src/georeference-contract.test.ts",
         "apps/api/openvietgis_api/adapters/formats/georeference_worker.py",
-        "tests/spec065/georeference_fixture.py"
+        "tests/spec065/georeference_fixture.py",
+        "apps/web-next/src/vector-georeference.ts",
+        "apps/web-next/src/VectorGeoreferencePanel.tsx",
+        "apps/web-next/src/vector-georeference.test.ts"
       ],
-      "blocker": "TIFF GCP affine georeferencer exists with preview, GeoTIFF checksum and GDAL fixture. Added client cross-check of affine determinant, CRS footprint and computed GCP residuals; new tests not executed. Vector georeferencing, warp/resampling and authenticated browser/QGIS acceptance remain."
+      "blocker": "TIFF GCP affine preview and verified GeoTIFF; client vector GCP affine conversion of bounded local XY GeoJSON to WGS84, preserving attributes, with residuals and explicit download review. Raster warp/resampling, vector topology checks, persisted project import and authenticated browser/QGIS acceptance remain. New tests written, not yet executed."
     },
     {
       "id": "PROC-10",
@@ -708,7 +711,7 @@
         "packages/spatial-workspace/src/tileset.ts",
         "packages/spatial-workspace/src/terrain.ts"
       ],
-      "blocker": "Bounded UTC day playback for fully loaded, authorized revision-pinned timestamp vector layers in read-only secondary map (up to 5000 features). No arbitrary time intervals, raster temporal series or tile support. Mesh dataset providers and point cloud formats LAS/LAZ/COPC/EPT remain unsupported: inspected existing GLTF triangle-only, DEM grid and GLB tile contracts are not equivalent. New tests not executed; browser/QGIS acceptance pending."
+      "blocker": "Bounded UTC day playback plus custom UTC interval/step, optional end timestamp field, half-open window overlap and empty frames for fully loaded authorized revision-pinned vector layers (5,000 features/frames). Raster temporal series, tile support, mesh dataset and point cloud adapters remain unsupported. New tests written, not yet executed; browser/QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-01",
