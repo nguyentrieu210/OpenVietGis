@@ -3,6 +3,7 @@
 use ovg_core::AppError;
 use serde_json::{json, Value};
 use sqlx::Row;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 use super::hierarchy::get_route;
@@ -53,6 +54,42 @@ pub async fn get_rule(edit: &mut ProjectRead<'_>, rule_id: Uuid) -> Result<Value
     Ok(value)
 }
 
+// Stable scope identities: a route includes its descendant alleys and an area
+// includes its descendant administrative units. Never accept out-of-scope rows.
+async fn scoped_buildings(
+    edit: &mut ProjectRead<'_>,
+    scope_kind: &str,
+    scope_id: Uuid,
+    building_ids: &[Uuid],
+) -> Result<(), AppError> {
+    if building_ids.is_empty() || building_ids.iter().collect::<HashSet<_>>().len() != building_ids.len() {
+        return Err(AppError::validation("INVALID_PROPOSAL_BUILDINGS", "proposal requires nonempty, unique buildings"));
+    }
+    let count: i64 = sqlx::query_scalar(
+        "WITH RECURSIVE scope_tree(id) AS (
+             SELECT $4::uuid
+             UNION
+             SELECT child.id FROM scope_tree parent JOIN (
+                 SELECT id,parent_route_id AS parent_id FROM house_numbering.routes
+                 WHERE organization_id=$1 AND project_id=$2 AND $3::text='route'
+                 UNION ALL
+                 SELECT id,parent_id FROM house_numbering.areas
+                 WHERE organization_id=$1 AND project_id=$2 AND $3::text='area'
+             ) child ON child.parent_id=parent.id
+         ) SELECT count(*) FROM house_numbering.buildings b
+         WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY($5)
+           AND b.state='active'
+           AND CASE $3::text WHEN 'route' THEN b.route_id IN (SELECT id FROM scope_tree)
+                            WHEN 'area' THEN b.area_id IN (SELECT id FROM scope_tree)
+                            ELSE false END",
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(scope_kind)
+     .bind(scope_id).bind(building_ids).fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
+    if count != building_ids.len() as i64 {
+        return Err(AppError::conflict("PROPOSAL_SCOPE_MISMATCH", "every building must be active and within the proposal scope"));
+    }
+    Ok(())
+}
+
 pub async fn create_proposal(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
@@ -82,10 +119,11 @@ pub async fn create_proposal(
         }
     }
     get_rule(edit, rule_id).await?;
+    scoped_buildings(edit, scope_kind, scope_id, building_ids).await?;
     let mut numbers: Vec<(Uuid, Uuid, String)> = Vec::new();
     for building_id in building_ids {
         let row = sqlx::query(
-            "SELECT id, building_id, number_text, kind FROM house_numbering.address_numbers
+            "SELECT id, building_id, number_text, kind, rule_id FROM house_numbering.address_numbers
              WHERE organization_id=$1 AND project_id=$2 AND building_id=$3
                AND retired_at IS NULL AND kind IN ('proposed','submitted','approved')
              ORDER BY CASE kind WHEN 'approved' THEN 1 WHEN 'submitted' THEN 2 ELSE 3 END
@@ -102,6 +140,9 @@ pub async fn create_proposal(
         };
         if row.try_get::<String, _>("kind").map_err(db_error)? != "proposed" {
             return Err(missing_proposed());
+        }
+        if row.try_get::<Option<Uuid>, _>("rule_id").map_err(db_error)? != Some(rule_id) {
+            return Err(AppError::conflict("PROPOSAL_RULE_MISMATCH", "number must be generated using the proposal rule"));
         }
         numbers.push((
             row.try_get("id").map_err(db_error)?,
@@ -274,6 +315,68 @@ pub async fn list_proposals(
     }))
 }
 
+// Lock the same entities used by allocation: route, then building, then number.
+// The proposal/rule row is already locked. Re-read authoritative fields only
+// after all entity locks have been acquired; never rely on the UI snapshot.
+async fn validate_transition_items(
+    edit: &mut ProjectRead<'_>, proposal_id: Uuid, proposal: &Value,
+    expected_kind: &str, approval: bool,
+) -> Result<(), AppError> {
+    let org=edit.organization_id(); let project=edit.project_id();
+    for statement in [
+        "SELECT r.id FROM house_numbering.routes r JOIN house_numbering.address_numbers n
+          ON (n.organization_id,n.project_id,n.route_id)=(r.organization_id,r.project_id,r.id)
+          WHERE r.organization_id=$1 AND r.project_id=$2 AND n.id IN
+          (SELECT source_number_id FROM house_numbering.proposal_items WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3)
+          ORDER BY r.id FOR UPDATE OF r",
+        "SELECT b.id FROM house_numbering.buildings b WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id IN
+          (SELECT building_id FROM house_numbering.proposal_items WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3)
+          ORDER BY b.id FOR UPDATE OF b",
+        "SELECT n.id FROM house_numbering.address_numbers n WHERE n.organization_id=$1 AND n.project_id=$2 AND n.id IN
+          (SELECT source_number_id FROM house_numbering.proposal_items WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3)
+          ORDER BY n.id FOR UPDATE OF n",
+    ] {
+        sqlx::query(statement).bind(org).bind(project).bind(proposal_id)
+            .fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    }
+    let rows=sqlx::query(
+        "SELECT i.building_id,i.proposed_number,b.state,b.eligibility,b.route_id AS building_route,
+            n.route_id,n.building_id AS number_building,n.number_text,n.kind,n.rule_id,n.retired_at IS NOT NULL AS retired,r.status AS route_status
+         FROM house_numbering.proposal_items i JOIN house_numbering.buildings b
+           ON (b.organization_id,b.project_id,b.id)=(i.organization_id,i.project_id,i.building_id)
+         LEFT JOIN house_numbering.address_numbers n ON (n.organization_id,n.project_id,n.id)=(i.organization_id,i.project_id,i.source_number_id)
+         LEFT JOIN house_numbering.routes r ON (r.organization_id,r.project_id,r.id)=(n.organization_id,n.project_id,n.route_id)
+         WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3 ORDER BY i.id"
+    ).bind(org).bind(project).bind(proposal_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    let rule=proposal["rule_id"].as_str().and_then(|v|Uuid::parse_str(v).ok()).ok_or_else(||AppError::internal("proposal rule missing"))?;
+    let scope=proposal["scope_id"].as_str().and_then(|v|Uuid::parse_str(v).ok()).ok_or_else(||AppError::internal("proposal scope missing"))?;
+    let mut buildings=Vec::with_capacity(rows.len());
+    for row in rows {
+        let id:Uuid=row.try_get("building_id").map_err(db_error)?;
+        let route:Option<Uuid>=row.try_get("route_id").map_err(db_error)?;
+        let number:Option<String>=row.try_get("number_text").map_err(db_error)?;
+        let snapshot:String=row.try_get("proposed_number").map_err(db_error)?;
+        if route.is_none() || row.try_get::<Option<Uuid>,_>("building_route").map_err(db_error)?!=route
+            || row.try_get::<Option<Uuid>,_>("number_building").map_err(db_error)?!=Some(id)
+            || number.as_deref()!=Some(snapshot.as_str())
+            || row.try_get::<Option<String>,_>("kind").map_err(db_error)?.as_deref()!=Some(expected_kind)
+            || row.try_get::<Option<Uuid>,_>("rule_id").map_err(db_error)?!=Some(rule)
+            || row.try_get::<bool,_>("retired").map_err(db_error)?
+            || row.try_get::<String,_>("state").map_err(db_error)?!="active" {
+            return Err(AppError::conflict("STALE_PROPOSAL_ITEM", "building, route, rule or proposed number changed"));
+        }
+        let eligibility:String=row.try_get("eligibility").map_err(db_error)?;
+        if eligibility=="ineligible" || (approval && eligibility!="eligible") {
+            return Err(AppError::conflict("BUILDING_ELIGIBILITY_UNVERIFIED", "approval requires every building to be explicitly eligible"));
+        }
+        if approval && row.try_get::<Option<String>,_>("route_status").map_err(db_error)?.as_deref()!=Some("confirmed") {
+            return Err(AppError::conflict("ROUTE_UNVERIFIED", "approval requires confirmed routes"));
+        }
+        buildings.push(id);
+    }
+    scoped_buildings(edit,proposal["scope_kind"].as_str().unwrap_or_default(),scope,&buildings).await
+}
+
 async fn move_numbers(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
@@ -282,13 +385,13 @@ async fn move_numbers(
     to: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<(), AppError> {
-    sqlx::query(
+    let moved=sqlx::query(
         "UPDATE house_numbering.address_numbers n SET kind=$5,revision=revision+1,
              updated_by_actor_id=$6,updated_at=$7
          FROM house_numbering.proposal_items i
          WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
            AND n.organization_id=i.organization_id AND n.project_id=i.project_id
-           AND n.id=i.source_number_id AND n.kind=$4",
+           AND n.id=i.source_number_id AND n.kind=$4 AND n.retired_at IS NULL",
     )
     .bind(edit.organization_id())
     .bind(edit.project_id())
@@ -299,7 +402,11 @@ async fn move_numbers(
     .bind(now)
     .execute(&mut **edit.transaction())
     .await
-    .map_err(db_error)?;
+    .map_err(db_error)?.rows_affected();
+    let expected:i64=sqlx::query_scalar("SELECT count(*) FROM house_numbering.proposal_items WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3")
+        .bind(edit.organization_id()).bind(edit.project_id()).bind(proposal_id)
+        .fetch_one(&mut **edit.transaction()).await.map_err(db_error)?;
+    if moved != expected as u64 || expected == 0 {return Err(AppError::conflict("STALE_PROPOSAL_ITEM", "not every proposal number could transition"));}
     Ok(())
 }
 
@@ -345,6 +452,7 @@ pub async fn transition_proposal(
         Option<chrono::DateTime<chrono::Utc>>,
     ) = match (action, state.as_str(), reviewer) {
         ("submit", "draft", _) => {
+            validate_transition_items(edit, proposal_id, &proposal, "proposed", false).await?;
             if invalid_items(&items, "proposed") {
                 return Err(invalid_item());
             }
@@ -442,19 +550,17 @@ pub async fn transition_proposal(
             ("draft", None, false, Some(now))
         }
         ("approve", "submitted", true) => {
+            let reviewer_id=actor.id.to_string();
+            if ["created_by_actor_id", "updated_by_actor_id"].iter().any(|key| proposal[*key].as_str()==Some(reviewer_id.as_str())) {
+                return Err(AppError::forbidden("proposal approver must be independent from creator and submitter"));
+            }
+            validate_transition_items(edit, proposal_id, &proposal, "submitted", true).await?;
             if proposal["rule_status"].as_str() != Some("authoritative")
-                || proposal["authority_ref"].as_str().is_none_or(str::is_empty)
+                || blank(proposal["authority_ref"].as_str())
             {
                 return Err(AppError::conflict(
                     "RULE_NOT_AUTHORITATIVE",
                     "approval requires authoritative rule",
-                ));
-            }
-            // Draft proposals may include unresolved buildings; approval must not.
-            if items.iter().any(|item| item["eligibility"].as_str() != Some("eligible")) {
-                return Err(AppError::conflict(
-                    "BUILDING_ELIGIBILITY_UNVERIFIED",
-                    "approval requires every building to be explicitly eligible",
                 ));
             }
             if invalid_items(&items, "submitted") {

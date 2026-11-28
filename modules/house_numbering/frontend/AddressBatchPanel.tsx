@@ -1,4 +1,4 @@
-import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {useEffect,useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 export type BatchGroup={key:string;kind:string;road:string;alley:string;code:string;verified_road:string;verified_prefix:string;count:number;distance_min:number;distance_max:number;members:{building_id:string;source_id:string;feature_id:string;road:string;alley:string;distance_m:number;evidence_token:string;revision:number}[]};

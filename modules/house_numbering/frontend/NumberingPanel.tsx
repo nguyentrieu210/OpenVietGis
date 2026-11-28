@@ -1,4 +1,4 @@
-import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {
   createHouseNumberingRule,
   inspectHouseNumberingLocation,

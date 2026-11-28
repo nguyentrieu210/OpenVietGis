@@ -1,4 +1,4 @@
-import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 type Input={building_id:string;cluster:string};

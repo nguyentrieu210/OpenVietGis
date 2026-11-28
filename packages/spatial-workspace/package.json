@@ -20,7 +20,12 @@
     "./tiles3d": "./src/tiles3d.ts",
     "./snap-math": "./src/snap-math.ts",
     "./survey-math": "./src/survey-math.ts",
-    "./terrain-analysis": "./src/terrain-analysis.ts"
+    "./terrain-analysis": "./src/terrain-analysis.ts",
+    "./plugin/studio-contract": "./src/plugin/studio-contract.ts",
+    "./plugin/studio-ui": "./src/plugin/studio-ui.tsx",
+    "./plugin/ui-dialog": "./src/plugin/ui-dialog.tsx",
+    "./plugin/Splitter": "./src/plugin/Splitter.tsx",
+    "./plugin/runtime": "./src/plugin/runtime.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -30,14 +35,15 @@
     "cesium": "1.147.0",
     "delaunator": "5.0.1",
     "maplibre-gl": "6.18.0",
-    "react": "^19.3.1"
+    "react": "^19.3.1",
+    "@openvietgis/client-sdk": "workspace:*",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/delaunator": "5.0.3",
     "@types/geojson": "7946.0.16",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "react-dom": "^19.3.1",
     "typescript": "^6.0.3",
     "vite": "^8.3.8"
   }

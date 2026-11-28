@@ -70,7 +70,8 @@ def runtime_source(relative: str) -> bool:
 
 def frontend_boundary_violations(root: Path, path: Path, content: str) -> list[str]:
     relative = path.relative_to(root).as_posix()
-    if not runtime_source(relative) or path.suffix not in {
+    module_frontend = relative.startswith("modules/") and "/frontend/" in relative and "/tests/" not in relative
+    if not (runtime_source(relative) or module_frontend) or path.suffix not in {
         ".ts",
         ".tsx",
         ".js",
@@ -89,7 +90,7 @@ def frontend_boundary_violations(root: Path, path: Path, content: str) -> list[s
             target = "apps/web-next/"
         elif imported.startswith("@openvietgis/web"):
             target = "apps/web/"
-        if relative.startswith("packages/") and target.startswith("apps/"):
+        if (relative.startswith("packages/") or module_frontend) and target.startswith("apps/"):
             errors.append(f"{relative} imports app internals: {imported}")
         if relative.startswith("apps/web/src/") and target.startswith("apps/web-next/"):
             errors.append(f"{relative} imports canonical app internals: {imported}")
@@ -125,7 +126,7 @@ def domain_framework_violations(relative: str, content: str) -> list[str]:
 
 def find_violations(root: Path = ROOT) -> list[str]:
     violations: list[str] = []
-    for core_root in (root / "apps", root / "packages"):
+    for core_root in (root / "apps", root / "packages", root / "modules"):
         if not core_root.exists():
             continue
         for path in core_root.rglob("*"):
@@ -145,7 +146,8 @@ def find_violations(root: Path = ROOT) -> list[str]:
                     domain_framework_violations(relative_to_root, content)
                 )
             if (
-                relative_to_root not in MODULE_GATEWAYS
+                not relative_to_root.startswith("modules/")
+                and relative_to_root not in MODULE_GATEWAYS
                 and references_vertical_module_code(content)
             ):
                 violations.append(f"{relative_to_root} references vertical module code")

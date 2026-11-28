@@ -1,4 +1,4 @@
-import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {useState} from "react";
 import {hnClient,uiError,withCsrf} from "./client";
 type Alias={id:string;token:string;route_id:string;route_name:string;root_name:string;prefix:string|null;road:string;alley:string;code:string;count:number;near:number;observations:number;matching_observations:number;reviewable:boolean;source_name:string|null;planned_name:string|null;source_id:string;feature_id:string};

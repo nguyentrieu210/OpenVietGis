@@ -1,4 +1,4 @@
-import {uiPrompt} from "../../../apps/web-next/src/ui-dialog";
+import {uiPrompt} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {
   createHouseNumberingArea,
   createHouseNumberingBuilding,

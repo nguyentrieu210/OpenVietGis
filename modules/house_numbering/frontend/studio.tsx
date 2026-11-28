@@ -1,10 +1,10 @@
-import {uiConfirm,uiPrompt} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm,uiPrompt} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import React,{useCallback,useEffect,useMemo,useState,type ReactNode} from "react";
 import {ApiClient,ApiError,commitChangeset,loadCsrfToken} from "@openvietgis/client-sdk";
-import type {StudioFeatureCollection as FeatureCollection,StudioPosition as Position} from "../../../apps/web-next/src/studio-contract";
-import {featureKey,type StudioHost,type StudioPlugin,type StudioRow as Row,type StudioData,type StudioContribution} from "../../../apps/web-next/src/studio-contract";
-import {Modal,SimpleForm} from "../../../apps/web-next/src/studio-ui";
-import {Splitter} from "../../../apps/web-next/src/Splitter";
+import type {StudioFeatureCollection as FeatureCollection,StudioPosition as Position} from "@openvietgis/spatial-workspace/plugin/studio-contract";
+import {featureKey,type StudioHost,type StudioPlugin,type StudioRow as Row,type StudioData,type StudioContribution} from "@openvietgis/spatial-workspace/plugin/studio-contract";
+import {Modal,SimpleForm} from "@openvietgis/spatial-workspace/plugin/studio-ui";
+import {Splitter} from "@openvietgis/spatial-workspace/plugin/Splitter";
 import {listHouseNumberingAreas,listHouseNumberingRoutes,listHouseNumberingBuildings,listHouseNumberingRules,createHouseNumberingArea,createHouseNumberingRoute,createHouseNumberingBuilding,createHouseNumberingRule,inspectHouseNumberingLocation,previewHouseNumbering,applyHouseNumberingPreview,searchHouseNumbers,listSurveySignoffs,signSurveyScope,revokeSurveySignoff,type SurveySignoff,type HouseNumberingArea,type HouseNumberingRoute,type HouseNumberingBuilding,type HouseNumberingRule,type HouseNumberingPreview,type HouseNumberingInspection} from "./api";
 import {StudioWorkbench} from "./StudioWorkbench";
 import {ProposalPanel} from "./ProposalPanel";

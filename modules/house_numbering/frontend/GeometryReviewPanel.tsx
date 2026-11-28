@@ -1,4 +1,4 @@
-import {uiConfirm} from "../../../apps/web-next/src/ui-dialog";
+import {uiConfirm} from "@openvietgis/spatial-workspace/plugin/ui-dialog";
 import {useEffect,useState} from "react";
 import {AddressVerificationPanel} from "./AddressVerificationPanel";
 import {VerifiedLinkPanel} from "./VerifiedLinkPanel";

@@ -114,3 +114,14 @@ def test_generic_module_glob_requires_discovery_gateway(tmp_path: Path) -> None:
     assert any(
         "references vertical module code" in v for v in find_violations(tmp_path)
     )
+
+
+def test_module_frontend_cannot_import_app_internals(tmp_path: Path) -> None:
+    write_source(tmp_path, "modules/example/frontend/Panel.tsx",
+                 'import {X} from "../../../apps/web-next/src/X";')
+    assert any("imports app internals" in v for v in find_violations(tmp_path))
+
+def test_module_frontend_can_import_public_plugin_sdk(tmp_path: Path) -> None:
+    write_source(tmp_path, "modules/example/frontend/Panel.tsx",
+                 'import {Modal} from "@openvietgis/spatial-workspace/plugin/studio-ui";')
+    assert find_violations(tmp_path) == []
