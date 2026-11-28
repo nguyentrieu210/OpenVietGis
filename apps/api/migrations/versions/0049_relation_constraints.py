@@ -183,6 +183,55 @@ def upgrade():
         WHEN (OLD.attributes IS DISTINCT FROM NEW.attributes)
         EXECUTE FUNCTION editing.check_relation_write()
     """)
+    # Definition changes from any SQL write path use the same project lock and
+    # validate both fields plus the entire existing key population.
+    op.execute("""
+        CREATE FUNCTION editing.guard_relation_definition() RETURNS trigger
+        LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+        DECLARE org uuid; project uuid; field_count integer; invalid boolean;
+        BEGIN
+          IF TG_OP='DELETE' THEN org:=OLD.organization_id; project:=OLD.project_id;
+          ELSE org:=NEW.organization_id; project:=NEW.project_id; END IF;
+          PERFORM 1 FROM workspace.projects p
+            WHERE p.organization_id=org AND p.id=project FOR UPDATE;
+          IF NOT FOUND THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation project unavailable'; END IF;
+          IF current_user='openvietgis_runtime' AND gis_access.scoped(org,project)
+          THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation management requires unrestricted project access'; END IF;
+          IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+          IF TG_OP='UPDATE' THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Replace relation definitions explicitly';
+          END IF;
+          SELECT count(*) INTO field_count FROM spatial.source_fields f
+          JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+          WHERE f.organization_id=org AND f.project_id=project
+            AND s.lifecycle='active' AND s.validation_state='ready'
+            AND f.schema_revision=s.schema_revision AND f.type=NEW.field_type
+            AND ((f.source_id=NEW.source_id AND f.field_id=NEW.local_field)
+              OR (f.source_id=NEW.target_source_id AND f.field_id=NEW.target_field));
+          IF field_count<>2 THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation fields unavailable or incompatible';
+          END IF;
+          IF (SELECT count(*) FROM editing.relations r WHERE r.organization_id=org AND r.project_id=project)>=100 THEN
+            RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation definition limit exceeded';
+          END IF;
+          WITH targets AS (
+            SELECT editing.relation_key(f.attributes->NEW.target_field,NEW.field_type) COLLATE "C" AS k,count(*) AS n
+            FROM spatial.reference_features f
+            WHERE (f.organization_id,f.project_id,f.source_id)=(org,project,NEW.target_source_id)
+            GROUP BY 1
+          ), locals AS (
+            SELECT DISTINCT editing.relation_key(f.attributes->NEW.local_field,NEW.field_type) COLLATE "C" AS k
+            FROM spatial.reference_features f
+            WHERE (f.organization_id,f.project_id,f.source_id)=(org,project,NEW.source_id)
+          )
+          SELECT EXISTS(SELECT 1 FROM locals l LEFT JOIN targets t ON t.k=l.k WHERE l.k IS NOT NULL AND t.k IS NULL)
+            OR (NEW.cardinality='one' AND EXISTS(SELECT 1 FROM targets t WHERE t.k IS NOT NULL AND t.n>1))
+            INTO invalid;
+          IF invalid THEN RAISE EXCEPTION USING ERRCODE='OV409', MESSAGE='Relation constraint would be violated'; END IF;
+          RETURN NEW;
+        END $$
+    """)
+    op.execute("CREATE TRIGGER relation_definition_guard BEFORE INSERT OR UPDATE OR DELETE ON editing.relations FOR EACH ROW EXECUTE FUNCTION editing.guard_relation_definition()")
     op.execute("REVOKE ALL ON FUNCTION editing.assert_relation_key(editing.relations,text) FROM PUBLIC")
     op.execute("GRANT EXECUTE ON FUNCTION editing.assert_relation_key(editing.relations,text) TO openvietgis_runtime")
 
@@ -204,5 +253,7 @@ def downgrade():
     op.execute("DROP FUNCTION editing.check_relation_write()")
     op.execute("DROP FUNCTION editing.lock_relation_write()")
     op.execute("DROP FUNCTION editing.assert_relation_key(editing.relations,text)")
+    op.execute("DROP TRIGGER relation_definition_guard ON editing.relations")
+    op.execute("DROP FUNCTION editing.guard_relation_definition()")
     op.execute("DROP TABLE editing.relations")
     op.execute("DROP FUNCTION editing.relation_key(jsonb,text)")
