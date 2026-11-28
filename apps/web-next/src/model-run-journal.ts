@@ -45,7 +45,7 @@ export async function executeVectorModel(initial:ModelRun,steps:readonly VectorS
   if(!entry){
    const load=async(id:string,ref:ModelRef|null)=>{const layer=await io.layer(id);if(layer.id!==id)throw Error("Layer trả về không khớp.");if(ref?.type==="layer"&&(!run.sources[id]||!equalPin(sourcePin(layer),run.sources[id]!)))throw Error("Nguồn đã thay đổi kể từ lúc lập mô hình.");return layer};
    const input=await load(a,n.a),overlay=b?await load(b,n.b):undefined;
-   const request=processingRequest(n.algorithm,input,overlay,String(n.parameters.distance_meters??""),String(n.parameters.quad_segs??"8"),String(n.parameters.group_by_field??""),outputName,io.operation());
+   const request=processingRequest(n.algorithm,input,overlay,String(n.parameters.distance_meters??""),String(n.parameters.quad_segs??"8"),String(n.parameters.group_by_field??""),outputName,io.operation(),{targetSrid:Number(n.parameters.target_srid),predicate:String(n.parameters.predicate??"intersects"),joinType:String(n.parameters.join_type??"left"),matchMode:String(n.parameters.match_mode??"all")});
    entry={step:n.id,request};run={...run,entries:[...run.entries,entry]};io.persist(run);
   }else if(entry.request.input_layer_id!==a||entry.request.overlay_layer_id!==(b??null)||entry.request.algorithm_id!==n.algorithm||entry.request.output_name!==outputName)throw Error("Yêu cầu nhật ký không khớp graph.");
   await io.current();if(io.stopped())break;

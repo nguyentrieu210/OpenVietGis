@@ -1344,8 +1344,11 @@ async fn prepare_inside_savepoint(
             ];
             for (prefix, original) in [("input", &input_fields), ("overlay", &overlay_fields)] {
                 for (i, (_, name, kind, _)) in original.iter().enumerate() {
-                    fields.push((format!("{prefix}_{i}"), format!("{prefix}: {name}"), kind.clone(), true));
+                    fields.push((format!("{prefix}_{i}"), format!("{prefix}: {name}").chars().take(200).collect(), kind.clone(), true));
                 }
+            }
+            if fields.len()>100 {
+                return Err(EditError::validation("PROCESSING_LIMIT","combined schema exceeds 100 fields"));
             }
             output_fields = fields;
             let cte = format!("WITH a AS (
