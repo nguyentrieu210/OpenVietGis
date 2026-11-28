@@ -81,7 +81,7 @@ for(let i=0;i<count;i++){
  await context.close();
 }
 const {context:modeContext,page:modePage}=await newFixturePage();
-const soakSamples=[];let measuredTransitions=0,soakStarted=null;
+const soakSamples=[];let measuredTransitions=0,soakStarted=null,soakElapsed=0;
 try{
  await modePage.goto(origin+"/app",{waitUntil:"domcontentloaded"});await gisReady(modePage);
  const modes=modePage.getByRole("group",{name:"Không gian làm việc"}),mapModes=modePage.getByRole("group",{name:"Chế độ bản đồ"});
@@ -103,11 +103,13 @@ try{
   await mapModes.getByRole("button",{name:"2D",exact:true}).click();await modePage.locator(".qgis-map-region .maplibregl-canvas").waitFor({state:"visible"});
  }
 }catch(error){failures.push({phase:"initialized-modes",message:error instanceof Error?error.message:String(error)})}
+// Record continuous workload time before teardown, not browser close time.
+soakElapsed=soakStarted===null?0:(performance.now()-soakStarted)/1000;
 await modeContext.close();
 samples.cold_gis_ms=coldGis;
 samples.cold_shell_ms=shell.cold;samples.warm_shell_ms=shell.warm;
 delete samples.warm_gis_ms;
 await browser.close();await new Promise(resolve=>server.close(resolve));
 const metrics=Object.fromEntries(Object.entries(samples).map(([k,v])=>[k,summary(v)]));
-console.log(JSON.stringify({label,sha,node:process.version,chromium:chromium.name(),iterations:count,measured_transitions:measuredTransitions,soak:{requested_seconds:soakSeconds,elapsed_seconds:soakStarted===null?0:(performance.now()-soakStarted)/1000,samples:soakSamples,scope:"Chromium DOM and optional JS heap in one continuous warmed context; no GPU or process-RSS claim"},failures,metrics,raw:samples,method:`${count} independent cold/warm shell contexts; ${count} independent cold GIS engine samples; ${measuredTransitions} initialized CAD/3D mode transitions in one warmed context; synthetic loopback API; service worker blocked; external provider requests aborted. Measures browser/client transition timing only, not production network/server latency.`},null,2));
+console.log(JSON.stringify({label,sha,node:process.version,chromium:chromium.name(),iterations:count,measured_transitions:measuredTransitions,soak:{requested_seconds:soakSeconds,elapsed_seconds:soakElapsed,samples:soakSamples,scope:"Chromium DOM and optional JS heap in one continuous warmed context; no GPU or process-RSS claim"},failures,metrics,raw:samples,method:`${count} independent cold/warm shell contexts; ${count} independent cold GIS engine samples; ${measuredTransitions} initialized CAD/3D mode transitions in one warmed context; synthetic loopback API; service worker blocked; external provider requests aborted. Measures browser/client transition timing only, not production network/server latency.`},null,2));
 if(failures.length)process.exitCode=2;

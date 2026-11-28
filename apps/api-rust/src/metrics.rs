@@ -77,7 +77,9 @@ impl MetricsRegistry {
             ));
         }
         cumulative += self.http_duration_buckets[HTTP_BUCKETS_MS.len()].load(Ordering::Relaxed);
-        duration.push_str(&format!("ovg_http_request_duration_seconds_bucket{{le=\"+Inf\"}} {cumulative}\novg_http_request_duration_seconds_sum {duration_sum:.6}\novg_http_request_duration_seconds_count {requests}\n"));
+        // Use the same sampled bucket population for +Inf and _count.
+        // The independent request counter may advance during a scrape.
+        duration.push_str(&format!("ovg_http_request_duration_seconds_bucket{{le=\"+Inf\"}} {cumulative}\novg_http_request_duration_seconds_sum {duration_sum:.6}\novg_http_request_duration_seconds_count {cumulative}\n"));
 
         format!(
             "# HELP ovg_http_requests_total Total HTTP requests handled by openvietgis-api-rust.\n\
@@ -130,6 +132,18 @@ mod tests {
         let out = metrics.render_prometheus(0, 0);
         assert!(out.contains("ovg_http_request_duration_seconds_bucket{le=\"0.005\"} 1\n"));
         assert!(out.contains("ovg_http_request_duration_seconds_bucket{le=\"0.010\"} 2\n"));
+    }
+
+    #[test]
+    fn histogram_count_agrees_with_inf_bucket_during_concurrent_update() {
+        let metrics = MetricsRegistry::new();
+        metrics.record_request(200, Duration::from_millis(5));
+        // Simulate a request counted before its latency bucket is published.
+        metrics.http_requests_total.fetch_add(1, Ordering::Relaxed);
+        let out = metrics.render_prometheus(0, 0);
+        assert!(out.contains("ovg_http_requests_total 2\n"));
+        assert!(out.contains("ovg_http_request_duration_seconds_bucket{le=\"+Inf\"} 1\n"));
+        assert!(out.contains("ovg_http_request_duration_seconds_count 1\n"));
     }
 
     #[test]

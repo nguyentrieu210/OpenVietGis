@@ -67,3 +67,10 @@ def test_soak_duplicate_timestamps_and_nonfinite_duration_do_not_prove_coverage(
     bad["soak"]["requested_seconds"] = float("nan")
     assert MODULE.evaluate(bad, SHA, require_soak=True)
     assert MODULE.evaluate(report(), "main")
+
+
+@pytest.mark.parametrize("value", [None, [], [1], "invalid", 1, True])
+def test_malformed_soak_is_a_reported_failure(value):
+    bad = report()
+    bad["soak"] = value
+    assert any("soak" in failure for failure in MODULE.evaluate(bad, SHA, require_soak=True))

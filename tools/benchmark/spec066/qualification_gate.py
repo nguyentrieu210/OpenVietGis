@@ -34,7 +34,9 @@ def evaluate(report: dict, candidate: str, *, require_soak: bool = False) -> lis
         if metric in limits and p95 > limits[metric]:
             failures.append(f"{metric}: p95 {p95:.3f} ms exceeds {limits[metric]} ms")
     if require_soak:
-        soak = report.get("soak") or {}
+        soak = report.get("soak")
+        if not isinstance(soak, dict):
+            return [*failures, "A continuous 60-minute browser soak is missing"]
         requested, elapsed = soak.get("requested_seconds"), soak.get("elapsed_seconds")
         samples = soak.get("samples")
         if (type(requested) not in (int, float) or not math.isfinite(requested) or requested < 3600

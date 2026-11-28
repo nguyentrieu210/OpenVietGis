@@ -10,7 +10,9 @@ import hashlib
 import json
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import httpx
 import psycopg
@@ -38,6 +40,32 @@ def exercise(url, owner_url, fixture):
         hits = next((int(line.split()[1]) for line in metrics.splitlines()
                      if line.startswith("ovg_tile_cache_hits_total ")), 0)
         results["cache_hit_observed"] = hits >= 1
+
+        # A different cold key under concurrent demand must share one leader.
+        burst_path = path.removesuffix("/0/0/0.mvt") + "/1/1/0.mvt"
+        def metric(name):
+            text = client.get("/api/v1/ops/metrics").text
+            return next(int(line.split()[1]) for line in text.splitlines()
+                        if line.startswith(name + " "))
+
+        misses_before = metric("ovg_tile_cache_misses_total")
+        gate = Barrier(8, timeout=10)
+
+        def fetch_tile(_):
+            gate.wait()
+            return client.get(burst_path, params=pins, headers=owner)
+
+        with ThreadPoolExecutor(max_workers=8) as workers:
+            responses = list(workers.map(fetch_tile, range(8)))
+        results["cold_burst_single_leader"] = (
+            metric("ovg_tile_cache_misses_total") - misses_before == 1
+        )
+        results["cold_burst_identical_private_bytes"] = all(
+            response.status_code == 200
+            and response.content == responses[0].content
+            and response.headers.get("cache-control") == "private, no-store"
+            for response in responses
+        )
         results["anonymous_denied"] = client.get(path, params=pins).status_code == 401
         results["foreign_tenant_denied"] = client.get(
             path, params=pins, headers={"cookie": f"ovg_session={fixture['session_b_token']}"},

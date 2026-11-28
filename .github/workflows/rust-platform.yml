@@ -116,8 +116,8 @@ jobs:
 
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
@@ -319,6 +319,21 @@ jobs:
           uv run --project apps/api python tests/rust-parity/e05_cache_security.py \
             --candidate target/debug/openvietgis-api-rust \
             --output dist/parity/e05-cache-security.json
+
+      - name: Run retained raster, CAD catalog, connector and offline differential cases
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/parity
+          failures=0
+          for suite in e09_raster_catalog e09_raster_content e10_3d_reads e10_cad_documents e10_model_download e10_scene_writes e12_catalog e12_profiles e13_packages e13_download; do
+            if ! uv run --project apps/api python "tests/rust-parity/$suite.py" \
+              --candidate target/debug/openvietgis-api-rust 2>&1 | tee "dist/parity/$suite.log"; then
+              failures=$((failures + 1))
+            fi
+          done
+          test "$failures" -eq 0
 
       - name: Record PostGIS version
         if: always()
