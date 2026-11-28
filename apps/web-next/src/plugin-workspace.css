@@ -3,3 +3,15 @@
 .ovg-plugin-palette.dock-top{top:3px;left:3px;right:3px;border-radius:2px}.ovg-plugin-palette.dock-bottom{bottom:34px;left:3px;right:3px;border-radius:2px}.ovg-plugin-palette select{font-size:11px;border:1px solid #cbd9cf;background:#fff;color:#304837;max-width:65px}
 
 .ovg-market-view{display:flex;align-items:center;gap:5px}.ovg-market-view b{flex:1;font-size:13px}.ovg-market-view button{border:1px solid #b9cec1;background:#fff;border-radius:3px;padding:4px 9px;font-size:12px}.ovg-market-view button[aria-pressed=true]{background:#e1eee5;color:#236347}.ovg-plugin-manager{display:grid;grid-template-columns:minmax(180px,40%) minmax(0,1fr);border:1px solid #cbd9cf;min-height:245px}.ovg-plugin-list{border-right:1px solid #cbd9cf;max-height:300px;overflow:auto;padding:3px}.ovg-plugin-list button{display:flex;gap:9px;align-items:center;text-align:left;width:100%;padding:8px 6px;background:#fff;border:0;color:#304837;font-size:12px}.ovg-plugin-list button[aria-pressed=true]{background:#e4efe7}.ovg-plugin-list small{display:block;font-size:10px;color:#657c70;margin-top:3px}.ovg-plugin-list-status{flex:0 0 18px;color:#24764b;text-align:center}.ovg-plugin-details{padding:14px;min-width:0;font-size:12px;color:#304837}.ovg-plugin-details h3{font-size:16px;margin:0 0 8px}.ovg-plugin-details dl{display:grid;grid-template-columns:100px minmax(0,1fr);gap:5px}.ovg-plugin-details dd{margin:0}.ovg-plugin-details dt{color:#647d70}.ovg-plugin-manager-actions{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}.ovg-plugin-manager-actions button{padding:5px 9px;border-radius:3px}.ovg-plugin-details>small{display:block;color:#657c70;line-height:1.4}@media(max-width:600px){.ovg-plugin-manager{grid-template-columns:1fr}.ovg-plugin-list{border-right:0;border-bottom:1px solid #cbd9cf;max-height:140px}}
+
+/* App manager uses available container size, not viewport-based minimums. */
+.ovg-market{container-type:inline-size}
+.ovg-market-top,.ovg-market-view,.ovg-market-cats,.ovg-plugin-manager,.ovg-plugin-list,.ovg-plugin-details{min-width:0;max-width:100%}
+.ovg-market-view{flex-wrap:wrap}.ovg-market-view b{flex:1 1 180px}
+.ovg-market-top input{width:100%;min-width:0}
+.ovg-plugin-manager{grid-template-columns:minmax(0,38%) minmax(0,1fr)}
+.ovg-plugin-list button>span:last-child{min-width:0;overflow-wrap:anywhere;white-space:normal}
+.ovg-plugin-details dl{grid-template-columns:minmax(65px,100px) minmax(0,1fr)}
+.ovg-plugin-details :is(p,dd,small,h3){overflow-wrap:anywhere}
+.qgis-studio .live-modal-body .ovg-plugin-manager-actions button{margin-left:0;min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+@container(max-width:560px){.ovg-plugin-manager{grid-template-columns:minmax(0,1fr)}.ovg-plugin-list{border-right:0;border-bottom:1px solid #cbd9cf;max-height:150px}.ovg-plugin-details{padding:10px}}

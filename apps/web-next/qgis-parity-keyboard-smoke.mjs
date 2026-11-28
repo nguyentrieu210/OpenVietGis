@@ -95,6 +95,16 @@ try{
   assert.ok(await manager.getByRole("button",{name:"Ngừng sử dụng",exact:true}).isVisible());
   await manager.getByRole("button",{name:"Thẻ",exact:true}).click();assert.ok(await manager.locator(".ovg-market-grid").first().isVisible());
   await manager.getByRole("button",{name:"Danh sách",exact:true}).click();
+  if(process.env.OVG_DIALOG072_ONLY==="1"){
+   const old=page.viewportSize();
+   for(const width of [1920,1280,768,640,390,360]){
+    await page.setViewportSize({width,height:width<640?720:900});await page.waitForTimeout(100);
+    const layout=await manager.evaluate(el=>{const b=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),buttons=[...el.querySelectorAll(".ovg-plugin-manager-actions button")];return {width:innerWidth,left:b.left,right:b.right,client:body.clientWidth,scroll:body.scrollWidth,buttons:buttons.every(x=>{const r=x.getBoundingClientRect();return r.left>=b.left-1&&r.right<=b.right+1})}});
+    console.log("DIALOG072",JSON.stringify(layout));assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.scroll<=layout.client+1&&layout.buttons,"no clipped action or horizontal overflow");
+   }
+   await page.setViewportSize(old);await manager.getByRole("button",{name:"Phóng to cửa sổ"}).click();assert.ok(await manager.evaluate(e=>e.classList.contains("ovg-dialog-maximized")));
+   await manager.getByRole("button",{name:"Khôi phục kích thước"}).click();assert.ok(await manager.evaluate(e=>!e.classList.contains("ovg-dialog-maximized")));
+  }
   await manager.getByRole("button",{name:"Đóng",exact:true}).click();
   assert.deepEqual(errors,[]);
   console.log("PASS SPEC 071: hidden default, scoped lazy plugin, movable palette, workspace docking, native workbench, close and restore");

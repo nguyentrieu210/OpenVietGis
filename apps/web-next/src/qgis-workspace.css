@@ -254,3 +254,11 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .qgis-studio .qgis-layer-row .ovg-row-lock.locked{color:#95630b!important;background:#f8e6c0!important;border-color:#dec183!important}
 .qgis-studio .qgis-layer-row .ovg-row-lock.editing{color:#537a61!important;background:#e5f0e8!important}
 @container (max-width:280px){.qgis-layer-row[data-layer-id]>.qgis-layer-count,.qgis-layer-row[data-layer-id]>.qgis-filter-indicator,.qgis-layer-row[data-layer-id]>.ovg-layer-tasks,.qgis-layer-row[data-layer-id]>.ovg-editor-dot{display:none}.qgis-layer-row[data-layer-id]>span.qgis-tree-toggle{width:7px}}
+/* Command palette: readable on the light list, even when the input is dark. */
+.qgis-studio .core-command-list{color:#263c49;background:#fff}
+.qgis-studio .core-command-list button{display:grid;grid-template-columns:minmax(65px,24%) minmax(0,1fr);align-items:center;gap:8px;text-align:left;height:auto;min-height:34px;white-space:normal;color:#263c49;background:#fff}
+.qgis-studio .core-command-list button>code{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qgis-studio .core-command-list button>span{display:grid;min-width:0;gap:2px;line-height:1.35;color:#263c49;overflow-wrap:anywhere}
+.qgis-studio .core-command-list button>span>small{position:static;color:#526b79;line-height:1.35;white-space:normal}
+.qgis-studio .core-command-list button:disabled{opacity:1;color:#768893;background:#f7f9fa}
+.qgis-studio .core-command-list button:disabled>span,.qgis-studio .core-command-list button:disabled>span>small{color:#687b86}

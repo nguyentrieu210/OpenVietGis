@@ -554,7 +554,7 @@
 .qgis-studio .maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(1) brightness(1.6)}
 
 /* App market */
-.ovg-market{display:grid;gap:14px;min-width:min(820px,86vw)}
+.ovg-market{display:grid;gap:10px;min-width:0;width:100%;max-width:100%}
 .ovg-market-top{display:grid;gap:10px}
 .ovg-market-top input{height:36px;padding:0 12px;border:1px solid #d3dbe1;border-radius:8px;font-size:13.5px}
 .ovg-market-top input:focus{outline:0;border-color:#1565a9;box-shadow:0 0 0 3px #1565a926}
@@ -562,7 +562,7 @@
 .ovg-market-cats button{padding:4px 12px;border:1px solid #d3dbe1;border-radius:16px;background:#fff;font-size:12.5px;cursor:pointer}
 .ovg-market-cats button[aria-selected=true]{background:#0f4c81;border-color:#0f4c81;color:#fff}
 .ovg-market h4{margin:4px 0 0;font-size:13px;color:#4b5b66;text-transform:uppercase;letter-spacing:.04em}
-.ovg-market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.ovg-market-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:12px}
 .ovg-app{display:grid;grid-template-columns:48px 1fr;grid-template-rows:1fr auto;gap:10px 12px;padding:14px;border:1px solid #dde4e9;border-radius:12px;background:#fff;transition:box-shadow .15s,border-color .15s}
 .ovg-app:hover{border-color:#a9c4dd;box-shadow:0 8px 20px #0f1b2414}
 .ovg-app-icon{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;font-size:24px;color:#fff;box-shadow:inset 0 -2px 0 #0002}
