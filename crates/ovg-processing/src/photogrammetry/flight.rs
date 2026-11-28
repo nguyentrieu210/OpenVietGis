@@ -3,7 +3,7 @@
 use super::{autotune,hardware,ingest,images,colmap,local_worker,colmap_model,jpeg_source,ortho,pipeline,disk_store};
 use sha2::{Digest,Sha256};
 use std::{fs::{self,File},io::Read,path::{Path,PathBuf},collections::{BTreeMap,BTreeSet},time::{Duration,Instant},sync::atomic::{AtomicBool,Ordering}};
-#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Unsupported,AmbiguousModel,Registration,Io(std::io::Error),Tune(autotune::Error),Ingest(ingest::Error),Worker(local_worker::Error),Render(pipeline::Error)}
+#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Unsupported,AmbiguousModel,Registration,Io(std::io::Error),Tune(autotune::Error),Ingest(ingest::Error),Worker(local_worker::Error),Render(pipeline::Error),Control(super::control_network::Error),Checkpoint,Surface(super::cloud_dsm::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]pub enum Stage{Import,Sparse,Undistort,AwaitAlignment,Render,Complete}
 pub struct PreparedFlight{root:PathBuf,model:local_worker::Prepared,plan:autotune::Plan,pub input_sha256:String,pub model_sha256:String,pub registered:usize,pub total:usize}
@@ -99,6 +99,79 @@ pub fn render(flight:&PreparedFlight,s:&AlignedSurface,output:&Path,cancel:&Atom
  progress(Stage::Render,0,0);
  let q=pipeline::run_controlled(&mut src,&store,0,"preview",s.grid,s.epsg,flight.plan.render,||cancel.load(Ordering::Acquire),|n,t|progress(Stage::Render,n as u64,t as u64)).map_err(Error::Render)?;
  progress(Stage::Complete,q.tiles as u64,q.tiles as u64);Ok(q)
+}
+
+/// GCP pixels refer to the *undistorted* prepared images, not original JPEGs.
+/// Target coordinates and vertical datum are supplied by the survey host.
+#[derive(Debug,Clone,Copy)]pub struct ImageMark{pub view_id:u32,pub pixel:[f64;2],pub sigma_px:f64}
+pub struct GroundMark<'a>{pub id:&'a str,pub role:super::control_network::Role,pub target:[f64;3],pub sigma_m:f64,pub images:&'a[ImageMark]}
+pub struct QualifiedAlignment{
+ model_sha256:String,alignment:colmap_model::Alignment,epsg:u16,vertical_datum:String,
+ pub report:super::control_network::Report,
+}
+pub fn qualify_alignment(flight:&PreparedFlight,expected_model:&str,epsg:u16,vertical_datum:&str,
+ marks:&[GroundMark<'_>],policy:super::control_network::Policy,cancel:&AtomicBool)->Result<QualifiedAlignment,Error>{
+ use super::{control_network,gcp};
+ if expected_model!=flight.model_sha256||!((32601..=32660).contains(&epsg)||(32701..=32760).contains(&epsg))||
+ vertical_datum.trim().is_empty()||vertical_datum.len()>128||vertical_datum.chars().any(char::is_control)||
+ marks.len()>512||policy.min_controls<3||policy.min_checks<3{return Err(Error::Invalid);}
+ if model_digest(&flight.root,&flight.model.views,cancel)?!=flight.model_sha256{return Err(Error::Invalid);}
+ let views:BTreeMap<_,_>=flight.model.views.iter().map(|v|(v.id,v)).collect();
+ if views.len()!=flight.model.views.len(){return Err(Error::Invalid);}
+ let mut observations=Vec::with_capacity(marks.len());
+ let mut total=0usize;
+ for m in marks{
+ if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+ if m.images.len()<2||m.images.len()>64{return Err(Error::Invalid);}
+ total=total.checked_add(m.images.len()).ok_or(Error::Limit)?;if total>16384{return Err(Error::Limit);}
+ super::preview::lonlat(epsg,m.target[0],m.target[1]).map_err(|_|Error::Invalid)?;
+ let mut seen=BTreeSet::new();let mut obs=Vec::new();
+ for o in m.images{
+ let v=views.get(&o.view_id).ok_or(Error::Invalid)?;
+ if !seen.insert(o.view_id)||!o.pixel.iter().all(|v|v.is_finite())||
+ o.pixel[0]<0.||o.pixel[1]<0.||o.pixel[0]>=f64::from(v.width)||o.pixel[1]>=f64::from(v.height)||
+ !o.sigma_px.is_finite()||o.sigma_px<=0.{return Err(Error::Invalid);}
+ obs.push(gcp::Observation{camera_id:o.view_id,camera:v.camera,pixel:o.pixel,sigma_px:o.sigma_px});
+ }
+ observations.push(obs);
+ }
+ let input:Vec<_>=marks.iter().zip(&observations).map(|(m,o)|control_network::Mark{
+ id:m.id,role:m.role,target:m.target,sigma_m:m.sigma_m,observations:o}).collect();
+ let report=control_network::align(&input,policy).map_err(Error::Control)?;
+ if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+ if !report.passed{return Err(Error::Checkpoint);}
+ Ok(QualifiedAlignment{model_sha256:flight.model_sha256.clone(),alignment:report.alignment,epsg,vertical_datum:vertical_datum.to_owned(),report})
+}
+/// Host-issued provenance must bind the fused cloud to the same local frame,
+/// model hash and vertical datum; a matching digest alone cannot prove geometry.
+pub struct CloudInput<'a>{pub path:&'a Path,pub sha256:&'a str,pub model_sha256:&'a str}
+pub struct DsmProduct{pub surface:AlignedSurface,pub receipt:super::cloud_dsm::Receipt,pub vertical_datum:String}
+pub fn derive_dsm(flight:&PreparedFlight,aligned:&QualifiedAlignment,cloud:CloudInput<'_>,
+ grid:ortho::Grid,policy:super::cloud_dsm::Policy,output:&Path,cancel:&AtomicBool)->Result<DsmProduct,Error>{
+ if aligned.model_sha256!=flight.model_sha256||cloud.model_sha256!=flight.model_sha256||
+ !super::digest(cloud.sha256)||!cloud.path.is_absolute()||!output.is_absolute()||output.exists()||
+ policy.max_work_bytes>flight.plan.admission.budget.host_bytes/2{return Err(Error::Invalid);}
+ let n=u64::from(grid.width)*u64::from(grid.height);
+ if n==0||n>16_000_000||n.checked_mul(4).ok_or(Error::Limit)?>flight.plan.render.output_bytes{return Err(Error::Limit);}
+ if digest(cloud.path,policy.cloud.max_bytes,cancel)?!=cloud.sha256||
+ model_digest(&flight.root,&flight.model.views,cancel)?!=aligned.model_sha256{return Err(Error::Invalid);}
+ // The staging directory is fresh and private. No result becomes visible at
+ // the requested path before the input is rechecked.
+ let parent=output.parent().ok_or(Error::Invalid)?;
+ let stage=parent.join(format!(".flight-dsm-{}",uuid::Uuid::new_v4()));
+ fs::create_dir(&stage)?;
+ let temp=stage.join("dem.raw");
+ let result=(||{
+ let receipt=super::cloud_dsm::build(File::open(cloud.path)?,&temp,grid,aligned.alignment,policy,
+ ||cancel.load(Ordering::Acquire)).map_err(Error::Surface)?;
+ if digest(cloud.path,policy.cloud.max_bytes,cancel)?!=cloud.sha256{return Err(Error::Invalid);}
+ if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+ fs::hard_link(&temp,output)?;
+ Ok(DsmProduct{surface:AlignedSurface{model_sha256:aligned.model_sha256.clone(),alignment:aligned.alignment,
+ dem:output.to_path_buf(),dem_sha256:receipt.sha256.clone(),grid,epsg:aligned.epsg,footprints:BTreeMap::new()},
+ receipt,vertical_datum:aligned.vertical_datum.clone()})
+ })();
+ let _=fs::remove_dir_all(&stage);result
 }
 #[cfg(test)]mod tests{
  use super::*;
