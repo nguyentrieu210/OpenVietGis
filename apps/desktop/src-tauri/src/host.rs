@@ -439,15 +439,14 @@ impl Host {
     pub fn set_schema(&self,handle:Uuid,fields:Vec<ovg_mobile_engine::attributes::Field>)->Result<()>{
         self.mutate(handle,|s|s.set_attribute_schema(&fields).map_err(store_err))
     }
-    pub fn backup_project(&self,handle:Uuid,dest:&Path)->Result<()>{
+    fn snapshot_project(&self,handle:Uuid,stage:&Path)->Result<(Uuid,Vec<LayerInfo>,crate::project_state::ProjectState)>{
         let s=self.lock()?;let w=s.open.get(&handle).ok_or("STALE_HANDLE")?;
         if w.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
         let project=w.project;let layers=self.list_layers_for(project)?;
-        let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
-        w._store.export_snapshot(&stage.path().join("workspace.gpkg")).map_err(store_err)?;
-        let mut total=fs::metadata(stage.path().join("workspace.gpkg")).map_err(|_|"STORAGE_UNAVAILABLE")?.len();
+        w._store.export_snapshot(&stage.join("workspace.gpkg")).map_err(store_err)?;
+        let mut total=fs::metadata(stage.join("workspace.gpkg")).map_err(|_|"STORAGE_UNAVAILABLE")?.len();
         for layer in &layers{
-            let dir=stage.path().join("layers").join(layer.id.to_string());
+            let dir=stage.join("layers").join(layer.id.to_string());
             fs::create_dir_all(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?;
             let snapshot=dir.join("workspace.gpkg");
             if let Some(open)=s.open.values().find(|o|o.project==project&&o.layer==Some(layer.id)){
@@ -466,7 +465,24 @@ impl Host {
         }
         let ids:Vec<_>=layers.iter().map(|l|l.id).collect();
         let state=crate::project_state::read(&self.root.join(project.to_string()),&ids)?;
+        Ok((project,layers,state))
+    }
+    pub fn backup_project(&self,handle:Uuid,dest:&Path)->Result<()>{
+        let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+        let (_,layers,state)=self.snapshot_project(handle,stage.path())?;
         crate::project_backup::write_bundle(stage.path(),&layers,&state,dest)
+    }
+    // Export only. Existing project is still the authoritative editable store.
+    pub fn export_unified_candidate(&self,handle:Uuid,dest:&Path)->Result<Vec<ovg_project_store::migration::Migrated>>{
+        if dest.exists(){return Err("DESTINATION_EXISTS")}
+        let stage=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+        let (project,layers,_state)=self.snapshot_project(handle,stage.path())?;
+        let mut sources=vec![ovg_project_store::migration::Source{layer:project,name:"Default".into(),snapshot:stage.path().join("workspace.gpkg")}];
+        for layer in layers{
+            sources.push(ovg_project_store::migration::Source{layer:layer.id,name:layer.name,snapshot:stage.path().join("layers").join(layer.id.to_string()).join("workspace.gpkg")});
+        }
+        ovg_project_store::migration::migrate(&sources,dest,&std::sync::atomic::AtomicBool::new(false))
+            .map_err(|e|match e{ovg_project_store::Error::Unsupported=>"UNSUPPORTED_MIGRATION_PROFILE",ovg_project_store::Error::Limit=>"RESOURCE_LIMIT",ovg_project_store::Error::Conflict=>"MIGRATION_CONFLICT",_=>"MIGRATION_FAILED"})
     }
     pub fn restore_project(&self,path:&Path)->Result<Project>{
         let _guard=self.lock()?;
