@@ -19,6 +19,8 @@ pub mod depth;
 pub mod surface;
 pub mod seam;
 pub mod mesh;
+pub mod streaming;
+pub mod incremental;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
