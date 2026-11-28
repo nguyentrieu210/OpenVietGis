@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod host;
+#[path="../../../../infra/desktop/wave0/protocol.rs"]
+mod protocol;
 use host::{Host, Opened, Poll, Project};
 use serde::Serialize;
 use tauri::{Emitter, Manager, State, WebviewWindow};
@@ -54,6 +56,18 @@ async fn desktop_cancel(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:
 }
 fn main(){
     tauri::Builder::default()
+        // Separate read plane; no data provider is qualified in W1. Reject every
+        // valid resource as unavailable, never return synthetic project data.
+        .register_uri_scheme_protocol("ovg", |_ctx, req| {
+            use tauri::http::{Method, Response, StatusCode};
+            let path = req.uri().path();
+            let canonical = format!("ovg://v1{}", if path.starts_with("/v1/") { &path[3..] } else { path });
+            let valid = req.method()==Method::GET && req.uri().query().is_none()
+                && protocol::parse(&canonical).is_ok();
+            Response::builder().status(if valid {StatusCode::NOT_FOUND} else {StatusCode::FORBIDDEN})
+                .header("Cache-Control","no-store").header("Content-Type","application/octet-stream")
+                .body(Vec::<u8>::new()).expect("static response")
+        })
         .setup(|app|{
             let root=app.path().app_local_data_dir()?.join("standalone");
             app.manage(Host::new(root).map_err(std::io::Error::other)?);
