@@ -1,6 +1,6 @@
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
-const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4176/rewrite/?live=1";
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));

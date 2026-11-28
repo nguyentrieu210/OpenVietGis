@@ -1,6 +1,6 @@
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
-const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const context=await browser.newContext({viewport:{width:1280,height:850}});
  const page=await context.newPage(),errors=[];

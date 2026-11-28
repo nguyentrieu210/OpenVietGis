@@ -4,7 +4,7 @@ import {fileURLToPath} from "node:url";
 import {dirname} from "node:path";
 import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
-const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 const server=process.env.OVG_TEST_URL?null:await preview({root:dirname(fileURLToPath(import.meta.url)),preview:{host:"127.0.0.1",port:0,strictPort:true}});const url=process.env.OVG_TEST_URL??"http://127.0.0.1:"+server.httpServer.address().port+"/app";if(new URL(url).hostname!=="127.0.0.1")throw Error("Layout fixture must use loopback");
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
