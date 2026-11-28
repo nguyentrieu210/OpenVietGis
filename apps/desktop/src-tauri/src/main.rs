@@ -2,9 +2,10 @@
 mod host;
 mod mvt;
 mod gpkg_import;
+mod resource_files;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
 mod protocol;
-use host::{Host, Opened, Poll, Project, Raster};
+use host::{Host, Opened, Poll, Project, Raster, AssetInfo};
 use serde::Serialize;
 use serde_json::Value;
 use tauri_plugin_dialog::DialogExt;
@@ -157,6 +158,7 @@ async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String)->
         protocol::Resource::RasterTile{z,x,y} if revision==0=>h.raster_tile(handle,source,z,x,y),
         protocol::Resource::VectorTile{z,x,y}=>h.vector_tile(handle,source,revision,z,x,y),
         protocol::Resource::TileJson=>h.tilejson(handle,source,revision),
+        protocol::Resource::CadChunk(_) | protocol::Resource::PointNode(_) | protocol::Resource::Asset if revision==0=>h.asset_resource(handle,source,resource),
         _=>Err("NOT_AVAILABLE")
     }).await?;
     Ok(tauri::ipc::Response::new(b))
@@ -178,6 +180,21 @@ async fn desktop_generation(window:WebviewWindow,host:State<'_,Host>,handle:Uuid
 #[tauri::command]
 async fn desktop_reshape(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,revision:String,geometry:Value)->Reply<()>{
     run(window,host.inner().clone(),move|h|h.reshape(handle,id,revision,geometry)).await
+}
+#[tauri::command]
+async fn desktop_open_asset(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,kind:String,epsg:Option<u32>)->Reply<Option<AssetInfo>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let (label,ext)=match kind.as_str(){"cad"=>("DXF LINE/POINT XY","dxf"),"las"=>("LAS uncompressed","las"),"glb"=>("Self-contained GLB","glb"),_=>return Err("UNSUPPORTED_FORMAT")};
+        let Some(file)=app.dialog().file().add_filter(label,&[ext]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.open_asset(handle,&path,&kind,epsg).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_close_asset(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid)->Reply<()>{
+    run(window,host.inner().clone(),move|h|h.close_asset(handle,id)).await
 }
 fn main(){
     tauri::Builder::default()
@@ -214,6 +231,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
