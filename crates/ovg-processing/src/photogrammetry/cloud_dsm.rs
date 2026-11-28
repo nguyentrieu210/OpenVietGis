@@ -3,7 +3,7 @@
 use super::{fused_ply,colmap_model::Alignment,ortho::Grid};
 use std::{io::{Read,Write},fs::{self,OpenOptions},path::Path};
 use sha2::{Digest,Sha256};
-#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Coverage,Cloud(fused_ply::Error),Ground(super::ground_filter::Error),Io(std::io::Error)}
+#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Coverage,Cloud(fused_ply::Error),Ground(super::ground_filter::Error),Pmf(super::pmf::Error),Io(std::io::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 #[derive(Debug,Clone,Copy)]pub struct Policy{pub cloud:fused_ply::Policy,pub min_points:u32,pub min_coverage:f64,pub max_work_bytes:u64,pub min_z:f64,pub max_z:f64}
 #[derive(Debug,Clone)]pub struct Receipt{pub sha256:String,pub points:u64,pub inside:u64,pub cells:u64,pub covered:u64,pub min_z:f32,pub max_z:f32}
@@ -25,15 +25,20 @@ pub fn build(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,cancelled
 /// Not individual point classification or survey-grade bare-earth certification.
 pub fn build_dtm(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,
  ground:super::ground_filter::Policy,cancelled:impl FnMut()->bool)->Result<Receipt,Error>{
- build_inner(reader,output,g,a,p,Some(ground),cancelled)
+ build_inner(reader,output,g,a,p,Some(GroundMethod::Directional(ground)),cancelled)
 }
-fn build_inner(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,ground:Option<super::ground_filter::Policy>,mut cancelled:impl FnMut()->bool)->Result<Receipt,Error>{
+pub fn build_pmf_dtm(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,
+ ground:super::pmf::Policy,cancelled:impl FnMut()->bool)->Result<Receipt,Error>{
+ build_inner(reader,output,g,a,p,Some(GroundMethod::Morphological(ground)),cancelled)
+}
+enum GroundMethod{Directional(super::ground_filter::Policy),Morphological(super::pmf::Policy)}
+fn build_inner(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,ground:Option<GroundMethod>,mut cancelled:impl FnMut()->bool)->Result<Receipt,Error>{
  if !output.is_absolute()||g.width==0||g.height==0||!g.gsd.is_finite()||g.gsd<=0.||
  !g.origin_x.is_finite()||!g.origin_y.is_finite()||!valid_alignment(a)||p.min_points==0||
  !p.min_coverage.is_finite()||p.min_coverage<=0.||p.min_coverage>1.||
  !p.min_z.is_finite()||!p.max_z.is_finite()||p.min_z>=p.max_z||p.min_z< -(f32::MAX as f64)||p.max_z>f32::MAX as f64{return Err(Error::Invalid);}
  let n=u64::from(g.width)*u64::from(g.height);
- if n>16_000_000||n.checked_mul(if ground.is_some(){16}else{8}).and_then(|v|v.checked_add(256*1024)).ok_or(Error::Limit)?>p.max_work_bytes{return Err(Error::Limit);}
+ if n>16_000_000||n.checked_mul(if matches!(&ground,Some(GroundMethod::Morphological(_))){32}else if ground.is_some(){16}else{8}).and_then(|v|v.checked_add(256*1024)).ok_or(Error::Limit)?>p.max_work_bytes{return Err(Error::Limit);}
  if cancelled(){return Err(Error::Cancelled);}
  let mut z=vec![f32::NAN;n as usize];let mut counts=vec![0u32;n as usize];let mut inside=0u64;
  let summary=fused_ply::visit(reader,p.cloud,&mut cancelled,|xyz|{
@@ -50,8 +55,13 @@ fn build_inner(reader:impl Read,output:&Path,g:Grid,a:Alignment,p:Policy,ground:
  if i%65536==0&&cancelled(){return Err(Error::Cancelled);}
  if c<p.min_points{*v=f32::NAN;}
  }
- if let Some(q)=ground{z=super::ground_filter::filter(g,&z,q,&mut cancelled).map_err(|e|
- if matches!(e,super::ground_filter::Error::Cancelled){Error::Cancelled}else{Error::Ground(e)})?.elevations;}
+ match ground{
+ Some(GroundMethod::Directional(q))=>{z=super::ground_filter::filter(g,&z,q,&mut cancelled).map_err(|e|
+ if matches!(e,super::ground_filter::Error::Cancelled){Error::Cancelled}else{Error::Ground(e)})?.elevations;},
+ Some(GroundMethod::Morphological(q))=>{z=super::pmf::filter(g,&z,q,&mut cancelled).map_err(|e|
+ if matches!(e,super::pmf::Error::Cancelled){Error::Cancelled}else{Error::Pmf(e)})?.elevations;},
+ None=>{}
+ }
  let(mut covered,mut low,mut high)=(0u64,f32::INFINITY,f32::NEG_INFINITY);
  for v in &z{if v.is_finite(){covered+=1;low=low.min(*v);high=high.max(*v);}}
  if covered==0||(covered as f64)/(n as f64)<p.min_coverage{return Err(Error::Coverage);}

@@ -28,6 +28,7 @@ pub mod depth;
 pub mod surface;
 pub mod cloud_dsm;
 pub mod ground_filter;
+pub mod pmf;
 pub mod seam;
 pub mod seam_graph;
 pub mod multiband;

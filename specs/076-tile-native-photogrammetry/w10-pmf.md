@@ -1,0 +1,2 @@
+# W10 progressive morphological ground candidate
+Adds separable monotonic-deque min/max opening over progressively larger square windows, slope-dependent capped threshold, bounded memory/work and cancellation. Uses the lower-envelope raster, rejects raised cells, preserves strict nodata and never interpolates. Integrated as an alternative build_pmf_dtm PLY-to-raw route; DSM unchanged. Not a full point-level PMF/CSF classification; terrain/vegetation qualification remains necessary. Tests authored, unexecuted.
