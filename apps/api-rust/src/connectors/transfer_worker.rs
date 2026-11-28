@@ -635,22 +635,6 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
                 .unwrap_or("transfer worker failed")
                 .to_owned();
             return Err(WorkerError {
-                code: match val
-                    .get("code")
-                    .and_then(Value::as_str)
-                    .filter(|_| !status.is_server_error())
-                {
-                    Some("ARCHIVE_PATH_TRAVERSAL") => Some("ARCHIVE_PATH_TRAVERSAL"),
-                    Some("ARCHIVE_SYMLINK_REJECTED") => Some("ARCHIVE_SYMLINK_REJECTED"),
-                    Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED") => Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED"),
-                    Some("ARCHIVE_ENCRYPTED") => Some("ARCHIVE_ENCRYPTED"),
-                    Some("ARCHIVE_DUPLICATE_ENTRY") => Some("ARCHIVE_DUPLICATE_ENTRY"),
-                    Some("ARCHIVE_SIZE_EXCEEDED") => Some("ARCHIVE_SIZE_EXCEEDED"),
-                    Some("ARCHIVE_BOMB_REJECTED") => Some("ARCHIVE_BOMB_REJECTED"),
-                    Some("INVALID_ZIP") => Some("INVALID_ZIP"),
-                    Some("INVALID_GEOPACKAGE") => Some("INVALID_GEOPACKAGE"),
-                    _ => None,
-                },
                 status,
                 message: msg,
             });
