@@ -1,13 +1,16 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import maplibregl,{type GeoJSONSource} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import {desktop,type FeatureRecord,type FeatureRow,type AssetInfo} from "./transport";
+import {desktop,type FeatureRecord,type FeatureRow,type AssetInfo,type ViewState,type LayerStyle,type AttributeField} from "./transport";
 
 import {vertices,moveVertex} from "./vertices";
 type Kind="point"|"line"|"polygon";
 const empty=():GeoJSON.FeatureCollection=>({type:"FeatureCollection",features:[]});
-type Overlay={id:string;handle:string;name:string};
-export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overlays?:Overlay[]}){
+type Overlay={id:string;handle:string;name:string;style:LayerStyle};
+export default function LocalWorkbench({handle,overlays=[],initialView,onView,layerStyle}:{handle:string;overlays?:Overlay[];initialView?:ViewState;onView?:(v:ViewState)=>void;layerStyle?:LayerStyle}){
+  const viewAtStart=useRef(initialView);const viewCallback=useRef(onView);viewCallback.current=onView;
+  const styleRef=useRef(layerStyle);styleRef.current=layerStyle;
+  const [schemaText,setSchemaText]=useState("[]"),[schemaOpen,setSchemaOpen]=useState(false);
   const canvas=useRef<HTMLDivElement>(null);
   const map=useRef<maplibregl.Map|undefined>(undefined);
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
@@ -86,9 +89,9 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
     if(!alive.current||!tileMode.current)return;
     m.addSource("mvt",{type:"vector",tiles:[`ovg://v1/workspaces/${handle}/layers/${handle}/revisions/${rev}/tiles/{z}/{x}/{y}.mvt`],minzoom:0,maxzoom:22,promoteId:"stable_id"});
     const layer={"source":"mvt","source-layer":"local"} as const;
-    m.addLayer({id:"mvt-fill",...layer,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":"#1976a3","fill-opacity":0.25}},"draft-fill");
-    m.addLayer({id:"mvt-line",...layer,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":"#1976a3","line-width":2}},"draft-fill");
-    m.addLayer({id:"mvt-point",...layer,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":"#1976a3","circle-radius":5}},"draft-fill");
+    m.addLayer({id:"mvt-fill",...layer,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":styleRef.current?.color??"#1976a3","fill-opacity":styleRef.current?.opacity??.25}},"draft-fill");
+    m.addLayer({id:"mvt-line",...layer,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":styleRef.current?.color??"#1976a3","line-width":2}},"draft-fill");
+    m.addLayer({id:"mvt-point",...layer,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":styleRef.current?.color??"#1976a3","circle-radius":5}},"draft-fill");
     setNotice("MVT · Tile theo revision "+rev);
   };
   const afterMutation=async()=>{setVertexMode(false);setSelected(undefined);setAttrs("{}");setGeometryText("");await page("0",filter);if(tileMode.current)await setVectorTiles(true);else invalidate()};
@@ -103,20 +106,20 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
     if(!canvas.current)return;
     let m:maplibregl.Map|undefined;
     try{
-      m=new maplibregl.Map({container:canvas.current,style:{version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#e8edf0"}}]},center:[106.7,11],zoom:5,renderWorldCopies:false,attributionControl:false});
+      m=new maplibregl.Map({container:canvas.current,style:{version:8,sources:{},layers:[{id:"background",type:"background",paint:{"background-color":"#e8edf0"}}]},center:[viewAtStart.current?.lon??106.7,viewAtStart.current?.lat??11],zoom:viewAtStart.current?.zoom??5,bearing:viewAtStart.current?.bearing??0,pitch:viewAtStart.current?.pitch??0,renderWorldCopies:false,attributionControl:false});
       map.current=m;m.addControl(new maplibregl.NavigationControl(),"top-right");
       m.on("load",()=>{
         if(!m)return;
         m.addSource("local",{type:"geojson",data:empty()});m.addSource("draft",{type:"geojson",data:empty()});m.addSource("cad",{type:"geojson",data:empty()});
         for(const src of ["local","cad","draft"]){
-          const color=src==="local"?"#1976a3":src==="cad"?"#7048ab":"#d77718";
-          m.addLayer({id:src+"-fill",source:src,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":0.25}});
+          const color=src==="local"?(styleRef.current?.color??"#1976a3"):src==="cad"?"#7048ab":"#d77718";
+          m.addLayer({id:src+"-fill",source:src,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":src==="local"?(styleRef.current?.opacity??.25):.25}});
           m.addLayer({id:src+"-line",source:src,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":2}});
           m.addLayer({id:src+"-point",source:src,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":5,"circle-stroke-color":"#fff","circle-stroke-width":1}});
         }
         styleReady.current=true;setReady(true);invalidate();
       });
-      m.on("moveend",invalidate);
+      m.on("moveend",()=>{invalidate();if(m){const p=m.getCenter();viewCallback.current?.({lon:((p.lng+180)%360+360)%360-180,lat:p.lat,zoom:m.getZoom(),bearing:m.getBearing(),pitch:m.getPitch()})}});
       m.on("click",e=>{
         if(!m||!styleReady.current||working.current)return;
         const k=mode.current;
@@ -164,16 +167,16 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
     let disposed=false;
     const installed:string[]=[];
     void (async()=>{
-      for(const [i,o] of overlays.entries()){
+      for(const o of overlays){
         const generation=await desktop.generation(o.handle);
         if(disposed||!alive.current)return;
         const id="overlay-"+o.handle;
         const url=`ovg://v1/workspaces/${o.handle}/layers/${o.handle}/revisions/${generation}/tiles/{z}/{x}/{y}.mvt`;
         m.addSource(id,{type:"vector",tiles:[url],minzoom:0,maxzoom:22,promoteId:"stable_id"});
         installed.push(id);
-        const color=["#6b7280","#22875e","#a254a1","#b68924"][i%4]!;
+        const color=o.style.color;
         const l={source:id,"source-layer":"local"} as const;
-        m.addLayer({id:id+"-fill",...l,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":0.16}},"local-fill");
+        m.addLayer({id:id+"-fill",...l,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":o.style.opacity}},"local-fill");
         m.addLayer({id:id+"-line",...l,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":1.5}},"local-fill");
         m.addLayer({id:id+"-point",...l,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":4}},"local-fill");
       }
@@ -187,6 +190,20 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
       }
     };
   },[ready,overlays]);
+  useEffect(()=>{
+    const m=map.current;if(!m||!ready||!layerStyle)return;
+    for(const prefix of ["local","mvt"]){
+      if(m.getLayer(prefix+"-fill")){m.setPaintProperty(prefix+"-fill","fill-color",layerStyle.color);m.setPaintProperty(prefix+"-fill","fill-opacity",layerStyle.opacity)}
+      if(m.getLayer(prefix+"-line"))m.setPaintProperty(prefix+"-line","line-color",layerStyle.color);
+      if(m.getLayer(prefix+"-point"))m.setPaintProperty(prefix+"-point","circle-color",layerStyle.color);
+    }
+  },[ready,layerStyle?.color,layerStyle?.opacity]);
+  const saveSchema=()=>run(async()=>{
+    const f:unknown=JSON.parse(schemaText);
+    if(!Array.isArray(f)||f.length>128)throw Error("Schema phải là danh sách tối đa 128 trường");
+    if(!window.confirm("Áp dụng schema mới? Tất cả dữ liệu hiện có phải hợp lệ; lịch sử Undo/Redo của lớp sẽ được đặt lại."))return;
+    await desktop.setSchema(handle,f as AttributeField[],true);setSchemaOpen(false);await afterMutation();
+  });
   const openAsset=(kind:"cad"|"las"|"laz"|"copc"|"glb")=>run(async()=>{
     if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
     const epsg=kind==="cad"?4326:kind==="glb"?null:Number(lasEpsg);
@@ -272,13 +289,14 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
       <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGeoJSON(handle);if(n!==null)await afterMutation()})}>Nhập GeoJSON</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.exportFile(handle,"gpkg")})}>Lưu bản sao GPKG</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.exportFile(handle,"geojson")})}>Xuất GeoJSON</button>
-      <button disabled={busy} onClick={()=>void run(async()=>{await desktop.checkpoint(handle);setNotice("Đã checkpoint")})}>Lưu</button>
+      <button disabled={busy} onClick={()=>void run(async()=>{await desktop.checkpoint(handle);setNotice("Đã checkpoint")})}>Lưu</button><button disabled={busy} aria-expanded={schemaOpen} onClick={()=>setSchemaOpen(!schemaOpen)}>Schema thuộc tính</button>
       {(["point","line","polygon"] as const).map(k=><button key={k} aria-pressed={kind===k} disabled={!ready||busy} onClick={()=>begin(k)}>{{point:"Điểm",line:"Đường",polygon:"Vùng"}[k]}</button>)}
       <button disabled={busy||!kind||count<(kind==="polygon"?3:kind==="line"?2:1)} onClick={()=>void commit()}>Ghi hình học</button>
       <button disabled={busy||!kind} onClick={clearDraft}>Hủy vẽ</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,false);await afterMutation()})}>Undo</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,true);await afterMutation()})}>Redo</button>
     </div>
+    {schemaOpen&&<div className="ovg-local-tools"><label>Định nghĩa trường (JSON)<textarea rows={4} value={schemaText} onChange={e=>setSchemaText(e.target.value)}/></label><button disabled={busy} onClick={()=>void saveSchema()}>Áp dụng schema</button></div>}
     <div ref={canvas} className="ovg-local-map" aria-label="Bản đồ dữ liệu cục bộ"/>
     {asset&&["las","laz","copc"].includes(asset.kind)&&<div className="ovg-local-tools"><button disabled={busy||pointPage===0} onClick={()=>void readPointPage(pointPage-1)}>Khối điểm trước</button><button disabled={busy||(pointPage+1)*2048>=asset.count} onClick={()=>void readPointPage(pointPage+1)}>Khối điểm tiếp</button>{asset.kind==="copc"&&<><input aria-label="COPC bbox XYZ min max" value={copcBounds} onChange={e=>setCopcBounds(e.target.value)}/><input aria-label="LOD" value={copcLevel} onChange={e=>setCopcLevel(e.target.value)}/><button disabled={busy} onClick={()=>void queryCopc()}>Truy vấn COPC LOD</button></>}</div>}
     <div role="status" className="ovg-local-status">{notice}{assetPreview&&" · "+assetPreview}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
