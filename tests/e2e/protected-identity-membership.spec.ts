@@ -380,20 +380,20 @@ test(
 
       release();
 
-      await expect(
-        page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
-      ).toBeVisible();
+      await expect(page.locator(".landing-page")).toBeVisible();
       await expect(page.locator(".live-studio")).toHaveCount(0);
       await expect(page.getByLabel("Thông tin lời mời")).toHaveCount(0);
 
-      const login = page.getByRole("link", {
-        name: "Đăng nhập với OpenVietGIS Development",
-        exact: true
+      const loginRequest = page.waitForRequest((request) => {
+        const url = new URL(request.url());
+        return url.pathname.startsWith("/api/v1/auth/login/");
       });
-      const href = await login.getAttribute("href");
-      expect(
-        new URL(href ?? "", page.url()).searchParams.get("return_to")
-      ).toBe("/app/invitations/accept");
+      const popup = page.waitForEvent("popup");
+      await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+      const [request, auth] = await Promise.all([loginRequest, popup]);
+      expect(new URL(request.url()).searchParams.get("return_to"))
+        .toBe("/app/invitations/accept?auth_complete=1");
+      await auth.close();
     } finally {
       release();
       await page.unroute(matches);
