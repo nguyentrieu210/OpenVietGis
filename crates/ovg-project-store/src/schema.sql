@@ -31,3 +31,5 @@ CREATE INDEX encrypted_media_owner ON encrypted_media(layer,feature,id);
 -- V6 additive native CAD versions
 CREATE TABLE cad_version(asset TEXT PRIMARY KEY REFERENCES project_asset(id) ON DELETE CASCADE,parent TEXT NOT NULL REFERENCES project_asset(id) ON DELETE RESTRICT,parent_sha TEXT NOT NULL CHECK(length(parent_sha)=64),CHECK(asset<>parent));
 CREATE INDEX cad_version_parent ON cad_version(parent);
+-- V7 additive native media capture
+CREATE TABLE media_capture(id TEXT PRIMARY KEY REFERENCES encrypted_media(id) ON DELETE CASCADE,mime TEXT NOT NULL CHECK(mime='image/jpeg'));
