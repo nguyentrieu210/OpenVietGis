@@ -40,7 +40,7 @@ fn arc(f:&[Pair<'_>],circle:bool)->R<Vec<XY>>{
 }
 fn hatch(f:&[Pair<'_>])->R<Vec<Vec<XY>>>{
  // Only solid, non-associative, closed, straight polyline boundaries.
- if get(f,70)?!=1.||opt(f,71,0.)?!=0.{return Err("UNSUPPORTED_HATCH")}
+ if get(f,70)?!=1.||opt(f,71,0.)?!=0.||opt(f,75,0.)?!=0.{return Err("UNSUPPORTED_HATCH")}
  let loops=get(f,91)?;if loops.fract()!=0.||!(1. ..=32.).contains(&loops){return Err("HATCH_LIMIT")}
  let starts:Vec<_>=f.iter().enumerate().filter_map(|(i,p)|(p.0==92).then_some(i)).collect();
  if starts.len()!=loops as usize{return Err("INVALID_HATCH")}
@@ -78,6 +78,7 @@ fn render(kind:&str,f:&[Pair<'_>],blocks:&HashMap<String,Block<'_>>,stack:&mut H
   let angle=opt(f,50,0.)?.to_radians();let(c,s)=(angle.cos(),angle.sin());
   let mut result=Vec::new();
   for (k,fields)in &b.entities{
+   if *k=="HATCH"{return Err("BLOCK_HATCH_PREVIEW_UNSUPPORTED")}
    for mut path in render(k,fields,blocks,stack,budget)?{
     for v in &mut path{let x=(v[0]-b.base[0])*sx;let y=(v[1]-b.base[1])*sy;*v=[p[0]+c*x-s*y,p[1]+s*x+c*y];}
     result.push(path);
@@ -107,7 +108,7 @@ pub fn open(path:&Path)->R<Vec<Stroke>>{
   let f=&pairs[start..i];
   match section{
    "BLOCKS"=>match k{
-    "BLOCK"=>{if block.is_some()||blocks.len()>=256{return Err("BLOCK_LIMIT")}ocs(f)?;let name=field(f,2)?.to_ascii_uppercase();block=Some((name,Block{base:xy(f,10,20)?,entities:Vec::new()}));},
+    "BLOCK"=>{if block.is_some()||blocks.len()>=256{return Err("BLOCK_LIMIT")}ocs(f)?;let flags=opt(f,70,0.)?;if flags.fract()!=0.||flags<0.||flags>127.||(flags as u32&124)!=0{return Err("EXTERNAL_BLOCK_UNSUPPORTED")}let name=field(f,2)?.to_ascii_uppercase();block=Some((name,Block{base:xy(f,10,20)?,entities:Vec::new()}));},
     "ENDBLK"=>{let(n,b)=block.take().ok_or("INVALID_BLOCK")?;if blocks.insert(n,b).is_some(){return Err("DUPLICATE_BLOCK")}},
     _=>{let b=&mut block.as_mut().ok_or("INVALID_BLOCK")?.1;if b.entities.len()>=512{return Err("BLOCK_LIMIT")}b.entities.push((k,f.to_vec()));}
    },
