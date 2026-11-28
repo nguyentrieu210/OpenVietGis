@@ -13,7 +13,7 @@ type Pick={kind:"footprint"|"model"|"terrain";id:string};
 type MeshGroup={id:Pick;positions:number[];color:Cesium.Color};
 export type ProjectImagery={name:string;url:string;bounds:[number,number,number,number];maxzoom:number};
 export type LegacyImagery={id:"google-satellite"|"google-hybrid";name:string;url:string;maxzoom:number;credit:string};
-type SceneOptions={vectors?:readonly SharedVector[];initialBasemap?:string;onBasemapChange?:(id:string)=>void;legacyImagery?:readonly LegacyImagery[];imagery?:readonly ProjectImagery[];terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void};
+type SceneOptions={pointCloud?:readonly {longitude:number;latitude:number;height:number;intensity:number}[];vectors?:readonly SharedVector[];initialBasemap?:string;onBasemapChange?:(id:string)=>void;legacyImagery?:readonly LegacyImagery[];imagery?:readonly ProjectImagery[];terrain?:TerrainGrid;model?:PlacedModel;models?:readonly NamedModel[];onModelPick?:(id:string)=>void};
 const abortError=()=>new DOMException("Aborted","AbortError");
 let runtime:Promise<C>|undefined;
 export function loadCesium():Promise<C>{
@@ -264,7 +264,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
  let widget:Cesium.CesiumWidget|undefined,disposed=false,active=false,cleanupNav:(()=>void)|undefined;
  const modelLayers=new Map<string,{primitive:Cesium.Primitive;groups:MeshGroup[]}>();
  const footprintEntities=new Map<string,Cesium.Entity[]>();
- let terrain:Cesium.Primitive|undefined,footprintsVisible=true,selectedModel="";
+ let pointCloud:Cesium.PointPrimitiveCollection|undefined;let terrain:Cesium.Primitive|undefined,footprintsVisible=true,selectedModel="";
  const vectorEntities=new Map<string,{items:Cesium.Entity[];color:Cesium.Color}>();
  const replaceVectors=(rows:readonly SharedVector[],selected:string)=>{
   if(!widget||disposed)return;
@@ -298,7 +298,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
  const select=(id:string)=>{for(const [key,entities] of footprintEntities)for(const entity of entities)if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(key===id?highlight:color);for(const [key,v] of vectorEntities)for(const entity of v.items){const tint=key===id?highlight:v.color;if(entity.point)entity.point.color=new c.ConstantProperty(tint);if(entity.polyline)entity.polyline.material=new c.ColorMaterialProperty(tint);if(entity.polygon)entity.polygon.material=new c.ColorMaterialProperty(tint.withAlpha(.4))}render()};
  const applyModelHighlight=()=>{for(const [id,{primitive,groups}] of modelLayers){if(!primitive.ready)continue;for(const group of groups){const a=primitive.getGeometryInstanceAttributes(group.id);if(a)a.color=c.ColorGeometryInstanceAttribute.toValue(id===selectedModel?highlight:group.color,a.color)}}};
  const selectModel=(id:string)=>{selectedModel=id;applyModelHighlight();render()};
- const setLayerVisible=(id:string,visible:boolean)=>{if(id==="footprints"){footprintsVisible=visible;for(const items of footprintEntities.values())for(const item of items)item.show=visible}else if(id==="terrain"&&terrain)terrain.show=visible;else{const m=modelLayers.get(id);if(m)m.primitive.show=visible}render()};
+ const setLayerVisible=(id:string,visible:boolean)=>{if(id==="footprints"){footprintsVisible=visible;for(const items of footprintEntities.values())for(const item of items)item.show=visible}else if(id==="terrain"&&terrain)terrain.show=visible;else if(id==="point-cloud"&&pointCloud)pointCloud.show=visible;else{const m=modelLayers.get(id);if(m)m.primitive.show=visible}render()};
  try{
   widget=new c.CesiumWidget(surface,{baseLayer:false,terrainProvider:new c.EllipsoidTerrainProvider(),skyBox:false,skyAtmosphere:false,scene3DOnly:true,requestRenderMode:true,maximumRenderTimeChange:Infinity,showRenderLoopErrors:false,shouldAnimate:false,targetFrameRate:60,useBrowserRecommendedResolution:false,msaaSamples:1});
   const scene=widget.scene;scene.backgroundColor=c.Color.fromCssColorString("#dce6e8");scene.globe.baseColor=c.Color.fromCssColorString("#dce6e8");scene.globe.depthTestAgainstTerrain=true;
@@ -320,6 +320,7 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
   replaceVectors(extras?.vectors??[],"");
   if(extras?.terrain){terrain=meshPrimitive(c,terrainGroups(c,extras.terrain));scene.primitives.add(terrain)}
   for(const m of models){const groups=modelGroups(c,m.id,m.placement),primitive=meshPrimitive(c,groups);scene.primitives.add(primitive);modelLayers.set(m.id,{primitive,groups})}
+  if(extras?.pointCloud){if(extras.pointCloud.length>100000)throw Error("Point cloud exceeds preview limit");pointCloud=new c.PointPrimitiveCollection();scene.primitives.add(pointCloud);for(const p of extras.pointCloud){if(![p.longitude,p.latitude,p.height,p.intensity].every(Number.isFinite)||Math.abs(p.longitude)>180||Math.abs(p.latitude)>85.051129||p.height< -12000||p.height>100000)throw Error("Invalid point cloud coordinate");const shade=.25+.75*Math.max(0,Math.min(1,p.intensity/65535));pointCloud.add({position:c.Cartesian3.fromDegrees(p.longitude,p.latitude,p.height),pixelSize:3,color:new c.Color(.15,shade,.9,1)})}}
   setCamera(c,widget,camera);
   cleanupNav=addNavigation(c,widget,surface,camera,extras?.imagery,extras?.legacyImagery,extras?.initialBasemap,extras?.onBasemapChange);
   let waitingForModels=true;scene.postRender.addEventListener(()=>{if(waitingForModels&&[...modelLayers.values()].every(v=>v.primitive.ready)){waitingForModels=false;applyModelHighlight();render()}});
