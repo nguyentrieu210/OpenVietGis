@@ -38,6 +38,7 @@ export const desktop={
   attributes:(handle:string,after="0",limit=100,contains="")=>host().core.invoke<{generation:string;rows:FeatureRow[]}>("desktop_attributes",{handle,after,limit,contains}),
   feature:(handle:string,id:string)=>host().core.invoke<FeatureRecord>("desktop_feature",{handle,id}),
   edit:(handle:string,edit:EditInput)=>host().core.invoke<void>("desktop_edit",{handle,edit}),
+  reshape:(handle:string,id:string,revision:string,geometry:unknown)=>host().core.invoke<void>("desktop_reshape",{handle,id,revision,geometry}),
   updateAttributes:(handle:string,id:string,revision:string,attributes:Attributes)=>host().core.invoke<void>("desktop_update_attributes",{handle,id,revision,attributes}),
   history:(handle:string,redo:boolean)=>host().core.invoke<boolean>("desktop_history",{handle,redo}),
   checkpoint:(handle:string)=>host().core.invoke<void>("desktop_checkpoint",{handle}),
