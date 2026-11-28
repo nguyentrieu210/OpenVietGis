@@ -43,7 +43,9 @@ def publisher(args):
         raise ValueError("manifest identity mismatch")
     if not envelope["extension_key"].startswith("partner_" + envelope["publisher_id"] + "_"):
         raise ValueError("publisher namespace mismatch")
-    if not set(envelope["permissions"]).issubset(manifest["permissions"]):
+    allowed = set(manifest["permissions"])
+    allowed.update("ext." + envelope["extension_key"] + "." + cap for cap in ("host_context", "host_notice") if cap in manifest.get("capabilities", []))
+    if not set(envelope["permissions"]).issubset(allowed):
         raise ValueError("permission escalation")
     if envelope["contribution_digest"] != sha(data):
         raise ValueError("contribution digest mismatch")
@@ -80,6 +82,19 @@ def review(args):
         raise ValueError("publisher key mismatch")
     Ed25519PublicKey.from_public_bytes(public).verify(
         base64.b64decode(bundle["publisher_signature"],validate=True), canonical(bundle["envelope"]))
+    envelope = bundle["envelope"]
+    contribution = base64.b64decode(bundle["contribution"], validate=True)
+    if len(contribution) > 256 * 1024 or sha(contribution) != envelope["contribution_digest"]:
+        raise ValueError("contribution digest mismatch")
+    descriptors = {a["id"]: a for a in envelope["assets"]}
+    if len(descriptors) != len(envelope["assets"]) or set(descriptors) != set(bundle["assets"]):
+        raise ValueError("asset list mismatch")
+    total = 0
+    for name, encoded in bundle["assets"].items():
+        raw = base64.b64decode(encoded, validate=True)
+        total += len(raw)
+        if total > 10 * 1024 * 1024 or len(raw) != descriptors[name]["size"] or sha(raw) != descriptors[name]["sha256"]:
+            raise ValueError("asset digest mismatch")
     payload = {"schema":"openvietgis.review.v2","envelope_digest":sha(canonical(bundle["envelope"])),"epoch":args.epoch}
     bundle["operator_signature"] = signed(operator,payload)
     write(args.output,{"schema":"openvietgis.marketplace.v2","epoch":args.epoch,"releases":[bundle]})

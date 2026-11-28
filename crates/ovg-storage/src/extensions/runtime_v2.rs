@@ -1,0 +1,116 @@
+//! Canonical project activation pin and append-only command receipt.
+use super::db_error;
+use crate::catalog::ProjectRead;
+use ovg_core::AppError;
+use serde_json::{json, Value};
+use sqlx::Row;
+use uuid::Uuid;
+
+pub struct ActivePin {
+    pub activation_id: Uuid,
+    pub manifest_id: Uuid,
+    pub revision: i64,
+    pub manifest: Value,
+}
+pub async fn active_pin(
+    read: &mut ProjectRead<'_>,
+    manifest_id: Uuid,
+) -> Result<ActivePin, AppError> {
+    if read.is_gis_scoped() || read.actor_type() != "human" {
+        return Err(AppError::forbidden(
+            "unrestricted human project read required",
+        ));
+    }
+    let row=sqlx::query("SELECT a.id, a.revision, m.extension_key, m.version, m.api_compatibility, m.display_name,
+      m.description, m.permissions, m.commands, m.capabilities, m.entity_schemas, m.ui_contributions
+      FROM extensions.project_activations a JOIN extensions.manifests m
+        ON m.organization_id=a.organization_id AND m.id=a.manifest_id
+      WHERE a.organization_id=$1 AND a.project_id=$2 AND a.manifest_id=$3 AND a.status='active' AND m.enabled
+      FOR SHARE OF a,m")
+        .bind(read.organization_id()).bind(read.project_id()).bind(manifest_id)
+        .fetch_optional(&mut **read.transaction()).await.map_err(db_error)?
+        .ok_or_else(||AppError::not_found("active plugin not found"))?;
+    let manifest = json!({
+        "extension_key":row.try_get::<String,_>("extension_key").map_err(db_error)?,
+        "version":row.try_get::<String,_>("version").map_err(db_error)?,
+        "api_compatibility":row.try_get::<String,_>("api_compatibility").map_err(db_error)?,
+        "display_name":row.try_get::<String,_>("display_name").map_err(db_error)?,
+        "description":row.try_get::<String,_>("description").map_err(db_error)?,
+        "permissions":row.try_get::<Value,_>("permissions").map_err(db_error)?,
+        "commands":row.try_get::<Value,_>("commands").map_err(db_error)?,
+        "capabilities":row.try_get::<Value,_>("capabilities").map_err(db_error)?,
+        "entity_schemas":row.try_get::<Value,_>("entity_schemas").map_err(db_error)?,
+        "ui_contributions":row.try_get::<Value,_>("ui_contributions").map_err(db_error)?,
+    });
+    Ok(ActivePin {
+        activation_id: row.try_get("id").map_err(db_error)?,
+        manifest_id,
+        revision: row.try_get("revision").map_err(db_error)?,
+        manifest,
+    })
+}
+
+pub struct ReceiptInput<'a> {
+    pub request_id: Uuid,
+    pub release_digest: &'a str,
+    pub request_digest: &'a str,
+    pub command_id: &'a str,
+}
+/// Serialized per actor/project. Read-only commands have no mutation effects;
+/// store only fingerprints, not user input/notice text.
+pub async fn receipt(
+    read: &mut ProjectRead<'_>,
+    pin: &ActivePin,
+    input: ReceiptInput<'_>,
+) -> Result<Uuid, AppError> {
+    let org = read.organization_id();
+    let project = read.project_id();
+    let actor = read.actor_id();
+    if read.is_gis_scoped() || read.actor_type() != "human" || input.request_id.is_nil() {
+        return Err(AppError::forbidden("invalid invocation scope"));
+    }
+    let lock_key = format!("plugin-v2:{org}:{project}:{actor}");
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
+        .bind(lock_key)
+        .execute(&mut **read.transaction())
+        .await
+        .map_err(db_error)?;
+    let previous=sqlx::query("SELECT id,activation_id,activation_revision,manifest_id,release_digest,request_digest,command_id
+        FROM extensions.plugin_v2_receipts WHERE organization_id=$1 AND project_id=$2 AND actor_id=$3 AND request_id=$4")
+        .bind(org).bind(project).bind(actor).bind(input.request_id).fetch_optional(&mut **read.transaction()).await.map_err(db_error)?;
+    if let Some(row) = previous {
+        if row.try_get::<Uuid, _>("activation_id").map_err(db_error)? != pin.activation_id
+            || row.try_get::<Uuid, _>("manifest_id").map_err(db_error)? != pin.manifest_id
+            || row
+                .try_get::<i64, _>("activation_revision")
+                .map_err(db_error)?
+                != pin.revision
+            || row
+                .try_get::<String, _>("release_digest")
+                .map_err(db_error)?
+                != input.release_digest
+            || row
+                .try_get::<String, _>("request_digest")
+                .map_err(db_error)?
+                != input.request_digest
+            || row.try_get::<String, _>("command_id").map_err(db_error)? != input.command_id
+        {
+            return Err(AppError::conflict(
+                "PLUGIN_REQUEST_CONFLICT",
+                "request ID already used for different invocation",
+            ));
+        }
+        return row.try_get("id").map_err(db_error);
+    }
+    let n:i64=sqlx::query_scalar("SELECT count(*) FROM extensions.plugin_v2_receipts WHERE organization_id=$1 AND project_id=$2 AND actor_id=$3 AND created_at>clock_timestamp()-interval '1 minute'")
+        .bind(org).bind(project).bind(actor).fetch_one(&mut **read.transaction()).await.map_err(db_error)?;
+    if n >= 60 {
+        return Err(AppError::rate_limited(Some(60)));
+    }
+    let id = Uuid::new_v4();
+    sqlx::query("INSERT INTO extensions.plugin_v2_receipts (id,organization_id,project_id,actor_id,request_id,activation_id,activation_revision,manifest_id,release_digest,request_digest,command_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)")
+      .bind(id).bind(org).bind(project).bind(actor).bind(input.request_id).bind(pin.activation_id).bind(pin.revision).bind(pin.manifest_id)
+      .bind(input.release_digest).bind(input.request_digest).bind(input.command_id).execute(&mut **read.transaction()).await.map_err(db_error)?;
+    Ok(id)
+}

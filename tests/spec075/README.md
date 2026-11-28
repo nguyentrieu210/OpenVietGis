@@ -1,0 +1,7 @@
+# SPEC 075 focused fixtures
+- `python3 tests/spec075/generate_signed_fixture.py --check` regenerates signatures via the Python SDK and checks exact golden fixture. The deterministic test keys are never production trust roots.
+- `cargo test --locked -p ovg-module-sdk --lib` exercises SDK, dependency resolution, sandbox ledger.
+- `cargo test --locked -p openvietgis-api-rust --no-default-features --lib` requires an unprivileged Linux runtime for the existing offline format worker.
+- `cargo test --locked -p openvietgis-api-rust --no-default-features --test spec075_runtime_gate` exercises disabled runtime routes.
+- `pnpm --filter @openvietgis/client-sdk exec vitest run tests/plugin-v2.test.ts`.
+- The SQL receipt fixture is for an EMPTY disposable PostgreSQL/PostGIS database only. Run receipt_fixture.sql, then exact upgrade SQL from migration 0052, then test_receipt_rls.sql with psql ON_ERROR_STOP=1. Fixture implements minimal FK/ACL interfaces, not the full migration chain. Do not run fixture against any shared or production database.

@@ -1,0 +1,128 @@
+{
+  "operator_public_key": "GX9rI+FshTLGq8g4+s1ep4m+DHaykgM0A5v6iz02jWE=",
+  "v1": {
+    "payload": {
+      "publishers": [
+        {
+          "id": "fixture",
+          "name": "Fixture publisher",
+          "public_key": "+kg0FH9uaQw2k+/2EzYEZAPNiuKhTzGzxAc1hWkjlWU="
+        }
+      ],
+      "releases": [
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "host_context"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture context",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_context",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture context",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/context/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "1xIMijdf/pXK9/gYo46WuMhd4PhPFijLwTAnuxBngIuCzlE0PE3wJUu8JQzjgjLsQP3NZrE0t8D0I2Kg/fSTDA=="
+        },
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "host_notice"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture notice",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_notice",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture notice",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/notice/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "mwI6rwKgkFrpvwGG5EL7vm5ByeEDWzCMO6OXxDlgWZJsTkfB0wSu+LVtRPFRuptd4caNpKTIVUPn0q0K7ZYFCg=="
+        }
+      ],
+      "schema": "openvietgis.marketplace.v1"
+    },
+    "signature": "2bXx8nMUoUCeeX8VLlH8D0vYFN/i34gTyDY+OmZYbSu/Hp76p2+W1SJKlAYxT9ASYMs31XlxmWYrY4Ph89KTDQ=="
+  },
+  "v2": {
+    "epoch": 2,
+    "releases": [
+      {
+        "assets": {},
+        "contribution": "eyJzbG90Ijoid29ya3NwYWNlIiwid2lkZ2V0cyI6W3sia2luZCI6InRleHQiLCJpZCI6InRpdGxlIiwidGV4dCI6IlRow7RuZyB0aW4gbcO0aSB0csaw4budbmcgR0lTIn0seyJraW5kIjoiYnV0dG9uIiwiaWQiOiJydW4iLCJsYWJlbCI6IlhlbSB0aMO0bmcgdGluIFNESyIsImFjdGlvbiI6ImNvbnRleHQifV0sImFjdGlvbnMiOlt7ImlkIjoiY29udGV4dCIsImNvbW1hbmRfaWQiOiJob3N0X2NvbnRleHQiLCJwZXJtaXNzaW9uIjoiZXh0LnBhcnRuZXJfZml4dHVyZV9jb250ZXh0Lmhvc3RfY29udGV4dCIsImNvbnNlbnQiOiJyZWFkIiwidGltZW91dF9tcyI6MTAwMCwiaW5wdXQiOnt9fV19Cg==",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "ab6dfe87a5e2d19e39bb99a9da681def7203ad20bb6b3f325adbe4a345b38895",
+          "extension_key": "partner_fixture_context",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "75aee718ab115abd1661389360e5f2e58bc7056e2c96871bc97bb78278f28cdd",
+          "permissions": [
+            "ext.partner_fixture_context.host_context"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "bgd9ZOyxCXO18k2E5FjvTCNRDwtVQEIOXG6Gm7maurkPO9SStGUr6T8pYi3U74MOKrH/jnAghu4pbx5lf30bAQ==",
+        "publisher_signature": "HlDQQNc9nBSsPWKGqFbitIAJIPIKpoyNOlceKdbBN5i+wXiPFkFBQmu5XsgjXfyt+7Jqj5E6p/nTFkvkd+dLCg=="
+      },
+      {
+        "assets": {},
+        "contribution": "eyJzbG90IjoiZm9ybSIsIndpZGdldHMiOlt7ImtpbmQiOiJpbnB1dCIsImlkIjoibm90aWNlIiwibGFiZWwiOiJO4buZaSBkdW5nIHRow7RuZyBiw6FvIiwiZmllbGQiOiJ0ZXh0In0seyJraW5kIjoiYnV0dG9uIiwiaWQiOiJzaG93IiwibGFiZWwiOiJIaeG7g24gdGjhu4siLCJhY3Rpb24iOiJub3RpY2UifV0sImFjdGlvbnMiOlt7ImlkIjoibm90aWNlIiwiY29tbWFuZF9pZCI6Imhvc3Rfbm90aWNlIiwicGVybWlzc2lvbiI6ImV4dC5wYXJ0bmVyX2ZpeHR1cmVfbm90aWNlLmhvc3Rfbm90aWNlIiwiY29uc2VudCI6InJlYWQiLCJ0aW1lb3V0X21zIjoxMDAwLCJpbnB1dCI6eyJ0ZXh0Ijp7ImtpbmQiOiJ0ZXh0IiwicmVxdWlyZWQiOnRydWV9fX1dfQo=",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "5d52438eede3415ec89ccfe8fd9717f1f09c88dcac0567500f5e4488ea6628df",
+          "extension_key": "partner_fixture_notice",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "7ecfc878bcdf52325dfcbd9897797621bfc542034f6faa282e17e3409fc0379c",
+          "permissions": [
+            "ext.partner_fixture_notice.host_notice"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "DmMhtHq/nXVW+Zs5d7koZvYVF46bAi34MZZxr8IFSlHThx3Yv3lIEN21uxPp2suk+AiTnUSd1fUYq7KgBxocBw==",
+        "publisher_signature": "1sUr1XCf1odfQ3ZYXF58GuzzjRqSRG7hcw3rRCXWYNJjOgMxuMOsTPGBUz7HauxD+qt1Ndr6BOXkqxJdQdimAg=="
+      }
+    ],
+    "schema": "openvietgis.marketplace.v2"
+  }
+}

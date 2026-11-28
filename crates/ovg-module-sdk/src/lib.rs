@@ -5,6 +5,7 @@
 
 pub mod release_v2;
 pub mod declarative;
+pub mod commerce;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

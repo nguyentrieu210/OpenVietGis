@@ -1,5 +1,5 @@
 //! Additive, opt-in reviewed V2 metadata delivery. V1 registration and activation
-//! remain canonical. This endpoint never installs or executes an extension.
+//! remain canonical. Runtime delivery is scoped separately.
 use super::{
     validation::{decode_ed25519_public_key, load_catalog, marketplace_canonical, CatalogRelease},
     ExtensionError,
@@ -50,9 +50,14 @@ struct Release {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Profile {
-    host: String,
-    api: String,
+pub(super) struct Profile {
+    pub host: String,
+    pub api: String,
+}
+
+pub(super) struct VerifiedRelease {
+    pub metadata: Value,
+    pub document: Vec<u8>,
 }
 pub(crate) fn router() -> Router<AppState> {
     Router::new().route("/marketplace/v2/catalog", get(catalog))
@@ -76,7 +81,7 @@ fn verified_items(
     operator: &str,
     epoch: u64,
     profile: &Profile,
-) -> Result<Vec<Value>, AppError> {
+) -> Result<Vec<VerifiedRelease>, AppError> {
     if c.schema != "openvietgis.marketplace.v2"
         || c.epoch != epoch
         || epoch == 0
@@ -118,9 +123,18 @@ fn verified_items(
         let manifest_digest =
             hash(&marketplace_canonical(&legacy.manifest).map_err(|_| invalid())?);
         let key_id = hash(publisher.as_bytes());
-        let allowed: BTreeSet<String> =
+        let mut allowed: BTreeSet<String> =
             serde_json::from_value(legacy.manifest["permissions"].clone())
                 .map_err(|_| invalid())?;
+        // V1 partner capabilities are deliberately not extension permissions.
+        // Derive only the two read-only host capabilities, never general grants.
+        if let Some(caps) = legacy.manifest["capabilities"].as_array() {
+            for cap in ["host_context", "host_notice"] {
+                if caps.iter().any(|v| v.as_str() == Some(cap)) {
+                    allowed.insert(format!("ext.{}.{cap}", e.extension_key));
+                }
+            }
+        }
         let contribution = bytes(&r.contribution, 256 * 1024)?;
         let mut assets = BTreeMap::new();
         let mut total = 0usize;
@@ -168,22 +182,22 @@ fn verified_items(
         let digest = verify_bundle(&b, &trust, &profile.host, &api)?;
         // A signature is not runtime qualification. Only expose metadata;
         // contribution and assets remain server-side until broker/host integration.
-        items.push(json!({"envelope":e,"release_digest":digest,"catalog_epoch":epoch,"runtime_available":false,
-            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}));
+        items.push(VerifiedRelease { metadata: json!({"envelope":e,"release_digest":digest,"catalog_epoch":epoch,"runtime_available":false,
+            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}), document: contribution });
     }
     items.sort_by(|a, b| {
-        a["envelope"]["extension_key"]
+        a.metadata["envelope"]["extension_key"]
             .as_str()
-            .cmp(&b["envelope"]["extension_key"].as_str())
+            .cmp(&b.metadata["envelope"]["extension_key"].as_str())
             .then_with(|| {
-                a["envelope"]["version"]
+                a.metadata["envelope"]["version"]
                     .as_str()
-                    .cmp(&b["envelope"]["version"].as_str())
+                    .cmp(&b.metadata["envelope"]["version"].as_str())
             })
     });
     Ok(items)
 }
-fn load(config: &AppConfig, p: &Profile) -> Result<Vec<Value>, AppError> {
+fn load(config: &AppConfig, p: &Profile) -> Result<Vec<VerifiedRelease>, AppError> {
     let Some(path) = config.marketplace_v2_catalog_path.as_deref() else {
         return Ok(vec![]);
     };
@@ -204,28 +218,39 @@ fn load(config: &AppConfig, p: &Profile) -> Result<Vec<Value>, AppError> {
     let c: Catalog = serde_json::from_slice(&raw).map_err(|_| invalid())?;
     verified_items(c, &load_catalog(config)?, key, epoch, p)
 }
-async fn catalog(
-    State(state): State<AppState>,
-    Query(profile): Query<Profile>,
-) -> Result<Response, ExtensionError> {
-    // File IO and signature verification are kept off the async reactor.
+pub(super) async fn load_verified(
+    config: std::sync::Arc<AppConfig>,
+    profile: Profile,
+) -> Result<Vec<VerifiedRelease>, ExtensionError> {
     let slot = VERIFY_SLOTS.try_acquire().map_err(|_| {
         ExtensionError::Domain(AppError::service_unavailable(
             "PLUGIN_CATALOG_BUSY",
             "catalog verification capacity exhausted",
         ))
     })?;
-    let config = state.config.clone();
-    let items = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let _slot = slot;
         load(&config, &profile)
     })
     .await
     .map_err(|_| ExtensionError::Domain(invalid()))?
-    .map_err(ExtensionError::Domain)?;
+    .map_err(ExtensionError::Domain)
+}
+async fn catalog(
+    State(state): State<AppState>,
+    Query(profile): Query<Profile>,
+) -> Result<Response, ExtensionError> {
+    let runtime_enabled = state.config.marketplace_v2_runtime_enabled
+        && profile.host == "web"
+        && profile.api == "1.0.0";
+    let items: Vec<Value> = load_verified(state.config.clone(), profile)
+        .await?
+        .into_iter()
+        .map(|r| r.metadata)
+        .collect();
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({"items":items,"profile":"metadata_only"})),
+        Json(json!({"items":items,"profile":"metadata_only","web_read_only_enabled":runtime_enabled})),
     )
         .into_response())
 }
@@ -288,11 +313,45 @@ mod tests {
         )
     }
     #[test]
+    fn python_signed_reference_catalog_verifies_both_releases() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/spec075/python-signed-catalog.json"
+        ))
+        .unwrap();
+        let key = fixture["operator_public_key"].as_str().unwrap();
+        let legacy = &fixture["v1"];
+        super::super::validation::verify_ed25519(
+            key,
+            &legacy["payload"],
+            legacy["signature"].as_str().unwrap(),
+        )
+        .unwrap();
+        let existing = super::super::validation::validate_catalog(&legacy["payload"]).unwrap();
+        let c: Catalog = serde_json::from_value(fixture["v2"].clone()).unwrap();
+        let rows = verified_items(
+            c,
+            &existing,
+            key,
+            2,
+            &Profile {
+                host: "web".into(),
+                api: "1.0.0".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 2);
+        for row in rows {
+            let doc = ovg_module_sdk::declarative::Document::parse(&row.document).unwrap();
+            assert_eq!(doc.actions.len(), 1);
+            assert_eq!(row.metadata["runtime_available"], false);
+        }
+    }
+    #[test]
     fn v2_metadata_uses_existing_catalog_trust() {
         let (c, existing, key, p) = fixture();
         let rows = verified_items(c, &existing, &key, 2, &p).unwrap();
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["runtime_available"], false);
+        assert_eq!(rows[0].metadata["runtime_available"], false);
         let (c, _, key, p) = fixture();
         assert!(verified_items(c, &[], &key, 2, &p).is_err());
         let (c, existing, key, p) = fixture();

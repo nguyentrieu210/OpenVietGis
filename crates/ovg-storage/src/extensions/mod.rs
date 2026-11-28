@@ -2,6 +2,7 @@
 
 pub mod marketplace;
 pub mod partner;
+pub mod runtime_v2;
 pub mod records;
 pub mod validation;
 
