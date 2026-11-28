@@ -289,7 +289,7 @@
         "apps/web-next/src/field-calculation-plan.test.ts",
         "apps/web-next/src/AdvancedEditor.tsx"
       ],
-      "blocker": "Typed AST subset integrated into labels and complete revision-pinned attribute selection, with fields/functions, preview, null logic and no arbitrary eval. Full QGIS expression library, shared field calculator/filter/server AST and paired browser acceptance remain. New tests not executed. Shared typed AST and exact rational field-calculation preview integrated into existing atomic attribute changeset for loaded revision-pinned rows. No new-field creation or server expression execution; tests not executed."
+      "blocker": "A typed, bounded AST (`label-expr.ts`) is shared by label preview, field-calculation planning and query selection, including typed NULL/missing-field behavior and validation without arbitrary eval. E17 consumer unit run 46178329115 on 1998ce1 passed the web-next Vitest suite (88 files/314 tests), including `query-selection.test.ts` (7) and `field-calculation-plan.test.ts` (3); the expression code/tests are unchanged through current candidate. Remaining: the supported function/operation subset is not the full QGIS expression library; no exact-final-SHA authenticated browser/QGIS expression comparison, server execution parity or full-source evaluation evidence. Keep partial."
     },
     {
       "id": "STYLE-06",
