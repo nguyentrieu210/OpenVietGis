@@ -156,6 +156,18 @@ impl Store{
   tx.execute("INSERT INTO journal VALUES(?1,?2,?3,?4)",params![n,b.operation.to_string(),json(&(before,link_before))?,json(b)?])?;
   tx.commit().map_err(|_|Error::Relation)?;Ok(receipt)
  }
+ // Undo the last feature/link batch via a new transaction. Undoing the
+ // compensating batch redoes it; never rewind feature or project revisions.
+ // Metadata changes do not have a compensation record.
+ pub fn compensate_latest(&self,operation:Uuid,expected_project:u64)->Result<Receipt>{
+  let (mut edits,links):(Vec<Edit>,Vec<Link>)={
+    let db=self.db.lock().map_err(lock_err)?;
+    let data:String=db.query_row("SELECT before_json FROM journal WHERE revision=?1",[expected_project],|r|r.get(0)).optional()?.ok_or(Error::Unsupported)?;
+    decode(&data)?
+  };
+  for e in &mut edits{e.expected=e.expected.checked_add(1).ok_or(Error::Limit)?;}
+  self.apply(&Batch{operation,expected_project,edits,links})
+ }
  pub fn query(&self,layer:Uuid,b:[f64;4],after:i64,limit:u32,expected:u64)->Result<Page>{
   if b.iter().any(|v|!v.is_finite())||b[0]>b[2]||b[1]>b[3]||after<0||!(1..=200).contains(&limit){return Err(Error::Invalid)}
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction()?;
@@ -209,6 +221,11 @@ mod tests{
    let mut changed=good.clone();changed.edits[0].image=Some(img(105.));assert_eq!(s.apply(&changed),Err(Error::Reused));
    assert_eq!(s.query(b,[106.,10.,108.,12.],0,10,3).unwrap().rows[0].id,y);
    assert!(s.query(a,[0.,0.,180.,90.],0,10,2).is_err());
+   let undo=Uuid::new_v4();let u=s.compensate_latest(undo,3).unwrap();assert_eq!(u.revision,4);
+   assert_eq!(s.compensate_latest(undo,3).unwrap(),u);
+   assert!(s.query(a,[0.,0.,180.,90.],0,10,4).unwrap().rows.is_empty());
+   assert_eq!(s.compensate_latest(Uuid::new_v4(),4).unwrap().revision,5);
+   assert_eq!(s.query(a,[0.,0.,180.,90.],0,10,5).unwrap().rows[0].revision,3);
  }
  #[test]fn relation_cardinality_and_deletion_roll_back(){
    let d=tempfile::tempdir().unwrap();let s=Store::create(&d.path().join("p.sqlite")).unwrap();
