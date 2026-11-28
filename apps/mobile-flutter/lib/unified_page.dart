@@ -331,11 +331,11 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
  Future<void> _capture()async{
   final ctrl=TextEditingController();
   try{
-   final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Ảnh khảo sát · camera native'),content:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Nhập UUID đối tượng trong lớp hiện tại. Camera Android trả ảnh preview, không yêu cầu ghi file; ứng dụng camera bên ngoài có thể có cách lưu riêng.'),TextField(controller:ctrl,decoration:const InputDecoration(labelText:'UUID đối tượng'))]),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Chụp'))]));
+   final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Ảnh khảo sát · camera native'),content:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Nhập UUID đối tượng trong lớp hiện tại. Camera native chụp JPEG trong bộ nhớ, không ghi file ảnh; giới hạn 16 MiB và 32 megapixel. Thiết bị có thể chọn độ phân giải phù hợp.'),TextField(controller:ctrl,decoration:const InputDecoration(labelText:'UUID đối tượng'))]),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Chụp'))]));
    if(ok!=true||!mounted)return;
    final r=jsonDecode(await widget.project.captureMediaPreview(layerId:widget.layer,featureId:ctrl.text.trim(),attachmentId:widget.uuid(),expected:_revision)) as Map;
    _revision=r['revision'].toString();await _load('');
-   if(mounted)setState(()=>_message='Đã ghi ảnh preview mã hóa vào dự án.');
+   if(mounted)setState(()=>_message='Đã ghi ảnh JPEG mã hóa vào dự án.');
   }finally{ctrl.dispose();}
  }
  Future<void> _view(String id)async{
@@ -352,7 +352,7 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   const Text('Nhập qua manifest liên kết đã xác thực nguồn. Không gửi khóa hoặc ảnh giải mã qua Flutter. Backup không mang theo khóa; không tự tạo khóa thay thế khi khóa cũ mất.'),
   OutlinedButton(onPressed:_busy||!_provider?null:()=>unawaited(_run(_import)),child:const Text('Nhập manifest media (tối đa 16)')),
   Wrap(children:[OutlinedButton(onPressed:_busy||!_key?null:()=>unawaited(_run(_transferSend)),child:const Text('Chuyển khóa')),OutlinedButton(onPressed:_busy||!_provider||_key||_rows.isEmpty?null:()=>unawaited(_run(_transferReceive)),child:const Text('Nhận khóa từ thiết bị cũ'))]),
-  OutlinedButton(onPressed:_busy||!_camera?null:()=>unawaited(_run(_capture)),child:const Text('Chụp ảnh preview Android')),
+  OutlinedButton(onPressed:_busy||!_camera?null:()=>unawaited(_run(_capture)),child:const Text('Chụp ảnh native')),
   if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),if(_message!=null)Text(_message!),
   if(!_busy&&_rows.isEmpty&&_error==null)const Text('Không có media mã hóa trong trang này.'),
   for(final row in _rows)ListTile(leading:Icon(_key?Icons.verified_user:Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext'),trailing:Wrap(children:[TextButton(onPressed:_busy||!_key||!_camera?null:()=>unawaited(_run(()=>_view(row['id'].toString()))),child:const Text('Xem')),TextButton(onPressed:_busy||!_key?null:()=>unawaited(_run(()=>_verify(row['id'].toString()))),child:const Text('Xác thực'))])),
