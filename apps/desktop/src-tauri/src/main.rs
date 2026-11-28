@@ -23,7 +23,7 @@ use tauri::{Emitter, Manager, State, WebviewWindow};
 use uuid::Uuid;
 use std::sync::{Arc,Mutex,OnceLock,atomic::{AtomicBool,AtomicUsize, Ordering}};
 use std::collections::HashMap;
-struct CancelToken{flag:AtomicBool,notify:tokio::sync::Notify}
+struct CancelToken{flag:Arc<AtomicBool>,notify:tokio::sync::Notify}
 type Requests=HashMap<Uuid,Arc<CancelToken>>;
 static READ_SLOTS:OnceLock<tokio::sync::Semaphore>=OnceLock::new();
 static READS:OnceLock<Mutex<Requests>>=OnceLock::new();
@@ -32,7 +32,7 @@ impl ReadPermit{
     fn acquire(id:Uuid)->Reply<Self>{
         let mut r=READS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|"SESSION_FAILED".to_owned())?;
         if r.len()>=64||r.contains_key(&id){return Err("RESOURCE_LIMIT".into())}
-        let token=Arc::new(CancelToken{flag:AtomicBool::new(false),notify:tokio::sync::Notify::new()});r.insert(id,token.clone());Ok(Self{id,token})
+        let token=Arc::new(CancelToken{flag:Arc::new(AtomicBool::new(false)),notify:tokio::sync::Notify::new()});r.insert(id,token.clone());Ok(Self{id,token})
     }
 }
 impl Drop for ReadPermit{fn drop(&mut self){if let Ok(mut r)=READS.get_or_init(||Mutex::new(HashMap::new())).lock(){r.remove(&self.id);}}}
