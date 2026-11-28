@@ -3,10 +3,10 @@ import wasmUrl from "laz-perf/lib/worker/laz-perf.wasm?url";
 import {LAS_MAX_BYTES,parseLasRecords,type LasCloud} from "./local-las";
 type Reader={open(p:number,n:number):void;getCount():number;getPointLength():number;getPointFormat():number;getPoint(p:number):void;delete():void};
 type ChunkReader={open(format:number,length:number,p:number):void;getPoint(p:number):void;delete():void};
-type Module={_malloc(n:number):number;_free(p:number):void;HEAPU8:Uint8Array;LASZip:new()=>Reader;ChunkDecoder:new()=>ChunkReader};
-let pending:Promise<Module>|undefined;
+export type LazModule={_malloc(n:number):number;_free(p:number):void;HEAPU8:Uint8Array;LASZip:new()=>Reader;ChunkDecoder:new()=>ChunkReader};
+let pending:Promise<LazModule>|undefined;
 export async function decoder(){
- if(!pending)pending=Promise.resolve((createLazPerf as unknown as (options:{locateFile:(name:string)=>string})=>Promise<Module>)({locateFile:()=>wasmUrl})).catch(e=>{pending=undefined;throw e});
+ if(!pending)pending=Promise.resolve((createLazPerf as unknown as (options:{locateFile:(name:string)=>string})=>Promise<LazModule>)({locateFile:()=>wasmUrl})).catch(e=>{pending=undefined;throw e});
  return pending;
 }
 export function lazHeader(bytes:ArrayBuffer){
@@ -22,7 +22,10 @@ export function lazHeader(bytes:ArrayBuffer){
  return {count,format,length,offset};
 }
 export async function decodeLaz(bytes:ArrayBuffer,crs:4326|3857):Promise<LasCloud>{
- const {count,format,length}=lazHeader(bytes),mod=await decoder();
+ return decodeLazWith(bytes,crs,await decoder());
+}
+export function decodeLazWith(bytes:ArrayBuffer,crs:4326|3857,mod:LazModule):LasCloud{
+ const {count,format,length}=lazHeader(bytes);
  let src=0,dest=0,reader:Reader|undefined;
  try{
   src=mod._malloc(bytes.byteLength);dest=mod._malloc(length);if(!src||!dest)throw Error("LAZ allocation failed");
@@ -35,7 +38,11 @@ export async function decodeLaz(bytes:ArrayBuffer,crs:4326|3857):Promise<LasClou
 }
 export async function decodeLazChunk(bytes:ArrayBuffer,count:number,format:number,length:number):Promise<ArrayBuffer>{
  if(!Number.isInteger(count)||count<1||count>500000||!Number.isInteger(length)||length<30||length>512||![6,7,8].includes(format)||count*length>LAS_MAX_BYTES||!bytes.byteLength||bytes.byteLength>LAS_MAX_BYTES)throw Error("COPC chunk budget");
- const mod=await decoder();let src=0,dest=0,reader:ChunkReader|undefined;
+ return decodeLazChunkWith(bytes,count,format,length,await decoder());
+}
+export function decodeLazChunkWith(bytes:ArrayBuffer,count:number,format:number,length:number,mod:LazModule):ArrayBuffer{
+ if(!Number.isInteger(count)||count<1||count>500000||!Number.isInteger(length)||length<30||length>512||![6,7,8].includes(format)||count*length>LAS_MAX_BYTES||!bytes.byteLength||bytes.byteLength>LAS_MAX_BYTES)throw Error("COPC chunk budget");
+ let src=0,dest=0,reader:ChunkReader|undefined;
  try{src=mod._malloc(bytes.byteLength);dest=mod._malloc(length);if(!src||!dest)throw Error("COPC allocation failed");
   mod.HEAPU8.set(new Uint8Array(bytes),src);reader=new mod.ChunkDecoder();reader.open(format,length,src);
   const raw=new Uint8Array(count*length);for(let i=0;i<count;i++){reader.getPoint(dest);raw.set(mod.HEAPU8.subarray(dest,dest+length),i*length)}return raw.buffer;
