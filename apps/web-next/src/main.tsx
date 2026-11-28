@@ -12,8 +12,9 @@ const Qgis = lazy(() => import("./QgisConnectPage").then(m => ({default: m.QgisC
 const Publisher = lazy(() => import("./PublisherPortal").then(m => ({default: m.PublisherPortal})));
 const routes = {workspace: Workspace, offline: Offline, auth: Auth, marketplace: Marketplace, qgis: Qgis, developer: Publisher};
 const route = entryRoute(location.pathname, location.search);
-const Page = routes[route];
-if (import.meta.env.PROD && import.meta.env.BASE_URL === "/" && "serviceWorker" in navigator && window.isSecureContext) {
+const Desktop = import.meta.env.VITE_OVG_DESKTOP === "1" ? lazy(() => import("./desktop/DesktopEntry")) : null;
+const Page = Desktop ?? routes[route];
+if (!Desktop && import.meta.env.PROD && import.meta.env.BASE_URL === "/" && "serviceWorker" in navigator && window.isSecureContext) {
   const register = () => void navigator.serviceWorker.register("/offline-shell-sw.js").catch(error => console.warn("Offline shell unavailable", error));
   // Offline users explicitly need readiness; other routes should not contend with
   // their critical entry request. Registration remains automatic after page load.
