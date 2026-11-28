@@ -12,6 +12,9 @@ importers:
 
 packages:
 
+  h5wasm@0.10.3:
+    resolution: {integrity: sha512-W4Jy5ExtX/VNbyD8GdOBckDuj6AL16TemppVNxZsV3rJZEWCv2sxlCzOttZLer3zkMttbDYsWHl0qt1z3Bln+Q==}
+
   laz-perf@0.0.7:
     resolution: {integrity: sha512-2xRqm/f/2UqDS5qqkjOyDb6uVIjkVw6SGmQlMoTQliVWkZhPfIbUJTubUl3mTloaWqKcjlS/urmP1CYoxelsEg==}
 
@@ -103,6 +106,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  h5wasm@0.10.3: {}
 
   laz-perf@0.0.7: {}
 
@@ -253,6 +258,9 @@ importers:
       geotiff:
         specifier: 3.0.5
         version: 3.0.5
+      h5wasm:
+        specifier: 0.10.3
+        version: 0.10.3
       laz-perf:
         specifier: 0.0.7
         version: 0.0.7
