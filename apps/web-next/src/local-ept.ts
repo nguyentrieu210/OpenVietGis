@@ -56,3 +56,65 @@ export async function parseEpt(files:ReadonlyMap<string,LocalEntry>,crs:4326|385
  if(n!==count||east-west>180)throw Error("EPT incomplete or antimeridian crossing");
  return {points,count,bounds:[west,south,east,north],center:[(west+east)/2,(south+north)/2]};
 }
+
+/** Remote EPT preview: bounded breadth-first LOD, only selected nodes downloaded.
+ * No server proxy, no credentials, no redirect, no arbitrary paths from metadata.
+ * This is a user-selected depth preview rather than continuous camera LOD.
+ */
+export type RemoteEptPreview=LasCloud&{datasetCount:number;nodeCount:number;complete:boolean};
+export function remoteEptUrl(raw:string){
+ const url=new URL(raw.trim());
+ if(url.protocol!=="https:"||url.username||url.password||url.search||url.hash||url.port&&url.port!=="443"||!url.pathname.endsWith("/ept.json")||!url.hostname.includes(".")||/^(?:\d+(?:\.\d+){3}|\[.*\])$/.test(url.hostname)||/\.(?:local|internal|localhost|test|invalid)$/.test(url.hostname)||url.hostname==="localhost"||typeof location!=="undefined"&&url.origin===location.origin)throw Error("Use a public HTTPS EPT manifest URL without credentials or parameters");
+ return url;
+}
+export async function loadRemoteEpt(raw:string,crs:4326|3857,depth:number,signal:AbortSignal,fetcher:typeof fetch=fetch):Promise<RemoteEptPreview>{
+ const url=remoteEptUrl(raw);
+ if(!Number.isInteger(depth)||depth<0||depth>12)throw Error("Remote EPT depth must be 0–12");
+ const base=new URL(".",url),files=new Map<string,Blob>(),MAX_REMOTE_BYTES=32*1024*1024,MAX_REMOTE_NODES=128,MAX_REMOTE_POINTS=500000;
+ let transferred=0,requests=0;
+ async function get(path:string,max:number){
+  signal.throwIfAborted();
+  const target=new URL(path,base);
+  if(target.origin!==url.origin||!target.pathname.startsWith(base.pathname)||++requests>MAX_REMOTE_NODES*2+1)throw Error("Remote EPT request limit");
+  const cap=Math.min(max,MAX_REMOTE_BYTES-transferred);if(cap<1)throw Error("Remote EPT byte budget");
+  const r=await fetcher(target,{signal,mode:"cors",credentials:"omit",redirect:"error",referrerPolicy:"no-referrer",cache:"no-store"});
+  if(!r.ok||r.status!==200||!r.body)throw Error("EPT requires public CORS-enabled files");
+  const len=r.headers.get("content-length");if(len!==null&&(!/^\d+$/.test(len)||Number(len)>cap)){await r.body.cancel();throw Error("Remote EPT response exceeds limit")}
+  const reader=r.body.getReader(),chunks:Uint8Array<ArrayBuffer>[]= [];let size=0;
+  try{while(true){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>cap)throw Error("Remote EPT response exceeds byte limit");chunks.push(new Uint8Array(next.value))}}catch(e){await reader.cancel().catch(()=>{});throw e}finally{reader.releaseLock()}
+  if(size===0)throw Error("Empty EPT response");transferred+=size;
+  return new Blob(chunks);
+ }
+ const metadata=await get("ept.json",1024*1024),meta:unknown=JSON.parse(await metadata.text());
+ if(!obj(meta)||meta.dataType!=="binary"||(meta.hierarchyType??"json")!=="json"||!Array.isArray(meta.schema)||meta.schema.length<3||meta.schema.length>64||!finite(meta.points)||!Number.isSafeInteger(meta.points)||meta.points<1)throw Error("Only remote EPT binary/JSON is supported");
+ const datasetCount=meta.points;
+ const stride=meta.schema.reduce((sum:number,d:unknown)=>{if(!obj(d)||!finite(d.size)||![1,2,4,8].includes(d.size))throw Error("Invalid remote EPT schema");return sum+d.size},0);
+ const queue=new Map<string,number>(),seenPages=new Set<string>(),seenNodes=new Set<string>();
+ let complete=true;
+ async function page(root:string){
+  if(seenPages.has(root)||seenPages.size>=MAX_REMOTE_NODES)throw Error("EPT hierarchy page limit or cycle");
+  seenPages.add(root);const f=await get("ept-hierarchy/"+root+".json",1024*1024),v:unknown=JSON.parse(await f.text());
+  if(!obj(v)||!finite(v[root])||v[root]<1||Object.keys(v).length>65536)throw Error("Invalid EPT hierarchy");
+  for(const [k,n] of Object.entries(v)){
+   if(!within(k,root)||!finite(n)||!Number.isSafeInteger(n)||n===0||n< -1||n>datasetCount)throw Error("Invalid EPT hierarchy entry");
+   if(node(k)[0]>depth){complete=false;continue}
+   if(k===root||!seenNodes.has(k)){if(n===-1){if(k===root)throw Error("Invalid EPT page pointer");await page(k)}else{if(queue.has(k))throw Error("Duplicate EPT node");queue.set(k,n)}seenNodes.add(k)}
+   else throw Error("Duplicate EPT node");
+  }
+ }
+ await page(ROOT);
+ const selected:Record<string,number>=Object.create(null);let count=0,nodes=0;
+ const sorted=[...queue].sort(([a],[b])=>node(a)[0]-node(b)[0]||a.localeCompare(b));
+ for(const [k,n] of sorted){
+  signal.throwIfAborted();
+  const [d,x,y,z]=node(k),parent=[d-1,Math.floor(x/2),Math.floor(y/2),Math.floor(z/2)].join("-");
+  if(d>0&&!Object.hasOwn(selected,parent)||nodes>=MAX_REMOTE_NODES||count+n>MAX_REMOTE_POINTS||n*stride>MAX_REMOTE_BYTES-transferred){complete=false;continue}
+  const path="ept-data/"+k+".bin",blob=await get(path,n*stride);if(blob.size!==n*stride)throw Error("Truncated EPT tile");
+  selected[k]=n;files.set(path,blob);count+=n;nodes++;
+ }
+ if(!Object.hasOwn(selected,ROOT)||count>datasetCount||complete&&count!==datasetCount)throw Error("Invalid or oversized EPT root/point count");
+ files.set("ept.json",new Blob([JSON.stringify({...meta,points:count})]));
+ files.set("ept-hierarchy/"+ROOT+".json",new Blob([JSON.stringify(selected)]));
+ const preview=await parseEpt(files,crs);
+ return {...preview,datasetCount,nodeCount:nodes,complete:complete&&count===datasetCount};
+}
