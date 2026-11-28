@@ -70,6 +70,7 @@ export default function DesktopEntry(){
         <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreSnapshot();if(p){await refresh();await open(p.id)}})}>Khôi phục bản sao GPKG</button>
         <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreProject();if(p){await refresh();await open(p.id)}})}>Khôi phục dự án nhiều lớp</button>
         <button disabled={!opened||busy} onClick={()=>void execute(async()=>{if(opened)await desktop.backupProject(opened.handle)})}>Sao lưu toàn bộ dự án</button>
+        <button disabled={!opened||busy} onClick={()=>void execute(async()=>{if(!opened||!window.confirm("Xuất bản SQLite thử nghiệm, giữ nguyên dự án đang dùng. Bản xuất chưa dùng để chỉnh sửa trên Desktop."))return;const r=await desktop.exportUnifiedCandidate(opened.handle);if(r)setMessage("Đã xuất "+r.length+" lớp; "+r.reduce((n,l)=>n+l.live,0)+" đối tượng; "+r.reduce((n,l)=>n+l.tombstones,0)+" tombstone.")})}>Xuất kho thống nhất (thử nghiệm)</button>
         <button disabled={!caps||busy} onClick={()=>void execute(refresh)}>Làm mới</button>
         <ul>{projects.map(p=><li key={p.id}><button title={p.id} disabled={busy} aria-current={opened?.id===p.id} onClick={()=>void execute(()=>open(p.id))}>{p.id.slice(0,8)}</button></li>)}</ul>
         <button disabled={!opened||busy} onClick={()=>void execute(close)}>Đóng dự án</button>
