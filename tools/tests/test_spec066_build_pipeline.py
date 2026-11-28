@@ -29,7 +29,7 @@ def test_frontend_dependency_layer_covers_all_workspace_manifests() -> None:
 
 
 def test_pr_cancellation_cannot_cancel_main_or_manual_runs() -> None:
-    for name in ("ci.yml", "e17-web-parity.yml"):
+    for name in ("ci.yml", "e17-web-parity.yml", "rust-platform.yml"):
         workflow = yaml.safe_load((ROOT / ".github/workflows" / name).read_text())
         policy = workflow["concurrency"]
         assert policy["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
