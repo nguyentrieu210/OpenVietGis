@@ -841,9 +841,12 @@
         "apps/web-next/src/transfer-verification.ts",
         "tests/spec065/edit_processing.py",
         "tests/spec065/realtime_collaboration.py",
-        "tests/spec065/run-attribute-query.sh"
+        "tests/spec065/run-attribute-query.sh",
+        "integrations/qgis_plugin/openvietgis_connector/managed_client.py",
+        "integrations/qgis_plugin/openvietgis_connector/plugin.py",
+        "tools/tests/test_qgis_managed_snapshots.py"
       ],
-      "blocker": "Actual R029 authenticated two-user managed sessions, bootstrap pages, exact commit receipt replay, durable delta pull/reset, allowlisted desktop commands and revoked session tested. GeoPackage file sync previously tested. Native QGIS Desktop/plugin, SSE reconnection and permission-epoch reset remain."
+      "blocker": "R029 authenticated two-user managed API verified previously. Native QGIS connector SSE now includes bounded complete-event framing, reconnect catch-up delta and desktop-command wakeup, bounded exponential backoff, stale worker signal fencing, revocation timer shutdown and snapshot count pinning. New pure-Python regression tests not executed; actual QGIS Desktop interactive reconnect/permission reset and broad project/style exchange acceptance remain."
     },
     {
       "id": "COLLAB-01",

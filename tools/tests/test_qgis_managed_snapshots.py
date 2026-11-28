@@ -211,3 +211,33 @@ def test_reopen_changed_cache_uses_delta_and_revalidates(monkeypatch):
     delta.next_cursor = 3
     delta.reset_required = True
     assert client.catch_up_cached_layer(None, sess, probe, record, lambda: False) is None
+
+def test_managed_sse_frames_and_reconnect_bounds():
+    import io
+    from integrations.qgis_plugin.openvietgis_connector.managed_client import (
+        iter_managed_events, managed_reconnect_delay,
+    )
+    wire = (b": heartbeat\n\n"
+            b"event: spatial_change\ndata: first\ndata: second\n\n"
+            b"event: unknown\ndata: ignored\n\n"
+            b"event: desktop_command\r\ndata: {}\r\n\r\n"
+            b"event: session_revoked\ndata: truncated")
+    assert list(iter_managed_events(io.BytesIO(wire))) == ["spatial_change", "desktop_command"]
+    assert list(iter_managed_events(io.BytesIO(b"event: session_revoked\ndata: {}\n\n"))) == ["session_revoked"]
+    assert list(iter_managed_events(io.BytesIO(wire), lambda: True)) == []
+    with pytest.raises(ApiError):
+        list(iter_managed_events(io.BytesIO(b"data: " + b"a"*65536 + b"\n")))
+    assert [managed_reconnect_delay(i) for i in (0, 1, 2, 5, 20)] == [1, 2, 4, 30, 30]
+
+
+def test_snapshot_count_is_revision_pinned(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as c
+    def page(count, more=False):
+        return c.ManagedBootstrapPage(
+            layer_id="l", source_id="s", name="Layer", geometry_family="Point",
+            dimensions="XY", crs_code=4326, content_revision="a"*64, schema_revision="b"*64,
+            cursor=1, permission_epoch=1, fields=(), features=({"feature_id":"a"},),
+            has_more=more, next_offset=1 if more else None, feature_count=count)
+    monkeypatch.setattr(c, "bootstrap_managed_layer", lambda *a, **k: page(2))
+    with pytest.raises(ApiError, match="thiếu đối tượng"):
+        c.load_managed_snapshot(None, layer_id="l", session_id="s", permission_epoch=1)

@@ -236,10 +236,10 @@ def load_managed_snapshot(
                 raise ApiError("Tên trường bị trùng hoặc trùng mã định danh hệ thống.")
         elif (
             page.source_id, page.crs_code, page.geometry_family, page.dimensions,
-            page.content_revision, page.schema_revision, page.fields
+            page.content_revision, page.schema_revision, page.fields, page.feature_count
         ) != (
             first.source_id, first.crs_code, first.geometry_family, first.dimensions,
-            first.content_revision, first.schema_revision, first.fields
+            first.content_revision, first.schema_revision, first.fields, first.feature_count
         ):
             raise ApiError("Lớp thay đổi trong lúc tải; hãy mở lại để tránh mất dữ liệu.")
         if len(page.features) > limit:
@@ -250,7 +250,13 @@ def load_managed_snapshot(
                 raise ApiError("Mã đối tượng không hợp lệ hoặc trùng lặp.")
             ids.add(oid)
             features.append(item)
+        if page.feature_count is not None and len(features) > page.feature_count:
+            raise ApiError("Số đối tượng vượt quá snapshot đã xác nhận.")
+        if len(features) > 1000000:
+            raise ApiError("Snapshot vượt giới hạn một triệu đối tượng.")
         if not page.has_more:
+            if first.feature_count is not None and len(features) != first.feature_count:
+                raise ApiError("Snapshot thiếu đối tượng; hãy tải lại.")
             if page.next_offset is not None:
                 raise ApiError("Con trỏ trang cuối không hợp lệ.")
             return first, features
@@ -572,3 +578,40 @@ def validate_managed_operations(operations, fields):
             "Mở bảng thuộc tính hoặc biểu mẫu đối tượng, điền các trường này rồi lưu lại. "
             "Bản nháp vẫn được giữ."
         )
+
+def iter_managed_events(response, cancelled=lambda: False):
+    """SSE framing, bounded input, and no dispatch for truncated events.
+
+    Notifications are wakeups only; authoritative data always comes from delta.
+    """
+    event = ""
+    data_seen = False
+    size = 0
+    while not cancelled():
+        raw = response.readline(65537)
+        if not raw:
+            return
+        if len(raw) > 65536:
+            raise ApiError("SSE line exceeds limit.")
+        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+        if not line:
+            if data_seen and event in ("spatial_change", "session_revoked", "desktop_command"):
+                yield event
+            event, data_seen, size = "", False, 0
+            continue
+        if line.startswith(":"):
+            continue
+        size += len(raw)
+        if size > 262144:
+            raise ApiError("SSE event exceeds limit.")
+        field, _, value = line.partition(":")
+        if value.startswith(" "):
+            value = value[1:]
+        if field == "event":
+            event = value
+        elif field == "data":
+            data_seen = True
+
+
+def managed_reconnect_delay(failures: int) -> float:
+    return float(min(30, 2 ** min(5, max(0, failures))))
