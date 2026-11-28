@@ -1,7 +1,7 @@
 import "./ui-menu.css";
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import {createPortal} from "react-dom";
-import {normalizeCommand as normalize,searchCommands,resolveCommand,searchRibbonCommands} from "./command-search";
+import {normalizeCommand as normalize,searchCommands,resolveCommand,searchRibbonCommands,executeHostCommand} from "./command-search";
 export type CoreCommand={alias:string;label:string;group:string;hint?:string;pluginMenu?:{id:string;name:string;label:string;checked?:boolean;section?:string};disabled?:boolean;disabledReason?:string;run:(args:string)=>void|Promise<void>};
 const aliases:Record<string,string>={L:"LINE",PL:"POLYGON",PO:"POINT",M:"MOVE",CO:"COPY",CP:"COPY",O:"OFFSET",RO:"ROTATE",SC:"SCALE",S:"STRETCH",TR:"TRIM",EX:"EXTEND",F:"FILLET",E:"ERASE",DI:"DIST",AA:"AREA",P:"PAN",Z:"ZOOM",U:"UNDO",OS:"OSNAP",QSELECT:"SELRECT",RE:"RELOAD"};
 type Host={commands:CoreCommand[];cancel:()=>string;activePrompt?:string;finishActive:()=>string|undefined;inputActive:(value:string)=>string|undefined;shortcut:(key:"F3"|"F8")=>string|undefined};
@@ -9,6 +9,7 @@ const editable=(t:HTMLElement|null)=>!!t&&(t.isContentEditable||["INPUT","TEXTAR
 export function CoreCommandBar(host:Host){
  const [value,setValue]=useState(""),[history,setHistory]=useState<string[]>([]),[log,setLog]=useState<string[]>([]),[status,setStatus]=useState("Sẵn sàng"),[focused,setFocused]=useState(false),[help,setHelp]=useState(false),[showHistory,setShowHistory]=useState(false),[cursor,setCursor]=useState(-1),[highlight,setHighlight]=useState(-1),[pending,setPending]=useState<"ZOOM"|"PAN"|null>(null);
  const ref=useRef<HTMLInputElement>(null),root=useRef<HTMLDivElement>(null),epoch=useRef(0),last=useRef(""),running=useRef(false);
+ const liveCommands=useRef(host.commands);liveCommands.current=host.commands;
  const query=value.trim();
  const matches=useMemo(()=>searchCommands(host.commands,help?"":query,aliases,help?host.commands.length:8),[host.commands,query,help]);
  const report=(line:string)=>{setStatus(line);setLog(l=>[...l,line].slice(-80))};
@@ -35,7 +36,7 @@ export function CoreCommandBar(host:Host){
   if(command.disabled){report(command.alias+" · "+commandDisabledReason(command));setPending(null);return}
   const full=[command.alias,...rest].join(" ");if(!host.activePrompt||!["ZE","ZI","ZO","ZL","ZS","ZOOM","PAN","ORTHO","OSNAP","SNAP"].includes(command.alias))last.current=full;setHistory(h=>[full,...h.filter(x=>x!==full)].slice(0,50));setLog(l=>[...l,"Command: "+full].slice(-80));
   const seq=++epoch.current;clear();setFocused(false);running.current=true;
-  try{await command.run(rest.join(" "));if(seq===epoch.current)report(command.alias+" · "+command.label)}catch(e){if(seq===epoch.current)report(command.alias+" · "+(e instanceof Error?e.message:"Không thể thực hiện"))}finally{running.current=false}
+  try{await executeHostCommand(()=>liveCommands.current,command.alias,rest.join(" "),commandDisabledReason);if(seq===epoch.current)report(command.alias+" · "+command.label)}catch(e){if(seq===epoch.current)report(command.alias+" · "+(e instanceof Error?e.message:"Không thể thực hiện"))}finally{running.current=false}
  }
  const latest=useRef({execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt});latest.current={execute,escape,focus,clear,shortcut:host.shortcut,activePrompt:host.activePrompt};
  useEffect(()=>{const key=(e:KeyboardEvent)=>{

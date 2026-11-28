@@ -3,3 +3,5 @@ packages:
   - "packages/client-sdk"
   - "packages/spatial-workspace"
   - "modules/*/frontend"
+
+  - "packages/ui-react"

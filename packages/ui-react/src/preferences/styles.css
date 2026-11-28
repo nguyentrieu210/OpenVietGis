@@ -1,0 +1,6 @@
+:root[data-ovg-contrast=high]{--ovg-ui-line:var(--ovg-ui-ink);--ovg-ui-line-strong:var(--ovg-ui-ink);--ovg-ui-muted:var(--ovg-ui-ink)}
+:root[data-ovg-motion=reduce]{--ovg-ui-motion-fast:0ms;--ovg-ui-motion-normal:0ms;--ovg-ui-motion-slow:0ms}
+@media (forced-colors:active){.ovg-v2-button:focus-visible,.ovg-v2-input:focus-visible,.ovg-grid button:focus-visible{outline:2px solid Highlight}}
+
+.ovg-theme-picker{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px;font-size:12px}
+.ovg-theme-picker select{min-width:0;max-width:150px}

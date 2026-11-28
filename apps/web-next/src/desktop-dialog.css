@@ -1,6 +1,7 @@
 /* Shared desktop dialogs and embedded legacy workbenches. Keep the native
    map and non-modal workbench available independently of blocking dialogs. */
-.qgis-studio .live-shade:not(.partner-docked){padding:12px;z-index:1000;overscroll-behavior:contain}
+/* Blocking modal above chat (3800), workspace switcher (4500) and opacity popover (4600), below global confirmation (5000). */
+.qgis-studio .live-shade:not(.partner-docked){padding:12px;z-index:4800;overscroll-behavior:contain}
 .qgis-studio .live-shade:not(.partner-docked)>.live-modal{max-height:calc(100dvh - 24px);min-width:0;display:flex;flex-direction:column;overflow:hidden;outline:none}
 .qgis-studio .live-shade:not(.partner-docked)>.live-modal>header{flex:none;position:relative;min-height:36px}
 .qgis-studio .live-modal>header>div{flex:1;min-width:0}

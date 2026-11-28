@@ -1,0 +1,92 @@
+/* Generated from tokens.json; do not edit. */
+:root {
+  --ovg-ui-danger: #b91c1c;
+  --ovg-ui-focus: #1565a9;
+  --ovg-ui-ink: #263c49;
+  --ovg-ui-line: #ccd8df;
+  --ovg-ui-line-strong: #64748b;
+  --ovg-ui-muted: #526b79;
+  --ovg-ui-on-primary: #ffffff;
+  --ovg-ui-panel: #f2f5f6;
+  --ovg-ui-primary: #1565a9;
+  --ovg-ui-success: #166534;
+  --ovg-ui-surface: #ffffff;
+  --ovg-ui-warning: #92400e;
+  --ovg-ui-control-height: 32px;
+  --ovg-ui-field-gap: 6px;
+  --ovg-ui-gap: 8px;
+  --ovg-ui-inset: 16px;
+  --ovg-ui-section-gap: 16px;
+  --ovg-ui-toolbar-gap: 4px;
+  --ovg-ui-touch-target: 32px;
+  --ovg-ui-radius-lg: 12px;
+  --ovg-ui-radius-md: 8px;
+  --ovg-ui-radius-sm: 4px;
+  --ovg-ui-radius-ui: 4px;
+  --ovg-ui-type-body: 14px;
+  --ovg-ui-type-font-family: "Be Vietnam Pro", Inter, system-ui, sans-serif;
+  --ovg-ui-type-heading: 18px;
+  --ovg-ui-type-mono-family: "JetBrains Mono", monospace;
+  --ovg-ui-type-sm: 13px;
+  --ovg-ui-type-xs: 12px;
+  --ovg-ui-motion-fast: 100ms;
+  --ovg-ui-motion-normal: 180ms;
+  --ovg-ui-motion-reduced: 0ms;
+  --ovg-ui-motion-slow: 260ms;
+  --ovg-ui-radius: var(--ovg-ui-radius-ui);
+}
+:root[data-ovg-theme=dark] {
+  --ovg-ui-danger: #fca5a5;
+  --ovg-ui-focus: #62a9e5;
+  --ovg-ui-ink: #e2eaf0;
+  --ovg-ui-line: #425461;
+  --ovg-ui-line-strong: #94a3b8;
+  --ovg-ui-muted: #aebfca;
+  --ovg-ui-on-primary: #10202c;
+  --ovg-ui-panel: #26343e;
+  --ovg-ui-primary: #62a9e5;
+  --ovg-ui-success: #86efac;
+  --ovg-ui-surface: #202b34;
+  --ovg-ui-warning: #fcd34d;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-ovg-theme=system] {
+    --ovg-ui-danger: #fca5a5;
+    --ovg-ui-focus: #62a9e5;
+    --ovg-ui-ink: #e2eaf0;
+    --ovg-ui-line: #425461;
+    --ovg-ui-line-strong: #94a3b8;
+    --ovg-ui-muted: #aebfca;
+    --ovg-ui-on-primary: #10202c;
+    --ovg-ui-panel: #26343e;
+    --ovg-ui-primary: #62a9e5;
+    --ovg-ui-success: #86efac;
+    --ovg-ui-surface: #202b34;
+    --ovg-ui-warning: #fcd34d;
+  }
+}
+:root[data-ovg-density=comfortable] {
+  --ovg-ui-control-height: 40px;
+  --ovg-ui-field-gap: 8px;
+  --ovg-ui-gap: 12px;
+  --ovg-ui-inset: 20px;
+  --ovg-ui-section-gap: 20px;
+  --ovg-ui-toolbar-gap: 8px;
+  --ovg-ui-touch-target: 40px;
+}
+:root[data-ovg-density=touch] {
+  --ovg-ui-control-height: 48px;
+  --ovg-ui-field-gap: 10px;
+  --ovg-ui-gap: 12px;
+  --ovg-ui-inset: 20px;
+  --ovg-ui-section-gap: 24px;
+  --ovg-ui-toolbar-gap: 8px;
+  --ovg-ui-touch-target: 48px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ovg-ui-motion-fast: var(--ovg-ui-motion-reduced);
+    --ovg-ui-motion-normal: var(--ovg-ui-motion-reduced);
+    --ovg-ui-motion-slow: var(--ovg-ui-motion-reduced);
+  }
+}

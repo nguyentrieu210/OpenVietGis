@@ -1,0 +1,6 @@
+# W1 evidence — token foundation
+Implemented at b3d47fe4b664142cd60236add5e38226a488eb8d. 59 typed token leaves across semantic colors, density, radius, typography and motion. Generator has no runtime dependencies. CSS aliases preserve SPEC072 defaults; Tailwind @theme inline references variables; Flutter package exports OvgTokens.theme and density/motion helpers.
+
+Validation on isolated VPS runner: node packages/design-tokens/generate.mjs --check PASS; node --test packages/design-tokens/test/tokens.test.mjs tools/tests/audit_frontend_077.test.mjs PASS 8/8 (5 W1, 3 W0); clean git status. Headless Chromium loaded standalone generated CSS; 8/8 computed-style assertions PASS (light/dark primary, dark surface, 32/40/48 density, radius alias and switch back light). No live application accessed. Contrast assertions 4.5:1 text and 3:1 focus/strong boundary pass.
+
+Flutter and Dart executables absent on runner, so Flutter test source is not executed. Tailwind production compiler and integrated UI regression remain pending with W0 T006b. No runtime import/activation until those gates; no new external dependencies, no backend or production changes. DTCG-shaped subset is intentionally dependency-free, not certified full standard support.

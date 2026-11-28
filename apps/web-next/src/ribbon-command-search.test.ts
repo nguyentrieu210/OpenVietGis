@@ -17,3 +17,18 @@ describe("ribbon command search",()=>{
   expect(searchRibbonCommands(commands,"",{})).toEqual(commands);
  });
 });
+
+import {executeHostCommand} from "./command-search";
+describe("shared host command execution",()=>{
+ it("preserves CAD arguments and rechecks live permissions",async()=>{
+  const args:string[]=[];let current=[{alias:"LINE",label:"Vẽ đường",group:"CAD",disabled:false,run:(v:string)=>{args.push(v)}}];
+  await executeHostCommand(()=>current,"line","106.6,11.1 106.7,11.2",()=>"Không có quyền");
+  expect(args).toEqual(["106.6,11.1 106.7,11.2"]);
+  current=[{...current[0]!,disabled:true}];
+  await expect(executeHostCommand(()=>current,"LINE","1,2",()=>"Không có quyền")).rejects.toThrow("Không có quyền");
+  await expect(executeHostCommand(()=>current,"LIN","",()=>"Không có quyền")).rejects.toThrow("không còn khả dụng");
+  current=[current[0]!,current[0]!];
+  await expect(executeHostCommand(()=>current,"LINE","",()=>"Không có quyền")).rejects.toThrow("trùng");
+  expect(args).toHaveLength(1);
+ });
+});
