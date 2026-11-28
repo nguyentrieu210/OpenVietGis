@@ -67,7 +67,7 @@ try{
  assert.equal(await pointTool.getAttribute("aria-pressed"),"true","Point digitizing tool should be active before Space");
  const panTool=page.getByRole("button",{name:/Di chuyển bản đồ/}).first();
  assert.equal(await panTool.getAttribute("aria-pressed"),"false","persistent Pan should be inactive before Space");
- await canvas.hover({position:{x:120,y:120}});await page.keyboard.down("Space");
+ await canvas.hover({position:{x:120,y:120}});await canvas.focus();await page.keyboard.down("Space");
  await page.waitForFunction(()=>document.body.dataset.ovgSpacePan==="1");
  assert.equal(await pointTool.getAttribute("aria-pressed"),"true","temporary pan must not replace the active tool");
  await page.keyboard.up("Space");
