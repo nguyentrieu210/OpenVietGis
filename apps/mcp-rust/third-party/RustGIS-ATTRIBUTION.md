@@ -9,3 +9,5 @@ Wave 2: assistant/agent.rs conversation-loop design, step/retry limits and comme
 Wave 3: provider.rs protocol adapter design, native-message replay, provider retry classification and fixed presets adapted from the same pinned source; OpenVietGIS server transport and consent/tenant boundary are new.
 
 Wave 4: assistant/agent.rs subagent delegation, separate conversation and shared budget patterns adapted from the pinned upstream. OpenVietGIS uses concurrent read-only specialists and serialized tenant-scoped dispatch.
+
+Wave 5: visual map observation and native image-block design adapted from RustGIS assistant/tools.rs and provider.rs at the pinned revision; OpenVietGIS uses its own bounded canvas capture and explicit consent.

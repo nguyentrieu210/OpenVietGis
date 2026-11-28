@@ -1,0 +1,9 @@
+# Wave 5 — Visual GIS Agent
+Base Wave 4 PR #108 at c60955f1c58e7bf8b17960d7b202de2eed41d431. RustGIS view_map and provider image-block design at aea84131974b57ff6359666dbe79f88054a64bf1, Apache-2.0; OpenVietGIS implements its own scoped browser canvas capture and provider attachment.
+
+- Capture the actual 2D MapLibre canvas in its render callback, without global preserveDrawingBuffer or full-screen/DOM capture. Explicit preview and separate per-run image consent. Snapshot expires client-side after 60 seconds and on provider/workspace/camera changes; no automatic capture or re-capture.
+- JPEG max 1024 px and 80,000 base64 characters, with bounded SOF header dimensions and envelope validation. Native provider body uses OpenAI image_url, Anthropic image source, or Gemini inlineData. No arbitrary URL or remote fetch.
+- Operator must enable exact provider=model via OVG_AI_VISION_MODELS (comma-separated); default disabled. Provider pin and project/browser authorization remain enforced. Images are only attached to the parent gateway; forked child conversations do not inherit image bytes.
+- Snapshot is static, may be stale after subsequent GIS commands, and is never an authoritative measurement. Actual output remains model-generated. Only image dimensions/type are returned in job metadata, not raw bytes or hidden reasoning. No storage of snapshot in jobs; in-memory gateway lifetime only.
+- Scope limitation: single 2D map canvas per run, not live continuous vision, print-layout page, 3D, CAD, or independent screenshot tool. No automatic cartographic edits. Render capture can fail for unsupported/tainted canvas or large images; fail closed.
+- Acceptance: locked Rust tests, native multimodal request fixtures, actual MapLibre browser capture and separate consent fixture. Real vision model, visual quality, deployed proxy and end-to-end live acceptance remain unverified.

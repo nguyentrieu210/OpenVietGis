@@ -23,3 +23,5 @@
 @media(max-width:600px){.ovg-ai-copilot [data-ai=panel]{right:8px;max-width:calc(100vw - 16px);top:72px;max-height:calc(100dvh - 90px)}}
 
 .ovg-ai-copilot [data-ai=native]{display:grid;gap:8px;margin:14px 18px;padding:12px;border:1px solid #c8e5d6;border-radius:10px}.ovg-ai-copilot [data-ai=native] label{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.ovg-ai-copilot [data-ai=native] select,.ovg-ai-copilot [data-ai=native] textarea{font:inherit;max-width:100%;padding:7px;border:1px solid #cadbd4;border-radius:6px}.ovg-ai-copilot [data-ai=native] button{font:inherit;padding:7px 12px;border:1px solid #cadbd4;border-radius:6px;background:#eef8f3;cursor:pointer}.ovg-ai-copilot [data-ai=answer]{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font:inherit;margin:0}
+
+.ovg-ai-copilot [data-ai=vision]{display:grid;gap:6px;border-top:1px solid #d4e1de;padding-top:8px}.ovg-ai-copilot [data-ai=preview]{display:block;max-width:100%;max-height:220px;object-fit:contain;border:1px solid #cadbd4;border-radius:6px}.ovg-ai-copilot [data-ai=image-status]{font-size:11px;color:#527063}

@@ -29,16 +29,17 @@ fn valid_model(p:Provider,s:&str)->bool{
 }
 /// No Debug/Serialize implementation: credentials must never enter a transcript.
 #[derive(Clone)]
-pub struct Config { provider:Provider, model:String, key:String }
+pub struct Config { provider:Provider, model:String, key:String, vision:bool }
 impl Config {
     pub fn from_env(p:Provider)->Option<Self>{
         let model=std::env::var(p.model_env()).ok()?;
         if !valid_model(p,&model){return None}
         let key=if p==Provider::Ollama{String::new()}else{std::env::var(p.key_env()).ok()?};
         if p!=Provider::Ollama&&(key.trim().is_empty()||key.len()>4096||key.bytes().any(|b|b<33||b>126)){return None}
-        Some(Self{provider:p,model,key})
+        let vision=std::env::var("OVG_AI_VISION_MODELS").ok().is_some_and(|s|s.split(',').any(|v|v.trim()==format!("{}={}",p.id(),model)));
+        Some(Self{provider:p,model,key,vision})
     }
-    pub fn descriptor(&self)->Value{json!({"id":self.provider.id(),"model":self.model,"local":self.provider==Provider::Ollama})}
+    pub fn descriptor(&self)->Value{json!({"id":self.provider.id(),"model":self.model,"local":self.provider==Provider::Ollama,"vision":self.vision})}
 }
 const MAX_RESPONSE:usize=1_000_000;
 const MAX_NATIVE:usize=512_000;
@@ -46,17 +47,22 @@ const MAX_OUTPUT:usize=4096;
 struct Native { value:Value, ids:HashMap<String,(String,Option<String>)> }
 /// Per-run native message history preserves Gemini thought signatures and Anthropic
 /// opaque blocks, without returning them to the browser or mixing conversations.
-pub struct Gateway { cfg:Config, http:reqwest::Client, native:Mutex<HashMap<usize,Native>> }
+pub struct Gateway { cfg:Config, http:reqwest::Client, native:Mutex<HashMap<usize,Native>>, snapshot:Option<crate::vision::Snapshot> }
 impl Gateway {
     pub fn new(cfg:Config)->Result<Self,ProviderError>{
         let http=reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(60)).build().map_err(|_|ProviderError::Fatal)?;
-        Ok(Self{cfg,http,native:Mutex::new(HashMap::new())})
+        Ok(Self{cfg,http,native:Mutex::new(HashMap::new()),snapshot:None})
     }
     /// Isolated native replay state for each delegated conversation; same consented model and transport.
-    pub fn fork(&self)->Self{Self{cfg:self.cfg.clone(),http:self.http.clone(),native:Mutex::new(HashMap::new())}}
+    pub fn fork(&self)->Self{Self{cfg:self.cfg.clone(),http:self.http.clone(),native:Mutex::new(HashMap::new()),snapshot:None}}
+    pub fn with_snapshot(mut self,snapshot:crate::vision::Snapshot)->Result<Self,ProviderError>{
+        if !self.cfg.vision{return Err(ProviderError::Fatal)}
+        self.snapshot=Some(snapshot);Ok(self)
+    }
     pub async fn complete(&self,req:ModelRequest)->Result<Reply,ProviderError>{
         let index=req.turns.len();
-        let body={let history=self.native.lock().map_err(|_|ProviderError::Fatal)?;encode(self.cfg.provider,&self.cfg.model,&req,&history)?};
+        let mut body={let history=self.native.lock().map_err(|_|ProviderError::Fatal)?;encode(self.cfg.provider,&self.cfg.model,&req,&history)?};
+        if let Some(snapshot)=&self.snapshot{snapshot.attach(self.cfg.provider.api(),&mut body).ok_or(ProviderError::Fatal)?;}
         if serde_json::to_vec(&body).map_err(|_|ProviderError::Fatal)?.len()>2_000_000{return Err(ProviderError::Fatal)}
         let mut r=self.http.post(self.cfg.provider.url(&self.cfg.model)).json(&body);
         r=match self.cfg.provider{
