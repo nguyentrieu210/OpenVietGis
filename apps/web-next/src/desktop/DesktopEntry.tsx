@@ -73,6 +73,9 @@ export default function DesktopEntry(){
         <button disabled={!caps||busy} onClick={()=>void execute(refresh)}>Làm mới</button>
         <ul>{projects.map(p=><li key={p.id}><button title={p.id} disabled={busy} aria-current={opened?.id===p.id} onClick={()=>void execute(()=>open(p.id))}>{p.id.slice(0,8)}</button></li>)}</ul>
         <button disabled={!opened||busy} onClick={()=>void execute(close)}>Đóng dự án</button>
+        <h2>AI Copilot · Cloud</h2>
+        <p>AI Platform v1. Đăng nhập trong trình duyệt tại <code>https://openvietgis.cloud/</code>. Dự án local không được gửi lên cloud. AI native chưa khả dụng.</p>
+        <button disabled title="Cần nghiệm thu cloud identity và native tool bridge">AI Copilot native</button>
         <h2>Khả năng</h2>
         <p>Cloud và đồng bộ chưa kích hoạt. Local MVT/raster ở chế độ thử nghiệm.</p>
         <button disabled={!opened||busy||!caps?.transform} onClick={()=>void transform()}>Thử chuyển CRS 4326 → 3857</button>
