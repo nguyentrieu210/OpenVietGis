@@ -1,4 +1,6 @@
-use ovg_local_storage::LocalStore;
+use ovg_local_storage::{LocalStore, editing::Edit, Error as StoreError};
+use std::io::{Read, Write};
+use serde_json::{Value,json};
 use ovg_mobile_engine::{Engine, Job, Session, Workspace};
 use serde::Serialize;
 use std::{collections::HashMap, fs, path::{Path, PathBuf}, sync::{Arc, Mutex}};
@@ -17,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64 }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -39,7 +41,94 @@ fn err(e: ovg_mobile_engine::Error) -> &'static str {
     match e { Stale => "STALE_HANDLE", Limit => "RESOURCE_LIMIT", InvalidBatch => "INVALID_BATCH",
         Cancelled => "CANCELLED", Failed => "SESSION_FAILED", Spatial(_) => "SPATIAL_ERROR", Pending => "JOB_PENDING" }
 }
+fn store_err(e:StoreError)->&'static str {
+    match e {StoreError::Conflict=>"REVISION_CONFLICT",StoreError::Reused=>"OPERATION_ID_REUSED",
+      StoreError::Invalid=>"INVALID_LOCAL_DATA",StoreError::Limit=>"RESOURCE_LIMIT",
+      StoreError::Unsupported=>"UNSUPPORTED_DATABASE",_=>"STORAGE_UNAVAILABLE"}
+}
+const MAX_IMPORT:u64=16*1024*1024;
+const MAX_READ:usize=2*1024*1024;
+#[derive(Serialize)]
+pub struct Viewport { pub generation:String, pub data:Value, pub truncated:bool }
 impl Host {
+    fn read<T>(&self,handle:Uuid,f:impl FnOnce(&Open)->Result<T>)->Result<T>{
+        let s=self.lock()?; f(s.open.get(&handle).ok_or("STALE_HANDLE")?)
+    }
+    fn mutate<T>(&self,handle:Uuid,f:impl FnOnce(&LocalStore)->Result<T>)->Result<T>{
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        let next=w.generation.checked_add(1).ok_or("RESOURCE_LIMIT")?;
+        let out=f(&w._store)?;w.generation=next;Ok(out)
+    }
+    pub fn generation(&self,handle:Uuid)->Result<String>{self.read(handle,|w|Ok(w.generation.to_string()))}
+    pub fn viewport(&self,handle:Uuid,bbox:[f64;4])->Result<Viewport>{
+        if bbox.iter().any(|x|!x.is_finite())||bbox[0]< -180.||bbox[2]>180.||bbox[1]< -90.||bbox[3]>90.||bbox[0]>bbox[2]||bbox[1]>bbox[3]{return Err("INVALID_BBOX")}
+        self.read(handle,|w|{
+            let raw=w._store.viewport_geojson(bbox).map_err(store_err)?;
+            if raw.len()>MAX_READ{return Err("RESOURCE_LIMIT")}
+            let v:Value=serde_json::from_str(&raw).map_err(|_|"INVALID_LOCAL_DATA")?;
+            Ok(Viewport{generation:w.generation.to_string(),data:v["data"].clone(),truncated:v["truncated"].as_bool().ok_or("INVALID_LOCAL_DATA")?})
+        })
+    }
+    pub fn attributes(&self,handle:Uuid,after:String,limit:u32,contains:String)->Result<Value>{
+        let n=after.parse::<i64>().map_err(|_|"INVALID_CURSOR")?;
+        self.read(handle,|w|{
+            let raw=w._store.attribute_page(n,limit,&contains).map_err(store_err)?;
+            if raw.len()>MAX_READ{return Err("RESOURCE_LIMIT")}
+            let mut v:Value=serde_json::from_str(&raw).map_err(|_|"INVALID_LOCAL_DATA")?;
+            for row in v.as_array_mut().ok_or("INVALID_LOCAL_DATA")?{
+                for field in ["fid","revision"]{let val=row[field].as_u64().ok_or("INVALID_LOCAL_DATA")?;row[field]=json!(val.to_string());}
+            }
+            Ok(json!({"generation":w.generation.to_string(),"rows":v}))
+        })
+    }
+    pub fn feature(&self,handle:Uuid,id:Uuid)->Result<Value>{
+        self.read(handle,|w|{
+            let raw=w._store.feature_json(id).map_err(store_err)?;
+            if raw.len()>MAX_READ{return Err("RESOURCE_LIMIT")}
+            let mut v:Value=serde_json::from_str(&raw).map_err(|_|"INVALID_LOCAL_DATA")?;
+            let rev=v["revision"].as_u64().ok_or("INVALID_LOCAL_DATA")?;
+            v["revision"]=json!(rev.to_string());Ok(v)
+        })
+    }
+    pub fn edit(&self,handle:Uuid,command:Uuid,id:Uuid,revision:String,kind:Option<String>,xy:Vec<f64>,attrs:Value)->Result<()>{
+        let expected_revision=revision.parse::<u64>().map_err(|_|"INVALID_REVISION")?;
+        if !attrs.is_object()||attrs.to_string().len()>256*1024||xy.len()>8192{return Err("RESOURCE_LIMIT")}
+        let wkb=match kind {Some(k)=>Some(ovg_mobile_engine::edit::draft(&k,&xy).map_err(err)?),None if xy.is_empty()=>None,_=>return Err("INVALID_BATCH")};
+        self.mutate(handle,|s|s.commit_edit(command,&[Edit{feature_id:id,expected_revision,wkb,attributes:attrs}]).map_err(store_err))
+    }
+    pub fn update_attributes(&self,handle:Uuid,id:Uuid,revision:String,attrs:Value)->Result<()>{
+        if !attrs.is_object()||attrs.to_string().len()>256*1024{return Err("RESOURCE_LIMIT")}
+        let rev=revision.parse().map_err(|_|"INVALID_REVISION")?;
+        self.mutate(handle,|s|s.update_attributes(id,rev,attrs).map_err(store_err))
+    }
+    pub fn history(&self,handle:Uuid,redo:bool)->Result<bool>{
+        self.mutate(handle,|s|s.history_step(redo).map_err(store_err))
+    }
+    // Path is obtained exclusively from the native dialog; never from renderer IPC.
+    pub fn import_geojson(&self,handle:Uuid,path:&Path)->Result<u32>{
+        regular(path)?;
+        if fs::metadata(path).map_err(|_|"STORAGE_UNAVAILABLE")?.len()>MAX_IMPORT{return Err("RESOURCE_LIMIT")}
+        let mut buf=Vec::new();
+        fs::File::open(path).map_err(|_|"STORAGE_UNAVAILABLE")?.take(MAX_IMPORT+1).read_to_end(&mut buf).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        if buf.len() as u64>MAX_IMPORT{return Err("RESOURCE_LIMIT")}
+        self.mutate(handle,|s|s.import_geojson(&buf).map_err(store_err))
+    }
+    pub fn snapshot(&self,handle:Uuid,path:&Path)->Result<()>{
+        if path.exists(){return Err("DESTINATION_EXISTS")}
+        self.read(handle,|w|w._store.export_snapshot(path).map_err(store_err))
+    }
+    pub fn export_geojson(&self,handle:Uuid,path:&Path)->Result<()>{
+        self.read(handle,|w|{
+            let data=w._store.export_geojson().map_err(store_err)?;
+            let mut f=fs::OpenOptions::new().write(true).create_new(true).open(path).map_err(|_|"DESTINATION_UNAVAILABLE")?;
+            if f.write_all(data.as_bytes()).and_then(|_|f.sync_all()).is_err(){drop(f);let _=fs::remove_file(path);return Err("STORAGE_UNAVAILABLE")}
+            Ok(())
+        })
+    }
+    pub fn checkpoint(&self,handle:Uuid)->Result<()>{
+        self.read(handle,|w|w._store.checkpoint().map_err(store_err))
+    }
+
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root).map_err(|_|"STORAGE_UNAVAILABLE")?;
         real_dir(&root)?;
@@ -103,7 +192,7 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
@@ -143,6 +232,24 @@ impl Host {
 #[cfg(test)]
 mod tests{
     use super::*;
+    #[test] fn local_data_edit_undo_and_restart(){
+        let root=std::env::temp_dir().join(format!("ovg-w2-{}",Uuid::new_v4()));
+        let h=Host::new(root.clone()).unwrap();let p=h.create().unwrap();let w=h.open(p.id).unwrap();
+        let id=Uuid::new_v4();
+        h.edit(w.handle,Uuid::new_v4(),id,"0".into(),Some("point".into()),vec![106.7,11.],json!({"name":"test"})).unwrap();
+        let v=h.viewport(w.handle,[106.,10.,108.,12.]).unwrap();assert_eq!(v.data["features"].as_array().unwrap().len(),1);
+        assert!(h.viewport(w.handle,[0.,0.,1.,1.]).unwrap().data["features"].as_array().unwrap().is_empty());
+        let f=h.feature(w.handle,id).unwrap();let rev=f["revision"].as_str().unwrap().to_owned();
+        assert!(h.update_attributes(w.handle,id,"0".into(),json!({})).is_err());
+        h.update_attributes(w.handle,id,rev,json!({"name":"changed"})).unwrap();
+        assert!(h.history(w.handle,false).unwrap());assert_eq!(h.feature(w.handle,id).unwrap()["attributes"]["name"],"test");
+        assert!(h.history(w.handle,true).unwrap());
+        let backup=root.join("backup.gpkg");h.snapshot(w.handle,&backup).unwrap();assert!(h.snapshot(w.handle,&backup).is_err());
+        h.close(w.handle).unwrap();let w=h.open(p.id).unwrap();
+        assert_eq!(h.feature(w.handle,id).unwrap()["attributes"]["name"],"changed");
+        assert!(h.attributes(w.handle,"0".into(),200,"".into()).unwrap()["rows"].as_array().unwrap().len()==1);
+        h.close(w.handle).unwrap();drop(h);fs::remove_dir_all(root).unwrap();
+    }
     #[test] fn local_lifecycle_and_real_transform(){
         let root=std::env::temp_dir().join(format!("ovg-w1-{}",Uuid::new_v4()));
         let h=Host::new(root.clone()).unwrap();
