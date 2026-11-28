@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 
 FIXTURES = (
-    "attributes.csv", "clip.geojson", "dem.tif", "expected.json", "invalid.geojson",
-    "line.dxf", "nir.tif", "parcels.geojson", "point.geojson", "red.tif",
+    "attributes.csv", "clip.geojson", "clip-wgs84.geojson", "dem.tif", "expected.json", "invalid.geojson",
+    "line.dxf", "nir.tif", "parcels.geojson", "point.geojson", "point-wgs84.geojson", "red.tif",
 )
 
 
@@ -90,6 +90,89 @@ def run(root: Path, out: Path) -> dict:
             "INPUT": point, "DISTANCE": 10.0, "SEGMENTS": 8,
             "END_CAP_STYLE": 0, "JOIN_STYLE": 0, "MITER_LIMIT": 2.0, "DISSOLVE": False,
         })
+        # Cross-CRS algorithm evidence runs through native QGIS Processing on
+        # the same checksum-pinned fixtures used by the Rust/PostGIS harness.
+        wgs_clip = QgsVectorLayer(str(root / "clip-wgs84.geojson"), "clip_wgs84", "ogr")
+        wgs_point = QgsVectorLayer(str(root / "point-wgs84.geojson"), "point_wgs84", "ogr")
+        if (not wgs_clip.isValid() or wgs_clip.crs().authid() != "EPSG:4326"
+                or not wgs_point.isValid() or wgs_point.crs().authid() != "EPSG:4326"):
+            raise ValueError("Invalid WGS84 processing fixtures")
+
+        mixed_union = process("native:union", {"INPUT": parcels, "OVERLAY": wgs_clip})
+        mixed_join = process("native:joinattributesbylocations", {
+            "INPUT": point, "JOIN": wgs_point, "PREDICATE": [0],
+            "JOIN_FIELDS": [], "METHOD": 1, "DISCARD_NONMATCHING": True,
+            "PREFIX": "join_",
+        })
+        reverse_mixed_join = process("native:joinattributesbylocations", {
+            "INPUT": wgs_point, "JOIN": point, "PREDICATE": [0],
+            "JOIN_FIELDS": [], "METHOD": 1, "DISCARD_NONMATCHING": True,
+            "PREFIX": "join_",
+        })
+        projected = processing.run(
+            "native:reprojectlayer",
+            {"INPUT": wgs_point, "TARGET_CRS": crs, "OUTPUT": "memory:"},
+            context=context,
+        )["OUTPUT"]
+        if not projected.isValid() or projected.crs().authid() != "EPSG:3857":
+            raise RuntimeError("Invalid QGIS reproject output")
+
+        mixed_actual = {}
+
+        def feature_rows(layer):
+            names = [field.name() for field in layer.fields()]
+            rows = []
+            for feature in layer.getFeatures():
+                geometry = feature.geometry()
+                attributes = {name: feature[name] for name in names}
+                row = {
+                    "source_feature_id": attributes.get("source_feature_id")
+                        or attributes.get("join_source_feature_id"),
+                    "overlay_feature_id": attributes.get("overlay_feature_id")
+                        or attributes.get("join_overlay_feature_id")
+                        or attributes.get("join_source_feature_id"),
+                    "geometry_type": int(geometry.type()),
+                    "attributes": attributes,
+                }
+                if "code" in attributes:
+                    row["source_code"] = attributes["code"]
+                overlay_code = attributes.get("join_code")
+                if overlay_code is None:
+                    overlay_code = next(
+                        (value for name, value in attributes.items()
+                         if name.startswith("code_") and value is not None),
+                        None,
+                    )
+                if overlay_code is not None:
+                    row["overlay_code"] = overlay_code
+                if geometry.type() == 2:
+                    row["area_m2"] = geometry.area()
+                elif geometry.type() == 0 and not geometry.isEmpty():
+                    point_geometry = geometry.asPoint()
+                    row["x"] = point_geometry.x()
+                    row["y"] = point_geometry.y()
+                rows.append(row)
+            return rows
+
+        mixed_actual["mixed_crs_union"] = {
+            "features": mixed_union.featureCount(),
+            "area_m2": sum(row["area_m2"] for row in feature_rows(mixed_union)),
+            "rows": feature_rows(mixed_union),
+        }
+        mixed_actual["mixed_crs_spatial_join"] = {
+            "features": mixed_join.featureCount(),
+            "rows": feature_rows(mixed_join),
+        }
+        mixed_actual["reverse_mixed_crs_spatial_join"] = {
+            "features": reverse_mixed_join.featureCount(),
+            "rows": feature_rows(reverse_mixed_join),
+        }
+        mixed_actual["mixed_crs_reproject"] = {
+            "crs": projected.crs().authid(),
+            "features": projected.featureCount(),
+            "rows": feature_rows(projected),
+        }
+
         expected = json.loads((root / "expected.json").read_text(encoding="utf-8"))
         actual = {
             "clip": {
@@ -106,6 +189,8 @@ def run(root: Path, out: Path) -> dict:
             },
             "invalid_geometry_rejected": all(not f.geometry().isGeosValid() for f in invalid.getFeatures()),
         }
+        actual.update(mixed_actual)
+
         def close(a, b):
             return math.isclose(a, b, rel_tol=0, abs_tol=1e-6)
         if (
@@ -120,6 +205,17 @@ def run(root: Path, out: Path) -> dict:
             or not actual["invalid_geometry_rejected"]
         ):
             raise RuntimeError(f"QGIS reference mismatch: {actual}")
+
+        print(
+            "QGIS mixed-CRS measurements: "
+            + json.dumps({
+                key: actual[key] for key in (
+                    "mixed_crs_union", "mixed_crs_spatial_join",
+                    "reverse_mixed_crs_spatial_join", "mixed_crs_reproject",
+                )
+            }, ensure_ascii=False, sort_keys=True),
+            flush=True,
+        )
 
         # Reference map images, not screenshots of the interactive QGIS application.
         parcels.renderer().setSymbol(QgsFillSymbol.createSimple({
@@ -180,7 +276,7 @@ def main():
     (out / "qgis-oracle.json").write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
     )
-    print("PASS QGIS engine reference: clip, dissolve, buffer, invalid geometry and map render")
+    print("PASS QGIS engine reference: clip, dissolve, buffer, Union, Spatial Join, Reproject and map render")
 
 
 if __name__ == "__main__":

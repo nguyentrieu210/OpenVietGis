@@ -15,8 +15,8 @@ def rectangle(x, y, w, h):
 def feature(fid, geometry, properties):
     return {"type":"Feature","id":fid,"geometry":geometry,"properties":properties}
 
-def collection(features):
-    return {"type":"FeatureCollection","name":"spec065 synthetic","crs":{"type":"name","properties":{"name":"EPSG:3857"}},"features":features}
+def collection(features, crs="EPSG:3857"):
+    return {"type":"FeatureCollection","name":"spec065 synthetic","crs":{"type":"name","properties":{"name":crs}},"features":features}
 
 def tiff(path, values):
     # Little-endian, uncompressed Float32 single-band GeoTIFF, 3x3 cells, EPSG:3857,
@@ -57,12 +57,29 @@ def tiff(path, values):
 def generate(out):
     out.mkdir(parents=True,exist_ok=True)
     write_json(out/"parcels.geojson",collection([
-        feature("p1",rectangle(0,0,100,100),{"zone":"A","height":2,"active":True,"note":"Ô thử A"}),
-        feature("p2",rectangle(100,0,100,100),{"zone":"A","height":10,"active":False,"note":None}),
-        feature("p3",rectangle(200,0,100,100),{"zone":"B","height":None,"active":True,"note":"Ô thử B"}),
+        feature("p1",rectangle(0,0,100,100),{"code":"p1","source_feature_id":"p1","zone":"A","height":2,"active":True,"note":"Ô thử A"}),
+        feature("p2",rectangle(100,0,100,100),{"code":"p2","source_feature_id":"p2","zone":"A","height":10,"active":False,"note":None}),
+        feature("p3",rectangle(200,0,100,100),{"code":"p3","source_feature_id":"p3","zone":"B","height":None,"active":True,"note":"Ô thử B"}),
     ]))
-    write_json(out/"clip.geojson",collection([feature("clip",rectangle(50,0,100,100),{"name":"Clip"})]))
-    write_json(out/"point.geojson",collection([feature("point",{"type":"Point","coordinates":[50,50]},{"name":"Buffer point"})]))
+    write_json(out/"clip.geojson",collection([feature("clip",rectangle(50,0,100,100),{"code":"clip","overlay_feature_id":"clip","name":"Clip"})],"EPSG:4326"))
+    write_json(out/"point.geojson",collection([feature("point",{"type":"Point","coordinates":[50,50]},{"code":"pt","source_feature_id":"pt","name":"Buffer point"})]))
+    # WGS84 counterparts are generated mathematically from the same Web Mercator
+    # coordinates used by the Rust/PostGIS fixture. Their bytes are covered by the
+    # immutable manifest below, so both engines consume the same source fixture.
+    radius=6378137.0
+    def inverse_mercator(x,y):
+        return math.degrees(x/radius), math.degrees(math.atan(math.sinh(y/radius)))
+    def wgs_point(x,y):
+        lon,lat=inverse_mercator(x,y)
+        return [lon,lat]
+    write_json(out/"clip-wgs84.geojson",collection([
+        feature("clip",{"type":"Polygon","coordinates":[[
+            wgs_point(50,0),wgs_point(150,0),wgs_point(150,100),
+            wgs_point(50,100),wgs_point(50,0)]]},
+            {"code":"clip","overlay_feature_id":"clip","name":"Clip"})],"EPSG:4326"))
+    write_json(out/"point-wgs84.geojson",collection([
+        feature("pt",{"type":"Point","coordinates":wgs_point(50,50)},
+            {"code":"pt","overlay_feature_id":"pt","name":"WGS point"})],"EPSG:4326"))
     write_json(out/"invalid.geojson",collection([feature("bowtie",{"type":"Polygon","coordinates":[[[0,0],[100,100],[0,100],[100,0],[0,0]]]},{})]))
     (out/"attributes.csv").write_text("fid,zone,height,active,note\np1,A,2,true,Ô thử A\np2,A,10,false,\np3,B,,true,Ô thử B\n",encoding="utf-8")
     (out/"line.dxf").write_text("0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nQA\n10\n0\n20\n0\n30\n0\n11\n100\n21\n0\n31\n0\n0\nENDSEC\n0\nEOF\n",encoding="ascii")
@@ -79,7 +96,7 @@ def generate(out):
         "sort_height_asc":["p1","p2","p3"],
         "two_user_scenario":{"actor_a":"project editor A","actor_b":"project editor B","same_base_revision":True,"expected":"A commit succeeds; B stale changeset rejected; no production identities"}
     })
-    names=["parcels.geojson","clip.geojson","point.geojson","invalid.geojson","attributes.csv","line.dxf","nir.tif","red.tif","dem.tif","expected.json"]
+    names=["parcels.geojson","clip.geojson","point.geojson","invalid.geojson","attributes.csv","line.dxf","nir.tif","red.tif","dem.tif","expected.json","clip-wgs84.geojson","point-wgs84.geojson"]
     (out/"SHA256SUMS.txt").write_text("".join(hashlib.sha256((out/n).read_bytes()).hexdigest()+"  "+n+"\n" for n in sorted(names)),encoding="ascii")
 if __name__=="__main__":
     parser=argparse.ArgumentParser()

@@ -70,7 +70,22 @@ def check_processing(post,get,foreign,fixtures):
     def result(body,count,area):
         r=post("/processing/jobs",body)
         assert r["status"]=="succeeded",(r.get("error_code"),r.get("error_message"),r)
-        assert r["feature_count"]==count, {"algorithm_id":body["algorithm_id"],"expected_feature_count":count,"actual_feature_count":r.get("feature_count"),"job":r}
+        if r["feature_count"] != count:
+            with psycopg.connect(OWNER) as conn:
+                rows = conn.execute(
+                    "SELECT r.attributes, ST_GeometryType(r.geometry), ST_Area(r.geometry), "
+                    "ST_AsText(r.geometry) FROM spatial.reference_features r "
+                    "JOIN spatial.layers l ON l.source_id=r.source_id "
+                    "AND l.organization_id=r.organization_id AND l.project_id=r.project_id "
+                    "WHERE l.id=%s ORDER BY r.feature_id",
+                    (r["output_layer_id"],),
+                ).fetchall()
+            raise AssertionError({
+                "algorithm_id": body["algorithm_id"],
+                "expected_feature_count": count,
+                "actual_feature_count": r.get("feature_count"),
+                "output_rows": rows,
+            })
         assert post("/processing/jobs",body)["id"]==r["id"]
         post("/processing/jobs",body|{"output_name":"changed"},expected=409)
         post("/processing/jobs",body,foreign,404)
@@ -285,8 +300,55 @@ def check_processing(post,get,foreign,fixtures):
     assert retried["status"]=="succeeded" and retried["id"]==queued["id"]
     post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=409)
     print("PASS queued/cancel/retry/terminal job lifecycle",flush=True)
-    return {"buffer":buffer_metrics,"clip":clip_metrics,
-            "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas}}
+    def processing_rows(output_source_id, source_layer=None, overlay_layer=None):
+        def code_ordinal(layer):
+            if layer is None:
+                return None
+            with psycopg.connect(OWNER) as conn:
+                value = conn.execute(
+                    "SELECT row_number() OVER (ORDER BY ordinal,field_id)-1 FROM spatial.source_fields "
+                    "WHERE source_id=%s AND field_id='code'",
+                    (layer["source_id"],),
+                ).fetchone()
+            return value[0] if value else None
+
+        source_code_ordinal = code_ordinal(source_layer)
+        overlay_code_ordinal = code_ordinal(overlay_layer)
+        with psycopg.connect(OWNER) as conn:
+            rows = conn.execute(
+                "SELECT attributes, ST_GeometryType(geometry), ST_Area(geometry), "
+                "CASE WHEN GeometryType(geometry)='POINT' THEN ST_X(geometry) END, "
+                "CASE WHEN GeometryType(geometry)='POINT' THEN ST_Y(geometry) END "
+                "FROM spatial.reference_features WHERE source_id=%s ORDER BY feature_id",
+                (output_source_id,),
+            ).fetchall()
+        result = []
+        for attributes, geometry_type, area_m2, x, y in rows:
+            row = {
+                "source_feature_id": attributes.get("source_feature_id"),
+                "overlay_feature_id": attributes.get("overlay_feature_id"),
+                "geometry_type": geometry_type,
+                "area_m2": area_m2,
+            }
+            if source_code_ordinal is not None:
+                row["source_code"] = attributes.get(f"input_{source_code_ordinal}")
+            if overlay_code_ordinal is not None:
+                row["overlay_code"] = attributes.get(f"overlay_{overlay_code_ordinal}")
+            if x is not None:
+                row.update({"x": x, "y": y, "code": attributes.get("code")})
+            result.append(row)
+        return result
+
+    return {
+        "buffer":buffer_metrics,
+        "clip":clip_metrics,
+        "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas},
+        "mixed_crs_union":{"features":cross_union_metrics["features"],"area_m2":cross_union_metrics["area_m2"],
+                           "rows":processing_rows(cross_union["output_source_id"],parcels,wgs_clip)},
+        "mixed_crs_spatial_join":{"features":1,"rows":processing_rows(cross_join["output_source_id"],point,wgs_point)},
+        "reverse_mixed_crs_spatial_join":{"features":1,"rows":processing_rows(reverse_cross_join["output_source_id"],wgs_point,point)},
+        "mixed_crs_reproject":{"crs":"EPSG:3857","features":1,"rows":processing_rows(reverse_reproject["output_source_id"],wgs_point)},
+    }
 
 def verify_processing_fixture(fixtures,directory):
     import hashlib
