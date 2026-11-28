@@ -23,6 +23,11 @@ function host():Host {
 // Deliberately not a general invoke facade. All exposed calls are typed and bounded by Rust.
 export const desktop={
   capabilities:()=>host().core.invoke<Capabilities>("desktop_capabilities"),
+  providers:()=>host().core.invoke<{id:string;format:string;modes:string[];profile:string;candidate:boolean}[]>("desktop_providers"),
+  integrity:(handle:string)=>host().core.invoke<Record<string,unknown>>("desktop_integrity",{handle}),
+  directOpen:(handle:string)=>host().core.invoke<{id:string;layers:{table:string;column:string;epsg:number;z:number;m:number}[]}|null>("desktop_direct_open",{handle}),
+  directPage:(handle:string,grant:string,table:string,bbox:[number,number,number,number],after="")=>host().core.invoke<{data:GeoJSON.FeatureCollection;next:string|null}>("desktop_direct_page",{handle,grant,table,bbox,after}),
+  directClose:(handle:string,grant:string)=>host().core.invoke<void>("desktop_direct_close",{handle,grant}),
   projectState:(handle:string)=>host().core.invoke<ProjectState>("desktop_project_state",{handle}),
   saveProjectState:(handle:string,state:ProjectState)=>host().core.invoke<ProjectState>("desktop_save_project_state",{handle,state,expected:state.revision}),
   setSchema:(handle:string,fields:AttributeField[],confirmed:boolean)=>host().core.invoke<void>("desktop_set_schema",{handle,fields,confirmed}),
