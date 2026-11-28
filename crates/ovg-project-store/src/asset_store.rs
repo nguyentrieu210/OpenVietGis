@@ -73,3 +73,22 @@ impl Store{
   tx.commit()?;Ok(n)
  }
 }
+
+pub(crate) fn verify_assets(db:&Connection)->Result<bool>{
+ let mut q=db.prepare("SELECT id,kind,epsg,bytes,sha256 FROM project_asset ORDER BY id LIMIT 33")?;
+ let mut rows=q.query([])?;let mut count=0;let mut all=0u64;
+ while let Some(r)=rows.next()?{
+  count+=1;let id:String=r.get(0)?;let kind:String=r.get(1)?;let epsg:Option<u32>=r.get(2)?;let size:u64=r.get(3)?;let digest:String=r.get(4)?;
+  all=all.saturating_add(size);
+  if count>32||all>TOTAL||size==0||size>MAX||!profile(&kind,epsg)||Uuid::parse_str(&id).ok().is_none_or(|u|u.is_nil()||u.to_string()!=id){return Ok(false)}
+  let mut chunks=db.prepare("SELECT seq,data FROM project_asset_chunk WHERE asset=?1 ORDER BY seq")?;
+  let mut chunks=chunks.query([id])?;let mut seq=0u32;let mut bytes=0u64;let mut hash=Sha256::new();
+  while let Some(c)=chunks.next()?{
+   let n:u32=c.get(0)?;let data:Vec<u8>=c.get(1)?;
+   if seq!=n||data.is_empty()||data.len()>CHUNK||bytes%CHUNK as u64!=0{return Ok(false)}
+   bytes+=data.len()as u64;if bytes>size{return Ok(false)}
+   hash.update(&data);seq+=1;
+  }
+  if bytes!=size||format!("{:x}",hash.finalize())!=digest{return Ok(false)}
+ }Ok(true)
+}
