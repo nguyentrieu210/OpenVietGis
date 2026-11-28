@@ -1,0 +1,13 @@
+# Implementation plan
+## Technical context
+Existing Rust/Axum/Tokio server, Postgres/PostGIS, React/TypeScript Web, Flutter mobile SPEC 073, native desktop SPEC 074; use existing command/registry/identity/processing APIs. Confirm actual package names and routes in F001; no new parallel implementation assumed. Existing rendering, GIS, CAD, AI, sync and storage adapters behind public contracts. Optional WASM Component Model only after sandbox/platform policy qualification; no downloaded native code on mobile. Out-of-process isolated Python for legacy adapters if justified.
+## Constitution gates
+Platform-first, portable data, tenant isolation, explicit CRS, revision/audit, capability-driven commands, replaceable engines. Core tests must pass with all vertical plugins removed. AGPL boundaries and third-party license review. No production testing with sensitive data.
+## Delivery topology
+Wave 0 owns shared schemas, SDK, runtime and security. Each wave owns plugin namespaces; one integration maintainer controls shared migration sequence, command registry and contract versions. Use isolated worktrees from accepted baseline; one branch per wave or coherent plugin set, no force-push shared refs. W1/W3 establish shared algorithm/no-code interfaces; parallelize downstream A research before blockers, B/C only after prerequisite contracts accepted. D tasks use independent fixtures and reviewers.
+## Runtime architecture
+Host -> signed manifest/contribution -> scoped broker -> Core command or isolated job -> scoped artifact/revision. Registry -> publisher/review/signing -> release catalog -> install lock graph -> activation/entitlement. Existing Web v1 canonical signature stays unchanged. Use capability negotiation, additive versioned envelopes and generated adapters.
+## Storage
+Extend existing tables when possible, no duplicate registry or identity. Add tenant-scoped installation, release metadata, dependency locks, approval/audit, entitlement and commercial ledger only if absent. RLS + service checks, migration order and reversible deployment, outbox for durable events. Data export stays usable when plugin removed.
+## Performance and testing
+Reference benchmark 4 vCPU/8GiB server + documented PostGIS and browser; load and negative tests per SC, reproducible seeded fixtures. Scientific algorithms compare to independent oracle with domain tolerances; real external device/provider tests when capability requires them. Run full integrated CI after assigned scope implemented, not every task. Independent security review and staged rollback required before authorized release.

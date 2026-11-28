@@ -285,3 +285,7 @@ Cross-cutting v1.0 / R001 and R015, preserves R002–R014 contracts. Prerequisit
 ## 070 — Unified Geospatial Search, Places & Navigation
 
 Child slice of R004/R007/R010 (R005/R008 for derived GIS outputs): OSM-backed place search, reverse geocoding and routing, integrated with the existing locator. Depends on configured provider infrastructure and authorization contracts. Stage: implementation candidate; no production qualification. [Spec](specs/070-geospatial-search-navigation/spec.md) · [Plan](specs/070-geospatial-search-navigation/plan.md) · [Tasks](specs/070-geospatial-search-navigation/tasks.md).
+
+### R014 extension — Universal Plugin Ecosystem (SPEC 075)
+
+[Spec](specs/075-universal-plugin-ecosystem/spec.md) · [Catalog](specs/075-universal-plugin-ecosystem/plugin-catalog.md) · [Tasks](specs/075-universal-plugin-ecosystem/tasks.md). Planned/draft: 150 plugin packages, 16 waves; extends existing registry and SDK, depends on R002–R014 and relevant 073/074 interfaces; commercial release gated by R015. No implementation or acceptance claim.
