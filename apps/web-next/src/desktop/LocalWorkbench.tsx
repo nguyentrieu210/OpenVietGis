@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import maplibregl,{type GeoJSONSource} from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import {desktop,type FeatureRecord,type FeatureRow} from "./transport";
+import {desktop,type FeatureRecord,type FeatureRow,type AssetInfo} from "./transport";
 
 type Kind="point"|"line"|"polygon";
 const empty=():GeoJSON.FeatureCollection=>({type:"FeatureCollection",features:[]});
@@ -9,11 +9,14 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const canvas=useRef<HTMLDivElement>(null);
   const map=useRef<maplibregl.Map|undefined>(undefined);
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
-  const [rows,setRows]=useState<FeatureRow[]>([]),[cursor,setCursor]=useState("0"),[filter,setFilter]=useState("");
+  const [rows,setRows]=useState<FeatureRow[]>([]),[cursor,setCursor]=useState<string|null>("0"),[filter,setFilter]=useState("");
   const [selected,setSelected]=useState<FeatureRecord>(),[attrs,setAttrs]=useState("{}"),[geometryText,setGeometryText]=useState("");
   const [tiles,setTiles]=useState(false);const tileMode=useRef(false);
   const [raster,setRaster]=useState<{id:string;attribution:string}>();
   const styleReady=useRef(false);
+  const [asset,setAsset]=useState<AssetInfo>(),[assetPreview,setAssetPreview]=useState("");
+  const cad=useRef<AssetInfo|undefined>(undefined);
+  const [lasEpsg,setLasEpsg]=useState("4326");
   const [kind,setKind]=useState<Kind>(),[count,setCount]=useState(0);
   const draft=useRef<number[]>([]),mode=useRef<Kind|undefined>(undefined),alive=useRef(true);
   const sequence=useRef(0),pending=useRef(false),dirty=useRef(false),working=useRef(false);
@@ -27,13 +30,19 @@ export default function LocalWorkbench({handle}:{handle:string}){
       while(dirty.current&&alive.current){
         dirty.current=false;const id=sequence.current;
         const m=map.current;if(!m||!styleReady.current)return;
-        if(tileMode.current)return;
         const b=m.getBounds();
         const west=Math.max(-180,b.getWest()),east=Math.min(180,b.getEast());
         const south=Math.max(-90,b.getSouth()),north=Math.min(90,b.getNorth());
         if(west>east||south>north||b.getWest() < -180||b.getEast()>180){
           dataSource()?.setData(empty());setNotice("Khung nhìn vượt phạm vi kinh độ hỗ trợ; hãy thu phóng vào vùng dữ liệu.");continue;
         }
+        const currentCad=cad.current;
+        if(currentCad){
+          const v=await desktop.cadViewport(handle,currentCad.id,[west,south,east,north]);
+          if(!alive.current||id!==sequence.current||dirty.current)continue;
+          (m.getSource("cad") as GeoJSONSource|undefined)?.setData(v);
+        }
+        if(tileMode.current)continue;
         const v=await desktop.viewport(handle,[west,south,east,north]);
         if(!alive.current||id!==sequence.current||dirty.current)continue;
         dataSource()?.setData(v.data);
@@ -45,7 +54,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const invalidate=useCallback(()=>{sequence.current++;void refreshMap()},[refreshMap]);
   const page=useCallback(async(after="0",term="")=>{
     const v=await desktop.attributes(handle,after,100,term);
-    if(alive.current){setRows(v.rows);setCursor(v.rows.at(-1)?.fid??after)}
+    if(alive.current){setRows(v.rows);setCursor(v.next)}
   },[handle]);
   const select=useCallback(async(id:string)=>{
     const f=await desktop.feature(handle,id);
@@ -91,9 +100,9 @@ export default function LocalWorkbench({handle}:{handle:string}){
       map.current=m;m.addControl(new maplibregl.NavigationControl(),"top-right");
       m.on("load",()=>{
         if(!m)return;
-        m.addSource("local",{type:"geojson",data:empty()});m.addSource("draft",{type:"geojson",data:empty()});
-        for(const src of ["local","draft"]){
-          const color=src==="local"?"#1976a3":"#d77718";
+        m.addSource("local",{type:"geojson",data:empty()});m.addSource("draft",{type:"geojson",data:empty()});m.addSource("cad",{type:"geojson",data:empty()});
+        for(const src of ["local","cad","draft"]){
+          const color=src==="local"?"#1976a3":src==="cad"?"#7048ab":"#d77718";
           m.addLayer({id:src+"-fill",source:src,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":0.25}});
           m.addLayer({id:src+"-line",source:src,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":2}});
           m.addLayer({id:src+"-point",source:src,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":5,"circle-stroke-color":"#fff","circle-stroke-width":1}});
@@ -122,6 +131,30 @@ export default function LocalWorkbench({handle}:{handle:string}){
     }catch(e){setNotice(String(e))}
     return()=>{alive.current=false;sequence.current++;dirty.current=false;styleReady.current=false;map.current=undefined;m?.remove();maplibregl.removeProtocol("ovg")};
   },[handle,invalidate,page,run,select]);
+  const openAsset=(kind:"cad"|"las"|"glb")=>run(async()=>{
+    if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
+    const epsg=kind==="cad"?4326:kind==="las"?Number(lasEpsg):null;
+    if(kind==="cad"&&!window.confirm("Xác nhận DXF POINT/LINE sử dụng tọa độ XY WGS84, không phải hệ mét CAD?"))return;
+    if(kind==="las"&&(!Number.isSafeInteger(epsg)||Number(epsg)<=0||Number(epsg)>4294967295))throw Error("EPSG không hợp lệ");
+    const a=await desktop.openAsset(handle,kind,epsg);if(!a)return;
+    setAsset(a);
+    const prefix=`ovg://v1/workspaces/${handle}`;
+    if(a.kind==="cad"){cad.current=a;invalidate();setAssetPreview(a.count+" đối tượng DXF")}
+    else if(a.kind==="las"){
+      const b=await desktop.resource(`${prefix}/pointcloud/${a.id}/revisions/0/nodes/0`);
+      if(b.byteLength%24!==0)throw Error("INVALID_LAS_CHUNK");
+      const d=new DataView(b);const first=b.byteLength>=24?[d.getFloat64(0,true),d.getFloat64(8,true),d.getFloat64(16,true)]:[];
+      setAssetPreview(`${a.count} điểm, EPSG:${a.epsg}; khối 0: ${b.byteLength/24} điểm; XYZ đầu: ${first.join(", ")}`);
+    }else{
+      const b=await desktop.resource(`${prefix}/assets/${a.id}/revisions/0/content`);
+      setAssetPreview(`GLB tự chứa: ${b.byteLength} byte; renderer 3D ở Wave 3`);
+    }
+  });
+  const closeAsset=()=>run(async()=>{
+    if(!asset)return;
+    await desktop.closeAsset(handle,asset.id);cad.current=undefined;sequence.current++;
+    (map.current?.getSource("cad") as GeoJSONSource|undefined)?.setData(empty());setAsset(undefined);setAssetPreview("");
+  });
   const openRaster=()=>run(async()=>{
     const m=map.current;if(!m||!styleReady.current)return;
     const a=await desktop.openRaster(handle);if(!a)return;
@@ -163,6 +196,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
     <div className="ovg-local-tools" role="toolbar" aria-label="Công cụ GIS cục bộ">
       <button disabled={busy||!ready} aria-pressed={tiles} onClick={()=>void run(()=>setVectorTiles(!tiles))}>MVT vector tile</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGPKG(handle);if(n!==null)await afterMutation()})}>Nhập GPKG XY</button>
+      <button disabled={busy||!ready||!!asset} onClick={()=>void openAsset("cad")}>Mở DXF XY</button><label>EPSG LAS <input aria-label="EPSG LAS" value={lasEpsg} maxLength={10} onChange={e=>setLasEpsg(e.target.value)}/></label><button disabled={busy||!!asset} onClick={()=>void openAsset("las")}>Đọc LAS</button><button disabled={busy||!!asset} onClick={()=>void openAsset("glb")}>Đọc GLB</button><button disabled={busy||!asset} onClick={()=>void closeAsset()}>Đóng tài nguyên</button>
       <button disabled={busy||!ready} onClick={()=>void openRaster()}>Mở MBTiles PNG</button>
       <button disabled={busy||!raster} onClick={()=>void closeRaster()}>Đóng raster</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGeoJSON(handle);if(n!==null)await afterMutation()})}>Nhập GeoJSON</button>
@@ -176,11 +210,11 @@ export default function LocalWorkbench({handle}:{handle:string}){
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,true);await afterMutation()})}>Redo</button>
     </div>
     <div ref={canvas} className="ovg-local-map" aria-label="Bản đồ dữ liệu cục bộ"/>
-    <div role="status" className="ovg-local-status">{notice}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
+    <div role="status" className="ovg-local-status">{notice}{assetPreview&&" · "+assetPreview}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
     <div className="ovg-local-table">
       <div><label>Tìm thuộc tính <input value={filter} maxLength={128} onChange={e=>setFilter(e.target.value)}/></label>
       <button disabled={busy} onClick={()=>void run(()=>page("0",filter))}>Trang đầu</button>
-      <button disabled={busy||!rows.length} onClick={()=>void run(()=>page(cursor,filter))}>Trang tiếp</button></div>
+      <button disabled={busy||!cursor} onClick={()=>void run(()=>page(cursor??"0",filter))}>Trang tiếp</button></div>
       <div className="ovg-local-rows"><table><thead><tr><th>ID</th><th>Revision</th><th>Thuộc tính</th></tr></thead><tbody>{rows.map(r=><tr key={r.id}><td><button disabled={busy} onClick={()=>void run(()=>select(r.id))}>{r.id.slice(0,8)}</button></td><td>{r.revision}</td><td>{JSON.stringify(r.attributes).slice(0,200)}</td></tr>)}</tbody></table></div>
       {selected&&<div><label>Thuộc tính {selected.id}<textarea rows={3} value={attrs} onChange={e=>setAttrs(e.target.value)}/></label><button disabled={busy} onClick={()=>void update()}>Ghi thuộc tính</button><label>Tọa độ hình học GeoJSON<textarea rows={4} value={geometryText} onChange={e=>setGeometryText(e.target.value)}/></label><button disabled={busy} onClick={()=>void reshape()}>Ghi sửa hình học</button><button disabled={busy} onClick={()=>void remove()}>Xóa đối tượng</button></div>}
     </div>
