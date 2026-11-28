@@ -40,6 +40,8 @@ pub struct LocalStore { db: Mutex<Connection> }
 
 pub mod vector;
 pub mod mbtiles;
+pub mod editing;
+pub mod survey;
 const SCHEMA: &str = include_str!("schema.sql");
 fn parse_geometry(blob: &[u8]) -> Result<(Vec<u8>,BBox),Error> {
     if blob.len()>MAX_GEOMETRY {return Err(Error::Limit);}
@@ -91,11 +93,17 @@ impl LocalStore {
             tx.pragma_update(None,"application_id",APP_ID)?;
             tx.pragma_update(None,"user_version",VERSION)?;
             tx.commit()?;
-        } else if app!=APP_ID || version!=VERSION || db.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get::<_,i32>(0)).ok()!=Some(1) {
+        } else if app!=APP_ID || version!=VERSION || !matches!(db.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get::<_,i32>(0)).ok(),Some(1|2)) {
             return Err(Error::Unsupported);
         }
         let integrity:String=db.pragma_query_value(None,"quick_check",|r|r.get(0))?;
         if integrity!="ok"{return Err(Error::Invalid);}
+        let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let schema:i32=tx.query_row("SELECT schema_version FROM ovg_local_metadata WHERE singleton=1",[],|r|r.get(0))?;
+        if schema==1{
+            tx.execute_batch(include_str!("migration_002.sql"))?;
+        }
+        tx.commit()?;
         db.pragma_update(None,"journal_mode","WAL")?;
         db.pragma_update(None,"synchronous","FULL")?;
         db.pragma_update(None,"wal_autocheckpoint",128)?;
@@ -113,6 +121,7 @@ impl LocalStore {
         let mut db=self.lock()?;
         let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let result=Self::apply_in(&tx,m)?;
+        if !result.replayed{tx.execute("DELETE FROM ovg_edit_history",[])?;}
         tx.commit()?;
         Ok(result)
     }
@@ -128,6 +137,7 @@ impl LocalStore {
         let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut out=Vec::with_capacity(mutations.len());
         for m in mutations {out.push(Self::apply_in(&tx,m)?);}
+        if out.iter().any(|r|!r.replayed){tx.execute("DELETE FROM ovg_edit_history",[])?;}
         tx.commit()?;
         Ok(out)
     }
