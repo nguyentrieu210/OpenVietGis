@@ -349,7 +349,10 @@ const DONG_NAI: [CircularRow; 3] = [
         (10, 42, 571),
     ),
 ];
-pub(super) fn regional_controls(p: Provenance) -> Option<Vec<((f64, f64), (f64, f64))>> {
+type ControlPoint = (f64, f64);
+type RegionalControlPair = (ControlPoint, ControlPoint);
+
+pub(super) fn regional_controls(p: Provenance) -> Option<Vec<RegionalControlPair>> {
     let rows = match p {
         Provenance::DaNangCircular => &DA_NANG,
         Provenance::HaiPhongCircular => &HAI_PHONG,
