@@ -182,3 +182,14 @@ export const unifiedAssets={
  },
  exportParquet:(handle:string,layer:string,expected:string)=>host().core.invoke<number|null>("native_export_parquet",{handle,layer,expected})
 };
+
+export type RemoteTiffInfo={identity:{bytes:number;etag:string};info:{width:number;height:number;tile_width:number;tile_height:number;columns:number;rows:number;epsg:number|null;geotransform:number[]|null}};
+export const remoteTiff={
+ status:()=>host().core.invoke<boolean>("remote_range_status"),
+ inspect:(handle:string,url:string,requestId:string)=>host().core.invoke<RemoteTiffInfo>("remote_tiff_inspect",{handle,url,requestId}),
+ tile:async(handle:string,url:string,identity:RemoteTiffInfo["identity"],col:number,row:number,requestId:string)=>{
+  const raw=await host().core.invoke<ArrayBuffer|number[]>("remote_tiff_tile",{handle,url,...identity,col,row,requestId});
+  const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;if(b.byteLength>1048576)throw Error("RESOURCE_LIMIT");return b;
+ },
+ cancel:(requestId:string)=>host().core.invoke<void>("desktop_cancel_resource",{requestId})
+};
