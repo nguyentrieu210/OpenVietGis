@@ -22,6 +22,8 @@ COPY apps/api/openvietgis_api/adapters/cad/native_delta.py apps/api/openvietgis_
 COPY apps/api/openvietgis_api/adapters/formats/wkt_crs.py apps/api/openvietgis_api/adapters/formats/wkt_crs.py
 COPY apps/api/openvietgis_api/adapters/formats/geojson.py apps/api/openvietgis_api/adapters/formats/geojson.py
 COPY apps/api/openvietgis_api/adapters/formats/geopackage.py apps/api/openvietgis_api/adapters/formats/geopackage.py
+COPY apps/api/openvietgis_api/adapters/formats/shapefile_zip.py apps/api/openvietgis_api/adapters/formats/shapefile_zip.py
+COPY apps/api/openvietgis_api/adapters/formats/georeference_worker.py apps/api/openvietgis_api/adapters/formats/georeference_worker.py
 COPY apps/api/openvietgis_api/adapters/formats/postgis_sql.py apps/api/openvietgis_api/adapters/formats/postgis_sql.py
 COPY apps/api/openvietgis_api/adapters/formats/offline_snapshot.py apps/api/openvietgis_api/adapters/formats/offline_snapshot.py
 COPY apps/api/openvietgis_api/domains/integration_hub/sync_diff.py apps/api/openvietgis_api/domains/integration_hub/sync_diff.py
