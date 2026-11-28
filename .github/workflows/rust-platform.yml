@@ -325,7 +325,7 @@ jobs:
             2>&1 | tee dist/parity/e10-cad-dxf.log
 
       - name: Spec 065 measured Rust processing reference
-        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' && (startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')) }}
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' && (startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-') || github.head_ref == '066-t039-integrated-qualification' || github.ref_name == '066-t039-integrated-qualification') }}
         run: |
           set -euo pipefail
           mkdir -p dist/parity/spec065
@@ -413,7 +413,7 @@ jobs:
 
   qgis-reference:
     # Independent engine reference; not an interactive Desktop acceptance.
-    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')
+    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-') || github.head_ref == '066-t039-integrated-qualification' || github.ref_name == '066-t039-integrated-qualification'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -455,7 +455,7 @@ jobs:
 
   spec065-processing-comparison:
     needs: [qgis-reference, postgis-parity]
-    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')
+    if: startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-') || github.head_ref == '066-t039-integrated-qualification' || github.ref_name == '066-t039-integrated-qualification'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
