@@ -263,3 +263,30 @@ impl NativeUnifiedProject{
   self.inner.backup(Path::new(&exchange_root),&expected).map_err(unified_error)
  }
 }
+
+#[cfg(test)]
+mod unified_bridge_tests{
+ use super::*;
+ struct Fixture(std::path::PathBuf);
+ impl Drop for Fixture{fn drop(&mut self){let _=fs::remove_dir_all(&self.0);}}
+ #[test]fn unified_bridge_backup_replay_and_legacy_isolation(){
+  let fixture=Fixture(std::env::temp_dir().join(format!("ovg-unified-test-{}",Uuid::new_v4())));
+  let root=fixture.0.join("unified");let exchange=fixture.0.join("exchange");let legacy=fixture.0.join("legacy");
+  let r=root.to_string_lossy().to_string();let x=exchange.to_string_lossy().to_string();let l=legacy.to_string_lossy().to_string();
+  let legacy_id=create_local_workspace(l.clone()).unwrap();
+  let project=create_unified_project(r.clone()).unwrap();
+  let w=open_unified_project(r.clone(),project).unwrap();
+  let c:serde_json::Value=serde_json::from_str(&w.catalog().unwrap()).unwrap();
+  let layer=c["layers"][0]["id"].as_str().unwrap().to_owned();
+  let f=Uuid::new_v4().to_string();let op=Uuid::new_v4().to_string();
+  let draw=||w.draw_point(layer.clone(),f.clone(),op.clone(),"1".into(),106.,11.,r#"{"name":"mobile"}"#.into());
+  let receipt=draw().unwrap();assert_eq!(draw().unwrap(),receipt);
+  let b=w.backup(x.clone(),"2".into()).unwrap();
+  w.close().unwrap();assert!(w.catalog().is_err());
+  let restored=restore_unified_project(r.clone(),x,b).unwrap();let z=open_unified_project(r,restored).unwrap();
+  let q:serde_json::Value=serde_json::from_str(&z.query(layer,105.,10.,107.,12.,"0".into(),20,"2".into()).unwrap()).unwrap();
+  assert_eq!(q["rows"][0]["id"],f);
+  assert!(z.integrity().unwrap());z.close().unwrap();
+  assert_eq!(list_local_workspaces(l).unwrap(),vec![legacy_id]);
+ }
+}
