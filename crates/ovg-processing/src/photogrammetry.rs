@@ -35,6 +35,8 @@ pub mod jpeg_source;
 pub mod image_cache;
 pub mod checkpoint;
 pub mod mosaic_export;
+pub mod las_export;
+pub mod glb_export;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
