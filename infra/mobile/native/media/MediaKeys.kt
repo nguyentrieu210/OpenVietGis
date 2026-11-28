@@ -1,6 +1,20 @@
 package org.openvietgis.secure
 
+import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Looper
+import android.provider.MediaStore
+import android.view.WindowManager
+import android.widget.ImageView
+import java.io.ByteArrayOutputStream
+import java.lang.ref.WeakReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
@@ -15,6 +29,93 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** Native Rust JNI only. Never a Flutter MethodChannel key service. */
 class MediaKeys(context: Context) {
+    companion object {
+        private var activity = WeakReference<Activity>(null)
+        private val guard = Any()
+        private val codes = AtomicInteger(24000)
+        private class Capture(val code: Int) {
+            val done = CountDownLatch(1)
+            var bytes: ByteArray? = null
+        }
+        private var pending: Capture? = null
+        fun attach(a: Activity) { synchronized(guard) { activity = WeakReference(a) } }
+        fun cameraResult(code: Int, result: Int, data: Intent?): Boolean {
+            val p = synchronized(guard) { pending?.takeIf { it.code == code } } ?: return false
+            var bytes: ByteArray? = null
+            try {
+                if (result == Activity.RESULT_OK) {
+                    @Suppress("DEPRECATION")
+                    val bitmap = data?.extras?.get("data") as? Bitmap
+                    if (bitmap != null && bitmap.width in 1..4096 && bitmap.height in 1..4096 &&
+                        bitmap.width.toLong() * bitmap.height <= 4_000_000L) {
+                        val out = ByteArrayOutputStream()
+                        if (bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)) {
+                            val raw = out.toByteArray()
+                            if (raw.size <= 16 * 1024 * 1024) bytes = raw else raw.fill(0)
+                        }
+                    }
+                }
+            } catch (_: Exception) { bytes?.fill(0); bytes = null }
+            synchronized(guard) {
+                if (pending === p) { p.bytes = bytes; p.done.countDown() }
+                else bytes?.fill(0)
+            }
+            return true
+        }
+    }
+    // ACTION_IMAGE_CAPTURE preview only; no output URI or gallery write requested.
+    // Native camera app itself is outside our process and trust boundary.
+    fun capturePreview(): ByteArray? {
+        if (Looper.myLooper() == Looper.getMainLooper()) return null
+        val a = synchronized(guard) { activity.get() } ?: return null
+        val p = synchronized(guard) {
+            if (pending != null) return null
+            val code = codes.getAndIncrement()
+            if (code > 64000) return null
+            Capture(code).also { pending = it }
+        }
+        a.runOnUiThread {
+            try {
+                if (a.isFinishing || a.isDestroyed) p.done.countDown()
+                else a.startActivityForResult(Intent(MediaStore.ACTION_IMAGE_CAPTURE), p.code)
+            } catch (_: Exception) { p.done.countDown() }
+        }
+        val ok = try { p.done.await(90, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
+        return synchronized(guard) {
+            pending = null
+            if (!ok) { p.bytes?.fill(0); null } else p.bytes
+        }
+    }
+    // Native-only decoded preview, bounded dimensions, no plaintext file or URI.
+    fun showPreview(raw: ByteArray): Boolean {
+        if (Looper.myLooper() == Looper.getMainLooper() || raw.size > 16 * 1024 * 1024) { raw.fill(0); return false }
+        val a = synchronized(guard) { activity.get() } ?: run { raw.fill(0); return false }
+        val bitmap = try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(raw, 0, raw.size, bounds)
+            if (bounds.outWidth !in 1..8192 || bounds.outHeight !in 1..8192 ||
+                bounds.outWidth.toLong()*bounds.outHeight > 32_000_000L) return false
+            var sample = 1
+            while (bounds.outWidth/sample > 2048 || bounds.outHeight/sample > 2048) sample *= 2
+            BitmapFactory.decodeByteArray(raw, 0, raw.size, BitmapFactory.Options().apply { inSampleSize = sample })
+        } catch (_: Exception) { null } finally { raw.fill(0) } ?: return false
+        val done = CountDownLatch(1)
+        var shown = false
+        val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+        a.runOnUiThread {
+            if (closed.get() || a.isFinishing || a.isDestroyed) { bitmap.recycle(); done.countDown(); return@runOnUiThread }
+            val view = ImageView(a).apply { setImageBitmap(bitmap); adjustViewBounds = true; contentDescription = "Encrypted photo preview" }
+            val dialog = AlertDialog.Builder(a).setTitle("Media preview").setView(view).setPositiveButton("Close", null).create()
+            dialog.setOnDismissListener { view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
+            dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            try { dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE); shown = true }
+            catch (_: Exception) { view.setImageDrawable(null); bitmap.recycle(); done.countDown() }
+        }
+        // A displayed dialog owns its bitmap until dismissal, not until a
+        // timeout that would leave a dangling native image reference.
+        try { done.await() } catch (_: InterruptedException) { closed.set(true); return false }
+        return shown
+    }
     private val root = File(context.applicationContext.noBackupFilesDir, "ovg-media-keys-v1")
     private val alias = "org.openvietgis.media.wrap.v1"
     private val lock = Any()
