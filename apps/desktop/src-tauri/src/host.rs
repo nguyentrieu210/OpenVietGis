@@ -146,6 +146,29 @@ impl Host {
         let wkb=match kind {Some(k)=>Some(ovg_mobile_engine::edit::draft(&k,&xy).map_err(err)?),None if xy.is_empty()=>None,_=>return Err("INVALID_BATCH")};
         self.mutate(handle,|s|s.commit_edit(command,&[Edit{feature_id:id,expected_revision,wkb,attributes:attrs}]).map_err(store_err))
     }
+    pub fn reshape(&self,handle:Uuid,id:Uuid,revision:String,geometry:Value)->Result<()>{
+        let rev=revision.parse::<u64>().map_err(|_|"INVALID_REVISION")?;
+        if geometry.to_string().len()>1024*1024{return Err("RESOURCE_LIMIT")}
+        let kind=geometry["type"].as_str().ok_or("INVALID_GEOMETRY")?;
+        if !matches!(kind,"Point"|"MultiPoint"|"LineString"|"MultiLineString"|"Polygon"|"MultiPolygon"){return Err("UNSUPPORTED_GEOMETRY")}
+        fn xy(v:&Value,depth:usize)->bool{
+            if depth>5{return false}
+            let Some(a)=v.as_array()else{return false};
+            if a.is_empty(){return false}
+            if a[0].is_number(){return a.len()==2&&a.iter().all(|n|n.as_f64().is_some_and(f64::is_finite))}
+            a.iter().all(|n|xy(n,depth+1))
+        }
+        if !xy(&geometry["coordinates"],0){return Err("INVALID_GEOMETRY")}
+        let g=ovg_spatial::parse_geojson(&geometry,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+        let bytes=ovg_spatial::encode_wkb(&g,None).map_err(|_|"INVALID_GEOMETRY")?;
+        ovg_mobile_engine::edit::validate(&bytes).map_err(err)?;
+        self.mutate(handle,|s|{
+            let raw=s.feature_json(id).map_err(store_err)?;
+            let feature:Value=serde_json::from_str(&raw).map_err(|_|"INVALID_LOCAL_DATA")?;
+            if feature["revision"].as_u64()!=Some(rev){return Err("REVISION_CONFLICT")}
+            s.commit_edit(Uuid::new_v4(),&[Edit{feature_id:id,expected_revision:rev,wkb:Some(bytes),attributes:feature["attributes"].clone()}]).map_err(store_err)
+        })
+    }
     pub fn update_attributes(&self,handle:Uuid,id:Uuid,revision:String,attrs:Value)->Result<()>{
         if !attrs.is_object()||attrs.to_string().len()>256*1024{return Err("RESOURCE_LIMIT")}
         let rev=revision.parse().map_err(|_|"INVALID_REVISION")?;
