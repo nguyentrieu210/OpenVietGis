@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 import benchmark_runner as baseline
 import e03_editing
-from e05_render import compare_render_reads
+from e05_render import check_cached_tile_revocation, compare_render_reads
 
 SEED = 20261125
 API = "/api/v1"
@@ -819,6 +819,18 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 committed map history", f"{root_a}/map/history", token=a)
     suite.get("E02 map operation receipt", f"{root_a}/map/operations/{map_operation}", token=a)
     suite.get("E02 missing map operation", f"{root_a}/map/operations/{uuid4()}", 404, token=a)
+
+    check_cached_tile_revocation(
+        suite,
+        lambda layer_id: f"{layers_a}/{layer_id}",
+        selected,
+        org_a,
+        fixture["project_a_id"],
+        mid,
+        a,
+        surveyor,
+        fixture["csrf_a_token"],
+    )
 
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
