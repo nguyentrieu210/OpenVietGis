@@ -19,7 +19,7 @@ try{
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,technical_supported:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
  let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
- const saved=[],edits=[],processingRequests=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
+ const saved=[],edits=[],processingRequests=[],aclRequests=[];let aclRules=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -27,9 +27,13 @@ try{
   if(p.endsWith("/me"))body={id:"fixture",display_name:"Spatial Test",status:"active"};
   else if(p.endsWith("/auth/providers"))body=[];
   else if(p.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
-  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
+  else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active",role:process.env.OVG_ACL072_ONLY==="1"?"owner":"member"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
+  else if(p.endsWith("/members"))body=[{id:"m-owner",user_id:"fixture",role:"owner",status:"active"},{id:"m-member",user_id:"member1",display_name:"Người khảo sát",role:"member",status:"active"}];
+  else if(p.endsWith("/grants"))body=[];
+  else if(p.endsWith("/access")&&m==="GET")body={members:[{user_id:"member1",display_name:"Người khảo sát",role:"member",status:"active",restricted:aclRules.length>0}],groups:[],layers:[{id:"layer1",name:"Buildings",fields:[{id:"height_m",name:"Height",type:"integer"}]},{id:"layer2",name:"Second layer",fields:[]}],rules:aclRules,audit:[]};
+  else if(p.endsWith("/access/rules/batch")&&m==="POST"){const q=route.request().postDataJSON();aclRequests.push(q);if(q.rules){aclRules=q.rules.map((r,i)=>({...r,id:"rule-"+i,created_at:"2026-01-01T00:00:00Z"}));body={created:aclRules.length,unchanged:0}}else{aclRules=aclRules.filter(r=>!q.revoke_ids.includes(r.id));body={revoked:q.revoke_ids.length}}}
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.includes("/modules/house-numbering/")){domainCalls++;body={items:[],next_after_id:null}}
@@ -62,7 +66,35 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_PLUGIN071_ONLY==="1"){
+ if(process.env.OVG_ACL072_ONLY==="1"){
+  await first.click({button:"right"});
+  await page.getByRole("menuitem",{name:"Phân quyền layer"}).click();
+  const acl=page.getByRole("dialog",{name:"Phân quyền tổ chức & dự án",exact:true});await acl.waitFor();
+  await acl.getByLabel("Chọn Người khảo sát",{exact:true}).check();
+  await acl.getByLabel("Buildings · Sửa hình học",{exact:true}).check();
+  assert.ok(await acl.getByLabel("Buildings · Xem dữ liệu",{exact:true}).isChecked());
+  await acl.getByRole("button",{name:"Mã đối tượng",exact:true}).click();
+  await acl.getByLabel("Mã đối tượng",{exact:true}).fill("building, building");
+  const initial=page.viewportSize();
+  for(const theme of ["light","dark"]){
+   await page.evaluate(t=>document.documentElement.dataset.ovgTheme=t,theme);
+   for(const width of [390,1280]){
+    await page.setViewportSize({width,height:850});
+    const layout=await acl.evaluate(el=>{const r=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),table=el.querySelector(".acl-matrix-scroll");return {left:r.left,right:r.right,outer:body.scrollWidth,client:body.clientWidth,table:table.scrollWidth,tableClient:table.clientWidth}});
+    assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.outer<=layout.client+1&&layout.table>=layout.tableClient,JSON.stringify(layout));
+    if(process.env.OVG_UI_SCREENSHOTS)await acl.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/acl-"+theme+"-"+width+".png",animations:"disabled"});
+   }
+  }
+  await page.evaluate(()=>document.documentElement.dataset.ovgTheme="light");await page.setViewportSize(initial);
+  await acl.getByRole("button",{name:"Cấp quyền hàng loạt (1)",exact:true}).click();
+  const confirm=page.getByRole("dialog",{name:"Xác nhận",exact:true});await confirm.getByRole("button",{name:"Hủy",exact:true}).click();assert.equal(aclRequests.length,0);
+  await acl.getByRole("button",{name:"Cấp quyền hàng loạt (1)",exact:true}).click();await confirm.getByRole("button",{name:"Đồng ý",exact:true}).click();
+  await acl.getByText("Đã cấp 1 quy tắc; 0 quy tắc đã có.",{exact:true}).waitFor();
+  assert.deepEqual(aclRequests[0],{rules:[{user_id:"member1",layer_id:"layer1",actions:["read","geometry"],feature_ids:["building"]}]});
+  await acl.getByLabel("Chọn quy tắc rule-0",{exact:true}).check();await acl.getByRole("button",{name:"Thu hồi đã chọn (1)",exact:true}).click();await confirm.getByRole("button",{name:"Đồng ý",exact:true}).click();
+  await acl.getByText("Đã thu hồi 1 quy tắc.",{exact:true}).waitFor();assert.deepEqual(aclRequests[1],{revoke_ids:["rule-0"]});assert.equal(aclRules.length,0);
+  console.log("PASS SPEC072 ACL scoped batch grant, cancel, revoke and four responsive/theme combinations");
+ }else if(process.env.OVG_PLUGIN071_ONLY==="1"){
   assert.equal(await page.locator(".qgis-plugin-toolbar").getByText("Quản lý số nhà",{exact:false}).count(),0);
   assert.equal(domainCalls,0,"no business API before opening plugin");
   const command=async(label)=>{await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();const root=page.getByRole("region",{name:"Menu Plugin",exact:true});const trigger=root.locator(".ovg-plugin-sub-trigger").first();await trigger.focus();await trigger.press("ArrowRight");const submenu=page.locator(".ovg-plugin-submenu");await submenu.waitFor();assert.equal(await submenu.locator("code").count(),0);const contained=await submenu.evaluate(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.right<=innerWidth&&b.top>=0&&b.bottom<=innerHeight});assert.ok(contained,"submenu remains inside viewport");await submenu.getByText(label,{exact:true}).click()};
