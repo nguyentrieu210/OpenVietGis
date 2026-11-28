@@ -299,6 +299,35 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   _revision=r['revision'].toString();await _load('');
   if(mounted)setState(()=>_message='Đã nhập ${r["count"]} media vào revision $_revision.');
  }
+ Future<String?> _transferInput(String title,String label,{String? body})async{
+  final ctrl=TextEditingController();
+  try{
+   return await showDialog<String>(context:context,builder:(d)=>AlertDialog(title:Text(title),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[if(body!=null)Text(body),TextField(controller:ctrl,maxLines:4,decoration:InputDecoration(labelText:label))])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,ctrl.text.trim()),child:const Text('Tiếp tục'))]));
+  }finally{ctrl.dispose();}
+ }
+ Future<void> _transferSend()async{
+  final req=await _transferInput('Chuyển khóa sang thiết bị nhận','Yêu cầu nhận công khai');if(req==null||!mounted)return;
+  final fp=await widget.project.mediaTransferFingerprint(request:req);
+  if(!mounted)return;
+  final verified=await _transferInput('Đối chiếu fingerprint trực tiếp','Fingerprint hiển thị trên thiết bị nhận',body:'Fingerprint của yêu cầu: $fp. Chỉ tiếp tục nếu đã kiểm tra trực tiếp thiết bị nhận, không tin yêu cầu tự nhận qua tin nhắn.');
+  if(verified==null||!mounted)return;
+  final env=await widget.project.sealMediaKeyTransfer(layerId:widget.layer,expected:_revision,request:req,confirmedFingerprint:verified.toLowerCase());
+  if(!mounted)return;
+  await showDialog<void>(context:context,builder:(d)=>AlertDialog(title:const Text('Gói khóa đã mã hóa'),content:SingleChildScrollView(child:SelectableText(env)),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Đóng'))]));
+ }
+ Future<void> _transferReceive()async{
+  if(_rows.isEmpty)throw StateError('Cần một attachment mã hóa trong bản backup đã khôi phục.');
+  final req=jsonDecode(await widget.project.beginMediaKeyTransfer(layerId:widget.layer,expected:_revision)) as Map;
+  try{
+   if(!mounted)return;
+   await showDialog<void>(context:context,builder:(d)=>AlertDialog(title:const Text('Yêu cầu nhận khóa · 5 phút'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Gửi yêu cầu công khai sau và đối chiếu fingerprint trực tiếp với thiết bị gửi.'),SelectableText(req['request'].toString()),const Text('Fingerprint:'),SelectableText(req['fingerprint'].toString())])),actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Tiếp tục'))]));
+   if(!mounted)return;
+   final env=await _transferInput('Nhận khóa mã hóa','Gói khóa từ thiết bị gửi',body:'Khóa chỉ được cài sau khi xác thực một ảnh trong bản backup. Không thay thế khóa đã có.');
+   if(env==null||!mounted)return;
+   final ok=await widget.project.receiveMediaKeyTransfer(layerId:widget.layer,attachmentId:_rows.first['id'].toString(),expected:_revision,envelope:env);
+   if(ok){await _load('');if(mounted)setState(()=>_message='Đã xác thực và cài khóa vào kho khóa native.');}
+  }finally{await widget.project.cancelMediaKeyTransfer();}
+ }
  Future<void> _capture()async{
   final ctrl=TextEditingController();
   try{
@@ -322,6 +351,7 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   Text(_key?'Có khóa miền đích trên thiết bị':'Miền đích chưa có khóa khả dụng'),
   const Text('Nhập qua manifest liên kết đã xác thực nguồn. Không gửi khóa hoặc ảnh giải mã qua Flutter. Backup không mang theo khóa; không tự tạo khóa thay thế khi khóa cũ mất.'),
   OutlinedButton(onPressed:_busy||!_provider?null:()=>unawaited(_run(_import)),child:const Text('Nhập manifest media (tối đa 16)')),
+  Wrap(children:[OutlinedButton(onPressed:_busy||!_key?null:()=>unawaited(_run(_transferSend)),child:const Text('Chuyển khóa')),OutlinedButton(onPressed:_busy||!_provider||_key||_rows.isEmpty?null:()=>unawaited(_run(_transferReceive)),child:const Text('Nhận khóa từ thiết bị cũ'))]),
   OutlinedButton(onPressed:_busy||!_camera?null:()=>unawaited(_run(_capture)),child:const Text('Chụp ảnh preview Android')),
   if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),if(_message!=null)Text(_message!),
   if(!_busy&&_rows.isEmpty&&_error==null)const Text('Không có media mã hóa trong trang này.'),
