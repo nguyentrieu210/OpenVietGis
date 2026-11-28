@@ -160,3 +160,28 @@ pub async fn unified_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,l
  }).await?;
  Ok(tauri::ipc::Response::new(b))
 }
+
+#[cfg(test)]
+mod backup_tests{
+ use super::*;
+ #[test]fn backup_restore_preserves_ids_revisions_and_mvt(){
+  let d=tempfile::tempdir().unwrap();let u=Unified::new(d.path().join("projects")).unwrap();
+  let p=u.create().unwrap();let w=u.open(p.id).unwrap();let catalog=u.with(w.handle,|s|s.catalog().map_err(err)).unwrap();
+  let layer=catalog.layers[0].id;let id=Uuid::new_v4();let op=Uuid::new_v4();
+  let input=||Input{operation:op,expected_project:"1".into(),edits:vec![GeometryEdit{layer,feature:id,expected:"0".into(),geometry:Some(serde_json::json!({"type":"Point","coordinates":[106.7,11.]})),attributes:serde_json::json!({"name":"survey"})}],links:vec![]};
+  let receipt=u.apply(w.handle,input()).unwrap();
+  let cancel=AtomicBool::new(false);let tile=u.with(w.handle,|s|crate::mvt::unified_tile(s,layer,2,0,0,0,&cancel)).unwrap();
+  assert!(!tile.is_empty());assert!(u.with(w.handle,|s|crate::mvt::unified_tile(s,layer,1,0,0,0,&cancel)).is_err());
+  let path=d.path().join("backup.sqlite");u.with(w.handle,|s|s.backup_copy(&path,2,&cancel).map_err(err)).unwrap();
+  assert!(u.with(w.handle,|s|s.backup_copy(&path,2,&cancel).map_err(err)).is_err());
+  let p2=u.restore(&path).unwrap();assert_ne!(p.id,p2.id);let w2=u.open(p2.id).unwrap();
+  assert_eq!(u.apply(w2.handle,input()).unwrap(),receipt);
+  assert_eq!(u.with(w2.handle,|s|crate::mvt::unified_tile(s,layer,2,0,0,0,&cancel)).unwrap(),tile);
+  assert_eq!(u.with(w2.handle,|s|s.feature(layer,id,2).map_err(err)).unwrap().1.attributes["name"],"survey");
+  u.with(w2.handle,|s|s.compensate_latest(Uuid::new_v4(),2).map_err(err)).unwrap();
+  assert!(u.with(w2.handle,|s|s.feature(layer,id,3).map_err(err)).is_err());
+  assert!(u.with(w.handle,|s|s.feature(layer,id,2).map_err(err)).is_ok());
+  assert!(u.with(w2.handle,|s|crate::mvt::unified_tile(s,layer,3,0,0,0,&AtomicBool::new(true))).is_err());
+  u.shutdown().unwrap();
+ }
+}
