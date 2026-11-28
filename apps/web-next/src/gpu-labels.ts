@@ -114,7 +114,7 @@ export function createGpuLabelRenderer(m:MLMap){
   images=wantedImages;refreshUnique();
  };
  // Camera animation never touches GeoJSON or React state. Only optional uniqueness
- // is recalculated after movement; MapLibre owns placement and interpolation.
+ // is recalculated after movement; the renderer owns placement and interpolation.
  m.on("moveend",refreshUnique);m.on("resize",refreshUnique);
  const dispose=()=>{disposed=true;m.off("moveend",refreshUnique);m.off("resize",refreshUnique);
   if(!m.getStyle())return;for(const id of layerSpecs.keys())if(m.getLayer(id))m.removeLayer(id);
