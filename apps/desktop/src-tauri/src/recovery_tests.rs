@@ -146,3 +146,27 @@ fn complete_project_bundle_preserves_root_and_layer_journals(){
  assert_eq!(h.feature(child.handle,child_id).unwrap()["attributes"]["a"],2);
  h.close(w.handle).unwrap();h.close(w2.handle).unwrap();
 }
+
+#[test]
+fn direct_read_detects_source_change_without_import(){
+ use rusqlite::{Connection,params};
+ let d=tempfile::tempdir().unwrap();let path=d.path().join("source.gpkg");
+ let db=Connection::open(&path).unwrap();
+ db.execute_batch("PRAGMA application_id=1196444487;CREATE TABLE gpkg_spatial_ref_sys(srs_id INTEGER,organization TEXT,organization_coordsys_id INTEGER);INSERT INTO gpkg_spatial_ref_sys VALUES(4326,'EPSG',4326);CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT);CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER);CREATE TABLE a(fid INTEGER PRIMARY KEY,geom BLOB);CREATE VIRTUAL TABLE rtree_a_geom USING rtree(id,minx,maxx,miny,maxy);INSERT INTO gpkg_contents VALUES('a','features');INSERT INTO gpkg_geometry_columns VALUES('a','geom',4326,0,0);").unwrap();
+ let mut blob=vec![b'G',b'P',0,1];blob.extend(4326_i32.to_le_bytes());blob.extend(point(106.,11.));
+ db.execute("INSERT INTO a VALUES(1,?1)",params![blob]).unwrap();
+ db.execute_batch("INSERT INTO rtree_a_geom VALUES(1,106,106,11,11)").unwrap();
+ let direct=crate::gpkg_import::Direct::open(&path).unwrap();
+ assert_eq!(direct.page("a",[105.,10.,107.,12.],"").unwrap().data["features"].as_array().unwrap().len(),1);
+ db.execute("DELETE FROM a",[]).unwrap();assert!(direct.page("a",[105.,10.,107.,12.],"").is_err());
+}
+#[test]
+fn project_state_backup_roundtrip(){
+ let d=tempfile::tempdir().unwrap();let h=Host::new(d.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();
+ let mut s=h.project_state(w.handle).unwrap();s.view.zoom=13.;s.layers[0].style.color="#123456".into();
+ let saved=h.save_project_state(w.handle,s,0).unwrap();
+ let file=d.path().join("state.ovgproject");h.backup_project(w.handle,&file).unwrap();
+ let p2=h.restore_project(&file).unwrap();let w2=h.open(p2.id).unwrap();
+ assert_eq!(h.project_state(w2.handle).unwrap(),saved);h.close(w2.handle).unwrap();h.close(w.handle).unwrap();
+}
