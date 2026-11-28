@@ -1,5 +1,8 @@
 //! Typed, fail-closed photogrammetry provider control-plane contracts.
 //! No execution, filesystem access or network capability is granted by these types.
+pub mod colmap;
+pub mod governor;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
