@@ -280,9 +280,12 @@
       "candidate_paths": [
         "apps/web-next/src/label-expr.ts",
         "apps/web-next/label-expr.test.mjs",
-        "apps/web-next/src/LayerProperties.tsx"
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/query-selection.ts",
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/AttributeServerQuery.tsx"
       ],
-      "blocker": "Legacy label templates plus explicit qgis: expression subset: bounded typed AST, quoted field references, whitelist functions, arithmetic, comparisons, null logic, short-circuit if/coalesce, field/function insert and sample preview; no arbitrary eval. Full QGIS expression library, shared field calculator/filter integration, server AST and authenticated paired browser acceptance remain. New tests written, not executed."
+      "blocker": "Typed AST subset integrated into labels and complete revision-pinned attribute selection, with fields/functions, preview, null logic and no arbitrary eval. Full QGIS expression library, shared field calculator/filter/server AST and paired browser acceptance remain. New tests not executed."
     },
     {
       "id": "STYLE-06",
@@ -377,7 +380,7 @@
         "apps/web-next/src/query-selection.ts",
         "apps/web-next/src/query-selection.test.ts"
       ],
-      "blocker": "Existing source-wide attribute selection implements pinned paging and replace/add/remove/intersect/invert with a 5000-FID bound. Spatial/location selection parity and authenticated browser/QGIS acceptance remain."
+      "blocker": "Source-wide attribute query selection plus typed Boolean/NULL expression selection over complete revision-pinned population (5000 FIDs), replace/add/remove/intersect/invert via query. Spatial/location selection parity and authenticated browser/QGIS acceptance remain. New tests not executed."
     },
     {
       "id": "TABLE-04",

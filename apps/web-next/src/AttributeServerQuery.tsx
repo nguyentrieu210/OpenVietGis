@@ -1,4 +1,5 @@
-import {collectQuerySelection,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode} from "./query-selection";
+import {collectQuerySelection,collectExpressionSelection,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode} from "./query-selection";
+import {parseExpression} from "./label-expr";
 import React,{useEffect,useRef,useState} from "react";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import {availableOperators,type FilterRow,type QueryOperator} from "./workbenches/features/platform/query-filters";
@@ -13,6 +14,8 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
  const [sort,setSort]=useState(""),[direction,setDirection]=useState<"asc"|"desc">("asc");
  const [result,setResult]=useState<LayerQueryResponse|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [selectionMode,setSelectionMode]=useState<QuerySelectionMode>("replace"),[selectionProgress,setSelectionProgress]=useState(""),[selecting,setSelecting]=useState(false);
+ const [expression,setExpression]=useState("");
+ const expressionError=(()=>{if(!expression.trim())return "";try{parseExpression(expression,fields.map(f=>f.field_id));return ""}catch(e){return e instanceof Error?e.message:String(e)}})();
  const latest=useRef({layer,selection,applySelection});latest.current={layer,selection,applySelection};
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>()=>{epoch.current++;lock.current=false},[]);
@@ -31,13 +34,14 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
   try{await openFeature(layer,id,()=>epoch.current===seq)}catch(e){if(epoch.current===seq)setError(e instanceof Error?e.message:"Không mở được đối tượng.")}
   finally{if(epoch.current===seq){lock.current=false;setBusy(false)}}
  }
- async function selectMatches(){
-  if(lock.current||!result||!selection||!applySelection)return;
+ async function selectMatches(useExpression=false){
+  if(lock.current||(!useExpression&&!result)||!selection||!applySelection||useExpression&&(!expression.trim()||expressionError||selectionMode==="invert"))return;
   const seq=++epoch.current,before=new Set(selection),base=layer,mode=selectionMode;
   lock.current=true;setBusy(true);setSelecting(true);setSelectionProgress("");setError("");
   const current=()=>epoch.current===seq&&selectionLayerCurrent(latest.current.layer,base)&&!!latest.current.selection&&sameKeys(latest.current.selection,before);
   try{
-   const found=await collectQuerySelection(base,result,filters,sort,direction,group,mode,body=>execute(base,body),current,(n,total)=>{if(current())setSelectionProgress("Đã kiểm tra "+n+"/"+total+" FID…")});
+   const progress=(n:number,total:number)=>{if(current())setSelectionProgress("Đã kiểm tra "+n+"/"+total+" FID…")};
+   const found=useExpression?await collectExpressionSelection(base,expression,body=>execute(base,body),current,progress):await collectQuerySelection(base,result!,filters,sort,direction,group,mode,body=>execute(base,body),current,progress);
    if(!current()||!latest.current.applySelection)throw Error("Phạm vi đã thay đổi.");
    const next=combineQuerySelection(before,base.source_id,found.keys,mode);
    latest.current.applySelection(base,before,next);
@@ -59,6 +63,7 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
    <label>Thứ tự <select disabled={busy} value={direction} onChange={e=>{invalidate();setDirection(e.target.value==="desc"?"desc":"asc")}}><option value="asc">Tăng dần</option><option value="desc">Giảm dần</option></select></label>
    <button type="submit" disabled={busy}>Chạy truy vấn</button>
   </form>
+  {selection&&applySelection&&<details><summary>Chọn theo biểu thức AST (toàn nguồn)</summary><p>Biểu thức Boolean; NULL không được chọn. Tối đa 5.000 bản ghi, đọc theo revision đã xác minh, không thực thi SQL.</p><label>Biểu thức<textarea rows={3} maxLength={500} disabled={busy} value={expression} onChange={e=>{setExpression(e.target.value);setSelectionProgress("")}} placeholder={'"ma" IS NOT NULL'}/></label><div>{fields.slice(0,50).map(f=><button key={f.field_id} type="button" disabled={busy} onClick={()=>setExpression(v=>(v+'"'+f.field_id.replaceAll('"','""')+'"').slice(0,500))}>{f.name}</button>)}</div>{expressionError&&<p role="alert">{expressionError}</p>}<label>Thao tác<select value={selectionMode} disabled={busy} onChange={e=>setSelectionMode(e.target.value as QuerySelectionMode)}><option value="replace">Thay vùng chọn nguồn này</option><option value="add">Thêm</option><option value="remove">Bỏ</option><option value="intersect">Giao</option>{selectionMode==="invert"&&<option value="invert" disabled>Đảo (chỉ truy vấn)</option>}</select></label><button type="button" disabled={busy||!expression.trim()||!!expressionError||selectionMode==="invert"||layer.source.feature_count==null||layer.source.feature_count>QUERY_SELECTION_LIMIT} onClick={()=>void selectMatches(true)}>Áp dụng biểu thức</button></details>}
   {busy&&!selecting&&<p role="status">Đang tải từ máy chủ…</p>}{selectionProgress&&<p role="status">{selectionProgress}</p>}{error&&<p role="alert">{error}</p>}
   {result&&<><p role="status">{result.total_count.toLocaleString("vi-VN")} đối tượng phù hợp · trang {Math.floor(result.offset/TABLE_QUERY_LIMIT)+1}</p>
    <div className="qgis-table-scroll"><table><thead><tr><th>FID</th><th>Hình học</th>{fields.map(f=><th key={f.field_id}>{f.name}</th>)}</tr></thead><tbody>{result.items.map(r=><tr key={r.feature_id}><td><button type="button" disabled={busy||r.geometry_state!=="present"} onClick={()=>void open(r.feature_id)}>{r.feature_id}</button></td><td>{({present:"Có hình học",absent:"Thiếu hình học",empty:"Rỗng",invalid:"Không hợp lệ",unsupported:"Chưa hỗ trợ"} as const)[r.geometry_state??"unsupported"]}</td>{fields.map(f=><td key={f.field_id}>{String(r.attributes[f.field_id]??"—")}</td>)}</tr>)}</tbody></table></div>

@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from "vitest";
 import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
-import {combineQuerySelection,collectQuerySelection,sameKeys} from "./query-selection";
+import {combineQuerySelection,collectQuerySelection,sameKeys,collectExpressionSelection} from "./query-selection";
 const layer={id:"l",source_id:"s",source:{content_revision:"c",schema_revision:"v",feature_count:101,schema:{fields:[]}}} as unknown as SpatialLayer;
 const page=(offset:number,ids:string[],fp="pin")=>({layer_id:"l",source_id:"s",content_revision:"c",schema_revision:"v",offset,limit:100,query_fingerprint:fp,attribute_only:true,total_count:101,has_more:offset===0,items:ids.map(feature_id=>({feature_id,attributes:{},geometry:null,geometry_state:"absent"}))} as LayerQueryResponse);
 const first=page(0,Array.from({length:100},(_,i)=>"id"+i));
@@ -28,5 +28,17 @@ describe("query selection",()=>{
   await expect(run(async b=>b.offset===0?first:page(100,["last"],"wrong"))).rejects.toThrow();
   let active=true;await expect(run(async()=>{active=false;return first},()=>active)).rejects.toThrow();
   await expect(collectQuerySelection({...layer,source:{...layer.source,feature_count:5001}},first,filters,"","asc","and","invert",async()=>first,()=>true,()=>{})).rejects.toThrow();
+ });
+});
+
+describe("typed expression selection",()=>{
+ it("checks full pinned population, excludes null, includes absent geometry",async()=>{
+  const l={...layer,source:{...layer.source,feature_count:3}};
+  const response={...page(0,["a","b","c"]),total_count:3,has_more:false} as LayerQueryResponse;
+  const found=await collectExpressionSelection(l,"TRUE",async()=>response,()=>true,()=>{});
+  expect(found.keys).toEqual(new Set(["s:a","s:b","s:c"]));expect(found.missingGeometry).toBe(3);
+  expect((await collectExpressionSelection(l,"NULL",async()=>response,()=>true,()=>{})).keys.size).toBe(0);
+  await expect(collectExpressionSelection(l,"42",async()=>response,()=>true,()=>{})).rejects.toThrow("Boolean");
+  await expect(collectExpressionSelection(l,"TRUE",async()=>response,()=>false,()=>{})).rejects.toThrow();
  });
 });

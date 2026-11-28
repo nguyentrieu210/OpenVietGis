@@ -1,3 +1,4 @@
+import {parseExpression,evaluateExpression} from "./label-expr";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import type {FilterRow} from "./workbenches/features/platform/query-filters";
 import {tableQueryBody,verifyTableQuery,TABLE_QUERY_LIMIT} from "./table-query";
@@ -40,5 +41,32 @@ export async function collectQuerySelection(layer:SpatialLayer,preview:LayerQuer
   progress(keys.size,expected);if(!r.has_more)break;
  }
  if(keys.size!==expected)throw Error("Vùng chọn chưa đầy đủ.");
+ return {keys,missingGeometry};
+}
+
+/** A local typed predicate over a complete revision-pinned server population.
+ * Never sends expression source to SQL or mutates selection on partial failure. */
+export async function collectExpressionSelection(layer:SpatialLayer,expression:string,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean,progress:(count:number,total:number)=>void){
+ const expected=layer.source.feature_count;
+ if(expected===null||!Number.isSafeInteger(expected)||expected<0||expected>QUERY_SELECTION_LIMIT)throw Error("Biểu thức chỉ hỗ trợ nguồn đã xác minh tối đa 5.000 đối tượng.");
+ const ast=parseExpression(expression,layer.source.schema.fields.map(f=>f.field_id));
+ const keys=new Set<string>(),seen=new Set<string>();let fingerprint:string|undefined,missingGeometry=0;
+ const ensure=()=>{if(!current())throw Error("Nguồn hoặc vùng chọn đã thay đổi; không áp dụng kết quả.")};
+ for(let offset=0;;offset+=TABLE_QUERY_LIMIT){
+  ensure();
+  const body=tableQueryBody(layer,{field:"",op:"eq",value:"",negate:false},"","asc",offset,fingerprint);
+  const page=verifyTableQuery(layer,await execute(body),offset,fingerprint);ensure();
+  if(page.total_count!==expected)throw Error("Số lượng nguồn đã thay đổi.");
+  fingerprint=page.query_fingerprint;
+  for(const row of page.items){
+   if(seen.has(row.feature_id))throw Error("Trùng FID giữa các trang.");
+   seen.add(row.feature_id);
+   const result=evaluateExpression(ast,row.attributes);
+   if(result!==null&&typeof result!=="boolean")throw Error("Biểu thức chọn phải trả về Boolean hoặc NULL.");
+   if(result===true){keys.add(layer.source_id+":"+row.feature_id);if(row.geometry_state!=="present")missingGeometry++}
+  }
+  progress(seen.size,expected);if(!page.has_more)break;
+ }
+ ensure();if(seen.size!==expected)throw Error("Nguồn chưa được tải đủ.");
  return {keys,missingGeometry};
 }
