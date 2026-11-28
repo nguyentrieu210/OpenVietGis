@@ -16,7 +16,7 @@ class _UnifiedOnDemandMapState extends State<UnifiedOnDemandMap> with WidgetsBin
  LocalTileServer? _server;
  MapLibreMapController? _map;
  String? _style,_error;
- bool _busy=true,_foreground=true,_closing=false;
+ bool _busy=true,_foreground=true,_closing=false,_canPop=false;
  int _epoch=0;
  static const _colors=['#00695c','#315b9b','#9b4c80','#927017','#4b768e','#99533a','#6555a5','#627b36'];
  @override void initState(){super.initState();WidgetsBinding.instance.addObserver(this);unawaited(_start());}
@@ -49,7 +49,7 @@ class _UnifiedOnDemandMapState extends State<UnifiedOnDemandMap> with WidgetsBin
  }
  @override void didChangeAppLifecycleState(AppLifecycleState state){
   _foreground=state==AppLifecycleState.resumed;
-  if(!_foreground&&!_closing){_closing=true;unawaited(_stop().whenComplete(()=>_closing=false));}
+  if(!_foreground&&!_closing){_closing=true;unawaited(_stop().whenComplete((){if(mounted)setState(()=>_closing=false);}));}
  }
  @override void dispose(){WidgetsBinding.instance.removeObserver(this);++_epoch;unawaited(_server?.close()??Future<void>.value());super.dispose();}
  Future<void> _pick(dynamic point)async{
@@ -69,9 +69,9 @@ class _UnifiedOnDemandMapState extends State<UnifiedOnDemandMap> with WidgetsBin
   }catch(_){if(mounted)setState(()=>_error='Không đọc được đối tượng ở revision hiện tại.');}
  }
  Future<void> _leave()async{
-  if(_closing)return;_closing=true;await _stop();if(mounted)Navigator.of(context).pop();
+  if(_closing)return;_closing=true;await _stop();if(mounted){setState(()=>_canPop=true);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)Navigator.of(context).pop();});}
  }
- @override Widget build(BuildContext context)=>PopScope(canPop:false,onPopInvokedWithResult:(didPop,result){if(!didPop)unawaited(_leave());},child:Scaffold(
+ @override Widget build(BuildContext context)=>PopScope(canPop:_canPop,onPopInvokedWithResult:(didPop,result){if(!didPop)unawaited(_leave());},child:Scaffold(
  appBar:AppBar(leading:IconButton(icon:const Icon(Icons.arrow_back),onPressed:_closing||_busy?null:()=>unawaited(_leave())),title:const Text('MVT theo yêu cầu')),
  body:Stack(children:[
   if(_style!=null)Positioned.fill(child:MapLibreMap(key:ValueKey(_epoch),styleString:_style!,initialCameraPosition:const CameraPosition(target:LatLng(11,106.7),zoom:8),onMapCreated:(m)=>_map=m,onMapClick:(p,c)=>unawaited(_pick(p)))),
