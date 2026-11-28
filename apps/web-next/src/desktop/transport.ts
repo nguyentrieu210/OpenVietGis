@@ -154,7 +154,13 @@ export const unified={
 export type UnifiedAssetKind="cad"|"las"|"laz"|"copc"|"glb"|"mbtiles"|"tiff";
 export type UnifiedAsset={id:string;kind:UnifiedAssetKind;count:number;epsg:number|null;metadata:{width:number;height:number;bands:number;epsg:number|null;geotransform:number[]}|null};
 export type AssetRead={chunk?:number;bbox?:[number,number,number,number];bounds?:[number,number,number,number,number,number];level?:number;tile?:[number,number,number];band?:number;pixel?:[number,number,number,number];shape?:[number,number]};
+export type PersistentAsset={id:string;kind:UnifiedAssetKind;epsg:number|null;bytes:number;sha256:string};
 export const unifiedAssets={
+ list:(handle:string)=>host().core.invoke<PersistentAsset[]>("unified_asset_list",{handle}),
+ attach:(handle:string,kind:UnifiedAssetKind,epsg:number|null,expected:string)=>host().core.invoke<PersistentAsset|null>("unified_asset_attach",{handle,kind,epsg,expected}),
+ reopen:(handle:string,id:string)=>host().core.invoke<UnifiedAsset>("unified_asset_reopen",{handle,id}),
+ detach:(handle:string,id:string,expected:string)=>host().core.invoke<string>("unified_asset_detach",{handle,id,expected}),
+ importNDJSON:(handle:string,name:string,expected:string)=>host().core.invoke<{layer:string;revision:string;count:number;digest:string}|null>("unified_import_ndjson",{handle,name,expected}),
  open:(handle:string,kind:UnifiedAssetKind,epsg:number|null)=>host().core.invoke<UnifiedAsset|null>("unified_asset_open",{handle,kind,epsg}),
  close:(handle:string,id:string)=>host().core.invoke<void>("unified_asset_close",{handle,id}),
  read:async(handle:string,id:string,q:AssetRead={}):Promise<ArrayBuffer>=>{
