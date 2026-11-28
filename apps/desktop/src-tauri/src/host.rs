@@ -19,7 +19,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive,tempfile::NamedTempFile)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -67,16 +67,17 @@ impl Host {
     // Session-scoped, explicitly selected raster archive. No persistent path grants.
     pub fn open_raster(&self,handle:Uuid,path:&Path)->Result<Raster>{
         regular(path)?;
-        let archive=ovg_local_storage::mbtiles::Archive::open(path).map_err(store_err)?;
+        let staged=crate::gpkg_import::sqlite_snapshot(path,512*1024*1024)?;
+        let archive=ovg_local_storage::mbtiles::Archive::open(staged.path()).map_err(store_err)?;
         if archive.format!="png"{return Err("UNSUPPORTED_FORMAT")}
         let id=Uuid::new_v4();let attribution=archive.attribution.clone();
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
-        w.raster=Some((id,archive));Ok(Raster{id,attribution})
+        w.raster=Some((id,archive,staged));Ok(Raster{id,attribution})
     }
     pub fn raster_tile(&self,handle:Uuid,id:Uuid,z:u8,x:u32,y:u32)->Result<Vec<u8>>{
         if z>22||x>=(1u32<<z)||y>=(1u32<<z){return Err("INVALID_TILE")}
         self.read(handle,|w|{
-            let (_,a)=w.raster.as_ref().filter(|(key,_)|*key==id).ok_or("STALE_HANDLE")?;
+            let (_,a,_)=w.raster.as_ref().filter(|(key,_,_)|*key==id).ok_or("STALE_HANDLE")?;
             let b=a.tile(z,x,y).map_err(store_err)?.ok_or("TILE_NOT_FOUND")?;
             if b.len()<33||b.len()>4*1024*1024||b[..8]!=[137,80,78,71,13,10,26,10]||&b[12..16]!=b"IHDR"{return Err("INVALID_TILE")}
             let width=u32::from_be_bytes(b[16..20].try_into().map_err(|_|"INVALID_TILE")?);
