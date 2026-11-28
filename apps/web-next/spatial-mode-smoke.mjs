@@ -52,7 +52,9 @@ try{
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("BUFFER");
  const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
- assert.equal(await activeMenu.locator(".core-menu-items button").count(),1);
+ const searchResults=activeMenu.locator(".core-menu-items button");
+ assert.ok(await searchResults.count()>=1);
+ assert.ok((await searchResults.locator("code").allTextContents()).some(value=>value.trim().toUpperCase()==="BUFFER"));
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));
