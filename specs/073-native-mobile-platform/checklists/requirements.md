@@ -9,3 +9,10 @@
 - [ ] Establish pinned physical-device reference profile, independent CRS/format fixtures and benchmark.
 - [ ] Owner review of public SDK license and commercial scope; no new monetization commitment without approval.
 - [ ] Complete mandatory tasks, evidence and independent acceptance; no production claims.
+
+## Revision 2 design review
+- [x] Five P0 and six P1 findings mapped to revised contracts and execution/acceptance matrices.
+- [ ] W0 independently verify actual portable dependency DAG, mobile human auth, manifest v1/v2 compatibility, encryption and receipt/lease semantics.
+- [ ] Android 4KB/16KB runtime and artifacts verified; separate iOS I1 gate.
+- [ ] Freeze resource/device/CRS tolerances, mandatory release profile and owner paths before implementation.
+- [ ] Execute all required leaves and tests; no design checkbox is implementation acceptance.
