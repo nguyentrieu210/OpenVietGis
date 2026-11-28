@@ -164,3 +164,22 @@ mod durable_tests{
   u.shutdown().unwrap();
  }
 }
+
+#[tauri::command]
+pub async fn unified_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,id:Uuid,band:usize,z:u8,x:u32,y:u32,stretch:[f64;2],request_id:Uuid)->Reply<tauri::ipc::Response>{
+ #[cfg(feature="native-ogr")]{
+  trusted(&window)?;let read=ReadPermit::acquire(request_id)?;
+  let slot=tokio::select!{
+   p=READ_SLOTS.get_or_init(||tokio::sync::Semaphore::new(4)).acquire()=>p.map_err(|_|"SESSION_FAILED".to_owned())?,
+   _=read.token.notify.notified()=>return Err("CANCELLED".into())
+  };
+  let b=work(window,u.inner().clone(),move|s|{
+   let _slot=slot;
+   s.with_asset(handle,id,|e|match &e.asset{
+    Asset::Tiff(a)=>a.map_tile(band,z,x,y,stretch,&read.token.flag),_=>Err("INVALID_ASSET")
+   })
+  }).await?;
+  Ok(tauri::ipc::Response::new(b))
+ }
+ #[cfg(not(feature="native-ogr"))]{let _=(u,handle,id,band,z,x,y,stretch,request_id);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
+}
