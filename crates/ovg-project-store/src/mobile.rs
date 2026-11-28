@@ -144,6 +144,28 @@ impl NativeProject{
    encode(&match best{Some((l,f,r,h))=>serde_json::json!({"layer":l,"feature":f,"revision":r.to_string(),"x":h.x,"y":h.y,"distance_m":h.distance_m,"vertex":h.vertex}),None=>Value::Null})
   })
  }
+ /// Commit full XY geometry, preserving multipart and interior rings. Reject
+ /// dimensional loss and non-closed rings rather than normalizing silently.
+ pub fn commit_geojson(&self,layer:&str,feature:&str,operation:&str,expected_project:&str,expected_feature:&str,geometry_json:&str,attributes_json:&str)->Result<String>{
+  if geometry_json.len()>1024*1024||attributes_json.len()>256*1024{return Err(Error::Limit)}
+  let g:Value=decode(geometry_json)?;
+  let kind=g["type"].as_str().ok_or(Error::Invalid)?;
+  if !matches!(kind,"Point"|"MultiPoint"|"LineString"|"MultiLineString"|"Polygon"|"MultiPolygon"){return Err(Error::Unsupported)}
+  fn xy(v:&Value,d:usize,count:&mut usize)->bool{
+   if d>5{return false}let Some(a)=v.as_array()else{return false};
+   if a.is_empty(){return false}
+   if a[0].is_number(){*count+=1;return *count<=4096&&a.len()==2&&a[0].as_f64().is_some_and(|n|n.is_finite()&&n.abs()<=180.)&&a[1].as_f64().is_some_and(|n|n.is_finite()&&n.abs()<=90.)}
+   a.iter().all(|v|xy(v,d+1,count))
+  }
+  fn rings(v:&Value)->bool{v.as_array().is_some_and(|a|!a.is_empty()&&a.iter().all(|r|r.as_array().is_some_and(|p|p.len()>=4&&p.first()==p.last())))}
+  if !xy(&g["coordinates"],0,&mut 0)||kind=="Polygon"&&!rings(&g["coordinates"])||kind=="MultiPolygon"&&!g["coordinates"].as_array().is_some_and(|a|a.iter().all(rings)){return Err(Error::Invalid)}
+  let limits=ValidationLimits{max_vertices:4096,max_rings_per_polygon:256,max_nesting_depth:5};
+  let geom=ovg_spatial::parse_geojson(&g,&limits).map_err(|_|Error::Invalid)?;
+  validate_geometry(&geom,&limits).map_err(|_|Error::Invalid)?;
+  let wkb=ovg_spatial::encode_wkb(&geom,None).map_err(|_|Error::Invalid)?;
+  let b=Batch{operation:id(operation)?,expected_project:revision(expected_project)?,edits:vec![Edit{layer:id(layer)?,feature:id(feature)?,expected:revision(expected_feature)?,image:Some(Image{wkb,attributes:decode(attributes_json)?})}],links:vec![]};
+  self.apply(&json(&b)?)
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
