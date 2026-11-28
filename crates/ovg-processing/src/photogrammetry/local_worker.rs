@@ -5,12 +5,12 @@ use super::{colmap,Device};
 use sha2::{Digest,Sha256};
 use std::{fs::{self,File},io::Read,path::{Path,PathBuf},time::{Duration,Instant}};
 #[derive(Debug)]
-pub enum Error{Unsupported,Invalid,Io(std::io::Error),HashMismatch,Limit,Cancelled,Timeout,Failed(Option<i32>),Plan(colmap::PlanError)}
+pub enum Error{Unsupported,Invalid,Io(std::io::Error),HashMismatch,Limit,Cancelled,Timeout,Failed(Option<i32>),Plan(colmap::PlanError),Ingest(super::ingest::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 #[derive(Debug,Clone)]
 pub struct ApprovedPack{pub binary:PathBuf,pub sha256:String}
 #[derive(Debug,Clone,Copy)]
-pub struct Limits{pub timeout:Duration,pub address_space_bytes:u64,pub max_file_bytes:u64}
+pub struct Limits{pub timeout:Duration,pub address_space_bytes:u64,pub max_file_bytes:u64,pub input_bytes:u64}
 fn digest_file(p:&Path)->Result<String,Error>{
  let meta=fs::symlink_metadata(p)?;
  if !meta.is_file()||meta.file_type().is_symlink()||meta.len()==0||meta.len()>1024*1024*1024{return Err(Error::Invalid);}
@@ -24,11 +24,11 @@ fn verify(pack:&ApprovedPack)->Result<PathBuf,Error>{
  Ok(pack.binary.canonicalize()?)
 }
 fn valid_limits(l:Limits)->bool{
- !l.timeout.is_zero()&&l.timeout<=Duration::from_secs(86400)&&l.address_space_bytes>=256*1024*1024&&l.max_file_bytes>0
+ !l.timeout.is_zero()&&l.timeout<=Duration::from_secs(86400)&&l.address_space_bytes>=256*1024*1024&&l.max_file_bytes>0&&l.input_bytes>0
 }
 /// CPU sparse reconstruction only. All commands are generated internally, never supplied by UI.
 /// Linux sandbox requires /usr/bin/bwrap and /usr/bin/prlimit. On unsupported hosts fail closed.
-pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits,mut cancelled:impl FnMut()->bool)->Result<(),Error>{
+pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits,approved_input_manifest_sha256:&str,mut cancelled:impl FnMut()->bool)->Result<(),Error>{
  if config.device!=Device::Cpu||config.gpu_index.is_some(){return Err(Error::Unsupported);}
  if !valid_limits(limits)||!root.is_absolute(){return Err(Error::Invalid);}
  #[cfg(not(target_os="linux"))]{let _=(pack,&mut cancelled);return Err(Error::Unsupported);}
@@ -46,6 +46,8 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
  count=count.checked_add(1).ok_or(Error::Limit)?;if count>config.image_count{return Err(Error::Invalid);}
  }
  if count!=config.image_count{return Err(Error::Invalid);}
+ let manifest=super::ingest::verify_staged(&root,config.image_count,limits.input_bytes,&mut cancelled).map_err(Error::Ingest)?;
+ if manifest!=approved_input_manifest_sha256{return Err(Error::HashMismatch);}
  let layout=colmap::Layout::from_host_root("/work".into()).map_err(Error::Plan)?;
  let plan=colmap::sparse_plan(&layout,config).map_err(Error::Plan)?;
  if !Path::new("/usr/bin/bwrap").is_file()||!Path::new("/usr/bin/prlimit").is_file(){return Err(Error::Unsupported);}
@@ -85,7 +87,7 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
 #[cfg(test)]mod tests{
  use super::*;
  #[test]fn rejects_bad_limits_and_unapproved_digest(){
- assert!(!valid_limits(Limits{timeout:Duration::ZERO,address_space_bytes:1,max_file_bytes:1}));
+ assert!(!valid_limits(Limits{timeout:Duration::ZERO,address_space_bytes:1,max_file_bytes:1,input_bytes:1}));
  let p=std::env::temp_dir().join(format!("ovg-pack-{}",uuid::Uuid::new_v4()));
  fs::write(&p,b"binary").unwrap();
  assert!(matches!(verify(&ApprovedPack{binary:p.clone(),sha256:"a".repeat(64)}),Err(Error::HashMismatch)));
