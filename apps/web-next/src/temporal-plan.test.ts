@@ -2,7 +2,7 @@ import {describe,it,expect} from "vitest";
 import type {SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 import type {FeatureCollection} from "geojson";
-import {timestampMs,temporalPopulation,temporalCollection} from "./temporal-plan";
+import {timestampMs,temporalPopulation,temporalCollection,temporalWindowPopulation} from "./temporal-plan";
 const layer={id:"l",source_id:"s",lifecycle:"active",source:{feature_count:3,content_revision:"c",schema_revision:"v",schema:{fields:[{field_id:"time",type:"timestamp"}]}},capabilities:[{name:"feature_read",available:true,actor_authorized:true,technical_supported:true}]} as unknown as SpatialLayer;
 const row=(key:string,time:unknown)=>({key,layer,feature:{feature_id:key,attributes:{time}},geometry:null}) as unknown as StudioRow;
 const rows=[row("a","2026-11-28T00:30:00+07:00"),row("b","2026-11-28T00:00:00Z"),row("c",null)];
@@ -27,5 +27,18 @@ describe("temporal vector frames",()=>{
   const input:FeatureCollection={type:"FeatureCollection",features:[f("l:a"),f("l:b"),f("foreign:a")]};
   const out=temporalCollection(input,new Set(["l:a"]));
   expect(out.features.map(x=>x.id)).toEqual(["l:a"]);expect(out.features[0]!.properties).toMatchObject({selected:false,selectable:false});expect(input.features[0]!.properties?.selected).toBe(true);
+ });
+});
+
+describe("custom temporal ranges",()=>{
+ it("includes interval overlaps and uses exclusive right boundary for events",()=>{
+  const l={...layer,source:{...layer.source,schema:{...layer.source.schema,fields:[...layer.source.schema.fields,{field_id:"until",type:"timestamp"}]}}} as SpatialLayer;
+  const r=rows.map((x,i)=>({...x,layer:l,feature:{...x.feature,attributes:{...x.feature.attributes,until:i===0?"2026-11-28T01:00:00Z":i===1?"2026-11-28T00:00:00Z":null}}}));
+  const start=Date.parse("2026-11-28T00:00:00Z");
+  const p=temporalWindowPopulation(l,r,"time","until",{start,end:start+7200000,stepMs:3600000});
+  expect(p.frames).toEqual([start,start+3600000]);expect([...p.idsAt(0)]).toEqual(["l:a","l:b"]);expect([...p.idsAt(1)]).toEqual([]);expect(p.invalid).toBe(1);
+  expect(p.idsAt(-1).size).toBe(0);
+  expect(()=>temporalWindowPopulation(l,r,"time","until",{start,end:start+5001*60000,stepMs:60000})).toThrow();
+  expect(()=>temporalWindowPopulation(l,r,"time","missing",{start,end:start+60000,stepMs:60000})).toThrow();
  });
 });
