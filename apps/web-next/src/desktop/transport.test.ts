@@ -16,6 +16,15 @@ describe("desktop transport",()=>{
     for(const xy of [[],[1],[NaN,0],Array(8194).fill(0)])expect(()=>desktop.transform("w",4326,3857,xy)).toThrow("INVALID_BATCH");
     expect(invoke).not.toHaveBeenCalled();
   });
+  it("decodes a bounded binary viewport, not a full-layer payload",async()=>{
+    const data={generation:"1",data:{type:"FeatureCollection",features:[]},truncated:false};
+    const invoke=vi.fn().mockResolvedValue(new TextEncoder().encode(JSON.stringify(data)).buffer);
+    vi.stubGlobal("window",{__TAURI__:{core:{invoke}}});
+    expect(await desktop.viewport("workspace",[0,0,1,1])).toEqual(data);
+    expect(invoke).toHaveBeenCalledWith("desktop_viewport",{handle:"workspace",bbox:[0,0,1,1]});
+    invoke.mockResolvedValue(new ArrayBuffer(2*1024*1024+1));
+    await expect(desktop.viewport("workspace",[0,0,1,1])).rejects.toThrow("RESOURCE_LIMIT");
+  });
   it("fails closed without the desktop host",()=>{
     vi.stubGlobal("window",{});
     expect(()=>desktop.capabilities()).toThrow("DESKTOP_HOST_REQUIRED");
