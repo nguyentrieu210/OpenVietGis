@@ -1,14 +1,16 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import {
-  createMapProject, expectUsableMap, mapSignIn, openFixtureMap
+  createMapProject, expectUsableMap, openFixtureMap
 } from "./map-fixtures";
+import { signInIdentity } from "./frontend-auth-helpers";
 
 test.use({ viewport: { width: 1440, height: 900 }, trace: "off", screenshot: "off", video: "off" });
 
 test("T072 authenticated project previews a bounded real LAZ cloud; anonymous project has no cloud controls", async ({ browser, page }) => {
   test.setTimeout(180_000);
-  await mapSignIn(page);
+  await signInIdentity(page, "owner-a", "openvietgis-test-owner-a", "/");
+  await expect(page.locator(".ovg-account-name")).toContainText("Owner Alpha");
   const fixture = await createMapProject(page, "t072-" + Date.now());
   await openFixtureMap(page, fixture);
 
