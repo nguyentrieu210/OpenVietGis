@@ -35,7 +35,7 @@ jobs:
           git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
           test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-          rustup toolchain install 1.85.1 --profile minimal
+          rustup toolchain install 1.85.1 --profile minimal --component rustfmt
           rustup target add --toolchain 1.85.1 aarch64-linux-android
       - name: Generate host integration and actual typed bindings
         run: |
@@ -64,6 +64,7 @@ jobs:
           PY
           flutter pub get
           flutter_rust_bridge_codegen generate
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-cargokit-gradle.py" rust_builder/cargokit/gradle/plugin.gradle
           # Remove only generated example tests; the checked-in real tests replace them.
           find integration_test -maxdepth 1 -type f -name '*_test.dart' -delete || true
       - name: Analyze and test Flutter shell and native bridge

@@ -157,9 +157,12 @@ impl LocalStore {
         Ok(Receipt{revision:rev,replayed:false})
     }
     pub fn query(&self,bbox:[f64;4],after_fid:i64,limit:u32)->Result<Vec<(i64,Feature)>,Error>{
+        let db=self.lock()?;
+        Self::query_in(&db,bbox,after_fid,limit)
+    }
+    fn query_in(db:&Connection,bbox:[f64;4],after_fid:i64,limit:u32)->Result<Vec<(i64,Feature)>,Error>{
         let [minx,miny,maxx,maxy]=bbox;
         if !bbox.iter().all(|n|n.is_finite())||minx>maxx||miny>maxy||after_fid<0||limit==0||limit>4096{return Err(Error::Invalid);}
-        let db=self.lock()?;
         let mut stmt=db.prepare("SELECT f.fid,f.stable_id,f.revision,f.geom,f.attributes FROM rtree_features_geom r JOIN features f ON f.fid=r.id WHERE r.maxx>=?1 AND r.minx<=?2 AND r.maxy>=?3 AND r.miny<=?4 AND f.fid>?5 AND ST_MaxX(f.geom)>=?1 AND ST_MinX(f.geom)<=?2 AND ST_MaxY(f.geom)>=?3 AND ST_MinY(f.geom)<=?4 ORDER BY f.fid LIMIT ?6")?;
         let mut rows=stmt.query(params![minx,maxx,miny,maxy,after_fid,limit])?;
         let mut out=Vec::new();let mut bytes=0usize;

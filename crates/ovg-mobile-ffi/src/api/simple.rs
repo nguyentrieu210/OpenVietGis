@@ -71,6 +71,18 @@ impl NativeWorkspace {
         let m=Mutation{operation_id:id(&operation_id)?,feature_id:id(&feature_id)?,expected_revision,wkb,attributes:serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?};
         self.with_state(|s|s.store.apply(&m).map(|r|r.revision).map_err(|e|e.to_string()))
     }
+    pub fn viewport_geojson(&self,west:f64,south:f64,east:f64,north:f64)->Result<String,String>{
+        self.with_state(|s|s.store.viewport_geojson([west,south,east,north]).map_err(|e|e.to_string()))
+    }
+    pub fn import_geojson(&self,bytes:Vec<u8>)->Result<u32,String>{
+        self.with_state(|s|s.store.import_geojson(&bytes).map_err(|e|e.to_string()))
+    }
+    pub fn import_csv(&self,bytes:Vec<u8>,x:String,y:String,epsg:u32,delimiter:u8)->Result<u32,String>{
+        self.with_state(|s|s.store.import_csv(&bytes,&x,&y,epsg,delimiter).map_err(|e|e.to_string()))
+    }
+    pub fn export_geojson(&self)->Result<String,String>{
+        self.with_state(|s|s.store.export_geojson().map_err(|e|e.to_string()))
+    }
     pub fn checkpoint(&self)->Result<(),String>{
         self.with_state(|s|s.store.checkpoint().map_err(|e|e.to_string()))
     }

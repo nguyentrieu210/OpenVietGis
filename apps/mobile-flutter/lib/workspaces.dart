@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +15,7 @@ class WorkspaceController extends ChangeNotifier{
   SharedPreferences? _prefs;
   NativeWorkspace? _workspace;
   bool _disposed=false;
+  int dataEpoch=0;
   void _notify(){if(!_disposed)notifyListeners();}
   Future<void> boot()async{
     try{
@@ -35,7 +37,7 @@ class WorkspaceController extends ChangeNotifier{
     final next=await openLocalWorkspace(rootPath:_root!,workspaceId:id);
     if(_disposed){await next.close();return;}
     final previous=_workspace;
-    _workspace=next;selected=id;
+    _workspace=next;selected=id;dataEpoch++;
     if(previous!=null)await previous.close();
     await _prefs!.setString('selected-local-workspace',id);
   }
@@ -54,6 +56,21 @@ class WorkspaceController extends ChangeNotifier{
       await _open(id);
     }catch(_){error='CREATE_WORKSPACE_FAILED';}
     finally{busy=false;_notify();}
+  }
+  Future<String> viewport(double west,double south,double east,double north)async{
+    final w=_workspace;
+    if(w==null)throw StateError('NO_LOCAL_WORKSPACE');
+    return w.viewportGeojson(west:west,south:south,east:east,north:north);
+  }
+  Future<int> importGeojson(Uint8List bytes)async{
+    final w=_workspace;if(w==null||busy||!ready)throw StateError('WORKSPACE_UNAVAILABLE');
+    busy=true;error=null;_notify();
+    try{final n=await w.importGeojson(bytes:bytes);dataEpoch++;return n;}
+    finally{busy=false;_notify();}
+  }
+  Future<String> exportGeojson()async{
+    final w=_workspace;if(w==null||busy||!ready)throw StateError('WORKSPACE_UNAVAILABLE');
+    return w.exportGeojson();
   }
   Future<void> toggleLanguage()async{vi=!vi;_notify();await _prefs?.setBool('vi',vi);}
   @override

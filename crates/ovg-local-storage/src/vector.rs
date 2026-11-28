@@ -44,9 +44,11 @@ impl LocalStore{
     }
     /// RFC 7946 XY, bounded candidate export. Explicit refusal if dataset exceeds one page.
     pub fn export_geojson(&self)->Result<String,Error>{
-        let rows=self.query([-180.,-90.,180.,90.],0,MAX_ROWS as u32)?;
+        let mut db=self.lock()?;
+        let tx=db.transaction()?;
+        let rows=Self::query_in(&tx,[-180.,-90.,180.,90.],0,MAX_ROWS as u32)?;
         let last=rows.last().map_or(0,|r|r.0);
-        if !self.query([-180.,-90.,180.,90.],last,1)?.is_empty(){return Err(Error::Limit);}
+        if !Self::query_in(&tx,[-180.,-90.,180.,90.],last,1)?.is_empty(){return Err(Error::Limit);}
         let mut features=Vec::with_capacity(rows.len());let mut size=0usize;
         for (_,f) in rows{
             let g=parse_xy_wkb(&f.wkb,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
@@ -54,7 +56,9 @@ impl LocalStore{
             size=size.checked_add(v.to_string().len()).ok_or(Error::Limit)?;
             if size>MAX_INPUT{return Err(Error::Limit);}features.push(v);
         }
-        Ok(json!({"type":"FeatureCollection","features":features}).to_string())
+        let out=json!({"type":"FeatureCollection","features":features}).to_string();
+        if out.len()>MAX_INPUT{return Err(Error::Limit);}
+        tx.commit()?;Ok(out)
     }
     /// UTF-8 CSV, explicit delimiter, coordinate column names and source CRS.
     /// All original fields retained as strings; formula-like cells are never executed.
@@ -77,5 +81,25 @@ impl LocalStore{
             mutations.push(feature(&json!({"type":"Feature","geometry":{"type":"Point","coordinates":[p.x,p.y]},"properties":props}))?);
         }
         self.apply_batch(&mutations)?;Ok(mutations.len() as u32)
+    }
+}
+
+impl LocalStore{
+    /// Small, viewport-scoped source only. Explicit truncation signal; not a large-layer LOD implementation.
+    pub fn viewport_geojson(&self,bbox:[f64;4])->Result<String,Error>{
+        let mut db=self.lock()?;let tx=db.transaction()?;
+        let rows=Self::query_in(&tx,bbox,0,513)?;
+        let mut features=Vec::new();let mut size=0usize;let mut last=0i64;
+        for (fid,f) in rows{
+            if features.len()>=512{break;}
+            let g=parse_xy_wkb(&f.wkb,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
+            let v=json!({"type":"Feature","id":f.feature_id.to_string(),"properties":{},"geometry":to_geojson(&g.geometry)});
+            let n=v.to_string().len();
+            if size+n>1024*1024{break;}
+            size+=n;last=fid;features.push(v);
+        }
+        let truncated=!Self::query_in(&tx,bbox,last,1)?.is_empty();
+        tx.commit()?;
+        Ok(json!({"data":{"type":"FeatureCollection","features":features},"truncated":truncated}).to_string())
     }
 }

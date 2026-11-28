@@ -12,6 +12,8 @@ dependencies:
   go_router: 14.8.1
   maplibre_gl: 0.28.1
   path_provider: 2.1.5
+  file_picker: 10.3.10
+  share_plus: 10.1.4
   shared_preferences: 2.5.3
   flutter_rust_bridge: 2.11.1
   rust_lib_openvietgis_mobile:
