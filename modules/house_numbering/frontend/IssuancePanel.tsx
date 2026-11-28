@@ -1,3 +1,4 @@
+import {AddressHistoryPanel} from "./AddressHistoryPanel";
 import {useEffect,useState} from "react";
 import {getHouseNumberingProposal,listHouseNumberingProposals,recordHouseNumberingIssuance,replaceHouseNumberingIssuance,listHouseNumberingIssuances,getHouseNumberingIssuance,transitionHouseNumberingIssuance,houseNumberingAddressLookupUrl,stableAddressLookupUrl,type IssuanceDetail,type IssuanceInput,type IssuanceState} from "./api";
 import {hnClient,uiError,withCsrf} from "./client";
@@ -35,6 +36,7 @@ export function IssuancePanel({organizationId:org,projectId:project}:Props){
  {fields.map(([key,label])=><label key={key}>{label}<input disabled={busy} type={key==="effective_date"?"date":"text"} maxLength={key==="template_revision"?100:200} value={form[key]} onChange={e=>setForm(v=>({...v,[key]:e.target.value}))}/></label>)}
  <button className="hn-btn" type="button" disabled={busy||replaceMode||!number||Object.values(form).some(v=>!v.trim())} onClick={()=>void run(async()=>{const result=await withCsrf(()=>recordHouseNumberingIssuance(hnClient,org,project,{proposal_id:proposal,number_id:number,...form}));setDetail(result);await refresh()})}>Ghi nhận chứng nhận đã cấp</button>
  </div>
+ {building&&<AddressHistoryPanel key={org+":"+project+":"+building+":"+number} org={org} project={project} building={building} number={number} proposal={proposal} onChange={async()=>{setDetail(null);await refresh()}}/>}
  {records.map(r=><div key={r.id}><button type="button" disabled={busy} onClick={()=>void run(async()=>{setDetail(await getHouseNumberingIssuance(hnClient,org,project,r.id))})}>{r.number_text} {r.route_name} · {labels[r.state]} · {r.certificate_ref}</button></div>)}
  {detail&&latest&&<div><strong>{detail.record.number_text} {detail.record.route_name}</strong><p>{detail.record.certificate_ref} · {labels[latest.state]}</p>
  {detail.record.replaces_issuance_id&&<p>Thay thế hồ sơ: {detail.record.replaces_issuance_id} · {detail.record.replacement_reason}</p>}

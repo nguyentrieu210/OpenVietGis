@@ -1102,3 +1102,14 @@ export function transitionParcelLink(client:ApiClient,org:string,project:string,
 export function stableAddressLookupUrl(org:string,project:string,number:string){
  return "/api/v1"+base(org,project)+"/addresses/"+encodeURIComponent(number)+"/lookup";
 }
+
+export type AddressHistoryItem={id:string;number_text:string;route_id:string;route_name:string;revision:number;retired_at:string|null;retirement:{effective_date:string;decision_ref:string;reason:string}|null;successor:{new_number_id:string;effective_date:string;decision_ref:string}|null};
+export function listAddressHistory(client:ApiClient,org:string,project:string,building:string){
+ return client.request<{items:AddressHistoryItem[]}>(base(org,project)+"/buildings/"+encodeURIComponent(building)+"/address-history");
+}
+export function retireAddress(client:ApiClient,org:string,project:string,id:string,input:{expected_revision:number;effective_date:string;decision_ref:string;reason:string}){
+ return jsonMutation<unknown>(client,base(org,project)+"/addresses/"+encodeURIComponent(id)+"/retire","POST",input);
+}
+export function linkAddressSuccessor(client:ApiClient,org:string,project:string,id:string,input:{new_number_id:string;proposal_id:string;effective_date:string;decision_ref:string}){
+ return jsonMutation<unknown>(client,base(org,project)+"/addresses/"+encodeURIComponent(id)+"/successor","POST",input);
+}

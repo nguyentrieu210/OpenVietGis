@@ -2,6 +2,7 @@
 
 mod assignment;
 mod buildings;
+mod address_changes;
 mod entrances;
 mod field;
 mod hierarchy;
@@ -50,6 +51,7 @@ pub fn router() -> Router<AppState> {
         .merge(hierarchy::router())
         .merge(assignment::router())
         .merge(buildings::router())
+        .merge(address_changes::router())
         .merge(entrances::router())
         .merge(parcels::router())
         .merge(proposals::router())
