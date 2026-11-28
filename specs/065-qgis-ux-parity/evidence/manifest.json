@@ -497,9 +497,10 @@
         "apps/web-next/src/digitizing.ts",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "packages/spatial-workspace/src/snap-math.ts",
-        "apps/web-next/src/digitizing.test.ts"
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/core-toolkit-smoke.mjs"
       ],
-      "blocker": "Per-layer personal pixel tolerance (4–25 px) now validated, persisted and applied to rendered, authorized geometry candidates, including both segments of an intersection. Targeted vertex/edge/intersection tests added; not yet executed. Map-unit mode, scoped geometry browser fixture and paired QGIS acceptance remain."
+      "blocker": "Per-layer pixel and projected EPSG:3857 metre tolerance with independent persisted settings, bounded flat-map search, intersection limits and world-boundary protection implemented. Unit and synthetic browser persistence tests added, not yet verified. Native/project CRS-specific snapping, actual geometry browser interaction and paired QGIS acceptance remain."
     },
     {
       "id": "EDIT-05",
@@ -596,9 +597,10 @@
         "fixtures/qgis-parity/generate.py",
         "fixtures/qgis-parity/vector-oracle.sql",
         "tests/spec065/edit_processing.py",
-        "tests/spec065/run-attribute-query.sh"
+        "tests/spec065/run-attribute-query.sh",
+        "fixtures/qgis-parity/qgis_oracle.py"
       ],
-      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain."
+      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain. Independent QGIS 3.44 native clip/dissolve/buffer engine oracle and map reference runner added; not executed."
     },
     {
       "id": "PROC-04",
