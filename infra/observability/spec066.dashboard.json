@@ -1,0 +1,332 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Aggregate OpenVietGIS operational metrics. Select only an authorized private Prometheus datasource; no tenant, route, account, feature or token dimensions are exposed.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg:http_latency:p95_5m",
+          "legendFormat": "p95",
+          "refId": "A"
+        },
+        {
+          "expr": "ovg:http_latency:p99_5m",
+          "legendFormat": "p99",
+          "refId": "B"
+        }
+      ],
+      "title": "HTTP request latency (p95 / p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg:http_errors:ratio_5m",
+          "legendFormat": "5xx response ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP server error ratio",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg:http_requests:rate_5m",
+          "legendFormat": "requests / second",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg:tile_cache:hit_ratio_5m",
+          "legendFormat": "hit ratio",
+          "refId": "A"
+        },
+        {
+          "expr": "ovg:tile_cache:capacity_ratio",
+          "legendFormat": "capacity ratio",
+          "refId": "B"
+        }
+      ],
+      "title": "Private tile cache",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg:api:resident_memory_bytes",
+          "legendFormat": "total resident memory",
+          "refId": "A"
+        },
+        {
+          "expr": "ovg:api:max_instance_resident_memory_bytes",
+          "legendFormat": "largest API instance",
+          "refId": "B"
+        }
+      ],
+      "title": "API process memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "expr": "ovg_tile_cache_hits_total",
+          "legendFormat": "hits",
+          "refId": "A"
+        },
+        {
+          "expr": "ovg_tile_cache_misses_total",
+          "legendFormat": "misses",
+          "refId": "B"
+        },
+        {
+          "expr": "ovg_tile_cache_bypasses_total",
+          "legendFormat": "capacity bypasses",
+          "refId": "C"
+        }
+      ],
+      "title": "Private tile cache observations",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "mode": "markdown",
+        "content": "### Build and deployment timing\nBuild duration is recorded in the exact-run release-qualification.json artifact; verified deployment duration belongs to the operator-observed deployment-observation.json receipt. These structured records include source SHA and image digest, contain no request/user dimensions, and are not deployment approval. They are kept as receipts rather than exported as process gauges because builds and deployments are external to the API process."
+      },
+      "targets": [],
+      "title": "Build and deployment receipts",
+      "type": "text"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "openvietgis",
+    "spec-066",
+    "aggregate"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "OpenVietGIS — SPEC 066 Operations",
+  "uid": "openvietgis-spec066-ops",
+  "version": 1,
+  "weekStart": ""
+}
