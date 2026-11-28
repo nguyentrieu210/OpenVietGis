@@ -74,7 +74,7 @@ fn convert(root:&Path,src:&Path,dest:&Path,cancel:&AtomicBool)->R<Export>{
 pub fn native_cad_status(window:WebviewWindow)->Reply<Status>{
  trusted(&window)?;
  let root=window.app_handle().path().resource_dir().map_err(|_|"CAD_RUNTIME_NOT_PACKAGED")?;
- Ok(Status{available:cfg!(feature="native-cad")&&executable(&root).is_ok(),source_revision:SOURCE,mode:"separate native conversion sidecar"})
+ Ok(Status{available:cfg!(feature="native-cad")&&executable(&root).is_ok(),source_revision:SOURCE,mode:"native editor and conversion sidecar"})
 }
 #[tauri::command]
 pub async fn native_cad_convert(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,request_id:Uuid)->Reply<Option<Export>>{
@@ -101,4 +101,126 @@ pub async fn native_cad_convert(window:WebviewWindow,u:State<'_,Unified>,handle:
  use super::*;
  #[test]fn fails_closed_without_sidecar(){let d=tempfile::tempdir().unwrap();assert!(executable(d.path()).is_err());assert!(format(Path::new("a.exe")).is_err());}
  #[test]fn refuses_arbitrary_dwg(){let d=tempfile::tempdir().unwrap();let p=d.path().join("bad.dwg");fs::write(&p,b"not a drawing").unwrap();assert!(drawing(&p,"dwg").is_err());}
+}
+
+#[derive(Clone,Debug,Serialize)]
+pub struct EditorStatus{pub session:Uuid,pub state:String,pub format:String,pub changed:bool,pub bytes:u64,pub sha256:String}
+struct Editor{owner:Uuid,dir:tempfile::TempDir,path:PathBuf,format:String,original:String,child:Option<std::process::Child>,failed:bool}
+#[derive(Clone,Default)]
+pub struct CadEditors{sessions:std::sync::Arc<std::sync::Mutex<std::collections::HashMap<Uuid,Editor>>>}
+fn stage_copy(src:&Path,dest:&Path,fmt:&str)->R<String>{
+ drawing(src,fmt)?;
+ let mut from=file(src,MAX)?.take(MAX+1);
+ let mut to=fs::OpenOptions::new().write(true).create_new(true).open(dest).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let n=std::io::copy(&mut from,&mut to).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ if n==0||n>MAX{return Err("FILE_LIMIT")}
+ to.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(to);
+ drawing(dest,fmt)?;Ok(digest(dest,MAX)?.1)
+}
+impl Editor{
+ fn poll(&mut self,id:Uuid)->R<EditorStatus>{
+  if let Some(child)=self.child.as_mut(){
+   match child.try_wait().map_err(|_|"CAD_PROCESS_FAILED")?{
+    None=>return Ok(EditorStatus{session:id,state:"editing".into(),format:self.format.clone(),changed:false,bytes:0,sha256:String::new()}),
+    Some(s)=>{self.failed=!s.success();self.child=None;}
+   }
+  }
+  drawing(&self.path,&self.format)?;
+  let (bytes,sha256)=digest(&self.path,MAX)?;
+  Ok(EditorStatus{session:id,state:if self.failed{"recoverable"}else{"ready"}.into(),format:self.format.clone(),changed:sha256!=self.original,bytes,sha256})
+ }
+}
+impl CadEditors{
+ fn start(&self,owner:Uuid,resource:&Path,private:&Path,src:&Path)->R<EditorStatus>{
+  let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  if map.len()>=2||map.values().any(|e|e.owner==owner){return Err("CAD_EDITOR_LIMIT")}
+  let fmt=format(src)?;
+  let exe=executable(resource)?;
+  fs::create_dir_all(private).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  if !fs::symlink_metadata(private).map_err(|_|"STORAGE_UNAVAILABLE")?.is_dir(){return Err("INVALID_PRIVATE_ROOT")}
+  let dir=tempfile::Builder::new().prefix("cad-edit-").tempdir_in(private).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let path=dir.path().join(format!("drawing.{fmt}"));
+  let original=stage_copy(src,&path,fmt)?;
+  let child=Command::new(exe).arg("--new-instance").arg(&path).current_dir(dir.path()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_|"CAD_START_FAILED")?;
+  let session=Uuid::new_v4();
+  map.insert(session,Editor{owner,dir,path,format:fmt.into(),original,child:Some(child),failed:false});
+  Ok(EditorStatus{session,state:"editing".into(),format:fmt.into(),changed:false,bytes:0,sha256:String::new()})
+ }
+ fn poll(&self,owner:Uuid,id:Uuid)->R<EditorStatus>{
+  let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  let e=map.get_mut(&id).filter(|e|e.owner==owner).ok_or("STALE_CAD_SESSION")?;
+  e.poll(id)
+ }
+ fn publish(&self,owner:Uuid,id:Uuid,dest:&Path,expected:&str)->R<Export>{
+  let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  let e=map.get_mut(&id).filter(|e|e.owner==owner).ok_or("STALE_CAD_SESSION")?;
+  let s=e.poll(id)?;
+  if s.state=="editing"{return Err("CAD_EDITOR_STILL_OPEN")}
+  if !s.changed{return Err("CAD_DRAWING_UNCHANGED")}
+  if s.sha256!=expected{return Err("CAD_DRAWING_CHANGED")}
+  if format(dest)?!=e.format||dest.exists(){return Err("INVALID_DESTINATION")}
+  let dir=tempfile::tempdir_in(dest.parent().ok_or("INVALID_DESTINATION")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let staged=dir.path().join(format!("result.{}",e.format));
+  if stage_copy(&e.path,&staged,&e.format)?!=expected{return Err("CAD_DRAWING_CHANGED")}
+  fs::hard_link(&staged,dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;
+  let result=Export{bytes:s.bytes,sha256:s.sha256,format:s.format};
+  map.remove(&id);Ok(result)
+ }
+ fn discard(&self,owner:Uuid,id:Uuid)->R<()>{
+  let mut map=self.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  let e=map.get_mut(&id).filter(|e|e.owner==owner).ok_or("STALE_CAD_SESSION")?;
+  if let Some(child)=e.child.as_mut(){
+   if child.try_wait().map_err(|_|"CAD_PROCESS_FAILED")?.is_none(){return Err("CAD_EDITOR_STILL_OPEN")}
+  }
+  map.remove(&id);Ok(())
+ }
+ // Never kill a running editor or delete unsaved working files during GIS exit.
+ // Keep staged copies in private application data for explicit manual recovery.
+ pub fn preserve_on_exit(&self){
+  if let Ok(mut map)=self.sessions.lock(){for (_,e) in map.drain(){let _=e.dir.keep();}}
+ }
+}
+#[tauri::command]
+pub async fn native_cad_edit_open(window:WebviewWindow,u:State<'_,Unified>,editors:State<'_,CadEditors>,handle:Uuid)->Reply<Option<EditorStatus>>{
+ #[cfg(feature="native-cad")]{
+  trusted(&window)?;let app=window.app_handle().clone();let ed=editors.inner().clone();
+  work(window,u.inner().clone(),move|s|{
+   s.with(handle,|_|Ok(()))?;
+   let root=app.path().resource_dir().map_err(|_|"CAD_RUNTIME_NOT_PACKAGED")?;
+   let private=app.path().app_local_data_dir().map_err(|_|"STORAGE_UNAVAILABLE")?.join("cad-recovery");
+   executable(&root)?;
+   let Some(file)=app.dialog().file().add_filter("CAD DWG / DXF",&["dwg","dxf"]).blocking_pick_file()else{return Ok(None)};
+   let path=file.into_path().map_err(|_|"INVALID_FILE")?;
+   s.with(handle,|_|ed.start(handle,&root,&private,&path).map(Some))
+  }).await
+ }
+ #[cfg(not(feature="native-cad"))]{let _=(u,editors,handle);trusted(&window)?;Err("CAD_RUNTIME_NOT_PACKAGED".into())}
+}
+#[tauri::command]
+pub async fn native_cad_edit_poll(window:WebviewWindow,editors:State<'_,CadEditors>,handle:Uuid,session:Uuid)->Reply<EditorStatus>{
+ trusted(&window)?;let ed=editors.inner().clone();
+ tauri::async_runtime::spawn_blocking(move||ed.poll(handle,session)).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
+}
+#[tauri::command]
+pub async fn native_cad_edit_save(window:WebviewWindow,editors:State<'_,CadEditors>,handle:Uuid,session:Uuid,expected:String)->Reply<Option<Export>>{
+ trusted(&window)?;let app=window.app_handle().clone();let ed=editors.inner().clone();
+ tauri::async_runtime::spawn_blocking(move||->R<Option<Export>>{
+  let s=ed.poll(handle,session)?;
+  if s.state=="editing"||!s.changed||s.sha256!=expected{return Err("CAD_DRAWING_NOT_READY")}
+  let Some(file)=app.dialog().file().add_filter("Edited CAD",&[s.format.as_str()]).set_file_name(format!("edited.{}",s.format)).blocking_save_file()else{return Ok(None)};
+  let dest=file.into_path().map_err(|_|"INVALID_DESTINATION")?;
+  ed.publish(handle,session,&dest,&expected).map(Some)
+ }).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
+}
+#[tauri::command]
+pub fn native_cad_edit_discard(window:WebviewWindow,editors:State<'_,CadEditors>,handle:Uuid,session:Uuid)->Reply<()>{
+ trusted(&window)?;editors.discard(handle,session).map_err(str::to_owned)
+}
+#[tauri::command]
+pub async fn native_cad_edit_list(window:WebviewWindow,editors:State<'_,CadEditors>,handle:Uuid)->Reply<Vec<EditorStatus>>{
+ trusted(&window)?;let ed=editors.inner().clone();
+ tauri::async_runtime::spawn_blocking(move||->R<Vec<EditorStatus>>{
+  let mut map=ed.sessions.lock().map_err(|_|"SESSION_FAILED")?;
+  map.iter_mut().filter(|(_,e)|e.owner==handle).map(|(id,e)|e.poll(*id)).collect()
+ }).await.map_err(|_|"SESSION_FAILED".to_owned())?.map_err(str::to_owned)
 }
