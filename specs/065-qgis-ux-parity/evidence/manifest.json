@@ -740,9 +740,11 @@
         "apps/web-next/src/local-mesh.test.ts",
         "apps/web-next/src/mesh-dataset.ts",
         "apps/web-next/src/mesh-dataset.test.ts",
-        "packages/spatial-workspace/src/maplibre3d.ts"
+        "packages/spatial-workspace/src/maplibre3d.ts",
+        "apps/web-next/src/local-ept.ts",
+        "apps/web-next/src/local-ept.test.ts"
       ],
-      "blocker": "Bounded vector temporal playback, local LAS and 2DM, plus explicitly node-ID keyed scalar/vector magnitude JSON v1 datasets with UTC frames, fixed global scale, NULL face omission and interactive Cesium playback. Not SMS DAT/NetCDF, no raster temporal series, LAZ/COPC/EPT, persisted mesh provider or QGIS paired acceptance. New tests not executed."
+      "blocker": "Vector temporal, local LAS/2DM and scalar/vector magnitude JSON temporal mesh playback. Local EPT 1.x binary directory with complete JSON hierarchy, scale/offset and bounded sampled preview added. No remote octree streaming, LAZ/COPC/zstandard, SMS DAT/NetCDF, raster temporal or persisted mesh provider. New tests unexecuted; QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-01",
