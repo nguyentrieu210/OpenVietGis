@@ -162,3 +162,85 @@ pub fn raster_preview(path:&Path,band:usize)->Result<RasterPreview>{
   assert!(Source::vector(Path::new("https://example.com/remote.fgb")).is_err());
  }
 }
+
+#[derive(Clone,Debug,Serialize)]
+pub struct RasterInfo{pub width:usize,pub height:usize,pub bands:usize,pub epsg:Option<u32>,pub geotransform:[f64;6]}
+/// Immutable session source, reopen per operation so no GDAL handle crosses threads.
+pub struct RasterSource{_dir:tempfile::TempDir,path:PathBuf,pub info:RasterInfo}
+impl RasterSource{
+ fn dataset(p:&Path)->Result<Dataset>{
+  Dataset::open_ex(p,DatasetOptions{open_flags:GdalOpenFlags::GDAL_OF_RASTER|GdalOpenFlags::GDAL_OF_READONLY,allowed_drivers:Some(&["GTiff"]),..Default::default()}).map_err(|_|"GDAL_RASTER_OPEN")
+ }
+ pub fn open(source:&Path)->Result<Self>{
+  let _offline=Offline::new()?;
+  if !matches!(source.extension().and_then(|s|s.to_str()).unwrap_or("").to_ascii_lowercase().as_str(),"tif"|"tiff"){return Err("UNSUPPORTED_FORMAT")}
+  let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let path=dir.path().join("raster.tif");
+  let m=fs::symlink_metadata(source).map_err(|_|"INVALID_FILE")?;
+  const LIMIT:u64=512*1024*1024;
+  if !m.file_type().is_file()||m.len()>LIMIT{return Err("RESOURCE_LIMIT")}
+  let mut r=fs::File::open(source).map_err(|_|"INVALID_FILE")?.take(LIMIT+1);
+  let mut w=fs::OpenOptions::new().write(true).create_new(true).open(&path).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  let n=std::io::copy(&mut r,&mut w).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  if n!=m.len(){return Err("SOURCE_CHANGED")}w.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(w);
+  let ds=Self::dataset(&path)?;
+  let (width,height)=ds.raster_size();let bands=ds.raster_count();
+  let geotransform=ds.geo_transform().map_err(|_|"RASTER_GEOREFERENCE_REQUIRED")?;
+  if width==0||height==0||bands==0||bands>256||geotransform.iter().any(|v|!v.is_finite()){return Err("INVALID_RASTER")}
+  let info=RasterInfo{width,height,bands,epsg:ds.spatial_ref().ok().and_then(|s|epsg(&s).ok()),geotransform};
+  drop(ds);Ok(Self{_dir:dir,path,info})
+ }
+ /// Window in native pixel coordinates; binary little-endian Float32, NaN nodata.
+ /// Hard limits on input footprint and decoded output; no remote reads.
+ pub fn window(&self,band:usize,window:[usize;4],shape:[usize;2])->Result<Vec<u8>>{
+  let [x,y,w,h]=window;let [ow,oh]=shape;
+  if band==0||band>self.info.bands||w==0||h==0||ow==0||oh==0||ow>512||oh>512||
+     w.checked_mul(h).is_none_or(|n|n>16*1024*1024)||
+     x.checked_add(w).is_none_or(|n|n>self.info.width)||y.checked_add(h).is_none_or(|n|n>self.info.height){return Err("INVALID_RASTER_WINDOW")}
+  let _offline=Offline::new()?;let ds=Self::dataset(&self.path)?;
+  let b=ds.rasterband(band).map_err(|_|"INVALID_BAND")?;
+  let nodata=b.no_data_value().map(|n|n as f32);
+  let buf=b.read_as::<f32>((x as isize,y as isize),(w,h),(ow,oh),None).map_err(|_|"GDAL_RASTER_READ")?;
+  let mut out=Vec::with_capacity(ow*oh*4);
+  for &v in buf.data(){out.extend(if v.is_finite()&&Some(v)!=nodata{v}else{f32::NAN}.to_le_bytes());}
+  Ok(out)
+ }
+}
+/// Fixed interchange profile: UUID and attributes JSON columns plus WGS84 geometry.
+/// Does not imply native typed attribute column fidelity.
+pub fn export_parquet<I>(dest:&Path,rows:I)->Result<u64>
+where I:IntoIterator<Item=Result<(String,Value,Value)>>{
+ use gdal::{DriverManager,vector::{LayerOptions,Feature,Geometry,OGRFieldType}};
+ let _offline=Offline::new()?;
+ if dest.exists(){return Err("DESTINATION_EXISTS")}
+ let dir=tempfile::tempdir_in(dest.parent().ok_or("INVALID_FILE")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let path=dir.path().join("export.parquet");
+ let driver=DriverManager::get_driver_by_name("Parquet").map_err(|_|"PARQUET_DRIVER_UNAVAILABLE")?;
+ let mut ds=driver.create_vector_only(&path).map_err(|_|"PARQUET_CREATE_FAILED")?;
+ let mut sr=SpatialRef::from_epsg(4326).map_err(|_|"UNSUPPORTED_CRS")?;
+ sr.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
+ let mut count=0u64;let mut total=0usize;
+ {
+  let l=ds.create_layer(LayerOptions{name:"features",srs:Some(&sr),options:Some(&["GEOMETRY_ENCODING=WKB"]),..Default::default()}).map_err(|_|"PARQUET_LAYER_FAILED")?;
+  l.create_defn_fields(&[("stable_id",OGRFieldType::OFTString),("attributes_json",OGRFieldType::OFTString)]).map_err(|_|"PARQUET_SCHEMA_FAILED")?;
+  for row in rows{
+   let (id,g,a)=row?;let g=g.to_string();let a=a.to_string();
+   total=total.saturating_add(g.len()+a.len()+id.len());
+   if id.len()!=36||count>=1_000_000||total>256*1024*1024{return Err("RESOURCE_LIMIT")}
+   let geom=Geometry::from_geojson(&g).map_err(|_|"INVALID_GEOMETRY")?;
+   if geom.is_empty()||geometry_type_has_z(geom.geometry_type())||geometry_type_has_m(geom.geometry_type()){return Err("UNSUPPORTED_DIMENSIONS")}
+   let mut f=Feature::new(l.defn()).map_err(|_|"PARQUET_WRITE_FAILED")?;
+   f.set_field_string(0,&id).map_err(|_|"PARQUET_WRITE_FAILED")?;
+   f.set_field_string(1,&a).map_err(|_|"PARQUET_WRITE_FAILED")?;
+   f.set_geometry(geom).map_err(|_|"PARQUET_WRITE_FAILED")?;
+   f.create(&l).map_err(|_|"PARQUET_WRITE_FAILED")?;count+=1;
+  }
+ }
+ ds.flush_cache().map_err(|_|"PARQUET_WRITE_FAILED")?;drop(ds);
+ let ds=Dataset::open_ex(&path,DatasetOptions{open_flags:GdalOpenFlags::GDAL_OF_VECTOR|GdalOpenFlags::GDAL_OF_READONLY,allowed_drivers:Some(&["Parquet"]),..Default::default()}).map_err(|_|"PARQUET_VERIFY_FAILED")?;
+ let l=ds.layer(0).map_err(|_|"PARQUET_VERIFY_FAILED")?;
+ if l.feature_count()!=count||l.spatial_ref().and_then(|s|epsg(&s).ok())!=Some(4326){return Err("PARQUET_VERIFY_FAILED")}
+ drop(l);drop(ds);
+ fs::File::open(&path).and_then(|f|f.sync_all()).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ fs::hard_link(&path,dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;Ok(count)
+}
