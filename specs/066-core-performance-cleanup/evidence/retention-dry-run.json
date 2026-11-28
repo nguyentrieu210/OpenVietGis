@@ -1,0 +1,324 @@
+{
+  "schema": 1,
+  "mode": "dry-run-only",
+  "protected": [
+    {
+      "section": "worktrees",
+      "worktree": "/opt/ovg-066-work",
+      "HEAD": "70a038c29d7c4a3f5c5dd202a2f55669b97c1c90",
+      "branch": "refs/heads/066-core-performance-cleanup",
+      "bytes": 718332640,
+      "retention": "protect-active"
+    },
+    {
+      "section": "containers",
+      "name": "/openvietgis-live-web-1",
+      "status": "running",
+      "image_ref": "openvietgis-live-web",
+      "retention": "protect-live"
+    },
+    {
+      "section": "containers",
+      "name": "/openvietgis-live-api-1",
+      "status": "running",
+      "image_ref": "openvietgis-live-api",
+      "retention": "protect-live"
+    },
+    {
+      "section": "containers",
+      "name": "/openvietgis-live-migrate-1",
+      "status": "exited",
+      "image_ref": "openvietgis-live-migrate",
+      "retention": "protect-live"
+    },
+    {
+      "section": "containers",
+      "name": "/openvietgis-live-keycloak-1",
+      "status": "running",
+      "image_ref": "quay.io/keycloak/keycloak:26.8.2",
+      "retention": "protect-live"
+    },
+    {
+      "section": "containers",
+      "name": "/openvietgis-live-postgres-1",
+      "status": "running",
+      "image_ref": "openvietgis-live-postgres",
+      "retention": "protect-live"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-web:latest",
+      "id": "sha256:2291c47f9cfadd48be926163e268cc4f62aa5f7128e31f55fe07045c6d5eadd6",
+      "size": "64.6MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-web:candidate-e3be65d9",
+      "id": "sha256:89fb6b3a2824aca4e22e14c8e01522470eb96a41191a27e625cf2c88cc4a04b7",
+      "size": "130MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-web:candidate-1c1395ad",
+      "id": "sha256:7fc7ab3982c06ac784380f7743cfb21882c6b3124e99859618ec44b5c6519bcc",
+      "size": "97.4MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-web:rollback-before-cad-dirty-e3be65d9",
+      "id": "sha256:7fc7ab3982c06ac784380f7743cfb21882c6b3124e99859618ec44b5c6519bcc",
+      "size": "97.4MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-web:rollback-before-guest-1c1395ad",
+      "id": "sha256:59e9c1ba541f0179c09a4729b501b0f3ce6332297db7bfa53bb08835ca468956",
+      "size": "64.6MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-api:latest",
+      "id": "sha256:17b905b6ee16f75e0e2a9679d7f764b190864369582ed18c7ec38f1360a4d20d",
+      "size": "586MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-migrate:latest",
+      "id": "sha256:92548ab477539435a30783227a7138e67c49cfd0d2c3a8693804f5b493a66b2e",
+      "size": "891MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "images",
+      "ref": "openvietgis-live-postgres:latest",
+      "id": "sha256:fd9b63dac78d5754dd9bf140fead50feced92568a10991ef650584097655b4bd",
+      "size": "723MB",
+      "retention": "protect-live-or-rollback"
+    },
+    {
+      "section": "volumes",
+      "name": "openvietgis-live_artifacts",
+      "retention": "protect-live-data"
+    },
+    {
+      "section": "volumes",
+      "name": "openvietgis-live_keycloak_data",
+      "retention": "protect-live-data"
+    },
+    {
+      "section": "volumes",
+      "name": "openvietgis-live_pgdata",
+      "retention": "protect-live-data"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/openvietgis.new",
+      "bytes": 53098121,
+      "retention": "protect-active"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-065-work",
+      "bytes": 393548320,
+      "retention": "protect-active"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-work",
+      "bytes": 718332640,
+      "retention": "protect-active"
+    }
+  ],
+  "manual_review": [
+    {
+      "section": "worktrees",
+      "worktree": "/opt/ovg-066-baseline",
+      "HEAD": "d716ba7a67d094ae04d1a9226c832ff3db37421e",
+      "detached": true,
+      "bytes": 392995148,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "worktrees",
+      "worktree": "/tmp/ovg066-baseline.xnZw1d",
+      "HEAD": "d716ba7a67d094ae04d1a9226c832ff3db37421e",
+      "detached": true,
+      "bytes": 316360735,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/ovg066-postgis-fixture",
+      "status": "exited",
+      "image_ref": "openvietgis-live-postgres:latest",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "ovg-revert-guest-check:builder",
+      "id": "sha256:62ea3d3e96ce0b0d9dfd9e57efcac981b349c2ea949b07f0b84aaea4ca548d7e",
+      "size": "788MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "ovg-e16-web-check:builder",
+      "id": "sha256:de8e66e581be605e87f54f67538d0518aacd13902c9240f05a5280b9471640bd",
+      "size": "788MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "<none>:<none>",
+      "id": "sha256:363918a27240ad13ae3072887f0e92f38eb48ff355385d19e7ab5c852d1d6bcd",
+      "size": "64.6MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "ovg-pan-check:builder",
+      "id": "sha256:673b69af1071ab4016991f43a1470efc68c8a2de35a73c6463f65c013e6556f8",
+      "size": "791MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "<none>:<none>",
+      "id": "sha256:b9ce45f2015c7a8fa3a38d62a325f44ca9bda0ddb1fe5a8c87d05592c89824a9",
+      "size": "64.6MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "ovg-resume-check:builder",
+      "id": "sha256:d1942346257f013235b2c252c62d745287bc077f38995e0dbbbf7a9cdf472946",
+      "size": "789MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "<none>:<none>",
+      "id": "sha256:cf64aad2515a2223762309d9c245ff564f89ef13f64d6e066c90269b71f1903a",
+      "size": "64.7MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "<none>:<none>",
+      "id": "sha256:d2979cca70a1db322bce953fea7eec71e1668f2e132bb59035edfbc033bc5987",
+      "size": "64.7MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "quay.io/keycloak/keycloak:26.8.2",
+      "id": "sha256:4938c322f47d3736c580fc57bb335d35c784489bc7e6d8fbbd52dbdd1b27e72e",
+      "size": "473MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "rust:1.85.1-slim-bookworm",
+      "id": "sha256:8573a005bfcb44d5f462a33f6ad6e85d231f51e759b60c8061777422becfcb94",
+      "size": "807MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "volumes",
+      "name": "ovg-e16-cargo-cache",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/openvietgis-build-cache-backups",
+      "bytes": 4288,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-baseline",
+      "bytes": 392995148,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-pgdata",
+      "bytes": 1612025318,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-rust-cache",
+      "bytes": 29009707,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-rust-target",
+      "bytes": 144916427,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-cad-dirty",
+      "bytes": 392977803,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-e16-native",
+      "bytes": 606475980,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-guest-entry",
+      "bytes": 403087317,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-mcp-rust-live",
+      "bytes": 18563576,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-pan-check",
+      "bytes": 27559616,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-resume-check",
+      "bytes": 27559307,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-revert-guest-check",
+      "bytes": 27733345,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg066-web-layer.lPKtRh",
+      "bytes": 370424079,
+      "retention": "review-owner-before-delete"
+    }
+  ],
+  "automatic_delete": [],
+  "rules": [
+    "No automatic deletion is permitted.",
+    "Live/rollback images, active containers, volumes and active worktrees remain protected.",
+    "Manual-review entries require explicit owner approval and a fresh runtime inventory before any deletion.",
+    "Reclaimable Docker bytes are not evidence that an object is safe to delete."
+  ],
+  "inventory_sha256": "25a612e441ba45f969a82b032e982a1f2ec687b79e1090db54ee8d1072733b57"
+}

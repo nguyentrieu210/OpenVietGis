@@ -1,5 +1,5 @@
 # Tasks — 066
-Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md and evidence/implementation-11.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
+Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md evidence/implementation-11.md and evidence/implementation-12.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
 
 ## W1 audit
 - [x] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
@@ -36,13 +36,13 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 
 ## W5 engines
 - [ ] T026 [P0] Profile allocations, blocking Tokio work and bounded Rayon/jobs — paths: `apps/api-rust/src; crates/ovg-core; crates/ovg-processing`. Acceptance: Comparable benchmark and no correctness change.
-- [ ] T027 [P0] EXPLAIN with representative PostGIS data, index/pool/query optimization — paths: `crates/ovg-storage; apps/api-rust/src/queries.rs; catalog.rs`. Acceptance: Plans and latency evidence; no unsafe index removal.
+- [x] T027 [P0] EXPLAIN with representative PostGIS data, index/pool/query optimization — paths: `crates/ovg-storage; apps/api-rust/src/queries.rs; catalog.rs`. Acceptance: Plans and latency evidence; no unsafe index removal.
 - [ ] T028 [P1] Batch/paginate/stream suitable payloads and cancellation — paths: `apps/api-rust/src/map_render.rs; tilesets.rs; transfers`. Acceptance: Bounded payload and concurrency; contract tests.
 - [ ] T029 [P0] Viewport BBOX, LOD, incremental render and virtual table — paths: `apps/web-next/src/ProfessionalTiles.ts; SpatialWorkspace.tsx; QgisWorkspace.tsx`. Acceptance: 10k/100k/1m tests; source geometry unchanged.
 - [ ] T030 [P1] CAD selection/snap/culling/undo/autosave profile — paths: `apps/web-next/src/CadTool.tsx; native-dxf.ts; packages/spatial-workspace`. Acceptance: CAD accuracy, undo/redo and performance evidence.
 - [ ] T031 [P1] Lazy Cesium, LOD and texture/GPU lifecycle, optimize copy — paths: `apps/web-next/src/Spatial3DSettings.tsx; TilesetPanel.tsx; vite.config.ts`. Acceptance: No 3D initialization outside 3D; measured frame/bytes.
-- [ ] T032 [P1] Bound workers and cancel stale geometry calculations — paths: `apps/web-next/src/SpatialCacheWorker.ts; terrain-flow.worker.ts`. Acceptance: No unbounded queue; stale result ignored.
-- [ ] T033 [P0] Differential CRS/geometry/export and security tests — paths: `tests/rust-parity; tests/architecture; specs/064*/evidence`. Acceptance: No coordinate/data regression.
+- [x] T032 [P1] Bound workers and cancel stale geometry calculations — paths: `apps/web-next/src/SpatialCacheWorker.ts; terrain-flow.worker.ts`. Acceptance: No unbounded queue; stale result ignored.
+- [x] T033 [P0] Differential CRS/geometry/export and security tests — paths: `tests/rust-parity; tests/architecture; specs/064*/evidence`. Acceptance: No coordinate/data regression.
 
 ## W6 sync
 - [x] T034 [P0] Ordered delta/resume/dedup/backpressure — paths: `crates/ovg-sync; apps/api-rust/src/managed_sync.rs; presence.rs`. Acceptance: Reconnect, gaps, concurrent edits, persistence PASS.
@@ -54,7 +54,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [ ] T038 [P1] Optimize multi-stage image and BuildKit cache — paths: `infra/prod/Dockerfile.web; infra/rust-platform/Dockerfile.api-rust; .dockerignore`. Acceptance: Size/build comparison; SBOM and smoke PASS.
 - [ ] T039 [P0] Map then consolidate path filters/concurrency/caches and required checks — paths: `.github/workflows/ci.yml; rust-platform.yml; other workflows`. Acceptance: No lost quality gate; exact final candidate verified.
 - [ ] T040 [P0] Build once on GitHub, publish digest and consume on VPS — paths: `infra/prod/docker-compose.prod.yml; infra/rust-platform; deployment scripts`. Acceptance: Same digest staging/deploy; no repeated build.
-- [ ] T041 [P1] Plan safe cache/log/image/worktree retention, dry-run — paths: `infra/prod; VPS inventory`. Acceptance: Active releases, volumes, backups protected; no destructive action without approval.
+- [x] T041 [P1] Plan safe cache/log/image/worktree retention, dry-run — paths: `infra/prod; VPS inventory`. Acceptance: Active releases, volumes, backups protected; no destructive action without approval.
 - [ ] T042 [P0] Rehearse rollback, health and database compatibility in isolation — paths: `infra/prod; tools/backup_restore.py; rollback-plan.md`. Acceptance: Restore and rollback evidence on staged candidate.
 - [ ] T043 [P1] Track p95/p99, memory, errors, cache hit, build/deploy — paths: `apps/api-rust/src/metrics.rs; infra/prod`. Acceptance: Dashboard/structured metrics with privacy checks.
 
