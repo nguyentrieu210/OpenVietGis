@@ -11,6 +11,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
   const [rows,setRows]=useState<FeatureRow[]>([]),[cursor,setCursor]=useState<string|null>("0"),[filter,setFilter]=useState("");
   const [selected,setSelected]=useState<FeatureRecord>(),[attrs,setAttrs]=useState("{}"),[geometryText,setGeometryText]=useState("");
+  const [catalog,setCatalog]=useState<Awaited<ReturnType<typeof desktop.inspectGPKG>>>(null),[table,setTable]=useState("");
   const [tiles,setTiles]=useState(false);const tileMode=useRef(false);
   const [raster,setRaster]=useState<{id:string;attribution:string}>();
   const styleReady=useRef(false);
@@ -195,7 +196,8 @@ export default function LocalWorkbench({handle}:{handle:string}){
   return <section className="ovg-local-workbench">
     <div className="ovg-local-tools" role="toolbar" aria-label="Công cụ GIS cục bộ">
       <button disabled={busy||!ready} aria-pressed={tiles} onClick={()=>void run(()=>setVectorTiles(!tiles))}>MVT vector tile</button>
-      <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGPKG(handle);if(n!==null)await afterMutation()})}>Nhập GPKG XY</button>
+      <button disabled={busy} onClick={()=>void run(async()=>{const c=await desktop.inspectGPKG(handle);if(c){setCatalog(c);setTable(c.layers[0]?.table??"")}})}>Mở danh sách lớp GPKG</button>
+      {catalog&&<><select aria-label="Lớp GeoPackage" value={table} onChange={e=>setTable(e.target.value)}>{catalog.layers.map(l=><option key={l.table} value={l.table}>{l.table} · EPSG:{l.epsg}</option>)}</select><button disabled={busy||!table} onClick={()=>void run(async()=>{await desktop.importLayer(handle,catalog.id,table);await afterMutation()})}>Nhập lớp vào dự án hiện tại</button></>}
       <button disabled={busy||!ready||!!asset} onClick={()=>void openAsset("cad")}>Mở DXF XY</button><label>EPSG LAS <input aria-label="EPSG LAS" value={lasEpsg} maxLength={10} onChange={e=>setLasEpsg(e.target.value)}/></label><button disabled={busy||!!asset} onClick={()=>void openAsset("las")}>Đọc LAS</button><button disabled={busy||!!asset} onClick={()=>void openAsset("glb")}>Đọc GLB</button><button disabled={busy||!asset} onClick={()=>void closeAsset()}>Đóng tài nguyên</button>
       <button disabled={busy||!ready} onClick={()=>void openRaster()}>Mở MBTiles PNG</button>
       <button disabled={busy||!raster} onClick={()=>void closeRaster()}>Đóng raster</button>
