@@ -127,6 +127,11 @@ impl Host {
         let id=Uuid::new_v4();w.assets.insert(id,asset);
         Ok(AssetInfo{id,kind:kind.into(),count,epsg})
     }
+    pub fn cad_viewport(&self,handle:Uuid,id:Uuid,bbox:[f64;4])->Result<Vec<u8>>{
+        self.read(handle,|w|match w.assets.get(&id){
+            Some(Asset::Cad(a))=>a.viewport(bbox),_=>Err("STALE_HANDLE")
+        })
+    }
     pub fn close_asset(&self,handle:Uuid,id:Uuid)->Result<()>{
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         w.assets.remove(&id).ok_or("STALE_HANDLE")?;Ok(())
@@ -153,15 +158,20 @@ impl Host {
         })
     }
     pub fn attributes(&self,handle:Uuid,after:String,limit:u32,contains:String)->Result<Value>{
-        let n=after.parse::<i64>().map_err(|_|"INVALID_CURSOR")?;
         self.read(handle,|w|{
+            let n=if after=="0"{0}else{
+                let (generation,fid)=after.split_once(':').ok_or("INVALID_CURSOR")?;
+                if generation!=w.generation.to_string(){return Err("STALE_REVISION")}
+                fid.parse::<i64>().map_err(|_|"INVALID_CURSOR")?
+            };
             let raw=w._store.attribute_page(n,limit,&contains).map_err(store_err)?;
             if raw.len()>MAX_READ{return Err("RESOURCE_LIMIT")}
             let mut v:Value=serde_json::from_str(&raw).map_err(|_|"INVALID_LOCAL_DATA")?;
             for row in v.as_array_mut().ok_or("INVALID_LOCAL_DATA")?{
                 for field in ["fid","revision"]{let val=row[field].as_u64().ok_or("INVALID_LOCAL_DATA")?;row[field]=json!(val.to_string());}
             }
-            Ok(json!({"generation":w.generation.to_string(),"rows":v}))
+            let next=v.as_array().and_then(|r|r.last()).and_then(|r|r["fid"].as_str()).map(|fid|format!("{}:{fid}",w.generation));
+            Ok(json!({"generation":w.generation.to_string(),"rows":v,"next":next}))
         })
     }
     pub fn feature(&self,handle:Uuid,id:Uuid)->Result<Value>{
