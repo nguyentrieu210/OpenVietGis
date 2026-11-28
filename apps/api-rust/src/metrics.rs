@@ -44,10 +44,11 @@ impl MetricsRegistry {
             elapsed.as_micros().min(u128::from(u64::MAX)) as u64,
             Ordering::Relaxed,
         );
-        let ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
+        // Compare the full duration, not truncated milliseconds: a request
+        // just above a bucket boundary must belong to the next bucket.
         let bucket = HTTP_BUCKETS_MS
             .iter()
-            .position(|upper| ms <= *upper)
+            .position(|upper| elapsed <= Duration::from_millis(*upper))
             .unwrap_or(HTTP_BUCKETS_MS.len());
         self.http_duration_buckets[bucket].fetch_add(1, Ordering::Relaxed);
     }
@@ -120,6 +121,16 @@ fn process_rss_bytes() -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn histogram_preserves_submillisecond_bucket_boundaries() {
+        let metrics = MetricsRegistry::new();
+        metrics.record_request(200, Duration::from_millis(5));
+        metrics.record_request(200, Duration::from_millis(5) + Duration::from_nanos(1));
+        let out = metrics.render_prometheus(0, 0);
+        assert!(out.contains("ovg_http_request_duration_seconds_bucket{le=\"0.005\"} 1\n"));
+        assert!(out.contains("ovg_http_request_duration_seconds_bucket{le=\"0.010\"} 2\n"));
+    }
 
     #[test]
     fn histogram_is_cumulative_and_has_no_sensitive_labels() {

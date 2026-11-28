@@ -131,6 +131,9 @@ async fn vector_tile(
     if z > MAX_TILE_ZOOM || x >= 1 << z || y >= 1 << z {
         return Err(RenderError::InvalidRequest);
     }
+    // Bound total time spent joining a flight, even if its leader stalls or
+    // successive leaders fail. Do not bypass the same flight and stampede DB.
+    let wait_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
     loop {
         // Authorization is intentionally opened before any cache lookup.  A
         // waiter releases its transaction, waits, then loops through this same
@@ -156,9 +159,17 @@ async fn vector_tile(
             }
             TileCacheLookup::Wait(mut completion) => {
                 read.commit().await?;
-                let _ =
-                    tokio::time::timeout(std::time::Duration::from_secs(5), completion.changed())
-                        .await;
+                if tokio::time::Instant::now() >= wait_deadline
+                    || tokio::time::timeout_at(wait_deadline, completion.changed())
+                        .await
+                        .is_err()
+                {
+                    return Err(AppError::service_unavailable(
+                        "TILE_CACHE_WAIT_TIMEOUT",
+                        "tile generation is temporarily busy",
+                    )
+                    .into());
+                }
             }
             TileCacheLookup::Bypass => {
                 let (body, complete) = read.vector_tile(layer_id, &pins, z, x, y).await?;
