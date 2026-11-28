@@ -75,6 +75,48 @@ impl Unified{
   self.with(h,|s|{let r=s.apply(&Batch{operation:input.operation,expected_project:number(&input.expected_project)?,edits,links:input.links}).map_err(err)?;
    Ok(serde_json::json!({"revision":r.revision.to_string(),"features":r.features.iter().map(|(l,f,r)|serde_json::json!([l,f,r.to_string()])).collect::<Vec<_>>() }))})
  }
+ pub fn import_geojson(&self,h:Uuid,layer:Uuid,path:&std::path::Path,expected:String,operation:Uuid)->UResult<Value>{
+  use std::io::Read;
+  let meta=fs::symlink_metadata(path).map_err(|_|"INVALID_STORAGE")?;
+  if !meta.file_type().is_file()||meta.len()>2*1024*1024{return Err("RESOURCE_LIMIT")}
+  let mut b=Vec::new();fs::File::open(path).map_err(|_|"STORAGE_UNAVAILABLE")?.take(2*1024*1024+1).read_to_end(&mut b).map_err(|_|"STORAGE_UNAVAILABLE")?;
+  if b.len()>2*1024*1024{return Err("RESOURCE_LIMIT")}
+  let v:Value=serde_json::from_slice(&b).map_err(|_|"INVALID_GEOJSON")?;
+  if v["type"]!="FeatureCollection"||v.get("crs").is_some(){return Err("WGS84_FEATURE_COLLECTION_REQUIRED")}
+  let features=v["features"].as_array().ok_or("INVALID_GEOJSON")?;
+  if features.is_empty()||features.len()>64{return Err("ATOMIC_IMPORT_LIMIT_64")}
+  let mut edits=Vec::new();
+  for f in features{
+   if f["type"]!="Feature"||f["geometry"].is_null(){return Err("INVALID_GEOJSON")}
+   let attrs=if f["properties"].is_null(){serde_json::json!({})}else{f["properties"].clone()};
+   if !attrs.is_object(){return Err("INVALID_ATTRIBUTES")}
+   edits.push(GeometryEdit{layer,feature:Uuid::new_v4(),expected:"0".into(),geometry:Some(f["geometry"].clone()),attributes:attrs});
+  }
+  self.apply(h,Input{operation,expected_project:expected,edits,links:vec![]})
+ }
+ pub fn export_geojson(&self,h:Uuid,layer:Uuid,path:&std::path::Path,expected:u64)->UResult<u64>{
+  use std::io::Write;
+  self.with(h,|s|{
+   let stage=tempfile::NamedTempFile::new_in(path.parent().ok_or("INVALID_STORAGE")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+   let mut f=stage.reopen().map_err(|_|"STORAGE_UNAVAILABLE")?;
+   f.write_all(b"{\"type\":\"FeatureCollection\",\"features\":[").map_err(|_|"STORAGE_UNAVAILABLE")?;
+   let mut after=0;let mut count=0u64;let mut bytes=0usize;
+   loop{
+    let page=s.query(layer,[-180.,-90.,180.,90.],after,100,expected).map_err(err)?;
+    for r in page.rows{
+     let g=ovg_spatial::parse_xy_wkb(&r.image.wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+     let v=serde_json::json!({"type":"Feature","id":r.id,"geometry":ovg_spatial::to_geojson(&g.geometry),"properties":r.image.attributes});
+     let b=serde_json::to_vec(&v).map_err(|_|"INVALID_GEOJSON")?;
+     bytes=bytes.saturating_add(b.len()+1);if bytes>256*1024*1024{return Err("RESOURCE_LIMIT")}
+     if count>0{f.write_all(b",").map_err(|_|"STORAGE_UNAVAILABLE")?;}
+     f.write_all(&b).map_err(|_|"STORAGE_UNAVAILABLE")?;count+=1;
+    }
+    match page.next{Some(n) if n>after=>after=n,Some(_)=>return Err("INVALID_CURSOR"),None=>break}
+   }
+   f.write_all(b"]}").map_err(|_|"STORAGE_UNAVAILABLE")?;f.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(f);
+   stage.persist_noclobber(path).map_err(|_|"DESTINATION_UNAVAILABLE")?;Ok(count)
+  })
+ }
  pub fn query(&self,h:Uuid,plan:Plan,cursor:Option<Cursor>,expected:String)->UResult<Value>{
   self.with(h,|s|{
    let page=s.virtual_page(&plan,cursor.as_ref(),100,number(&expected)?).map_err(err)?;
@@ -184,4 +226,24 @@ mod backup_tests{
   assert!(u.with(w2.handle,|s|crate::mvt::unified_tile(s,layer,3,0,0,0,&AtomicBool::new(true))).is_err());
   u.shutdown().unwrap();
  }
+}
+
+#[tauri::command]
+pub async fn unified_import_geojson(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,expected:String)->Reply<Option<Value>>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  let Some(file)=app.dialog().file().add_filter("WGS84 GeoJSON (max 64 features)",&["geojson","json"]).blocking_pick_file() else{return Ok(None)};
+  let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  s.import_geojson(handle,layer,&path,expected,Uuid::new_v4()).map(Some)
+ }).await
+}
+#[tauri::command]
+pub async fn unified_export_geojson(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,expected:String)->Reply<Option<u64>>{
+ let app=window.app_handle().clone();
+ work(window,u.inner().clone(),move|s|{
+  let Some(file)=app.dialog().file().add_filter("WGS84 GeoJSON",&["geojson"]).set_file_name("layer.geojson").blocking_save_file() else{return Ok(None)};
+  let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+  if path.extension().and_then(|x|x.to_str())!=Some("geojson"){return Err("UNSUPPORTED_FORMAT")}
+  s.export_geojson(handle,layer,&path,number(&expected)?).map(Some)
+ }).await
 }
