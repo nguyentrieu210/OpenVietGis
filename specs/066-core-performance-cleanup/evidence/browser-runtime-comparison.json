@@ -1,0 +1,121 @@
+{
+  "baseline_code_parent": "5bfc83826161acd83b98a925e85690cebde53ae1",
+  "baseline_build_commit": "d716ba7a67d094ae04d1a9226c832ff3db37421e",
+  "candidate": "70a038c29d7c4a3f5c5dd202a2f55669b97c1c90",
+  "failures": {
+    "baseline": [],
+    "candidate": []
+  },
+  "rows": {
+    "cold_gis_ms": {
+      "baseline": {
+        "count": 5,
+        "median_ms": 2127.633532000007,
+        "p95_ms": 2551.176743000018,
+        "min_ms": 1632.5262649999931,
+        "max_ms": 2551.176743000018
+      },
+      "candidate": {
+        "count": 5,
+        "median_ms": 2038.9401080000098,
+        "p95_ms": 2412.733342000007,
+        "min_ms": 1871.6919170000037,
+        "max_ms": 2412.733342000007
+      },
+      "p95_delta_percent": -5.426648756495444,
+      "median_delta_percent": -4.16864195201061
+    },
+    "gis_to_cad_ms": {
+      "baseline": {
+        "count": 30,
+        "median_ms": 861.3281159999897,
+        "p95_ms": 1750.8510549999774,
+        "min_ms": 153.4392419999931,
+        "max_ms": 2586.557690000016
+      },
+      "candidate": {
+        "count": 30,
+        "median_ms": 758.4919780000055,
+        "p95_ms": 1532.975157000008,
+        "min_ms": 112.69258299999638,
+        "max_ms": 2186.8303799999994
+      },
+      "p95_delta_percent": -12.44399958396073,
+      "median_delta_percent": -11.939252427699165
+    },
+    "cad_to_gis_ms": {
+      "baseline": {
+        "count": 30,
+        "median_ms": 457.4408720000065,
+        "p95_ms": 1517.4613329999847,
+        "min_ms": 94.96003800001927,
+        "max_ms": 3135.487576000014
+      },
+      "candidate": {
+        "count": 30,
+        "median_ms": 493.7026790000091,
+        "p95_ms": 1220.9663329999894,
+        "min_ms": 123.34478899999522,
+        "max_ms": 1435.1418650000123
+      },
+      "p95_delta_percent": -19.53888336738253,
+      "median_delta_percent": 7.9271025436489895
+    },
+    "gis_to_3d_ms": {
+      "baseline": {
+        "count": 30,
+        "median_ms": 1222.3163490000006,
+        "p95_ms": 3275.4581600000092,
+        "min_ms": 303.04517299996223,
+        "max_ms": 4156.374866999977
+      },
+      "candidate": {
+        "count": 30,
+        "median_ms": 1594.4431309999782,
+        "p95_ms": 3108.3915129999514,
+        "min_ms": 239.5909709999978,
+        "max_ms": 4653.406308999984
+      },
+      "p95_delta_percent": -5.100558115511311,
+      "median_delta_percent": 30.44439210065555
+    },
+    "cold_shell_ms": {
+      "baseline": {
+        "count": 30,
+        "median_ms": 1820.691006000001,
+        "p95_ms": 3076.9694810000074,
+        "min_ms": 1059.1090609999956,
+        "max_ms": 3656.1161700000002
+      },
+      "candidate": {
+        "count": 30,
+        "median_ms": 1575.8850220000022,
+        "p95_ms": 2283.320684999999,
+        "min_ms": 1323.5010699999984,
+        "max_ms": 4535.163171
+      },
+      "p95_delta_percent": -25.79319687441537,
+      "median_delta_percent": -13.44577323627415
+    },
+    "warm_shell_ms": {
+      "baseline": {
+        "count": 30,
+        "median_ms": 1442.3799409999992,
+        "p95_ms": 3530.8750659999932,
+        "min_ms": 900.98459,
+        "max_ms": 5441.004113999999
+      },
+      "candidate": {
+        "count": 30,
+        "median_ms": 1913.6905890000053,
+        "p95_ms": 2655.6964940000034,
+        "min_ms": 1359.3419909999975,
+        "max_ms": 2707.583983000004
+      },
+      "p95_delta_percent": -24.78644969422409,
+      "median_delta_percent": 32.67590144613681
+    }
+  },
+  "method": "30 independent cold/warm shell contexts; five independent cold GIS engine samples; 30 initialized CAD/3D mode transitions in one warmed context; synthetic loopback API; service worker blocked; external provider requests aborted. Measures browser/client transition timing only, not production network/server latency.",
+  "interpretation": "30-sample p95 is valid for shell and initialized mode transitions. cold_gis_ms has five raw samples and is not a p95 qualification. Synthetic loopback browser timings are not field CWV or production API latency."
+}

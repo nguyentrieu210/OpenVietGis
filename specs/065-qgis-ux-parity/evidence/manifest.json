@@ -1,0 +1,607 @@
+{
+  "schema_version": 1,
+  "baseline": "8f12fbfdae21a6e5d74a84ea2f7084a8fbdfee00",
+  "rows": [
+    {
+      "id": "SHELL-01",
+      "task": "T009",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "SHELL-02",
+      "task": "T010",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "SHELL-03",
+      "task": "T011",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/command-search.test.mjs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/locator.ts",
+        "apps/web-next/src/locator.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features"
+    },
+    {
+      "id": "SHELL-04",
+      "task": "T012",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/locator.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "SHELL-05",
+      "task": "T013",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/hotkeys.ts",
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/QgisWorkspace.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "SHELL-06",
+      "task": "T014",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "SHELL-07",
+      "task": "T015",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "SHELL-08",
+      "task": "T016",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-01",
+      "task": "T019",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/dock-sizing.test.mjs",
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "DOCK-02",
+      "task": "T020",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/DockLayout.tsx",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "DOCK-03",
+      "task": "T021",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-04",
+      "task": "T022",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-05",
+      "task": "T023",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/layer-tree.ts",
+        "apps/web-next/layer-tree.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "DOCK-06",
+      "task": "T024",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/layer-tree.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "DOCK-07",
+      "task": "T025",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-08",
+      "task": "T026",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-09",
+      "task": "T027",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "DOCK-10",
+      "task": "T028",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "STYLE-01",
+      "task": "T031",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "STYLE-02",
+      "task": "T032",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/graduated.ts",
+        "apps/web-next/graduated.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "STYLE-03",
+      "task": "T033",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "STYLE-04",
+      "task": "T034",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/label-expr.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "STYLE-05",
+      "task": "T035",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/label-expr.ts",
+        "apps/web-next/label-expr.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; template language, not full QGIS expression AST"
+    },
+    {
+      "id": "STYLE-06",
+      "task": "T036",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/style-io.ts",
+        "apps/web-next/style-io.test.mjs",
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/graduated.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; contiguous graduated subset, not arbitrary QML/SLD"
+    },
+    {
+      "id": "STYLE-07",
+      "task": "T037",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "STYLE-08",
+      "task": "T038",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "STYLE-09",
+      "task": "T039",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "TABLE-01",
+      "task": "T042",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/table-columns.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; duplicate-source identity and remote selection remain"
+    },
+    {
+      "id": "TABLE-02",
+      "task": "T043",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/table-query.test.ts",
+        "apps/web-next/src/table-columns.ts",
+        "apps/web-next/src/table-columns.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; server query geometry-present only with source/offset limits; local sort loaded/page only"
+    },
+    {
+      "id": "TABLE-03",
+      "task": "T044",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "TABLE-04",
+      "task": "T045",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/attribute-value.ts",
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/attribute-value.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; single field typed dialog; relation widgets and full form edit remain"
+    },
+    {
+      "id": "TABLE-05",
+      "task": "T046",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; no inline multi-cell editor; real transactional rollback not tested"
+    },
+    {
+      "id": "TABLE-06",
+      "task": "T047",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "TABLE-07",
+      "task": "T048",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/table-columns.ts",
+        "apps/web-next/src/table-columns.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; column width/order and selected export remain"
+    },
+    {
+      "id": "TABLE-08",
+      "task": "T049",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "EDIT-01",
+      "task": "T052",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "EDIT-02",
+      "task": "T053",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/digitizing.test.ts"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "EDIT-03",
+      "task": "T054",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/src/LiveApp.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; full project/navigation draft coverage remains"
+    },
+    {
+      "id": "EDIT-04",
+      "task": "T055",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/LayerProperties.tsx",
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; shared pixel tolerance; no per-layer tolerance/map-unit mode; no scoped geometry fixture yet"
+    },
+    {
+      "id": "EDIT-05",
+      "task": "T056",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/AdvancedEditor.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; structural draft checks only; cross-feature topology not added"
+    },
+    {
+      "id": "EDIT-06",
+      "task": "T057",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "EDIT-07",
+      "task": "T058",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/digitizing.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; spherical WGS84 approximation, ellipsoidal/projected CRS parity not verified"
+    },
+    {
+      "id": "EDIT-08",
+      "task": "T059",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; real concurrent conflict, persisted revert and rollback remain"
+    },
+    {
+      "id": "EDIT-09",
+      "task": "T060",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/digitizing.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; spherical WGS84 approximation, ellipsoidal/projected CRS parity not verified"
+    },
+    {
+      "id": "PROC-01",
+      "task": "T063",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/src/ProcessingToolbox.tsx",
+        "apps/web-next/command-search.test.mjs",
+        "apps/web-next/workspace-preferences.test.mjs"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "PROC-02",
+      "task": "T064",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-03",
+      "task": "T065",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-04",
+      "task": "T066",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-05",
+      "task": "T067",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-06",
+      "task": "T068",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-07",
+      "task": "T069",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-08",
+      "task": "T070",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-09",
+      "task": "T071",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "PROC-10",
+      "task": "T072",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-01",
+      "task": "T075",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-02",
+      "task": "T076",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-03",
+      "task": "T077",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-04",
+      "task": "T078",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-05",
+      "task": "T079",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-06",
+      "task": "T080",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-07",
+      "task": "T081",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "OUTPUT-08",
+      "task": "T082",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-01",
+      "task": "T085",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-02",
+      "task": "T086",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-03",
+      "task": "T087",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-04",
+      "task": "T088",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-05",
+      "task": "T089",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-06",
+      "task": "T090",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-07",
+      "task": "T091",
+      "status": "partial",
+      "candidate_paths": [
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/QgisWorkspace.tsx"
+      ],
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+    },
+    {
+      "id": "COLLAB-08",
+      "task": "T092",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    },
+    {
+      "id": "COLLAB-09",
+      "task": "T093",
+      "status": "unverified",
+      "candidate_paths": [],
+      "blocker": "Acceptance evidence not collected"
+    }
+  ]
+}

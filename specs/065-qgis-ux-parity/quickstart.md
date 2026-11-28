@@ -1,0 +1,8 @@
+# Quickstart — baseline audit and verification
+1. Checkout baseline 5bfc83826161acd83b98a925e85690cebde53ae1; keep main intact and do not deploy or use real tenant records.
+2. Install/run QGIS Desktop 3.44 in isolated QA environment. Record exact build/version, renderer, locale, CRS. Create fixture project: point/line/polygon with null/zero/Vietnamese attributes, grouped 20 layers, mixed CRS including validated VN-2000 control points, raster with nodata, 1k/35k/100k vectors, CAD fixture with stable handles, 2 test users (viewer/editor) and separate tenant.
+3. Build canonical OVG web and Rust API using existing repo instructions. Create isolated DEV project via normal authorized API, not production. Import equivalent fixtures.
+4. Execute source inventory and evidence for each feature-matrix ID; capture paired QGIS/OVG screenshots and input sequence. Record unsupported/blocked instead of fabricating.
+5. Run existing tests (`pnpm --filter @openvietgis/web-next test`, `cargo test --locked` in apps/mcp-rust for relevant changes, existing Rust workspace and e2e commands as defined by repo CI). Add targeted Playwright scenarios under tests/e2e. Confirm actual test config/environment before execution.
+6. Test keyboard, IME, screen reader, contrast, zoom and breakpoints; record WCAG findings, not automatic compliance. Run two-user negative authorization and concurrent edit tests against actual PostGIS. Capture timings on fixed fixtures.
+7. Update matrix V only after acceptance. Use DEV artifact + exact tree, merge after gates, smoke authorized live separately; rollback previous compatible frontend release if regression. No GuestStudio reinstatement.

@@ -44,3 +44,15 @@ apps/api/.venv/bin/python -m unittest discover -s tests/rust-parity -p 'test_*.p
 GitHub Actions uploads parity logs and Cargo Audit JSON even on failure. See
 `specs/064-rust-platform/evidence/ci-parity-agent18.md` for the observed baseline
 and remaining cross-engine gates.
+
+## Spec 066 mounted route qualification
+
+`cargo test --locked -p openvietgis-api-rust --test spec066_route_inventory`
+compares the full-profile Axum method/path registrations against all 18 frozen
+engine inventories (API v1 only). It uses a database-free test router with a
+sentinel response before handlers execute, plus negative method/path controls.
+No runtime authorization is bypassed in the deployed binary. Missing routes
+are reported with their method and contract path. Registration is not behavior
+parity: tenant, CSRF, revision, geometry and error behavior must still pass the
+independent differential suites. Keep the oracle and migration implementation
+until ADR approval; do not treat a registration pass as deletion authority.

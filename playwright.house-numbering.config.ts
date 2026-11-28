@@ -57,8 +57,8 @@ export default defineConfig({
     },
     {
       command: `"${execPath}" node_modules/vite/bin/vite.js build && "${execPath}" node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 5178 --strictPort`,
-      cwd: "./apps/web",
-      env: { OPENVIETGIS_VITE_API_TARGET: "http://127.0.0.1:8019" },
+      cwd: "./apps/web-next",
+      env: { OPENVIETGIS_API_PROXY_PORT: "8019" },
       url: "http://127.0.0.1:5178/api/v1/health/ready",
       reuseExistingServer: false,
       timeout: 90_000

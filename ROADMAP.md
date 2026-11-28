@@ -270,3 +270,7 @@ Cross-cutting [Spec 047 — Stable Acceptance](specs/047-stable-acceptance/spec.
 Cross-cutting [Spec 064 — Rust-native platform migration](specs/064-rust-platform/spec.md): proposed R031 child; preserve reference behavior, data and contracts, stage Rust core and API, tiles and incremental sync, benchmark and require security/rollback gates. [Plan](specs/064-rust-platform/plan.md) · [Tasks](specs/064-rust-platform/tasks.md) · [ADR-015 (Proposed)](docs/adr/ADR-015-rust-platform.md). Specification only; no implementation or production promotion implied.
 
 Spec 064 engine decomposition: [18 engine scopes](specs/064-rust-platform/engine-scope.md), [90 child tasks](specs/064-rust-platform/engine-tasks.md), [pinned static inventory](specs/064-rust-platform/contracts/static-inventory.json); runtime inventory and parity remain blocking gates.
+
+
+## 066 — Core architecture, cleanup and performance
+Cross-cutting v1.0 / R001 and R015, preserves R002–R014 contracts. Prerequisites: verified 062, 064 parity and ADR decision, coordination with 065 UX. Status: implementation in progress, slice 01 measured and locally verified, not release certification. [Evidence](specs/066-core-performance-cleanup/evidence/implementation-01.md) · [Spec](specs/066-core-performance-cleanup/spec.md) · [Plan](specs/066-core-performance-cleanup/plan.md) · [Tasks](specs/066-core-performance-cleanup/tasks.md).

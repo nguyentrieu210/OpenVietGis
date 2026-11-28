@@ -6,7 +6,7 @@ self.onmessage=e=>{
     try{
       let value:unknown=true;
       if(command.kind==="read")value=await readCache(command.scope,command.layerId);
-      else if(command.kind==="write")await writeCache(command.scope,command.layer,command.rows);
+      else if(command.kind==="write")await writeCache(command.scope,command.layer,command.rows,command.permissionKey);
       else if(command.kind==="clear")await clearSpatialCache(command.account,command.scope);
       else value=null;
       self.postMessage({id,value});

@@ -3,11 +3,16 @@ WORKDIR /app
 RUN npm install --global pnpm@12.21.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY tools/check_node_runtime.mjs ./tools/check_node_runtime.mjs
+# Dependency layer changes only when a workspace manifest or lockfile changes.
+COPY packages/client-sdk/package.json ./packages/client-sdk/package.json
+COPY packages/spatial-workspace/package.json ./packages/spatial-workspace/package.json
+COPY apps/web-next/package.json ./apps/web-next/package.json
+COPY modules/house_numbering/frontend/package.json ./modules/house_numbering/frontend/package.json
+RUN pnpm validate:runtime && pnpm install --frozen-lockfile
 COPY packages ./packages
-COPY apps/web/package.json ./apps/web/package.json
 COPY apps/web-next ./apps/web-next
 COPY modules ./modules
-RUN pnpm validate:runtime && pnpm install --frozen-lockfile && pnpm --filter @openvietgis/web-next build
+RUN pnpm --filter @openvietgis/web-next build
 # Vite copies public files with source modes; the nginx worker must read them.
 RUN chmod -R a+rX /app/apps/web-next/dist
 
@@ -15,3 +20,4 @@ FROM nginx:1.27-alpine
 COPY infra/prod/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/web-next/dist /usr/share/nginx/html
 EXPOSE 80
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 CMD wget -q -O /dev/null http://127.0.0.1/index.html || exit 1

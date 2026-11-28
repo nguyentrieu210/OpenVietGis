@@ -89,3 +89,16 @@ def test_reject_mixed_snapshot(monkeypatch, changes):
 def test_reject_invalid_initial_page(monkeypatch, changes):
     with pytest.raises(client.ApiError):
         read(monkeypatch, fixture_page(**changes))
+
+
+def test_snapshot_page_bounds_and_cancellation(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    with pytest.raises(client.ApiError):
+        client.load_managed_snapshot(None, layer_id="layer", session_id="s", permission_epoch=2, limit=5001)
+    calls=[]
+    pages=[fixture_page(), fixture_page(features=({"feature_id":"p2"},),has_more=False,next_offset=None)]
+    monkeypatch.setattr(client,"bootstrap_managed_layer",lambda *a,**kw:calls.append(kw) or pages.pop(0))
+    checks=iter([False,True])
+    with pytest.raises(client.ApiError,match="hủy"):
+        client.load_managed_snapshot(None,layer_id="layer",session_id="s",permission_epoch=2,limit=1,cancelled=lambda:next(checks))
+    assert len(calls)==1

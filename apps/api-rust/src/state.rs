@@ -1,16 +1,14 @@
 //! Shared application state injected into Axum handlers.
-
-use std::sync::Arc;
-
+use crate::config::AppConfig;
+use crate::metrics::MetricsRegistry;
+use crate::tile_cache::TileCache;
 #[cfg(feature = "house-numbering")]
 use ovg_module_house_numbering::HouseNumberingModule;
 use ovg_module_sdk::ModuleRegistry;
 use ovg_processing::{ExecutorConfig, JobExecutor};
 use ovg_storage::DbPool;
 use ovg_sync::SyncBroadcaster;
-
-use crate::config::AppConfig;
-use crate::metrics::MetricsRegistry;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,6 +18,7 @@ pub struct AppState {
     pub metrics: MetricsRegistry,
     pub broadcaster: SyncBroadcaster,
     pub jobs: JobExecutor,
+    pub tile_cache: TileCache,
 }
 
 impl AppState {
@@ -39,6 +38,7 @@ impl AppState {
             metrics: MetricsRegistry::new(),
             broadcaster: SyncBroadcaster::new(256),
             jobs,
+            tile_cache: TileCache::new(),
         })
     }
 }

@@ -311,6 +311,55 @@ pub async fn progress(read: &mut ProjectRead<'_>) -> Result<Value, AppError> {
     }))
 }
 
+/// Scoped progress detail, matching the oracle's current-number and latest-survey
+/// ordering. Never include private household records in a progress workbook.
+pub async fn progress_report_rows(read: &mut ProjectRead<'_>) -> Result<Vec<Value>, AppError> {
+    let rows = sqlx::query(
+        "SELECT jsonb_build_object(
+            'building_id',b.id,'route_name',r.name,'house_number',n.number_text,
+            'condition',s.condition,'state',s.state,'updated_at',s.updated_at
+         ) AS wire
+         FROM house_numbering.buildings b
+         LEFT JOIN house_numbering.routes r
+           ON (r.organization_id,r.project_id,r.id)=(b.organization_id,b.project_id,b.route_id)
+         LEFT JOIN LATERAL (
+             SELECT number_text FROM house_numbering.address_numbers n
+             WHERE n.organization_id=b.organization_id AND n.project_id=b.project_id
+               AND n.building_id=b.id AND n.retired_at IS NULL
+             ORDER BY CASE n.kind WHEN 'approved' THEN 1 WHEN 'submitted' THEN 2 ELSE 3 END,
+                      n.created_at DESC LIMIT 1
+         ) n ON true
+         LEFT JOIN LATERAL (
+             SELECT condition,state,updated_at FROM house_numbering.surveys s
+             WHERE s.organization_id=b.organization_id AND s.project_id=b.project_id
+               AND s.building_id=b.id
+             ORDER BY s.updated_at DESC,s.id DESC LIMIT 1
+         ) s ON true
+         WHERE b.organization_id=$1 AND b.project_id=$2 AND b.state='active'
+         ORDER BY r.name,n.number_text,b.id LIMIT 50001",
+    )
+    .bind(read.organization_id())
+    .bind(read.project_id())
+    .fetch_all(&mut **read.transaction())
+    .await
+    .map_err(db_error)?;
+    if rows.len() > 50_000 {
+        return Err(AppError::validation(
+            "REPORT_ROW_LIMIT_EXCEEDED",
+            "Progress report exceeds 50000 buildings.",
+        ));
+    }
+    rows.iter()
+        .map(|row| {
+            let mut value = wire(row)?;
+            if let Some(timestamp) = value["updated_at"].as_str() {
+                value["updated_at"] = Value::String(timestamp.replacen('T', " ", 1));
+            }
+            Ok(value)
+        })
+        .collect()
+}
+
 /// Python `round(x, 3)`: exact decimal rounding of the binary value.
 fn round3(value: f64) -> f64 {
     format!("{value:.3}").parse().unwrap_or(value)

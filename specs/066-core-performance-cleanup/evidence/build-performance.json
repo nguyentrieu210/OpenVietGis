@@ -1,0 +1,11 @@
+{
+  "candidate_source_sha": "70a038c29d7c4a3f5c5dd202a2f55669b97c1c90",
+  "toolchain": "rust 1.85.1, release profile, 2 CPU, 2300 MiB container, separate /opt/ovg-066-rust-target",
+  "cold_cargo_reported_seconds": 698,
+  "cold_cargo_reported": "11m 38s",
+  "warm_cargo_reported_seconds": 0.93,
+  "warm_full_docker_command_ms": 1908,
+  "binary_bytes_note": "du reports 21 MiB",
+  "binary_sha256": "23ca3d5eeff35b3473e37749e5cbf9724df2c657f0be2ecf9f64a7cc3201554a",
+  "interpretation": "Cold included dependency compilation and LTO in the dedicated 066 target/cache. Warm reused exact target/cache. This is a VPS build benchmark, not the still-unrun GitHub Actions/GHA cache workflow."
+}

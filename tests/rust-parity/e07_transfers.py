@@ -3,8 +3,8 @@
 
 Uses the same isolated database/session setup as run.py, never production.
 Each engine creates its own GeoJSON assets and jobs. Generated IDs may differ;
-semantic reports, revision digests and downloaded GeoJSON must agree. FastAPI
-retains GeoPackage and ZIP Shapefile handling under the hybrid scope.
+semantic reports, revision digests and downloaded GeoJSON must agree. Binary
+formats are also exercised through the isolated Rust-owned transfer boundary.
 """
 
 from __future__ import annotations
@@ -222,6 +222,8 @@ def roundtrip(client, manifest, name, fmt, filename, data):
         second["feature_count"] == 2 and second["resolved_source_crs"] == 4326,
         "round-trip inspection differs",
     )
+    if fmt == "geojson" and name == "rust":
+        check_binary_exports(client, base, headers, outsider, export)
     return {
         "source_crs": result["source_crs"],
         "stored_crs": result["stored_crs"],
@@ -231,6 +233,48 @@ def roundtrip(client, manifest, name, fmt, filename, data):
         "disclosures": preview["disclosures"],
         "geojson": payload,
     }
+
+
+def check_binary_exports(client, base, headers, outsider, export):
+    from openvietgis_api.adapters.formats.geopackage import (
+        inspect_geopackage,
+        parse_geopackage_member,
+    )
+    from openvietgis_api.adapters.formats.shapefile_zip import (
+        inspect_shapefile_zip,
+        parse_shapefile_member,
+    )
+
+    for fmt, media, inspect, parse in [
+        ("geopackage", "application/geopackage+sqlite3", inspect_geopackage, parse_geopackage_member),
+        ("shapefile_zip", "application/zip", inspect_shapefile_zip, parse_shapefile_member),
+    ]:
+        options = dict(export, output_format=fmt)
+        preview = response(client.post(f"{base}/exports/preview", json=options, headers=headers), 200)
+        request = dict(
+            options,
+            operation_id=str(uuid4()),
+            preview_fingerprint=preview["preview_fingerprint"],
+            approved_disclosures=[d["code"] for d in preview["disclosures"] if d["requires_approval"]],
+        )
+        job = response(client.post(f"{base}/exports/confirm", json=request, headers=headers), 200)
+        require(job["status"] == "succeeded", f"{fmt} export failed")
+        artifact = job["artifact"]
+        path = f"{base}/artifacts/{artifact['id']}/download"
+        download = client.get(path, headers=headers)
+        require(download.status_code == 200, f"{fmt} download failed")
+        require(download.headers["content-type"].split(";")[0] == media, "binary media type mismatch")
+        require(hashlib.sha256(download.content).hexdigest() == artifact["sha256"], "binary digest mismatch")
+        require(client.get(path, headers=outsider).status_code == 404, "binary cross-tenant leak")
+        members = inspect(download.content)
+        require(len(members) == 1 and members[0].eligible, "invalid binary vector member")
+        parsed = parse(download.content, member_name=members[0].name, declared_crs=4326)
+        require(parsed.detected_crs == 4326 and len(parsed.features) == 2, "binary geometry/CRS mismatch")
+        require(not parsed.findings, "binary export failed independent reader validation")
+        require(
+            response(client.post(f"{base}/exports/confirm", json=request, headers=headers), 200)["id"]
+            == job["id"], "binary replay created another job",
+        )
 
 
 def unsafe_archive():
@@ -278,32 +322,15 @@ def main():
                             expected = roundtrip(oracle, manifest, "python", fmt, filename, data)
                             oracle_ms = (time.monotonic() - start) * 1000
                             start = time.monotonic()
-                            if fmt == "geojson":
-                                actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
-                                rust_ms = (time.monotonic() - start) * 1000
-                                require(actual == expected, f"semantic or revision mismatch: {fmt}")
-                                print(
-                                    f"PASS E07 {fmt} roundtrip; "
-                                    f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
-                                    "(single sample)",
-                                    flush=True,
-                                )
-                            else:
-                                base = project_path(manifest["org_a_id"], manifest["project_a_id"])
-                                headers = session_headers(
-                                    manifest["session_a_token"],
-                                    **{"x-openvietgis-csrf": manifest["csrf_a_token"]},
-                                )
-                                unavailable = rust.post(
-                                    f"{base}/imports/upload",
-                                    files={"file": (filename, data, "application/octet-stream")},
-                                    headers=headers,
-                                )
-                                require(
-                                    response(unavailable, 422).get("code") == "FORMAT_NOT_MIGRATED",
-                                    f"Rust did not report retained format boundary: {fmt}",
-                                )
-                                print(f"PASS E07 {fmt} retained FastAPI roundtrip", flush=True)
+                            actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
+                            rust_ms = (time.monotonic() - start) * 1000
+                            require(actual == expected, f"semantic or revision mismatch: {fmt}")
+                            print(
+                                f"PASS E07 {fmt} roundtrip; "
+                                f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
+                                "(single sample)",
+                                flush=True,
+                            )
                         except (AssertionError, KeyError, ValueError) as exc:
                             failures.append(fmt)
                             print(f"FAIL E07 {fmt}: {exc}", flush=True)
@@ -327,11 +354,7 @@ def main():
                                     files={"file": (name, data)},
                                     headers=headers,
                                 )
-                                expected_code = (
-                                    "FORMAT_NOT_MIGRATED"
-                                    if label == "Rust" and name.endswith(".zip")
-                                    else code
-                                )
+                                expected_code = code
                                 require(
                                     res.status_code == 422
                                     and res.json().get("code") == expected_code,

@@ -48,8 +48,12 @@ try{
  await engine.getByRole("button",{name:"Invalid"}).click();await page.waitForTimeout(120);assert.equal(await controls.getByText("Handle đã chọn: B2").count(),1);
  await engine.getByRole("button",{name:"Pick A1"}).click();await controls.getByRole("button",{name:"Mở trên 3D"}).waitFor();
  await page.evaluate(()=>window.postMessage({source:"ovg-cad-relay",type:"selection",channel:"a".repeat(32),handle:"FAKE"},"*"));assert.equal(await controls.getByText("Handle đã chọn: A1").count(),1);
- await engine.getByRole("button",{name:"Dirty"}).click();await controls.getByRole("button",{name:"Mở trên GIS"}).isDisabled().then(v=>assert.equal(v,true));
- await engine.getByRole("button",{name:"Clean"}).click();assert.equal(await controls.getByRole("button",{name:"Mở trên GIS"}).isEnabled(),true);
+ await engine.getByRole("button",{name:"Dirty"}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll("button")].some(b=>b.textContent?.trim()==="Mở trên GIS"&&(b).disabled));
+ assert.equal(await controls.getByRole("button",{name:"Mở trên GIS"}).isDisabled(),true);
+ await engine.getByRole("button",{name:"Clean"}).click();
+ await page.waitForFunction(()=>[...document.querySelectorAll("button")].some(b=>b.textContent?.trim()==="Mở trên GIS"&&!(b).disabled));
+ assert.equal(await controls.getByRole("button",{name:"Mở trên GIS"}).isEnabled(),true);
  delay=true;await engine.getByRole("button",{name:"Pick B2"}).click();await engine.getByRole("button",{name:"Clear"}).click();await page.waitForTimeout(650);assert.equal(await controls.getByText("Handle đã chọn: B2").count(),0);assert.equal(await controls.getByRole("button",{name:"Mở trên GIS"}).count(),0);
  await page.getByRole("button",{name:"Revoke"}).click();await page.locator("#closed").waitFor();assert.equal(await page.locator("iframe").count(),0);
  // Legacy engine cannot claim native selection: its UI must use the manual lookup fallback.

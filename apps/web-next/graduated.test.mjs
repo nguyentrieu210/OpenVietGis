@@ -15,3 +15,23 @@ test("equal and quantile breaks, class lookup and colour ramp", () => {
   assert.equal(gradColor(0, v), "#000000"); assert.equal(gradColor(1, v), "#ffffff"); assert.equal(gradColor(-1, v), "#bdbdbd");
   assert.equal(zoomScale(0), "1:591.657.550");
 });
+
+import {numeric,validBreaks,gradKey} from "./src/graduated.ts";
+test("graduated nulls, precise legend keys and persisted breaks",()=>{
+ for(const x of [null,"", " ",true,[],{},Infinity,"0x10"])assert.equal(numeric(x),null);
+ assert.equal(numeric(" 15,5 "),15.5);
+ assert.equal(validBreaks([1,1]),true);
+ for(const b of [[1,0],[0,1,1],[0,Infinity],[]])assert.equal(validBreaks(b),false);
+ const v={gradBreaks:[0,0.00001,0.00002]};
+ assert.notEqual(gradKey(0,v),gradKey(0.000015,v));
+});
+
+import {cleanGradColors,gradLegend} from "./src/graduated.ts";
+test("custom class colors persist, invalid keys ignored and legend uses same color",()=>{
+ const b=[0,10,20,30],colors=cleanGradColors({"0":"#ff0000","1":"#00ff00","2":"#0000ff","3":"#123456","-1":"#111111"},b);
+ assert.deepEqual(colors,{"0":"#ff0000","1":"#00ff00","2":"#0000ff"});
+ const ramp={gradField:"value",gradFrom:"#ff0000",gradTo:"#0000ff",gradBreaks:b,gradColors:colors};
+ assert.equal(gradColor(1,ramp),"#00ff00");
+ assert.equal(gradColor(3,ramp),"#bdbdbd");
+ assert.equal(gradLegend([],ramp)[1].color,"#00ff00");
+});

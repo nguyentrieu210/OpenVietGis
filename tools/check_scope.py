@@ -27,12 +27,9 @@ FORBIDDEN_MARKERS = {
     "customrolebuilder": "custom-role builder",
     "publicsharelink": "public/anonymous sharing",
 }
-MAP_UI_ROOT = "apps/web/src/features/map/"
-MAP_ENGINE_ADAPTER = MAP_UI_ROOT + "maplibre-engine.ts"
 # Explicit renderer ownership paths. The Studio compatibility adapter and the
 # independent 3D adapter do not grant renderer access to their parent folders.
 RENDERER_OWNERS = {
-    MAP_ENGINE_ADAPTER,
     "apps/web-next/src/map-surface.ts",
     # E17 owner decision retains the canonical LiveApp MapLibre shell.
     "apps/web-next/src/LiveApp.tsx",
@@ -45,7 +42,6 @@ RENDERER_OWNERS = {
     "packages/spatial-workspace/tests/browser/worker.ts",
 }
 RENDERER_MANIFESTS = {
-    "apps/web/package.json",
     "apps/web-next/package.json",
     "apps/web-next/tsconfig.json",
     "packages/spatial-workspace/package.json",
@@ -61,7 +57,11 @@ EDITING_ENGINE_OWNERS = {
 RETAINED_MARKER_OWNERS = {
     "geoserver": {"apps/web-next/src/DsmPanes.tsx"},
     "house-number": {"apps/api-rust/Cargo.toml"},
-    "house_number": {"apps/web-next/src/AppMarket.tsx"},
+    # E15 byte-format adapter is owned by the feature-gated vertical, not core.
+    "house_number": {
+        "apps/web-next/src/AppMarket.tsx",
+        "apps/api-rust/src/house_numbering/file_codec.py",
+    },
 }
 # These two existing R022 references are not renderer imports: a UI label
 # and an internal type-only contract. Remove only the exact allowed text.
@@ -107,13 +107,10 @@ def find_scope_violations(root: Path = ROOT) -> list[str]:
                 if marker == "maplibre":
                     if relative in RENDERER_OWNERS or relative in RENDERER_MANIFESTS:
                         continue
-                    # The legacy R004 UI may mention the engine by name, but it
-                    # may not import renderer APIs, types or CSS.
-                    if relative.startswith(MAP_UI_ROOT):
-                        if RENDERER_IMPORT.search(content):
-                            violations.append(
-                                f"{relative} imports renderer APIs outside the MapEngine adapter"
-                            )
+                    if RENDERER_IMPORT.search(content):
+                        violations.append(
+                            f"{relative} imports renderer APIs outside an accepted renderer owner"
+                        )
                         continue
                 if marker in content:
                     violations.append(

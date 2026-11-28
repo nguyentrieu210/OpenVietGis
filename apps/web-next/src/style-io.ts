@@ -14,7 +14,7 @@ export type StyleSpec = {
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const hex = (x: string | null | undefined, fallback: string) => (x && /^#[0-9a-f]{6}$/i.test(x.trim()) ? x.trim().toLowerCase() : fallback);
-const num = (x: string | null | undefined, fallback: number) => { const n = Number(x); return Number.isFinite(n) ? n : fallback; };
+const num = (x: string | null | undefined, fallback: number) => { const n = x==null||!x.trim()?NaN:Number(x); return Number.isFinite(n) ? n : fallback; };
 
 function sldSymbolizer(spec: StyleSpec, color: string) {
   const fill = `<CssParameter name="fill">${color}</CssParameter><CssParameter name="fill-opacity">${spec.opacity}</CssParameter>`;
@@ -29,10 +29,10 @@ export function toSLD(name: string, spec: StyleSpec): string {
   const prop = (f: string) => `<ogc:PropertyName>${esc(f)}</ogc:PropertyName>`;
   const rules = spec.renderer === "single" || !spec.field
     ? [`<Rule><Name>${esc(name)}</Name>${sldSymbolizer(spec, spec.color)}</Rule>`]
-    : spec.classes.map(c => {
+    : spec.classes.map((c,index) => {
         const filter = spec.renderer === "categorized"
           ? `<ogc:PropertyIsEqualTo>${prop(spec.field!)}<ogc:Literal>${esc(c.value ?? "")}</ogc:Literal></ogc:PropertyIsEqualTo>`
-          : `<ogc:And><ogc:PropertyIsGreaterThanOrEqualTo>${prop(spec.field!)}<ogc:Literal>${c.min}</ogc:Literal></ogc:PropertyIsGreaterThanOrEqualTo><ogc:PropertyIsLessThanOrEqualTo>${prop(spec.field!)}<ogc:Literal>${c.max}</ogc:Literal></ogc:PropertyIsLessThanOrEqualTo></ogc:And>`;
+          : `<ogc:And><ogc:${index===0?"PropertyIsGreaterThanOrEqualTo":"PropertyIsGreaterThan"}>${prop(spec.field!)}<ogc:Literal>${c.min}</ogc:Literal></ogc:${index===0?"PropertyIsGreaterThanOrEqualTo":"PropertyIsGreaterThan"}><ogc:PropertyIsLessThanOrEqualTo>${prop(spec.field!)}<ogc:Literal>${c.max}</ogc:Literal></ogc:PropertyIsLessThanOrEqualTo></ogc:And>`;
         return `<Rule><Name>${esc(c.label ?? c.value ?? `${c.min} - ${c.max}`)}</Name><ogc:Filter>${filter}</ogc:Filter>${sldSymbolizer(spec, c.color)}</Rule>`;
       });
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -88,6 +88,7 @@ export function parseStyle(xml: string, parser: { parseFromString(s: string, t: 
       return { renderer: "categorized", field: r.getAttribute("attr") ?? undefined, classes: byLocal(r, "category").flatMap(c => { const color = symbolColor(c.getAttribute("symbol")); return color ? [{ value: c.getAttribute("value") ?? "", label: c.getAttribute("label") ?? undefined, color }] : []; }) };
     if (type === "graduatedSymbol")
       return { renderer: "graduated", field: r.getAttribute("attr") ?? undefined, classes: byLocal(r, "range").flatMap(c => { const color = symbolColor(c.getAttribute("symbol")); return color ? [{ min: num(c.getAttribute("lower"), 0), max: num(c.getAttribute("upper"), 0), color }] : []; }).sort((a, b) => a.min! - b.min!) };
+    if(type!=="singleSymbol")throw Error("Kiểu renderer QML chưa được hỗ trợ: "+type);
     const sym = first(r, "symbol");
     return { renderer: "single", color: symbolColor(sym?.getAttribute("name") ?? "0"), opacity: num(sym?.getAttribute("alpha"), 1), classes: [] };
   }
@@ -98,11 +99,12 @@ export function parseStyle(xml: string, parser: { parseFromString(s: string, t: 
   const literal = (el: Element | undefined) => el && first(el, "Literal")?.textContent?.trim();
   const fieldOf = (el: Element | undefined) => el && first(el, "PropertyName")?.textContent?.trim();
   const eq = rules.map(r => ({ r, f: first(r, "PropertyIsEqualTo") }));
-  if (eq.length && eq.every(x => x.f))
+  if (eq.length && eq.every(x => x.f&&fieldOf(x.f)===fieldOf(eq[0]!.f)))
     return { renderer: "categorized", field: fieldOf(eq[0]!.f), classes: eq.flatMap(({ r, f }) => { const color = ruleColor(r); return color ? [{ value: literal(f) ?? "", color }] : []; }) };
   const ranged = rules.map(r => ({ r, lo: first(r, "PropertyIsGreaterThanOrEqualTo") ?? first(r, "PropertyIsGreaterThan"), hi: first(r, "PropertyIsLessThanOrEqualTo") ?? first(r, "PropertyIsLessThan") }));
-  if (ranged.length && ranged.every(x => x.lo && x.hi))
+  if (ranged.length && ranged.every(x => x.lo && x.hi&&fieldOf(x.lo)===fieldOf(ranged[0]!.lo)&&fieldOf(x.hi)===fieldOf(x.lo)))
     return { renderer: "graduated", field: fieldOf(ranged[0]!.lo), classes: ranged.flatMap(({ r, lo, hi }) => { const color = ruleColor(r); return color ? [{ min: num(literal(lo), 0), max: num(literal(hi), 0), color }] : []; }).sort((a, b) => a.min! - b.min!) };
+  if(rules.length!==1||rules.some(r=>!!first(r,"Filter")||!!first(r,"ElseFilter")))throw Error("SLD rule-based hoặc nhiều trường chưa được hỗ trợ.");
   const rule = rules[0];
   if (!rule) throw Error("SLD không có quy tắc (Rule) nào.");
   const fill = first(rule, "Fill"), stroke = first(rule, "Stroke"), size = first(rule, "Size")?.textContent;

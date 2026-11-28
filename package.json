@@ -14,7 +14,7 @@
     "db:migrate": "uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head && uv run --project apps/api python tools/migrate_official_modules.py",
     "dev:reset": "uv run --project apps/api python tools/reset_dev.py",
     "validate:runtime": "node tools/check_node_runtime.mjs",
-    "validate:ts": "pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @openvietgis/web build && pnpm --filter @openvietgis/web-next build",
+    "validate:ts": "pnpm -r lint && pnpm -r typecheck && pnpm -r test && pnpm --filter @openvietgis/web-next build",
     "validate:py": "uv run --project apps/api ruff check apps/api tools tests modules && uv run --project apps/api mypy apps/api/openvietgis_api && uv run --project apps/api pytest apps/api/tests/unit apps/api/tests/contract tools/tests tests/architecture tests/modules/test_house_numbering_domain.py",
     "validate:arch": "uv run --project apps/api python tools/check_architecture.py",
     "validate:docs": "uv run --project apps/api python tools/check_docs.py",

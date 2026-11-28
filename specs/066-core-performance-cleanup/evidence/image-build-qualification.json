@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "candidate_sha": "beb4fdbe93ced1a54983e1ff261372a96261cac1",
+  "exact_local_images": {
+    "web": {"id": "sha256:5135218f317e5cd84e6cf229e5ec5882a64593ab829725379f94f8c9419adbef", "bytes": 64702802, "build_load_ms": 89072},
+    "api": {"id": "sha256:b3b096f8fe5c58d8829c079f90b9e08de7b00535d27dacde3edc0c53a7410685", "bytes": 586099140, "build_load_ms": 37739},
+    "migrate": {"id": "sha256:43f29c5f1d58742c2ec0889d994093d966e640d0d56aae6e16870c143a967055", "bytes": 683732000, "build_load_ms": 156794},
+    "postgres": {"id": "sha256:1848c4e3906d2846203a93ce27610ed408671e42e76452b460a776b328002630", "bytes": 722734500, "build_load_ms": 41097}
+  },
+  "web_cache_probe": {"source_sha": "37f308fc9a19d3304243893f9f655dd12a9dee0a", "cold_build_ms": 67734, "warm_build_ms": 1794, "cold_and_warm_image_identical": true},
+  "attestation_probe": {
+    "rust_pipeline_ms": 1427805,
+    "rust_release_compile_ms": 1249000,
+    "rust_manifest_list_digest": "sha256:70bc93ea149e5fc77049cd72a788679982461ae2de54e6ad669b61f8e6843abe",
+    "rust_image_manifest_digest": "sha256:38fd6e3c2c0f302a18c42b9b05c7fa761241ad533bc14d0980cacdbaac2f2f8f",
+    "rust_attestation_manifest_digest": "sha256:82195437b7eafb17ceffc978518bd77b7b40011a7223d6bcc08fa4ef6a2dc51b",
+    "predicates": ["https://spdx.dev/Document", "https://slsa.dev/provenance/v1"],
+    "web_attestation_verified": true,
+    "note": "BuildKit pipeline qualification before later frontend-only CAD commits; final release attestation remains T040/T047."
+  },
+  "smoke": {"api_live_status": 200, "api_ready_without_database_status": 503, "web_root_status": 200, "web_hashed_asset_status": 200, "web_hashed_asset_cache_control": "public, max-age=31536000, immutable"},
+  "limitations": ["Exact local tags are not GHCR digest receipts.", "Final release provenance must be regenerated on exact final SHA.", "No production service or registry was modified."]
+}

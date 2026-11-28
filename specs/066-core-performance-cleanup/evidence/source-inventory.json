@@ -1,0 +1,206 @@
+{
+  "sha": "5bfc83826161acd83b98a925e85690cebde53ae1",
+  "files": 2271,
+  "bytes": 27733278,
+  "buckets": {
+    ".cargo": {
+      "files": 2,
+      "bytes": 632
+    },
+    ".claude": {
+      "files": 9,
+      "bytes": 135821
+    },
+    "root": {
+      "files": 25,
+      "bytes": 266289
+    },
+    ".github": {
+      "files": 19,
+      "bytes": 60020
+    },
+    ".specify": {
+      "files": 20,
+      "bytes": 103394
+    },
+    "apps/api-rust": {
+      "files": 74,
+      "bytes": 1718066
+    },
+    "apps/api": {
+      "files": 458,
+      "bytes": 4146472
+    },
+    "apps/mcp-rust": {
+      "files": 6,
+      "bytes": 167711
+    },
+    "apps/mcp": {
+      "files": 40,
+      "bytes": 208527
+    },
+    "apps/web-next": {
+      "files": 306,
+      "bytes": 3007237
+    },
+    "apps/web": {
+      "files": 151,
+      "bytes": 868270
+    },
+    "crates/ovg-core": {
+      "files": 5,
+      "bytes": 39335
+    },
+    "crates/ovg-mcp-policy": {
+      "files": 2,
+      "bytes": 14279
+    },
+    "crates/ovg-module-sdk": {
+      "files": 2,
+      "bytes": 25125
+    },
+    "crates/ovg-processing": {
+      "files": 5,
+      "bytes": 28509
+    },
+    "crates/ovg-spatial": {
+      "files": 7,
+      "bytes": 122924
+    },
+    "crates/ovg-storage": {
+      "files": 53,
+      "bytes": 1536635
+    },
+    "crates/ovg-sync": {
+      "files": 9,
+      "bytes": 40789
+    },
+    "docs": {
+      "files": 48,
+      "bytes": 145051
+    },
+    "fixtures": {
+      "files": 11,
+      "bytes": 60368
+    },
+    "infra": {
+      "files": 49,
+      "bytes": 338593
+    },
+    "integrations/microstation-v8i-bridge": {
+      "files": 8,
+      "bytes": 31771
+    },
+    "integrations/qgis_plugin": {
+      "files": 11,
+      "bytes": 271928
+    },
+    "modules/README.md": {
+      "files": 1,
+      "bytes": 336
+    },
+    "modules/house_numbering": {
+      "files": 125,
+      "bytes": 1395201
+    },
+    "modules/land_asset": {
+      "files": 2,
+      "bytes": 1721
+    },
+    "packages/client-sdk": {
+      "files": 44,
+      "bytes": 387869
+    },
+    "packages/plugin-sdk": {
+      "files": 7,
+      "bytes": 31940
+    },
+    "packages/spatial-workspace": {
+      "files": 67,
+      "bytes": 227943
+    },
+    "specs": {
+      "files": 543,
+      "bytes": 8374283
+    },
+    "tests": {
+      "files": 97,
+      "bytes": 3571483
+    },
+    "tools": {
+      "files": 65,
+      "bytes": 404756
+    }
+  },
+  "workflows": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/e06-e08-retention.yml",
+    ".github/workflows/e11-outbox.yml",
+    ".github/workflows/e15-retention.yml",
+    ".github/workflows/e16-mcp-retained.yml",
+    ".github/workflows/e17-web-parity.yml",
+    ".github/workflows/e18-ops-safety.yml",
+    ".github/workflows/hybrid-staging-gateway.yml",
+    ".github/workflows/hybrid-staging-runtime.yml",
+    ".github/workflows/qgis-connector.yml",
+    ".github/workflows/rust-e04-benchmark.yml",
+    ".github/workflows/rust-e05-benchmark.yml",
+    ".github/workflows/rust-mcp.yml",
+    ".github/workflows/rust-platform.yml"
+  ],
+  "legacyScriptReferences": [
+    {
+      "name": "bootstrap",
+      "command": "pnpm install && uv sync --project apps/api && docker compose -f infra/dev/compose.yaml up -d postgres postgres-test && pnpm exec playwright install chromium"
+    },
+    {
+      "name": "dev:api",
+      "command": "uv run --project apps/api uvicorn openvietgis_api.main:app --reload --no-access-log --app-dir apps/api"
+    },
+    {
+      "name": "db:migrate",
+      "command": "uv run --project apps/api alembic -c apps/api/alembic.ini upgrade head && uv run --project apps/api python tools/migrate_official_modules.py"
+    },
+    {
+      "name": "dev:reset",
+      "command": "uv run --project apps/api python tools/reset_dev.py"
+    },
+    {
+      "name": "validate:py",
+      "command": "uv run --project apps/api ruff check apps/api tools tests modules && uv run --project apps/api mypy apps/api/openvietgis_api && uv run --project apps/api pytest apps/api/tests/unit apps/api/tests/contract tools/tests tests/architecture tests/modules/test_house_numbering_domain.py"
+    },
+    {
+      "name": "validate:arch",
+      "command": "uv run --project apps/api python tools/check_architecture.py"
+    },
+    {
+      "name": "validate:docs",
+      "command": "uv run --project apps/api python tools/check_docs.py"
+    },
+    {
+      "name": "validate:integration",
+      "command": "uv run --project apps/api python -m tools.run_with_test_database pytest apps/api/tests/integration apps/api/tests/performance tests/modules modules/house_numbering/tests/integration"
+    },
+    {
+      "name": "validate:e2e",
+      "command": "uv run --project apps/api python -m tools.run_with_test_database node node_modules/@playwright/test/cli.js test"
+    },
+    {
+      "name": "validate:e2e:bootstrap",
+      "command": "uv run --project apps/api python -m tools.run_with_test_database node node_modules/@playwright/test/cli.js test --config playwright.bootstrap.config.ts"
+    },
+    {
+      "name": "validate",
+      "command": "pnpm validate:runtime && pnpm validate:ts && pnpm validate:py && pnpm validate:contracts && pnpm validate:scope && pnpm validate:arch && pnpm validate:docs && pnpm validate:integration && pnpm validate:e2e && pnpm validate:e2e:bootstrap && pnpm validate:e2e:offline && uv run --project apps/api python tools/check_secret_surfaces.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json && uv run --project apps/api python tools/check_tenant_timing.py dist/security-evidence/playwright-p1.json dist/security-evidence/playwright-bootstrap.json"
+    },
+    {
+      "name": "validate:contracts",
+      "command": "uv run --project apps/api python tools/check_contracts.py && pnpm contracts:generate && git diff --exit-code -- packages/client-sdk/src/generated"
+    },
+    {
+      "name": "validate:scope",
+      "command": "uv run --project apps/api python tools/check_scope.py"
+    }
+  ],
+  "notes": "Tracked inventory only: not proof of dead code or deployed runtime role"
+}
