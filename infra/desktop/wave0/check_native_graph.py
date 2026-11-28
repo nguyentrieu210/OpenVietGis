@@ -1,4 +1,4 @@
-"""Reject server and Flutter adapter crates in resolved native dependency metadata."""
+"""Reject server/Flutter adapter crates and split shared OVG package identities."""
 import json
 import sys
 from pathlib import Path
@@ -14,7 +14,14 @@ def violations(data):
     active = {node["id"] for node in resolve["nodes"]}
     if not active <= packages.keys():
         raise ValueError("unresolved package IDs")
-    return sorted({packages[p] for p in active if packages[p] in DENIED})
+    failures = {packages[p] for p in active if packages[p] in DENIED}
+    shared = {}
+    for p in active:
+        name = packages[p]
+        if name.startswith("ovg-"):
+            shared.setdefault(name, set()).add(p)
+    failures.update("duplicate shared crate: " + name for name, ids in shared.items() if len(ids) > 1)
+    return sorted(failures)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -22,4 +29,4 @@ if __name__ == "__main__":
     failures = violations(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")))
     if failures:
         raise SystemExit("Forbidden native dependencies: " + ", ".join(failures))
-    print("Resolved graph excludes the listed server and Flutter adapter crates")
+    print("Resolved graph excludes forbidden server/Flutter crates and duplicate OVG crate identities")

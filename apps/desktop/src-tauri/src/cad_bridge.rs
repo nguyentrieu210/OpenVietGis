@@ -489,6 +489,23 @@ pub async fn native_cad_preview(window:WebviewWindow,u:State<'_,Unified>,handle:
  })).await
 }
 
+#[tauri::command]
+pub async fn native_cad_reshape(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,asset:Uuid,expected:String,sha256:String,entity:String,edit:crate::cad_preview::CadEdit)->Reply<ovg_project_store::asset_store::AssetMeta>{
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  let rev=unified::number(&expected)?;
+  if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=rev{return Err("REVISION_CONFLICT")}
+  let a=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
+  if a.kind!="cad-native-dxf"||a.bytes>4*1024*1024{return Err("DXF_PROFILE_REQUIRED")}
+  if a.sha256!=sha256{return Err("CAD_PARENT_DIGEST_CHANGED")}
+  let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;let p=dir.path().join("source.dxf");let out=dir.path().join("edited.dxf");
+  let cancel=AtomicBool::new(false);
+  store.materialize_asset(asset,&p,&cancel).map_err(|_|"CAD_ASSET_READ_FAILED")?;
+  crate::cad_preview::edit(&p,&out,&entity,&edit)?;
+  let hash=digest(&out,MAX)?.1;
+  store.attach_cad_version(Uuid::new_v4(),"cad-native-dxf",&out,rev,&hash,Some((asset,&a.sha256)),&cancel).map_err(|_|"CAD_ADOPTION_FAILED")
+ })).await
+}
+
 // Explicit layer synchronization, bounded to one atomic GIS batch. No silent
 // overwrite of independently edited features, no implicit coordinate transforms.
 fn cad_wkb(g:&Value)->R<Vec<u8>>{
@@ -512,18 +529,31 @@ fn sync_cad_to_gis(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,child:U
  let(_a,_p,meta,base)=load_dxf(store,asset,revision)?;
  let(_b,_q,next,updated)=load_dxf(store,child,revision)?;
  let rows=projection_rows(store,layer,asset,revision,&meta,&base)?;
- if updated.features().len()!=rows.len(){return Err("SYNC_ENTITY_SET_CHANGED")}
+ if updated.features().len()>64{return Err("SYNC_BATCH_LIMIT")}
+ let root=cad_root(store,asset)?;
  let mut edits=Vec::new();
  for row in rows{
   let h=row.image.attributes["cad_handle"].as_str().ok_or("CAD_PROVENANCE_REQUIRED")?;
   let before=base.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("STALE_ENTITY")?;
-  let after=updated.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("SYNC_ENTITY_SET_CHANGED")?;
+  let Some(after)=updated.features().iter().find(|f|f["properties"]["handle"]==h)else{
+   if row.image.wkb!=cad_wkb(&before["geometry"])?{return Err("GIS_GEOMETRY_CONFLICT")}
+   if row.image.attributes.as_object().map_or(true,|a|a.keys().any(|k|!matches!(k.as_str(),"cad_root"|"cad_asset"|"cad_sha256"|"cad_handle"|"cad_layer"|"cad_entity"))){return Err("GIS_ATTRIBUTE_DELETE_CONFLICT")}
+   edits.push(Edit{layer,feature:row.id,expected:row.revision,image:None});continue
+  };
   if before["properties"]["entity"]!=after["properties"]["entity"]{return Err("SYNC_ENTITY_TYPE_CHANGED")}
   let target=cad_wkb(&after["geometry"])?;
   if row.image.wkb!=cad_wkb(&before["geometry"])?&&row.image.wkb!=target{return Err("GIS_GEOMETRY_CONFLICT")}
   let mut attrs=row.image.attributes.clone();attrs["cad_asset"]=serde_json::json!(child);attrs["cad_sha256"]=serde_json::json!(next.sha256);attrs["cad_layer"]=after["properties"]["layer"].clone();
   edits.push(Edit{layer,feature:row.id,expected:row.revision,image:Some(Image{wkb:target,attributes:attrs})});
  }
+ for after in updated.features(){
+  let h=after["properties"]["handle"].as_str().ok_or("CAD_PROVENANCE_REQUIRED")?;
+  if base.features().iter().any(|f|f["properties"]["handle"]==h){continue}
+  let attrs=serde_json::json!({"cad_root":root,"cad_asset":child,"cad_sha256":next.sha256,"cad_handle":h,"cad_layer":after["properties"]["layer"],"cad_entity":after["properties"]["entity"]});
+  // A reused tombstoned handle conflicts instead of silently resurrecting identity.
+  edits.push(Edit{layer,feature:cad_feature_id(root,h),expected:0,image:Some(Image{wkb:cad_wkb(&after["geometry"])?,attributes:attrs})});
+ }
+ if edits.len()>64{return Err("SYNC_BATCH_LIMIT")}
  store.apply(&Batch{operation,expected_project:revision,edits,links:vec![]}).map_err(|e|match e{ovg_project_store::Error::Conflict=>"REVISION_CONFLICT",ovg_project_store::Error::Limit=>"SYNC_BATCH_LIMIT",_=>"SYNC_FAILED"})
 }
 fn sync_gis_to_cad(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,revision:u64)->R<ovg_project_store::asset_store::AssetMeta>{
@@ -556,6 +586,21 @@ pub async fn native_cad_sync_layer(window:WebviewWindow,u:State<'_,Unified>,hand
 #[cfg(test)]mod sync_tests{
  use super::*;
  use ovg_project_store::{Store,Batch,Edit};
+ #[test]fn sync_add_delete_is_atomic_and_preserves_handle_identity(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("source.dxf");
+  let drawing=|handles:&[&str]|format!("0\nSECTION\n2\nENTITIES\n{}0\nENDSEC\n0\nEOF\n",handles.iter().map(|h|format!("0\nPOINT\n5\n{h}\n8\nSurvey\n10\n106\n20\n11\n")).collect::<String>());
+  fs::write(&p,drawing(&["AB","AC"])).unwrap();
+  let s=Store::create(&d.path().join("p.sqlite")).unwrap();let a=Uuid::new_v4();let h=digest(&p,MAX).unwrap().1;let cancel=AtomicBool::new(false);
+  s.attach_cad_version(a,"cad-native-dxf",&p,0,&h,None,&cancel).unwrap();
+  let l=Uuid::new_v4();project_dxf(&s,a,1,Uuid::new_v4(),l,"Survey").unwrap();
+  fs::write(&p,drawing(&["AC","AD"])).unwrap();let child=Uuid::new_v4();let sha=digest(&p,MAX).unwrap().1;
+  s.attach_cad_version(child,"cad-native-dxf",&p,2,&sha,Some((a,&h)),&cancel).unwrap();
+  let r=sync_cad_to_gis(&s,l,a,child,3,Uuid::new_v4()).unwrap();assert_eq!(r.revision,4);
+  assert!(s.feature(l,cad_feature_id(a,"AB"),4).is_err());
+  assert_eq!(s.feature(l,cad_feature_id(a,"AC"),4).unwrap().1.attributes["cad_asset"],child.to_string());
+  assert_eq!(s.feature(l,cad_feature_id(a,"AD"),4).unwrap().1.attributes["cad_handle"],"AD");
+  assert!(s.integrity().unwrap());
+ }
  #[test]fn direct_child_sync_preserves_stable_id_and_rejects_divergence(){
   let d=tempfile::tempdir().unwrap();let p=d.path().join("source.dxf");
   fs::write(&p,"0\nSECTION\n2\nENTITIES\n0\nPOINT\n5\nAB\n8\nSurvey\n10\n106\n20\n11\n0\nENDSEC\n0\nEOF\n").unwrap();

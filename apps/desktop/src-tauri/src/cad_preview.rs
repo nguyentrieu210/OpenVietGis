@@ -1,5 +1,5 @@
 //! Bounded native-coordinate DXF preview. Never used for authoritative writes.
-use serde::Serialize;
+use serde::{Deserialize,Serialize};
 use std::{collections::{HashMap,HashSet},f64::consts::TAU,io::Read,path::Path};
 type R<T>=Result<T,&'static str>;
 type XY=[f64;2];
@@ -125,8 +125,164 @@ pub fn open(path:&Path)->R<Vec<Stroke>>{
   out.push(Stroke{handle,layer:layer.into(),kind:k.into(),paths,fill:k=="HATCH"});
  }Ok(out)
 }
+/// Authoritative edits operate on native DXF group records, never on sampled
+/// curves. Only the selected supported top-level entity is changed.
+#[derive(Clone,Copy,Debug,Deserialize)]
+#[serde(tag="type",rename_all="snake_case",deny_unknown_fields)]
+pub enum CadEdit{
+ Translate{dx:f64,dy:f64},
+ Vertex{path:usize,vertex:usize,x:f64,y:f64},
+ Radius{radius:f64},
+ ArcAngles{start:f64,end:f64},
+ BlockTransform{scale_x:f64,scale_y:f64,rotation:f64},
+}
+fn finite(v:f64)->R<f64>{if v.is_finite()&&v.abs()<=1e12{Ok(v)}else{Err("INVALID_COORDINATE")}}
+#[cfg(test)]
+pub fn translate(src:&Path,out:&Path,handle:&str,dx:f64,dy:f64)->R<()>{edit(src,out,handle,&CadEdit::Translate{dx,dy})}
+pub fn edit(src:&Path,out:&Path,handle:&str,operation:&CadEdit)->R<()>{
+ let before=open(src)?;
+ let target=before.iter().find(|e|e.handle==handle).ok_or("STALE_ENTITY")?;
+ let mut bytes=Vec::new();std::fs::File::open(src).map_err(|_|"FILE_UNAVAILABLE")?.take(4*1024*1024+1).read_to_end(&mut bytes).map_err(|_|"FILE_UNAVAILABLE")?;
+ if bytes.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}
+ let raw=std::str::from_utf8(&bytes).map_err(|_|"UNSUPPORTED_DXF")?;
+ let lines:Vec<_>=raw.split_inclusive('\n').collect();
+ if lines.len()%2!=0{return Err("INVALID_DXF")}
+ let codes:Vec<u16>=lines.chunks_exact(2).map(|p|p[0].trim().parse().map_err(|_|"INVALID_DXF")).collect::<R<_>>()?;
+ let field=|i:usize|lines[i*2+1].trim();
+ let mut edits=HashMap::new();let mut insertion:Option<(usize,String)>=None;let mut i=0;let mut entities=false;let mut found=false;
+ while i<codes.len(){
+  if codes[i]==0&&field(i)=="SECTION"&&codes.get(i+1)==Some(&2)&&field(i+1)=="ENTITIES"{entities=true;i+=2;continue}
+  if codes[i]==0&&field(i)=="ENDSEC"{entities=false;i+=1;continue}
+  if !entities{i+=1;continue}
+  if codes[i]!=0{return Err("INVALID_DXF")}
+  let kind=field(i);let start=i+1;i=start;while i<codes.len()&&codes[i]!=0{i+=1}
+  if !(start..i).any(|j|codes[j]==5&&field(j).eq_ignore_ascii_case(handle)){continue}
+  if found||kind!=target.kind{return Err("INVALID_DXF_IDENTITY")}found=true;
+  if (start..i).any(|j|codes[j]==102){return Err("UNSUPPORTED_ENTITY_EXTENSION")}
+  let stop=(start..i).find(|j|codes[*j]>=1000).unwrap_or(i);
+  let mut values:Vec<(usize,f64)>=Vec::new();
+  let mut add:Vec<(u16,f64)>=Vec::new();
+  let mut single=|code:u16,value:f64,allow_insert:bool|->R<()>{
+   let matches:Vec<_>=(start..stop).filter(|j|codes[*j]==code).collect();
+   match matches.as_slice(){[j]=>values.push((*j,finite(value)?)),[] if allow_insert=>add.push((code,finite(value)?)),_=>return Err("INVALID_DXF")}
+   Ok(())
+  };
+  match *operation{
+   CadEdit::Translate{dx,dy}=>{
+    if finite(dx).is_err()||finite(dy).is_err()||(dx==0.&&dy==0.){return Err("INVALID_TRANSLATION")}
+    let mut boundary=false;let mut seeds=false;
+    for j in start..stop{
+     let c=codes[j];
+     if kind=="HATCH"{match c{92=>{boundary=true;seeds=false},97=>boundary=false,98=>seeds=true,_=>{}}}
+     let delta=match (kind,c){
+      ("LINE",10|11)=>dx,("LINE",20|21)=>dy,
+      ("POINT"|"LWPOLYLINE"|"ARC"|"CIRCLE"|"INSERT",10)=>dx,
+      ("POINT"|"LWPOLYLINE"|"ARC"|"CIRCLE"|"INSERT",20)=>dy,
+      ("HATCH",10) if boundary||seeds=>dx,("HATCH",20) if boundary||seeds=>dy,
+      _=>continue
+     };
+     values.push((j,finite(num(field(j))?+delta)?));
+    }
+   },
+   CadEdit::Radius{radius} if matches!(kind,"ARC"|"CIRCLE")=>{
+    if radius<=0.{return Err("INVALID_RADIUS")}single(40,radius,false)?;
+   },
+   CadEdit::ArcAngles{start:angle_start,end:angle_end} if kind=="ARC"=>{
+    if !(0. ..=360.).contains(&angle_start)||!(0. ..=360.).contains(&angle_end)||(angle_end-angle_start).rem_euclid(360.)<=1e-10{return Err("INVALID_ARC")}
+    single(50,angle_start,false)?;single(51,angle_end,false)?;
+   },
+   CadEdit::BlockTransform{scale_x,scale_y,rotation} if kind=="INSERT"=>{
+    if scale_x==0.||scale_y==0.||!(-360. ..=360.).contains(&rotation){return Err("INVALID_BLOCK_TRANSFORM")}
+    single(41,scale_x,true)?;single(42,scale_y,true)?;single(50,rotation,true)?;
+   },
+   CadEdit::Vertex{path,vertex,x,y} if matches!(kind,"LWPOLYLINE"|"HATCH")=>{
+    let(a,b)=if kind=="LWPOLYLINE"{
+     if path!=0{return Err("INVALID_PATH")} (start,stop)
+    }else{
+     // Boundary edits for the explicitly supported non-associative solid
+     // hatch profile. Refuse seed-bearing hatches rather than invalidate seeds.
+     if (start..stop).any(|j|codes[j]==98&&num(field(j)).ok()!=Some(0.)){return Err("HATCH_SEED_EDIT_UNSUPPORTED")}
+     let begins:Vec<_>=(start..stop).filter(|j|codes[*j]==92).collect();
+     let a=*begins.get(path).ok_or("INVALID_PATH")?;
+     let stop=begins.get(path+1).copied().unwrap_or(stop);
+     let b=(a..stop).find(|j|codes[*j]==97).ok_or("INVALID_HATCH")?;
+     (a,b)
+    };
+    let xs:Vec<_>=(a..b).filter(|j|codes[*j]==10).collect();
+    let ys:Vec<_>=(a..b).filter(|j|codes[*j]==20).collect();
+    if xs.len()!=ys.len(){return Err("INVALID_POLYLINE")}
+    values.push((*xs.get(vertex).ok_or("INVALID_VERTEX")?,finite(x)?));
+    values.push((*ys.get(vertex).ok_or("INVALID_VERTEX")?,finite(y)?));
+   },
+   _=>return Err("CAD_EDIT_TYPE_UNSUPPORTED")
+  }
+  for(j,v)in values{
+   let at=j*2+1;let end=if lines[at].ends_with("\r\n"){"\r\n"}else if lines[at].ends_with('\n'){"\n"}else{""};
+   if edits.insert(at,format!("{v}{end}")).is_some(){return Err("INVALID_DXF")}
+  }
+  if !add.is_empty(){
+   let end=if lines[start*2].ends_with("\r\n"){"\r\n"}else{"\n"};
+   insertion=Some((stop*2,add.into_iter().map(|(c,v)|format!("{c}{end}{v}{end}")).collect()));
+  }
+ }
+ if !found||(edits.is_empty()&&insertion.is_none()){return Err("STALE_ENTITY")}
+ let mut result=String::with_capacity(raw.len());
+ for(i,line)in lines.iter().enumerate(){
+  if let Some((at,data))=&insertion{if *at==i{result.push_str(data)}}
+  result.push_str(edits.get(&i).map(String::as_str).unwrap_or(line))
+ }
+ if result.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}
+ std::fs::write(out,result).map_err(|_|"FILE_UNAVAILABLE")?;
+ let after=open(out)?;
+ if after.len()!=before.len(){return Err("CAD_FIDELITY_FAILED")}
+ for(a,b)in before.iter().zip(&after){
+  if a.handle!=handle{if a!=b{return Err("CAD_FIDELITY_FAILED")}continue}
+  if a.handle!=b.handle||a.layer!=b.layer||a.kind!=b.kind||a.fill!=b.fill||a.paths.len()!=b.paths.len(){return Err("CAD_FIDELITY_FAILED")}
+  if let CadEdit::Translate{dx,dy}=*operation{
+   for(p,q)in a.paths.iter().zip(&b.paths){
+    if p.len()!=q.len(){return Err("CAD_FIDELITY_FAILED")}
+    for(x,y)in p.iter().zip(q){for k in 0..2{let expected=x[k]+if k==0{dx}else{dy};if (expected-y[k]).abs()>1e-7+expected.abs()*1e-12{return Err("CAD_FIDELITY_FAILED")}}}
+   }
+  }
+ }
+ Ok(())
+}
 #[cfg(test)]mod tests{
  use super::*;
+ #[test]fn translate_all_extended_types_preserves_records(){
+  let dir=tempfile::tempdir().unwrap();let src=dir.path().join("input.dxf");let dst=dir.path().join("output.dxf");
+  let block="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nB\n10\n0\n20\n0\n0\nPOINT\n10\n1\n20\n2\n0\nENDBLK\n0\nENDSEC\n";
+  let items=[
+   ("LWPOLYLINE","90\n2\n70\n1\n10\n1\n20\n2\n10\n3\n20\n4\n"),
+   ("ARC","10\n1\n20\n2\n40\n2\n50\n0\n51\n90\n"),
+   ("CIRCLE","10\n1\n20\n2\n40\n2\n"),
+   ("HATCH","10\n0\n20\n0\n70\n1\n91\n1\n92\n2\n72\n0\n73\n1\n93\n3\n10\n0\n20\n0\n10\n1\n20\n0\n10\n0\n20\n1\n97\n0\n98\n1\n10\n0.2\n20\n0.2\n"),
+   ("INSERT","2\nB\n10\n1\n20\n2\n50\n90\n")
+  ];
+  for(kind,fields)in items{
+   let input=format!("{block}0\nSECTION\n2\nENTITIES\n0\n{kind}\n5\nAB\n8\nSurvey\n62\n4\n{fields}1001\nTEST\n1010\n123\n0\nPOINT\n5\nCD\n8\nOther\n10\n7\n20\n8\n0\nENDSEC\n0\nEOF\n");
+   std::fs::write(&src,&input).unwrap();translate(&src,&dst,"AB",10.,-2.).unwrap();
+   let out=std::fs::read_to_string(&dst).unwrap();assert!(out.starts_with(block));assert!(out.contains("62\n4\n"));assert!(out.contains("1001\nTEST\n1010\n123\n"));assert_eq!(std::fs::read_to_string(&src).unwrap(),input);
+   assert_eq!(translate(&src,&dst,"AB",f64::NAN,0.),Err("INVALID_TRANSLATION"));
+   assert_eq!(translate(&src,&dst,"FF",1.,0.),Err("STALE_ENTITY"));
+  }
+ }
+ #[test]fn native_property_edits_preserve_exact_entity_types(){
+  let dir=tempfile::tempdir().unwrap();let src=dir.path().join("input.dxf");let dst=dir.path().join("output.dxf");
+  let block="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nB\n10\n0\n20\n0\n0\nPOINT\n10\n1\n20\n0\n0\nENDBLK\n0\nENDSEC\n";
+  let fixture=|kind:&str,fields:&str|format!("{block}0\nSECTION\n2\nENTITIES\n0\n{kind}\n5\nAB\n8\nSurvey\n{fields}0\nENDSEC\n0\nEOF\n");
+  std::fs::write(&src,fixture("CIRCLE","10\n0\n20\n0\n40\n2\n")).unwrap();
+  edit(&src,&dst,"AB",&CadEdit::Radius{radius:5.}).unwrap();assert_eq!(open(&dst).unwrap()[0].paths[0][0],[5.,0.]);
+  assert_eq!(edit(&src,&dst,"AB",&CadEdit::Radius{radius:-1.}),Err("INVALID_RADIUS"));
+  std::fs::write(&src,fixture("ARC","10\n0\n20\n0\n40\n2\n50\n0\n51\n90\n")).unwrap();
+  edit(&src,&dst,"AB",&CadEdit::ArcAngles{start:90.,end:180.}).unwrap();let paths=open(&dst).unwrap();assert!((paths[0].paths[0][0][1]-2.).abs()<1e-12);
+  std::fs::write(&src,fixture("LWPOLYLINE","90\n2\n70\n1\n10\n1\n20\n2\n10\n3\n20\n4\n")).unwrap();
+  edit(&src,&dst,"AB",&CadEdit::Vertex{path:0,vertex:0,x:7.,y:8.}).unwrap();assert_eq!(open(&dst).unwrap()[0].paths[0],vec![[7.,8.],[3.,4.],[7.,8.]]);
+  std::fs::write(&src,fixture("HATCH","10\n0\n20\n0\n70\n1\n91\n1\n92\n2\n72\n0\n73\n1\n93\n3\n10\n0\n20\n0\n10\n1\n20\n0\n10\n0\n20\n1\n97\n0\n98\n0\n")).unwrap();
+  edit(&src,&dst,"AB",&CadEdit::Vertex{path:0,vertex:1,x:3.,y:0.}).unwrap();assert_eq!(open(&dst).unwrap()[0].paths[0][1],[3.,0.]);
+  std::fs::write(&src,fixture("INSERT","2\nB\n10\n10\n20\n20\n")).unwrap();
+  edit(&src,&dst,"AB",&CadEdit::BlockTransform{scale_x:2.,scale_y:3.,rotation:90.}).unwrap();let paths=open(&dst).unwrap();assert!((paths[0].paths[0][0][0]-10.).abs()<1e-12);assert!((paths[0].paths[0][0][1]-22.).abs()<1e-12);
+ }
  #[test]fn arc_polyline_block_and_hatch(){
   let f=[(10,"0"),(20,"0"),(40,"2"),(50,"0"),(51,"90")];let v=arc(&f,false).unwrap();assert_eq!(v[0],[2.,0.]);assert!((v.last().unwrap()[1]-2.).abs()<1e-12);
   let p=[(10,"1"),(20,"2"),(10,"3"),(20,"4")];assert_eq!(poly(&p,2,true).unwrap(),vec![[1.,2.],[3.,4.],[1.,2.]]);
