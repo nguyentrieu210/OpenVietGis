@@ -456,9 +456,13 @@
         "apps/web-next/src/AttributeServerQuery.tsx",
         "apps/web-next/src/table-query.ts",
         "apps/web-next/src/query-selection.ts",
-        "apps/web-next/src/query-selection.test.ts"
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/selected-geojson.ts",
+        "apps/web-next/src/selected-geojson.test.ts"
       ],
-      "blocker": "Current page TSV plus selected attribute TSV across revision-pinned source pages (up to 5000 selected FIDs, 50000 source rows, 16 MiB, includes unloaded FIDs and missing geometry states). Formula-injection protection, stale scope guard and no partial export. Full spatial format export and paired QGIS/browser acceptance remain. New tests not executed."
+      "blocker": "Page TSV, selected full-source TSV and selected WGS84 XY GeoJSON including unloaded FIDs, original wire attributes and explicit null geometry state, complete pinned read verification, 5000 selected FIDs/50000 source rows/32 MiB GeoJSON bound. No selected GPKG/SHP or lossless native CRS export and paired QGIS/browser acceptance; new tests not executed."
     },
     {
       "id": "TABLE-08",
