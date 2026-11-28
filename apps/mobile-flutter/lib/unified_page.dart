@@ -109,7 +109,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
   }
   Future<void> _mediaInventory()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_MediaInventoryPage(project:p,layer:l,revision:r,legacyRoot:_legacyRoot!)));
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_MediaInventoryPage(project:p,layer:l,revision:r,legacyRoot:_legacyRoot!,uuid:_uuid)));
     if(mounted)await _refresh();
   }
   Future<void> _survey()async{
@@ -265,11 +265,12 @@ class _SurveyReadPageState extends State<_SurveyReadPage>{
 
 class _MediaInventoryPage extends StatefulWidget{
  final NativeUnifiedProject project;final String layer,revision,legacyRoot;
- const _MediaInventoryPage({required this.project,required this.layer,required this.revision,required this.legacyRoot});
+ final String Function() uuid;
+ const _MediaInventoryPage({required this.project,required this.layer,required this.revision,required this.legacyRoot,required this.uuid});
  @override State<_MediaInventoryPage> createState()=>_MediaInventoryPageState();
 }
 class _MediaInventoryPageState extends State<_MediaInventoryPage>{
- List<Map<String,dynamic>> _rows=[];String? _next,_error,_message;bool _busy=false,_provider=false,_key=false;
+ List<Map<String,dynamic>> _rows=[];String? _next,_error,_message;bool _busy=false,_provider=false,_key=false,_camera=false;
  late String _revision;
  @override void initState(){super.initState();_revision=widget.revision;unawaited(_run(()=>_load('')));}
  Future<void> _run(Future<void> Function() f)async{
@@ -281,7 +282,7 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   final v=jsonDecode(await widget.project.mediaInventory(layerId:widget.layer,after:after,expected:_revision)) as Map<String,dynamic>;
   final status=jsonDecode(await widget.project.mediaKeyStatus(layerId:widget.layer,expected:_revision)) as Map;
   final rows=(v['items'] as List).cast<Map<String,dynamic>>();
-  if(mounted)setState((){_rows=rows;_next=rows.length==100?rows.last['id'].toString():null;_provider=status['provider_available']==true;_key=status['key_available']==true;});
+  if(mounted)setState((){_rows=rows;_next=rows.length==100?rows.last['id'].toString():null;_provider=status['provider_available']==true;_key=status['key_available']==true;_camera=status['native_camera']==true;});
  }
  Future<void> _import()async{
   final pick=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['json'],withData:false);
@@ -298,6 +299,20 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   _revision=r['revision'].toString();await _load('');
   if(mounted)setState(()=>_message='Đã nhập ${r["count"]} media vào revision $_revision.');
  }
+ Future<void> _capture()async{
+  final ctrl=TextEditingController();
+  try{
+   final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Ảnh khảo sát · camera native'),content:Column(mainAxisSize:MainAxisSize.min,children:[const Text('Nhập UUID đối tượng trong lớp hiện tại. Camera Android trả ảnh preview, không yêu cầu ghi file; ứng dụng camera bên ngoài có thể có cách lưu riêng.'),TextField(controller:ctrl,decoration:const InputDecoration(labelText:'UUID đối tượng'))]),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Chụp'))]));
+   if(ok!=true||!mounted)return;
+   final r=jsonDecode(await widget.project.captureMediaPreview(layerId:widget.layer,featureId:ctrl.text.trim(),attachmentId:widget.uuid(),expected:_revision)) as Map;
+   _revision=r['revision'].toString();await _load('');
+   if(mounted)setState(()=>_message='Đã ghi ảnh preview mã hóa vào dự án.');
+  }finally{ctrl.dispose();}
+ }
+ Future<void> _view(String id)async{
+  final ok=await widget.project.viewMediaNative(attachmentId:id,expected:_revision);
+  if(mounted&&!ok)setState(()=>_message='Ảnh không được mở hoặc native viewer không hỗ trợ định dạng.');
+ }
  Future<void> _verify(String id)async{
   final ok=await widget.project.verifyMediaUnlock(attachmentId:id,expected:_revision);
   if(mounted)setState(()=>_message=ok?'Xác thực AEAD thành công; nội dung không xuất qua Flutter.':'Không xác thực được.');
@@ -307,9 +322,10 @@ class _MediaInventoryPageState extends State<_MediaInventoryPage>{
   Text(_key?'Có khóa miền đích trên thiết bị':'Miền đích chưa có khóa khả dụng'),
   const Text('Nhập qua manifest liên kết đã xác thực nguồn. Không gửi khóa hoặc ảnh giải mã qua Flutter. Backup không mang theo khóa; không tự tạo khóa thay thế khi khóa cũ mất.'),
   OutlinedButton(onPressed:_busy||!_provider?null:()=>unawaited(_run(_import)),child:const Text('Nhập manifest media (tối đa 16)')),
+  OutlinedButton(onPressed:_busy||!_camera?null:()=>unawaited(_run(_capture)),child:const Text('Chụp ảnh preview Android')),
   if(_busy)const LinearProgressIndicator(),if(_error!=null)Text(_error!),if(_message!=null)Text(_message!),
   if(!_busy&&_rows.isEmpty&&_error==null)const Text('Không có media mã hóa trong trang này.'),
-  for(final row in _rows)ListTile(leading:Icon(_key?Icons.verified_user:Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext'),trailing:TextButton(onPressed:_busy||!_key?null:()=>unawaited(_run(()=>_verify(row['id'].toString()))),child:const Text('Xác thực'))),
+  for(final row in _rows)ListTile(leading:Icon(_key?Icons.verified_user:Icons.lock_outline),title:Text(row['id'].toString()),subtitle:Text('Đối tượng: ${row["feature"]}\n${row["cipher_bytes"]} byte ciphertext'),trailing:Wrap(children:[TextButton(onPressed:_busy||!_key||!_camera?null:()=>unawaited(_run(()=>_view(row['id'].toString()))),child:const Text('Xem')),TextButton(onPressed:_busy||!_key?null:()=>unawaited(_run(()=>_verify(row['id'].toString()))),child:const Text('Xác thực'))])),
   if(_next!=null)OutlinedButton(onPressed:_busy?null:()=>unawaited(_run(()=>_load(_next!))),child:const Text('Trang tiếp'))
  ])));
 }
