@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod host;
+mod mvt;
+mod gpkg_import;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
 mod protocol;
 use host::{Host, Opened, Poll, Project, Raster};
@@ -38,7 +40,7 @@ struct Capabilities { protocol_version:u32, standalone:bool, managed:bool, cloud
 #[tauri::command]
 fn desktop_capabilities(window:WebviewWindow)->Reply<Capabilities>{
     trusted(&window)?;
-    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:false,transform:true,local_edit:true,viewport:true,raster_archive:true})
+    Ok(Capabilities{protocol_version:1,standalone:true,managed:false,cloud:false,local_tiles:true,transform:true,local_edit:true,viewport:true,raster_archive:true})
 }
 #[tauri::command]
 async fn desktop_list(window:WebviewWindow,host:State<'_,Host>)->Reply<Vec<Project>>{
@@ -149,10 +151,29 @@ async fn desktop_resource(window:WebviewWindow,host:State<'_,Host>,uri:String)->
     let req=protocol::parse(&uri).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let handle=Uuid::parse_str(req.workspace).map_err(|_|"INVALID_RESOURCE".to_owned())?;
     let source=Uuid::parse_str(req.source).map_err(|_|"INVALID_RESOURCE".to_owned())?;
-    if req.revision!=0{return Err("STALE_REVISION".into())}
-    let protocol::Resource::RasterTile{z,x,y}=req.resource else{return Err("NOT_AVAILABLE".into())};
-    let b=run(window,host.inner().clone(),move|h|h.raster_tile(handle,source,z,x,y)).await?;
+    let revision=req.revision;
+    let resource=req.resource;
+    let b=run(window,host.inner().clone(),move|h|match resource{
+        protocol::Resource::RasterTile{z,x,y} if revision==0=>h.raster_tile(handle,source,z,x,y),
+        protocol::Resource::VectorTile{z,x,y}=>h.vector_tile(handle,source,revision,z,x,y),
+        protocol::Resource::TileJson=>h.tilejson(handle,source,revision),
+        _=>Err("NOT_AVAILABLE")
+    }).await?;
     Ok(tauri::ipc::Response::new(b))
+}
+#[tauri::command]
+async fn desktop_import_gpkg(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<u32>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("GeoPackage XY WGS84",&["gpkg"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.import_gpkg(handle,&path).map(Some)
+    }).await
+}
+#[tauri::command]
+async fn desktop_generation(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<String>{
+    run(window,host.inner().clone(),move|h|h.generation(handle)).await
 }
 fn main(){
     tauri::Builder::default()
@@ -189,6 +210,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
