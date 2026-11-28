@@ -358,7 +358,7 @@ function CrsPicker({preferenceScope,current,close,choose,projection}:{preference
  const hit=(c:DisplayCrs)=>!q||n(c.name+" "+c.id+" "+c.group+" EPSG:"+(c.epsg??"")).includes(n(q));
  const groups=[...new Set(DISPLAY_CRS.map(c=>c.group))];
  const row=(c:DisplayCrs,k:string)=><button key={k} type="button" role="option" aria-selected={sel.id===c.id} className={"crs-row"+(sel.id===c.id?" active":"")} onClick={()=>setSel(c)} onDoubleClick={()=>choose(c)}><span>{c.name}</span><small>{c.epsg?"EPSG:"+c.epsg:""}</small></button>;
- return <Modal title="Hệ tọa độ hiển thị" close={close}><div className="crs-picker">
+ return <Modal title="Hệ tọa độ hiển thị" size="lg" resizeScope={preferenceScope+":crs-dialog"} close={close}><div className="crs-picker">
   <input type="search" autoFocus placeholder="Lọc theo tên, EPSG, tỉnh…" value={q} onChange={e=>setQ(e.target.value)} aria-label="Lọc hệ tọa độ"/>
   {!q&&recent.length>0&&<><b className="crs-group">Dùng gần đây</b>{recent.map(c=>row(c,"r"+c.id))}</>}
   <div className="crs-list" role="listbox">{groups.map(g=>{const items=DISPLAY_CRS.filter(c=>c.group===g&&hit(c));return items.length?<React.Fragment key={g}><b className="crs-group">{g}</b>{items.map(c=>row(c,c.id))}</React.Fragment>:null})}</div>

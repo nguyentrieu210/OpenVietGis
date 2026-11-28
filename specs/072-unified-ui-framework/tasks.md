@@ -15,3 +15,5 @@
 [Wave 1 evidence](evidence/dev-wave-1.md).
 
 [Wave 2 evidence](evidence/dev-wave-2.md) · [First-party UI contract](ui-contract.md).
+
+[Wave 3 evidence](evidence/dev-wave-3.md).

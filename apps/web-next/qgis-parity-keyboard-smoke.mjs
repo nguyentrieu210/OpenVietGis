@@ -99,10 +99,10 @@ try{
    const old=page.viewportSize();
    for(const width of [1920,1280,768,640,390,360]){
     await page.setViewportSize({width,height:width<640?720:900});await page.waitForTimeout(100);
-    const layout=await manager.evaluate(el=>{const b=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),buttons=[...el.querySelectorAll(".ovg-plugin-manager-actions button")];return {width:innerWidth,left:b.left,right:b.right,client:body.clientWidth,scroll:body.scrollWidth,buttons:buttons.every(x=>{const r=x.getBoundingClientRect();return r.left>=b.left-1&&r.right<=b.right+1})}});
-    console.log("DIALOG072",JSON.stringify(layout));assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.scroll<=layout.client+1&&layout.buttons,"no clipped action or horizontal overflow");
+    const layout=await manager.evaluate(el=>{const b=el.getBoundingClientRect(),body=el.querySelector(".live-modal-body"),buttons=[...el.querySelectorAll(".ovg-plugin-manager-actions button")];return {width:innerWidth,left:b.left,right:b.right,client:body.clientWidth,scroll:body.scrollWidth,padding:parseFloat(getComputedStyle(body).paddingLeft),gap:parseFloat(getComputedStyle(el.querySelector(".ovg-market-top")).gap),buttons:buttons.every(x=>{const r=x.getBoundingClientRect();return r.left>=b.left-1&&r.right<=b.right+1})}});
+    console.log("DIALOG072",JSON.stringify(layout));assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.scroll<=layout.client+1&&layout.buttons,"no clipped action or horizontal overflow");assert.ok(layout.padding>=12&&layout.gap>=10,"shared modal spacing" );
    }
-   await page.setViewportSize(old);await manager.getByRole("button",{name:"Phóng to cửa sổ"}).click();assert.ok(await manager.evaluate(e=>e.classList.contains("ovg-dialog-maximized")));
+   await page.setViewportSize(old);if(process.env.OVG_UI_SCREENSHOTS)await manager.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/plugin-manager.png"});await manager.getByRole("button",{name:"Phóng to cửa sổ"}).click();assert.ok(await manager.evaluate(e=>e.classList.contains("ovg-dialog-maximized")));
    await manager.getByRole("button",{name:"Khôi phục kích thước"}).click();assert.ok(await manager.evaluate(e=>!e.classList.contains("ovg-dialog-maximized")));
   }
   await manager.getByRole("button",{name:"Đóng",exact:true}).click();

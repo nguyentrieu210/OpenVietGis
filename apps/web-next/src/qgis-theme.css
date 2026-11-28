@@ -135,7 +135,7 @@
 .qgis-studio .core-workbench-body a{color:var(--ovg-primary)}
 
 /* CRS picker */
-.qgis-studio .crs-picker{display:grid;gap:6px;min-width:min(560px,86vw)}
+.qgis-studio .crs-picker{display:grid;gap:6px;min-width:0;max-width:100%}
 .qgis-studio .crs-list{max-height:46vh;overflow:auto;border:1px solid var(--ovg-line);background:var(--ovg-surface)}
 .qgis-studio .crs-group{display:block;padding:5px 8px;background:var(--ovg-header);font-size:11.5px;color:var(--ovg-muted)}
 .qgis-studio .crs-picker .crs-row{display:flex!important;justify-content:space-between;width:100%;min-height:26px!important;margin:0!important;padding:3px 10px!important;border:0!important;border-radius:0!important;background:transparent!important;text-align:left;font-weight:400}
