@@ -61,6 +61,12 @@ pub fn generate_street_numbers(rule: &NumberingRule) -> Result<Vec<NumberingProp
         _ => {}
     }
 
+    if rule.count > 1 && rule.step % 2 != 0 {
+        return Err(AppError::validation(
+            "PARITY_MISMATCH",
+            "a multi-house sequence must preserve the selected side parity",
+        ));
+    }
     let prefix = match &rule.alley_prefix {
         Some(raw) if !raw.trim().is_empty() => Some(canonical_prefix(raw)?),
         _ => None,
@@ -132,6 +138,33 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(err.code(), "NUMBERING_OVERFLOW");
+    }
+
+    #[test]
+    fn preserves_side_parity_for_entire_sequence() {
+        for (side, start) in [(HouseSide::LeftOdd, 1), (HouseSide::RightEven, 2)] {
+            let mut rule = NumberingRule {
+                street_name: "Đường A".into(),
+                alley_prefix: None,
+                side,
+                start_number: start,
+                step: 3,
+                count: 2,
+            };
+            assert_eq!(
+                generate_street_numbers(&rule).unwrap_err().code(),
+                "PARITY_MISMATCH"
+            );
+            rule.count = 1;
+            assert_eq!(generate_street_numbers(&rule).unwrap().len(), 1);
+            rule.count = 10_000;
+            rule.step = 2;
+            let proposals = generate_street_numbers(&rule).unwrap();
+            assert_eq!(proposals.len(), 10_000);
+            assert!(proposals
+                .iter()
+                .all(|p| p.house_number.parse::<u32>().unwrap() % 2 == start % 2));
+        }
     }
 
     #[test]

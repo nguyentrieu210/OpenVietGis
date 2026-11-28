@@ -255,15 +255,18 @@ pub struct DependencyApproval<'a> {
     pub digest: &'a str,
     pub epoch: i64,
 }
-/// Read the maximum previously approved epoch for this project, including
-/// revoked events. A stale operator catalog cannot re-enable an older approval.
+/// Read the maximum previously approved or switched epoch for this project,
+/// including revoked events. A stale operator catalog cannot re-enable an older approval.
 pub async fn minimum_approved_epoch(read: &mut ProjectRead<'_>) -> Result<i64, AppError> {
     if read.is_gis_scoped() || read.actor_type() != "human" {
         return Err(AppError::forbidden("unrestricted human project required"));
     }
     let v: Option<i64> = sqlx::query_scalar(
-        "SELECT max(catalog_epoch) FROM extensions.plugin_v2_grant_events
-        WHERE organization_id=$1 AND project_id=$2",
+        "SELECT max(catalog_epoch) FROM (
+           SELECT catalog_epoch FROM extensions.plugin_v2_grant_events WHERE organization_id=$1 AND project_id=$2
+           UNION ALL
+           SELECT catalog_epoch FROM extensions.plugin_graph_switches WHERE organization_id=$1 AND project_id=$2
+        ) accepted",
     )
     .bind(read.organization_id())
     .bind(read.project_id())

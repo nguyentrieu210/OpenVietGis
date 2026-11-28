@@ -32,6 +32,9 @@ fn check_graph(graph: &[GraphRelease]) -> Result<(), AppError> {
     for p in graph {
         let key = p.manifest["extension_key"].as_str().ok_or_else(invalid)?;
         if !key.starts_with("partner_")
+            || p.manifest["entity_schemas"]
+                .as_object()
+                .is_none_or(|m| !m.is_empty())
             || !keys.insert(key)
             || p.release_digest.len() != 64
             || !p
@@ -307,4 +310,35 @@ pub async fn switch_graph(
         .bind(org).bind(project).bind(request).bind(actor).bind(plan_digest).bind(epoch).bind(&receipt)
         .execute(&mut **edit.transaction()).await.map_err(db_error)?;
     Ok(receipt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn reviewed_graph_boundary_denies_builtin_and_stateful_manifests() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/spec075/python-signed-catalog.json"
+        ))
+        .unwrap();
+        let m = fixture["v1"]["payload"]["releases"][0]["manifest"].clone();
+        let good = GraphRelease {
+            manifest: m,
+            release_digest: "a".repeat(64),
+        };
+        assert!(check_graph(&[good.clone()]).is_ok());
+        assert!(check_graph(&[good.clone(), good.clone()]).is_err());
+        let mut bad = good.clone();
+        bad.manifest["extension_key"] = json!("house_numbering");
+        assert!(check_graph(&[bad]).is_err());
+        let mut bad = good.clone();
+        bad.manifest["entity_schemas"] = json!({"record":{"fields":{}}});
+        assert!(check_graph(&[bad]).is_err());
+        let mut bad = good;
+        bad.manifest
+            .as_object_mut()
+            .unwrap()
+            .remove("entity_schemas");
+        assert!(check_graph(&[bad]).is_err());
+    }
 }

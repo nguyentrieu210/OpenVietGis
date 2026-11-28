@@ -46,3 +46,20 @@ def test_plugin_zip_refuses_missing_source_and_unreviewed_metadata(tmp_path: Pat
     plugin.mkdir()
     with pytest.raises(ValueError, match="Missing"):
         package_qgis_plugin(tmp_path / "out.zip", plugin_root=plugin)
+
+
+def test_plugin_zip_ignores_unreviewed_files_and_rejects_symlink(tmp_path: Path) -> None:
+    import shutil
+    from tools.package_qgis_plugin import PLUGIN_ROOT
+    plugin = tmp_path / "plugin"
+    shutil.copytree(PLUGIN_ROOT, plugin)
+    (plugin / "local-notes.txt").write_text("synthetic local notes")
+    (plugin / "unreviewed.py").write_text("# not part of reviewed release")
+    output = tmp_path / "plugin.zip"
+    package_qgis_plugin(output, plugin_root=plugin)
+    with zipfile.ZipFile(output) as archive:
+        assert not any("local-notes" in n or "unreviewed" in n for n in archive.namelist())
+    (plugin / "client.py").unlink()
+    (plugin / "client.py").symlink_to(PLUGIN_ROOT / "client.py")
+    with pytest.raises(ValueError, match="Missing"):
+        package_qgis_plugin(output, plugin_root=plugin)
