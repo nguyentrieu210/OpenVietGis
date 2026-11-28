@@ -29,6 +29,8 @@ pub mod pipeline;
 pub mod colmap_model;
 pub mod ingest;
 pub mod local_worker;
+pub mod jpeg;
+pub mod exif;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

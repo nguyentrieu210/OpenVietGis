@@ -19,3 +19,5 @@ tokio.workspace = true
 uuid.workspace = true
 
 sha2.workspace = true
+
+jpeg-decoder = { version = "=0.3.2", default-features = false }

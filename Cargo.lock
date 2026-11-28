@@ -1071,6 +1071,7 @@ name = "ovg-processing"
 version = "0.2.0"
 dependencies = [
  "chrono",
+ "jpeg-decoder",
  "ovg-core",
  "rayon",
  "serde",
