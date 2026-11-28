@@ -19,9 +19,9 @@ export function splitCsv(text: string, delim: string): string[][] {
   if (cell || row.length) { row.push(cell); rows.push(row); }
   return rows.filter(r => r.some(x => x.trim() !== ""));
 }
-export const guessDelim = (text: string) => { const line = text.split(/\r?\n/, 1)[0] ?? ""; return [",", ";", "\t", "|"].sort((a, b) => line.split(b).length - line.split(a).length)[0]; };
+export function guessDelim(text:string){const counts=new Map([",",";","\t","|"].map(d=>[d,0]));let q=false;for(let i=0;i<text.length;i++){const ch=text[i]!;if(ch==='"'){if(q&&text[i+1]==='"')i++;else q=!q;}else if(!q){if(ch==="\n"||ch==="\r")break;if(counts.has(ch))counts.set(ch,counts.get(ch)!+1);}}return [...counts.keys()].sort((a,b)=>counts.get(b)!-counts.get(a)!)[0]!;}
 // Vietnamese sheets often write decimals with a comma ("106,7123") when the delimiter is ";".
-const num = (v: string) => { const t = v.trim().replace(/\s/g, ""); const n = Number(/^-?\d+,\d+$/.test(t) ? t.replace(",", ".") : t); return t !== "" && Number.isFinite(n) ? n : null; };
+const num = (v: string) => { const t = v.trim(); if(!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?$/.test(t))return null; const n = Number(t.replace(",", ".")); return Number.isFinite(n) ? n : null; };
 const X_NAMES = ["x", "lon", "lng", "long", "longitude", "kinh_do", "kinhdo", "easting", "e"];
 const Y_NAMES = ["y", "lat", "latitude", "vi_do", "vido", "northing", "n"];
 export const guessXY = (header: string[]) => { const low = header.map(h => h.trim().toLowerCase()); const f = (names: string[]) => header[low.findIndex(h => names.includes(h))] ?? ""; return { x: f(X_NAMES), y: f(Y_NAMES) }; };
@@ -54,39 +54,45 @@ export function validateRemoteCollection(raw:unknown,limit:number):Fc{
   if(!v||v.type!=="FeatureCollection"||!Array.isArray(v.features)||v.features.length>limit||v.features.some(f=>!f||f.type!=="Feature"||!("geometry" in f)||!f.properties||typeof f.properties!=="object"||Array.isArray(f.properties)))throw Error("Phản hồi GeoJSON không hợp lệ hoặc vượt giới hạn.");
   return v;
 }
-async function getJson(url: string) {
-  const r = await fetch(url, { credentials: "omit" });
-  if (!r.ok) throw Error("Máy chủ trả lỗi " + r.status);
-  return r.json();
+const REMOTE_MAX_BYTES=32*1024*1024;
+async function getText(url:string,signal?:AbortSignal){
+  const r=await fetch(url,{credentials:"omit",signal,cache:"no-store"});
+  if(!r.ok)throw Error("Máy chủ trả lỗi "+r.status);
+  const length=Number(r.headers.get("content-length"));if(length>REMOTE_MAX_BYTES)throw Error("Phản hồi vượt 32 MiB.");
+  if(!r.body)throw Error("Phản hồi trống.");
+  const reader=r.body.getReader(),decoder=new TextDecoder("utf-8",{fatal:true});let bytes=0;const parts:string[]=[];
+  try{for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>REMOTE_MAX_BYTES)throw Error("Phản hồi vượt 32 MiB.");parts.push(decoder.decode(value,{stream:true}));}parts.push(decoder.decode());return parts.join("");}
+  finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-const httpUrl = (raw: string) => { const u = new URL(raw.trim()); if (u.protocol !== "https:" && u.protocol !== "http:") throw Error("Chỉ hỗ trợ http(s)"); return u; };
+async function getJson(url:string,signal?:AbortSignal){return JSON.parse(await getText(url,signal));}
+const httpUrl = (raw: string) => { const u = new URL(raw.trim()); if (u.protocol !== "https:" && u.protocol !== "http:") throw Error("Chỉ hỗ trợ http(s)"); if(u.username||u.password)throw Error("Không hỗ trợ thông tin đăng nhập trong URL.");u.hash="";return u; };
 
 // WFS 2.0 / OGC API Features
-export async function wfsLayers(raw: string): Promise<{ name: string; title: string }[]> {
+export async function wfsLayers(raw: string,signal?:AbortSignal): Promise<{ name: string; title: string }[]> {
   const u = httpUrl(raw);
   if (/\/collections\/?$/.test(u.pathname) || u.searchParams.get("f") === "json") {
-    const j = await getJson(u.toString()); return (j.collections ?? []).map((c: { id: string; title?: string }) => ({ name: c.id, title: c.title ?? c.id }));
+    const j = await getJson(u.toString(),signal); return (j.collections ?? []).map((c: { id: string; title?: string }) => ({ name: c.id, title: c.title ?? c.id }));
   }
   u.search = ""; u.searchParams.set("service", "WFS"); u.searchParams.set("request", "GetCapabilities");
-  const r = await fetch(u.toString(), { credentials: "omit" }); if (!r.ok) throw Error("Máy chủ trả lỗi " + r.status);
-  const xml = new DOMParser().parseFromString(await r.text(), "application/xml");
+  const xml = new DOMParser().parseFromString(await getText(u.toString(),signal), "application/xml");
+  if(xml.getElementsByTagName("parsererror").length)throw Error("WFS capabilities XML không hợp lệ.");
   return [...xml.getElementsByTagNameNS("*", "FeatureType")].map(ft => ({ name: ft.getElementsByTagNameNS("*", "Name")[0]?.textContent ?? "", title: ft.getElementsByTagNameNS("*", "Title")[0]?.textContent ?? "" })).filter(x => x.name);
 }
-export async function wfsFetch(raw: string, layer: string, limit: number): Promise<Fc> {
+export async function wfsFetch(raw: string, layer: string, limit: number,signal?:AbortSignal): Promise<Fc> {
   const u = httpUrl(raw), n = remoteLimit(limit);
-  if (/\/collections\/?$/.test(u.pathname)) { const items = new URL(u); items.pathname = u.pathname.replace(/\/?$/, "/") + encodeURIComponent(layer) + "/items"; items.searchParams.set("f", "json"); items.searchParams.set("limit", String(n)); return validateRemoteCollection(await getJson(items.toString()),n); }
+  if (/\/collections\/?$/.test(u.pathname)) { const items = new URL(u); items.pathname = u.pathname.replace(/\/?$/, "/") + encodeURIComponent(layer) + "/items"; items.searchParams.set("f", "json"); items.searchParams.set("limit", String(n)); return validateRemoteCollection(await getJson(items.toString(),signal),n); }
   u.search = ""; for (const [k, v] of Object.entries({ service: "WFS", version: "2.0.0", request: "GetFeature", typeNames: layer, outputFormat: "application/json", srsName: "EPSG:4326", count: String(n) })) u.searchParams.set(k, v);
-  return validateRemoteCollection(await getJson(u.toString()),n);
+  return validateRemoteCollection(await getJson(u.toString(),signal),n);
 }
 
 // ArcGIS REST: service root lists layers; a layer URL (…/FeatureServer/0) is queried as GeoJSON.
-export async function arcgisLayers(raw: string): Promise<{ name: string; title: string }[]> {
+export async function arcgisLayers(raw: string,signal?:AbortSignal): Promise<{ name: string; title: string }[]> {
   const u = httpUrl(raw); if (/\/\d+\/?$/.test(u.pathname)) return [{ name: u.toString().replace(/\/$/, ""), title: "Lớp " + u.pathname.split("/").filter(Boolean).pop() }];
-  u.search = "f=json"; const j = await getJson(u.toString()); const base = raw.trim().split("?")[0].replace(/\/$/, "");
+  u.search = "f=json"; const j = await getJson(u.toString(),signal); const base = raw.trim().split("?")[0].replace(/\/$/, "");
   return [...(j.layers ?? []), ...(j.tables ?? [])].map((l: { id: number; name: string }) => ({ name: base + "/" + l.id, title: l.name }));
 }
-export async function arcgisFetch(layerUrl: string, limit: number): Promise<Fc> {
-  const u = httpUrl(layerUrl.replace(/\/$/, "") + "/query");
+export async function arcgisFetch(layerUrl: string, limit: number,signal?:AbortSignal): Promise<Fc> {
+  const u = httpUrl(layerUrl); u.pathname=u.pathname.replace(/\/$/,"")+"/query";
   for (const [k, v] of Object.entries({ where: "1=1", outFields: "*", outSR: "4326", f: "geojson", resultRecordCount: String(remoteLimit(limit)) })) u.searchParams.set(k, v);
-  const j = await getJson(u.toString()); if (j.error) throw Error(j.error.message ?? "ArcGIS báo lỗi"); return validateRemoteCollection(j,limit);
+  const j = await getJson(u.toString(),signal); if (j.error) throw Error(j.error.message ?? "ArcGIS báo lỗi"); return validateRemoteCollection(j,limit);
 }
