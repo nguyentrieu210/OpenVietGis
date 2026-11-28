@@ -32,7 +32,7 @@ try{
   else if(p.includes("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Vùng đệm",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Cắt lớp",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Gộp vùng",required_inputs:["input_layer"],parameters_schema:{}}]};
   else if(p.includes("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
-  else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
+  else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{organization_id:org,source_id:"source"+part,layer_id:"layer"+part,project_id:pid,content_revision:layer(part).source.content_revision,schema_revision:layer(part).source.schema_revision,geometry_included:true,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
   else return route.fulfill({status:404,json:{}});
   return route.fulfill({json:body});
  });
