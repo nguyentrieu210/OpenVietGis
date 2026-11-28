@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pairing { ExhaustiveSmall, Sequential { overlap: u16 } }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Stage { Extract, Match, Map, Undistort, Depth, Fuse }
+pub enum Stage { Extract, Match, Map, Undistort, Depth, Fuse, ConvertModel }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanError { InvalidRoot, InvalidSettings, UnsupportedDevice, TooManyImages, MissingModel }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +82,23 @@ pub fn sparse_plan(layout: &Layout, c: &Config) -> Result<Vec<Step>,PlanError> {
     path_arg(&mut map.args,"--output_path",&layout.sparse());
     arg(&mut map.args,"--Mapper.num_threads",c.threads.to_string());
     Ok(vec![extract,matching,map])
+}
+/// CPU-compatible preparation of pinhole images for the reference ortho pipeline.
+/// COLMAP's dense workspace contains images/ and sparse/ (binary model).
+/// The host must create a fresh model-text directory and verify actual outputs.
+pub fn ortho_prepare_plan(layout:&Layout,c:&Config,model_index:u32)->Result<Vec<Step>,PlanError>{
+    validate(c)?;
+    let mut undistort=step(Stage::Undistort,"image_undistorter");
+    path_arg(&mut undistort.args,"--image_path",&layout.images());
+    path_arg(&mut undistort.args,"--input_path",&layout.sparse().join(model_index.to_string()));
+    path_arg(&mut undistort.args,"--output_path",&layout.dense());
+    arg(&mut undistort.args,"--output_type","COLMAP");
+    arg(&mut undistort.args,"--max_image_size",c.max_image_side.to_string());
+    let mut convert=step(Stage::ConvertModel,"model_converter");
+    path_arg(&mut convert.args,"--input_path",&layout.dense().join("sparse"));
+    path_arg(&mut convert.args,"--output_path",&layout.root.join("model-text"));
+    arg(&mut convert.args,"--output_type","TXT");
+    Ok(vec![undistort,convert])
 }
 /// Dense output is a scratch PLY, not a georeferenced point cloud.
 /// Host selects and validates a real registered sparse model before planning.
@@ -159,6 +176,12 @@ mod tests {
         c.device=Device::Cuda;c.gpu_index=Some(0);
         assert_eq!(dense_plan(&layout(),&c,None,8,1),Err(PlanError::MissingModel));
         assert_eq!(dense_plan(&layout(),&c,Some(0),8,1).unwrap().len(),3);
+    }
+    #[test] fn ortho_preparation_needs_no_dense_gpu(){
+        let p=ortho_prepare_plan(&layout(),&config(),0).unwrap();
+        assert_eq!(p.iter().map(|s|s.stage).collect::<Vec<_>>(),vec![Stage::Undistort,Stage::ConvertModel]);
+        assert!(p[1].args.iter().any(|s|s=="TXT"));
+        assert!(p[0].args.iter().any(|s|s==layout().sparse().join("0").as_os_str()));
     }
     #[test] fn bounded_source_config() {
         let names=vec!["a.jpg".into(),"b.jpg".into()];

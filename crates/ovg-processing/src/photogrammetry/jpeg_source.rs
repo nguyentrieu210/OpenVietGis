@@ -37,7 +37,7 @@ impl Source{
 }
 impl pipeline::Source for Source{
  fn dem(&mut self,w:tiles::Window,max_bytes:u64)->Result<Vec<f32>,pipeline::Error>{
-  self.dem.dem(w,max_bytes)
+  pipeline::Source::dem(&mut self.dem,w,max_bytes)
  }
  fn images(&mut self,w:tiles::Window,max_bytes:u64)->Result<Vec<pipeline::OwnedImage>,pipeline::Error>{
   let mut held=0u64;let mut out=Vec::new();
