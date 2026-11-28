@@ -7,9 +7,11 @@ pub fn remote_range_status(window:WebviewWindow)->Reply<bool>{trusted(&window)?;
 pub async fn remote_tiff_inspect(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,url:String,request_id:Uuid)->Reply<Value>{
  #[cfg(feature="remote-range")]{
   trusted(&window)?;let read=ReadPermit::acquire(request_id)?;
+  let slot=tokio::select!{p=READ_SLOTS.get_or_init(||tokio::sync::Semaphore::new(4)).acquire()=>p.map_err(|_|"SESSION_FAILED".to_owned())?,_=read.token.notify.notified()=>return Err("CANCELLED".into())};
   work(window,u.inner().clone(),move|s|{
+   let _slot=slot;
    s.with(handle,|_|Ok(()))?;
-   let mut source=ovg_native_providers::http_range::RangeSource::open(&url,Arc::new(AtomicBool::new(false))).map_err(|_|"REMOTE_OPEN_FAILED")?;
+   let mut source=ovg_native_providers::http_range::RangeSource::open(&url,read.token.flag.clone()).map_err(|_|"REMOTE_OPEN_FAILED")?;
    let identity=source.identity().clone();
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
    let t=ovg_native_providers::remote_tiff::TiledTiff::open(&mut source,identity.bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
@@ -31,7 +33,7 @@ pub async fn remote_tiff_tile(window:WebviewWindow,u:State<'_,Unified>,handle:Uu
    let _slot=slot;
    s.with(handle,|_|Ok(()))?;
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
-   let mut source=ovg_native_providers::http_range::RangeSource::open(&url,Arc::new(AtomicBool::new(false))).map_err(|_|"REMOTE_OPEN_FAILED")?;
+   let mut source=ovg_native_providers::http_range::RangeSource::open(&url,read.token.flag.clone()).map_err(|_|"REMOTE_OPEN_FAILED")?;
    source.require_identity(&ovg_native_providers::http_range::Identity{bytes,etag}).map_err(|_|"REMOTE_SOURCE_CHANGED")?;
    let t=ovg_native_providers::remote_tiff::TiledTiff::open(&mut source,bytes).map_err(|_|"REMOTE_TIFF_PROFILE_UNSUPPORTED")?;
    if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED")}
