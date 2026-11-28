@@ -28,3 +28,6 @@ CREATE TABLE survey_fix(layer TEXT NOT NULL,track_id TEXT NOT NULL,seq INTEGER N
 CREATE TABLE media_domain(singleton INTEGER PRIMARY KEY CHECK(singleton=1),scope TEXT NOT NULL UNIQUE);
 CREATE TABLE encrypted_media(id TEXT PRIMARY KEY,scope TEXT NOT NULL REFERENCES media_domain(scope),layer TEXT NOT NULL,feature TEXT NOT NULL,source_scope TEXT NOT NULL,source_id TEXT NOT NULL,source_sha BLOB NOT NULL CHECK(length(source_sha)=32),cipher_sha BLOB NOT NULL CHECK(length(cipher_sha)=32),cipher_bytes INTEGER NOT NULL CHECK(cipher_bytes>48 AND cipher_bytes<=16777264),ciphertext BLOB NOT NULL CHECK(length(ciphertext)=cipher_bytes),UNIQUE(source_scope,source_id),FOREIGN KEY(layer,feature) REFERENCES feature_revision(layer,id));
 CREATE INDEX encrypted_media_owner ON encrypted_media(layer,feature,id);
+-- V6 additive native CAD versions
+CREATE TABLE cad_version(asset TEXT PRIMARY KEY REFERENCES project_asset(id) ON DELETE CASCADE,parent TEXT NOT NULL REFERENCES project_asset(id) ON DELETE RESTRICT,parent_sha TEXT NOT NULL CHECK(length(parent_sha)=64),CHECK(asset<>parent));
+CREATE INDEX cad_version_parent ON cad_version(parent);
