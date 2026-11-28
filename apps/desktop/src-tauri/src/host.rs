@@ -285,6 +285,17 @@ impl Host {
         out.sort_by_key(|p|p.id);
         Ok(out)
     }
+    pub fn restore_snapshot(&self,path:&Path)->Result<Project>{
+        let _guard=self.lock()?;
+        real_dir(&self.root)?;
+        if self.list()?.len()>=MAX_PROJECTS{return Err("RESOURCE_LIMIT")}
+        let id=Uuid::new_v4();
+        let stage=tempfile::tempdir_in(&self.root).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        crate::snapshot_restore::restore(path,stage.path())?;
+        fs::rename(stage.path(),self.root.join(id.to_string())).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        // TempDir destructor sees the old path, not the published workspace.
+        Ok(Project{id})
+    }
     pub fn create(&self)->Result<Project> {
         let _guard=self.lock()?;
         if self.list()?.len()>=MAX_PROJECTS{return Err("RESOURCE_LIMIT")}
