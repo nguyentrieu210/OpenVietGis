@@ -64,13 +64,14 @@
     {
       "id": "SHELL-06",
       "task": "T014",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/DockLayout.tsx",
-        "apps/web-next/dock-sizing.test.mjs"
+        "apps/web-next/dock-sizing.test.mjs",
+        "apps/web-next/src/qgis-workspace.css"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Temporary map focus hides dock panels without unmounting them or mutating saved layout; auto exits for active editing and other blocked states. Existing fullscreen button. Floating bounds skip hidden zero-size geometry. Browser and QGIS layout/keyboard/selection restoration tests remain."
     },
     {
       "id": "SHELL-07",
@@ -91,13 +92,13 @@
     {
       "id": "SHELL-08",
       "task": "T016",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/studio-ui.tsx",
         "apps/web-next/spatial-mode-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Session refresh and auth request generation guards invalidate stale identity responses after expiration/signout; explicit expiry message. Existing loading/error states. Retry policy, technical error sanitization and browser tests remain."
     },
     {
       "id": "DOCK-01",
@@ -139,14 +140,16 @@
     {
       "id": "DOCK-04",
       "task": "T022",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/DsmPanes.tsx",
         "apps/web-next/src/TransferTool.tsx",
         "apps/web-next/src/ExternalPluginHub.tsx",
-        "apps/web-next/core-toolkit-smoke.mjs"
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/src/dsm-sources.ts",
+        "apps/web-next/dsm-sources.test.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "CSV, WFS/OGC and ArcGIS import panes now validate input, bound remote responses and cancel stale fetches; CSV preserves noncanonical identifiers and noninteger decimals as text for server inspection. New regression tests written but not executed. Live provider, CRS, import confirmation and progress acceptance remain."
     },
     {
       "id": "DOCK-05",
@@ -291,23 +294,25 @@
     {
       "id": "STYLE-07",
       "task": "T037",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/ExcelJoin.ts",
         "apps/web-next/src/ProfessionalTools.tsx",
-        "apps/api-rust/src/editing.rs"
+        "apps/api-rust/src/editing.rs",
+        "apps/web-next/src/join-contract.ts",
+        "apps/web-next/src/join-contract.test.ts"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Bounded spreadsheet many-to-one exact-key join with unique lookup keys, blank/null handling and preserved final empty value. Existing field constraints/preview changeset; durable relations, relation widgets, general constraint and form design parity remain. New tests not executed."
     },
     {
       "id": "STYLE-08",
       "task": "T038",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/FeatureInfo.tsx"
       ],
-      "blocker": "Metadata candidate sources; diagrams/actions/map tips not demonstrated."
+      "blocker": "Read-only metadata includes source/schema/layer revisions, lifecycle, declared fields and current capability/authorization indicators. Diagrams, sandboxed actions and map tips not implemented or accepted."
     },
     {
       "id": "STYLE-09",
@@ -814,14 +819,14 @@
     {
       "id": "COLLAB-01",
       "task": "T085",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/SpatialWorkspace.tsx",
         "apps/web-next/src/Spatial3DSettings.tsx",
         "apps/web-next/spatial-mode-smoke.mjs",
         "packages/spatial-workspace/tests/coordinator.test.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Existing Cesium/MapLibre 3D views, terrain, layers, selection and camera coordination inspected; async model attachment now pinned to project and current selected feature/source/schema revisions. Full scene and camera browser acceptance remains."
     },
     {
       "id": "COLLAB-02",
