@@ -270,6 +270,18 @@ impl NativeUnifiedProject{
  pub fn edit_attributes(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,attributes_json:String)->Result<String,String>{
   self.inner.edit_attributes(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&attributes_json).map_err(unified_error)
  }
+ pub fn create_survey(&self,layer_id:String,track_id:String,name:String,expected:String)->Result<String,String>{
+  self.inner.create_survey(&layer_id,&track_id,&name,&expected).map_err(unified_error)
+ }
+ pub fn survey_state(&self,layer_id:String,track_id:String,action:String,expected:String)->Result<String,String>{
+  self.inner.survey_state(&layer_id,&track_id,&action,&expected).map_err(unified_error)
+ }
+ pub fn recover_surveys(&self,expected:String)->Result<String,String>{
+  self.inner.recover_surveys(&expected).map_err(unified_error)
+ }
+ pub fn append_survey(&self,layer_id:String,track_id:String,fix_json:String,expected:String)->Result<String,String>{
+  self.inner.append_survey(&layer_id,&track_id,&fix_json,&expected).map_err(unified_error)
+ }
  pub fn survey_tracks(&self,layer_id:String,after:String,expected:String)->Result<String,String>{
   self.inner.survey_tracks(&layer_id,&after,&expected).map_err(unified_error)
  }
