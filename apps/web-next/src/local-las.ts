@@ -31,22 +31,23 @@ export function validateLasWkt(wkt:string,crs:4326|3857){
  }
  if(top.some(x=>/^(VERT_CS|VERTCRS|COMPOUNDCRS|BOUNDCRS)\s*\[/i.test(x)))throw Error("Unsupported LAS vertical or compound CRS");
 }
-export function parseLas(bytes:ArrayBuffer,crs:4326|3857):LasCloud{
+export function parseLas(bytes:ArrayBuffer,crs:4326|3857):LasCloud{return parseLasRecords(bytes,crs)}
+export function parseLasRecords(bytes:ArrayBuffer,crs:4326|3857,decoded?:ArrayBuffer):LasCloud{
  if(bytes.byteLength<227||bytes.byteLength>LAS_MAX_BYTES)throw Error("LAS size exceeds preview limits");
  if(crs!==4326&&crs!==3857)throw Error("Unsupported horizontal CRS");
  const d=new DataView(bytes),s=(o:number,n:number)=>String.fromCharCode(...new Uint8Array(bytes,o,n)).replace(/\0.*$/s,"").trim();
  if(s(0,4)!=="LASF"||d.getUint8(24)!==1||![2,3,4].includes(d.getUint8(25)))throw Error("Only LAS 1.2–1.4 is supported");
- const minor=d.getUint8(25),header=d.getUint16(94,true),offset=d.getUint32(96,true),vlrs=d.getUint32(100,true),format=d.getUint8(104),length=d.getUint16(105,true);
- if(header<(minor===4?375:minor===3?235:227)||header>offset||offset>bytes.byteLength||vlrs>1024||!Object.hasOwn(lengths,format)||format>=6&&minor!==4||length<lengths[format]!)throw Error("Invalid or unsupported LAS records (LAZ is not supported)");
+ const minor=d.getUint8(25),header=d.getUint16(94,true),offset=d.getUint32(96,true),vlrs=d.getUint32(100,true),rawFormat=d.getUint8(104),format=decoded?rawFormat&63:rawFormat,length=d.getUint16(105,true);
+ if(decoded&&(rawFormat&128)===0||header<(minor===4?375:minor===3?235:227)||header>offset||offset>bytes.byteLength||vlrs>1024||!Object.hasOwn(lengths,format)||format>=6&&minor!==4||length<lengths[format]!)throw Error("Invalid or unsupported LAS records (LAZ is not supported)");
  const legacy=d.getUint32(107,true),extended=minor===4?d.getBigUint64(247,true):0n;
  if(extended>2000000n||minor===4&&format>=6&&(legacy!==0||extended===0n)||extended&&legacy&&extended!==BigInt(legacy))throw Error("Invalid LAS point count");
- const count=extended?Number(extended):legacy,pointEnd=offset+length*count;
- if(count<1||count>2000000||pointEnd>bytes.byteLength)throw Error("Invalid LAS point count or truncated records");
+ const count=extended?Number(extended):legacy,pointEnd=decoded?offset:offset+length*count;
+ if(count<1||count>2000000||pointEnd>bytes.byteLength||decoded&&(decoded.byteLength!==count*length||decoded.byteLength>LAS_MAX_BYTES))throw Error("Invalid LAS point count or truncated records");
  const wktFlag=(d.getUint16(6,true)&16)!==0;
  if(format>=6&&!wktFlag||minor!==4&&wktFlag)throw Error("Invalid LAS WKT flag");
  let geoKeys=false,wktSeen=false;
  function metadata(user:string,id:number,start:number,size:number){
-  if(user.toLowerCase()==="laszip encoded")throw Error("LAZ compression is unsupported");
+  if(user.toLowerCase()==="laszip encoded"){if(!decoded)throw Error("LAZ compression is unsupported");return}
   if(user!=="LASF_Projection")return;
   if(id===2112){
    if(!wktFlag||wktSeen||geoKeys||size<1||size>32768)throw Error("Conflicting or oversized WKT metadata");
@@ -74,15 +75,15 @@ export function parseLas(bytes:ArrayBuffer,crs:4326|3857):LasCloud{
  if(wktFlag&&!wktSeen)throw Error("Missing LAS WKT CRS metadata");
  const scales=[131,139,147].map(i=>d.getFloat64(i,true)),origins=[155,163,171].map(i=>d.getFloat64(i,true));
  if(scales.some(v=>!Number.isFinite(v)||v<=0)||origins.some(v=>!Number.isFinite(v)))throw Error("Invalid LAS scale or offset");
- const points:LasPoint[]=[];let west=Infinity,east=-Infinity,south=Infinity,north=-Infinity;
+ const points:LasPoint[]=[],recordView=decoded?new DataView(decoded):d;let west=Infinity,east=-Infinity,south=Infinity,north=-Infinity;
  const step=Math.max(1,Math.ceil(count/LAS_MAX_POINTS));
  for(let i=0;i<count;i++){
-  const at=offset+i*length,xyz=[0,4,8].map((o,j)=>d.getInt32(at+o,true)*scales[j]!+origins[j]!);
+  const at=(decoded?0:offset)+i*length,xyz=[0,4,8].map((o,j)=>recordView.getInt32(at+o,true)*scales[j]!+origins[j]!);
   let [longitude,latitude,height]=xyz as [number,number,number];
   if(crs===3857){if(Math.abs(longitude)>Math.PI*R||Math.abs(latitude)>Math.PI*R)throw Error("Projected LAS coordinate outside domain");longitude=longitude/R*180/Math.PI;latitude=Math.atan(Math.sinh(latitude/R))*180/Math.PI}
   if(![longitude,latitude,height].every(Number.isFinite)||Math.abs(longitude)>180||Math.abs(latitude)>85||height< -12000||height>100000)throw Error("LAS coordinate outside supported range");
   west=Math.min(west,longitude);east=Math.max(east,longitude);south=Math.min(south,latitude);north=Math.max(north,latitude);
-  if(i%step===0){const rgb=rgbOffset[format];points.push({longitude,latitude,height,intensity:d.getUint16(at+12,true),...(rgb===undefined?{}:{rgb:[d.getUint16(at+rgb,true),d.getUint16(at+rgb+2,true),d.getUint16(at+rgb+4,true)] as const})})}
+  if(i%step===0){const rgb=rgbOffset[format];points.push({longitude,latitude,height,intensity:recordView.getUint16(at+12,true),...(rgb===undefined?{}:{rgb:[recordView.getUint16(at+rgb,true),recordView.getUint16(at+rgb+2,true),recordView.getUint16(at+rgb+4,true)] as const})})}
  }
  if(east-west>180)throw Error("LAS crossing the antimeridian is unsupported");
  return {points,count,center:[(west+east)/2,(south+north)/2],bounds:[west,south,east,north]};

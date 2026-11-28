@@ -12,6 +12,9 @@ importers:
 
 packages:
 
+  laz-perf@0.0.7:
+    resolution: {integrity: sha512-2xRqm/f/2UqDS5qqkjOyDb6uVIjkVw6SGmQlMoTQliVWkZhPfIbUJTubUl3mTloaWqKcjlS/urmP1CYoxelsEg==}
+
   '@pnpm/exe.android-arm64@12.21.0':
     resolution: {integrity: sha512-iaWidxR5B9NUBpwMznCQu1yUpKB6BjTY5BYX2lORj76VsfINdj8Z8XWSzSNrGI8qlxa28Jzdp5fiaspzOaJZlA==}
     cpu: [arm64]
@@ -100,6 +103,8 @@ packages:
     hasBin: true
 
 snapshots:
+
+  laz-perf@0.0.7: {}
 
   '@pnpm/exe.android-arm64@12.21.0':
     optional: true
@@ -248,6 +253,9 @@ importers:
       geotiff:
         specifier: 3.0.5
         version: 3.0.5
+      laz-perf:
+        specifier: 0.0.7
+        version: 0.0.7
       maplibre-gl:
         specifier: 6.18.0
         version: 6.18.0
