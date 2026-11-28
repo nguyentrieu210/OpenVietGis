@@ -279,9 +279,10 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/label-expr.ts",
-        "apps/web-next/label-expr.test.mjs"
+        "apps/web-next/label-expr.test.mjs",
+        "apps/web-next/src/LayerProperties.tsx"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; template language, not full QGIS expression AST"
+      "blocker": "Legacy label templates plus explicit qgis: expression subset: bounded typed AST, quoted field references, whitelist functions, arithmetic, comparisons, null logic, short-circuit if/coalesce, field/function insert and sample preview; no arbitrary eval. Full QGIS expression library, shared field calculator/filter integration, server AST and authenticated paired browser acceptance remain. New tests written, not executed."
     },
     {
       "id": "STYLE-06",
