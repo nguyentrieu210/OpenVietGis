@@ -208,7 +208,11 @@ export const remoteCopc={
 
 export type CadEditorStatus={session:string;state:"editing"|"ready"|"recoverable";format:"dwg"|"dxf";changed:boolean;bytes:number;sha256:string;parent:string|null};
 export type CadVersion={asset:string;parent:string;parent_sha:string};
+export type CadCanvasFeature={type:"Feature";geometry:{type:"Point";coordinates:number[]}|{type:"LineString";coordinates:number[][]};properties:{handle:string;layer:string;entity:string}};
 export const nativeCad={
+ canvas:(handle:string,asset:string,expected:string)=>host().core.invoke<{sha256:string;features:CadCanvasFeature[]}>("native_cad_canvas",{handle,asset,expected,assertWgs84:true}),
+ canvasCommit:(handle:string,asset:string,expected:string,sha256:string,entity:string,geometry:CadCanvasFeature["geometry"])=>host().core.invoke<PersistentAsset>("native_cad_canvas_commit",{handle,asset,expected,sha256,entity,geometry,assertWgs84:true}),
+ gisToDxf:(handle:string,layer:string,feature:string,expected:string)=>host().core.invoke<PersistentAsset>("native_cad_gis_to_dxf",{handle,layer,feature,expected,assertWgs84:true}),
  projectDxf:(handle:string,asset:string,expected:string,name:string)=>host().core.invoke<{layer:string;revision:string;count:number;digest:string}>("native_cad_project_dxf",{handle,asset,expected,name,operation:crypto.randomUUID(),layer:crypto.randomUUID(),assertWgs84:true}),
  editProject:(handle:string,asset:string,expected:string)=>host().core.invoke<CadEditorStatus>("native_cad_edit_project",{handle,asset,expected}),
  adopt:(handle:string,session:string,revision:string,expected:string)=>host().core.invoke<PersistentAsset>("native_cad_edit_adopt",{handle,session,revision,expected}),
