@@ -462,11 +462,16 @@ impl ExpectedSource {
     }
 
     fn matches_refs(&self, refs: &Value, prefix: &str) -> bool {
-        refs.get(format!("{prefix}_source_id")).and_then(Value::as_str)
+        refs.get(format!("{prefix}_source_id"))
+            .and_then(Value::as_str)
             == Some(self.source_id.to_string().as_str())
-            && refs.get(format!("{prefix}_content_revision")).and_then(Value::as_str)
+            && refs
+                .get(format!("{prefix}_content_revision"))
+                .and_then(Value::as_str)
                 == Some(self.content_revision.as_str())
-            && refs.get(format!("{prefix}_schema_revision")).and_then(Value::as_str)
+            && refs
+                .get(format!("{prefix}_schema_revision"))
+                .and_then(Value::as_str)
                 == Some(self.schema_revision.as_str())
     }
 }
@@ -483,9 +488,17 @@ pub async fn submit_job(
     operation_id: &str,
 ) -> Result<SubmitJobResult, EditError> {
     submit_job_pinned(
-        scope, algorithm_id, input_layer_id, overlay_layer_id, clean_params,
-        output_name, operation_id, None, None,
-    ).await
+        scope,
+        algorithm_id,
+        input_layer_id,
+        overlay_layer_id,
+        clean_params,
+        output_name,
+        operation_id,
+        None,
+        None,
+    )
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -505,7 +518,10 @@ pub async fn submit_job_pinned(
         || expected_overlay.is_some() && (algorithm_id != "clip" || expected_input.is_none())
         || expected_input.is_some() && algorithm_id == "clip" && expected_overlay.is_none()
     {
-        return Err(EditError::validation("INVALID_INPUT_PIN", "invalid or incomplete expected source pins"));
+        return Err(EditError::validation(
+            "INVALID_INPUT_PIN",
+            "invalid or incomplete expected source pins",
+        ));
     }
     let org_id = scope.organization_id();
     let project_id = scope.project_id();
@@ -540,7 +556,7 @@ pub async fn submit_job_pinned(
         let prev_refs: Value = row.try_get("input_refs").map_err(edit_db_error)?;
         let prev_params: Value = row.try_get("parameters").map_err(edit_db_error)?;
         let prev_name: String = row.try_get("output_name").map_err(edit_db_error)?;
-        let expected_overlay = overlay_layer_id.map(|id| id.to_string());
+        let expected_overlay_id = overlay_layer_id.map(|id| id.to_string());
         if prev_algo != algorithm_id
             || prev_refs.get("input_layer_id").and_then(Value::as_str)
                 != Some(input_layer_id.to_string().as_str())
@@ -548,7 +564,7 @@ pub async fn submit_job_pinned(
                 .get("overlay_layer_id")
                 .and_then(Value::as_str)
                 .map(str::to_owned)
-                != expected_overlay
+                != expected_overlay_id
             || !py_eq(&prev_params, &clean_params)
             || prev_name != clean_out_name
             || expected_input.is_some_and(|p| !p.matches_refs(&prev_refs, "input"))
@@ -567,7 +583,10 @@ pub async fn submit_job_pinned(
 
     let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
     if expected_input.is_some_and(|p| !p.matches_source(&input_source)) {
-        return Err(EditError::conflict("STALE_INPUT_PIN", "input changed after request preparation"));
+        return Err(EditError::conflict(
+            "STALE_INPUT_PIN",
+            "input changed after request preparation",
+        ));
     }
     let mut input_refs = Map::new();
     input_refs.insert("input_layer_id".into(), json!(input_layer_id.to_string()));
@@ -591,7 +610,10 @@ pub async fn submit_job_pinned(
         };
         let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
         if expected_overlay.is_some_and(|p| !p.matches_source(&overlay_source)) {
-            return Err(EditError::conflict("STALE_INPUT_PIN", "overlay changed after request preparation"));
+            return Err(EditError::conflict(
+                "STALE_INPUT_PIN",
+                "overlay changed after request preparation",
+            ));
         }
         if overlay_source.geometry_family != "Polygon" {
             return Err(EditError::validation(

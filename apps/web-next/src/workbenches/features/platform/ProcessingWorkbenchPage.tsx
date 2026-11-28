@@ -18,6 +18,12 @@ import {processingLayer,processingRequest,readPendingProcessing,supportedAlgorit
 import {appendBatch,readBatch,receivedBatch,nextBatchRow,MAX_BATCH,type BatchRow} from "./processing-batch";
 
 const activeProcessingScopes=new Set<string>();
+async function definitelyRejected(error:unknown){
+  if(!(error instanceof ApiError))return false;
+  if([400,403,404,422].includes(error.status))return true;
+  if(error.status!==409)return false;
+  try{const body=await error.response.clone().json();return body.code==="STALE_INPUT_PIN"||body.error?.code==="STALE_INPUT_PIN"}catch{return false}
+}
 function processingStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     queued: "Đang chờ",
@@ -115,7 +121,7 @@ export function ProcessingWorkbenchPage() {
       await qc.invalidateQueries({queryKey:["r008",organizationId,projectId]});
     }catch(err){
       // Once a request is ambiguous, even a later 4xx cannot prove it never committed.
-      if(!pending&&err instanceof ApiError&&[400,403,404,422].includes(err.status))try{remember(null)}catch{}
+      if(!pending&&await definitelyRejected(err))try{remember(null)}catch{}
       setError(err instanceof Error?err.message:"Xử lý không thành công.");
     }finally{activeProcessingScopes.delete(pendingKey);inFlight.current=false;if(alive.current)setBusy(false)}
   }
@@ -143,7 +149,7 @@ export function ProcessingWorkbenchPage() {
           const job=await createProcessingJob(apiClient,organizationId,projectId,row.request,csrf);
           rows=rows.map((r,i)=>i===index?receivedBatch(row,job):r);storeBatch(rows);
         }catch(e){
-          const definitive=!wasUncertain&&e instanceof ApiError&&[400,403,404,422].includes(e.status);
+          const definitive=!wasUncertain&&await definitelyRejected(e);
           rows=rows.map((r,i)=>i===index?{request:row.request,state:definitive?"rejected":"uncertain",error:(e instanceof Error?e.message:String(e)).slice(0,500)}:r);
           storeBatch(rows);
           if(!definitive||e instanceof ApiError&&(e.status===403||e.status===401))break;

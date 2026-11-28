@@ -19,10 +19,10 @@ export function MapTips({map,ready,rows,views,renderLayers,disabled}:{map:RefObj
  const selected=useMemo(()=>hit?identifyRows([hit],rows)[0]:undefined,[hit,rows]);
  const value=selected?mapTipText(selected,views[selected.layer.id]?.mapTipField??""):"";
  const enabled=!disabled&&Object.values(views).some(v=>!!v.mapTipField);
- useEffect(()=>{const m=map.current;setHit(null);if(!enabled||!ready||!m)return;let timer=0;
+ useEffect(()=>{const m=map.current;setHit(null);if(!enabled||!ready||!m)return;let timer=0,live=true;
   const clear=()=>{window.clearTimeout(timer);setHit(null)};
-  const move=(e:ml.MapMouseEvent)=>{window.clearTimeout(timer);setHit(null);if(m.isMoving()||document.body.dataset.ovgSpacePan)return;const point=e.point;timer=window.setTimeout(()=>{try{const ids=renderLayers.current.filter(id=>!!m.getLayer(id));if(!ids.length)return;const hits=identifyHits(m.queryRenderedFeatures(point,{layers:ids}));setHit(hits.find(h=>!!views[h.layerId]?.mapTipField)??null)}catch{setHit(null)}},350)};
-  m.on("mousemove",move);m.on("movestart",clear);m.getCanvas().addEventListener("mouseleave",clear);return()=>{window.clearTimeout(timer);m.off("mousemove",move);m.off("movestart",clear);m.getCanvas().removeEventListener("mouseleave",clear)};
+  const move=(e:ml.MapMouseEvent)=>{window.clearTimeout(timer);setHit(null);if(m.isMoving()||document.body.dataset.ovgSpacePan)return;const point=e.point;timer=window.setTimeout(()=>{if(!live||m.isMoving()||document.body.dataset.ovgSpacePan)return;try{const ids=renderLayers.current.filter(id=>!!m.getLayer(id));if(!ids.length)return;const hits=identifyHits(m.queryRenderedFeatures(point,{layers:ids}));setHit(hits.find(h=>!!views[h.layerId]?.mapTipField)??null)}catch{setHit(null)}},350)};
+  m.on("mousemove",move);m.on("movestart",clear);m.getCanvas().addEventListener("mouseleave",clear);return()=>{live=false;window.clearTimeout(timer);m.off("mousemove",move);m.off("movestart",clear);m.getCanvas().removeEventListener("mouseleave",clear)};
  },[map,ready,enabled,views,renderLayers]);
  return enabled&&selected&&value?<div role="status" className="panel" style={{position:"absolute",left:12,bottom:48,maxWidth:"min(320px, 85%)",zIndex:6,pointerEvents:"none",padding:8,overflowWrap:"anywhere"}}><strong>{selected.layer.name}</strong><div>{value}</div></div>:null;
 }
