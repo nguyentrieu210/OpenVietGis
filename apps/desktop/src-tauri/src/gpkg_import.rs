@@ -193,10 +193,10 @@ impl Direct{
   let statement=format!("SELECT f.{id},length(f.{g}),CASE WHEN length(f.{g})<=1048576 THEN f.{g} ELSE NULL END FROM {} i JOIN {} f ON f.{id}=i.id WHERE f.{id}>?1 AND i.maxx>=?2 AND i.maxy>=?3 AND i.minx<=?4 AND i.miny<=?5 ORDER BY f.{id} LIMIT 513",ident(&idx)?,ident(table)?);
   let mut q=sql(self.db.prepare(&statement))?;let mut rows=sql(q.query(rusqlite::params![last,b[0],b[1],b[2],b[3]]))?;
   let mut features=Vec::new();let mut next=None;let mut bytes=0usize;
-  let mut final_id=last;
+  let mut final_id=last;let mut scanned=0usize;
   while let Some(row)=sql(rows.next())?{
    let fid:i64=sql(row.get(0))?;
-   if features.len()==512{next=Some(final_id.to_string());break}
+   if scanned==512{next=Some(final_id.to_string());break}scanned+=1;
    let raw:Option<Vec<u8>>=sql(row.get(2))?;
    let raw=raw.ok_or("GEOMETRY_TOO_LARGE_OR_NULL")?;
    let g=ovg_spatial::parse_xy_wkb(&wkb(&raw,4326)?,&ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
