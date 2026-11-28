@@ -31,6 +31,7 @@ pub mod ingest;
 pub mod local_worker;
 pub mod jpeg;
 pub mod exif;
+pub mod jpeg_source;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

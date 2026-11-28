@@ -5,7 +5,7 @@ use super::{disk_store,geotiff,ortho,tiles};
 use std::{collections::BTreeMap,fs::File,io::{Read,Seek,SeekFrom},path::PathBuf};
 
 #[derive(Debug)]
-pub enum Error{Invalid,Limit,Cancelled,Io(std::io::Error),Tile(tiles::Error),
+pub enum Error{Invalid,Limit,Cancelled,Io(std::io::Error),Jpeg(super::jpeg::Error),Tile(tiles::Error),
  Render(ortho::Error),Tiff(geotiff::Error),Store(disk_store::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 pub struct OwnedImage{pub camera:ortho::Camera,pub width:u32,pub height:u32,pub rgb:Vec<u8>}
@@ -79,7 +79,7 @@ pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id
 pub struct RawImage{pub path:PathBuf,pub camera:ortho::Camera,pub width:u32,pub height:u32,
  pub footprint:Option<tiles::Window>}
 pub struct RawSource{pub width:u32,pub height:u32,pub dem_path:PathBuf,pub images:Vec<RawImage>}
-fn intersects(a:tiles::Window,b:tiles::Window)->bool{
+pub(crate) fn intersects(a:tiles::Window,b:tiles::Window)->bool{
  match(a.x.checked_add(a.width),a.y.checked_add(a.height),b.x.checked_add(b.width),b.y.checked_add(b.height)){
  (Some(ax),Some(ay),Some(bx),Some(by))=>a.width>0&&a.height>0&&b.width>0&&b.height>0&&a.x<bx&&b.x<ax&&a.y<by&&b.y<ay,
  _=>false}
@@ -126,7 +126,7 @@ impl Source for RawSource{
  fn fixture()->(Temp,RawSource,ortho::Grid){
  let t=Temp(std::env::temp_dir().join(format!("ovg-pipe-{}",Uuid::new_v4())));fs::create_dir_all(&t.0).unwrap();
  let dem=t.0.join("dem.raw");fs::write(&dem,vec![0u8;3*3*4]).unwrap();
- let rgb=t.0.join("rgb.raw");let data:Vec<_>=(0..4).flat_map(|y|(0..4).flat_map(move|x|[x*40,y*40,0])).collect();fs::write(&rgb,data).unwrap();
+ let rgb=t.0.join("rgb.raw");let data:Vec<u8>=(0..4).flat_map(|y|(0..4).flat_map(move|x|[x*40,y*40,0])).collect();fs::write(&rgb,data).unwrap();
  let camera=ortho::Camera{world_to_camera:[[1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]],center:[0.,0.,10.],fx:10.,fy:10.,cx:0.,cy:0.};
  let source=RawSource{width:3,height:3,dem_path:dem,images:vec![RawImage{path:rgb,camera,width:4,height:4,footprint:None}]};
  let grid=ortho::Grid{origin_x:0.,origin_y:0.,gsd:1.,width:3,height:3};(t,source,grid)
