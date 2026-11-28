@@ -40,7 +40,7 @@ export function parseLasRecords(bytes:ArrayBuffer,crs:4326|3857,decoded?:ArrayBu
  const minor=d.getUint8(25),header=d.getUint16(94,true),offset=d.getUint32(96,true),vlrs=d.getUint32(100,true),rawFormat=d.getUint8(104),format=decoded?rawFormat&63:rawFormat,length=d.getUint16(105,true);
  if(decoded&&(rawFormat&128)===0||header<(minor===4?375:minor===3?235:227)||header>offset||offset>bytes.byteLength||vlrs>1024||!Object.hasOwn(lengths,format)||format>=6&&minor!==4||length<lengths[format]!)throw Error("Invalid or unsupported LAS records (LAZ is not supported)");
  const legacy=d.getUint32(107,true),extended=minor===4?d.getBigUint64(247,true):0n;
- if(extended>2000000n||minor===4&&format>=6&&(legacy!==0||extended===0n)||extended&&legacy&&extended!==BigInt(legacy))throw Error("Invalid LAS point count");
+ if(extended>2000000n||minor===4&&format>=6&&extended===0n||extended&&legacy&&extended!==BigInt(legacy))throw Error("Invalid LAS point count");
  const count=extended?Number(extended):legacy,pointEnd=decoded?offset:offset+length*count;
  if(count<1||count>2000000||pointEnd>bytes.byteLength||decoded&&(decoded.byteLength!==count*length||decoded.byteLength>LAS_MAX_BYTES))throw Error("Invalid LAS point count or truncated records");
  const wktFlag=(d.getUint16(6,true)&16)!==0;
