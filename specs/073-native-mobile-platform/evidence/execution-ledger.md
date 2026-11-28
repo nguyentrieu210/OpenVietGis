@@ -112,3 +112,6 @@ See [W3 checkpoint](w3-implementation-checkpoint.md). Focused host run passed 29
 
 ## W4 source implementation
 See [W4 checkpoint](w4-implementation-checkpoint.md). Dart SDK targeted tests passed; encrypted host and identity integration pending. A0/A1/A2 remain open.
+
+## W5 source implementation
+See [W5 checkpoint](w5-implementation-checkpoint.md). SDK/host Rust v1/v2 and house-numbering facade tests passed; renderer, actual signed installation and A3 pending. No parent or leaf closure.

@@ -121,3 +121,7 @@ See [W3 checkpoint](evidence/w3-implementation-checkpoint.md). Host focused 29 t
 
 ### W4 implementation evidence
 See [W4 checkpoint](evidence/w4-implementation-checkpoint.md). Candidate scoped Dart SDK passes targeted tests. Separate encrypted managed repository and PostgreSQL identity candidate require further qualification; no formal task closure.
+
+
+### W5 implementation evidence
+See [W5 checkpoint](evidence/w5-implementation-checkpoint.md). Candidate signed v2 SDK/Rust and official facade tests passed. Actual installed plugin, connected workflow and A3 gate remain open.
