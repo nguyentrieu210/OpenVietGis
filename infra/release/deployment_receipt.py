@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import time
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from image_manifest import validate, verify_running
 def record(manifest: dict, repository: str, candidate: str, project: str,
            started: int, completed: int) -> dict:
     images = validate(manifest, repository, candidate)
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", project):
+    if not isinstance(project, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", project):
         raise ValueError("Invalid trusted Compose project")
     if (type(started) is not int or type(completed) is not int
             or started <= 0 or not 0 <= completed - started <= 86400):
@@ -54,7 +55,7 @@ def main() -> int:
         # Do not replace a prior observation or the input manifest.
         with args.output.open("x", encoding="utf-8") as out:
             out.write(json.dumps(value, indent=2) + "\n")
-    except (ValueError, OSError, TypeError) as error:
+    except (ValueError, OSError, TypeError, subprocess.TimeoutExpired) as error:
         parser.exit(1, f"Deployment observation failed: {error}\n")
     return 0
 

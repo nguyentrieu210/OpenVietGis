@@ -84,3 +84,31 @@ python3 infra/release/deployment_receipt.py release-images.json \\
 
 This checks running app digests and health without changing services. It does not
 authenticate operator timestamps, certify release approval, or verify schema/identity.
+
+## Versioned digest-only Rust staging profile
+
+The new `docker-compose.rust.yml` provides exactly the four release-image roles,
+with no build sections, no public database/API ports, a dedicated migration role,
+and app health checks. Use it first in a new isolated Compose project, with fresh
+volumes and a dedicated unused loopback port; it does not replace the historical
+hybrid fixture or the existing deployment. No production credentials belong in
+the generated pins. Generate the four validated digest environment entries:
+
+```sh
+python3 infra/release/image_manifest.py release-images.json \\
+  --repository "$repo" --candidate "$SHA" --format env > release-images.env
+set -o pipefail
+docker compose -p "$STAGING_PROJECT" --env-file "$STAGING_ENV" \\
+  --env-file release-images.env -f infra/release/docker-compose.rust.yml \\
+  config --format json | python3 infra/release/image_manifest.py release-images.json \\
+    --repository "$repo" --candidate "$SHA" --format verify-compose
+```
+
+Use only a synthetic or authorized isolated database. The Python migration
+role still needs the SQLAlchemy runtime URL and distinct migration owner URL;
+the Rust API receives only the SQLx restricted runtime URL. Identity/TLS,
+optional email provider configuration and backup/restore remain operator
+gates. Verify all four local digests before any authorized staging start.
+Public nginx rejects the metrics endpoint; scrape the private API endpoint
+from the authorized internal monitoring network. This profile is code and
+test coverage, not proof of a successful GHCR build, staging run or live rollout.

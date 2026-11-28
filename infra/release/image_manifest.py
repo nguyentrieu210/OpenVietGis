@@ -47,6 +47,11 @@ def validate(manifest: dict, repository: str, candidate: str) -> dict[str, str]:
     return result
 
 
+def compose_env(images: dict[str, str]) -> str:
+    """Render only the four validated digest pins, never deployment secrets."""
+    return "".join(f"OVG_{role.upper()}_IMAGE={images[role]}\n" for role in ROLES)
+
+
 def compose_override(images: dict[str, str]) -> str:
     # Compose >=2.24.4 supports !reset. Do not replace networking, env,
     # ports, database volumes, or the existing migration command.
@@ -75,7 +80,7 @@ def verify_local(images: dict[str, str], candidate: str) -> None:
     for role, ref in images.items():
         # Inspect only locally pulled digest references; no network or mutation.
         process = subprocess.run(
-            ["docker", "image", "inspect", ref], capture_output=True, text=True, check=False
+            ["docker", "image", "inspect", ref], capture_output=True, text=True, check=False, timeout=30
         )
         if process.returncode:
             raise ValueError(f"Required digest not present locally: {role}")
@@ -138,13 +143,15 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--repository", required=True, help="Trusted lowercase owner/repo")
     parser.add_argument("--candidate", required=True, help="Independently approved source SHA")
-    parser.add_argument("--format", choices=("compose", "refs", "verify-compose", "verify-local", "verify-running"), default="compose")
+    parser.add_argument("--format", choices=("compose", "env", "refs", "verify-compose", "verify-local", "verify-running"), default="compose")
     parser.add_argument("--project", help="Trusted existing Compose project for read-only running-app verification")
     args = parser.parse_args()
     try:
         images = validate(json.loads(args.manifest.read_text()), args.repository, args.candidate)
         if args.format == "compose":
             print(compose_override(images), end="")
+        elif args.format == "env":
+            print(compose_env(images), end="")
         elif args.format == "refs":
             print("\n".join(images.values()))
         elif args.format == "verify-compose":

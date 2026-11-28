@@ -63,3 +63,10 @@ def test_mismatched_candidate_never_inspects(receipt, monkeypatch):
     monkeypatch.setattr(receipt, "verify_running", lambda *args: pytest.fail("unexpected inspect"))
     with pytest.raises(ValueError):
         receipt.record(manifest(), REPO, "b" * 40, "ovg", 1000, 1060)
+
+
+@pytest.mark.parametrize("project", [None, "", "../live", "bad;command", 42])
+def test_invalid_project_never_inspects(receipt, monkeypatch, project):
+    monkeypatch.setattr(receipt, "verify_running", lambda *args: pytest.fail("unexpected inspect"))
+    with pytest.raises(ValueError):
+        receipt.record(manifest(), REPO, SHA, project, 1000, 1060)

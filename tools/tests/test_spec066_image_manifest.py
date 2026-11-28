@@ -104,3 +104,50 @@ def test_release_workflow_is_manual_main_only_and_no_deploy():
     assert build["with"]["provenance"] == "mode=max"
     assert build["with"]["platforms"] == "linux/amd64"
     assert ":latest" not in build["with"]["tags"]
+
+
+def test_digest_env_contains_only_the_four_validated_image_pins():
+    images = MODULE.validate(receipt(), REPO, SHA)
+    values = dict(line.split("=", 1) for line in MODULE.compose_env(images).splitlines())
+    assert values == {f"OVG_{role.upper()}_IMAGE": ref for role, ref in images.items()}
+
+
+def test_rust_release_compose_is_digest_only_and_keeps_db_private():
+    data = yaml.safe_load((ROOT / "infra/release/docker-compose.rust.yml").read_text())
+    services = data["services"]
+    assert set(services) == set(MODULE.ROLES)
+    for role, service in services.items():
+        assert "build" not in service
+        assert service["pull_policy"] == "never"
+        assert service["image"].startswith(f"${{OVG_{role.upper()}_IMAGE:?")
+        assert "container_name" not in service
+        assert all(not str(volume).startswith("/") for volume in service.get("volumes", []))
+        if role != "web":
+            assert "ports" not in service
+    assert services["web"]["ports"][0].startswith("127.0.0.1:")
+    assert "8000" in services["api"]["environment"]["OPENVIETGIS_BIND_ADDR"]
+    assert "OPENVIETGIS_MIGRATION_DATABASE_URL" not in services["api"]["environment"]
+    assert "OPENVIETGIS_MIGRATION_DATABASE_URL" in services["migrate"]["environment"]
+    assert services["api"]["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
+    assert set(data["volumes"]) == {"pgdata", "artifacts"}
+    assert all(value is None for value in data["volumes"].values())
+
+
+def test_public_proxy_does_not_expose_private_metrics():
+    nginx = (ROOT / "infra/prod/nginx.conf").read_text()
+    assert "location = /api/v1/ops/metrics {\n        return 404;" in nginx
+    assert "proxy_pass http://api:8000/api/;" in nginx
+    docker = (ROOT / "infra/prod/Dockerfile.web").read_text()
+    assert "HEALTHCHECK" in docker and "http://127.0.0.1/index.html" in docker
+
+
+def test_local_image_inspect_timeout_fails_closed(monkeypatch):
+    images = MODULE.validate(receipt(), REPO, SHA)
+
+    def timed_out(args, **kwargs):
+        assert kwargs["timeout"] == 30
+        raise subprocess.TimeoutExpired(args, 30)
+
+    monkeypatch.setattr(MODULE.subprocess, "run", timed_out)
+    with pytest.raises(subprocess.TimeoutExpired):
+        MODULE.verify_local(images, SHA)

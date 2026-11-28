@@ -1,0 +1,96 @@
+# Spec 066 immutable Rust candidate, for an isolated staging project first.
+# Never use this file to replace an existing live configuration blindly.
+# Supply an explicit Compose project and protected environment; use generated
+# digest pins from image_manifest.py --format env. No build or public DB port.
+x-shared-environment: &shared
+  OPENVIETGIS_ENVIRONMENT: production
+  OPENVIETGIS_APPLICATION_SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+  OPENVIETGIS_CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
+  OPENVIETGIS_BOOTSTRAP_SECRET: ${BOOTSTRAP_SECRET:?set BOOTSTRAP_SECRET}
+  OPENVIETGIS_SESSION_COOKIE_SECURE: "true"
+  OPENVIETGIS_WEB_BASE_URL: ${PUBLIC_HTTPS_ORIGIN:?set PUBLIC_HTTPS_ORIGIN}
+  OPENVIETGIS_API_PUBLIC_BASE_URL: ${PUBLIC_HTTPS_ORIGIN:?set PUBLIC_HTTPS_ORIGIN}
+  OPENVIETGIS_OIDC_PROVIDERS: ${OIDC_PROVIDERS_JSON:?configure HTTPS OIDC}
+  OPENVIETGIS_ARTIFACT_STORE_DIR: /var/lib/openvietgis/artifacts
+  OPENVIETGIS_INVITATION_WEB_PATH: /app
+
+services:
+  postgres:
+    image: ${OVG_POSTGRES_IMAGE:?generate exact digest pins}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openvietgis}
+      POSTGRES_USER: ${POSTGRES_USER:-openvietgis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      RUNTIME_DB_PASSWORD: ${RUNTIME_DB_PASSWORD:?set RUNTIME_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-openvietgis} -d ${POSTGRES_DB:-openvietgis}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ${OVG_MIGRATE_IMAGE:?generate exact digest pins}
+    pull_policy: never
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        /app/apps/api/.venv/bin/alembic -c /app/apps/api/alembic.ini upgrade head
+        /app/apps/api/.venv/bin/python /app/tools/migrate_official_modules.py
+    environment:
+      <<: *shared
+      OPENVIETGIS_DATABASE_URL: ${RUNTIME_DATABASE_URL:?set restricted SQLAlchemy URL}
+      OPENVIETGIS_RUNTIME_DATABASE_URL: ${RUNTIME_DATABASE_URL:?set restricted SQLAlchemy URL}
+      OPENVIETGIS_MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?set migration owner URL}
+    restart: "no"
+
+  api:
+    image: ${OVG_API_IMAGE:?generate exact digest pins}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *shared
+      OPENVIETGIS_BIND_ADDR: 0.0.0.0:8000
+      OPENVIETGIS_DATABASE_URL: ${RUST_RUNTIME_DATABASE_URL:?set restricted SQLx URL}
+      OPENVIETGIS_DB_MAX_CONNECTIONS: "8"
+      OVG_CORS_ORIGINS: ${PUBLIC_HTTPS_ORIGIN:?set PUBLIC_HTTPS_ORIGIN}
+      OPENVIETGIS_RESEND_API_KEY: ${OPENVIETGIS_RESEND_API_KEY:-}
+      OPENVIETGIS_INVITATION_FROM_EMAIL: ${OPENVIETGIS_INVITATION_FROM_EMAIL:-}
+    volumes:
+      - artifacts:/var/lib/openvietgis/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/ops/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: ${OVG_WEB_IMAGE:?generate exact digest pins}
+    pull_policy: never
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HTTP_PORT:?set a dedicated unused staging port}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/index.html"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  artifacts:
