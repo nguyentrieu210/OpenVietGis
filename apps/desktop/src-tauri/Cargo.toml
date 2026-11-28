@@ -10,6 +10,11 @@ license = "AGPL-3.0-or-later"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+default = []
+native-ogr = ["ovg-native-providers/ogr"]
+native-analytics = ["ovg-native-providers/analytics"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
@@ -29,3 +34,5 @@ tokio = { version = "1", features = ["sync", "macros"] }
 zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 
 ovg-project-store = { path = "../../../crates/ovg-project-store" }
+
+ovg-native-providers = { path = "../../../crates/ovg-native-providers" }
