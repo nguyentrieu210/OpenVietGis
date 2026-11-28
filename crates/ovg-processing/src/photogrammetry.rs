@@ -39,6 +39,8 @@ pub mod las_export;
 pub mod glb_export;
 pub mod export_worker;
 pub mod tileset;
+pub mod dense_io;
+pub mod dense_job;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
