@@ -7,14 +7,14 @@ use zip::{ZipArchive,ZipWriter,write::SimpleFileOptions,CompressionMethod};
 type Result<T>=std::result::Result<T,&'static str>;
 const MAX_FILE:u64=512*1024*1024;
 const MAX_TOTAL:u64=2*1024*1024*1024;
-const MANIFEST_MAX:u64=64*1024;
+const MANIFEST_MAX:u64=96*1024;
 #[derive(Serialize,Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Manifest{version:u32,layers:Vec<LayerInfo>}
+struct Manifest{version:u32,layers:Vec<LayerInfo>,#[serde(default)]state:Option<crate::project_state::ProjectState>}
 fn path_for(id:Uuid)->String{format!("layers/{id}/workspace.gpkg")}
-pub fn write_bundle(stage:&Path,layers:&[LayerInfo],dest:&Path)->Result<()>{
+pub fn write_bundle(stage:&Path,layers:&[LayerInfo],state:&crate::project_state::ProjectState,dest:&Path)->Result<()>{
  if layers.len()>32{return Err("RESOURCE_LIMIT")}
- let manifest=serde_json::to_vec(&Manifest{version:1,layers:layers.to_vec()}).map_err(|_|"INVALID_PROJECT")?;
+ let manifest=serde_json::to_vec(&Manifest{version:1,layers:layers.to_vec(),state:Some(state.clone())}).map_err(|_|"INVALID_PROJECT")?;
  if manifest.len()as u64>MANIFEST_MAX{return Err("RESOURCE_LIMIT")}
  let f=fs::OpenOptions::new().write(true).create_new(true).open(dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;
  let result=(||{
@@ -82,5 +82,6 @@ pub fn restore_bundle(source:&Path,stage:&Path)->Result<()>{
      f.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;
    }
  }
+ if let Some(state)=manifest.state{let ids:Vec<_>=manifest.layers.iter().map(|l|l.id).collect();state.validate(&crate::project_state::known(&ids))?;crate::project_state::write_exact(stage,&state)?;}
  Ok(())
 }
