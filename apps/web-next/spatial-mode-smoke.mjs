@@ -146,9 +146,12 @@ try{
  pluginCompatible=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached"});
  await page.getByRole("button",{name:/Chợ ứng dụng/}).click();
- const mismatch=page.locator(".ovg-app").filter({hasText:"Quản lý và đánh số nhà"});
- await mismatch.getByText("Phiên bản không khớp",{exact:true}).waitFor();
- assert.equal(await mismatch.getByRole("button",{name:"Mở",exact:true}).count(),0);
+ const market=page.getByRole("dialog",{name:"Chợ ứng dụng"});
+ const details=market.locator(".ovg-plugin-details");
+ await details.getByRole("heading",{name:/đánh số nhà/i}).waitFor();
+ await details.getByText("Không tương thích",{exact:true}).waitFor();
+ await details.getByText("Cần phiên bản tương thích.",{exact:true}).waitFor();
+ assert.equal(await details.getByRole("button",{name:"Mở",exact:true}).count(),0);
  await page.getByRole("dialog",{name:"Chợ ứng dụng"}).getByRole("button",{name:"Đóng",exact:true}).click();
  await modes.getByRole("button",{name:"GIS",exact:true}).waitFor();
  console.log("PASS incompatible activation falls back to Core with explicit reason");
