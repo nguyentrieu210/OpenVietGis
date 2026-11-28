@@ -26,3 +26,12 @@ describe("multiple server filters",()=>{
 });
 
 it("accepts final page beyond old 25000 offset",()=>{expect(tableQueryBody(layer,filter,"name","asc",49900,"pin").offset).toBe(49900)});
+
+it("rejects malformed attribute row identity and payload before use",()=>{
+ const row=result.items[0]!;
+ for(const patch of [{feature_id:""},{feature_id:123},{feature_id:"a".repeat(513)},{attributes:null},{attributes:[]},{attributes:"bad"}]){
+  expect(()=>verifyTableQuery(layer,{...result,items:[{...row,...patch}]} as unknown as LayerQueryResponse,100,"pin")).toThrow();
+ }
+ expect(()=>verifyTableQuery(layer,{...result,query_fingerprint:"x".repeat(513)},100)).toThrow();
+ expect(()=>tableQueryBody(layer,filter,"name","asc",100,"x".repeat(513))).toThrow();
+});
