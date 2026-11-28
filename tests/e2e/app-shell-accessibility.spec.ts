@@ -39,7 +39,7 @@ test("primary account and command controls meet minimum touch target", async ({
 
   for (const locator of [
     page.getByRole("button", { name: "Menu tài khoản" }),
-    page.getByRole("button", { name: /Lệnh nhanh/ })
+    page.getByRole("textbox", { name: "Dòng lệnh GIS", exact: true })
   ]) {
     const box = await locator.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);

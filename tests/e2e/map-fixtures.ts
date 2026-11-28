@@ -124,7 +124,7 @@ export async function expectUsableMap(page: Page): Promise<void> {
 }
 
 export async function openFixtureMap(page: Page, fixture: MapFixture): Promise<void> {
-  await page.goto(fixture.root + "/map");
+  await page.goto(fixture.root + "/spatial");
   await expectUsableMap(page);
 }
 

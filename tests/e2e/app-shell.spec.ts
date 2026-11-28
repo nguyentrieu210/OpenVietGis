@@ -30,7 +30,7 @@ test("background /me revalidation keeps authenticated shell mounted", async ({
   );
 
   await page.evaluate(() => {
-    window.dispatchEvent(new Event("visibilitychange"));
+    window.dispatchEvent(new Event("focus"));
   });
 
   await request;

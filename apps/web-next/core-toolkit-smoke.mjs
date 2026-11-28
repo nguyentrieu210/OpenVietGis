@@ -38,6 +38,7 @@ try{
  });
  await page.goto(url,{waitUntil:"domcontentloaded"});
  await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await page.getByRole("complementary",{name:"Chat"}).getByRole("button",{name:"Thu thanh chat",exact:true}).click();
  assert.equal(pluginCalls,0);assert.equal(chunkCalls,0);
  assert.equal(await page.getByRole("button",{name:"Địa bàn",exact:true}).count(),0);
  assert.equal(await page.locator(".qgis-tree [data-layer-id]").count(),2);
