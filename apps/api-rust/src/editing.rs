@@ -183,6 +183,15 @@ async fn commit_changeset(
     )
     .await?;
     require_csrf(&state, &session, &headers)?;
+    let mut body = body;
+    let prevent_overlap = match body.as_mut().and_then(Value::as_object_mut) {
+        Some(object) => match object.remove("prevent_overlap") {
+            None | Some(Value::Bool(false)) => false,
+            Some(Value::Bool(true)) => true,
+            _ => return Err(EditError::InvalidRequest.into()),
+        },
+        None => false,
+    };
     let body: CommitRequest = decode(body)?;
     let schema_ok = body
         .base_schema_revision
@@ -194,7 +203,11 @@ async fn commit_changeset(
     let (Some(mut scope), Ok(source_id)) = (scope, Uuid::parse_str(&source)) else {
         return Err(EditError::InvalidRequest.into());
     };
-    let result = scope.commit_changeset(source_id, body).await?;
+    let result = if prevent_overlap {
+        scope.commit_changeset_no_overlap(source_id, body).await?
+    } else {
+        scope.commit_changeset(source_id, body).await?
+    };
     scope.commit().await?;
     Ok((StatusCode::CREATED, Json(result)))
 }

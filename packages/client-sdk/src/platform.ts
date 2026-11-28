@@ -397,6 +397,7 @@ export function commitChangeset(
   body: {
     base_content_revision: string;
     base_schema_revision?: string;
+    prevent_overlap?: boolean;
     operation_id: string;
     summary: string;
     operations: Array<{

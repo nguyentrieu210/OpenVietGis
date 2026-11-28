@@ -531,9 +531,12 @@
         "apps/web-next/src/ProfessionalTools.tsx",
         "tests/spec065/topology.py",
         "apps/web-next/src/advanced-geometry.ts",
-        "apps/web-next/src/advanced-geometry.test.ts"
+        "apps/web-next/src/advanced-geometry.test.ts",
+        "crates/ovg-storage/src/editing/mod.rs",
+        "apps/api-rust/src/editing.rs",
+        "packages/client-sdk/src/platform.ts"
       ],
-      "blocker": "Rust/PostGIS topology checks plus exact coincident vertex move for a complete revision-pinned source in one existing changeset (up to 100 features, 5000 source features); no automatic segment noding, avoid-overlap transactional policy or paired QGIS. New tests unexecuted."
+      "blocker": "Rust/PostGIS topology review and exact shared vertex move; opt-in transaction-level polygon interior overlap rejection on final changeset state, source lock, bounded complete geometry scan, replay digest and rollback fixture. Edge touching permitted. Automatic noding, cross-source persistent policy and paired QGIS acceptance remain. New tests not executed."
     },
     {
       "id": "EDIT-06",

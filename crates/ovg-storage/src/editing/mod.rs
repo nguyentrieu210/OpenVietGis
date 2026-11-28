@@ -667,7 +667,16 @@ impl<'a> EditScope<'a> {
         source_id: Uuid,
         request: CommitRequest,
     ) -> Result<Value, EditError> {
-        self.commit_inner(source_id, request, None).await
+        self.commit_inner(source_id, request, None, false).await
+    }
+
+    /// Opt-in transactional polygon overlap protection for an unrestricted editor.
+    pub async fn commit_changeset_no_overlap(
+        &mut self,
+        source_id: Uuid,
+        request: CommitRequest,
+    ) -> Result<Value, EditError> {
+        self.commit_inner(source_id, request, None, true).await
     }
 
     /// Commit the inverse of the latest changeset as a new `reverted` changeset.
@@ -718,7 +727,7 @@ impl<'a> EditScope<'a> {
                 .unwrap_or_else(|| format!("Revert changeset {changeset_id}")),
             operations,
         };
-        self.commit_inner(source_id, request, Some(changeset_id))
+        self.commit_inner(source_id, request, Some(changeset_id), false)
             .await
     }
 
@@ -727,8 +736,12 @@ impl<'a> EditScope<'a> {
         source_id: Uuid,
         request: CommitRequest,
         reverted_from: Option<Uuid>,
+        prevent_overlap: bool,
     ) -> Result<Value, EditError> {
         self.authorize(Permission::Edit).await?;
+        if prevent_overlap && self.scoped {
+            return Err(gis_denied());
+        }
         let org = self.tx.organization_id();
         let proj = self.project_id;
         let actor_type = self.actor_type();
@@ -778,6 +791,12 @@ impl<'a> EditScope<'a> {
             &request.operations,
             reverted_from,
         )?;
+
+        let digest = if prevent_overlap {
+            domain::sha256_py_json(&json!({"request": digest, "prevent_overlap": true}))
+        } else {
+            digest
+        };
 
         // Serialize replay lookup with source mutation (row lock) like the oracle.
         let source = sqlx::query(
@@ -914,6 +933,12 @@ impl<'a> EditScope<'a> {
                     "draft_preserved": true,
                 })));
             }
+        }
+        if prevent_overlap && (family != "Polygon" || request.operations.len() > 100) {
+            return Err(EditError::validation(
+                "OVERLAP_POLICY_LIMIT",
+                "overlap guard requires a polygon source and at most 100 operations",
+            ));
         }
         let fields = self.load_fields(source_id).await?;
         if fields.iter().any(|f| f.schema_revision != schema_revision) {
@@ -1115,6 +1140,80 @@ impl<'a> EditScope<'a> {
                 .execute(&mut **self.tx.tx_mut())
                 .await
                 .map_err(db_error)?;
+        }
+
+        if prevent_overlap {
+            let changed: Vec<String> = prepared
+                .iter()
+                .filter(|item| item.after_wkb.is_some() && item.before_wkb != item.after_wkb)
+                .map(|item| item.feature_id.clone())
+                .collect();
+            if !changed.is_empty() {
+                // All new geometries are already in the same uncommitted transaction.
+                // The source lock protects against concurrent changeset writes.
+                let count: i64 = sqlx::query_scalar(
+                    "SELECT count(*) FROM spatial.reference_features
+                     WHERE organization_id=$1 AND project_id=$2 AND source_id=$3",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if count > 5000 {
+                    return Err(EditError::validation(
+                        "OVERLAP_POLICY_LIMIT",
+                        "overlap guard requires at most 5000 source features",
+                    ));
+                }
+                let invalid: bool = sqlx::query_scalar(
+                    "SELECT EXISTS (
+                         SELECT 1 FROM spatial.reference_features
+                         WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
+                           AND (geometry_state <> 'present' OR geometry IS NULL
+                                OR NOT ST_IsValid(geometry) OR ST_IsEmpty(geometry))
+                     )",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if invalid {
+                    return Err(EditError::validation(
+                        "OVERLAP_POLICY_INCOMPLETE",
+                        "source has unavailable or invalid geometry; cannot verify overlap",
+                    ));
+                }
+                let collision: bool = sqlx::query_scalar(
+                    "SELECT EXISTS (
+                         SELECT 1 FROM spatial.reference_features a
+                         JOIN spatial.reference_features b
+                           ON b.organization_id=a.organization_id
+                          AND b.project_id=a.project_id AND b.source_id=a.source_id
+                          AND b.feature_id<>a.feature_id AND a.geometry && b.geometry
+                         WHERE a.organization_id=$1 AND a.project_id=$2 AND a.source_id=$3
+                           AND a.feature_id=ANY(CAST($4 AS varchar[]))
+                           AND ST_Relate(a.geometry,b.geometry,'2********')
+                     )",
+                )
+                .bind(org)
+                .bind(proj)
+                .bind(source_id)
+                .bind(&changed)
+                .fetch_one(&mut **self.tx.tx_mut())
+                .await
+                .map_err(db_error)?;
+                if collision {
+                    return Err(EditError::conflict(
+                        "POLYGON_OVERLAP",
+                        "polygon interiors overlap; changeset was not saved",
+                    )
+                    .with_details(json!({"draft_preserved": true})));
+                }
+            }
         }
 
         sqlx::query(

@@ -78,13 +78,31 @@ def check_topology(c, f):
     sid=parcels["source_id"]
     with psycopg.connect(OWNER) as conn:
         attrs=conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='a'",(sid,)).fetchone()[0]
-    def save(op,revision,operations):
-        return post("/sources/"+sid+"/changesets",{"operation_id":op,"base_content_revision":revision,"base_schema_revision":parcels["schema_revision"],"summary":"Spec065 topology acceptance","operations":operations},201)
+    def save(op,revision,operations,guard=True,expected=201):
+        return post(
+            "/sources/"+sid+"/changesets",
+            {"operation_id":op,"base_content_revision":revision,
+             "base_schema_revision":parcels["schema_revision"],
+             "summary":"Spec065 topology acceptance","operations":operations,
+             "prevent_overlap":guard},expected,
+        )
+    overlapping={"type":"Polygon","coordinates":[[
+        [.005,0],[.015,0],[.015,.01],[.005,.01],[.005,0],
+    ]]}
+    rejected=save("spec065-overlap",parcels["content_revision"],[
+        {"op_type":"update","feature_id":"a","geometry":overlapping},
+    ],expected=409)
+    assert rejected["code"]=="POLYGON_OVERLAP",rejected
+    with psycopg.connect(OWNER) as conn:
+        assert conn.execute(
+            "SELECT content_revision FROM spatial.data_sources WHERE id=%s",(sid,),
+        ).fetchone()[0]==parcels["content_revision"]
     cut_ops=[{"op_type":"update","feature_id":"a","geometry":split["geometries"][0]},
              {"op_type":"create","feature_id":"a_split","geometry":split["geometries"][1],"properties":attrs}]
     cut=save("spec065-cut",parcels["content_revision"],cut_ops)
     assert cut["status"]=="committed" and cut["operation_count"]==2
     assert save("spec065-cut",parcels["content_revision"],cut_ops)["id"]==cut["id"]
+    save("spec065-cut",parcels["content_revision"],cut_ops,guard=False,expected=409)
     new=post(endpoint,{"action":"merge","content_revision":cut["resulting_content_revision"],"schema_revision":parcels["schema_revision"],"feature_ids":["a","a_split","b"]})
     assert len(new["geometries"])==1
     union_ops=[{"op_type":"update","feature_id":"a","geometry":new["geometries"][0]},
