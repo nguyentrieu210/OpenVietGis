@@ -252,9 +252,18 @@ def check(c,f,second,fixtures,directory):
         assert conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='pt'",(child["source_id"],)).fetchone()[0]==child_attrs
         assert conn.execute("SELECT count(*) FROM spatial.reference_features WHERE source_id=%s AND feature_id='clip'",(target["source_id"],)).fetchone()[0]==1
         assert conn.execute("SELECT content_revision FROM spatial.data_sources WHERE id=%s",(child["source_id"],)).fetchone()[0]==child["content_revision"]
+    # The parcels have duplicate ward A: creation must fail even if no child references another duplicate.
+    parcels=fixtures[0]
+    duplicate=definition|{"target_source_id":parcels["source_id"],"target_schema_revision":parcels["schema_revision"]}
+    post(relation,duplicate,expected=409)
+    assert len(get(relation)["items"])==1
     assert post(relation+"/"+rule["id"]+"/delete",{},expected=200)["deleted"]
     assert rule["id"] not in {r["id"] for r in get(relation)["items"]}
-    print("PASS persistent relation create/replay, cross-tenant denial, orphan update/delete rollback",flush=True)
+    # Once explicitly removed, the same previously rejected edit may be resubmitted.
+    changed=post(child_endpoint,bad)
+    assert changed["status"]=="committed"
+    post("/changesets/"+changed["id"]+"/revert",{"operation_id":str(uuid4())})
+    print("PASS persistent relation create/replay, cross-tenant denial, duplicate targets, orphan update/delete rollback, removal",flush=True)
     # Real GDAL worker, candidate runs under unprivileged uid.
     spec=importlib.util.spec_from_file_location("spec065_fixtures",ROOT/"fixtures/qgis-parity/generate.py")
     gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)

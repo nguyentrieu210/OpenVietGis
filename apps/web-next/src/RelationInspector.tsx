@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from "react";
-import {loadCsrfToken,executeLayerQuery,type ApiClient,type SpatialLayer} from "@openvietgis/client-sdk";
+import {loadCsrfToken,executeLayerQuery,getEffectivePermissions,type ApiClient,type SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 import {readRelationSpec,readableRelationLayer,queryableRelationLayer,relationMatches,queryRelation,auditRelation,type RelationAudit,type RelatedRecord,type RelationSpec} from "./relation-inspector";
 import {uiConfirm} from "./ui-dialog";
@@ -18,20 +18,20 @@ export function RelationInspector({row,layers,rows,storageKey,restricted,navigat
  useEffect(()=>{generation.current++;setRemote(null);setAudit(null);setAuditProgress("");setRemoteError("");setBusy(false);return()=>{generation.current++}},[pin]);
  type SharedRelation={id:string;source_id:string;local_field:string;target_source_id:string;target_field:string;cardinality:"one"|"many"};
  const relationPath="/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(pid)+"/editing/relations";
- const [shared,setShared]=useState<SharedRelation[]>([]),[sharedError,setSharedError]=useState(""),[sharedBusy,setSharedBusy]=useState(false);
+ const [shared,setShared]=useState<SharedRelation[]>([]),[sharedError,setSharedError]=useState(""),[sharedBusy,setSharedBusy]=useState(false),[canManage,setCanManage]=useState(false);
  const sharedScope=useRef("");const scopeKey=JSON.stringify([org,pid,row.layer.source_id,opened,restricted]);sharedScope.current=scopeKey;
- useEffect(()=>{let live=true;setShared([]);setSharedError("");setSharedBusy(false);if(opened&&!restricted)client.request<{items:SharedRelation[]}>(relationPath).then(r=>{if(live)setShared(r.items)}).catch(e=>{if(live)setSharedError(e instanceof Error?e.message:String(e))});return()=>{live=false}},[client,relationPath,scopeKey]);
+ useEffect(()=>{let live=true;setShared([]);setSharedError("");setSharedBusy(false);setCanManage(false);if(opened&&!restricted){client.request<{items:SharedRelation[]}>(relationPath).then(r=>{if(live)setShared(r.items)}).catch(e=>{if(live)setSharedError(e instanceof Error?e.message:String(e))});getEffectivePermissions(client,org,{project_id:pid}).then(p=>{if(live)setCanManage(p.permissions.includes("project.manage"))}).catch(()=>{if(live)setCanManage(false)})}return()=>{live=false}},[client,relationPath,scopeKey,org,pid]);
  const mutateShared=async(remove?:string)=>{
-  if(sharedBusy||disabled||restricted||!opened||!source)return;
+  if(sharedBusy||disabled||restricted||!opened||!source||!canManage)return;
   if(!remove&&(!target||!local||!readRelationSpec(spec)))return;
-  const key=scopeKey;const current=()=>sharedScope.current===key;
+  const key=scopeKey,definitionPin=pin;const current=()=>sharedScope.current===key&&latest.current===definitionPin;
   if(!await uiConfirm(remove?"Xóa ràng buộc dùng chung?":"Áp dụng ràng buộc ghi cho toàn dự án? Dữ liệu hiện có phải hợp lệ."))return;
   if(!current())return;setSharedBusy(true);setSharedError("");
   try{
    const csrf=await loadCsrfToken(client);if(!current())return;
    await client.request(remove?relationPath+"/"+encodeURIComponent(remove)+"/delete":relationPath,{method:"POST",headers:{"x-openvietgis-csrf":csrf},body:JSON.stringify(remove?{}:{source_id:source.source_id,local_field:spec.localField,target_source_id:target!.source_id,target_field:spec.targetField,cardinality:spec.cardinality,source_schema_revision:source.source.schema_revision,target_schema_revision:target!.source.schema_revision})});
    if(current()){const r=await client.request<{items:SharedRelation[]}>(relationPath);if(current())setShared(r.items)}
-  }catch(e){if(current())setSharedError(e instanceof Error?e.message:String(e))}finally{if(current())setSharedBusy(false)}
+  }catch(e){if(current())setSharedError(e instanceof Error?e.message:String(e))}finally{if(sharedScope.current===key)setSharedBusy(false)}
  };
  const patch=(p:Partial<RelationSpec>)=>{setSpec(v=>({...v,...p}))};
  const query=async()=>{if(!target||!canQuery||!opened||restricted||disabled||busy)return;const ticket=++generation.current,key=pin;setBusy(true);setRemoteError("");setRemote(null);const current=()=>latest.current===key&&generation.current===ticket;
@@ -49,8 +49,8 @@ export function RelationInspector({row,layers,rows,storageKey,restricted,navigat
  <label>Cardinality<select value={spec.cardinality} onChange={e=>patch({cardinality:e.target.value==="one"?"one":"many"})}><option value="many">Một–nhiều</option><option value="one">Nhiều–một (kiểm tra khóa đang chọn)</option></select></label>
  <button type="button" disabled={!readRelationSpec(spec)||!target||!local||!targetFields.some(f=>f.field_id===spec.targetField)} onClick={()=>writePreference(storageKey,spec)}>Lưu cấu hình cá nhân</button><button type="button" onClick={()=>{setSpec(empty);writePreference(storageKey,null)}}>Xóa cấu hình</button><button type="button" disabled={!canQuery||!readRelationSpec(spec)||!target||!local||!targetFields.some(f=>f.field_id===spec.targetField)} onClick={()=>void query()}>Tra cứu toàn nguồn qua máy chủ</button><button type="button" disabled={!source||!queryableRelationLayer(source)||!canQuery||!readRelationSpec(spec)||!local||!targetFields.some(f=>f.field_id===spec.targetField)} onClick={()=>void checkAll()}>Kiểm tra toàn bộ quan hệ</button></fieldset>
  {opened&&!restricted&&<section aria-label="Ràng buộc dùng chung"><h4>Ràng buộc ghi cấp dự án</h4>
- <button type="button" disabled={disabled||sharedBusy||!target||!local||!readRelationSpec(spec)||!targetFields.some(f=>f.field_id===spec.targetField)} onClick={()=>void mutateShared()}>Tạo ràng buộc dùng chung (quản lý)</button>
- {shared.filter(r=>r.source_id===row.layer.source_id||r.target_source_id===row.layer.source_id).map(r=><div key={r.id}><span>{layers.find(l=>l.source_id===r.source_id)?.name??r.source_id} · {r.local_field} → {layers.find(l=>l.source_id===r.target_source_id)?.name??r.target_source_id} · {r.target_field} ({r.cardinality})</span><button type="button" disabled={disabled||sharedBusy} onClick={()=>void mutateShared(r.id)}>Xóa ràng buộc</button></div>)}
+ {canManage?<button type="button" disabled={disabled||sharedBusy||!target||!local||!readRelationSpec(spec)||!targetFields.some(f=>f.field_id===spec.targetField)} onClick={()=>void mutateShared()}>Tạo ràng buộc dùng chung (quản lý)</button>:<small>Chỉ người có quyền quản lý dự án được thay đổi ràng buộc.</small>}
+ {shared.filter(r=>r.source_id===row.layer.source_id||r.target_source_id===row.layer.source_id).map(r=><div key={r.id}><span>{layers.find(l=>l.source_id===r.source_id)?.name??r.source_id} · {r.local_field} → {layers.find(l=>l.source_id===r.target_source_id)?.name??r.target_source_id} · {r.target_field} ({r.cardinality})</span>{canManage&&<button type="button" disabled={disabled||sharedBusy} onClick={()=>void mutateShared(r.id)}>Xóa ràng buộc</button>}</div>)}
  {sharedError&&<p role="alert">{sharedError}</p>}</section>}
  {busy&&<p role="status">Đang truy vấn… {auditProgress}</p>}{opened&&canQuery&&!restricted&&audit?.pin===pin&&<section aria-label="Kết quả kiểm tra quan hệ"><p>Nguồn: {audit.report.sourceRows} · Đích: {audit.report.targetRows}</p><dl><dt>Khớp</dt><dd>{audit.report.matched}</dd><dt>Khóa nguồn NULL / đích NULL</dt><dd>{audit.report.nullSource} / {audit.report.nullTarget}</dd><dt>Tham chiếu không tồn tại</dt><dd>{audit.report.missing}</dd><dt>Tham chiếu không duy nhất</dt><dd>{audit.report.ambiguous}</dd><dt>Nhóm khóa đích trùng</dt><dd>{audit.report.duplicateTargetKeys}</dd></dl>{audit.report.examples.missing.length>0&&<p>FID thiếu tham chiếu (tối đa 20): {audit.report.examples.missing.join(", ")}</p>}{audit.report.examples.ambiguous.length>0&&<p>FID khớp nhiều đích (tối đa 20): {audit.report.examples.ambiguous.join(", ")}</p>}{audit.report.examples.duplicate.length>0&&<p>FID mẫu đích trùng (tối đa 20): {audit.report.examples.duplicate.join(", ")}</p>}<small>Kiểm tra chỉ đọc, không phải khóa ngoại hoặc ràng buộc ghi của cơ sở dữ liệu.</small></section>}{remoteError&&<p role="alert">{remoteError}</p>}{opened&&canQuery&&!restricted&&remote?.pin===pin&&<><p>{remote.items.length} kết quả máy chủ</p>{remote.items.map(r=><button key={r.feature_id} disabled={busy||disabled||restricted} onClick={()=>void openRemote(r.feature_id)}>{target?.name} · {r.feature_id}</button>)}</>}{error&&!remote&&<p role="status">{error}</p>}{result&&!remote&&<><p>{result.length} đối tượng khớp</p>{result.map(r=><button key={r.key} type="button" disabled={disabled||restricted} onClick={()=>navigate(r.key)}>{r.layer.name} · {r.feature.feature_id}</button>)}</>}
  </details>

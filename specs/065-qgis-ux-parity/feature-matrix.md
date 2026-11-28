@@ -44,7 +44,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
-| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools; quan hệ/form chưa xác nhận | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
+| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, editing.relations/changesets; có code ràng buộc dùng chung, chờ nghiệm thu | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
 | STYLE-08 | Metadata, diagrams, actions, map tips | U | Metadata cơ bản; phần còn lại chưa xác nhận | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
 | STYLE-09 | Layer styling panel live preview | P | LayerProperties modal, LayerLabels | Panel styling preview và apply rõ ràng; cancel không ghi đè dữ liệu | P2 |
 
@@ -81,7 +81,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 |---|---|---|---|---|---|
 | PROC-01 | Processing Toolbox search, category/provider | P | ProcessingToolbox | Registry thuật toán theo capability, tìm/lọc, help, favorite/recent; không hiện thuật toán giả | P1 |
 | PROC-02 | Algorithm parameter form / preview | P | ProcessingToolbox, CoreWorkbench, RasterWorkbench | Typed inputs, CRS, extent, output, validation, chạy lại cùng tham số | P1 |
-| PROC-03 | Buffer/Clip/Dissolve, spatial joins & analysis | P | CoreMapTools, AdvancedEditor, Rust processing | Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage | P1 |
+| PROC-03 | Buffer/Clip/Dissolve, spatial joins & analysis | P | CoreMapTools, AdvancedEditor, Rust processing; 8 thuật toán, Union/Spatial Join/Reproject có code, chờ golden/CI | Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage | P1 |
 | PROC-04 | Job progress, history, cancel, retry | P | CoreMapTools job controls, Rust processing | Durable job id, trạng thái queued/running/succeeded/failed/canceled, retry idempotent | P1 |
 | PROC-05 | Batch processing | P | ProcessingWorkbenchPage + processing-batch.ts: tối đa 20 hàng, chạy tuần tự, hiển thị đầu vào/tham số/trạng thái/lỗi từng hàng, phục hồi yêu cầu chưa xác minh, xuất lịch sử JSON | Chưa có xác nhận Rust/PostGIS có xác thực và đối chiếu QGIS; chưa phải parity batch đầy đủ | P2 |
 | PROC-06 | Model Designer | D | ProcessingModeler, Rust processing_models.rs | Graph DAG, parameter mapping, named outputs, revision, cancel/partial results | P2 |

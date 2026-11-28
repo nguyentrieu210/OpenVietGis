@@ -807,6 +807,12 @@ impl<'a> EditScope<'a> {
             .bind(request.target_source_id).bind(&request.target_field).bind(&request.cardinality).bind(&local.2)
             .fetch_one(&mut **tx).await.map_err(db_error)?;
         self.validate_relations(request.source_id).await?;
+        let id = Uuid::parse_str(row["id"].as_str().unwrap_or_default())
+            .map_err(|_| EditError::Internal("relation receipt missing id".into()))?;
+        self.audit_relation(id, "editing.relation.create", json!({
+            "project_id":project,"source_id":request.source_id,"target_source_id":request.target_source_id,
+            "cardinality":request.cardinality
+        })).await?;
         Ok(row)
     }
 
@@ -817,7 +823,25 @@ impl<'a> EditScope<'a> {
         let project=self.project_id();
         let result=sqlx::query("DELETE FROM editing.relations WHERE organization_id=$1 AND project_id=$2 AND id=$3")
             .bind(org).bind(project).bind(id).execute(&mut **self.tx_mut()).await.map_err(db_error)?;
-        Ok(json!({"id":id,"deleted":result.rows_affected()==1}))
+        let deleted = result.rows_affected()==1;
+        if deleted {
+            self.audit_relation(id, "editing.relation.delete", json!({"project_id":project})).await?;
+        }
+        Ok(json!({"id":id,"deleted":deleted}))
+    }
+
+    async fn audit_relation(&mut self, id: Uuid, action: &str, metadata: Value) -> Result<(), EditError> {
+        let org=self.organization_id();
+        let actor=self.actor_id();
+        let kind=self.actor_kind();
+        let label=self.display_name().to_owned();
+        sqlx::query("INSERT INTO audit.audit_events
+            (id,organization_id,actor_type,actor_id,actor_display_snapshot,action,resource_type,resource_id,outcome,metadata,created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,'relation',$7,'success',$8,$9)")
+            .bind(Uuid::new_v4()).bind(org).bind(kind).bind(actor).bind(label).bind(action)
+            .bind(id).bind(metadata).bind(Utc::now().trunc_subsecs(6))
+            .execute(&mut **self.tx_mut()).await.map_err(db_error)?;
+        Ok(())
     }
 
     // Project write guards serialize changesets and relation configuration.
