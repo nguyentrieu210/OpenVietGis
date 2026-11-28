@@ -16,6 +16,8 @@ try{
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
+ const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
+ let rasterPosts=0;
  const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
@@ -30,6 +32,8 @@ try{
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
+  else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
+  else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer",source:{...layer.source,feature_count:1001}}],next_after_id:null};
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
@@ -51,6 +55,29 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
+ if(process.env.OVG_RASTER_ONLY==="1"){
+  await page.getByRole("button",{name:"Chi tiết raster QA DEM"}).click();
+  await page.getByText(/NoData 1/).waitFor();
+  await page.getByLabel("Nội suy QA DEM").selectOption("linear");
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"linear");
+  await page.getByLabel("Hiển thị raster QA DEM").uncheck();
+  await page.reload();await page.getByRole("button",{name:"Chi tiết raster QA DEM"}).click();
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"linear");
+  assert.equal(await page.getByLabel("Hiển thị raster QA DEM").isChecked(),false);
+  await page.getByRole("button",{name:"Đặt lại hiển thị"}).click();
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"nearest");
+  await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("NDVI");await command.press("Enter");
+  const panel=page.getByRole("dialog",{name:"Phân tích Raster"});await panel.waitFor();
+  await panel.getByLabel("Nguồn A").selectOption(raster.id);
+  const save=panel.getByRole("button",{name:/Lưu thành layer dự án/});
+  assert.equal(await save.isEnabled(),false);
+  await panel.getByLabel("Band B").fill("1");assert.equal(await save.isEnabled(),true);
+  await save.click();await panel.getByRole("alert").filter({hasText:"Chưa xác minh kết quả lưu"}).waitFor();
+  assert.equal(await save.isEnabled(),false);assert.equal(rasterPosts,1);
+  await panel.getByRole("button",{name:"Đóng phân tích raster"}).click();
+  console.log("PASS raster metadata and display persistence, same-source band guard, ambiguous save blocked");
+ }else{
+
  await page.locator(".qgis-crs").click();
  const crs=page.getByRole("dialog",{name:"Hệ tọa độ hiển thị"});await crs.waitFor();
  await crs.getByRole("option",{name:/WGS 84 \/ UTM múi 48N/}).first().click();
@@ -246,6 +273,7 @@ try{
 
 
 
+ }
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
 }finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

@@ -594,9 +594,14 @@
         "apps/web-next/src/RasterWorkbench.tsx",
         "apps/api-rust/src/raster_compute.rs",
         "tests/spec065/edit_processing.py",
-        "tests/spec065/run-attribute-query.sh"
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/raster-contract.ts",
+        "apps/web-next/src/raster-contract.test.ts",
+        "apps/web-next/src/RasterReportWorkbench.tsx",
+        "tests/spec065/raster_reports.py",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Authenticated unprivileged raster worker, band persistence, stored source IDs, NoData, file download and tenant isolation verified; display properties and provider-specific pairing still missing."
+      "blocker": "Raster metadata/band/NoData validation, display opacity/brightness/contrast/saturation/resampling persisted by scope; Chromium fixture passed. Display controls apply to pre-rendered tiles, not native stretch/palette; paired QGIS and provider matrix remain."
     },
     {
       "id": "PROC-08",
@@ -608,9 +613,14 @@
         "apps/api-rust/src/raster_compute.rs",
         "fixtures/qgis-parity/generate.py",
         "tests/spec065/edit_processing.py",
-        "tests/spec065/run-attribute-query.sh"
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/raster-contract.ts",
+        "apps/web-next/src/raster-contract.test.ts",
+        "apps/web-next/src/ProjectRaster.tsx",
+        "tests/spec065/raster_reports.py",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Authenticated real raster analyze and persisted NDVI lineage, slope and aspect match analytical fixtures. Other calculator/resampling/reports, raster UI and QGIS pairing remain."
+      "blocker": "Authenticated GDAL NDVI/terrain and new zonal/contour tests PASS; validate report shape and lineage receipts, guard ambiguous persistence; no durable idempotency/reconciliation, complete calculator/resample/clip/mosaic matrix or paired QGIS."
     },
     {
       "id": "PROC-09",
