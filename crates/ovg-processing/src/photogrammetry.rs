@@ -4,6 +4,7 @@ pub mod colmap;
 pub mod governor;
 pub mod quality;
 pub mod hardware;
+pub mod autotune;
 pub mod tiles;
 pub mod admission;
 pub mod images;
