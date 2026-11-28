@@ -1,6 +1,6 @@
 //! Owned WKB batches; bounded by bytes and feature count, not a zero-copy claim.
 use crate::{Error, MAX_BYTES, MAX_ROWS};
-use ovg_spatial::{parse_wkb, validate_geometry, ValidationLimits};
+use ovg_spatial::{parse_xy_wkb, validate_geometry, ValidationLimits};
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BatchHeader {
@@ -23,7 +23,7 @@ impl WkbBatch {
             || offsets.first()!=Some(&0) || offsets.last().copied()!=Some(bytes.len() as u32)
             || offsets.windows(2).any(|w| w[0]>=w[1]) { return Err(Error::InvalidBatch); }
         for w in offsets.windows(2) {
-            let geom=parse_wkb(&bytes[w[0] as usize..w[1] as usize],&ValidationLimits::default()).map_err(|_|Error::InvalidBatch)?;
+            let geom=parse_xy_wkb(&bytes[w[0] as usize..w[1] as usize],&ValidationLimits::default()).map_err(|_|Error::InvalidBatch)?;
             if geom.srid.is_some_and(|s|s!=header.epsg) { return Err(Error::InvalidBatch); }
             validate_geometry(&geom.geometry,&ValidationLimits::default()).map_err(|_|Error::InvalidBatch)?;
         }

@@ -1,5 +1,5 @@
 //! Independent local GeoPackage only. Managed data must never enter this plaintext adapter.
-use ovg_spatial::{encode_wkb, parse_wkb, validate_geometry, BBox, ValidationLimits};
+use ovg_spatial::{encode_wkb, parse_xy_wkb, validate_geometry, BBox, ValidationLimits};
 use rusqlite::{functions::FunctionFlags, params, Connection, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -41,7 +41,7 @@ pub struct LocalStore { db: Mutex<Connection> }
 const SCHEMA: &str = include_str!("schema.sql");
 fn parse_geometry(blob: &[u8]) -> Result<(Vec<u8>,BBox),Error> {
     if blob.len()>MAX_GEOMETRY {return Err(Error::Limit);}
-    let geom=parse_wkb(blob,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
+    let geom=parse_xy_wkb(blob,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
     if geom.srid.is_some_and(|s|s!=4326){return Err(Error::Invalid);}
     let report=validate_geometry(&geom.geometry,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
     let b=report.bbox;
@@ -139,7 +139,7 @@ impl LocalStore {
         let [minx,miny,maxx,maxy]=bbox;
         if !bbox.iter().all(|n|n.is_finite())||minx>maxx||miny>maxy||after_fid<0||limit==0||limit>4096{return Err(Error::Invalid);}
         let db=self.lock()?;
-        let mut stmt=db.prepare("SELECT f.fid,f.stable_id,f.revision,f.geom,f.attributes FROM rtree_features_geom r JOIN features f ON f.fid=r.id WHERE r.maxx>=?1 AND r.minx<=?2 AND r.maxy>=?3 AND r.miny<=?4 AND f.fid>?5 ORDER BY f.fid LIMIT ?6")?;
+        let mut stmt=db.prepare("SELECT f.fid,f.stable_id,f.revision,f.geom,f.attributes FROM rtree_features_geom r JOIN features f ON f.fid=r.id WHERE r.maxx>=?1 AND r.minx<=?2 AND r.maxy>=?3 AND r.miny<=?4 AND f.fid>?5 AND ST_MaxX(f.geom)>=?1 AND ST_MinX(f.geom)<=?2 AND ST_MaxY(f.geom)>=?3 AND ST_MinY(f.geom)<=?4 ORDER BY f.fid LIMIT ?6")?;
         let mut rows=stmt.query(params![minx,maxx,miny,maxy,after_fid,limit])?;
         let mut out=Vec::new();let mut bytes=0usize;
         while let Some(row)=rows.next()?{

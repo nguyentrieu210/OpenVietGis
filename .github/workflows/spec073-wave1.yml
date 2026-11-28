@@ -2,7 +2,7 @@ name: SPEC 073 Wave 1 targeted native tests
 on:
   push:
     branches: ["073-native-mobile-platform"]
-    paths: ["crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", ".github/workflows/spec073-wave1.yml"]
+    paths: ["crates/ovg-spatial/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", ".github/workflows/spec073-wave1.yml"]
   workflow_dispatch:
 permissions:
   contents: read
