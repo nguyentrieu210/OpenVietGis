@@ -17,3 +17,7 @@ CREATE TABLE legacy_source(layer TEXT PRIMARY KEY REFERENCES layer(id),sha256 TE
 CREATE TABLE legacy_receipt(layer TEXT NOT NULL REFERENCES layer(id),operation TEXT NOT NULL,feature TEXT NOT NULL,digest BLOB NOT NULL CHECK(length(digest)=32),revision INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(layer,operation));
 CREATE TABLE legacy_history(layer TEXT NOT NULL REFERENCES layer(id),seq INTEGER NOT NULL,command TEXT NOT NULL,before_json TEXT NOT NULL,after_json TEXT NOT NULL,applied INTEGER NOT NULL CHECK(applied IN(0,1)),PRIMARY KEY(layer,seq));
 CREATE TABLE legacy_command(layer TEXT NOT NULL REFERENCES layer(id),command TEXT NOT NULL,PRIMARY KEY(layer,command));
+-- V3 additive assets and bulk import
+CREATE TABLE project_asset(id TEXT PRIMARY KEY,kind TEXT NOT NULL,epsg INTEGER,bytes INTEGER NOT NULL CHECK(bytes>0 AND bytes<=536870912),sha256 TEXT NOT NULL CHECK(length(sha256)=64));
+CREATE TABLE project_asset_chunk(asset TEXT NOT NULL REFERENCES project_asset(id) ON DELETE CASCADE,seq INTEGER NOT NULL CHECK(seq>=0),data BLOB NOT NULL CHECK(length(data)>0 AND length(data)<=1048576),PRIMARY KEY(asset,seq));
+CREATE TABLE bulk_import(operation TEXT PRIMARY KEY,digest TEXT NOT NULL CHECK(length(digest)=64),layer TEXT NOT NULL REFERENCES layer(id),revision INTEGER NOT NULL,count INTEGER NOT NULL);
