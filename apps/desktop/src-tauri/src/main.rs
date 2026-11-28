@@ -3,6 +3,7 @@ mod host;
 mod mvt;
 mod gpkg_import;
 mod resource_files;
+mod snapshot_restore;
 #[cfg(test)]
 mod recovery_tests;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
@@ -230,6 +231,15 @@ async fn desktop_cad_viewport(window:WebviewWindow,host:State<'_,Host>,handle:Uu
     let b=run(window,host.inner().clone(),move|h|h.cad_viewport(handle,id,bbox)).await?;
     Ok(tauri::ipc::Response::new(b))
 }
+#[tauri::command]
+async fn desktop_restore_snapshot(window:WebviewWindow,host:State<'_,Host>)->Reply<Option<Project>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        let Some(file)=app.dialog().file().add_filter("OpenVietGIS standalone snapshot",&["gpkg"]).blocking_pick_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        h.restore_snapshot(&path).map(Some)
+    }).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -265,6 +275,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
