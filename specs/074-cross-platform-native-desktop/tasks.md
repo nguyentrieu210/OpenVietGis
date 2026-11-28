@@ -59,3 +59,13 @@ All tasks open. Evidence includes exact SHA, OS/architecture, dataset, command/t
 ## W6 — optional
 - [ ] T031 DuckDB Spatial/GeoParquet read-only analytics spike; benchmark and license review.
 - [ ] T032 Native GPU provider spike with measured benefit; decision before implementation.
+
+## Revision 3 — W2 universal local data (mandatory before A8)
+- [ ] T044 Project view, order, visibility, style, revision and backup integration.
+- [ ] T045 Single-domain shared multilayer transaction kernel, revision and idempotency.
+- [ ] T046 Staged migration from legacy independent GPKG layers; verify identity, revisions, journals and rollback; converge SPEC 073.
+- [ ] T047 Typed schema controls, constraints, relations and multi-layer atomicity.
+- [ ] T048 Incremental RTree, bounded cursor, streaming and virtual join/filter.
+- [ ] T049 Provider registry, explicit modes, source revision detection, file grants and qualified format adapters.
+- [ ] T050 Maintenance integrity, checkpoint, explicit compaction/rebuild, safe backup/restore.
+- [ ] T051 Large dataset benchmark fixtures and capability/format matrix; no performance claim without evidence.
