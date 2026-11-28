@@ -669,8 +669,7 @@ mod native_vn2000_tests {
                 "forward control mismatch for {published_geographic:?}: {projected:?}"
             );
 
-            let geographic =
-                project_native_vn2000(5899, 4756, published_projected).unwrap();
+            let geographic = project_native_vn2000(5899, 4756, published_projected).unwrap();
             assert!(
                 geodesic_distance_m(geographic, published_geographic) <= 1.0,
                 "inverse control mismatch for {published_projected:?}: {geographic:?}"
