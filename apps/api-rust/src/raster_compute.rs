@@ -36,7 +36,8 @@ const MAX_OUTPUT: usize = 128 * MIB;
 const WORKER: &str = include_str!("../../api/openvietgis_api/adapters/formats/raster_worker.py");
 const PERSISTENT: &str =
     include_str!("../../api/openvietgis_api/adapters/formats/persistent_raster_worker.py");
-const GEOREF: &str = include_str!("../../api/openvietgis_api/adapters/formats/georeference_worker.py");
+const GEOREF: &str =
+    include_str!("../../api/openvietgis_api/adapters/formats/georeference_worker.py");
 const TERRAIN: &str = include_str!("../../api/openvietgis_api/adapters/formats/terrain_worker.py");
 static GATE: Semaphore = Semaphore::const_new(1);
 
@@ -474,33 +475,71 @@ async fn georeference(
     let (kind, data) = body(req, 33 * MIB).await?;
     let form = Form::parse(&kind, &data)?;
     let mode = form.required("mode")?;
-    if !matches!(mode, "inspect" | "solve") { return Err(ComputeError::InvalidRequest); }
+    if !matches!(mode, "inspect" | "solve") {
+        return Err(ComputeError::InvalidRequest);
+    }
     let source = form.file("file")?.ok_or(ComputeError::InvalidRequest)?;
     let digest = hex::encode(Sha256::digest(source));
     let config = if mode == "solve" {
         let points = form.required("points")?;
-        if points.len() > 16384 || form.required("source_sha256")? != digest { return Err(invalid("Source or GCP preview mismatch")); }
-        let points: Value = serde_json::from_str(points).map_err(|_| invalid("Invalid GCP list"))?;
-        let epsg: i32 = form.required("epsg")?.parse().map_err(|_| ComputeError::InvalidRequest)?;
-        if !matches!(epsg,4326|3857) || !points.as_array().is_some_and(|p| (3..=32).contains(&p.len())) { return Err(invalid("Unsupported GCP profile")); }
+        if points.len() > 16384 || form.required("source_sha256")? != digest {
+            return Err(invalid("Source or GCP preview mismatch"));
+        }
+        let points: Value =
+            serde_json::from_str(points).map_err(|_| invalid("Invalid GCP list"))?;
+        let epsg: i32 = form
+            .required("epsg")?
+            .parse()
+            .map_err(|_| ComputeError::InvalidRequest)?;
+        if !matches!(epsg, 4326 | 3857)
+            || !points
+                .as_array()
+                .is_some_and(|p| (3..=32).contains(&p.len()))
+        {
+            return Err(invalid("Unsupported GCP profile"));
+        }
         json!({"mode":mode,"source_sha256":digest,"points":points,"epsg":epsg})
-    } else { json!({"mode":mode}) };
+    } else {
+        json!({"mode":mode})
+    };
     let scratch = Scratch::create()?;
-    let src = scratch.stage("source.tif",source,32*MIB).await?;
+    let src = scratch.stage("source.tif", source, 32 * MIB).await?;
     let cfg = scratch.path("georef.json");
-    tokio::fs::write(&cfg,config.to_string()).await.map_err(|_| invalid("Raster workspace unavailable"))?;
+    tokio::fs::write(&cfg, config.to_string())
+        .await
+        .map_err(|_| invalid("Raster workspace unavailable"))?;
     let output = scratch.path("result.tif");
-    let mut result = worker(&scratch,"georeference_worker.py",&[src.to_string_lossy().into_owned(),cfg.to_string_lossy().into_owned(),output.to_string_lossy().into_owned()],false,28,4*MIB).await?;
-    if result["source_sha256"].as_str()!=Some(digest.as_str()) { return Err(invalid("Raster source digest mismatch")); }
-    if mode=="solve" {
-        let file = read_output(&output,16*MIB).await?;
-        if !file.get(..4).and_then(|v|v.try_into().ok()).is_some_and(valid_geotiff_magic) { return Err(invalid("Invalid GeoTIFF output")); }
-        result["sha256"]=json!(hex::encode(Sha256::digest(&file)));
-        result["byte_size"]=json!(file.len());
-        result["tiff"]=json!(STANDARD.encode(file));
+    let mut result = worker(
+        &scratch,
+        "georeference_worker.py",
+        &[
+            src.to_string_lossy().into_owned(),
+            cfg.to_string_lossy().into_owned(),
+            output.to_string_lossy().into_owned(),
+        ],
+        false,
+        28,
+        4 * MIB,
+    )
+    .await?;
+    if result["source_sha256"].as_str() != Some(digest.as_str()) {
+        return Err(invalid("Raster source digest mismatch"));
+    }
+    if mode == "solve" {
+        let file = read_output(&output, 16 * MIB).await?;
+        if !file
+            .get(..4)
+            .and_then(|v| v.try_into().ok())
+            .is_some_and(valid_geotiff_magic)
+        {
+            return Err(invalid("Invalid GeoTIFF output"));
+        }
+        result["sha256"] = json!(hex::encode(Sha256::digest(&file)));
+        result["byte_size"] = json!(file.len());
+        result["tiff"] = json!(STANDARD.encode(file));
     }
     authorize(&state, &auth, ids, false).await?.commit().await?;
-    result["mode"]=json!(mode);
+    result["mode"] = json!(mode);
     Ok(Json(result))
 }
 
