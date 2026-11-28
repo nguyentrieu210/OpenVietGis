@@ -1,27 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signInOwner as signInOwnerWithCurrentFlow } from "./frontend-auth-helpers";
 
 // Authentication and invitations must not be retained in browser artifacts.
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
 async function signInOwner(page: Page) {
-  await page.goto("/login");
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await signInOwnerWithCurrentFlow(page);
   await expect(
     page.locator(".ovg-account-name").filter({ hasText: "Owner Alpha" })
   ).toBeVisible();
 }
 
 async function openAccountViaUi(page: Page) {
-  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Menu tài khoản" }).click();
   await page
     .getByRole("navigation", { name: "Tài khoản" })
     .getByRole("link", { name: "Tài khoản & phiên đăng nhập", exact: true })
@@ -29,7 +20,7 @@ async function openAccountViaUi(page: Page) {
 }
 
 async function openInvitationsViaUi(page: Page) {
-  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+  await page.getByRole("button", { name: "Menu tài khoản" }).click();
   await page
     .getByRole("navigation", { name: "Tài khoản" })
     .getByRole("link", { name: "Lời mời", exact: true })
@@ -189,7 +180,7 @@ test(
             .click(),
         async () => {
           expect(unlinked).toBe(true);
-          await expect(page.locator(".ovg-app-shell")).toBeVisible();
+          await expect(page.locator(".live-studio")).toBeVisible();
           await expect(
             page.getByRole("heading", {
               name: "Tài khoản & phiên đăng nhập"
@@ -208,7 +199,7 @@ test(
               name: "Tài khoản & phiên đăng nhập"
             })
           ).toHaveCount(0);
-          await expect(page.locator(".ovg-app-shell")).toHaveCount(0);
+          await expect(page.locator(".live-studio")).toHaveCount(0);
         }
       );
     } finally {
@@ -384,7 +375,7 @@ test(
 
       // Background revalidation must not flash the public shell or unmount the
       // authenticated route while the server answer is still pending.
-      await expect(page.locator(".ovg-app-shell")).toBeVisible();
+      await expect(page.locator(".live-studio")).toBeVisible();
       await expect(page.getByLabel("Thông tin lời mời")).toBeVisible();
 
       release();
@@ -392,7 +383,7 @@ test(
       await expect(
         page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
       ).toBeVisible();
-      await expect(page.locator(".ovg-app-shell")).toHaveCount(0);
+      await expect(page.locator(".live-studio")).toHaveCount(0);
       await expect(page.getByLabel("Thông tin lời mời")).toHaveCount(0);
 
       const login = page.getByRole("link", {
