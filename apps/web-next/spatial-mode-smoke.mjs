@@ -18,6 +18,8 @@ try{
   else if(p.endsWith("/auth/csrf"))body={token:"fixture-csrf"};
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
+  else if(p.endsWith("/permissions/self"))body={permissions:null,revision:0};
+  else if(p.endsWith("/layer-bindings"))body={revision:0,configured:false,items:[]};
   else if(p.endsWith("/access/mine"))body={restricted};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};

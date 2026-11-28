@@ -29,6 +29,8 @@ try{
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
+  else if(p.endsWith("/permissions/self"))body={permissions:null,revision:0};
+  else if(p.endsWith("/layer-bindings"))body={revision:0,configured:false,items:[]};
   else if(p.endsWith("/access/mine"))body={restricted};
   else if(p.endsWith("/sources/source1/changesets")){historyReads++;body={items:[{id:"change1",source_id:"source1",status:"committed",base_content_revision:"a".repeat(64),resulting_content_revision:"c".repeat(64),operation_count:1}]};}
   else if(p.endsWith("/changesets/change1"))body={id:"change1",source_id:"source1",operations:[{op_type:"update",feature_id:"f0"}]};

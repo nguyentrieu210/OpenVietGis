@@ -19,6 +19,8 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Bình Hưng",role:"owner",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Khảo sát số nhà xã Bình Hưng",status:"active"}];
   else if(p.endsWith("/layers"))body={items:retired?[layer(2)]:[layer(1),layer(2)],next_after_id:null};
+  else if(p.endsWith("/permissions/self"))body={permissions:null,revision:0};
+  else if(p.endsWith("/layer-bindings"))body={revision:0,configured:false,items:[]};
   else if(p.endsWith("/access/mine"))body={restricted,rules:scopeRules};
   else if(p.endsWith("/access")&&method==="GET")body={members:[{user_id:"member1",display_name:"Người khảo sát",role:"member",status:"active",restricted:scopeRules.length>0}],groups:[],layers:[{id:"layer1",name:"Khảo sát số nhà · Phần 01",fields:[{id:"name",name:"Tên",type:"text"}]},{id:"layer2",name:"Khảo sát số nhà · Phần 02",fields:[]}],rules:scopeRules,audit:[]};
   else if(p.endsWith("/access/rules/batch")&&method==="POST"){const batch=route.request().postDataJSON();if(batch.rules){scopeRules=batch.rules.map((r,i)=>({id:"r"+i,...r,created_at:new Date().toISOString()}));body={created:batch.rules.length,unchanged:0,revoked:0}}else{scopeRules=scopeRules.filter(r=>!batch.revoke_ids.includes(r.id));body={created:0,unchanged:0,revoked:batch.revoke_ids.length}}}

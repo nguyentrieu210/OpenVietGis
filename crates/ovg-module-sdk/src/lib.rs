@@ -325,9 +325,19 @@ pub struct ModuleCommandResult {
     pub output: Value,
 }
 
+/// A semantic source role is declared by the trusted module, not inferred by Core.
+#[derive(Debug, Clone, Copy)]
+pub struct ModuleLayerRole {
+    pub id: &'static str,
+    pub geometry_families: &'static [&'static str],
+    pub required_fields: &'static [&'static str],
+}
+
 /// Contract implemented by every isolated vertical module.
 pub trait OvgModule: Send + Sync {
     fn manifest(&self) -> ModuleManifest;
+
+    fn layer_roles(&self) -> &'static [ModuleLayerRole] { &[] }
 
     fn execute_command(
         &self,

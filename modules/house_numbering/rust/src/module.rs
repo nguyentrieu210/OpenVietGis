@@ -2,7 +2,7 @@
 
 use ovg_core::AppError;
 use ovg_module_sdk::{
-    ModuleCommandRequest, ModuleCommandResult, ModuleExecutionContext, ModuleManifest, OvgModule,
+    ModuleCommandRequest, ModuleCommandResult, ModuleExecutionContext, ModuleLayerRole, ModuleManifest, OvgModule,
 };
 use serde_json::json;
 
@@ -15,6 +15,18 @@ impl OvgModule for HouseNumberingModule {
     fn manifest(&self) -> ModuleManifest {
         serde_json::from_str(include_str!("../../manifest.json"))
             .expect("shipped house-numbering manifest must satisfy Rust SDK schema")
+    }
+
+    fn layer_roles(&self) -> &'static [ModuleLayerRole] {
+        &[
+            ModuleLayerRole { id: "survey_points", geometry_families: &["Point"], required_fields: &["ap", "ten_duong"] },
+            ModuleLayerRole { id: "commune_boundary", geometry_families: &["Polygon"], required_fields: &[] },
+            ModuleLayerRole { id: "hamlet_boundary", geometry_families: &["Polygon"], required_fields: &[] },
+            ModuleLayerRole { id: "boundary", geometry_families: &["Polygon"], required_fields: &[] },
+            ModuleLayerRole { id: "parcel", geometry_families: &["Polygon"], required_fields: &[] },
+            ModuleLayerRole { id: "building", geometry_families: &["Point", "Polygon"], required_fields: &[] },
+            ModuleLayerRole { id: "road", geometry_families: &["LineString"], required_fields: &[] },
+        ]
     }
 
     fn execute_command(

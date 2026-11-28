@@ -47,6 +47,8 @@ try{
   else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();commits.push(payload);body={operation_id:payload.operation_id,source_id:p.includes("source2")?"source2":"source1",base_content_revision:payload.base_content_revision};}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers/manual")){manual=route.request().postDataJSON();body={operation_id:manual.operation_id,layer_id:"new-layer",source_id:"new-source"}}
+  else if(p.endsWith("/permissions/self"))body={permissions:null,revision:0};
+  else if(p.endsWith("/layer-bindings"))body={revision:0,configured:false,items:[]};
   else if(p.endsWith("/access/mine"))body={restricted:false,rules:[]};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
   else if(p.endsWith("/extensions/activations")&&method==="GET")body={items:active?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]:[]};

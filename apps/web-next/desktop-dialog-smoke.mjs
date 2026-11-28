@@ -23,6 +23,8 @@ try{
   else if(p.endsWith("/revert")&&method==="POST"){const payload=route.request().postDataJSON(),target=p.split("/").at(-2);assert.equal(target,history[0].id);reverts.push(payload);revision=(reverts.length===1?"d":"e").repeat(64);body={...history[0],id:"revert-"+reverts.length,operation_id:payload.operation_id,summary:payload.summary,reverted_from_changeset_id:target,resulting_content_revision:revision};history=[body,...history]}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers/manual")){manual=route.request().postDataJSON();body={operation_id:manual.operation_id,layer_id:"new-layer",source_id:"new-source"}}
+  else if(p.endsWith("/permissions/self"))body={permissions:null,revision:0};
+  else if(p.endsWith("/layer-bindings"))body={revision:0,configured:false,items:[]};
   else if(p.endsWith("/access/mine"))body={restricted:false,rules:[]};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
   else if(p.endsWith("/extensions/activations")&&method==="GET")body={items:active?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}]:[]};

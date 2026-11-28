@@ -39,3 +39,5 @@ export * from "./external-plugins";
 export * from "./marketplace-developers";
 export * from "./integration-hub";
 export * from "./managed-sync";
+
+export * from "./module-runtime";

@@ -27,6 +27,7 @@ CORE='apps/api/migrations/versions/0047_generic_feature_guards.py'
 OLD='modules/house_numbering/migrations/versions/0011_survey_signoffs.py'
 NEW='modules/house_numbering/migrations/versions/0012_generic_edit_guards.py'
 PERMISSIONS='apps/api/migrations/versions/0048_module_permission_policies.py'
+BINDINGS='apps/api/migrations/versions/0049_module_layer_bindings.py'
 ORG='00000000-0000-4000-8000-000000000001'
 PROJECT='00000000-0000-4000-8000-000000000002'
 SOURCE='00000000-0000-4000-8000-000000000003'
@@ -50,6 +51,7 @@ with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'], autocommit=True) as conn:
       CREATE SCHEMA spatial; CREATE SCHEMA extensions; CREATE SCHEMA house_numbering; CREATE SCHEMA workspace;
       CREATE TABLE workspace.projects(organization_id uuid,id uuid,PRIMARY KEY(organization_id,id));
       GRANT USAGE ON SCHEMA extensions TO openvietgis_runtime;
+      CREATE TABLE spatial.data_sources(organization_id uuid,project_id uuid,id uuid,PRIMARY KEY(organization_id,project_id,id));
       CREATE TABLE extensions.project_activations(organization_id uuid, project_id uuid, extension_key text,status text);
       CREATE TABLE spatial.reference_features(organization_id uuid,project_id uuid,source_id uuid,feature_id text,
         attributes jsonb NOT NULL,geometry geometry,geometry_state text DEFAULT 'present',content_revision text DEFAULT 'a');''')
@@ -113,13 +115,25 @@ with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'], autocommit=True) as conn:
     # Scope and downgrade guard for explicit module permissions.
     conn.execute('INSERT INTO workspace.projects VALUES (%s,%s),(%s,%s)',(ORG,PROJECT,ORG,OTHER))
     run_migration(conn,PERMISSIONS,'upgrade')
+    run_migration(conn,BINDINGS,'upgrade')
+    conn.execute('INSERT INTO spatial.data_sources VALUES (%s,%s,%s)',(ORG,PROJECT,SOURCE))
+    conn.execute("INSERT INTO extensions.module_binding_sets(organization_id,project_id,extension_key,revision,updated_by_actor_id) VALUES (%s,%s,'house_numbering',1,%s)",(ORG,PROJECT,ACTOR))
+    conn.execute("INSERT INTO extensions.module_layer_bindings VALUES (%s,%s,'house_numbering',%s,'survey_points',%s)",(ORG,PROJECT,SOURCE,'a'*64))
     conn.execute('INSERT INTO extensions.module_permission_policies(organization_id,project_id,extension_key,actor_type,actor_id,permissions,updated_by_actor_id) VALUES (%s,%s,%s,%s,%s,%s,%s)',(ORG,PROJECT,'house_numbering','human',ACTOR,['ext.house_numbering.read'],ACTOR))
     conn.execute('SET ROLE openvietgis_runtime')
     conn.execute("SELECT set_config('openvietgis.organization_id',%s,false),set_config('openvietgis.project_id',%s,false)",(ORG,OTHER))
     assert conn.execute('SELECT count(*) FROM extensions.module_permission_policies').fetchone()[0]==0
+    assert conn.execute('SELECT count(*) FROM extensions.module_layer_bindings').fetchone()[0]==0
     conn.execute("SELECT set_config('openvietgis.project_id',%s,false)",(PROJECT,))
     assert conn.execute('SELECT permissions FROM extensions.module_permission_policies').fetchone()[0]==['ext.house_numbering.read']
+    assert conn.execute('SELECT role FROM extensions.module_layer_bindings').fetchone()[0]=='survey_points'
     conn.execute('RESET ROLE')
+    try:
+        with conn.transaction():run_migration(conn,BINDINGS,'downgrade')
+    except psycopg.Error as error:assert 'Explicit module bindings exist' in str(error)
+    else:raise AssertionError('binding downgrade removed data')
+    conn.execute('DELETE FROM extensions.module_binding_sets')
+    run_migration(conn,BINDINGS,'downgrade')
     try:
         with conn.transaction():run_migration(conn,PERMISSIONS,'downgrade')
     except psycopg.Error as error:assert 'refusing security downgrade' in str(error)
@@ -131,4 +145,4 @@ with psycopg.connect(os.environ['OVG_GUARD_TEST_DSN'], autocommit=True) as conn:
         run_migration(conn, CORE, 'downgrade')
     blocked(conn,"DELETE FROM spatial.reference_features WHERE feature_id='locked'")
     assert conn.execute('SELECT count(*) FROM house_numbering.survey_signoffs').fetchone()[0]==3
-    print('PASS real PostGIS: legacy backfill, old/new scope, writes, additive null, runtime privilege, second provider, disable/revoke, concurrent signoff, permission RLS and downgrade, signoff retention')
+    print('PASS real PostGIS: legacy backfill, old/new scope, writes, additive null, runtime privilege, second provider, disable/revoke, concurrent signoff, permission/binding RLS and downgrade, signoff retention')

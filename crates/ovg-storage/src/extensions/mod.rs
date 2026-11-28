@@ -1,5 +1,6 @@
 //! E14 extension platform storage repository over canonical RLS tables.
 
+pub mod bindings;
 pub mod marketplace;
 pub mod partner;
 pub mod permissions;

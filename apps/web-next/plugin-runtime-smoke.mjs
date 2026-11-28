@@ -4,9 +4,9 @@ const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-a
 const url=process.env.OVG_TEST_URL||"http://127.0.0.1:4176/app";
 try{
  const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[];page.on("pageerror",e=>errors.push(e.message));
- const org="fixture-org",pid="fixture-project",layer=(i)=>({id:"layer"+i,source_id:"source"+i,name:"Khảo sát số nhà · Phần 0"+i,lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:100,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326}}});
+ const org="fixture-org",pid="fixture-project",layer=(i)=>({id:"layer"+i,source_id:"source"+i,name:"Khảo sát số nhà · Phần 0"+i,lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:100,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),schema:{geometry_family:"Point",fields:[{field_id:"ap"},{field_id:"ten_duong"},{field_id:"xu_ly"}]},stored_crs:{code:4326}}});
  const features=part=>Array.from({length:100},(_,i)=>({feature_id:"f"+i,geometry_state:"present",attributes:{name:"Điểm "+i,ap:"Ấp "+part,ten_duong:i<50?"Đường A":"Đường B",hem:i%2===0?"12":"",so_nha:String(1000+i),hien_trang:"Nhà ở",trang_thai:"khop"},geometry:{type:"Point",coordinates:[106.60+(i%10)*.006,10.58+part*.03+Math.floor(i/10)*.006],coordinate_reference:{code:4326}}}));
- let active=false,pluginCalls=0,chunkCalls=0,featureCalls=0;
+ let active=false,pluginCalls=0,chunkCalls=0,featureCalls=0,policy=null,binding={revision:0,configured:false,items:[]};
  page.on("request",r=>{if(/\/assets\/studio-[^/]+\.js/.test(r.url()))chunkCalls++});
  await page.route("**/api/v1/**",async route=>{
   const p=new URL(route.request().url()).pathname,method=route.request().method();let body;
@@ -20,6 +20,10 @@ try{
   else if(p.endsWith("/extensions/activations")&&method==="POST"){active=true;body={id:"activation",extension_key:"house_numbering",manifest_version:"2.0.0",runtime_compatible:true,status:"active"}}
   else if(p.endsWith("/extensions/manifests"))body={items:[{id:"manifest",extension_key:"house_numbering",version:"2.0.0",api_compatibility:"1.x",enabled:true}]};
   else if(p.endsWith("/extensions/house_numbering/disable")){active=false;body={id:"activation",extension_key:"house_numbering",status:"disabled"}}
+  else if(p.endsWith("/permissions/self"))body={permissions:policy,revision:0};
+  else if(p.endsWith("/layer-bindings")&&method==="PUT"){
+   const payload=route.request().postDataJSON();assert.equal(payload.expected_revision,binding.revision);binding={revision:binding.revision+1,configured:true,items:payload.items.map(b=>({...b,current_schema_revision:b.schema_revision,status:"ready"}))};body=binding;
+  }else if(p.endsWith("/layer-bindings"))body=binding;
   else if(p.endsWith("/access/mine"))body={restricted:false};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
@@ -40,7 +44,19 @@ try{
  const house=()=>page.locator(".ovg-app").filter({hasText:"Quản lý và đánh số nhà"});
  await openMarket();await house().getByRole("button",{name:"Cài vào dự án"}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({timeout:30000});
- await closeMarket();assert.ok(pluginCalls>=4);assert.ok(await sameMap(),"map/canvas remounted on activation");
+ await closeMarket();await page.waitForFunction(()=>!!document.querySelector('.studio-module-main'));assert.ok(await sameMap(),"map/canvas remounted on activation");
+ await page.getByRole("button",{name:"Liên kết lớp",exact:true}).click();
+ const bindingsDialog=page.getByRole("dialog",{name:"Liên kết lớp nghiệp vụ"});await bindingsDialog.waitFor();
+ await bindingsDialog.getByLabel("Vai trò Khảo sát số nhà · Phần 02").selectOption("");
+ await bindingsDialog.getByRole("button",{name:"Lưu liên kết lớp"}).click();await bindingsDialog.waitFor({state:"detached"});
+ assert.equal(binding.items.length,1);assert.equal(binding.items[0].source_id,"source1");assert.ok(await sameMap());
+ // A configured empty/nonmatching source set must not fall back to its legacy layer name.
+ await page.getByRole("button",{name:"Địa bàn",exact:true}).click();await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();
+ await page.getByRole("button",{name:"Đóng địa bàn"}).click();
+ policy=[];await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await page.getByText("Không có quyền plugin số nhà",{exact:true}).waitFor();assert.ok(await sameMap(),"policy revocation remounted Core");
+ policy=null;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
+ assert.ok(pluginCalls>=4);
  await page.getByRole("button",{name:"Địa bàn",exact:true}).click();
  await page.getByRole("button",{name:"Đóng địa bàn"}).waitFor();
  await page.getByRole("button",{name:"Đóng địa bàn"}).click();
@@ -55,5 +71,5 @@ try{
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor({state:"detached",timeout:15000});
  assert.equal(active,false);assert.ok(await sameMap(),"map/canvas remounted on removal");
  assert.equal(errors.length,0,errors.join("\n"));
- console.log(`PASS activation, switch, reopen, disable preserved map/canvas identity; ${featureCalls} feature API requests`);
+ console.log(`PASS activation, binding save, policy revoke/restore, switch, reopen, disable preserved map/canvas identity; ${featureCalls} feature API requests`);
 }finally{await browser.close()}

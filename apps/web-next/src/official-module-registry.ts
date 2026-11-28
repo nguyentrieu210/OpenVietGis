@@ -1,7 +1,7 @@
 // Generic discovery only; never name a business module in Core.
 import type {ExtensionActivation,ExtensionManifest} from "@openvietgis/client-sdk";
 import type {StudioPlugin} from "./studio-contract";
-export type Manifest={extension_key:string;display_name:string;version:string;description?:string;api_compatibility:string};
+export type Manifest={extension_key:string;display_name:string;version:string;description?:string;api_compatibility:string;permissions?:string[]};
 const manifests=Object.values(import.meta.glob<Manifest>("../../../modules/*/manifest.json",{eager:true,import:"default"}));
 const loaders=import.meta.glob<StudioPlugin>("../../../modules/*/frontend/studio.tsx",{import:"default"});
 export const installed=manifests.filter(m=>m.api_compatibility==="1.x"&&Object.keys(loaders).some(path=>path.includes("/modules/"+m.extension_key+"/")));

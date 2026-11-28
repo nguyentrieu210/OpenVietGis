@@ -14,7 +14,7 @@ use super::{authenticate_actor,authenticate_json,decode_body,open_project_scope,
 
 const BASE:&str="/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/permissions/{actor_type}/{actor_id}";
 
-pub(crate) fn router()->Router<AppState>{Router::new().route(BASE,get(get_policy).put(put_policy))}
+pub(crate) fn router()->Router<AppState>{Router::new().route(BASE,get(get_policy).put(put_policy)).route("/organizations/{organization_id}/projects/{project_id}/extensions/{extension_key}/permissions/self",get(self_policy))}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -57,4 +57,13 @@ async fn put_policy(State(state):State<AppState>,Path((org,project,key,actor_typ
     let display=project_actor_display(&edit,&actor);
     let result=extensions::permissions::replace_policy(&mut edit,&key,&actor_type,id,body.permissions.as_deref(),body.expected_revision,&display).await.map_err(ExtensionError::Domain)?;
     edit.commit().await.map_err(ExtensionError::Domain)?;Ok(Json(result))
+}
+
+async fn self_policy(State(state):State<AppState>,Path((org,project,key)):Path<(String,String,String)>,request:Request)->Result<Json<Value>,ExtensionError>{
+    let (mut parts,_)=request.into_parts();let actor=authenticate_actor(&state,&mut parts,&org).await?;
+    let mut read=open_project_scope(&state,&actor,parse_uuid(&org)?,parse_uuid(&project)?,ProjectReadPolicy::Unrestricted).await?;
+    verified_manifest(&state,&mut read,&key).await.map_err(ExtensionError::Domain)?;
+    let actor_type=read.actor_type();let id=read.actor_id();
+    let value=extensions::permissions::policy(&mut read,&key,actor_type,id).await.map_err(ExtensionError::Domain)?;
+    read.commit().await.map_err(ExtensionError::Domain)?;Ok(Json(value))
 }

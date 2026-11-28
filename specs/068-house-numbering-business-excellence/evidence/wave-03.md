@@ -1,0 +1,3 @@
+# Wave 03 — explicit survey layer identity and permission presentation
+
+Survey points, commune/hamlet/other boundaries, parcels, buildings and routes have explicit source roles. Module role declarations verify geometry and require ap/ten_duong field IDs for survey sources. A manager can review bindings and see stale schemas; rename does not affect an explicitly bound source. Unbound Core layers are not styled or filtered by the business scope. Plugin controls now check the user's own policy; business operations still require backend enforcement. Full HTTP and full business acceptance, including actual Bình Hưng data, are not yet demonstrated. E05/E10/E16 advanced.
