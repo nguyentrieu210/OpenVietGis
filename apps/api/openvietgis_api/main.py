@@ -48,6 +48,7 @@ from openvietgis_api.adapters.http import (
     v8i_bridge,
     workspaces,
 )
+from openvietgis_api.adapters.http.cache_policy import PrivateDenialCachePolicy
 from openvietgis_api.adapters.http.errors import install_error_handlers
 from openvietgis_api.adapters.http.gis_access_guard import project_access_guard
 from openvietgis_api.adapters.http.native_processing import install_native_processing
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="OpenVietGIS API", version="0.2.0")
     app.state.settings = settings
+    app.add_middleware(PrivateDenialCachePolicy)
 
     app.add_middleware(
         SessionMiddleware,

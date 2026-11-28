@@ -35,8 +35,9 @@ This is implementation evidence, not release certification or ADR acceptance.
 ## Observed checks before the GitHub-only build
 
 49 focused manifest/running-image/workflow/metrics/sample-gate Python tests passed.
-Ruff, Rust 1.85.1 rustfmt parsing/formatting, benchmark syntax and whitespace checks
-passed. The two MCP parity tests passed in 1.74 seconds after the in-process fix.
+Ruff, Rust 1.85.1 rustfmt parsing/formatting for the prepared cache changes,
+benchmark syntax and whitespace checks passed. These were not whole-workspace
+acceptance checks. The two MCP parity tests passed in 1.74 seconds after the in-process fix.
 The additional pnpm guard awaits the final GitHub checks. No final application
 artifact was compiled or certified by those source checks.
 
@@ -61,3 +62,23 @@ Python stays retained. Exact CI, full load/soak, independent review, registry
 SBOM/provenance, same-digest staging and authorized live release need actual
 receipts before their task boxes are checked. Historical rollback images do not
 qualify a new registry candidate. No merge, deployment or release approval is claimed.
+
+## First GitHub candidate diagnostics
+
+PR #84 candidate 9b767f925a0333239cef0f5dfc026e4010007adb completed eight
+workflows successfully, including real QGIS 3.34.4 desktop smoke with 8,000
+features, Rust/Python MCP parity, frontend parity, E05 viewport/MVT performance,
+E06/E08 integration, retained modules and E18 safety. Cargo audit/deny also passed.
+
+The full CI batch exposed and retained these failures instead of relaxing gates:
+QGIS inventory lint; formatting in six retained Rust sections; denial Cache-Control
+differences between native and retained HTTP implementations; and a disposable
+cache-test fixture referring to spatial.sources instead of spatial.data_sources.
+The repair applies private, no-store to retained API 401/403/404 responses using
+streaming ASGI middleware and adds real HTTP adapter tests. Existing explicit
+cache policies are preserved, matching native behavior. Differential comparison
+assertions remain unchanged. The cache fixture uses the migrated table name.
+
+Backend source validation and root Python/contracts/architecture checks now
+precede their respective build steps. No production image was published or
+deployed. The repaired exact candidate still requires its own successful CI.

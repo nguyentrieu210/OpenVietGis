@@ -73,3 +73,15 @@ def test_builder_only_approves_the_pinned_package_manager_install_scripts():
     docker = (ROOT / "infra/prod/Dockerfile.web").read_text()
     assert "npm install --global --allow-scripts=pnpm pnpm@12.21.0" in docker
     assert "--allow-scripts=*" not in docker
+
+
+def test_source_checks_run_before_backend_and_web_builds():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    names = [step.get("name", "") for step in workflow["jobs"]["backend"]["steps"]]
+    assert names.index("Validate Python, contracts, scope, architecture and docs") < names.index(
+        "Build native E08 backend for integration and browser tests",
+    )
+    scripts = json.loads((ROOT / "package.json").read_text())["scripts"]
+    commands = scripts["validate"].split(" && ")
+    for check in ("py", "contracts", "scope", "arch", "docs"):
+        assert commands.index(f"pnpm validate:{check}") < commands.index("pnpm validate:ts")

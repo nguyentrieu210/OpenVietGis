@@ -13,7 +13,9 @@ def main():
     parser.add_argument("--inventory-only", action="store_true",
                         help="Check coverage without claiming acceptance")
     args = parser.parse_args()
-    matrix = re.findall(r"^\| ([A-Z]+-\d+) \|", (SPEC / "feature-matrix.md").read_text(), re.M)
+    matrix = re.findall(
+        r"^\| ([A-Z]+-\d+) \|", (SPEC / "feature-matrix.md").read_text(), re.MULTILINE,
+    )
     tasks = {row: task for task, row in re.findall(
         r"\b(T\d+) \[US\d+\] \[([A-Z]+-\d+)\]", (SPEC / "tasks.md").read_text())}
     rows = json.loads((SPEC / "evidence/manifest.json").read_text())["rows"]

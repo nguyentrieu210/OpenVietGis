@@ -350,8 +350,16 @@ mod tests {
         let payload = vec![0x5a_u8; CHUNK * 2 + 17];
         tokio::fs::write(&path, &payload).await.unwrap();
         let file = File::open(&path).await.unwrap();
-        let chunks: Vec<Bytes> = file_stream(file).collect::<Vec<_>>().await.into_iter().map(Result::unwrap).collect();
-        assert_eq!(chunks.iter().map(Bytes::len).collect::<Vec<_>>(), vec![CHUNK, CHUNK, 17]);
+        let chunks: Vec<Bytes> = file_stream(file)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            chunks.iter().map(Bytes::len).collect::<Vec<_>>(),
+            vec![CHUNK, CHUNK, 17]
+        );
         assert_eq!(chunks.concat(), payload);
         tokio::fs::remove_file(path).await.unwrap();
     }

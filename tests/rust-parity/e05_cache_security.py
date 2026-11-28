@@ -49,7 +49,7 @@ def exercise(url, owner_url, fixture):
         # Mutate only this disposable harness DB, then restore its source pin.
         # A cache hit must never turn an otherwise STALE_READ_PIN into HTTP 200.
         with psycopg.connect(owner_url) as conn:
-            conn.execute("UPDATE spatial.sources SET content_revision=%s WHERE id=%s",
+            conn.execute("UPDATE spatial.data_sources SET content_revision=%s WHERE id=%s",
                          ("f" * 64, layer["source_id"]))
         try:
             response = client.get(path, params=pins, headers=owner)
@@ -58,7 +58,7 @@ def exercise(url, owner_url, fixture):
             )
         finally:
             with psycopg.connect(owner_url) as conn:
-                conn.execute("UPDATE spatial.sources SET content_revision=%s WHERE id=%s",
+                conn.execute("UPDATE spatial.data_sources SET content_revision=%s WHERE id=%s",
                              (layer["content_revision"], layer["source_id"]))
         restored = client.get(path, params=pins, headers=owner)
         results["restored_authorized_pin"] = restored.status_code == 200
