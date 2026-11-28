@@ -224,3 +224,42 @@ impl NativeProcessingJob{
     pub fn close(&self)->Result<(),String>{self.engine.dispose_job(self.handle).map_err(|e|e.to_string())}
 }
 impl Drop for NativeProcessingJob{fn drop(&mut self){let _=self.engine.dispose_job(self.handle);}}
+
+// Shared standalone Unified Store candidate. No automatic replacement of legacy or managed data.
+use ovg_project_store::mobile as unified;
+fn unified_error(e:ovg_project_store::Error)->String{format!("UNIFIED_{e:?}")}
+#[flutter_rust_bridge::frb(opaque)]
+pub struct NativeUnifiedProject{inner:unified::NativeProject}
+pub fn list_unified_projects(root_path:String)->Result<Vec<String>,String>{unified::list_projects(Path::new(&root_path)).map_err(unified_error)}
+pub fn create_unified_project(root_path:String)->Result<String,String>{unified::create_project(Path::new(&root_path)).map_err(unified_error)}
+pub fn open_unified_project(root_path:String,project_id:String)->Result<NativeUnifiedProject,String>{
+ Ok(NativeUnifiedProject{inner:unified::open_project(Path::new(&root_path),&project_id).map_err(unified_error)?})
+}
+pub fn restore_unified_project(root_path:String,exchange_root:String,name:String)->Result<String,String>{
+ unified::restore_project(Path::new(&root_path),Path::new(&exchange_root),&name).map_err(unified_error)
+}
+impl NativeUnifiedProject{
+ pub fn close(&self)->Result<(),String>{self.inner.close().map_err(unified_error)}
+ pub fn catalog(&self)->Result<String,String>{self.inner.catalog().map_err(unified_error)}
+ pub fn add_layer(&self,layer_id:String,name:String,expected:String)->Result<String,String>{
+  self.inner.add_layer(&layer_id,&name,&expected).map_err(unified_error)
+ }
+ pub fn apply_batch(&self,batch_json:String)->Result<String,String>{self.inner.apply(&batch_json).map_err(unified_error)}
+ pub fn draw_point(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,lon:f64,lat:f64,attributes_json:String)->Result<String,String>{
+  if attributes_json.len()>256*1024{return Err("RESOURCE_LIMIT".into())}
+  let layer=id(&layer_id)?;let feature=id(&feature_id)?;let operation=id(&operation_id)?;
+  let rev=expected.parse::<u64>().map_err(|_|"INVALID_REVISION".to_owned())?;
+  let wkb=ovg_mobile_engine::edit::draft("point",&[lon,lat]).map_err(|e|e.to_string())?;
+  let attributes:serde_json::Value=serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?;
+  let b=serde_json::json!({"operation":operation,"expected_project":rev,"edits":[{"layer":layer,"feature":feature,"expected":0,"image":{"wkb":wkb,"attributes":attributes}}],"links":[]});
+  self.inner.apply(&b.to_string()).map_err(unified_error)
+ }
+ pub fn compensate(&self,operation_id:String,expected:String)->Result<String,String>{self.inner.compensate(&operation_id,&expected).map_err(unified_error)}
+ pub fn query(&self,layer_id:String,west:f64,south:f64,east:f64,north:f64,after:String,limit:u32,expected:String)->Result<String,String>{
+  self.inner.query(&layer_id,[west,south,east,north],&after,limit,&expected).map_err(unified_error)
+ }
+ pub fn integrity(&self)->Result<bool,String>{self.inner.integrity().map_err(unified_error)}
+ pub fn backup(&self,exchange_root:String,expected:String)->Result<String,String>{
+  self.inner.backup(Path::new(&exchange_root),&expected).map_err(unified_error)
+ }
+}
