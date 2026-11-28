@@ -6,6 +6,7 @@ export type RelationSpec={target:string;localField:string;targetField:string;car
 export const RELATION_LIMIT=5000;
 export const RELATION_MATCH_LIMIT=200;
 export const readableRelationLayer=(l:SpatialLayer)=>l.lifecycle==="active"&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.technical_supported&&c.actor_authorized);
+export const queryableRelationLayer=(l:SpatialLayer)=>readableRelationLayer(l)&&l.capabilities.some(c=>c.name==="query"&&c.available&&c.technical_supported&&c.actor_authorized);
 const field=(l:SpatialLayer,id:string)=>l.source.schema.fields.find(f=>f.field_id===id);
 const samePin=(a:SpatialLayer,b:SpatialLayer)=>a.id===b.id&&a.source_id===b.source_id&&a.source.content_revision===b.source.content_revision&&a.source.schema_revision===b.source.schema_revision;
 export function readRelationSpec(raw:unknown):RelationSpec|null{
@@ -42,7 +43,7 @@ export function relationMatches(source:StudioRow,layers:readonly SpatialLayer[],
 
 export type RelatedRecord={feature_id:string;attributes:Record<string,unknown>};
 export async function queryRelation(source:StudioRow,target:SpatialLayer,spec:RelationSpec,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean):Promise<RelatedRecord[]>{
- if(target.id!==spec.target||!readableRelationLayer(source.layer)||!readableRelationLayer(target))throw Error("Không có quyền đọc lớp liên kết.");
+ if(target.id!==spec.target||!readableRelationLayer(source.layer)||!queryableRelationLayer(target))throw Error("Không có quyền đọc lớp liên kết.");
  const a=field(source.layer,spec.localField),b=field(target,spec.targetField);
  if(!a||!b||a.type!==b.type)throw Error("Hai trường liên kết phải cùng kiểu.");
  const value=scalar(Object.hasOwn(source.feature.attributes,spec.localField)?source.feature.attributes[spec.localField]:null,a.type);

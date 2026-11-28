@@ -190,9 +190,10 @@ export function SpatialWorkspace(props:Props){
  const selectedModelLayer=sceneLayers.find(l=>l.id===pickedModel&&l.visible);
  const selectedModelSource=selectedModelLayer?.rowKey?rows.find(row=>row.key===selectedModelLayer.rowKey):undefined;
  const meshDataset=scene.localMesh?.dataset;
+ const appliedMesh=useRef<{engine:SelectableFootprintEngine;dataset:typeof meshDataset;frame:number}|null>(null);
  const meshFrameCount=meshDataset?.times.length??0;
- useEffect(()=>{setMeshFrame(0);setMeshPlaying(false)},[session.active,meshDataset]);
- useEffect(()=>{if(session.active!=="3d"||!props.canRead||!meshDataset||tileset)return;try{engineRef.current?.setMeshFrame?.(meshFrame)}catch(e){setMeshPlaying(false);setSceneError(e instanceof Error?e.message:String(e))}},[session.active,props.canRead,meshDataset,meshFrame,tileset]);
+ useEffect(()=>{appliedMesh.current=null;setMeshFrame(0);setMeshPlaying(false)},[session.active,meshDataset]);
+ useEffect(()=>{if(session.active!=="3d"||!props.canRead||!meshDataset||tileset)return;try{const engine=engineRef.current;if(!engine?.setMeshFrame)return;if(appliedMesh.current?.engine!==engine||appliedMesh.current.dataset!==meshDataset){appliedMesh.current={engine,dataset:meshDataset,frame:0};return}if(appliedMesh.current.frame===meshFrame)return;engine.setMeshFrame(meshFrame);appliedMesh.current={engine,dataset:meshDataset,frame:meshFrame};setSceneError("")}catch(e){setMeshPlaying(false);setSceneError(e instanceof Error?e.message:String(e))}},[session.active,props.canRead,meshDataset,meshFrame,tileset]);
  useEffect(()=>{if(!meshPlaying||session.active!=="3d"||!props.canRead||tileset||meshFrameCount<2)return;const timer=window.setTimeout(()=>{if(meshFrame+1>=meshFrameCount)setMeshPlaying(false);else setMeshFrame(meshFrame+1)},1000);return()=>window.clearTimeout(timer)},[meshPlaying,meshFrame,meshFrameCount,session.active,props.canRead,tileset]);
  const toggleLayer=(id:string,visible:boolean)=>{if(!latest.current.props.canRead||active!=="3d")return;engineRef.current?.setLayerVisible(id,visible);setSceneLayers(old=>old.map(l=>l.id===id?{...l,visible}:l));if(!visible&&pickedModel===id){engineRef.current?.selectModel("");setPickedModel("")}};
  const captureScene=():SceneProfile=>{

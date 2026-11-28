@@ -327,13 +327,15 @@ export async function prepareCesium3d(host:HTMLElement,view:FootprintView,camera
    let min=Infinity,max=-Infinity;for(const n of mesh.nodes){min=Math.min(min,n[2]);max=Math.max(max,n[2])}
    const faces:number[][]=[];for(let i=0;i<mesh.triangles.length;i+=3){const ids=mesh.triangles.slice(i,i+3);if(new Set(ids).size!==3||ids.some(j=>!Number.isSafeInteger(j)||j<0||j>=points.length))throw Error("Invalid 2DM face");faces.push(ids)}
    const dataset=mesh.dataset;
+   let renderedFrame=-1;
    if(dataset&&(faces.length>10000||!dataset.frames.length||dataset.frames.length>120||dataset.frames.length*points.length>1000000||!Number.isFinite(dataset.min)||!Number.isFinite(dataset.max)||dataset.min>dataset.max))throw Error("Invalid mesh dataset");
    const draw=(index:number)=>{
-    if(disposed)return;
+    if(disposed||index===renderedFrame)return;
+    if(!Number.isSafeInteger(index)||index<0)throw Error("Invalid mesh frame index");
     const values=dataset?.frames[index];if(dataset&&(!values||values.length!==points.length||values.some(v=>v!==null&&(!Number.isFinite(v)||v<dataset.min||v>dataset.max))))throw Error("Invalid mesh frame");
     const low=dataset?.min??min,high=dataset?.max??max,bins=new Map<number,MeshGroup>();
     for(const ids of faces){const v=ids.map(j=>values?values[j]:mesh.nodes[j]![2]);if(v.some(x=>x==null))continue;const h=v.reduce<number>((s,x)=>s+x!,0)/3,q=clamp(Math.round((h-low)/(high===low?1:high-low)*15),0,15),f=q/15;let group=bins.get(q);if(!group){group={id:{kind:"terrain",id:"local-mesh"},positions:[],color:new c.Color(.15+.75*f,.4+.3*f,.8-.6*f,1)};bins.set(q,group)}for(const j of ids){const p=points[j]!;group.positions.push(p.x,p.y,p.z)}}
-    const next=bins.size?meshPrimitive(c,[...bins.values()]):undefined;if(next){next.show=meshVisible;scene.primitives.add(next)}if(localMesh)scene.primitives.remove(localMesh);localMesh=next;render();
+    const next=bins.size?meshPrimitive(c,[...bins.values()]):undefined;if(next){next.show=meshVisible;scene.primitives.add(next)}if(localMesh)scene.primitives.remove(localMesh);localMesh=next;renderedFrame=index;render();
    };
    updateMeshFrame=dataset?draw:undefined;draw(0);
   }

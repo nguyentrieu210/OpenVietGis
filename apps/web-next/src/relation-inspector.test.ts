@@ -2,7 +2,7 @@ import {describe,it,expect} from "vitest";
 import type {SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 import {relationMatches,readRelationSpec,queryRelation} from "./relation-inspector";
-const layer=(id:string,n:number)=>({id,source_id:id,lifecycle:"active",capabilities:[{name:"feature_read",available:true,technical_supported:true,actor_authorized:true}],source:{content_revision:"c",schema_revision:"s",feature_count:n,schema:{fields:[{field_id:"k",type:"integer"}]}}} as unknown as SpatialLayer);
+const layer=(id:string,n:number)=>({id,source_id:id,lifecycle:"active",capabilities:["feature_read","query"].map(name=>({name,available:true,technical_supported:true,actor_authorized:true})),source:{content_revision:"c",schema_revision:"s",feature_count:n,schema:{fields:[{field_id:"k",type:"integer"}]}}} as unknown as SpatialLayer);
 const a=layer("a",1),b=layer("b",2);
 const row=(l:SpatialLayer,id:string,k:unknown)=>({key:l.id+":"+id,layer:l,feature:{feature_id:id,attributes:{k}},geometry:null} as unknown as StudioRow);
 const src=row(a,"src","9007199254740993"),r1=row(b,"r1","9007199254740993"),r2=row(b,"r2","9007199254740992");
@@ -27,5 +27,6 @@ describe("remote relations",()=>{
   expect(found[0]?.feature_id).toBe("r");
   await expect(queryRelation(source,y,spec,async()=>({...page,items:[{...page.items[0]!,attributes:{k:"9007199254740992.01"}}]}),()=>true)).rejects.toThrow();
   await expect(queryRelation(source,y,spec,async()=>page,()=>false)).rejects.toThrow();
+  await expect(queryRelation(source,{...y,capabilities:y.capabilities.filter(c=>c.name!=="query")},spec,async()=>page,()=>true)).rejects.toThrow();
  });
 });
