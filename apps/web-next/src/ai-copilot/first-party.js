@@ -112,7 +112,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
       }
       if(!out)throw Error("Hết hạn chờ Agent");
       if(active!==s||disposed)return;
-      get("answer").textContent=(out.answer||("Trạng thái: "+out.stop))+"\nLệnh: "+out.calls+" · Vòng: "+out.model_steps+(out.uncertain_call?"\nCó lệnh chưa xác minh; không gửi lại.":"")+(out.unresolved_ticket?"\nTicket: "+out.unresolved_ticket:"")+(Array.isArray(out.children)?out.children.map(c=>"\n"+c.role+" · "+c.stop+(c.report?": "+c.report:"")+(c.uncertain_call?" (chưa xác minh)":"")).join(""):"");
+      get("answer").textContent=(out.answer||("Trạng thái: "+out.stop))+"\nLệnh: "+out.calls+" · Vòng: "+out.model_steps+(out.uncertain_call?"\nCó lệnh chưa xác minh; không gửi lại.":"")+(out.unresolved_ticket?"\nTicket: "+out.unresolved_ticket:"")+(out.context?.compacted_groups?"\nNgữ cảnh: "+out.context.original_bytes+" → "+out.context.sent_bytes+" byte; "+out.context.compacted_groups+" nhóm đã nén.":"")+(Array.isArray(out.children)?out.children.map(c=>"\n"+c.role+" · "+c.stop+(c.report?": "+c.report:"")+(c.uncertain_call?" (chưa xác minh)":"")).join(""):"");
     }catch{
       if(active===s&&!disposed){get("answer").textContent="Mất phản hồi; không chạy lại. Đóng phiên và kiểm tra lịch sử lệnh.";void close();}
     }finally{
