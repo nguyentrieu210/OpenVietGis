@@ -3,6 +3,10 @@ export type Algorithm=ProcessingAlgorithm["id"];
 export type ProcessingSourcePin={source_id:string;content_revision:string;schema_revision:string};
 export type ProcessingRequest={algorithm_id:Algorithm;input_layer_id:string;overlay_layer_id:string|null;parameters:Record<string,unknown>;output_name:string;operation_id:string;expected_input?:ProcessingSourcePin;expected_overlay?:ProcessingSourcePin};
 export const supportedAlgorithm=(id:unknown):id is Algorithm=>id==="buffer"||id==="clip"||id==="dissolve"||id==="difference"||id==="intersection"||id==="union"||id==="reproject"||id==="spatial_join";
+export const REPROJECT_CRSS=[4326,3857,4756,5899] as const;
+export function reprojectTargets(native:number|undefined):number[]{
+ switch(native){case 4326:return [4326,3857,4756,5899];case 3857:return [4326,3857];case 4756:return [4326,5899];case 5899:return [4326,4756];default:return []}
+}
 export const overlayAlgorithm=(id:Algorithm)=>id==="clip"||id==="difference"||id==="intersection"||id==="union"||id==="spatial_join";
 export const processingLayer=(l:SpatialLayer)=>l.lifecycle==="active"&&l.source.lifecycle==="active"&&l.source.validation_state==="ready"&&!!l.source.stored_crs?.code&&l.source.feature_count!=null&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
 const revision=(v:unknown):v is string=>typeof v==="string"&&/^[a-f0-9]{64}$/.test(v);
@@ -22,7 +26,7 @@ export function processingRequest(algo:Algorithm,layer:SpatialLayer|undefined,ov
  if(overlayAlgorithm(algo)&&(!overlay||!processingLayer(overlay)||overlay.id===layer.id||overlay.source_id===layer.source_id||(algo!=="spatial_join"&&overlay.source.schema.geometry_family!=="Polygon")))throw Error("Chọn lớp phủ Polygon có nguồn khác đầu vào.");
  if(algo==="union"&&layer.source.schema.geometry_family!=="Polygon")throw Error("Union cần hai lớp Polygon.");
  if(algo==="reproject"){
-  if(![4326,3857].includes(options.targetSrid??0))throw Error("Chọn CRS đích EPSG:4326 hoặc 3857.");
+  if(!reprojectTargets(layer.source.stored_crs?.code).includes(options.targetSrid??0))throw Error("Chọn cặp CRS có phép chuyển đổi được duyệt. VN-2000 cần dữ liệu kiểm chứng Quảng Ninh.");
   parameters={target_srid:options.targetSrid};
  }
  if(algo==="spatial_join"){
@@ -54,7 +58,7 @@ export function readPendingProcessing(raw:string|null):ProcessingRequest|null{
   let parameters:Record<string,unknown>={};const p=x.parameters;
   if(x.algorithm_id==="buffer"){if(typeof p.distance_meters!=="number"||!Number.isFinite(p.distance_meters)||p.distance_meters<.1||p.distance_meters>500000||!Number.isInteger(p.quad_segs)||p.quad_segs<2||p.quad_segs>16)return null;parameters={distance_meters:p.distance_meters,quad_segs:p.quad_segs}}
   if(x.algorithm_id==="dissolve"){if(p.group_by_field!==null&&typeof p.group_by_field!=="string")return null;parameters={group_by_field:p.group_by_field}}
-  if(x.algorithm_id==="reproject"){if(![4326,3857].includes(p.target_srid))return null;parameters={target_srid:p.target_srid}}
+  if(x.algorithm_id==="reproject"){if(!REPROJECT_CRSS.some(code=>code===p.target_srid))return null;parameters={target_srid:p.target_srid}}
   if(x.algorithm_id==="spatial_join"){if(!["intersects","within","contains","touches","overlaps","crosses","equals"].includes(p.predicate)||!["left","inner"].includes(p.join_type)||!["all","first"].includes(p.match_mode))return null;parameters={predicate:p.predicate,join_type:p.join_type,match_mode:p.match_mode}}
   if(Object.keys(p).length!==Object.keys(parameters).length||Object.keys(p).some(k=>!Object.hasOwn(parameters,k)))return null;
   if(overlayAlgorithm(x.algorithm_id)&&(typeof x.overlay_layer_id!=="string"||!x.overlay_layer_id||x.overlay_layer_id===x.input_layer_id))return null;

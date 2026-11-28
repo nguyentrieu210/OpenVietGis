@@ -99,7 +99,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | OUTPUT-03 | Legend, north arrow, scale bar, label | D | LayoutDesigner, LayoutRender | Liên kết đúng map item, scale và legend; không sai đơn vị/CRS | P1 |
 | OUTPUT-04 | Atlas / report nhiều trang | U | Chưa xác nhận | Coverage layer, lọc, trang theo đối tượng, batch export; không rò dữ liệu | P3 |
 | OUTPUT-05 | PDF/PNG/SVG export, print preview | P | LayoutDesigner, PrintDesigner | Kiểm tra PDF/PNG, font VN, DPI, clipping; SVG chỉ khi engine hỗ trợ | P1 |
-| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust spatial | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
+| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust regional_crs: fixture/lineage verification for approved Quang Ninh edges, native feature/viewport/reproject; unverified provinces fail closed | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
 | OUTPUT-07 | Import/export GeoJSON/GPKG/SHP/CSV/DXF/raster | P | TransferTool, ExportDialog, Rust transfers | Kiểm tra từng format thực, CRS, schema/null/encoding, geometry, round-trip; không đoán parity | P1 |
 | OUTPUT-08 | Đồng bộ QGIS desktop & style/project exchange | P | QgisBindingManager, QgisConnectPage | Sync hai chiều, revision, conflict; QGZ/QGS/QML subset rõ ràng; plugin Python QGIS ngoài scope | P2 |
 

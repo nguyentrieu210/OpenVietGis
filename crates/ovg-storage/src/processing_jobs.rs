@@ -650,9 +650,11 @@ pub async fn submit_job_pinned(
         .map_err(edit_db_error)?;
     let engine_version = format!("PostGIS/{pg_ver}");
     let output_crs = if algorithm_id=="reproject" {
-        clean_params.get("target_srid").and_then(Value::as_i64).and_then(|v| i32::try_from(v).ok())
-            .filter(|v| matches!(v,4326|3857))
-            .ok_or_else(|| EditError::validation("INVALID_PARAMETERS","unsupported target CRS"))?
+        let target=clean_params.get("target_srid").and_then(Value::as_i64).and_then(|v| i32::try_from(v).ok())
+            .filter(|v| matches!(v,4326|3857|4756|5899))
+            .ok_or_else(|| EditError::validation("INVALID_PARAMETERS","unsupported target CRS"))?;
+        approved_reproject(scope.tx_mut(),org_id,project_id,input_source.id,input_source.stored_crs,target).await?;
+        target
     } else { input_source.stored_crs };
     let now = now_micros();
     let job_id = Uuid::new_v4();
@@ -807,6 +809,22 @@ fn web_transform_expr(
         step.pipeline,
         target_srid,
     ))
+}
+
+async fn approved_reproject(tx:&mut sqlx::Transaction<'_,sqlx::Postgres>,org:Uuid,project:Uuid,source:Uuid,native:i32,target:i32)->Result<String,EditError>{
+    if native==target && matches!(native,4326|3857) {return Ok("rf.geometry".to_owned());}
+    let profile=u32::try_from(native).ok().zip(u32::try_from(target).ok())
+        .and_then(|(a,b)|reference_transformation(a,b))
+        .ok_or_else(||EditError::validation("UNSUPPORTED_TRANSFORMATION","no approved directed CRS operation for this pair"))?;
+    if profile.fixture_requirement==FixtureRequirement::None {
+        let (expr,_,_)=web_transform_expr("rf.geometry",native,target)?;
+        require_web_domain(tx,org,project,WebDomainCheck{source_id:source,native_srid:native,expression:"geometry",expression_srid:native,margin:0.0}).await?;
+        Ok(expr)
+    }else{
+        crate::catalog::regional_crs::verify_regional_source(tx,org,project,source,profile).await
+            .map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None})?;
+        Ok(crate::catalog::regional_crs::profile_expression(profile,"rf.geometry"))
+    }
 }
 
 struct WebDomainCheck<'a> {
@@ -1298,18 +1316,9 @@ async fn prepare_inside_savepoint(
         "reproject" => {
             output_srid = parameters.get("target_srid").and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
-                .filter(|v| matches!(v, 4326 | 3857))
+                .filter(|v| matches!(v, 4326 | 3857 | 4756 | 5899))
                 .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
-            let expr = if input_srid == output_srid {
-                "rf.geometry".to_owned()
-            } else {
-                let (expr, _, _) = web_transform_expr("rf.geometry", input_srid, output_srid)?;
-                require_web_domain(sp, org_id, project_id, WebDomainCheck {
-                    source_id: input_src_id, native_srid: input_srid,
-                    expression: "geometry", expression_srid: input_srid, margin: 0.0,
-                }).await?;
-                expr
-            };
+            let expr=approved_reproject(sp,org_id,project_id,input_src_id,input_srid,output_srid).await?;
             output_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
             let sql = format!(
                 "WITH transformed AS (

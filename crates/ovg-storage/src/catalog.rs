@@ -17,6 +17,7 @@ use crate::{DbPool, TenantTransaction};
 
 mod features;
 mod fixtures;
+pub(crate) mod regional_crs;
 mod map_write;
 mod write;
 pub use features::FeatureRequest;

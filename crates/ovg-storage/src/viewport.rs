@@ -472,10 +472,10 @@ impl ProjectRead<'_> {
             RenderRead::Tile => None,
             RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
         };
-        if transformation.is_some_and(requires_fixture) {
-            // shortcut: trusted Quang Ninh fixture provenance (manifest re-materialization) is not
-            // ported; fail closed like an unverified fixture until the fixture registry is native.
-            return Err(out_of_area());
+        if let Some(edge)=transformation.filter(|edge|requires_fixture(edge)) {
+            if self.gis_scoped {return Err(out_of_area());}
+            let org=self.tx.organization_id();
+            crate::catalog::regional_crs::verify_regional_source(self.tx.tx_mut(),org,self.project_id,source_id,edge).await?;
         }
         let extent = source["extent"].as_object().and_then(|e| {
             Some([
@@ -583,13 +583,13 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
             )"
         );
     };
-    // Only fixture-free edges reach SQL: EPSG:3857 -> 4326 is one inverse step.
+    let transform=crate::catalog::regional_crs::profile_expression(edge,"geometry");
     let area = edge.geographic_bounds;
     format!(
         "WITH native AS NOT MATERIALIZED ({native}),
         step0 AS NOT MATERIALIZED (
             SELECT feature_id, CASE WHEN valid
-                THEN ST_InverseTransformPipeline(geometry, '{WEB_MERCATOR_PIPELINE}', 4326) END
+                THEN {transform} END
                 AS geometry, valid
             FROM native
         ),
