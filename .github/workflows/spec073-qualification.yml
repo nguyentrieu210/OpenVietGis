@@ -19,6 +19,10 @@ jobs:
           persist-credentials: false
       - name: ELF negative tests
         run: cd infra/mobile/native && python3 -m unittest -v test_verify_elf
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: "12266719"
+          packages: platform-tools
       - name: Install exact Android NDK and CMake
         run: |
           sdkmanager 'ndk;28.2.13676358' 'cmake;3.22.1'
@@ -37,7 +41,7 @@ jobs:
         run: |
           set -euxo pipefail
           cmake="$ANDROID_HOME/cmake/3.22.1/bin/cmake"
-          "$cmake" -S infra/mobile/native -B "$RUNNER_TEMP/native-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/ovg-vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=arm64-ovg-android -DVCPKG_HOST_TRIPLET=x64-linux -DVCPKG_OVERLAY_TRIPLETS="$GITHUB_WORKSPACE/infra/mobile/native/triplets" -DVCPKG_INSTALLED_DIR="$RUNNER_TEMP/ovg-installed" -DVCPKG_MANIFEST_INSTALL=OFF
+          "$cmake" -S infra/mobile/native -B "$RUNNER_TEMP/native-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/ovg-vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=arm64-ovg-android -DVCPKG_HOST_TRIPLET=x64-linux -DVCPKG_OVERLAY_TRIPLETS="$GITHUB_WORKSPACE/infra/mobile/native/triplets" -DVCPKG_INSTALLED_DIR="$RUNNER_TEMP/ovg-installed" -DVCPKG_MANIFEST_INSTALL=OFF -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28 -DANDROID_STL=c++_shared
           "$cmake" --build "$RUNNER_TEMP/native-build" --parallel 2
       - name: Collect binary, PROJ assets and static ABI evidence
         run: |
@@ -68,14 +72,18 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: "12266719"
+          packages: platform-tools
       - name: Pin Flutter source and Android tools
         run: |
           set -euxo pipefail
           sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
           git init "$RUNNER_TEMP/flutter"
           git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
-          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin ab2912035e160d9cad6306df307576da6128ebdb
-          git -C "$RUNNER_TEMP/flutter" checkout --detach FETCH_HEAD
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
           test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
       - name: Build offline MapLibre fixture
