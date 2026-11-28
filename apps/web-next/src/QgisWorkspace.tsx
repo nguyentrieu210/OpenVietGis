@@ -1,6 +1,6 @@
 import {filterCrs} from "@openvietgis/ui-react/gis/model";
 import {TableScrollRef} from "./ui/primitives";
-import {virtualTableRange} from "./virtual-table";
+import {useTableWindow} from "@openvietgis/ui-react/data/window";
 import {Vn2000Projection,type ProjectionContext} from "./Vn2000Projection";
 import {groupVisibilityState,remapExclusivePaths,type VisibilityPolicy} from "./layer-visibility";
 import {mergeSourcePage,type SourcePage,SOURCE_BROWSER_LIMIT,SOURCE_BROWSER_PAGE_LIMIT} from "./source-browser";
@@ -328,10 +328,10 @@ export function QgisAttributeTable({formScope="",preferenceScope,executeServerQu
  useEffect(()=>{setSort(null);setFormKey("");setFormMode(false);setPage(0)},[columnKey]);
  const maxPage=Math.max(0,Math.ceil(sorted.length/100)-1),current=remoteLayer?page:Math.min(page,maxPage);
  const pageRows=remoteLayer?sorted:localTablePage(sorted,current);
- const tableScroll=useRef<HTMLDivElement|null>(null),[tableViewport,setTableViewport]=useState({scroll:0,height:300});
- useEffect(()=>{const el=tableScroll.current;if(!el)return;const update=()=>setTableViewport({scroll:Math.max(0,el.scrollTop-(el.querySelector("thead")?.offsetHeight??0)),height:el.clientHeight});const observer=new ResizeObserver(update);observer.observe(el);el.addEventListener("scroll",update,{passive:true});update();return()=>{observer.disconnect();el.removeEventListener("scroll",update)}},[formMode,useServer,dockSide]);
- useEffect(()=>{if(tableScroll.current)tableScroll.current.scrollTop=0;setTableViewport(v=>({...v,scroll:0}))},[current,scope,normalizedQuery,sort]);
- const windowed=virtualTableRange(pageRows.length,tableViewport.scroll,tableViewport.height);
+ const tableScroll=useRef<HTMLDivElement|null>(null);
+ const windowed=useTableWindow(tableScroll,pageRows.length,!formMode&&!useServer);
+ useEffect(()=>{if(tableScroll.current)tableScroll.current.scrollTop=0},[current,scope,normalizedQuery,sort]);
+
 
  const hydrated=useMemo(()=>new Set(rows.map(r=>JSON.stringify([r.layer.id,r.layer.source_id,r.layer.source.content_revision,r.layer.source.schema_revision,r.key]))),[rows]);
  const selectableRow=(r:StudioRow)=>!remoteLayer||hydrated.has(JSON.stringify([r.layer.id,r.layer.source_id,r.layer.source.content_revision,r.layer.source.schema_revision,r.key]));

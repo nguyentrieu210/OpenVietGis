@@ -16,7 +16,8 @@
     "./plugin": "./src/plugin/index.tsx",
     "./preferences/model": "./src/preferences/model.ts",
     "./gis/model": "./src/gis/model.ts",
-    "./primitives": "./src/primitives.tsx"
+    "./primitives": "./src/primitives.tsx",
+    "./data/window": "./src/data/window.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

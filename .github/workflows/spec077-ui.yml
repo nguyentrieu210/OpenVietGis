@@ -3,6 +3,9 @@ on:
   pull_request:
     paths: ["packages/ui-react/**", "packages/ui-flutter/**", "packages/design-tokens/**", "apps/web-next/**", "specs/077-universal-frontend-platform/**", "pnpm-lock.yaml", ".github/workflows/spec077-ui.yml"]
   workflow_dispatch:
+concurrency:
+  group: spec077-ui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 permissions:
   contents: read
 jobs:
