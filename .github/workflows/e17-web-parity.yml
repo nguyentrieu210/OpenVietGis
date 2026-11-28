@@ -1,9 +1,8 @@
 name: E17 Web parity
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["064-**"]
@@ -38,6 +37,10 @@ on:
 permissions:
   contents: read
 # Cancel superseded PR revisions, not main/release or manual qualification runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   frontend:
     # Keep browser/font rendering deterministic for parity evidence.

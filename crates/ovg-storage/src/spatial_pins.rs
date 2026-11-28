@@ -125,7 +125,10 @@ pub fn validate_ready_geojson(
     expected_family: Option<&str>,
     srid: i32,
 ) -> Result<Value, &'static str> {
-    if !u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_processing_crs) {
+    if !u32::try_from(srid)
+        .ok()
+        .is_some_and(ovg_core::crs::is_processing_crs)
+    {
         return Err("readable CRS required");
     }
     let gtype = geom
@@ -288,8 +291,16 @@ fn validate_position_domain(x: f64, y: f64, srid: i32) -> Result<(), &'static st
                 return Err("Web Mercator position outside domain");
             }
         }
-        _ if u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000) => {
-            ovg_spatial::transform::project_native_vn2000(srid as u32,4756,ovg_spatial::Coord2D::new(x,y)).map_err(|_|"projected VN-2000 position outside declared zone")?;
+        _ if u32::try_from(srid)
+            .ok()
+            .is_some_and(ovg_core::crs::is_extended_native_vn2000) =>
+        {
+            ovg_spatial::transform::project_native_vn2000(
+                srid as u32,
+                4756,
+                ovg_spatial::Coord2D::new(x, y),
+            )
+            .map_err(|_| "projected VN-2000 position outside declared zone")?;
         }
         _ => {}
     }

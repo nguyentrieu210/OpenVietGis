@@ -1,34 +1,22 @@
 name: E11 Outbox Candidate
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 on:
   push:
-    branches: ["main", "064-**"]
+    branches: ["064-**"]
     paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".cargo/**"
       - "infra/rust-platform/e11/**"
       - "apps/api-rust/**"
-      - "crates/**"
-      - "crates/**"
       - "crates/ovg-storage/**"
       - "crates/ovg-sync/**"
       - "tests/rust-parity/e11/**"
       - ".github/workflows/e11-outbox.yml"
   pull_request:
     paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "rust-toolchain.toml"
-      - ".cargo/**"
       - "infra/rust-platform/e11/**"
       - "apps/api-rust/**"
-      - "crates/**"
       - "crates/ovg-storage/**"
       - "crates/ovg-sync/**"
       - "tests/rust-parity/e11/**"

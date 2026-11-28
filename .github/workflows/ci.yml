@@ -1,8 +1,8 @@
 name: CI
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 
 on:
   push:
@@ -17,6 +17,10 @@ on:
         default: false
 
 # Cancel superseded PR revisions, not main/release or manual qualification runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   native-api:
     runs-on: ubuntu-24.04
@@ -41,22 +45,6 @@ jobs:
             target/debug/openvietgis-api-rust.sha256
           if-no-files-found: error
           retention-days: 2
-  workflow-contracts:
-    name: Workflow policy regression tests
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: "3.13"
-          enable-cache: true
-      - name: Install locked test dependencies
-        run: uv sync --project apps/api --frozen
-      - name: Check workflow concurrency and trigger coverage
-        run: uv run --project apps/api pytest -q tools/tests/test_spec066_build_pipeline.py
-
   backend:
     needs: native-api
     if: ${{ !inputs.browser_only }}

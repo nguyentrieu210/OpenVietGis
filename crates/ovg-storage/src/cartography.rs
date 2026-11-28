@@ -740,7 +740,8 @@ pub async fn prepare_print_snapshot(
                 _ => None,
             }
             .filter(|p| {
-                p.fixture_requirement==ovg_core::crs::FixtureRequirement::None && p.steps.len() == 1
+                p.fixture_requirement == ovg_core::crs::FixtureRequirement::None
+                    && p.steps.len() == 1
             });
 
             let Some(profile) = profile else {

@@ -277,7 +277,7 @@ def check_binary_exports(client, base, headers, outsider, export):
         )
 
 
-def unsafe_archive():
+def unsafe_archive(name: str, *, symlink: bool = False):
     buff = io.BytesIO()
     with zipfile.ZipFile(buff, "w") as archive:
         info = zipfile.ZipInfo(name)
@@ -373,7 +373,7 @@ def main():
                             b'{"type":"FeatureCollection","crs":{},"features":[]}',
                             "LEGACY_GEOJSON_CRS",
                         ),
-                        ("traversal.zip", unsafe_archive(), "ARCHIVE_PATH_TRAVERSAL"),
+                        ("traversal.zip", unsafe_archive("../escape.shp"), "ARCHIVE_PATH_TRAVERSAL"),
                         (
                             "dir-traversal.zip", unsafe_archive("../escape/"),
                             "ARCHIVE_PATH_TRAVERSAL",

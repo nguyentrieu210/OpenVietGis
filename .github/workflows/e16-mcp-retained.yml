@@ -1,8 +1,4 @@
 name: E16 MCP adapter
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 
 on:
   push:
@@ -19,6 +15,10 @@ on:
       - 'tools/benchmark/spec066/mcp-contract-parity.py'
       - '.github/workflows/e16-mcp-retained.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

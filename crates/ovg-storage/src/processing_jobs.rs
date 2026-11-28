@@ -590,8 +590,17 @@ pub async fn submit_job_pinned(
     }
 
     let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
-    if input_source.feature_count>MAX_PROCESSING_FEATURES {return Err(EditError::validation("PROCESSING_LIMIT","processing input exceeds feature bounds"));}
-    if algorithm_id!="reproject" && u32::try_from(input_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
+    if input_source.feature_count > MAX_PROCESSING_FEATURES {
+        return Err(EditError::validation(
+            "PROCESSING_LIMIT",
+            "processing input exceeds feature bounds",
+        ));
+    }
+    if algorithm_id != "reproject"
+        && u32::try_from(input_source.stored_crs)
+            .ok()
+            .is_some_and(ovg_core::crs::is_extended_native_vn2000)
+    {
         return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 layers currently support only Reproject; convert to an existing analysis CRS first"));
     }
     if expected_input.is_some_and(|p| !p.matches_source(&input_source)) {
@@ -621,7 +630,15 @@ pub async fn submit_job_pinned(
             ));
         };
         let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
-        if u32::try_from(overlay_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 overlay must be reprojected first"));}
+        if u32::try_from(overlay_source.stored_crs)
+            .ok()
+            .is_some_and(ovg_core::crs::is_extended_native_vn2000)
+        {
+            return Err(EditError::validation(
+                "UNSUPPORTED_TRANSFORMATION",
+                "Extended native VN-2000 overlay must be reprojected first",
+            ));
+        }
         if expected_overlay.is_some_and(|p| !p.matches_source(&overlay_source)) {
             return Err(EditError::conflict(
                 "STALE_INPUT_PIN",
@@ -666,7 +683,11 @@ pub async fn submit_job_pinned(
             .get("target_srid")
             .and_then(Value::as_i64)
             .and_then(|v| i32::try_from(v).ok())
-            .filter(|v|u32::try_from(*v).ok().is_some_and(ovg_core::crs::is_processing_crs))
+            .filter(|v| {
+                u32::try_from(*v)
+                    .ok()
+                    .is_some_and(ovg_core::crs::is_processing_crs)
+            })
             .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
         approved_reproject(
             scope.tx_mut(),
@@ -844,16 +865,37 @@ async fn approved_reproject(
     native: i32,
     target: i32,
 ) -> Result<String, EditError> {
-    if let (Ok(a),Ok(b))=(u32::try_from(native),u32::try_from(target)) {
-        if ovg_core::crs::is_extended_native_vn2000(a)&&b==4326{
-            return crate::catalog::regional_crs::verify_extended_datum_source(tx,org,project,source,a,"rf.geometry").await.map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None});
+    if let (Ok(a), Ok(b)) = (u32::try_from(native), u32::try_from(target)) {
+        if ovg_core::crs::is_extended_native_vn2000(a) && b == 4326 {
+            return crate::catalog::regional_crs::verify_extended_datum_source(
+                tx,
+                org,
+                project,
+                source,
+                a,
+                "rf.geometry",
+            )
+            .await
+            .map_err(|error| EditError::Platform {
+                status: error.status_code(),
+                code: error.code(),
+                message: error.to_string(),
+                details: None,
+            });
         }
-        if crate::native_projection::is_native_pair(a,b) {
-            let map_error=|error:ovg_core::AppError|EditError::Platform{
-                status:error.status_code(),code:error.code(),message:error.to_string(),details:None
+        if crate::native_projection::is_native_pair(a, b) {
+            let map_error = |error: ovg_core::AppError| EditError::Platform {
+                status: error.status_code(),
+                code: error.code(),
+                message: error.to_string(),
+                details: None,
             };
-            let projection=crate::native_projection::NativeProjection::new(a,b).map_err(map_error)?;
-            projection.verify_source(tx,org,project,source).await.map_err(map_error)?;
+            let projection =
+                crate::native_projection::NativeProjection::new(a, b).map_err(map_error)?;
+            projection
+                .verify_source(tx, org, project, source)
+                .await
+                .map_err(map_error)?;
             return Ok(projection.expression("rf.geometry"));
         }
     }
@@ -888,14 +930,15 @@ async fn approved_reproject(
         Ok(expr)
     } else {
         // The immutable source chain is replayed before each datum operation.
-        let profile=crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
-            .await
-            .map_err(|error| EditError::Platform {
-                status: error.status_code(),
-                code: error.code(),
-                message: error.to_string(),
-                details: None,
-            })?;
+        let profile =
+            crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
+                .await
+                .map_err(|error| EditError::Platform {
+                    status: error.status_code(),
+                    code: error.code(),
+                    message: error.to_string(),
+                    details: None,
+                })?;
         Ok(crate::catalog::regional_crs::profile_expression(
             profile,
             "rf.geometry",
@@ -1024,14 +1067,16 @@ pub async fn lock_and_prepare_execution(
     let mut sp = scope.tx_mut().begin().await.map_err(edit_db_error)?;
     let outcome = prepare_inside_savepoint(
         &mut sp,
-        job_id,
-        org_id,
-        project_id,
-        algorithm_id,
-        input_refs,
-        parameters,
-        output_name,
-        engine_version,
+        ProcessingJobArgs {
+            job_id,
+            org_id,
+            project_id,
+            algorithm_id,
+            input_refs,
+            parameters,
+            output_name,
+            engine_version,
+        },
     )
     .await;
 
@@ -1050,8 +1095,18 @@ pub async fn lock_and_prepare_execution(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 type ProcessingField = (String, String, String, bool);
+
+struct ProcessingJobArgs {
+    job_id: Uuid,
+    org_id: Uuid,
+    project_id: Uuid,
+    algorithm_id: String,
+    input_refs: Value,
+    parameters: Value,
+    output_name: String,
+    engine_version: String,
+}
 
 async fn processing_source_fields(
     sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -1094,15 +1149,18 @@ fn processing_raw_row(
 
 async fn prepare_inside_savepoint(
     sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    job_id: Uuid,
-    org_id: Uuid,
-    project_id: Uuid,
-    algorithm_id: String,
-    input_refs: Value,
-    parameters: Value,
-    output_name: String,
-    engine_version: String,
+    args: ProcessingJobArgs,
 ) -> Result<ExecutionInputs, EditError> {
+    let ProcessingJobArgs {
+        job_id,
+        org_id,
+        project_id,
+        algorithm_id,
+        input_refs,
+        parameters,
+        output_name,
+        engine_version,
+    } = args;
     sqlx::query("SELECT set_config('statement_timeout', $1, true)")
         .bind(PROCESSING_STATEMENT_TIMEOUT)
         .execute(&mut **sp)
@@ -1417,7 +1475,11 @@ async fn prepare_inside_savepoint(
                 .get("target_srid")
                 .and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
-                .filter(|v|u32::try_from(*v).ok().is_some_and(ovg_core::crs::is_processing_crs))
+                .filter(|v| {
+                    u32::try_from(*v)
+                        .ok()
+                        .is_some_and(ovg_core::crs::is_processing_crs)
+                })
                 .ok_or_else(|| {
                     EditError::validation("INVALID_PARAMETERS", "unsupported target CRS")
                 })?;

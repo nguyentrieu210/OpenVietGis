@@ -6,10 +6,10 @@ use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use ovg_spatial::transform::{project_native_vn2000, Coord2D, NATIVE_VN2000_ZONES};
 use axum::{Json, Router};
 use ovg_core::crs::reference_registry_wire;
 use ovg_core::AppError;
+use ovg_spatial::transform::{project_native_vn2000, Coord2D, NATIVE_VN2000_ZONES};
 use ovg_storage::catalog::{FeatureRequest, MapSaveIntent, ProjectRead, ProjectReadPolicy};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -39,7 +39,10 @@ pub fn router() -> Router<AppState> {
             &format!("{PROJECT}/spatial/crs-profiles"),
             get(list_crs_profiles),
         )
-        .route(&format!("{PROJECT}/spatial/vn2000-projections"), get(list_native_vn2000).post(convert_native_vn2000))
+        .route(
+            &format!("{PROJECT}/spatial/vn2000-projections"),
+            get(list_native_vn2000).post(convert_native_vn2000),
+        )
         .route(
             &format!("{PROJECT}/layers/{{layer_id}}/features"),
             get(page_features),
@@ -330,11 +333,15 @@ async fn list_native_vn2000(
     let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
     let read = project_read(&state, &auth, org, project, ProjectReadPolicy::Unrestricted).await?;
     read.commit().await?;
-    Ok(([(header::CACHE_CONTROL,"no-store")], Json(json!({
-        "organization_id":org,"project_id":project,"datum":"VN-2000",
-        "geographic_code":4756,"zones":NATIVE_VN2000_ZONES,
-        "scope":"mathematical_same_datum_projection_only"
-    }))).into_response())
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({
+            "organization_id":org,"project_id":project,"datum":"VN-2000",
+            "geographic_code":4756,"zones":NATIVE_VN2000_ZONES,
+            "scope":"mathematical_same_datum_projection_only"
+        })),
+    )
+        .into_response())
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -351,21 +358,32 @@ async fn convert_native_vn2000(
     path: Result<Path<(Uuid, Uuid)>, PathRejection>,
     body: Bytes,
 ) -> Result<Response, CatalogError> {
-    require_csrf(&state,&auth,&headers).map_err(CatalogError::Identity)?;
-    let Path((org,project))=path.map_err(|_|CatalogError::InvalidRequest)?;
-    let read=project_read(&state,&auth,org,project,ProjectReadPolicy::Unrestricted).await?;
-    if body.len()>32768 {return Err(CatalogError::InvalidRequest);}
-    let req:NativeVn2000Request=serde_json::from_slice(&body).map_err(|_|CatalogError::InvalidRequest)?;
-    if !req.acknowledge_native_datum || req.coordinates.is_empty() || req.coordinates.len()>256 {
+    require_csrf(&state, &auth, &headers).map_err(CatalogError::Identity)?;
+    let Path((org, project)) = path.map_err(|_| CatalogError::InvalidRequest)?;
+    let read = project_read(&state, &auth, org, project, ProjectReadPolicy::Unrestricted).await?;
+    if body.len() > 32768 {
         return Err(CatalogError::InvalidRequest);
     }
-    let coordinates=req.coordinates.into_iter().map(|point| project_native_vn2000(req.source_epsg,req.target_epsg,point)).collect::<Result<Vec<_>,_>>()?;
+    let req: NativeVn2000Request =
+        serde_json::from_slice(&body).map_err(|_| CatalogError::InvalidRequest)?;
+    if !req.acknowledge_native_datum || req.coordinates.is_empty() || req.coordinates.len() > 256 {
+        return Err(CatalogError::InvalidRequest);
+    }
+    let coordinates = req
+        .coordinates
+        .into_iter()
+        .map(|point| project_native_vn2000(req.source_epsg, req.target_epsg, point))
+        .collect::<Result<Vec<_>, _>>()?;
     read.commit().await?;
-    Ok(([(header::CACHE_CONTROL,"no-store")],Json(json!({
-        "organization_id":org,"project_id":project,"source_epsg":req.source_epsg,
-        "target_epsg":req.target_epsg,"coordinates":coordinates,
-        "scope":"mathematical_same_datum_projection_only"
-    }))).into_response())
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({
+            "organization_id":org,"project_id":project,"source_epsg":req.source_epsg,
+            "target_epsg":req.target_epsg,"coordinates":coordinates,
+            "scope":"mathematical_same_datum_projection_only"
+        })),
+    )
+        .into_response())
 }
 
 async fn get_map(

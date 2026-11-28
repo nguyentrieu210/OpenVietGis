@@ -1,8 +1,4 @@
 name: Build immutable release candidates
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 
 # Intentionally manual and main-only. This workflow produces image receipts;
 # it never approves a candidate, connects to the VPS or deploys anything.

@@ -223,8 +223,18 @@ pub struct NativeVn2000Zone {
     pub scale_factor: f64,
     pub bounds: [f64; 4],
 }
-const fn vn_zone(code: u32, central_meridian: f64, scale_factor: f64, bounds: [f64; 4]) -> NativeVn2000Zone {
-    NativeVn2000Zone { code, central_meridian, scale_factor, bounds }
+const fn vn_zone(
+    code: u32,
+    central_meridian: f64,
+    scale_factor: f64,
+    bounds: [f64; 4],
+) -> NativeVn2000Zone {
+    NativeVn2000Zone {
+        code,
+        central_meridian,
+        scale_factor,
+        bounds,
+    }
 }
 pub const NATIVE_VN2000_ZONES: &[NativeVn2000Zone] = &[
     vn_zone(3405, 105.0, 0.9996, [102.14, 8.33, 108.0, 23.4]),
@@ -264,8 +274,8 @@ pub fn native_storage_profile_wire(code: u32) -> Option<Value> {
     if !is_extended_native_vn2000(code) {
         return reference_profile_wire(code);
     }
-    let z=NATIVE_VN2000_ZONES.iter().find(|z|z.code==code)?;
-    let meridian=z.central_meridian;
+    let z = NATIVE_VN2000_ZONES.iter().find(|z| z.code == code)?;
+    let meridian = z.central_meridian;
     Some(json!({
         "authority":"EPSG","code":code,
         "name":format!("VN-2000 / {} {}",if z.scale_factor==0.9996 {"UTM"}else{"TM-3"},meridian),
@@ -277,9 +287,13 @@ pub fn native_storage_profile_wire(code: u32) -> Option<Value> {
         "disposition":"readable"
     }))
 }
-pub fn native_storage_coordinate_wire(code:u32)->Option<Value>{
-    if !is_extended_native_vn2000(code){return reference_coordinate_wire(code);}
-    Some(json!({"authority":"EPSG","code":code,"coordinate_order":"xy","x_axis":"easting","y_axis":"northing","unit":"metre"}))
+pub fn native_storage_coordinate_wire(code: u32) -> Option<Value> {
+    if !is_extended_native_vn2000(code) {
+        return reference_coordinate_wire(code);
+    }
+    Some(
+        json!({"authority":"EPSG","code":code,"coordinate_order":"xy","x_axis":"easting","y_axis":"northing","unit":"metre"}),
+    )
 }
 
 /// Return all registered CRS profiles.
@@ -586,15 +600,42 @@ const DONG_NAI_FORWARD: TransformationProfile = TransformationProfile {
 };
 static REGIONAL_DATUM_TRANSFORMATIONS: &[TransformationProfile] = &[
     DA_NANG_FORWARD,
-    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DA_NANG_FORWARD},
+    TransformationProfile {
+        source_code: 4326,
+        target_code: 4756,
+        operation_id: "epsg-6960-inverse",
+        method: "inverse EPSG:6960",
+        steps: &[DATUM_INVERSE_STEP],
+        ..DA_NANG_FORWARD
+    },
     DONG_NAI_FORWARD,
-    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..DONG_NAI_FORWARD},
+    TransformationProfile {
+        source_code: 4326,
+        target_code: 4756,
+        operation_id: "epsg-6960-inverse",
+        method: "inverse EPSG:6960",
+        steps: &[DATUM_INVERSE_STEP],
+        ..DONG_NAI_FORWARD
+    },
     HAI_PHONG_FORWARD,
-    TransformationProfile {source_code:4326,target_code:4756,operation_id:"epsg-6960-inverse",method:"inverse EPSG:6960",steps:&[DATUM_INVERSE_STEP],..HAI_PHONG_FORWARD},
+    TransformationProfile {
+        source_code: 4326,
+        target_code: 4756,
+        operation_id: "epsg-6960-inverse",
+        method: "inverse EPSG:6960",
+        steps: &[DATUM_INVERSE_STEP],
+        ..HAI_PHONG_FORWARD
+    },
 ];
 #[must_use]
-pub fn regional_datum_transformation(source:u32,target:u32,requirement:FixtureRequirement)->Option<&'static TransformationProfile>{
-    REGIONAL_DATUM_TRANSFORMATIONS.iter().find(|p|p.source_code==source&&p.target_code==target&&p.fixture_requirement==requirement)
+pub fn regional_datum_transformation(
+    source: u32,
+    target: u32,
+    requirement: FixtureRequirement,
+) -> Option<&'static TransformationProfile> {
+    REGIONAL_DATUM_TRANSFORMATIONS.iter().find(|p| {
+        p.source_code == source && p.target_code == target && p.fixture_requirement == requirement
+    })
 }
 
 /// Look up a directed operation. Identity reads and inferred paths are excluded.

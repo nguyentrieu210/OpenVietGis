@@ -331,7 +331,7 @@ async fn commit(
     };
     let request = CommitRequest {
         acknowledge_native_crs: None,
-                operation_id,
+        operation_id,
         base_content_revision: body.base_content_revision,
         base_schema_revision: body.base_schema_revision,
         summary,

@@ -1,9 +1,8 @@
 name: E15 retained Python module
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 on:
   push:
     branches: ["064-e15", "064-clients-completion", "064-integration", "064-finalize", "064-rust-platform"]
