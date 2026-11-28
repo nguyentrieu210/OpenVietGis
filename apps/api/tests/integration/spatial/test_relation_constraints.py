@@ -95,6 +95,7 @@ def test_relation_constraints_reject_direct_runtime_writes_and_rollback() -> Non
         original = caught.value.orig
         sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
         assert sqlstate == "OV409", str(original)
+        assert "Relation constraint would be violated" in str(original), str(original)
 
     # A target delete would orphan the local key.
     runtime_write(
