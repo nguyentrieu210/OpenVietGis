@@ -16,6 +16,40 @@ export function snapToleranceFor(defaultPixels:number,overrides:Record<string,nu
  return typeof n==="number"&&Number.isInteger(n)&&n>=4&&n<=25?n:defaultPixels;
 }
 
+export type SnapUnit="pixel"|"mercator";
+const MERCATOR_RADIUS=6378137, MERCATOR_LIMIT=Math.PI*MERCATOR_RADIUS;
+export function toSnapMercator(p:XY):XY|null{
+ if(!validXY(p))return null;
+ return [p[0]*Math.PI/180*MERCATOR_RADIUS,Math.log(Math.tan(Math.PI/4+p[1]*Math.PI/360))*MERCATOR_RADIUS];
+}
+export function fromSnapMercator(p:XY):XY|null{
+ if(!p.every(Number.isFinite)||Math.abs(p[0])>MERCATOR_LIMIT||Math.abs(p[1])>MERCATOR_LIMIT)return null;
+ const q:XY=[p[0]/MERCATOR_RADIUS*180/Math.PI,(2*Math.atan(Math.exp(p[1]/MERCATOR_RADIUS))-Math.PI/2)*180/Math.PI];
+ return validXY(q)?q:null;
+}
+export function cleanSnapMeters(value:unknown,fallback=10):number{
+ return typeof value==="number"&&Number.isFinite(value)&&value>=0.1&&value<=1000?value:fallback;
+}
+export function cleanSnapLayerMeters(value:unknown):Record<string,number>{
+ if(!value||typeof value!=="object"||Array.isArray(value))return {};
+ return Object.fromEntries(Object.entries(value).filter(([id,n])=>/^[A-Za-z0-9_-]{1,128}$/.test(id)&&!["__proto__","constructor","prototype"].includes(id)&&cleanSnapMeters(n,0)>0).slice(0,100));
+}
+export function snapMetersFor(defaultMeters:number,overrides:Record<string,number>,id:string){
+ return Object.hasOwn(overrides,id)?cleanSnapMeters(overrides[id],defaultMeters):defaultMeters;
+}
+// Convert a projected square into a bounded screen search box. Reject map-domain
+// crossing and huge searches instead of silently reducing the requested tolerance.
+export function mercatorSnapBox(target:XY,radius:number,project:(p:XY)=>XY,screen:XY):[XY,XY]|null{
+ if(!Number.isFinite(radius)||radius<=0)return null;
+ const corners:XY[]=[];
+ for(const dx of [-radius,radius])for(const dy of [-radius,radius]){
+  const p=fromSnapMercator([target[0]+dx,target[1]+dy]);if(!p)return null;
+  const q=project(p);if(!q.every(Number.isFinite)||Math.hypot(q[0]-screen[0],q[1]-screen[1])>256)return null;
+  corners.push(q);
+ }
+ return [[Math.min(...corners.map(p=>p[0])),Math.min(...corners.map(p=>p[1]))],[Math.max(...corners.map(p=>p[0])),Math.max(...corners.map(p=>p[1]))]];
+}
+
 export function snapLayerAllowed(scope:SnapScope|undefined,id:string,active:string|undefined,selected:readonly string[]|undefined){
  return scope==="active"?!!active&&active===id:scope==="selected"?!!selected?.includes(id):true;
 }
