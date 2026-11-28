@@ -11,6 +11,9 @@ pub mod octree;
 pub mod dag;
 pub mod scheduler;
 pub mod manifest;
+pub mod matching;
+pub mod geometry;
+pub mod survey;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
