@@ -1,0 +1,15 @@
+# Tasks
+- [ ] E01 typed registry and duplicate validation
+- [ ] E02 marketplace and plugin menu
+- [ ] E03 movable toolbar, hidden default
+- [ ] E04 dock/resizable workspace and responsive layout
+- [ ] E05 general map tool SDK
+- [ ] E06 processing SDK
+- [ ] E07 deactivate/unmount and clear domain contributions
+- [ ] E08 house numbering workflow navigation
+- [ ] E09 scoped real-data dashboard
+- [ ] E10 map action handoffs
+- [ ] E11 authorization and scope regression
+- [ ] E12 scoped layout persistence
+- [ ] E13 developer SDK documentation
+- [ ] E14 browser/multi-plugin acceptance, dev deployment

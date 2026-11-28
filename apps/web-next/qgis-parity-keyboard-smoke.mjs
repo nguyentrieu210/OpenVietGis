@@ -19,7 +19,7 @@ try{
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,technical_supported:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
  let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
- const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
+ const saved=[],edits=[],processingRequests=[];let domainCalls=0;let restricted=false,pluginActive=process.env.OVG_PLUGIN071_ONLY==="1",pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -32,6 +32,7 @@ try{
   else if(p.endsWith("/access/mine"))body={restricted};
   else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
+  else if(p.includes("/modules/house-numbering/")){domainCalls++;body={items:[],next_after_id:null}}
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
   else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
@@ -61,7 +62,30 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_LAYER070_ONLY==="1"){
+ if(process.env.OVG_PLUGIN071_ONLY==="1"){
+  assert.equal(await page.locator(".qgis-plugin-toolbar").innerText(),"");
+  assert.equal(domainCalls,0,"no business API before opening plugin");
+  const command=async(label)=>{await page.locator(".core-ribbon").getByRole("button",{name:"Plugin",exact:true}).click();await page.getByRole("button",{name:label,exact:false}).last().click()};
+  await command("Quản lý số nhà · Mở không gian");
+  const workspace=page.getByRole("complementary",{name:"Quản lý số nhà",exact:true});await workspace.waitFor();
+  await workspace.getByRole("button",{name:"Hiện thanh công cụ",exact:true}).click();
+  const palette=page.getByRole("toolbar",{name:"Công cụ plugin"});await palette.waitFor();
+  const grip=palette.getByRole("button",{name:"Di chuyển thanh công cụ plugin"}),b=await grip.boundingBox(),before=await palette.boundingBox();
+  await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+45,b.y+b.height/2+30,{steps:5});await page.mouse.up();
+  assert.ok((await palette.boundingBox()).x>before.x+30,"toolbar moves");
+  await workspace.getByLabel("Vị trí khung plugin").selectOption("left");assert.ok(await workspace.evaluate(e=>e.classList.contains("side-left")));
+  await workspace.getByRole("button",{name:"Địa bàn",exact:true}).click();
+  await workspace.getByRole("button",{name:"Đóng plugin",exact:true}).click();
+  await workspace.waitFor({state:"detached"});assert.equal(await palette.count(),0);
+  assert.equal(await first.count(),1);assert.equal(await second.count(),1);
+  await command("Quản lý số nhà · Mở không gian");await workspace.waitFor();
+  assert.equal(await workspace.getByLabel("Vị trí khung plugin").inputValue(),"left");
+  await workspace.getByRole("button",{name:"Nghiệp vụ số nhà",exact:true}).click();
+  const dialog=page.getByRole("dialog",{name:"Nghiệp vụ số nhà",exact:true});await dialog.waitFor();
+  await dialog.getByRole("button",{name:"Đóng",exact:true}).click();await dialog.waitFor({state:"detached"});
+  await workspace.getByRole("button",{name:"Đóng plugin",exact:true}).click();assert.deepEqual(errors,[]);
+  console.log("PASS SPEC 071: hidden default, scoped lazy plugin, movable palette, workspace docking, native workbench, close and restore");
+ }else if(process.env.OVG_LAYER070_ONLY==="1"){
   const firstRow=page.locator('[data-layer-id="layer1"]'),secondRow=page.locator('[data-layer-id="layer2"]');
   await first.click();
   const dock=page.locator(".qgis-dock"),widthHandle=page.getByRole("separator",{name:"Đổi chiều rộng cây layer"});

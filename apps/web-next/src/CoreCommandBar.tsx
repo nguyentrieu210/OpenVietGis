@@ -88,7 +88,7 @@ export function commandDisabledReason(c:CoreCommand){
  return c.disabledReason??needs[c.alias]??"Cần chọn layer/đối tượng, quyền phù hợp hoặc hoàn tất công cụ đang mở.";
 }
 export function CoreRibbon({commands,enabled=true}:{commands:CoreCommand[];enabled?:boolean}){
- commands=commands.map(c=>({...c,group:QGIS_MENU_OF.get(c.alias)??"Khác"})).sort((a,b)=>(QGIS_RANK.get(a.alias)??99)-(QGIS_RANK.get(b.alias)??99));
+ commands=commands.map(c=>({...c,group:QGIS_MENU_OF.get(c.alias)??(c.group==="Plugin"?"Plugin":"Khác")})).sort((a,b)=>(QGIS_RANK.get(a.alias)??99)-(QGIS_RANK.get(b.alias)??99));
  const [group,setGroup]=useState(""),[query,setQuery]=useState(""),[pos,setPos]=useState({x:0,y:0});
  const groups=Object.keys(menuTopics),root=useRef<HTMLDivElement>(null),menu=useRef<HTMLDivElement>(null);
  const trigger=useRef<HTMLButtonElement|null>(null),search=useRef<HTMLInputElement>(null);
