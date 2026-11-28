@@ -355,6 +355,17 @@ fn desktop_providers(window:WebviewWindow)->Reply<Value>{
       {"id":"other","format":"DWG/DGN/E57/IFC/3D Tiles/remote COPC","modes":[],"profile":"specialist provider not linked","candidate":false}
     ]))
 }
+#[tauri::command]
+async fn desktop_export_unified_candidate(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<Option<Vec<ovg_project_store::migration::Migrated>>>{
+    let app=window.app_handle().clone();
+    run(window,host.inner().clone(),move|h|{
+        h.generation(handle)?;
+        let Some(file)=app.dialog().file().add_filter("Experimental unified SQLite export",&["sqlite"]).set_file_name("unified-candidate.sqlite").blocking_save_file() else{return Ok(None)};
+        let path=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+        if path.extension().and_then(|v|v.to_str())!=Some("sqlite"){return Err("UNSUPPORTED_FORMAT")}
+        h.export_unified_candidate(handle,&path).map(Some)
+    }).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -390,6 +401,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers,desktop_export_unified_candidate])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
