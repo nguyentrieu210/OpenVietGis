@@ -29,6 +29,7 @@ pub(crate) mod identity;
 mod invitation_mail;
 pub(crate) mod managed_sync;
 pub(crate) mod map_render;
+pub(crate) mod navigation;
 pub mod metrics;
 pub mod middleware;
 mod oidc_worker;
