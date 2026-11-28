@@ -12,6 +12,7 @@ use ovg_core::crs::{
     WEB_MERCATOR_MAX_LATITUDE,
 };
 use ovg_core::AppError;
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sqlx::postgres::PgRow;
 use sqlx::{Acquire, Row};
@@ -439,7 +440,39 @@ pub struct SubmitJobResult {
     pub already_existed: bool,
 }
 
-/// Persist a new queued processing job (or return idempotent replay) inside `scope`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpectedSource {
+    pub source_id: Uuid,
+    pub content_revision: String,
+    pub schema_revision: String,
+}
+
+impl ExpectedSource {
+    fn valid(&self) -> bool {
+        [&self.content_revision, &self.schema_revision]
+            .iter()
+            .all(|r| r.len() == 64 && r.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+    }
+
+    fn matches_source(&self, s: &ResolvedSource) -> bool {
+        self.source_id == s.id
+            && self.content_revision == s.content_revision
+            && self.schema_revision == s.schema_revision
+    }
+
+    fn matches_refs(&self, refs: &Value, prefix: &str) -> bool {
+        refs.get(format!("{prefix}_source_id")).and_then(Value::as_str)
+            == Some(self.source_id.to_string().as_str())
+            && refs.get(format!("{prefix}_content_revision")).and_then(Value::as_str)
+                == Some(self.content_revision.as_str())
+            && refs.get(format!("{prefix}_schema_revision")).and_then(Value::as_str)
+                == Some(self.schema_revision.as_str())
+    }
+}
+
+/// Persist a new queued processing job (or return idempotent replay) inside scope.
+/// Legacy callers without explicit expectations retain the existing contract.
 pub async fn submit_job(
     scope: &mut EditScope<'_>,
     algorithm_id: &str,
@@ -449,6 +482,31 @@ pub async fn submit_job(
     output_name: &str,
     operation_id: &str,
 ) -> Result<SubmitJobResult, EditError> {
+    submit_job_pinned(
+        scope, algorithm_id, input_layer_id, overlay_layer_id, clean_params,
+        output_name, operation_id, None, None,
+    ).await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn submit_job_pinned(
+    scope: &mut EditScope<'_>,
+    algorithm_id: &str,
+    input_layer_id: Uuid,
+    overlay_layer_id: Option<Uuid>,
+    clean_params: Value,
+    output_name: &str,
+    operation_id: &str,
+    expected_input: Option<&ExpectedSource>,
+    expected_overlay: Option<&ExpectedSource>,
+) -> Result<SubmitJobResult, EditError> {
+    if expected_input.is_some_and(|p| !p.valid())
+        || expected_overlay.is_some_and(|p| !p.valid())
+        || expected_overlay.is_some() && (algorithm_id != "clip" || expected_input.is_none())
+        || expected_input.is_some() && algorithm_id == "clip" && expected_overlay.is_none()
+    {
+        return Err(EditError::validation("INVALID_INPUT_PIN", "invalid or incomplete expected source pins"));
+    }
     let org_id = scope.organization_id();
     let project_id = scope.project_id();
     let clean_op_id = validate_operation_id(operation_id)?;
@@ -493,6 +551,8 @@ pub async fn submit_job(
                 != expected_overlay
             || !py_eq(&prev_params, &clean_params)
             || prev_name != clean_out_name
+            || expected_input.is_some_and(|p| !p.matches_refs(&prev_refs, "input"))
+            || expected_overlay.is_some_and(|p| !p.matches_refs(&prev_refs, "overlay"))
         {
             return Err(EditError::conflict(
                 "OPERATION_ID_CONFLICT",
@@ -506,6 +566,9 @@ pub async fn submit_job(
     }
 
     let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
+    if expected_input.is_some_and(|p| !p.matches_source(&input_source)) {
+        return Err(EditError::conflict("STALE_INPUT_PIN", "input changed after request preparation"));
+    }
     let mut input_refs = Map::new();
     input_refs.insert("input_layer_id".into(), json!(input_layer_id.to_string()));
     input_refs.insert("input_source_id".into(), json!(input_source.id.to_string()));
@@ -527,6 +590,9 @@ pub async fn submit_job(
             ));
         };
         let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
+        if expected_overlay.is_some_and(|p| !p.matches_source(&overlay_source)) {
+            return Err(EditError::conflict("STALE_INPUT_PIN", "overlay changed after request preparation"));
+        }
         if overlay_source.geometry_family != "Polygon" {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",

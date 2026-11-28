@@ -46,8 +46,10 @@ def fixture_layers(f):
 def check_processing(post,get,foreign,fixtures):
     parcels,clip,point=fixtures
     assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve"}
+    def pin(layer):
+        return {k: layer[k] for k in ("source_id", "content_revision", "schema_revision")}
     def job(algorithm,layer,parameters,overlay=None,execute=True,op=None):
-        return {"algorithm_id":algorithm,"input_layer_id":layer["layer_id"],"overlay_layer_id":overlay["layer_id"] if overlay else None,
+        return {"expected_input":pin(layer), "expected_overlay":pin(overlay) if overlay else None, "algorithm_id":algorithm,"input_layer_id":layer["layer_id"],"overlay_layer_id":overlay["layer_id"] if overlay else None,
                 "parameters":parameters,"output_name":"spec065 "+algorithm,"operation_id":op or str(uuid4()),"execute_now":execute}
     def result(body,count,area):
         r=post("/processing/jobs",body)
@@ -60,6 +62,9 @@ def check_processing(post,get,foreign,fixtures):
             n,a=conn.execute("SELECT count(*),sum(ST_Area(r.geometry)) FROM spatial.reference_features r JOIN spatial.layers l ON l.source_id=r.source_id AND l.organization_id=r.organization_id AND l.project_id=r.project_id WHERE l.id=%s",(r["output_layer_id"],)).fetchone()
             assert n==count and math.isclose(a,area,abs_tol=1e-6),(n,a,area)
         return r, {"features": n, "area_m2": a}
+    stale = job("buffer",point,{"distance_meters":10,"quad_segs":8})
+    stale["expected_input"]["content_revision"] = "0"*64
+    post("/processing/jobs",stale,expected=409)
     _, buffer_metrics = result(job("buffer",point,{"distance_meters":10,"quad_segs":8}),1,1600*math.sin(math.pi/16))
     _, clip_metrics = result(job("clip",parcels,{},clip),2,10000)
     dissolved, dissolve_metrics = result(job("dissolve",parcels,{"group_by_field":"ward"}),2,30000)

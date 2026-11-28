@@ -618,9 +618,12 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/workbenches/features/platform/processing-request.ts",
-        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts"
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "tests/spec065/edit_processing.py"
       ],
-      "blocker": "Paired QGIS and authenticated Rust/PostGIS acceptance not executed; no output preview or explicit server-side revision precondition on submit"
+      "blocker": "Vector request validation, registry and explicit expected input/overlay source, content and schema revision checked under existing share locks before enqueue; idempotent receipt pins verified and batch journal retains the exact request. Legacy API requests remain compatible. Stale source rejection fixture written, not executed. No output geometry preview, modeler pin parity or paired QGIS/browser acceptance."
     },
     {
       "id": "PROC-03",
