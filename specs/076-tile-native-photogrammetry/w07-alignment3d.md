@@ -1,0 +1,2 @@
+# W07 similarity alignment checkpoint
+Weighted Horn quaternion similarity estimator, normalized coordinates, symmetric Jacobi eigensolver, degeneracy checks, positive scale and proper rotation. Independent check point XY/Z RMSE and max 3D residual. Produces the explicit Alignment used by the pinhole camera adapter. Not bundle adjustment or a CRS transformation; no GCP image-observation triangulation, robust outlier rejection, RTK/PPK uncertainty, vertical datum conversion or independently qualified accuracy. Tests authored, not executed.
