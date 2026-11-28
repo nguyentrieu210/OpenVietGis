@@ -57,7 +57,7 @@ export default function PhotoWorkspacePanel({handle,selected,onSelect}:{handle:s
    <button disabled={busy||renders.length>=4} onClick={()=>void render()}>Render bộ ảnh đã chuẩn bị</button>
    {rendering&&<p role="status">{renderProgress?.total_tiles?<><progress max={renderProgress.total_tiles} value={renderProgress.completed_tiles}/> {renderProgress.completed_tiles}/{renderProgress.total_tiles} tile đã ghi</>:"Đang chọn hoặc kiểm tra bộ dữ liệu…"}</p>}
    {renders.map(r=><p key={r.job_id}><button aria-pressed={selected===r.job_id} onClick={()=>onSelect(selected===r.job_id?undefined:r.job_id)}>{selected===r.job_id?"Ẩn trên bản đồ":"Xem trên bản đồ"}</button> Preview {r.job_id.slice(0,8)} · EPSG:{r.result.epsg} · {r.result.tiles} tile · Độ phủ {(100*r.result.covered/r.result.pixels).toFixed(1)}% · {(r.result.written_bytes/1024**2).toFixed(1)} MiB</p>)}
-   <p>Bản xem trước kỹ thuật cục bộ, giảm mẫu tối đa 1.024 pixel mỗi cạnh; vị trí bốn góc xấp xỉ, chưa dùng đo đạc. GPU chưa bật.</p>
+   <p>Bản xem trước kỹ thuật cục bộ, raster XYZ lấy mẫu theo mức zoom. Chưa nghiệm thu độ chính xác tọa độ, chưa dùng đo đạc. GPU chưa bật.</p>
   </section>
   {error&&<p role="alert">{error}</p>}
  </details>;

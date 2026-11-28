@@ -28,6 +28,20 @@ export type PhotoRenderProgress={completed_tiles:number;total_tiles:number;cance
 export type PhotoRenderReceipt={job_id:string;result:{revision:number;tiles:number;pixels:number;covered:number;written_bytes:number;epsg:number}};
 export type PhotoOverview={width:number;height:number;corners:[[number,number],[number,number],[number,number],[number,number]];rgba:Uint8ClampedArray};
 export const desktop={
+  photoXYZ:async(handle:string,id:string,z:number,x:number,y:number,signal:AbortSignal):Promise<Uint8ClampedArray>=>{
+    if(![z,x,y].every(Number.isSafeInteger)||z<0||z>24||x<0||y<0||x>=2**z||y>=2**z)throw Error("INVALID_TILE");
+    if(signal.aborted)throw new DOMException("Aborted","AbortError");
+    const requestId=crypto.randomUUID();
+    const cancel=()=>{void host().core.invoke<void>("desktop_cancel_resource",{requestId}).catch(()=>{})};
+    signal.addEventListener("abort",cancel,{once:true});
+    try{
+      const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_photo_xyz",{handle,id,z,x,y,requestId});
+      if(signal.aborted)throw new DOMException("Aborted","AbortError");
+      const b=raw instanceof ArrayBuffer?new Uint8ClampedArray(raw):Uint8ClampedArray.from(raw);
+      if(b.length!==262144)throw Error("INVALID_TILE");
+      return b;
+    }finally{signal.removeEventListener("abort",cancel)}
+  },
   photoOverview:async(handle:string,id:string,signal:AbortSignal):Promise<PhotoOverview>=>{
     const requestId=crypto.randomUUID();
     if(signal.aborted)throw new DOMException("Aborted","AbortError");

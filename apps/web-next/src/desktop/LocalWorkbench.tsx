@@ -211,22 +211,39 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
   },[ready,layerStyle?.color,layerStyle?.opacity]);
   useEffect(()=>{
     const m=map.current;if(!ready||!m||!styleReady.current||!photoPreview)return;
-    const abort=new AbortController();const id="photo-overview";let url:string|undefined;
-    const remove=()=>{if(map.current===m){if(m.getLayer(id))m.removeLayer(id);if(m.getSource(id))m.removeSource(id)}if(url){URL.revokeObjectURL(url);url=undefined}};
+    const selected=photoPreview;const abort=new AbortController();const id="photo-overview";
+    const protocol="ovgphoto";let registered=false;
+    const remove=()=>{
+      if(map.current===m){if(m.getLayer(id))m.removeLayer(id);if(m.getSource(id))m.removeSource(id)}
+      if(registered){maplibregl.removeProtocol(protocol);registered=false;}
+    };
     void (async()=>{
-      const o=await desktop.photoOverview(photoPreview.handle,photoPreview.id,abort.signal);
+      // Reuse verified overview metadata for initial extent; native detail comes from XYZ.
+      const o=await desktop.photoOverview(selected.handle,selected.id,abort.signal);
       if(abort.signal.aborted||map.current!==m)return;
-      const c=document.createElement("canvas");c.width=o.width;c.height=o.height;
-      const ctx=c.getContext("2d");if(!ctx)throw Error("CANVAS_UNAVAILABLE");
-      const image=ctx.createImageData(o.width,o.height);image.data.set(o.rgba);ctx.putImageData(image,0,0);
-      const blob=await new Promise<Blob>((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(Error("PREVIEW_ENCODE_FAILED")),"image/png"));
-      if(abort.signal.aborted||map.current!==m)return;
-      url=URL.createObjectURL(blob);
-      m.addSource(id,{type:"image",url,coordinates:o.corners});
-      m.addLayer({id,type:"raster",source:id,paint:{"raster-opacity":0.9,"raster-fade-duration":0}},"local-fill");
       const bounds=new maplibregl.LngLatBounds();for(const corner of o.corners)bounds.extend(corner);
+      const extent:[number,number,number,number]=[bounds.getWest(),bounds.getSouth(),bounds.getEast(),bounds.getNorth()];
+      if(extent[2]-extent[0]>180)throw Error("ANTIMERIDIAN_UNSUPPORTED");
+      maplibregl.addProtocol(protocol,async(params,request)=>{
+        const prefix=protocol+"://"+selected.id+"/";
+        if(!params.url.startsWith(prefix))throw Error("INVALID_TILE");
+        const match=/^(\d{1,2})\/(\d{1,8})\/(\d{1,8})\.png$/.exec(params.url.slice(prefix.length));
+        if(!match)throw Error("INVALID_TILE");
+        const signal=AbortSignal.any([abort.signal,request.signal]);
+        const b=await desktop.photoXYZ(selected.handle,selected.id,Number(match[1]),Number(match[2]),Number(match[3]),signal);
+        if(signal.aborted)throw new DOMException("Aborted","AbortError");
+        const c=document.createElement("canvas");c.width=256;c.height=256;
+        const ctx=c.getContext("2d");if(!ctx)throw Error("CANVAS_UNAVAILABLE");
+        const image=ctx.createImageData(256,256);image.data.set(b);ctx.putImageData(image,0,0);
+        const blob=await new Promise<Blob>((resolve,reject)=>c.toBlob(v=>v?resolve(v):reject(Error("TILE_ENCODE_FAILED")),"image/png"));
+        const data=await blob.arrayBuffer();if(signal.aborted)throw new DOMException("Aborted","AbortError");
+        return {data};
+      });
+      registered=true;
+      m.addSource(id,{type:"raster",tiles:[protocol+"://"+selected.id+"/{z}/{x}/{y}.png"],bounds:extent,tileSize:256,minzoom:0,maxzoom:24});
+      m.addLayer({id,type:"raster",source:id,paint:{"raster-opacity":0.9,"raster-fade-duration":0,"raster-resampling":"nearest"}},"local-fill");
       m.fitBounds(bounds,{padding:48,maxZoom:20,duration:0});
-      setNotice("Orthomosaic · xem trước giảm mẫu, vị trí xấp xỉ");
+      setNotice("Orthomosaic · XYZ theo mức zoom, bản thử nghiệm");
     })().catch(e=>{if(!abort.signal.aborted){remove();setNotice(String(e))}});
     return()=>{abort.abort();remove()};
   },[ready,photoPreview?.handle,photoPreview?.id]);

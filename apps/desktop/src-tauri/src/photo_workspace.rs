@@ -232,3 +232,29 @@ pub async fn desktop_photo_overview(window:WebviewWindow,host:State<'_,Host>,han
  }).await?;
  Ok(tauri::ipc::Response::new(bytes))
 }
+
+static PHOTO_TILE_SLOTS:OnceLock<tokio::sync::Semaphore>=OnceLock::new();
+#[tauri::command]
+pub async fn desktop_photo_xyz(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,id:Uuid,z:u8,x:u32,y:u32,request_id:Uuid)->Reply<tauri::ipc::Response>{
+ crate::trusted(&window)?;
+ if z>24||x>=1u32<<z||y>=1u32<<z{return Err("INVALID_TILE".into());}
+ let read=crate::ReadPermit::acquire(request_id)?;
+ let slots=PHOTO_TILE_SLOTS.get_or_init(||tokio::sync::Semaphore::new(4));
+ let slot=tokio::select!{
+  p=slots.acquire()=>p.map_err(|_|"SESSION_FAILED".to_owned())?,
+  _=read.token.notify.notified()=>return Err("CANCELLED".into()),
+ };
+ if read.token.flag.load(Ordering::Acquire){return Err("CANCELLED".into());}
+ let bytes=crate::run(window,host.inner().clone(),move|h|{
+ let _slot=slot;
+ let runs=h.photo_project_dir(handle)?.join("photogrammetry-preview");let root=runs.join(id.to_string());
+ for p in [&runs,&root,&root.join("objects"),&root.join("revisions"),&root.join("checkpoints")]{
+ if !fs::symlink_metadata(p).map_err(|_|"INVALID_PREVIEW")?.file_type().is_dir(){return Err("INVALID_PREVIEW");}
+ }
+ let stop=||read.token.flag.load(Ordering::Acquire)||h.generation(handle).is_err();
+ let b=ovg_processing::photogrammetry::xyz::render(&root,z,x,y,stop).map_err(|e|
+ if matches!(e,ovg_processing::photogrammetry::xyz::Error::Cancelled){"CANCELLED"}else{"PHOTO_TILE_FAILED"})?;
+ if stop(){return Err("CANCELLED");}if b.len()!=256*256*4{return Err("INVALID_TILE");}Ok(b)
+ }).await?;
+ Ok(tauri::ipc::Response::new(bytes))
+}
