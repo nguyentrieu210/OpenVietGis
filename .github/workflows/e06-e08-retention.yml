@@ -57,6 +57,7 @@ jobs:
           apps/api/tests/integration/m2/test_cartography_completeness.py
           apps/api/tests/integration/m2/test_print_revision_pins.py
           apps/api/tests/integration/spatial/test_layout_designer.py
+          apps/api/tests/integration/spatial/test_relation_constraints.py
           apps/api/tests/integration/m2/test_processing_integrity.py
           apps/api/tests/integration/spatial/test_processing_models.py
           apps/api/tests/integration/spatial/test_professional.py

@@ -317,9 +317,11 @@
         "apps/web-next/src/relation-inspector.ts",
         "apps/web-next/src/relation-inspector.test.ts",
         "apps/web-next/src/RelationInspector.tsx",
-        "apps/web-next/src/LiveApp.tsx"
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/api/tests/integration/spatial/test_relation_constraints.py",
+        "specs/065-qgis-ux-parity/evidence/style-07-relation-write-guards.md"
       ],
-      "blocker": "Exact spreadsheet join, local relation inspector and now revision-pinned server-side exact attribute relation lookup (up to 200 matches, 1/n cardinality check and navigation to unloaded FIDs). Configuration remains personal; shared durable relational schema, server write constraints, form design and paired QGIS acceptance remain. New tests not executed. Full two-population revision-pinned relation integrity audit (null, orphan, ambiguous references, duplicate target keys), bounded 5000 rows per source, exact scalar keys. No persistent server-side write constraint or shared relation schema; tests not executed."
+      "blocker": "Migration 0049 installs deferred database guards for local and target keys, including direct SQL writes. A targeted restricted-runtime integration test covers orphan creation, target deletion, duplicate target keys under cardinality one, rollback, and retained relation definition; it passed in E06/PostGIS CI run 46148890322 on commit 77af5af45e94619545d5f783704a7756fa46c858. Personal relation configuration, shared form layout, broader QGIS pairing and end-to-end acceptance remain."
     },
     {
       "id": "STYLE-08",
