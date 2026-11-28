@@ -70,7 +70,9 @@ pub fn named_tile(store:&crate::Store,layer:uuid::Uuid,revision:u64,z:u8,x:u32,y
   for r in page.rows{size=size.saturating_add(r.image.wkb.len());if size>16*1024*1024||items.len()>=MAX_FEATURES as usize{return Err("TILE_DENSITY_LIMIT")}items.push((r.id,r.image.wkb));}
   match page.next{Some(n) if n>after=>after=n,Some(_)=>return Err("INVALID_CURSOR"),None=>break}
  }
- encode_named(items,z,x,y,name,cancel)
+ let result=encode_named(items,z,x,y,name,cancel)?;
+ if store.revision().map_err(|_|"STORAGE_UNAVAILABLE")?!=revision{return Err("STALE_REVISION")}
+ Ok(result)
 }
 pub fn encode(rows:impl IntoIterator<Item=(uuid::Uuid,Vec<u8>)>,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
  encode_named(rows,z,x,y,"local",cancel)
