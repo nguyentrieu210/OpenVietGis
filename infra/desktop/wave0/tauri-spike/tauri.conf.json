@@ -1,0 +1,24 @@
+{
+  "productName": "OVG Desktop W0 Spike",
+  "version": "0.1.0",
+  "identifier": "cloud.openvietgis.desktop.spike",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenVietGIS W0",
+        "width": 800,
+        "height": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ipc: http://ipc.localhost ovg: http://ovg.localhost; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}
