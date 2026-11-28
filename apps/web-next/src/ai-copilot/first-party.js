@@ -1,6 +1,6 @@
 import {modeAllows,validSession,pinCommand,assertCommandCurrent,recordHistory} from "./session-guard.js";
 /** First-party panel: mount inside a trusted, authenticated GIS workspace. */
-export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMode=()=>"gis",getContextEpoch=()=>0,runCad}) {
+export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMode=()=>"gis",getContextEpoch=()=>0,runCad,requestAgent}) {
   // Explicit session consent is limited to these read-only / temporary commands.
   // All downloads, persisted writes, administration and unknown tools are reviewed individually.
   const SESSION_SAFE=new Set(["map_view","map_selection","map_navigate","gis_layers","gis_features","gis_feature","gis_query","gis_geometry_preview","gis_topology","gis_overlay","gis_layer_visibility","gis_select","gis_raster_layers","gis_processing_job","gis_models","gis_layouts","gis_plugins","gis_plugin_records"]);
@@ -50,6 +50,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
     return r.json();
   }
   async function nativeReq(s,action,payload,signal){
+    if(requestAgent)return requestAgent(s,action,payload,signal);
     const r=await fetch("/ai-copilot/agent/"+s.session_id+"/"+action,{method:"POST",headers:{"X-OVG-AI":"1","X-OVG-Bridge":s.browser_token,"Content-Type":"application/json"},credentials:"same-origin",redirect:"error",cache:"no-store",body:JSON.stringify(payload),signal});
     if(!r.ok)throw Error("AI Agent không khả dụng ("+r.status+")");
     return r.json();
@@ -57,6 +58,7 @@ export function mountAiCopilot(host, {organizationId, projectId, getBridge,getMo
   async function loadProviders(s){
     try{
       const data=await nativeReq(s,"providers",{});if(active!==s||disposed)return;
+      if(data.platform?.version!==1)throw Error("Phiên bản AI không tương thích");
       providerChoices=Array.isArray(data.providers)?data.providers.filter(p=>typeof p.id==="string"&&typeof p.model==="string"):[];
       get("provider").replaceChildren(...providerChoices.map(p=>{const o=document.createElement("option");o.value=p.id;o.textContent=p.id+" · "+p.model;return o}));
       acpChoices=Array.isArray(data.acp_agents)?data.acp_agents.filter(x=>typeof x==="string"):[];

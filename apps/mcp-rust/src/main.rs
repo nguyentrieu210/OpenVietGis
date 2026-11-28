@@ -231,7 +231,7 @@ async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
     let(owner,_)=browser_identity(&app,&h,id).await?;
     let providers=if provider_allowed(&owner.subject){openvietgis_mcp_rust::provider::Provider::ALL.into_iter().filter_map(openvietgis_mcp_rust::provider::Config::from_env).map(|c|c.descriptor()).collect::<Vec<_>>()}else{vec![]};
     let acp_agents=if provider_allowed(&owner.subject)&&openvietgis_mcp_rust::acp::Remote::from_env().is_some(){openvietgis_mcp_rust::acp::Remote::agents()}else{vec![]};
-    Ok(respond(200,json!({"providers":providers,"acp_agents":acp_agents})))
+    Ok(respond(200,json!({"providers":providers,"acp_agents":acp_agents,"platform":openvietgis_mcp_rust::platform::manifest()})))
 }
 fn active_agents()->&'static Mutex<HashSet<String>>{
     static ACTIVE:std::sync::OnceLock<Mutex<HashSet<String>>>=std::sync::OnceLock::new();
@@ -440,7 +440,7 @@ async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     let version=hdr(&h,"mcp-protocol-version");
     if !version.is_empty()&&!PROTOCOLS.contains(&version){return respond(400,json!({"error":"Unsupported MCP protocol version"}))}
     match method{
-        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false},"prompts":{"listChanged":false}},"instructions":"Discover built-in GIS workflows using prompts/list and prompts/get. Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
+        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false},"prompts":{"listChanged":false},"experimental":{"openvietgis.aiPlatform":openvietgis_mcp_rust::platform::manifest()}},"instructions":"Discover built-in GIS workflows using prompts/list and prompts/get. Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
         "ping"=>rpc(id,json!({})),
         "prompts/list"=>{if v.get("params").is_some_and(|p| !p.as_object().is_some_and(|o| o.is_empty())){rpc_error(id,-32602,"Invalid prompt list parameters")}else{rpc(id,openvietgis_mcp_rust::skills::list())}},
         "prompts/get"=>match openvietgis_mcp_rust::skills::get(&v["params"]){Some(p)=>rpc(id,p),None=>rpc_error(id,-32602,"Unknown prompt or invalid arguments")},

@@ -35,5 +35,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: openvietgis-mcp-rust-linux
-          path: apps/mcp-rust/target/release/openvietgis-mcp-rust
+          path: |
+            apps/mcp-rust/target/release/openvietgis-mcp-rust
+            apps/mcp-rust/target/release/ovg-acp-runner
           if-no-files-found: error

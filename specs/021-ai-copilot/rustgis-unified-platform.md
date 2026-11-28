@@ -1,0 +1,7 @@
+# Wave 8 — Unified AI platform contract v1
+Depends on Wave 7 PR #112 at 233e4162761df43d605cb24c5439608dd418d07b. All earlier waves retain their authorization boundaries.
+- Single versioned manifest shared by authenticated provider discovery and MCP initialize experimental capability. Manifest describes implementation capabilities, not deployment availability; actual providers and ACP agents remain operator/subject gated.
+- TypeScript client SDK exports typed browser transport, same-origin bridge session, no automatic replay. Web Copilot injects this SDK transport, legacy standalone hotfix fallback requires v1 too. Existing 39 MCP tools and six skills unchanged; MCP does not expose browser agent jobs.
+- Desktop SPEC074 and Mobile SPEC073 are separate active PRs and local-only. Native integration companion branches carry contract/gated UI; no cookie extraction, local data transfer, bypass of OAuth or fake enabled cloud transport. Browser handoff is manual. Native cloud auth, local native tool bridge, offline inference and cross-device session recovery remain blocked until their own requirements are qualified.
+- Build artifact now includes separate ACP runner; not deployed on GIS host.
+- Convergence acceptance: locked Rust tests/build, TS SDK tests, browser integration, stack merge conflict review, real provider and MCP tests, separate sandbox qualification; Mobile/Desktop builds and native authentication acceptance required before claiming full cross-platform parity.

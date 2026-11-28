@@ -28,7 +28,7 @@ try{
  await page.route("**/ai-copilot/agent/**",route=>{
    const r=route.request(),path=new URL(r.url()).pathname;
    assert.equal(r.headers()["x-ovg-ai"],"1");assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
-   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false,vision:true}]:[],acp_agents:nativeEnabled?["codex"]:[]}});
+   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false,vision:true}]:[],acp_agents:nativeEnabled?["codex"]:[],platform:{version:1,capabilities:{}}}});
    if(path.endsWith("/run")){
      nativeRequests++;const payload=r.postDataJSON();const {snapshot,vision_consent,...rest}=payload;assert.deepEqual(rest,{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false,multi_agent:false});if(nativeRequests===2){assert.equal(vision_consent,true);assert.ok(snapshot.width>=64&&snapshot.height>=64&&snapshot.data.length<=80000);assert.equal(Buffer.from(snapshot.data,"base64").subarray(0,2).toString("hex"),"ffd8");}else{assert.equal(snapshot,undefined);assert.equal(vision_consent,undefined)}
      return route.fulfill({status:202,json:{run_id:"fixture-run",state:"running"}});

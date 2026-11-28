@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "transport": {
+    "browser": "same-origin cookie + workspace bridge token",
+    "mcp": "OAuth + existing tool registry",
+    "native": "disabled until authenticated native transport qualified"
+  },
+  "actions": [
+    "providers",
+    "run",
+    "acp",
+    "status",
+    "cancel"
+  ],
+  "limits": {
+    "model_steps": 16,
+    "model_attempts": 64,
+    "tool_calls": 32,
+    "children": 3,
+    "seconds": 300
+  },
+  "capabilities": {
+    "workspace_pin": true,
+    "skills": true,
+    "provider_gateway": true,
+    "multi_agent": true,
+    "vision": "static_2d_opt_in",
+    "context_compaction": true,
+    "acp": "advisory_only",
+    "native_authenticated": false,
+    "durable_jobs": false
+  },
+  "cloud_url": "https://openvietgis.cloud/"
+}
