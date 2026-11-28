@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:material_ui/material_ui.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'src/rust/api/simple.dart';
+import 'geometry_draft.dart';
 
 const _empty=<String,dynamic>{'type':'FeatureCollection','features':[]};
 const _style=<String,Object>{
@@ -32,7 +33,8 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  late String _revision,_active;
  late Set<String> _visible;
  bool _snap=true,_vertexMode=false,_insert=false;
- int _vertex=0;
+ int _vertex=0,_part=0;
+ GeometryDraft? _structured;
  Map<String,dynamic>? _geometry;
  static const _colors=['#00695c','#315b9b','#9b4c80','#927017','#4b768e','#99533a','#6555a5','#627b36'];
  bool _loaded=false,_busy=false,_running=false,_pending=false,_foreground=true,_truncated=false;
@@ -102,15 +104,17 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
  Future<void> _preview()async{
   final map=_map;if(map==null||!_loaded)return;
   final p=_vertices.map((v)=>[v.longitude,v.latitude]).toList();
+  final d=_structured;
   try{await map.setGeoJsonSource('draft',{'type':'FeatureCollection','features':[
+    if(d!=null)for(var j=0;j<d.paths.length;j++)if(j!=_part&&d.type!='Point'&&d.type!='MultiPoint'){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':[...d.paths[j],if(d.rings)d.paths[j].first]}},
     for(var i=0;i<p.length;i++){'type':'Feature','properties':{'chosen':_vertexMode&&i==_vertex},'geometry':{'type':'Point','coordinates':p[i]}},
-    if(p.length>=2){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':_kind=='polygon'&&p.length>=3?[...p,p.first]:p}}
+    if(p.length>=2&&d?.type!='MultiPoint'){'type':'Feature','properties':{},'geometry':{'type':'LineString','coordinates':(_kind=='polygon'||d?.rings==true)&&p.length>=3?[...p,p.first]:p}}
   ]});}catch(e){if(mounted)setState(()=>_error=e.toString());}
  }
  Future<void> _tap(dynamic point,LatLng coordinate)async{
   if(_busy||!_loaded)return;
   if(_kind!=null){
-   if(_vertices.length>=4095&&(!_vertexMode||_insert))return;
+   if((_vertices.length>=4095||(_structured!=null&&_structured!.vertexCount-_structured!.paths[_part].length+_vertices.length>=4096))&&(!_vertexMode||_insert))return;
    await _run(()async{
     var p=coordinate;
     if(_snap){
@@ -140,7 +144,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
   }catch(e){if(mounted&&epoch==_epoch)setState(()=>_error=e.toString());}
  }
  void _start(String kind,{bool replace=false}){
-  setState((){_vertexMode=false;_insert=false;_kind=kind;_vertices.clear();_operation=widget.uuid();_featureId=replace?_selected:widget.uuid();if(!replace){_featureRevision='0';_attributes={};_selected=null;}});
+  setState((){_vertexMode=false;_insert=false;_structured=null;_part=0;_kind=kind;_vertices.clear();_operation=widget.uuid();_featureId=replace?_selected:widget.uuid();if(!replace){_featureRevision='0';_attributes={};_selected=null;}});
  }
  Future<void> _chooseLayers()async{
   final selected=Set<String>.from(_visible);var active=_active;
@@ -152,25 +156,30 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
   if(ok!=true||!mounted)return;
   setState((){_active=active;_visible=selected;_selected=null;_featureRevision=null;_geometry=null;});_schedule();
  }
+ void _savePart(){
+  final d=_structured;if(d!=null)d.paths[_part]=_vertices.map((v)=>[v.longitude,v.latitude]).toList();
+ }
+ void _changePart(int part){
+  final d=_structured;if(d==null||part<0||part>=d.paths.length||part==_part)return;
+  setState((){_savePart();_part=part;_vertex=0;_insert=false;_vertices..clear()..addAll(d.paths[part].map((v)=>LatLng(v[1],v[0])));});
+  unawaited(_preview());
+ }
  Future<void> _editVertices()async{
   if(_geometry==null||_selected==null||_featureRevision==null)return;
-  final g=_geometry!;final type=g['type'];final raw=g['coordinates'];
-  List<dynamic> coords;
-  String kind;
-  if(type=='Point'){kind='point';coords=[raw];}
-  else if(type=='LineString'){kind='line';coords=raw as List;}
-  else if(type=='Polygon'&&raw is List&&raw.length==1){kind='polygon';final ring=raw.first as List;coords=ring.take(ring.length-1).toList();}
-  else{setState(()=>_error='Chỉ hỗ trợ chỉnh đỉnh Point/LineString/Polygon một vòng; không làm mất lỗ hoặc multipart.');return;}
-  if(coords.isEmpty||coords.length>4095)return;
-  final points=coords.map((v)=>LatLng((v[1] as num).toDouble(),(v[0] as num).toDouble())).toList();
-  _start(kind,replace:true);setState((){_vertexMode=true;_vertex=0;_vertices.addAll(points);});await _preview();
+  try{
+   final d=GeometryDraft.parse(_geometry!);
+   _start(d.rings?'polygon':d.type=='Point'?'point':'line',replace:true);
+   setState((){_structured=d;_part=0;_vertexMode=true;_vertex=0;_vertices.addAll(d.paths.first.map((v)=>LatLng(v[1],v[0])));});await _preview();
+  }catch(e){if(mounted)setState(()=>_error=e.toString());}
  }
  Future<void> _commit()async{
   final kind=_kind;if(kind==null||_featureId==null||_featureRevision==null||_operation==null)return;
   await _run(()async{
-   final r=jsonDecode(await widget.project.commitGeometry(layerId:_active,featureId:_featureId!,operationId:_operation!,expected:_revision,featureRevision:_featureRevision!,kind:kind,xy:Float64List.fromList([for(final p in _vertices)...[p.longitude,p.latitude]]),attributesJson:jsonEncode(_attributes))) as Map;
+   _savePart();final draft=_structured;
+   final receipt=draft!=null?await widget.project.commitGeojson(layerId:_active,featureId:_featureId!,operationId:_operation!,expected:_revision,featureRevision:_featureRevision!,geometryJson:jsonEncode(draft.toGeoJson()),attributesJson:jsonEncode(_attributes)):await widget.project.commitGeometry(layerId:_active,featureId:_featureId!,operationId:_operation!,expected:_revision,featureRevision:_featureRevision!,kind:kind,xy:Float64List.fromList([for(final p in _vertices)...[p.longitude,p.latitude]]),attributesJson:jsonEncode(_attributes));
+   final r=jsonDecode(receipt) as Map;
    if(!mounted)return;
-   setState((){_revision=r['revision'].toString();_kind=null;_vertexMode=false;_insert=false;_vertices.clear();_selected=null;_featureRevision=null;_operation=null;_featureId=null;});
+   setState((){_revision=r['revision'].toString();_kind=null;_vertexMode=false;_insert=false;_structured=null;_vertices.clear();_selected=null;_featureRevision=null;_operation=null;_featureId=null;});
    await _preview();
   });
  }
@@ -202,7 +211,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
     ]else...[
      IconButton(tooltip:'Snapping',icon:Icon(_snap?Icons.my_location:Icons.location_searching),onPressed:_busy?null:()=>setState(()=>_snap=!_snap)),
      if(_vertexMode&&_kind!='point')IconButton(tooltip:'Chèn sau đỉnh chọn',icon:const Icon(Icons.add_location_alt),onPressed:_busy||_vertices.length>=4095?null:()=>setState(()=>_insert=!_insert)),
-     IconButton(tooltip:'Bỏ đỉnh',icon:const Icon(Icons.undo),onPressed:_busy||_vertices.isEmpty?null:(){setState((){if(_vertexMode){if(_vertices.length<=(_kind=='polygon'?3:_kind=='line'?2:1))return;_vertices.removeAt(_vertex);_vertex=math.min(_vertex,_vertices.length-1).toInt();_insert=false;}else{_vertices.removeLast();}});unawaited(_preview());}),
+     IconButton(tooltip:'Bỏ đỉnh',icon:const Icon(Icons.undo),onPressed:_busy||_vertices.isEmpty?null:(){setState((){if(_vertexMode){if(_vertices.length<=(_structured?.minimum??(_kind=='polygon'?3:_kind=='line'?2:1)))return;_vertices.removeAt(_vertex);_vertex=math.min(_vertex,_vertices.length-1).toInt();_insert=false;}else{_vertices.removeLast();}});unawaited(_preview());}),
      IconButton(tooltip:'Lưu',icon:const Icon(Icons.check),onPressed:_busy||_vertices.isEmpty?null:()=>unawaited(_commit())),
      IconButton(tooltip:'Hủy',icon:const Icon(Icons.close),onPressed:_busy?null:(){setState((){_kind=null;_vertexMode=false;_insert=false;_vertices.clear();_selected=null;_featureRevision=null;});unawaited(_preview());}),
     ]
@@ -210,6 +219,7 @@ class _UnifiedMapState extends State<UnifiedMap> with WidgetsBindingObserver{
    Positioned(left:8,right:68,bottom:8,child:Card(child:Padding(padding:const EdgeInsets.all(8),child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
     Text('Revision $_revision · ${_kind??"Bản đồ"}'),
     Text('Lớp: '+widget.layers.firstWhere((l)=>l['id']==_active,orElse:()=>{'name':_active})['name'].toString()+' · '+_visible.length.toString()+' hiển thị'),
+    if(_structured!=null&&_structured!.paths.length>1)Row(children:[IconButton(onPressed:_busy||_part==0?null:()=>_changePart(_part-1),icon:const Icon(Icons.navigate_before)),Expanded(child:Text('Phần/vòng ${_part+1}/${_structured!.paths.length}')),IconButton(onPressed:_busy||_part==_structured!.paths.length-1?null:()=>_changePart(_part+1),icon:const Icon(Icons.navigate_next))]),
     if(_vertexMode&&_vertices.isNotEmpty)Row(children:[IconButton(onPressed:_busy||_vertex==0?null:(){setState(()=>_vertex--);unawaited(_preview());},icon:const Icon(Icons.chevron_left)),Expanded(child:Text('Đỉnh ${_vertex+1}/${_vertices.length} · ${_insert?"chèn":"chạm bản đồ để di chuyển"}')),IconButton(onPressed:_busy||_vertex==_vertices.length-1?null:(){setState(()=>_vertex++);unawaited(_preview());},icon:const Icon(Icons.chevron_right))]),
     if(_busy)const LinearProgressIndicator(),
     if(_error!=null)Text(_error!),
