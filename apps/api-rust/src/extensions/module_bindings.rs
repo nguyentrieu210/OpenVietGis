@@ -28,10 +28,10 @@ async fn put_bindings(State(state):State<AppState>,Path((org,project,key)):Path<
     let mut edit=open_project_scope(&state,&actor,parse_uuid(&org)?,parse_uuid(&project)?,ProjectReadPolicy::UnrestrictedManage).await?;
     verified_manifest(&state,&mut edit,&key).await.map_err(ExtensionError::Domain)?;
     for suffix in ["read","manage"]{if !permissions::allows(&mut edit,&key,&format!("ext.{key}.{suffix}")).await.map_err(ExtensionError::Domain)?{return Err(ExtensionError::Domain(AppError::forbidden("missing module management permission")));}}
-    let runtime=state.modules.get(&key).ok_or_else(||ExtensionError::Domain(AppError::not_found("module runtime missing")))?;
+    let roles=state.modules.layer_roles(&key).ok_or_else(||ExtensionError::Domain(AppError::not_found("module runtime missing")))?;
     if body.items.len()>256{return Err(ExtensionError::InvalidRequest);}
     for item in &body.items{
-        let role=runtime.layer_roles().iter().find(|r|r.id==item.role).ok_or_else(||ExtensionError::Domain(AppError::validation("UNKNOWN_LAYER_ROLE","role is not declared by module")))?;
+        let role=roles.iter().find(|r|r.id==item.role).ok_or_else(||ExtensionError::Domain(AppError::validation("UNKNOWN_LAYER_ROLE","role is not declared by module")))?;
         let (geometry,fields)=bindings::source_contract(&mut edit,item.source_id).await.map_err(ExtensionError::Domain)?;
         if !role.geometry_families.contains(&geometry.as_str())||role.required_fields.iter().any(|field|!fields.iter().any(|f|f==field)){
             return Err(ExtensionError::Domain(AppError::validation("LAYER_ROLE_SCHEMA_MISMATCH","source geometry or required field IDs do not match module role")));

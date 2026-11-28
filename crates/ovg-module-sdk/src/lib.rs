@@ -360,6 +360,7 @@ pub trait OvgModule: Send + Sync {
 struct RegisteredModule {
     manifest: ModuleManifest,
     pure_commands: Vec<PureModuleCommand>,
+    layer_roles: Vec<ModuleLayerRole>,
     runtime: Arc<dyn OvgModule>,
 }
 
@@ -378,8 +379,18 @@ impl ModuleRegistry {
     pub fn register(&mut self, module: Arc<dyn OvgModule>) -> Result<(), AppError> {
         let manifest = module.manifest();
         manifest.validate()?;
+        let pure_commands=module.pure_commands().to_vec();
+        let layer_roles=module.layer_roles().to_vec();
+        let mut roles=HashSet::new();
+        for role in &layer_roles {
+            if !identifier(role.id)||role.id.bytes().any(|c|c.is_ascii_uppercase())||!roles.insert(role.id)||roles.len()>64
+                || role.geometry_families.is_empty()||!unique_bounded(role.geometry_families.iter().copied())||role.geometry_families.iter().any(|g|!matches!(*g,"Point"|"LineString"|"Polygon"))
+                || !unique_bounded(role.required_fields.iter().copied())||role.required_fields.iter().any(|f|!identifier(f)) {
+                return Err(AppError::validation("INVALID_MODULE_MANIFEST","invalid layer role registration"));
+            }
+        }
         let mut exposed = HashSet::new();
-        for command in module.pure_commands() {
+        for command in &pure_commands {
             if !exposed.insert(command.id) || !manifest.commands.iter().any(|c| c.id == command.id)
                 || !matches!(command.core_permission, Permission::ProjectRead | Permission::ProjectEdit | Permission::ProjectManage) {
                 return Err(AppError::validation("INVALID_MODULE_MANIFEST", "invalid pure command registration"));
@@ -395,7 +406,8 @@ impl ModuleRegistry {
             manifest.extension_key.clone(),
             RegisteredModule {
                 manifest,
-                pure_commands: module.pure_commands().to_vec(),
+                pure_commands,
+                layer_roles,
                 runtime: module,
             },
         );
@@ -431,6 +443,9 @@ impl ModuleRegistry {
         manifests.sort_by(|a, b| a.extension_key.cmp(&b.extension_key));
         manifests
     }
+
+    /// Pinned semantic roles for the registered runtime.
+    pub fn layer_roles(&self,key:&str)->Option<&[ModuleLayerRole]>{Some(&self.modules.get(key)?.layer_roles)}
 
     /// Pinned pure command contract. Never dispatch unexposed persistent operations.
     pub fn pure_command(&self, key: &str, command_id: &str) -> Option<PureModuleCommand> {

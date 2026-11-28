@@ -1,0 +1,12 @@
+{
+  "extension_key": "quality_check",
+  "version": "1.0.0",
+  "api_compatibility": "1.x",
+  "display_name": "Quality Check (SDK example)",
+  "description": "Read-only example for checking field survey completeness.",
+  "permissions": ["ext.quality_check.read", "ext.quality_check.manage"],
+  "commands": [{"id":"completion_rate","label":"Completion rate","required_permission":"ext.quality_check.read"}],
+  "capabilities": ["quality_summary"],
+  "entity_schemas": {"quality_summary":{"fields":{"total":{"type":"integer","required":true},"complete":{"type":"integer","required":true}}}},
+  "ui_contributions": []
+}

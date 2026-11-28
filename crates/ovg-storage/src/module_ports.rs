@@ -141,3 +141,26 @@ pub async fn lock_linked_features(
         .fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
     rows.iter().map(|row|Ok(SpatialFeatureRef{source_id:row.try_get("source_id").map_err(db_error)?,feature_id:row.try_get("feature_id").map_err(db_error)?})).collect()
 }
+
+/// Aggregate only explicitly bound, ready, schema-pinned sources. This does not
+/// expose raw features, attributes or household data to the caller.
+pub async fn bound_spatial_summary(read:&mut ProjectRead<'_>,key:&str,role:&str)->Result<Value,AppError>{
+    if read.is_gis_scoped(){return Err(AppError::forbidden("unrestricted project scope required"));}
+    let result:Value=sqlx::query_scalar(
+        "WITH selected AS (
+          SELECT s.id FROM extensions.module_layer_bindings b
+          JOIN spatial.data_sources s ON (s.organization_id,s.project_id,s.id)=(b.organization_id,b.project_id,b.source_id)
+          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.extension_key=$3 AND b.role=$4
+            AND s.lifecycle='active' AND s.validation_state='ready' AND s.schema_revision=b.schema_revision
+            AND EXISTS(SELECT 1 FROM spatial.layers l WHERE l.organization_id=$1 AND l.project_id=$2 AND l.source_id=s.id AND l.lifecycle='active')
+        ), counts AS (
+          SELECT count(*) AS total,count(*) FILTER(WHERE f.geometry_state='present') AS geometry_present
+          FROM spatial.reference_features f JOIN selected s ON s.id=f.source_id
+          WHERE f.organization_id=$1 AND f.project_id=$2
+        )
+        SELECT jsonb_build_object('role',$4::text,'source_count',(SELECT count(*) FROM selected),
+           'total',total,'geometry_present',geometry_present) FROM counts"
+    ).bind(read.organization_id()).bind(read.project_id()).bind(key).bind(role)
+    .fetch_one(&mut **read.transaction()).await.map_err(db_error)?;
+    Ok(result)
+}

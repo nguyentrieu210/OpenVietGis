@@ -9,6 +9,7 @@ COPY crates crates
 COPY modules/house_numbering/rust modules/house_numbering/rust
 COPY modules/house_numbering/storage modules/house_numbering/storage
 COPY modules/house_numbering/http modules/house_numbering/http
+COPY examples/module-sdk/quality-check examples/module-sdk/quality-check
 COPY apps/api/openvietgis_api/domains/platform_errors.py apps/api/openvietgis_api/domains/platform_errors.py
 COPY apps/api/openvietgis_api/domains/tenancy/domain.py apps/api/openvietgis_api/domains/tenancy/domain.py
 COPY apps/api/openvietgis_api/domains/authorization/context.py apps/api/openvietgis_api/domains/authorization/context.py

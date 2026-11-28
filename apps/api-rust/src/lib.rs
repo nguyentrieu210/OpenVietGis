@@ -141,7 +141,7 @@ mod tests {
     async fn health_live_ready_metrics_and_error_envelope_contracts() {
         let state = AppState::new(AppConfig::default(), None).unwrap();
         let app = build_router(state);
-        let expected_modules = usize::from(cfg!(feature = "house-numbering"));
+        let expected_modules = usize::from(cfg!(feature = "house-numbering")) + usize::from(cfg!(feature = "sdk-example"));
 
         // 1. GET /api/v1/health/live -> 200 {"status": "ok"} + x-request-id propagation
         let res = app

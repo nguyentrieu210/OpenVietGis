@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--candidate',type=Path,required=True)
     parser.add_argument('--pure-commands',action='store_true',help='Also test Wave 04 runtime command gateway')
     parser.add_argument('--module-events',action='store_true',help='Also test Wave 06 durable module change stream')
+    parser.add_argument('--sdk-example',action='store_true',help='Exercise second independent native module')
     args=parser.parse_args();binary=args.candidate.resolve();assert binary.is_file()
     with tempfile.TemporaryDirectory(prefix='ovg-067-binding-http-') as d:
       work=Path(d)
@@ -116,5 +117,38 @@ def main():
             assert not expect(api.get(event_path,params={'cursor':cursor},headers=h),200)['items']
             assert expect(api.get(event_path,params={'cursor':epoch+':'+str(head+1)},headers=h),200)['mode']=='snapshot_required'
             print('PASS real HTTP: durable event replay, scoped access, page cursors and invalidation privacy')
+          if args.sdk_example:
+            registered=expect(api.get('/api/v1/modules',headers=h),200)['modules']
+            assert {m['extension_key'] for m in registered}=={'house_numbering','quality_check'}
+            sample=project+'/extensions/quality_check'
+            expect(api.get(sample+'/runtime-contract',headers=h),404)
+            manifest=expect(api.post(org+'/extensions/official/quality_check/register',headers=h),201)
+            expect(api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
+            contract=expect(api.get(sample+'/runtime-contract',headers=h),200)
+            assert contract['layer_roles']==[{'id':'survey','geometry_families':['Point'],'required_fields':['code']}]
+            assert [c['id'] for c in contract['pure_commands']]==['completion_rate']
+            summary=sample+'/spatial-summary/survey'
+            assert expect(api.get(summary,headers=h),200)=={'role':'survey','source_count':0,'total':0,'geometry_present':0}
+            expect(api.get(sample+'/spatial-summary/unknown',headers=h),422)
+            sid=fixture['layers']['epsg4326_1k']['source_id']
+            with psycopg.connect(owner) as db:
+              rev=db.execute('SELECT schema_revision FROM spatial.data_sources WHERE id=%s',(sid,)).fetchone()[0]
+            expect(api.put(sample+'/layer-bindings',json={'expected_revision':0,'items':[{'source_id':sid,'role':'survey','schema_revision':rev}]},headers=h),200)
+            assert expect(api.get(summary,headers=h),200)=={'role':'survey','source_count':1,'total':1000,'geometry_present':1000}
+            rate=sample+'/commands/completion_rate'
+            assert expect(api.post(rate,json={'payload':{'total':1000,'complete':750}},headers=h),200)['output']['percent']==75
+            expect(api.post(rate,json={'payload':{'total':3,'complete':4}},headers=h),422)
+            assert api.get(summary,headers=outsider).status_code in (403,404)
+            assert api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=outsider).status_code in (403,404)
+            pol=sample+'/permissions/human/'+fixture['user_a_id']
+            expect(api.put(pol,json={'expected_revision':0,'permissions':[]},headers=h),200)
+            expect(api.get(summary,headers=h),403)
+            expect(api.post(rate,json={'payload':{'total':3,'complete':2}},headers=h),403)
+            expect(api.put(pol,json={'expected_revision':1,'permissions':None},headers=h),200)
+            expect(api.post(sample+'/disable',headers=h),200)
+            expect(api.get(summary,headers=h),404)
+            expect(api.post(project+'/extensions/activations',json={'manifest_id':manifest['id']},headers=h),201)
+            assert expect(api.get(summary,headers=h),200)['total']==1000
+            print('PASS independent SDK example: registration, activation, role discovery, bound aggregate, permission denial, disable/reactivate preserves bindings')
           print('PASS real HTTP: bindings, role/schema validation, revision conflict, rename/retire, cross-tenant access, permission read/deny/restore, Core unchanged, disabled runtime')
 if __name__=='__main__':main()

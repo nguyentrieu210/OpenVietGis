@@ -31,6 +31,12 @@ impl AppState {
             modules.register(Arc::new(HouseNumberingModule))?;
             modules
         };
+        #[cfg(feature="sdk-example")]
+        let modules = {
+            let mut modules=modules;
+            modules.register(Arc::new(ovg_module_quality_check::QualityCheck))?;
+            modules
+        };
         let jobs = JobExecutor::new(ExecutorConfig::default())?;
         Ok(Self {
             config: Arc::new(config),

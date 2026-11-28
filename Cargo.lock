@@ -1016,6 +1016,7 @@ dependencies = [
  "ovg-module-house-numbering",
  "ovg-module-house-numbering-http",
  "ovg-module-http",
+ "ovg-module-quality-check",
  "ovg-module-sdk",
  "ovg-processing",
  "ovg-spatial",
@@ -1103,6 +1104,17 @@ dependencies = [
  "ovg-core",
  "ovg-module-sdk",
  "ovg-storage",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
+name = "ovg-module-quality-check"
+version = "0.2.0"
+dependencies = [
+ "ovg-core",
+ "ovg-module-sdk",
+ "serde",
  "serde_json",
  "uuid",
 ]

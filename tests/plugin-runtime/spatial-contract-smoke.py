@@ -76,6 +76,32 @@ with tempfile.TemporaryDirectory(prefix='ovg-spatial-contract-') as directory:
                         writer.execute("SELECT 1 FROM spatial.reference_features WHERE source_id=%s AND feature_id=%s FOR UPDATE",(source,feature_id))
                 except psycopg.errors.LockNotAvailable:pass
                 else:raise AssertionError("Core port did not hold feature lock")
+        # Execute the aggregate service's exact SQL against explicitly bound data.
+        summary_sql=re.search(r'"(WITH selected AS \(.*?FROM counts)"',rust,re.S).group(1)
+        order=[int(x)-1 for x in re.findall(r'\$(\d+)',summary_sql)]
+        summary_sql=re.sub(r'\$\d+','%s',summary_sql)
+        def summary(db,role):
+            params=[org,project,'quality_check',role]
+            return db.execute(summary_sql,[params[i] for i in order]).fetchone()[0]
+        with psycopg.connect(runtime) as db:
+            scope(db,org,project,actor)
+            assert summary(db,'survey')['source_count']==0
+        with psycopg.connect(owner) as db:
+            schema=db.execute("SELECT schema_revision FROM spatial.data_sources WHERE id=%s",(source,)).fetchone()[0]
+            db.execute("INSERT INTO extensions.module_binding_sets(organization_id,project_id,extension_key,revision,updated_by_actor_id) VALUES(%s,%s,'quality_check',1,%s)",(org,project,actor))
+            db.execute("INSERT INTO extensions.module_layer_bindings(organization_id,project_id,extension_key,source_id,role,schema_revision) VALUES(%s,%s,'quality_check',%s,'survey',%s)",(org,project,source,schema))
+        with psycopg.connect(runtime) as db:
+            scope(db,org,project,actor)
+            assert summary(db,'survey')=={'role':'survey','source_count':1,'total':30000,'geometry_present':30000}
+            assert summary(db,'other')['total']==0
+            scope(db,fixture['org_b_id'],fixture['project_b_id'],fixture['user_b_id'])
+            assert summary(db,'survey')['total']==0
+        with psycopg.connect(owner) as db:
+            db.execute("UPDATE extensions.module_layer_bindings SET schema_revision=%s WHERE source_id=%s",('0'*64,source))
+        with psycopg.connect(runtime) as db:
+            scope(db,org,project,actor)
+            assert summary(db,'survey')['source_count']==0
+        print('PASS exact bound summary SQL: unbound, 30k ready features, wrong role, cross-tenant and stale schema')
         # Scoped membership without any GIS grant must not gain access through views.
         with psycopg.connect(owner) as db:
             db.execute("UPDATE org.organization_memberships SET role='member' WHERE organization_id=%s AND user_id=%s",(org,actor))

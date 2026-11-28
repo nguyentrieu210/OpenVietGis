@@ -12,6 +12,7 @@ members = [
     "modules/house_numbering/rust",
     "modules/house_numbering/storage",
     "modules/house_numbering/http",
+    "examples/module-sdk/quality-check",
 ]
 
 [workspace.package]
@@ -53,6 +54,7 @@ ovg-processing = { path = "crates/ovg-processing" }
 ovg-module-sdk = { path = "crates/ovg-module-sdk" }
 ovg-module-http = { path = "crates/ovg-module-http" }
 ovg-module-house-numbering-http = { path = "modules/house_numbering/http" }
+ovg-module-quality-check = { path = "examples/module-sdk/quality-check" }
 ovg-module-house-numbering = { path = "modules/house_numbering/rust" }
 ovg-module-house-numbering-storage = { path = "modules/house_numbering/storage" }
 

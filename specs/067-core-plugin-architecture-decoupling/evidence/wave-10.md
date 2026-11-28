@@ -1,0 +1,8 @@
+# Wave 10 — native SDK reference implementation
+
+- Added an independently compiled Quality Check reference module (examples/module-sdk/quality-check), registered only through optional sdk-example composition feature. It depends only on Core domain and native SDK, declares survey role and bounded pure completion-rate command. Default builds do not include the example.
+- Registry pins semantic layer roles and pure command declarations at registration and validates role identifiers, unique geometry families and required field IDs. Generic binding API uses pinned roles.
+- Added authorized runtime-contract discovery and bound spatial-summary endpoints and corresponding typed TypeScript SDK calls. Aggregate includes only source_count, total, geometry_present and role; it uses current active ready sources with exact schema revision and an active layer. No raw attributes or arbitrary SQL exposed.
+- Documented native trusted module integration, lifecycle, privilege boundaries and distinction from the sandboxed partner SDK. Sample remains outside marketplace/frontend discovery; no new production plugin UI.
+- Rust check with both modules passed. Native SDK 9/9 and independent sample 2/2 runtime tests passed. Real 30k PostGIS fixture passed exact aggregate SQL (empty binding, valid binding, wrong role, cross-tenant and stale schema). Architecture 18/18 passed. TypeScript check produced no diagnostic but command was interrupted; not counted as verified until rerun. Full dual-module HTTP test added but candidate binary build timed out while compiling API; not claimed passed.
+- E14 advanced, not complete until compatibility/HTTP acceptance. Remaining business epics and production integration still open. No main merge or live change.

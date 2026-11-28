@@ -16,6 +16,7 @@ path = "src/main.rs"
 [features]
 default = ["house-numbering"]
 e11-candidate = []
+sdk-example = ["dep:ovg-module-quality-check"]
 house-numbering = ["dep:ovg-module-house-numbering", "dep:ovg-module-house-numbering-http"]
 
 [dependencies]
@@ -37,6 +38,7 @@ ovg-core.workspace = true
 ovg-module-house-numbering = { workspace = true, optional = true }
 ovg-module-house-numbering-http = { workspace = true, optional = true }
 ovg-module-http.workspace = true
+ovg-module-quality-check = { workspace = true, optional = true }
 ovg-module-sdk.workspace = true
 ovg-processing.workspace = true
 ovg-spatial.workspace = true
