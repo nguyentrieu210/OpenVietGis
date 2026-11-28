@@ -325,9 +325,13 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
-        "apps/web-next/src/FeatureInfo.tsx"
+        "apps/web-next/src/FeatureInfo.tsx",
+        "apps/web-next/src/identify-plan.ts",
+        "apps/web-next/src/identify-plan.test.ts",
+        "apps/web-next/src/MapInspectPanel.tsx",
+        "apps/web-next/src/LiveApp.tsx"
       ],
-      "blocker": "Read-only metadata includes source/schema/layer revisions, lifecycle, declared fields and current capability/authorization indicators. Diagrams, sandboxed actions and map tips not implemented or accepted."
+      "blocker": "Read-only metadata plus plain-text map tips by configured schema field, on authorized rendered vector features. Diagrams and sandboxed actions still missing; paired browser/QGIS acceptance remains. New tests not executed."
     },
     {
       "id": "STYLE-09",
@@ -464,9 +468,14 @@
         "apps/api-rust/src/queries.rs",
         "apps/web-next/src/precise-calculation.ts",
         "apps/web-next/src/attribute-population.ts",
-        "apps/web-next/src/table-query.ts"
+        "apps/web-next/src/table-query.ts",
+        "apps/web-next/src/identify-plan.ts",
+        "apps/web-next/src/identify-plan.test.ts",
+        "apps/web-next/src/MapInspectPanel.tsx",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/LayerProperties.tsx"
       ],
-      "blocker": "Existing grouped statistics use exact numeric aggregation and distinguish loaded/selected/all source (bounded). Multi-layer identify parity and paired QGIS/browser evidence remain."
+      "blocker": "Grouped exact statistics plus multi-layer rendered vector Identify with layer+FID identity, bounded 100 results, authorized row check, independent read-only details. No unloaded/vector tile/raster identify or paired browser/QGIS acceptance; tests not executed."
     },
     {
       "id": "EDIT-01",
