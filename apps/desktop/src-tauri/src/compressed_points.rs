@@ -51,3 +51,19 @@ fn append(out:&mut Vec<u8>,p:[f64;3])->Result<()>{
  if p.iter().any(|v|!v.is_finite()){return Err("INVALID_POINT")}
  for n in p{out.extend(n.to_le_bytes())}Ok(())
 }
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ #[test] fn laz_roundtrip_bounded_seek(){
+   let dir=tempfile::tempdir().unwrap();let p=dir.path().join("fixture.laz");
+   let mut writer=las::Writer::from_path(&p,las::Header::default()).unwrap();
+   for i in 0..2050{writer.write_point(las::Point{x:i as f64,y:11.,z:5.,..Default::default()}).unwrap();}
+   writer.close().unwrap();drop(writer);
+   let cloud=Cloud::open(&p,false).unwrap();assert_eq!(cloud.count(),2050);
+   let a=cloud.chunk(0).unwrap();assert_eq!(a.len(),2048*24);
+   let b=cloud.chunk(1).unwrap();assert_eq!(b.len(),2*24);
+   let x=f64::from_le_bytes(b[..8].try_into().unwrap());assert!((x-2048.).abs()<0.01);
+   assert!(cloud.chunk(2).is_err());assert!(cloud.query([0.;6],0).is_err());
+ }
+}
