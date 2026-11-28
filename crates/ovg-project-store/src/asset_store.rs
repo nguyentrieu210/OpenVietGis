@@ -8,8 +8,11 @@ const MAX:u64=512*1024*1024;
 const TOTAL:u64=2*1024*1024*1024;
 #[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
 pub struct AssetMeta{pub id:Uuid,pub kind:String,pub epsg:Option<u32>,pub bytes:u64,pub sha256:String}
+fn native_cad(kind:&str)->bool{matches!(kind,"cad-native-dwg"|"cad-native-dxf")}
+#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+pub struct CadVersion{pub asset:Uuid,pub parent:Uuid,pub parent_sha:String}
 fn profile(kind:&str,epsg:Option<u32>)->bool{match kind{
- "cad"=>epsg==Some(4326),"las"|"laz"|"copc"=>epsg.is_some_and(|e|e>0),"glb"|"mbtiles"|"tiff"=>epsg.is_none(),_=>false
+ "cad"=>epsg==Some(4326),"cad-native-dwg"|"cad-native-dxf"=>epsg.is_none(),"las"|"laz"|"copc"=>epsg.is_some_and(|e|e>0),"glb"|"mbtiles"|"tiff"=>epsg.is_none(),_=>false
 }}
 fn cancelled(c:&AtomicBool)->Result<()>{if c.load(Ordering::Acquire){Err(Error::Conflict)}else{Ok(())}}
 impl Store{
@@ -22,6 +25,15 @@ impl Store{
  }
  /// Caller supplies an already validated private snapshot, never an external live file.
  pub fn attach_asset(&self,id:Uuid,kind:&str,epsg:Option<u32>,path:&Path,expected:u64,cancel:&AtomicBool)->Result<AssetMeta>{
+  self.attach_checked(id,kind,epsg,path,expected,cancel,None,None)
+ }
+ /// Immutable CAD document version; preserve native coordinates without
+ /// claiming WGS84. Parent digest and project revision are checked atomically.
+ pub fn attach_cad_version(&self,id:Uuid,kind:&str,path:&Path,expected:u64,expected_sha:&str,parent:Option<(Uuid,&str)>,cancel:&AtomicBool)->Result<AssetMeta>{
+  if !native_cad(kind)||expected_sha.len()!=64{return Err(Error::Invalid)}
+  self.attach_checked(id,kind,None,path,expected,cancel,Some(expected_sha),parent)
+ }
+ fn attach_checked(&self,id:Uuid,kind:&str,epsg:Option<u32>,path:&Path,expected:u64,cancel:&AtomicBool,expected_sha:Option<&str>,parent:Option<(Uuid,&str)>)->Result<AssetMeta>{
   if id.is_nil()||!profile(kind,epsg){return Err(Error::Invalid)}
   let meta=std::fs::symlink_metadata(path).map_err(|_|Error::Storage)?;
   if !meta.file_type().is_file()||meta.len()==0||meta.len()>MAX{return Err(Error::Limit)}
@@ -29,6 +41,10 @@ impl Store{
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let (count,used):(u64,u64)=tx.query_row("SELECT count(*),coalesce(sum(bytes),0) FROM project_asset",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
   if count>=32||used.saturating_add(meta.len())>TOTAL{return Err(Error::Limit)}
+  if let Some((p,sha))=parent{
+   let old:Option<(String,String)>=tx.query_row("SELECT kind,sha256 FROM project_asset WHERE id=?1",[p.to_string()],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+   if old.as_ref().is_none_or(|(k,h)|k!=kind||h!=sha)||p==id||expected_sha==Some(sha){return Err(Error::Conflict)}
+  }
   next(&tx,expected)?;
   let key=id.to_string();
   tx.execute("INSERT INTO project_asset VALUES(?1,?2,?3,?4,?5)",params![key,kind,epsg,meta.len(),"0".repeat(64)])?;
@@ -42,7 +58,9 @@ impl Store{
   }
   if size!=meta.len(){return Err(Error::Conflict)}
   let sha256=format!("{:x}",hash.finalize());
+  if expected_sha.is_some_and(|s|s!=sha256){return Err(Error::Conflict)}
   tx.execute("UPDATE project_asset SET sha256=?1 WHERE id=?2",params![sha256,key])?;
+  if let Some((p,sha))=parent{tx.execute("INSERT INTO cad_version VALUES(?1,?2,?3)",params![key,p.to_string(),sha])?;}
   cancelled(cancel)?;tx.commit()?;
   Ok(AssetMeta{id,kind:kind.into(),epsg,bytes:size,sha256})
  }
@@ -66,8 +84,16 @@ impl Store{
   tmp.persist_noclobber(dest).map_err(|_|Error::Storage)?;
   Ok(AssetMeta{id,kind,epsg,bytes,sha256})
  }
+ pub fn cad_versions(&self)->Result<Vec<CadVersion>>{
+  let db=self.db.lock().map_err(lock_err)?;
+  let mut q=db.prepare("SELECT asset,parent,parent_sha FROM cad_version ORDER BY asset LIMIT 33")?;
+  let mut rows=q.query([])?;let mut out=Vec::new();
+  while let Some(r)=rows.next()?{out.push(CadVersion{asset:Uuid::parse_str(&r.get::<_,String>(0)?).map_err(|_|Error::Invalid)?,parent:Uuid::parse_str(&r.get::<_,String>(1)?).map_err(|_|Error::Invalid)?,parent_sha:r.get(2)?});}
+  if out.len()>32{return Err(Error::Limit)}Ok(out)
+ }
  pub fn detach_asset(&self,id:Uuid,expected:u64)->Result<u64>{
   let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  if tx.query_row("SELECT EXISTS(SELECT 1 FROM cad_version WHERE parent=?1)",[id.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Relation)}
   let n=next(&tx,expected)?;
   if tx.execute("DELETE FROM project_asset WHERE id=?1",[id.to_string()])?!=1{return Err(Error::Invalid)}
   tx.commit()?;Ok(n)
@@ -90,5 +116,13 @@ pub(crate) fn verify_assets(db:&Connection)->Result<bool>{
    hash.update(&data);seq+=1;
   }
   if bytes!=size||format!("{:x}",hash.finalize())!=digest{return Ok(false)}
- }Ok(true)
+ }
+ let mut q=db.prepare("SELECT c.asset,c.parent,c.parent_sha,a.kind,p.kind,p.sha256,a.sha256 FROM cad_version c JOIN project_asset a ON a.id=c.asset JOIN project_asset p ON p.id=c.parent")?;
+ let mut rows=q.query([])?;let mut parents=std::collections::HashMap::new();
+ while let Some(r)=rows.next()?{
+  let a:String=r.get(0)?;let p:String=r.get(1)?;let sha:String=r.get(2)?;let k:String=r.get(3)?;let pk:String=r.get(4)?;let ps:String=r.get(5)?;let own:String=r.get(6)?;
+  if !native_cad(&k)||k!=pk||sha!=ps||own==ps||a==p||parents.insert(a,p).is_some(){return Ok(false)}
+ }
+ for id in parents.keys(){let mut seen=HashSet::new();let mut at=id;while let Some(parent)=parents.get(at){if !seen.insert(at)||seen.len()>32{return Ok(false)}at=parent;}}
+ Ok(true)
 }
