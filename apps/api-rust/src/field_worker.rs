@@ -467,7 +467,9 @@ mod tests {
             let compatible = worker_python_311_source(source);
             assert!(!compatible.lines().any(|line| line.starts_with("type ")));
             if source.contains("type CoordinateTree =") {
-                assert!(compatible.lines().any(|line| line == "CoordinateTree = tuple"));
+                assert!(compatible
+                    .lines()
+                    .any(|line| line == "CoordinateTree = tuple"));
             }
         }
     }
