@@ -70,7 +70,7 @@ def check_processing(post,get,foreign,fixtures):
     def result(body,count,area):
         r=post("/processing/jobs",body)
         assert r["status"]=="succeeded",(r.get("error_code"),r.get("error_message"),r)
-        assert r["feature_count"]==count
+        assert r["feature_count"]==count, {"algorithm_id":body["algorithm_id"],"expected_feature_count":count,"actual_feature_count":r.get("feature_count"),"job":r}
         assert post("/processing/jobs",body)["id"]==r["id"]
         post("/processing/jobs",body|{"output_name":"changed"},expected=409)
         post("/processing/jobs",body,foreign,404)
