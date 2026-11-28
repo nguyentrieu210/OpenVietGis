@@ -28,7 +28,9 @@ fn baseline_operations() -> BTreeSet<(String, String)> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../specs/064-rust-platform/contracts/engines");
     let mut expected = BTreeSet::new();
-    let engine_counts = [54, 22, 5, 4, 7, 12, 11, 14, 8, 30, 57, 26, 6, 27, 72, 0, 0, 8];
+    let engine_counts = [
+        54, 22, 5, 4, 7, 12, 11, 14, 8, 30, 57, 26, 6, 27, 72, 0, 0, 8,
+    ];
     for (index, expected_count) in engine_counts.into_iter().enumerate() {
         let engine = index + 1;
         let mut count = 0;
