@@ -2,13 +2,13 @@
 //! Host supplies a qualified projected CRS, undistorted RGB and aligned DEM.
 //! Source adapters are trusted; this is not an untrusted path or IPC interface.
 use super::{disk_store,geotiff,ortho,tiles};
-use std::{collections::BTreeMap,fs::File,io::{Read,Seek,SeekFrom},path::PathBuf};
+use std::{collections::BTreeMap,fs::File,io::{Read,Seek,SeekFrom},path::PathBuf,sync::Arc};
 
 #[derive(Debug)]
 pub enum Error{Invalid,Limit,Cancelled,Io(std::io::Error),Jpeg(super::jpeg::Error),Tile(tiles::Error),
  Render(ortho::Error),Tiff(geotiff::Error),Store(disk_store::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
-pub struct OwnedImage{pub camera:ortho::Camera,pub width:u32,pub height:u32,pub rgb:Vec<u8>}
+pub struct OwnedImage{pub camera:ortho::Camera,pub width:u32,pub height:u32,pub rgb:Arc<[u8]>}
 pub trait Source{
  fn dem(&mut self,window:tiles::Window,max_bytes:u64)->Result<Vec<f32>,Error>;
  fn images(&mut self,window:tiles::Window,max_bytes:u64)->Result<Vec<OwnedImage>,Error>;
@@ -115,7 +115,7 @@ impl Source for RawSource{
  if len==0||!im.camera.valid(){return Err(Error::Invalid);}
  let mut f=exact_file(&im.path,len)?;let mut rgb=vec![0;len as usize];f.read_exact(&mut rgb)?;
  let mut extra=[0];if f.read(&mut extra)?!=0{return Err(Error::Invalid);}
- out.push(OwnedImage{camera:im.camera,width:im.width,height:im.height,rgb});
+ out.push(OwnedImage{camera:im.camera,width:im.width,height:im.height,rgb:rgb.into()});
  }
  Ok(out)
  }
