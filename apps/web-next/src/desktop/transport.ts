@@ -156,7 +156,7 @@ export const unified={
 export type UnifiedAssetKind="cad"|"las"|"laz"|"copc"|"glb"|"mbtiles"|"tiff";
 export type UnifiedAsset={id:string;kind:UnifiedAssetKind;count:number;epsg:number|null;metadata:{width:number;height:number;bands:number;epsg:number|null;geotransform:number[]}|null};
 export type AssetRead={chunk?:number;bbox?:[number,number,number,number];bounds?:[number,number,number,number,number,number];level?:number;tile?:[number,number,number];band?:number;pixel?:[number,number,number,number];shape?:[number,number]};
-export type PersistentAsset={id:string;kind:UnifiedAssetKind;epsg:number|null;bytes:number;sha256:string};
+export type PersistentAsset={id:string;kind:UnifiedAssetKind|"cad-native-dwg"|"cad-native-dxf";epsg:number|null;bytes:number;sha256:string};
 export const unifiedAssets={
  tiffTile:async(handle:string,id:string,band:number,z:number,x:number,y:number,stretch:[number,number],signal?:AbortSignal)=>{
   if(signal?.aborted)throw new DOMException("Aborted","AbortError");
