@@ -5,7 +5,8 @@
 - [x] T003 Classify every tracked CSS path in web src and identify existing primitives/theme/workbench/plugin interfaces.
 - [x] T004 Define candidate ADR, ownership, migration and acceptance contracts.
 - [x] T005 Implement dependency-free audit utility and unit tests; runtime execution tracked separately.
-- [ ] T006 Run audit/test on approved runner, capture baseline runtime screenshots/performance and close W0 qualification. No UI migration until baseline and candidate gates.
+- [x] T006a Run static audit and unit tests: 6/6 scopes and 3/3 tests PASS.
+- [ ] T006b Capture baseline runtime screenshots/performance on a provisioned runner and close W0 qualification. No UI migration until baseline and candidate gates.
 ## W1 token system
 - [ ] T101 Define semantic tokens + validation; generate deterministic CSS/Tailwind/Dart; test light/dark/density/contrast and compatibility aliases.
 ## W2 React foundation

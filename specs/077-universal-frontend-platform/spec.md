@@ -1,5 +1,5 @@
 # SPEC 077 — Universal Frontend Platform & Design System
-Status: Proposed; W0 source inventory implemented; runtime qualification pending.
+Status: Proposed; W0 static inventory implemented and verified; runtime qualification pending.
 Extends SPEC 072 (not a second framework), 038, 062, 070/071; integrates 073/074/075/076 and AI companion PRs 113–116.
 Baseline main: a4ae85a5e3d956de1870dcf65ff3fb21da7f0367. Repository license AGPL-3.0.
 
