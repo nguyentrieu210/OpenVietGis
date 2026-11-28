@@ -211,3 +211,5 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 /* Temporary map focus keeps docks mounted and all saved layout/preferences intact. */
 .qgis-work[data-map-focus=on]>.qgis-dock,.qgis-work[data-map-focus=on] .qgis-main-row>.live-inspector,.qgis-work[data-map-focus=on] .qgis-canvas>.qgis-table{display:none!important}
 .qgis-work[data-map-focus=on] .qgis-canvas{flex-direction:column}
+
+.ovg-temporal-controls{padding:6px;display:grid;gap:5px;max-height:48%;overflow:auto;border-bottom:1px solid #cbd4ce}.ovg-temporal-controls label{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ovg-temporal-controls select{max-width:100%;min-width:0;flex:1}.ovg-temporal-controls input[type=range]{flex:1;min-width:80px}.ovg-temporal-buttons{display:flex;align-items:center;gap:5px}.ovg-temporal-controls p{margin:0}.ovg-temporal-controls small{overflow-wrap:anywhere}
