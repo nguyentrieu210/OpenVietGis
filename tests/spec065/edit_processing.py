@@ -43,6 +43,65 @@ def fixture_layers(f):
     return parcels,clip,point
 
 
+def check_processing(post,get,foreign,fixtures):
+    parcels,clip,point=fixtures
+    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve"}
+    def job(algorithm,layer,parameters,overlay=None,execute=True,op=None):
+        return {"algorithm_id":algorithm,"input_layer_id":layer["layer_id"],"overlay_layer_id":overlay["layer_id"] if overlay else None,
+                "parameters":parameters,"output_name":"spec065 "+algorithm,"operation_id":op or str(uuid4()),"execute_now":execute}
+    def result(body,count,area):
+        r=post("/processing/jobs",body)
+        assert r["status"]=="succeeded",(r.get("error_code"),r.get("error_message"),r)
+        assert r["feature_count"]==count
+        assert post("/processing/jobs",body)["id"]==r["id"]
+        post("/processing/jobs",body|{"output_name":"changed"},expected=409)
+        post("/processing/jobs",body,foreign,404)
+        with psycopg.connect(OWNER) as conn:
+            n,a=conn.execute("SELECT count(*),sum(ST_Area(r.geometry)) FROM spatial.reference_features r JOIN spatial.layers l ON l.source_id=r.source_id AND l.organization_id=r.organization_id AND l.project_id=r.project_id WHERE l.id=%s",(r["output_layer_id"],)).fetchone()
+            assert n==count and math.isclose(a,area,abs_tol=1e-6),(n,a,area)
+        return r, {"features": n, "area_m2": a}
+    _, buffer_metrics = result(job("buffer",point,{"distance_meters":10,"quad_segs":8}),1,1600*math.sin(math.pi/16))
+    _, clip_metrics = result(job("clip",parcels,{},clip),2,10000)
+    dissolved, dissolve_metrics = result(job("dissolve",parcels,{"group_by_field":"ward"}),2,30000)
+    with psycopg.connect(OWNER) as conn:
+        areas = dict(conn.execute(
+            "SELECT r.attributes->>'group_value',sum(ST_Area(r.geometry)) "
+            "FROM spatial.reference_features r JOIN spatial.layers l ON l.source_id=r.source_id "
+            "AND l.organization_id=r.organization_id AND l.project_id=r.project_id "
+            "WHERE l.id=%s GROUP BY 1", (dissolved["output_layer_id"],)
+        ).fetchall())
+    assert set(areas)=={"A","B"} and math.isclose(areas["A"],20000,abs_tol=1e-6)
+    assert math.isclose(areas["B"],10000,abs_tol=1e-6)
+    print("PASS actual Rust jobs Buffer/Clip/Dissolve, golden counts/areas, idempotent replay, tenant isolation",flush=True)
+    queued=post("/processing/jobs",job("buffer",point,{"distance_meters":10,"quad_segs":8},execute=False))
+    assert queued["status"]=="queued"
+    cancelled=post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=200)
+    assert cancelled["status"]=="cancelled"
+    retried=post("/processing/jobs/"+queued["id"]+"/retry",{},expected=200)
+    assert retried["status"]=="succeeded" and retried["id"]==queued["id"]
+    post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=409)
+    print("PASS queued/cancel/retry/terminal job lifecycle",flush=True)
+    return {"buffer":buffer_metrics,"clip":clip_metrics,
+            "dissolve_zone":{"features":dissolve_metrics["features"],"areas_m2":areas}}
+
+def processing_only(c,f,fixtures):
+    auth=session_headers(f["session_a_token"], **{"x-openvietgis-csrf":f["csrf_a_token"]})
+    foreign=session_headers(f["session_b_token"], **{"x-openvietgis-csrf":f["csrf_b_token"]})
+    path=project_path(f["org_a_id"],f["project_a_id"])
+
+    def post(endpoint,body,headers=auth,expected=201):
+        r=c.post(path+endpoint,json=body,headers=headers,timeout=60)
+        assert r.status_code==expected,(endpoint,r.status_code,r.text[:600])
+        return r.json()
+
+    def get(endpoint):
+        r=c.get(path+endpoint,headers=auth)
+        assert r.status_code==200,(endpoint,r.status_code,r.text[:600])
+        return r.json()
+
+    return check_processing(post,get,foreign,fixtures)
+
+
 def check(c,f,second,fixtures,directory):
     from openvietgis_api.security.csrf import make_csrf_token
     _uid,_,token=second
@@ -92,34 +151,7 @@ def check(c,f,second,fixtures,directory):
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id=%s",(source,fid)).fetchone()[0]==attrs
     print("PASS two distinct authorized editor sessions, one commit/one 409, exact replay, atomic rollback, persisted revert, foreign denial",flush=True)
-    parcels,clip,point=fixtures
-    assert {r["id"] for r in get("/processing/algorithms")["items"]}=={"buffer","clip","dissolve"}
-    def job(algorithm,layer,parameters,overlay=None,execute=True,op=None):
-        return {"algorithm_id":algorithm,"input_layer_id":layer["layer_id"],"overlay_layer_id":overlay["layer_id"] if overlay else None,
-                "parameters":parameters,"output_name":"spec065 "+algorithm,"operation_id":op or str(uuid4()),"execute_now":execute}
-    def result(body,count,area):
-        r=post("/processing/jobs",body)
-        assert r["status"]=="succeeded",(r.get("error_code"),r.get("error_message"),r)
-        assert r["feature_count"]==count
-        assert post("/processing/jobs",body)["id"]==r["id"]
-        post("/processing/jobs",body|{"output_name":"changed"},expected=409)
-        post("/processing/jobs",body,foreign,404)
-        with psycopg.connect(OWNER) as conn:
-            n,a=conn.execute("SELECT count(*),sum(ST_Area(r.geometry)) FROM spatial.reference_features r JOIN spatial.layers l ON l.source_id=r.source_id AND l.organization_id=r.organization_id AND l.project_id=r.project_id WHERE l.id=%s",(r["output_layer_id"],)).fetchone()
-            assert n==count and math.isclose(a,area,abs_tol=1e-6),(n,a,area)
-        return r
-    result(job("buffer",point,{"distance_meters":10,"quad_segs":8}),1,1600*math.sin(math.pi/16))
-    result(job("clip",parcels,{},clip),2,10000)
-    result(job("dissolve",parcels,{"group_by_field":"ward"}),2,30000)
-    print("PASS actual Rust jobs Buffer/Clip/Dissolve, golden counts/areas, idempotent replay, tenant isolation",flush=True)
-    queued=post("/processing/jobs",job("buffer",point,{"distance_meters":10,"quad_segs":8},execute=False))
-    assert queued["status"]=="queued"
-    cancelled=post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=200)
-    assert cancelled["status"]=="cancelled"
-    retried=post("/processing/jobs/"+queued["id"]+"/retry",{},expected=200)
-    assert retried["status"]=="succeeded" and retried["id"]==queued["id"]
-    post("/processing/jobs/"+queued["id"]+"/cancel",{},expected=409)
-    print("PASS queued/cancel/retry/terminal job lifecycle",flush=True)
+    check_processing(post,get,foreign,fixtures)
     # Real GDAL worker, candidate runs under unprivileged uid.
     spec=importlib.util.spec_from_file_location("spec065_fixtures",ROOT/"fixtures/qgis-parity/generate.py")
     gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)
@@ -243,7 +275,11 @@ def check(c,f,second,fixtures,directory):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster","topology","native-import"],default="integrated");args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster","topology","native-import","processing"],default="integrated");p.add_argument("--evidence",type=Path);args=p.parse_args()
+    if args.evidence and args.suite!="processing":
+        p.error("--evidence requires --suite processing")
+    if args.evidence and args.evidence.exists():
+        p.error("evidence output already exists")
     baseline.assert_safe_bench_db(OWNER,isolated_port=54332)
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT to_regclass('spatial.reference_features')").fetchone()[0] is None,"refusing nonfresh DB"
@@ -276,6 +312,11 @@ def main():
             try:
                 if args.suite=="integrated":
                     check(c,f,second,fixtures,directory)
+                elif args.suite=="processing":
+                    actual=processing_only(c,f,fixtures)
+                    if args.evidence:
+                        with args.evidence.open("x",encoding="utf-8") as output:
+                            json.dump({"crs":"EPSG:3857","actual":actual},output,ensure_ascii=False,indent=2)
                 elif args.suite=="native-import":
                     from native_import import check_native_import
                     check_native_import(c,f)
