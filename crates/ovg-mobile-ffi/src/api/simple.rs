@@ -393,3 +393,27 @@ mod unified_snap_tests{
   assert_eq!(view["revision"],"2");assert!(w.integrity().unwrap());w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
  }
 }
+
+#[cfg(test)]
+mod active_unified_survey_tests{
+ use super::*;
+ #[test]fn unified_capture_bridge_roundtrip(){
+  let dir=std::env::temp_dir().join(format!("ovg-active-survey-{}",Uuid::new_v4()));
+  let root=dir.to_string_lossy().to_string();
+  let p=create_unified_project(root.clone()).unwrap();let w=open_unified_project(root.clone(),p.clone()).unwrap();
+  let c:serde_json::Value=serde_json::from_str(&w.catalog().unwrap()).unwrap();
+  let l=c["layers"][0]["id"].as_str().unwrap().to_owned();let t=Uuid::new_v4().to_string();
+  w.create_survey(l.clone(),t.clone(),"GPS".into(),"1".into()).unwrap();
+  w.survey_state(l.clone(),t.clone(),"resume".into(),"2".into()).unwrap();
+  let fix=r#"{"lon":106.7,"lat":11.0,"accuracy_m":4.0,"altitude_m":null,"utc_ms":1700000000000,"provider":"os","quality":"unknown","satellites":null}"#.to_owned();
+  let r:serde_json::Value=serde_json::from_str(&w.append_survey(l.clone(),t.clone(),fix,"3".into()).unwrap()).unwrap();
+  assert_eq!(r["revision"],"4");assert_eq!(r["seq"],1);
+  w.close().unwrap();drop(w);
+  let w=open_unified_project(root,p).unwrap();
+  assert_eq!(w.recover_surveys("4".into()).unwrap(),"5");
+  let tracks:serde_json::Value=serde_json::from_str(&w.survey_tracks(l.clone(),"".into(),"5".into()).unwrap()).unwrap();assert_eq!(tracks[0]["state"],"paused");
+  let page:serde_json::Value=serde_json::from_str(&w.survey_fixes(l,t,"0".into(),"5".into()).unwrap()).unwrap();
+  assert_eq!(page["rows"][0]["fix"]["quality"],"unknown");assert!(w.integrity().unwrap());
+  w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
+ }
+}
