@@ -15,7 +15,9 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::Signature;
 use ovg_core::AppError;
-use ovg_module_sdk::release_v2::{verify_bundle, Bundle, ContributionEnvelope, ReleaseTrust};
+use ovg_module_sdk::release_v2::{
+    verify_bundle_integrity, Bundle, ContributionEnvelope, ReleaseTrust,
+};
 use ovg_module_sdk::trust::{verify_policy, TrustPolicy, VerifiedTrust};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
@@ -116,6 +118,18 @@ fn verified_items(
     operator
         .verify_strict(&catalog_membership(&c)?, &signature(&c.catalog_signature)?)
         .map_err(|_| invalid())?;
+    // Index the already-validated V1 identities once per catalog.
+    let mut indexed = BTreeMap::new();
+    for row in existing {
+        let key = row.manifest["extension_key"].as_str().ok_or_else(invalid)?;
+        let version = row.manifest["version"].as_str().ok_or_else(invalid)?;
+        if indexed
+            .insert((row.publisher_id.as_str(), key, version), row)
+            .is_some()
+        {
+            return Err(invalid());
+        }
+    }
     let mut seen = BTreeSet::new();
     let mut items = Vec::new();
     for r in c.releases {
@@ -124,13 +138,12 @@ fn verified_items(
         if !seen.insert((e.extension_key.clone(), e.version.clone())) {
             return Err(invalid());
         }
-        let legacy = existing
-            .iter()
-            .find(|v| {
-                v.publisher_id == e.publisher_id
-                    && v.manifest["extension_key"].as_str() == Some(&e.extension_key)
-                    && v.manifest["version"].as_str() == Some(&e.version)
-            })
+        let legacy = *indexed
+            .get(&(
+                e.publisher_id.as_str(),
+                e.extension_key.as_str(),
+                e.version.as_str(),
+            ))
             .ok_or_else(invalid)?;
         let publisher =
             decode_ed25519_public_key(&legacy.publisher_public_key).map_err(|_| invalid())?;
@@ -190,8 +203,9 @@ fn verified_items(
             contribution: &contribution,
             assets: &assets,
         };
-        // Incompatible releases are not exposed. Never make a signature claim
-        // for a skipped release.
+        // Authenticate all members before admitting the global checkpoint,
+        // even when the requested host cannot run a particular release.
+        let digest = verify_bundle_integrity(&b, &trust)?;
         if !e.platforms.contains(&profile.host)
             || !VersionReq::parse(&e.host_api_range)
                 .map_err(|_| invalid())?
@@ -199,7 +213,6 @@ fn verified_items(
         {
             continue;
         }
-        let digest = verify_bundle(&b, &trust, &profile.host, &api)?;
         // A signature is not runtime qualification. Only expose metadata;
         // contribution and assets remain server-side until broker/host integration.
         items.push(VerifiedRelease { metadata: json!({"envelope":e,"release_digest":digest,"catalog_epoch":epoch,"runtime_available":false,
@@ -574,6 +587,18 @@ mod tests {
         save(&policy);
         assert!(load(&cfg, &p).is_err());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn incompatible_release_is_still_verified_before_checkpoint() {
+        let (c, existing, key, mut p) = fixture();
+        p.host = "android".into();
+        assert!(verified_items(c, &existing, &key, 2, &p)
+            .unwrap()
+            .is_empty());
+        let (mut c, existing, key, mut p) = fixture();
+        p.host = "android".into();
+        c.releases[0].contribution = STANDARD.encode(b"tampered");
+        assert!(verified_items(c, &existing, &key, 2, &p).is_err());
     }
     #[test]
     fn v2_metadata_uses_existing_catalog_trust() {

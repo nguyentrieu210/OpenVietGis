@@ -191,6 +191,23 @@ pub fn verify_bundle(
     host: &str,
     api: &Version,
 ) -> Result<String, AppError> {
+    let d = verify_bundle_integrity(bundle, trust)?;
+    let e = bundle.envelope;
+    if !e.platforms.iter().any(|p| p == host)
+        || !VersionReq::parse(&e.host_api_range)
+            .map_err(|_| invalid("bad API range"))?
+            .matches(api)
+    {
+        return Err(invalid("untrusted or incompatible release"));
+    }
+    Ok(d)
+}
+/// Authenticate every member before any host compatibility filter. This does
+/// not qualify the release for execution on any platform.
+pub fn verify_bundle_integrity(
+    bundle: &Bundle<'_>,
+    trust: &ReleaseTrust<'_>,
+) -> Result<String, AppError> {
     let e = bundle.envelope;
     e.validate()?;
     if trust.revoked
@@ -206,10 +223,6 @@ pub fn verify_bundle(
         || e.permissions
             .iter()
             .any(|p| !trust.allowed_permissions.contains(p))
-        || !e.platforms.iter().any(|p| p == host)
-        || !VersionReq::parse(&e.host_api_range)
-            .map_err(|_| invalid("bad API range"))?
-            .matches(api)
     {
         return Err(invalid("untrusted or incompatible release"));
     }

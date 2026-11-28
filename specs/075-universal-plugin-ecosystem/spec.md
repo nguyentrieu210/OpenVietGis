@@ -1,5 +1,5 @@
 # SPEC 075 — Universal Plugin Platform & Marketplace
-Branch: `075-universal-plugin-ecosystem` | Created: 2026-11-29 | Status: Draft / implementation not started
+Branch: `075-universal-plugin-ecosystem` | Created: 2026-11-29 | Status: Wave 0 implementation in progress; acceptance gates open
 Baseline: a4ae85a5e3d956de1870dcf65ff3fb21da7f0367
 Parent: [R014](../../ROADMAP.md#r014), R002–R013, R015; extend existing AI/MCP, Rust, mobile SPEC 073 and desktop SPEC 074 contracts, subject to actual inventory.
 ## Scope
