@@ -37,6 +37,7 @@ pub mod checkpoint;
 pub mod mosaic_export;
 pub mod las_export;
 pub mod glb_export;
+pub mod export_worker;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

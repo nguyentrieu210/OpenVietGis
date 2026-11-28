@@ -18,12 +18,12 @@ fn digest_file(p:&Path)->Result<String,Error>{
  loop{let k=f.read(&mut buf)?;if k==0{break;}n+=k as u64;if n>meta.len(){return Err(Error::Invalid);}h.update(&buf[..k]);}
  if n!=meta.len(){return Err(Error::Invalid);}Ok(format!("{:x}",h.finalize()))
 }
-fn verify(pack:&ApprovedPack)->Result<PathBuf,Error>{
+pub(super) fn verify(pack:&ApprovedPack)->Result<PathBuf,Error>{
  if !pack.binary.is_absolute()||!super::digest(&pack.sha256){return Err(Error::Invalid);}
  if digest_file(&pack.binary)?!=pack.sha256{return Err(Error::HashMismatch);}
  Ok(pack.binary.canonicalize()?)
 }
-fn valid_limits(l:Limits)->bool{
+pub(super) fn valid_limits(l:Limits)->bool{
  !l.timeout.is_zero()&&l.timeout<=Duration::from_secs(86400)&&l.address_space_bytes>=256*1024*1024&&l.max_file_bytes>0&&l.input_bytes>0
 }
 /// CPU sparse reconstruction only. All commands are generated internally, never supplied by UI.
