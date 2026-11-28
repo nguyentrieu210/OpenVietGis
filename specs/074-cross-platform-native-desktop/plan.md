@@ -11,6 +11,10 @@ Main workspace already includes ovg-core, ovg-spatial, ovg-processing, ovg-sync,
 - Reuse current sync and plugin contracts. Desktop-specific capability adapter; native runtime never bypasses authorization.
 - First renderer: current Web MapLibre/Cesium where qualified on OS WebView. Native GPU wgpu is a future optional provider, not first-release dependency.
 
+## Revision 2 — hybrid native data plane
+Control plane: typed commands for workspace lifecycle, editing, job/cancellation, auth and capability handshake. Data plane: logical ovg:// URLs for read-only binary tiles/resources and bounded typed pages; MapLibre addProtocol adapter, Cesium resource adapter, platform-specific Tauri handler or approved scoped fallback. No open loopback port by default. No whole-layer JSON IPC. Existing browser HTTP behavior stays unchanged.
+Reuse native runtime and storage from SPEC 073; derive render data from canonical revisioned sources. Separate render cache from authoritative store; bounded queues, priority, cancellation and byte budgets at every layer. Source CRS remains explicit; display tile projection never changes canonical data.
+W0 compares existing MapLibre/Cesium rendering, native providers and platform transport security. Research external repositories only against exact licensed commits and a dependency/capability matrix; no vendoring unlicensed code. Keep React as the only desktop/web UI; renderer replacement is not mandatory. Optional native provider dependencies must not enter server or mobile build graphs without explicit qualification.
 ## Work waves
 W0: inventory current PR #103 head, main, native crates and API parity; agree ownership and freeze cross-platform contracts; Windows/macOS/Linux toolchain and WebView spikes.
 W1: Tauri shell, shared UI build, typed transport, local session lifecycle; cloud connection unchanged.
