@@ -2,9 +2,9 @@
 """Strict E07 round-trip gate against both the baseline and Rust candidate.
 
 Uses the same isolated database/session setup as run.py, never production.
-Each engine creates its own GeoJSON assets and jobs. Generated IDs may differ;
-semantic reports, revision digests and downloaded GeoJSON must agree. FastAPI
-retains GeoPackage and ZIP Shapefile handling under the hybrid scope.
+Each engine creates its own assets and jobs for GeoJSON, GeoPackage and ZIP
+Shapefile. Generated IDs may differ; semantic reports, revision digests and
+GeoJSON payloads must agree. Binary outputs are re-inspected, not byte-compared.
 """
 
 from __future__ import annotations
@@ -278,32 +278,15 @@ def main():
                             expected = roundtrip(oracle, manifest, "python", fmt, filename, data)
                             oracle_ms = (time.monotonic() - start) * 1000
                             start = time.monotonic()
-                            if fmt == "geojson":
-                                actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
-                                rust_ms = (time.monotonic() - start) * 1000
-                                require(actual == expected, f"semantic or revision mismatch: {fmt}")
-                                print(
-                                    f"PASS E07 {fmt} roundtrip; "
-                                    f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
-                                    "(single sample)",
-                                    flush=True,
-                                )
-                            else:
-                                base = project_path(manifest["org_a_id"], manifest["project_a_id"])
-                                headers = session_headers(
-                                    manifest["session_a_token"],
-                                    **{"x-openvietgis-csrf": manifest["csrf_a_token"]},
-                                )
-                                unavailable = rust.post(
-                                    f"{base}/imports/upload",
-                                    files={"file": (filename, data, "application/octet-stream")},
-                                    headers=headers,
-                                )
-                                require(
-                                    response(unavailable, 422).get("code") == "FORMAT_NOT_MIGRATED",
-                                    f"Rust did not report retained format boundary: {fmt}",
-                                )
-                                print(f"PASS E07 {fmt} retained FastAPI roundtrip", flush=True)
+                            actual = roundtrip(rust, manifest, "rust", fmt, filename, data)
+                            rust_ms = (time.monotonic() - start) * 1000
+                            require(actual == expected, f"semantic or revision mismatch: {fmt}")
+                            print(
+                                f"PASS E07 {fmt} roundtrip; "
+                                f"Python {oracle_ms:.1f} ms Rust {rust_ms:.1f} ms "
+                                "(single sample)",
+                                flush=True,
+                            )
                         except (AssertionError, KeyError, ValueError) as exc:
                             failures.append(fmt)
                             print(f"FAIL E07 {fmt}: {exc}", flush=True)
@@ -327,11 +310,7 @@ def main():
                                     files={"file": (name, data)},
                                     headers=headers,
                                 )
-                                expected_code = (
-                                    "FORMAT_NOT_MIGRATED"
-                                    if label == "Rust" and name.endswith(".zip")
-                                    else code
-                                )
+                                expected_code = code
                                 require(
                                     res.status_code == 422
                                     and res.json().get("code") == expected_code,
