@@ -121,6 +121,7 @@ from openvietgis_api.domains.platform_errors import (
 )
 from openvietgis_api.domains.spatial.domain import FieldType, NativeGeometry
 from openvietgis_api.domains.transfers.domain import ExportFieldMapping
+from openvietgis_api.domains.transfers.ports import TransferError
 
 try:
     req = json.loads(Path(sys.argv[1]).read_text("utf-8"))
@@ -173,6 +174,65 @@ try:
                 allow_nan=False,
             )
         )
+    elif action == "inspect_transfer":
+        resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024, 64 * 1024 * 1024))
+        from openvietgis_api.adapters.formats.geopackage import (
+            inspect_geopackage, parse_geopackage_member,
+        )
+        data = Path(req["payload_path"]).read_bytes()
+        encoding = req["declared_encoding"]
+        source_crs = req["declared_source_crs"]
+        if req["format"] == "geopackage":
+            members = inspect_geopackage(data)
+        elif req["format"] == "shapefile_zip":
+            from openvietgis_api.adapters.formats.shapefile_zip import (
+                inspect_shapefile_zip, parse_shapefile_member,
+            )
+            members = inspect_shapefile_zip(data, encoding=encoding)
+        else:
+            raise ValueError("unsupported binary import format")
+        eligible = [m for m in members if m.eligible]
+        selected = req["selected_member"]
+        if selected is None and len(eligible) == 1:
+            selected = eligible[0].name
+        parsed = None
+        if any(m.name == selected for m in eligible):
+            if req["format"] == "geopackage":
+                parsed = parse_geopackage_member(
+                    data, member_name=selected, declared_crs=source_crs,
+                )
+            else:
+                parsed = parse_shapefile_member(
+                    data, member_name=selected, declared_crs=source_crs,
+                    declared_encoding=encoding,
+                )
+        report = {"members": [m.to_wire() for m in members], "parsed": None}
+        if parsed is not None:
+            report["parsed"] = {
+                "member_name": parsed.member_name,
+                "geometry_family": parsed.geometry_family.value,
+                "dimensions": parsed.dimensions.value,
+                "detected_crs": parsed.detected_crs,
+                "detected_encoding": parsed.detected_encoding,
+                "requires_encoding_resolution": parsed.requires_encoding_resolution,
+                "fields": [f.to_wire() for f in parsed.fields],
+                "findings": [f.to_wire() for f in parsed.findings],
+                "extent": parsed.extent,
+                "features": [
+                    {
+                        "feature_id": feature.feature_id,
+                        "attributes": feature.attributes,
+                        "geometry": {
+                            "type": feature.geometry.type,
+                            "coordinates": feature.geometry.coordinates,
+                        },
+                    }
+                    for feature in parsed.features
+                ],
+            }
+        with Path(req["out_path"]).open("w", encoding="utf-8") as handle:
+            json.dump(report, handle, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
+        print(json.dumps({"ok": True}, allow_nan=False))
     elif action == "export_transfer":
         resource.setrlimit(resource.RLIMIT_FSIZE, (75 * 1024 * 1024, 75 * 1024 * 1024))
         srid = int(req["srid"])
@@ -238,6 +298,11 @@ except PlatformDomainError as exc:
     if exc.details:
         err["details"] = exc.details
     print(json.dumps(err, allow_nan=False))
+except TransferError as exc:
+    print(json.dumps({
+        "ok": False, "status": exc.status_code,
+        "code": exc.code, "message": exc.message,
+    }, allow_nan=False))
 except Exception:
     print(
         json.dumps(
@@ -282,6 +347,28 @@ fn static_code(raw: &str) -> &'static str {
         "CONFLICT" => "CONFLICT",
         "FORBIDDEN" => "FORBIDDEN",
         "NOT_FOUND" => "NOT_FOUND",
+        "ARCHIVE_BOMB_REJECTED" => "ARCHIVE_BOMB_REJECTED",
+        "ARCHIVE_DUPLICATE_ENTRY" => "ARCHIVE_DUPLICATE_ENTRY",
+        "ARCHIVE_ENCRYPTED" => "ARCHIVE_ENCRYPTED",
+        "ARCHIVE_ENTRY_LIMIT_EXCEEDED" => "ARCHIVE_ENTRY_LIMIT_EXCEEDED",
+        "ARCHIVE_PATH_TRAVERSAL" => "ARCHIVE_PATH_TRAVERSAL",
+        "ARCHIVE_SIZE_EXCEEDED" => "ARCHIVE_SIZE_EXCEEDED",
+        "ARCHIVE_SYMLINK_REJECTED" => "ARCHIVE_SYMLINK_REJECTED",
+        "CRS_MISMATCH" => "CRS_MISMATCH",
+        "ENCODING_CONFLICT" => "ENCODING_CONFLICT",
+        "ENCODING_DECODE_FAILED" => "ENCODING_DECODE_FAILED",
+        "FEATURE_LIMIT_EXCEEDED" => "FEATURE_LIMIT_EXCEEDED",
+        "INVALID_ATTRIBUTE_VALUE" => "INVALID_ATTRIBUTE_VALUE",
+        "INVALID_GEOMETRY" => "INVALID_GEOMETRY",
+        "INVALID_GEOPACKAGE" => "INVALID_GEOPACKAGE",
+        "INVALID_ZIP" => "INVALID_ZIP",
+        "MISSING_SHAPEFILE_COMPONENTS" => "MISSING_SHAPEFILE_COMPONENTS",
+        "MIXED_GEOMETRY_FAMILY" => "MIXED_GEOMETRY_FAMILY",
+        "NULL_GEOMETRY" => "NULL_GEOMETRY",
+        "TOO_MANY_FIELDS" => "TOO_MANY_FIELDS",
+        "UNKNOWN_MEMBER" => "UNKNOWN_MEMBER",
+        "UNSUPPORTED_DIMENSIONS" => "UNSUPPORTED_DIMENSIONS",
+        "UNSUPPORTED_GEOMETRY" => "UNSUPPORTED_GEOMETRY",
         _ => "VALIDATION_ERROR",
     }
 }
@@ -458,6 +545,43 @@ pub(crate) async fn build_package(
         gpkg_bytes,
         snapshot_sha256,
     })
+}
+
+/// Decode format bytes in an unprivileged process. The returned metadata is
+/// independently checked by the Rust inspection and storage policy.
+pub(crate) async fn inspect_transfer_payload(
+    format: &str,
+    payload: &[u8],
+    selected_member: Option<&str>,
+    declared_source_crs: Option<i64>,
+    declared_encoding: Option<&str>,
+) -> Result<Value, WorkerError> {
+    let scratch = create_scratch().await?;
+    let input = scratch.0.join("source.bin");
+    let output = scratch.0.join("inspection.json");
+    tokio::fs::write(&input, payload)
+        .await
+        .map_err(|_| unavailable("transfer input staging failed"))?;
+    let request = json!({
+        "action": "inspect_transfer",
+        "format": format,
+        "payload_path": input.to_string_lossy(),
+        "out_path": output.to_string_lossy(),
+        "selected_member": selected_member,
+        "declared_source_crs": declared_source_crs,
+        "declared_encoding": declared_encoding,
+    });
+    run_driver(&scratch, &request).await?;
+    let metadata = tokio::fs::metadata(&output)
+        .await
+        .map_err(|_| unavailable("missing transfer inspection"))?;
+    if metadata.len() == 0 || metadata.len() > MAX_REQUEST_BYTES as u64 {
+        return Err(unavailable("invalid transfer inspection size"));
+    }
+    let bytes = tokio::fs::read(&output)
+        .await
+        .map_err(|_| unavailable("transfer inspection read failed"))?;
+    serde_json::from_slice(&bytes).map_err(|_| unavailable("invalid transfer inspection data"))
 }
 
 /// Encode already-authorized, revision-pinned rows. The adapter receives no
