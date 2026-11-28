@@ -1,0 +1,18 @@
+[package]
+name = "ovg-mobile-engine"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.85.1"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[workspace]
+
+[dependencies]
+ovg-core = { path = "../ovg-core" }
+ovg-spatial = { path = "../ovg-spatial" }
+ovg-processing = { path = "../ovg-processing" }
+ovg-sync = { path = "../ovg-sync" }
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
