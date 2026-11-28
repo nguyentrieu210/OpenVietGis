@@ -33,6 +33,7 @@ pub mod jpeg;
 pub mod exif;
 pub mod jpeg_source;
 pub mod image_cache;
+pub mod checkpoint;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

@@ -24,13 +24,26 @@ fn subgrid(g:ortho::Grid,w:tiles::Window)->ortho::Grid{
 /// Failure/cancellation leaves previous revision unchanged; unreferenced immutable
 /// objects may remain on disk until a future lease-aware garbage collector.
 pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
- grid:ortho::Grid,epsg:u16,p:Policy,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ grid:ortho::Grid,epsg:u16,p:Policy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,cancelled)
+}
+/// The host supplies a trusted digest covering actual source imagery, camera poses,
+/// DEM, alignment, renderer/provider build and immutable input revision.
+pub fn run_resumable(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:&str,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ if !super::digest(input_sha256){return Err(Error::Invalid);}
+ run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),cancelled)
+}
+fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::valid_id(grid_id)||epsg==0||epsg>=32767||grid.width==0||grid.height==0||!grid.gsd.is_finite()||
  grid.gsd<=0.||!grid.origin_x.is_finite()||!grid.origin_y.is_finite()||
  p.source_bytes==0||p.source_bytes>2*1024*1024*1024||p.tile_bytes<308||p.output_bytes==0||
  p.max_samples==0||p.tiles.bytes_per_pixel<16||p.tiles.max_tiles>100_000{return Err(Error::Invalid);}
  if store.head().map_err(Error::Store)?!=expected{return Err(Error::Store(disk_store::Error::Conflict));}
  let ts=tiles::partition(tiles::Window{x:0,y:0,width:grid.width,height:grid.height},tiles::Layer::Compute,p.tiles).map_err(Error::Tile)?;
+ let checkpoint=input_sha256.map(|hash|super::checkpoint::Checkpoint::open(store,expected,grid_id,grid,epsg,p,hash))
+    .transpose().map_err(Error::Store)?;
  let mut refs=BTreeMap::new();let mut covered=0u64;let mut written=0u64;
  for t in &ts{
  if cancelled(){return Err(Error::Cancelled);}
@@ -46,6 +59,13 @@ pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id
  if working>p.tiles.max_working_bytes||tiff_bytes>p.tile_bytes{return Err(Error::Limit);}
  written=written.checked_add(tiff_bytes).ok_or(Error::Limit)?;
  if written>p.output_bytes{return Err(Error::Limit);}
+ let id=format!("L{}_M{}",t.id.level,t.id.morton);
+ if let Some(cp)=&checkpoint{
+    if let Some(record)=cp.load(store,&id,c,tiff_bytes).map_err(Error::Store)?{
+        covered=covered.checked_add(record.covered).ok_or(Error::Limit)?;
+        refs.insert(id,record.tile);continue;
+    }
+ }
  let dem=source.dem(h,expected_dem)?;
  if dem.len() as u64!=halo_pixels{return Err(Error::Invalid);}
  let imgs=source.images(h,p.source_bytes)?;
@@ -62,11 +82,16 @@ pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id
    let start=((row+(c.y-h.y) as usize)*h.width as usize+(c.x-h.x) as usize)*4;
    core.extend_from_slice(&rgba[start..start+c.width as usize*4]);
  }
- covered+=core.chunks_exact(4).filter(|q|q[3]==255).count() as u64;
+ let tile_covered=core.chunks_exact(4).filter(|q|q[3]==255).count() as u64;
+ covered+=tile_covered;
  drop(rgba);drop(views);drop(imgs);drop(dem);
  let bytes=geotiff::rgba(subgrid(grid,c),epsg,&core,p.tile_bytes).map_err(Error::Tiff)?;
  let (sha256,bytes)=store.put(&bytes).map_err(Error::Store)?;
- refs.insert(format!("L{}_M{}",t.id.level,t.id.morton),disk_store::TileRef{window:c,sha256,bytes});
+ let tile=disk_store::TileRef{window:c,sha256,bytes};
+ if let Some(cp)=&checkpoint{
+    cp.save(store,&id,super::checkpoint::Record{tile:tile.clone(),covered:tile_covered}).map_err(Error::Store)?;
+ }
+ refs.insert(id,tile);
  }
  if cancelled(){return Err(Error::Cancelled);}
  if covered==0{return Err(Error::Invalid);}
@@ -144,6 +169,14 @@ impl Source for RawSource{
  let imgs=source.images(tiles::Window{x:0,y:0,width:3,height:3},1024).unwrap();
  let views:Vec<_>=imgs.iter().map(|im|ortho::Image{camera:im.camera,width:im.width,height:im.height,rgb:&im.rgb}).collect();
  assert_eq!(assembled,ortho::render(g,&[0.;9],&views,36,1000).unwrap());
+ }
+ #[test]fn resumes_verified_tile_after_cancel(){
+ let(t,mut source,g)=fixture();let s=disk_store::Store::open(&t.0.join("store")).unwrap();
+ let hash="a".repeat(64);let mut calls=0;
+ let r=run_resumable(&mut source,&s,0,"grid",32648,g,policy(),&hash,||{calls+=1;calls>1});
+ assert!(matches!(r,Err(Error::Cancelled)));assert_eq!(s.head().unwrap(),0);
+ let r=run_resumable(&mut source,&s,0,"grid",32648,g,policy(),&hash,||false).unwrap();
+ assert_eq!(r.covered,9);assert_eq!(r.tiles,4);assert_eq!(s.head().unwrap(),1);
  }
  #[test]fn cancelled_does_not_publish(){
  let(t,mut source,g)=fixture();let s=disk_store::Store::open(&t.0.join("store")).unwrap();

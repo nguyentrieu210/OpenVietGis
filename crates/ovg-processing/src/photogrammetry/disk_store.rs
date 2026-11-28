@@ -18,20 +18,20 @@ pub struct TileRef{pub window:Window,pub sha256:String,pub bytes:u64}
 #[serde(deny_unknown_fields)]
 pub struct Revision{pub id:u64,pub parent:u64,pub grid_id:String,pub epsg:u16,pub tiles:BTreeMap<String,TileRef>}
 pub struct Store{root:PathBuf}
-fn hash(bytes:&[u8])->String{format!("{:x}",Sha256::digest(bytes))}
-fn sync_dir(path:&Path)->Result<(),Error>{
+pub(super) fn hash(bytes:&[u8])->String{format!("{:x}",Sha256::digest(bytes))}
+pub(super) fn sync_dir(path:&Path)->Result<(),Error>{
  #[cfg(unix)]{File::open(path)?.sync_all()?;}
  #[cfg(not(unix))]{let _=path;}
  Ok(())
 }
-fn bounded_read(path:&Path,max:u64)->Result<Vec<u8>,Error>{
+pub(super) fn bounded_read(path:&Path,max:u64)->Result<Vec<u8>,Error>{
  let f=File::open(path)?;if !f.metadata()?.is_file()||f.metadata()?.len()>max{return Err(Error::Limit);}
  let mut data=Vec::new();f.take(max+1).read_to_end(&mut data)?;
  if data.len() as u64>max{return Err(Error::Limit);}Ok(data)
 }
 /// Write a fresh temp file, fsync it, then publish without overwriting a target.
 /// Hard-link requires same-volume filesystem support; otherwise fail explicitly.
-fn publish_new(dir:&Path,name:&str,data:&[u8])->Result<bool,Error>{
+pub(super) fn publish_new(dir:&Path,name:&str,data:&[u8])->Result<bool,Error>{
  let temp=dir.join(format!(".pending-{}",Uuid::new_v4()));let target=dir.join(name);
  let result=(||{
     let mut f=OpenOptions::new().write(true).create_new(true).open(&temp)?;
@@ -48,10 +48,11 @@ impl Store{
  pub fn open(root:&Path)->Result<Self,Error>{
   if !root.is_absolute(){return Err(Error::Invalid);}
   fs::create_dir_all(root)?;let root=root.canonicalize()?;
-  for n in ["objects","revisions"]{let p=root.join(n);fs::create_dir_all(&p)?;
+  for n in ["objects","revisions","checkpoints"]{let p=root.join(n);fs::create_dir_all(&p)?;
    let m=fs::symlink_metadata(&p)?;if !m.is_dir()||m.file_type().is_symlink(){return Err(Error::Invalid);}}
   sync_dir(&root)?;Ok(Self{root})
  }
+ pub(super) fn checkpoint_root(&self)->PathBuf{self.root.join("checkpoints")}
  pub fn put(&self,bytes:&[u8])->Result<(String,u64),Error>{
   if bytes.is_empty()||bytes.len() as u64>MAX_ARTIFACT{return Err(Error::Limit);}
   let key=hash(bytes);let dir=self.root.join("objects");
