@@ -1,4 +1,5 @@
-import type {GeographicCamera} from "@openvietgis/spatial-workspace/maplibre3d";
+// Persisted camera is renderer-independent; the renderer adapter consumes this shape.
+export type GeographicCamera=Readonly<{longitude:number;latitude:number;zoom:number;bearing:number;pitch?:number}>;
 type DocumentIdentity={id:string;version:number;sha256:string};
 export type CadResume={kind:"vault"}|({kind:"document"}&DocumentIdentity);
 const valid=(v:unknown):v is DocumentIdentity=>{const x=v as DocumentIdentity;return !!x&&typeof x.id==="string"&&/^[A-Za-z0-9_-]{1,128}$/.test(x.id)&&Number.isSafeInteger(x.version)&&x.version>=1&&x.version<=20&&typeof x.sha256==="string"&&/^[a-f0-9]{64}$/.test(x.sha256)};
