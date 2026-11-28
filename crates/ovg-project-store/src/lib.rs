@@ -7,6 +7,7 @@ use sha2::{Digest,Sha256};
 use std::{collections::HashSet,path::Path,sync::Mutex};
 use uuid::Uuid;
 pub mod catalog;
+pub mod mobile;
 pub mod asset_store;
 pub mod bulk_import;
 pub mod migration;
