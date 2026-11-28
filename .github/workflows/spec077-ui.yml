@@ -1,0 +1,65 @@
+name: SPEC 077 UI qualification
+on:
+  pull_request:
+    paths: ["packages/ui-react/**", "packages/ui-flutter/**", "packages/design-tokens/**", "apps/web-next/**", "specs/077-universal-frontend-platform/**", "pnpm-lock.yaml", ".github/workflows/spec077-ui.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26.13.1"
+      - run: pnpm install --frozen-lockfile
+      - run: node packages/design-tokens/generate.mjs --check && node --test packages/design-tokens/test/tokens.test.mjs tools/tests/audit_frontend_077.test.mjs
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm --filter @openvietgis/ui-react typecheck && pnpm --filter @openvietgis/ui-react build && pnpm --filter @openvietgis/ui-react test
+      - run: pnpm --filter @openvietgis/web-next build && pnpm --filter @openvietgis/web-next test
+      - name: Web fixture screenshots and smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/web-next
+          pnpm exec vite preview --host 127.0.0.1 --port 4198 --strictPort > "$RUNNER_TEMP/spec077-server.log" 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4198/ >/dev/null && break; sleep 1; done
+          OVG_CAPTURE_DIR="$RUNNER_TEMP/spec077-captures" OVG_TEST_URL="http://127.0.0.1:4198/rewrite/?live=1" node spec077-baseline-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec077-web-evidence
+          path: |
+            ${{ runner.temp }}/spec077-captures
+            ${{ runner.temp }}/spec077-server.log
+            packages/ui-react/test-results
+          if-no-files-found: ignore
+  flutter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install SPEC073 pinned Flutter
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter config --no-analytics
+      - run: cd packages/design-tokens/flutter && flutter pub get && flutter analyze && flutter test
+      - run: cd packages/ui-flutter && flutter pub get && flutter analyze && flutter test

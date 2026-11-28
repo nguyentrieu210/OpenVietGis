@@ -44,3 +44,15 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | Symbol/ramp preview, typed property updates and revision reset | PASS isolated |
 | TypeScript/Vite and regression suite 18/18 | PASS |
 | Real map/CAD host wiring, renderer and print parity | pending T401c |
+
+## W5–W11 evidence
+| Gate | Status |
+|---|---|
+| W5 100k synthetic grid, <60 mounted rows at sampled positions, edit/select/filter | PASS focused |
+| W6 Flutter component and widget test source | implemented, unexecuted |
+| W7 read-only UI presentation and invalid binding guards | PASS focused; actual SPEC075 session integration pending |
+| W8 command collision/capability/palette and W9 preferences | PASS focused; app integration pending |
+| W10 frozen pnpm install, Web build and legacy 312 Vitest + 53 Node tests | PASS |
+| W10 six viewport screenshot captures, no document overflow, modal CRUD smoke | PASS fixture; no full image/renderer comparison |
+| W11 latest isolated combined test run | interrupted/timeouts; focused rerun 3/3 PASS; final consolidated run pending |
+| W11 native builds, full production integration, renderer/device benchmark/security | pending |

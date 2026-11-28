@@ -2,18 +2,8 @@
 @layer theme, utilities;
 @import "tailwindcss/theme.css" layer(theme) prefix(ovg);
 @import "tailwindcss/utilities.css" layer(utilities) prefix(ovg);
-@theme {
- --color-ui-surface: #ffffff;
- --color-ui-panel: #f2f5f6;
- --color-ui-ink: #263c49;
- --color-ui-muted: #526b79;
- --color-ui-line: #ccd8df;
- --color-ui-primary: #1565a9;
- --radius-ui: 4px;
-}
-:root{
- --ovg-ui-surface:#fff;--ovg-ui-panel:#f2f5f6;--ovg-ui-ink:#263c49;--ovg-ui-muted:#526b79;--ovg-ui-line:#ccd8df;--ovg-ui-primary:#1565a9;--ovg-ui-radius:4px;--ovg-ui-gap:8px;--ovg-ui-inset:16px;--ovg-ui-section-gap:16px;--ovg-ui-field-gap:6px;--ovg-ui-control-height:32px;--ovg-ui-toolbar-gap:4px;
-}
+@import "../../../packages/design-tokens/generated/tokens.css";
+@import "../../../packages/design-tokens/generated/tailwind.css";
 .ovg-ui-button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .ovg-ui-scroll{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .ovg-ui-table-scroll{max-width:100%;min-width:0;overflow:auto;overscroll-behavior:contain}
@@ -21,7 +11,6 @@
 .ovg-ui-actions>button{min-width:0;max-width:100%;white-space:normal}
 .ovg-ui-input{min-width:0;max-width:100%;box-sizing:border-box}
 /* The account theme applies to application chrome, not imagery, maps or print sheets. */
-:root[data-ovg-theme=dark]{--ovg-ui-surface:#202b34;--ovg-ui-panel:#26343e;--ovg-ui-ink:#e2eaf0;--ovg-ui-muted:#aebfca;--ovg-ui-line:#425461;--ovg-ui-primary:#62a9e5}
 .ovg-ui-form{display:grid;gap:12px;min-width:0}
 .ovg-ui-form>label{display:grid;gap:var(--ovg-ui-field-gap);min-width:0}
 .ovg-ui-form :is(input:not([type=checkbox],[type=radio]),select,textarea){width:100%;min-width:0;max-width:100%}
