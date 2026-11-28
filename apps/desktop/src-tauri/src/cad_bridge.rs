@@ -488,3 +488,66 @@ pub async fn native_cad_preview(window:WebviewWindow,u:State<'_,Unified>,handle:
   if serde_json::to_vec(&v).map_err(|_|"INVALID_DXF")?.len()>4*1024*1024{return Err("RESOURCE_LIMIT")}Ok(v)
  })).await
 }
+
+// Explicit layer synchronization, bounded to one atomic GIS batch. No silent
+// overwrite of independently edited features, no implicit coordinate transforms.
+fn cad_wkb(g:&Value)->R<Vec<u8>>{
+ let g=ovg_spatial::parse_geojson(g,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+ ovg_spatial::encode_wkb(&g,None).map_err(|_|"INVALID_GEOMETRY")
+}
+fn projection_rows(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,revision:u64,meta:&ovg_project_store::asset_store::AssetMeta,cad:&crate::resource_files::Cad)->R<Vec<ovg_project_store::Row>>{
+ if cad.features().len()>64{return Err("SYNC_BATCH_LIMIT")}
+ let page=store.query(layer,[-180.,-90.,180.,90.],0,65,revision).map_err(|_|"STORE_QUERY_FAILED")?;
+ if page.next.is_some()||page.rows.len()!=cad.features().len(){return Err("SYNC_ENTITY_SET_CHANGED")}
+ let root=cad_root(store,asset)?;
+ for row in &page.rows{
+  let p=&row.image.attributes;let h=p["cad_handle"].as_str().ok_or("CAD_PROVENANCE_REQUIRED")?;
+  let base=cad.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("SYNC_ENTITY_SET_CHANGED")?;
+  if cad_feature_id(root,h)!=row.id||p["cad_root"]!=root.to_string()||p["cad_asset"]!=asset.to_string()||p["cad_sha256"]!=meta.sha256||p["cad_layer"]!=base["properties"]["layer"]||p["cad_entity"]!=base["properties"]["entity"]{return Err("CAD_PROVENANCE_MISMATCH")}
+ }Ok(page.rows)
+}
+fn sync_cad_to_gis(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,child:Uuid,revision:u64,operation:Uuid)->R<ovg_project_store::Receipt>{
+ use ovg_project_store::{Batch,Edit,Image};
+ if !store.cad_versions().map_err(|_|"STORE_QUERY_FAILED")?.iter().any(|v|v.asset==child&&v.parent==asset){return Err("DIRECT_CHILD_REQUIRED")}
+ let(_a,_p,meta,base)=load_dxf(store,asset,revision)?;
+ let(_b,_q,next,updated)=load_dxf(store,child,revision)?;
+ let rows=projection_rows(store,layer,asset,revision,&meta,&base)?;
+ if updated.features().len()!=rows.len(){return Err("SYNC_ENTITY_SET_CHANGED")}
+ let mut edits=Vec::new();
+ for row in rows{
+  let h=row.image.attributes["cad_handle"].as_str().ok_or("CAD_PROVENANCE_REQUIRED")?;
+  let before=base.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("STALE_ENTITY")?;
+  let after=updated.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("SYNC_ENTITY_SET_CHANGED")?;
+  if before["properties"]["entity"]!=after["properties"]["entity"]{return Err("SYNC_ENTITY_TYPE_CHANGED")}
+  if row.image.wkb!=cad_wkb(&before["geometry"])?{return Err("GIS_GEOMETRY_CONFLICT")}
+  let mut attrs=row.image.attributes.clone();attrs["cad_asset"]=serde_json::json!(child);attrs["cad_sha256"]=serde_json::json!(next.sha256);attrs["cad_layer"]=after["properties"]["layer"].clone();
+  edits.push(Edit{layer,feature:row.id,expected:row.revision,image:Some(Image{wkb:cad_wkb(&after["geometry"])?,attributes:attrs})});
+ }
+ store.apply(&Batch{operation,expected_project:revision,edits,links:vec![]}).map_err(|e|match e{ovg_project_store::Error::Conflict=>"REVISION_CONFLICT",ovg_project_store::Error::Limit=>"SYNC_BATCH_LIMIT",_=>"SYNC_FAILED"})
+}
+fn sync_gis_to_cad(store:&ovg_project_store::Store,layer:Uuid,asset:Uuid,revision:u64)->R<ovg_project_store::asset_store::AssetMeta>{
+ let(dir,src,meta,cad)=load_dxf(store,asset,revision)?;
+ let rows=projection_rows(store,layer,asset,revision,&meta,&cad)?;
+ let mut path=src;let mut changed=0;
+ for row in rows{
+  let h=row.image.attributes["cad_handle"].as_str().ok_or("CAD_PROVENANCE_REQUIRED")?;
+  let before=cad.features().iter().find(|f|f["properties"]["handle"]==h).ok_or("STALE_ENTITY")?;
+  if row.image.wkb==cad_wkb(&before["geometry"])?{continue}
+  let g=ovg_spatial::parse_xy_wkb(&row.image.wkb,&ovg_spatial::ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?;
+  let g=ovg_spatial::to_geojson(&g.geometry);
+  let current=crate::resource_files::Cad::open(&path)?;
+  let out=dir.path().join(format!("sync-{changed}.dxf"));patch_dxf(&path,&out,&current,h,&g)?;path=out;changed+=1;
+ }
+ if changed==0{return Err("CAD_DRAWING_UNCHANGED")}
+ let sha=digest(&path,MAX)?.1;
+ store.attach_cad_version(Uuid::new_v4(),"cad-native-dxf",&path,revision,&sha,Some((asset,&meta.sha256)),&AtomicBool::new(false)).map_err(|_|"CAD_ADOPTION_FAILED")
+}
+#[tauri::command]
+pub async fn native_cad_sync_layer(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,asset:Uuid,child:Option<Uuid>,expected:String,operation:Uuid,assert_wgs84:bool)->Reply<Value>{
+ if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
+ work(window,u.inner().clone(),move|s|s.with(handle,|store|{
+  let rev=unified::number(&expected)?;
+  if let Some(c)=child{let r=sync_cad_to_gis(store,layer,asset,c,rev,operation)?;Ok(serde_json::json!({"revision":r.revision.to_string(),"features":r.features.len()}))}
+  else{let r=sync_gis_to_cad(store,layer,asset,rev)?;Ok(serde_json::json!({"asset":r.id,"sha256":r.sha256}))}
+ })).await
+}
