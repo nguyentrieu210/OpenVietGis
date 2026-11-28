@@ -1,5 +1,6 @@
 """Extend storage only for bounded same-datum VN-2000 processing outputs."""
 import re
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -10,8 +11,17 @@ depends_on = None
 
 OLD = (4326,3857,4756,5899)
 DEFINITION = (*OLD,3405,3406)
-NEW = (*OLD,3405,3406,5896,5897,5898,9205,9206,9207,9208,9209,9210,9211,9212,9213,9214,9215,9216,9217,9218)
-EXTRA = (3405,3406,5896,5897,5898,9205,9206,9207,9208,9209,9210,9211,9212,9213,9214,9215,9216,9217,9218,)
+NEW = (
+    *OLD,
+    3405, 3406, 5896, 5897, 5898,
+    9205, 9206, 9207, 9208, 9209, 9210, 9211,
+    9212, 9213, 9214, 9215, 9216, 9217, 9218,
+)
+EXTRA = (
+    3405, 3406, 5896, 5897, 5898,
+    9205, 9206, 9207, 9208, 9209, 9210, 9211,
+    9212, 9213, 9214, 9215, 9216, 9217, 9218,
+)
 
 def _codes(codes):
     return ", ".join(map(str,codes))
@@ -19,7 +29,8 @@ def _codes(codes):
 def _constraint(table, name, before, after):
     connection = op.get_bind()
     definition = connection.execute(sa.text(
-        "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid=CAST(:table AS regclass) AND conname=:name"
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conrelid=CAST(:table AS regclass) AND conname=:name"
     ), {"table":table,"name":name}).scalar_one()
     pattern = r"ARRAY\[\s*" + r"\s*,\s*".join(map(str,before)) + r"\s*\]"
     updated, count = re.subn(pattern, "ARRAY["+_codes(after)+"]", definition)
