@@ -6,6 +6,7 @@ pub mod skills;
 pub mod agent;
 pub mod provider;
 pub mod team;
+pub mod vision;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};

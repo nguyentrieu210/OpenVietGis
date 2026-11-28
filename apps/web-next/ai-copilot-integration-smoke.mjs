@@ -28,9 +28,9 @@ try{
  await page.route("**/ai-copilot/agent/**",route=>{
    const r=route.request(),path=new URL(r.url()).pathname;
    assert.equal(r.headers()["x-ovg-ai"],"1");assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
-   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false}]:[]}});
+   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false,vision:true}]:[]}});
    if(path.endsWith("/run")){
-     nativeRequests++;assert.deepEqual(r.postDataJSON(),{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false,multi_agent:false});
+     nativeRequests++;const payload=r.postDataJSON();const {snapshot,vision_consent,...rest}=payload;assert.deepEqual(rest,{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false,multi_agent:false});if(nativeRequests===2){assert.equal(vision_consent,true);assert.ok(snapshot.width>=64&&snapshot.height>=64&&snapshot.data.length<=80000);assert.equal(Buffer.from(snapshot.data,"base64").subarray(0,2).toString("hex"),"ffd8");}else{assert.equal(snapshot,undefined);assert.equal(vision_consent,undefined)}
      return route.fulfill({status:202,json:{run_id:"fixture-run",state:"running"}});
    }
    if(path.endsWith("/status")){assert.deepEqual(r.postDataJSON(),{run_id:"fixture-run"});return route.fulfill({json:{state:"done",report:{stop:"complete",answer:"Verified fixture",calls:0,model_steps:1}}})}
@@ -72,6 +72,12 @@ try{
  await page.getByText(/xác nhận chia sẻ dữ liệu/).waitFor();assert.equal(nativeRequests,0);
  await page.locator('[data-ai="provider-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
  await page.getByText(/Verified fixture/).waitFor();assert.equal(nativeRequests,1);assert.equal(await page.locator('[data-ai="provider-consent"]').isChecked(),false);
+ await page.getByRole("button",{name:"Chụp ảnh bản đồ",exact:true}).click();
+ await page.locator('[data-ai="preview"]').waitFor({timeout:8000});
+ await page.locator('[data-ai="provider-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Xác nhận riêng ảnh bản đồ/).waitFor();assert.equal(nativeRequests,1);
+ await page.locator('[data-ai="vision-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Verified fixture/).waitFor();assert.equal(nativeRequests,2);
  await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();
  assert.deepEqual(errors,[]);console.log("PASS integrated GIS Copilot: disabled service, restricted project, no manual token, denial, real MapLibre navigation and view, disconnect");
 }finally{await browser.close()}

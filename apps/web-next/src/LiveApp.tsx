@@ -468,6 +468,35 @@ for(let page=0;page<pageLimit&&live;page++){ measurement.counters.pages++;const 
    const getMap=()=>{if(!alive.current||!map.current||!ready||loading||busy||running.current||data.restricted!==false||!data.permissions.includes("project.read")||draftRef.current||toolkit.modeRef.current||advanced.activeRef.current||pro.activeRef.current)throw Error("Bản đồ hoặc quyền truy cập không sẵn sàng.");return map.current};
    const getPartnerMap=()=>{if(workspaceModeRef.current!=="gis")throw Error("Công cụ đối tác chỉ khả dụng trong GIS.");return getMap()};
    const bridge:PartnerMapBridge={
+     snapshot:async()=>{
+       const m=getPartnerMap();
+       if(!m.loaded()||m.isMoving())throw Error("Chờ bản đồ tải và dừng di chuyển.");
+       // Read in the render callback, before WebGL discards its drawing buffer.
+       // No preserveDrawingBuffer overhead and no capture of surrounding DOM.
+       return new Promise<{data:string;width:number;height:number}>((resolve,reject)=>{
+         const cleanup=()=>{clearTimeout(timer);m.off("render",capture)};
+         const capture=()=>{
+           cleanup();
+           try{
+             if(getPartnerMap()!==m||!m.loaded()||m.isMoving())throw Error("Bản đồ đã thay đổi.");
+             const src=m.getCanvas();if(!src.width||!src.height)throw Error("Canvas không khả dụng.");
+             const cv=document.createElement("canvas");
+             for(const limit of [1024,768,512,384]){
+               const ratio=Math.min(1,limit/Math.max(src.width,src.height));
+               cv.width=Math.round(src.width*ratio);cv.height=Math.round(src.height*ratio);
+               if(cv.width<64||cv.height<64)continue;
+               const ctx=cv.getContext("2d");if(!ctx)throw Error("Không thể đọc ảnh bản đồ.");
+               ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(src,0,0,cv.width,cv.height);
+               const url=cv.toDataURL("image/jpeg",.72),prefix="data:image/jpeg;base64,";
+               if(url.startsWith(prefix)&&url.length-prefix.length<=80000){resolve({data:url.slice(prefix.length),width:cv.width,height:cv.height});return}
+             }
+             throw Error("Ảnh bản đồ vượt giới hạn.");
+           }catch(e){reject(e)}
+         };
+         const timer=setTimeout(()=>{cleanup();reject(Error("Không nhận được khung hình bản đồ."))},3000);
+         m.on("render",capture);m.triggerRepaint();
+       });
+     },
      view:()=>{const m=getPartnerMap(),c=m.getCenter().wrap(),b=m.getBounds();return {crs:"EPSG:4326",center:[c.lng,c.lat],bbox:[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()],zoom:m.getZoom()}},
      selection:()=>{const m=getPartnerMap();const layerView=row&&workspace.layerViews[row.layer.id];if(!row||!visible.some(r=>r.key===row.key)||!row.layer.capabilities.some(c=>c.name==="feature_read"&&c.actor_authorized&&c.available)||(layerView&&(m.getZoom()<layerView.minZoom||m.getZoom()>=layerView.maxZoom)))throw Error("Chọn một đối tượng đang hiển thị và có quyền đọc.");return {crs:"EPSG:4326",geometry:shareGeometry(row.geometry)}},
      navigate:target=>{const m=getPartnerMap();fit.current="full";m.easeTo({center:[target.longitude,target.latitude],zoom:target.zoom,duration:500});},

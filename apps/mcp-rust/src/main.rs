@@ -225,7 +225,7 @@ fn provider_allowed(subject:&str)->bool{
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool, #[serde(default)] multi_agent:bool}
+struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool, #[serde(default)] multi_agent:bool, #[serde(default)] vision_consent:bool, snapshot:Option<openvietgis_mcp_rust::vision::Input>}
 async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
     let v=parse(&body,&h)?;if v!=json!({}){return Err(Failure::new(422,"Invalid provider request"))}
     let(owner,_)=browser_identity(&app,&h,id).await?;
@@ -327,8 +327,17 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
     let p=Provider::parse(&input.provider).ok_or(Failure::new(422,"Unsupported provider"))?;
     let cfg=Config::from_env(p).ok_or(Failure::new(503,"Provider not configured"))?;
     if cfg.descriptor()["model"]!=input.expected_model.as_str(){return Err(Failure::new(409,"Provider model changed; refresh consent"))}
+    if input.snapshot.is_some()!=input.vision_consent{return Err(Failure::new(422,"Explicit image consent required"))}
+    let snapshot=match input.snapshot{
+        Some(img)=>{
+            if cfg.descriptor()["vision"]!=true{return Err(Failure::new(422,"Selected model not enabled for vision"))}
+            Some(openvietgis_mcp_rust::vision::Snapshot::validate(img).ok_or(Failure::new(422,"Invalid map snapshot"))?)
+        },None=>None
+    };
+    let vision_metadata=snapshot.as_ref().map(|s|s.metadata());
     let _slot=AgentSlot::acquire(&owner.subject)?;
-    let gateway=Gateway::new(cfg).map_err(|_|Failure::new(503,"Provider unavailable"))?;
+    let mut gateway=Gateway::new(cfg).map_err(|_|Failure::new(503,"Provider unavailable"))?;
+    if let Some(img)=snapshot{gateway=gateway.with_snapshot(img).map_err(|_|Failure::new(422,"Vision unavailable"))?;}
     let allowed=app.registry.list().iter().filter(|t|{
         let name=t["name"].as_str().unwrap_or("");
         // Administration remains excluded even when the user permits editing.
@@ -369,7 +378,7 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
         }).await;
         let totals=budget.snapshot();
         let children=reports.lock().map(|r|r.clone()).unwrap_or_default();
-        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"snapshot":vision_metadata,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
         if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
     });
     Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
