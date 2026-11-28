@@ -12,3 +12,9 @@ Baseline SPEC 075 commit 6bb971b. All F001–F012 stay open until acceptance.
 - Python developer signing CLI; does not replace moderation or server verification.
 ## Remaining
 F001 mapping of 150 packages, F002 exact compatibility and golden vectors, F003 persistent key rotation/revocation/metadata, F004 full dependency selection/transactional lock and lifecycle, F005 actual dispatch and isolation/audit/resource quotas, F006 native/Web declarative renderer, F007 remaining SDKs and samples, F008 marketplace moderation/versioning/private catalog/rollback, F009 payments and entitlement, F010 migrations and recovery, F011 end-to-end reference modules, F012 consolidated integration and review. No live deployment.
+
+## Verified on code commit `430907e86340d3b6946db415c89af8056a6d86a0`
+- All 15 changed files matched the fetched GitHub blob hashes on the separate VPS development checkout.
+- Rust 1.85.1 locked/offline: ovg-module-sdk lib 11/11; openvietgis-api-rust no-default-features lib 103/103 on an unprivileged Linux account. Initial root-only run failed the existing offline worker policy; running the exact built binary as `nobody` passed. No production changes.
+- TypeScript client-sdk and web-next typecheck passed; Node 24.22.2 was used locally (project expects Node 26, so exact supported toolchain remains a CI gate). Python signing CLI syntax compiled. `git diff --check` and changed Rust file formatting passed.
+- No full CI, real PostGIS integration, payment sandbox end-to-end, signed Web/mobile/desktop runtime activation, independent security review, or release gate claimed. F001–F012 remain open.
