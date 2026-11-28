@@ -86,12 +86,14 @@ pub fn run(algorithm:AlgorithmId,epsg:u32,input:&[Input],overlay:&[Input],parame
     let r=&input[i];
     match algorithm{
      AlgorithmId::Buffer=>{
-      // Geo buffer default round style only. Registry quad_segs=8 is not
-      // silently claimed equivalent to GEOS. Explicit alternative rejected.
-      if epsg!=3857||parameters.get("quad_segs").is_some(){return Err(fail());}
+      // Round angular step follows registry parameter; no exact GEOS parity claim.
+      if epsg!=3857{return Err(fail());}
       let d=params["distance_meters"].as_f64().ok_or(Error::InvalidBatch)?;
       if d>10000.{return Err(fail());}
-      emit(Geometry::MultiPolygon(g.buffer(d)),r.attributes.clone(),ids(r),vec![])?;
+      let angle=std::f64::consts::FRAC_PI_2/(params["quad_segs"].as_u64().ok_or(Error::InvalidBatch)? as f64);
+      use geo::algorithm::buffer::{BufferStyle,LineJoin,LineCap};
+      let style=BufferStyle::new(d).line_join(LineJoin::Round(angle)).line_cap(LineCap::Round(angle));
+      emit(Geometry::MultiPolygon(g.buffer_with_style(style)),r.attributes.clone(),ids(r),vec![])?;
      },
      AlgorithmId::Clip|AlgorithmId::Difference=>{
       let p=poly(g)?;let mask=mask.as_ref().ok_or(Error::InvalidBatch)?;
@@ -101,9 +103,7 @@ pub fn run(algorithm:AlgorithmId,epsg:u32,input:&[Input],overlay:&[Input],parame
      AlgorithmId::Intersection=>for(j,h)in b.iter().enumerate(){if cancel(){return Err(Error::Cancelled);}if g.intersects(h){emit(Geometry::MultiPolygon(poly(g)?.intersection(&poly(h)?)),r.attributes.clone(),ids(r),ids(&overlay[j]))?;}},
      AlgorithmId::Reproject=>{
       if !matches!(target,4326|3857){return Err(fail());}
-      let mut error=None;
-      let mapped=g.map_coords(|c|match crate::crs::transform(epsg,target,c.x,c.y){Ok([x,y])=>geo::Coord{x,y},Err(e)=>{error=Some(e);c}});
-      if let Some(e)=error{return Err(e);}emit(mapped,r.attributes.clone(),ids(r),vec![])?;
+      let mapped=g.try_map_coords(|c|crate::crs::transform(epsg,target,c.x,c.y).map(|[x,y]|geo::Coord{x,y}))?;emit(mapped,r.attributes.clone(),ids(r),vec![])?;
      },
      AlgorithmId::SpatialJoin=>{
       let mut found=false;for(j,h)in b.iter().enumerate(){if cancel(){return Err(Error::Cancelled);}
