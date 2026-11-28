@@ -74,9 +74,10 @@ export function Landing({provider,error,invitation,authenticated,onAuth,onWorksp
   window.addEventListener("message",receive);return()=>{active=false;window.clearInterval(timer);window.removeEventListener("message",receive)}
  },[mode,onAuth]);
  return <div className="landing-page">
+ <a className="ovg-skip-link" href="#main-content">Bỏ qua điều hướng</a>
  <div className="qgis-announcement"><div className="landing-container"><span className="qgis-announcement-badge">OPEN SOURCE</span> Bản đồ dành cho mọi người, được xây dựng bởi cộng đồng Việt Nam. <a href="https://github.com/nguyentrieu210/OpenVietGis" target="_blank" rel="noopener noreferrer">Khám phá mã nguồn ↗</a></div></div>
  <header className="landing-header"><div className="landing-container landing-nav"><a href="/" className="landing-home" aria-label="OpenVietGIS trang chủ"><Brand/></a><nav aria-label="Điều hướng"><a href="#features">Tính năng</a><a href="#workflow">Giải pháp</a><a href="/?marketplace=1">Plugin</a><a href="#community">Cộng đồng</a><button className="qgis-nav-donate" onClick={showDonate}>♡ Donate</button></nav><div className="landing-actions">{authenticated?<button className="landing-primary" onClick={onWorkspace}>Mở WebGIS <span>↗</span></button>:<><button className="landing-link-button" onClick={()=>open("login")}>Đăng nhập</button><button className="landing-primary" aria-label="Mở ứng dụng" onClick={()=>open("register")}>Bắt đầu miễn phí <span aria-hidden="true">↗</span></button></>}</div></div></header>
- <main>
+ <main id="main-content" tabIndex={-1}>
  <section className="landing-hero qgis-founder-hero">
  <svg className="atlas-contours" viewBox="0 0 1450 760" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none">{Array.from({length:20},(_,i)=><path key={i} d={`M${-180+i*21} 780 C ${-220+i*46} ${400-i*5} ${250+i*19} ${820-i*29} ${280+i*39} ${400-i*13} S ${560+i*36} ${-40+i*8} ${900+i*36} ${80-i*16} S ${1300+i*12} ${300-i*12} 1550 ${-80+i*26}`} stroke={i%5===0?"#70bca6":"#3b786e"} strokeWidth={i%5===0?1.2:.7}/>)}</g></svg>
  <div className="landing-container qgis-founder-grid">

@@ -14,6 +14,12 @@ test("public landing and login modal are separate surfaces", async ({ page }) =>
   const auth = await popupPromise;
   await expect(page.getByRole("dialog", { name: "Tài khoản OpenVietGIS" })).toBeVisible();
   await expect(auth.locator("#username")).toBeVisible();
+  const apiPort =
+    process.env.OPENVIETGIS_E2E_API_PORT ??
+    process.env.OVG_E2E_API_PORT ??
+    "8000";
+  const expectedCallback = `http://127.0.0.1:${apiPort}/api/v1/auth/callback/keycloak`;
+  expect(new URL(auth.url()).searchParams.get("redirect_uri")).toBe(expectedCallback);
   await auth.close();
   await expect(page).toHaveURL("/");
 });
@@ -25,7 +31,7 @@ test("protected deep link returns to the intended canonical destination", async 
   await expect(page.locator(".ovg-account-popover")).toBeVisible();
 });
 
-test("external return_to is ignored and authentication remains same-origin", async ({ page }) => {
+test("external return_to is ignored and authentication remains same-origin", async ({ page }, testInfo) => {
   await page.goto("/?return_to=" + encodeURIComponent("https://evil.example.test/steal-session"));
   await expect(page.getByRole("heading", { name: /OpenVietGIS.*GIS cho mọi người/i })).toBeVisible();
   const popupPromise = page.waitForEvent("popup");
@@ -38,7 +44,7 @@ test("external return_to is ignored and authentication remains same-origin", asy
 
   await expect(page.locator(".live-studio")).toBeVisible({timeout:20_000});
   await expect(page).toHaveURL("/app");
-  expect(new URL(page.url()).origin).toBe("http://127.0.0.1:5189");
+  expect(new URL(page.url()).origin).toBe(new URL(testInfo.project.use.baseURL as string).origin);
 });
 
 test("sign out from a deep route invalidates the application session", async ({ page }) => {

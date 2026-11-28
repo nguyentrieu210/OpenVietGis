@@ -13,6 +13,11 @@ test("public shell exposes skip navigation and visible keyboard focus", async ({
   await page.keyboard.press("Tab");
   await expect(skip).toBeFocused();
   await expect(skip).toHaveCSS("outline-style", "solid");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL("/#main-content");
+  const main = page.locator("#main-content");
+  await expect(main).toHaveAttribute("tabindex", "-1");
+  await expect(main).toBeFocused();
 });
 
 test("authenticated shell stays within viewport at reference widths", async ({
@@ -22,7 +27,7 @@ test("authenticated shell stays within viewport at reference widths", async ({
 
   for (const width of [1440, 1024, 768]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.locator(".ovg-app-shell")).toBeVisible();
+    await expect(page.locator(".live-studio")).toBeVisible();
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth
@@ -38,7 +43,7 @@ test("primary account and command controls meet minimum touch target", async ({
   await page.setViewportSize({ width: 1024, height: 900 });
 
   for (const locator of [
-    page.getByRole("button", { name: "Mở menu tài khoản" }),
+    page.getByRole("button", { name: "Menu tài khoản" }),
     page.getByRole("button", { name: /Lệnh nhanh/ })
   ]) {
     const box = await locator.boundingBox();

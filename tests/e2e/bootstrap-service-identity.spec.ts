@@ -12,19 +12,13 @@ test(
     const status = await page.request.get("/api/v1/bootstrap/status");
     expect(await status.json()).toEqual({ initialized: false });
 
-    await page.goto("/login");
-    await expect(
-      page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
-    ).toBeVisible();
-    await page
-      .getByRole("link", {
-        name: "Đăng nhập với OpenVietGIS Development",
-        exact: true
-      })
-      .click();
-    await page.locator("#username").fill("owner-a");
-    await page.locator("#password").fill("openvietgis-test-owner-a");
-    await page.locator("#kc-login").click();
+    await page.goto("/app");
+    const popupPromise = page.waitForEvent("popup");
+    await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+    const auth = await popupPromise;
+    await auth.locator("#username").fill("owner-a");
+    await auth.locator("#password").fill("openvietgis-test-owner-a");
+    await auth.locator("#kc-login").click();
 
     // Fresh installations must land directly on the bootstrap gate at /app.
     await expect(page).toHaveURL(new RegExp("/app$"));

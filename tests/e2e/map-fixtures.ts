@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import { signInIdentity } from "./frontend-auth-helpers";
 import type {
   MapConfiguration, MapViewpoint, ProjectMap, SaveMapInput, MapSaveReceipt,
   SpatialLayer, SpatialSource
@@ -14,17 +15,9 @@ export const referenceFamilies = [
 ] as const;
 
 export async function mapSignIn(page: Page, member = false): Promise<void> {
-  await page.goto("/login");
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill(member ? "member-a" : "owner-a");
-  await page.locator("#password").fill(member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  const username = member ? "member-a" : "owner-a";
+  const password = member ? "openvietgis-test-member-a" : "openvietgis-test-owner-a";
+  await signInIdentity(page, username, password);
   await expect(
     page.locator(".ovg-account-name").filter({
       hasText: member ? "Member Alpha" : "Owner Alpha"
