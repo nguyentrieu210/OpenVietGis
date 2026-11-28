@@ -1,0 +1,106 @@
+name: SPEC 074 Wave 1 desktop candidate
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'crates/ovg-project-store/**'
+      - 'crates/ovg-native-providers/**'
+      - 'apps/web-next/src/desktop/**'
+      - 'apps/web-next/src/main.tsx'
+      - '.github/workflows/spec074-wave1.yml'
+      - 'infra/desktop/wave0/**'
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next exec vitest run src/desktop/transport.test.ts src/desktop/vertices.test.ts
+      - run: pnpm --filter @openvietgis/web-next build
+      - run: pnpm --filter @openvietgis/web-next build
+        env:
+          VITE_OVG_DESKTOP: '1'
+      - run: cargo generate-lockfile --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo metadata --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --format-version 1 > desktop-metadata.json
+      - run: python infra/desktop/wave0/test_check_native_graph.py
+      - run: python infra/desktop/wave0/check_native_graph.py desktop-metadata.json
+      - run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo build --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-candidate-${{ matrix.os }}
+          path: |
+            apps/desktop/src-tauri/Cargo.lock
+            apps/desktop/src-tauri/target/debug/openvietgis-desktop
+            apps/desktop/src-tauri/target/debug/openvietgis-desktop.exe
+  universal-store:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: cargo generate-lockfile --manifest-path crates/ovg-project-store/Cargo.toml
+      - run: cargo test --locked --manifest-path crates/ovg-project-store/Cargo.toml
+      - run: cargo run --release --locked --manifest-path crates/ovg-project-store/Cargo.toml --example bulk_benchmark -- 100000 > bulk-benchmark.json
+      - run: cargo metadata --locked --manifest-path crates/ovg-project-store/Cargo.toml --format-version 1 > project-store-metadata.json
+      - run: python3 infra/desktop/wave0/check_native_graph.py project-store-metadata.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: universal-store-candidate
+          path: |
+            crates/ovg-project-store/Cargo.lock
+            project-store-metadata.json
+            bulk-benchmark.json
+  native-providers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libgdal-dev libproj-dev
+      - run: cargo test --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled,remote-copc
+      - run: cargo metadata --manifest-path crates/ovg-native-providers/Cargo.toml --features ogr,analytics-bundled,remote-copc --format-version 1 > native-providers-metadata.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-providers-candidate
+          path: |
+            crates/ovg-native-providers/Cargo.lock
+            native-providers-metadata.json
+  desktop-optional-profiles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libgdal-dev libproj-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next build
+        env:
+          VITE_OVG_DESKTOP: '1'
+      - run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --features native-ogr,remote-copc,native-cad

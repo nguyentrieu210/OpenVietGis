@@ -1,0 +1,83 @@
+name: SPEC 074 Wave 0 qualification
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'infra/desktop/wave0/**'
+      - 'specs/074-cross-platform-native-desktop/**'
+      - '.github/workflows/spec074-wave0.yml'
+permissions:
+  contents: read
+jobs:
+  protocol:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: rustc --edition=2021 --test infra/desktop/wave0/protocol.rs -o /tmp/ovg-protocol-test && /tmp/ovg-protocol-test
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: infra/desktop/wave0/tauri-spike
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - run: rustc -Vv
+      - run: cargo generate-lockfile
+      - run: cargo check --locked
+      - run: cargo tree --locked
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tauri-spike-lock-${{ matrix.os }}
+          path: infra/desktop/wave0/tauri-spike/Cargo.lock
+  shared-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @openvietgis/web-next build
+  shared-native-graph:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-apple-darwin, x86_64-unknown-linux-gnu]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: a746778f7b09ad691f4fe68e21a973174b46c51a
+          path: mobile-baseline
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: |
+          for crate in ovg-mobile-engine ovg-local-storage; do
+            cargo metadata --manifest-path "mobile-baseline/crates/$crate/Cargo.toml" --filter-platform "${{ matrix.target }}" --format-version 1 > "$crate.json"
+            python3 infra/desktop/wave0/check_native_graph.py "$crate.json"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-graph-${{ matrix.target }}
+          path: |
+            ovg-mobile-engine.json
+            ovg-local-storage.json
+            mobile-baseline/crates/ovg-mobile-engine/Cargo.lock
+            mobile-baseline/crates/ovg-local-storage/Cargo.lock

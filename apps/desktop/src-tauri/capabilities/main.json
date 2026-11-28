@@ -1,0 +1,11 @@
+{
+  "identifier": "main-local",
+  "description": "Local main window; no filesystem, shell, remote URLs or plugin permissions",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

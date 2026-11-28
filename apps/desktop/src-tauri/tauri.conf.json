@@ -1,0 +1,27 @@
+{
+  "productName": "OpenVietGIS Desktop",
+  "version": "0.1.0",
+  "identifier": "cloud.openvietgis.desktop",
+  "build": {
+    "frontendDist": "../../web-next/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "OpenVietGIS Desktop",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 780,
+        "minHeight": 500
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}
