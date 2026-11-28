@@ -11,3 +11,6 @@ Desktop IPC messages must have versioned typed input/output, allowlisted operati
 
 ## Qualification
 Shared golden vectors and CRS fixtures, cross-client workspace and recovery tests, isolated server conflict/receipt/revocation tests. Cross-platform schema upgrades must be forward-safe or fail without modifying source. Desktop signing, updater, dependency graph and WebView qualification are separate evidence. Do not advertise an OS, format, algorithm or offline capability that lacks acceptance.
+
+## Revision 2 read plane
+The [local data protocol](local-data-protocol.md) is read-only, revision scoped and bounded; it never becomes a second storage, sync or authorization system. Mutations and jobs stay on typed IPC. Shared source contracts remain SPEC 073 owned; Desktop render cache and protocol adapter are SPEC 074 owned. [Performance qualification](performance.md) is required per advertised OS.
