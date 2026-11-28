@@ -27,3 +27,13 @@ fn area(r:&ovg_mobile_engine::processing::ResultSet)->f64{r.rows.iter().map(|r|p
  let p=run(AlgorithmId::Reproject,4326,&a,&[],&json!({"target_srid":3857}),||false,|_|{}).unwrap();assert_eq!(p.epsg,3857);
  assert!(matches!(run(AlgorithmId::Reproject,4326,&a,&[],&json!({"target_srid":3857}),||true,|_|{}),Err(Error::Cancelled)));
 }
+
+#[test]fn processing_job_result_once_and_workspace_close(){
+ let e=ovg_mobile_engine::Engine::default();let s=e.open_session().unwrap();let w=e.open_workspace(s).unwrap();
+ let j=e.start_processing(w,AlgorithmId::Clip,3857,vec![row("a",0.,0.)],vec![row("b",1.,0.)],json!({})).unwrap();
+ let started=std::time::Instant::now();
+ while !e.is_finished(j).unwrap(){assert!(started.elapsed()<std::time::Duration::from_secs(5));std::thread::yield_now();}
+ assert_eq!(e.progress(j).unwrap(),100);assert!((area(&e.take_processing(j).unwrap())-2.).abs()<1e-6);
+ assert!(matches!(e.take_processing(j),Err(Error::Stale)));
+ e.close_workspace(w).unwrap();assert!(matches!(e.start_processing(w,AlgorithmId::Clip,3857,vec![],vec![],json!({})),Err(Error::Stale)));
+}

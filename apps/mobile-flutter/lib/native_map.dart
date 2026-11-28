@@ -45,7 +45,7 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
     if(_focusSeen!=c.focusEpoch){
       _focusSeen=c.focusEpoch;
       final p=c.focusPoint;final map=_map;
-      if(p!=null&&map!=null){unawaited(map.animateCamera(CameraUpdate.newLatLngZoom(LatLng(p[1],p[0]),16)));}
+      if(p!=null&&map!=null){unawaited(map.animateCamera(CameraUpdate.newLatLngZoom(LatLng(p[1],p[0]),16)).then<void>((_){}).catchError((Object _){}));}
     }
     if(_scope==c.selected&&_seen==c.dataEpoch)return;
     _scope=c.selected;_seen=c.dataEpoch;_selected=null;_epoch++;

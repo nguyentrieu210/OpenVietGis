@@ -1,7 +1,7 @@
 /// Trusted host widgets. Only reviewed runtime data is accepted. No dynamic
 /// widget factory, URL launch, embedded HTML, filesystem or native bridge.
 library;
-import 'package:material_ui/material_ui.dart';
+import 'package:material_ui/material_ui.dart' hide Action;
 import 'package:openvietgis_plugin_sdk/openvietgis_plugin_sdk.dart';
 import 'dart:convert';
 

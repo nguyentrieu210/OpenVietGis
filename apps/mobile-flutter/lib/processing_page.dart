@@ -18,13 +18,13 @@ class _ProcessingPageState extends State<ProcessingPage>{
  NativeProcessingJob? _job;
  bool _busy=false,_cancel=false;
  int _progress=0;
- String? _result,_error;
+ String? _result,_error,_resultScope;
  Map<String,dynamic>? _summary;
  @override void dispose(){_cancel=true;final j=_job;if(j!=null){unawaited(j.close());}_input.dispose();_overlay.dispose();_params.dispose();super.dispose();}
  List<String> _ids(String s)=>s.split(RegExp(r'[\s,;]+')).where((v)=>v.isNotEmpty).toList();
  Future<void> _run()async{
   if(_busy)return;final scope=widget.controller.selected;
-  setState((){_busy=true;_cancel=false;_error=null;_result=null;_summary=null;_progress=0;});
+  setState((){_busy=true;_cancel=false;_error=null;_result=null;_resultScope=null;_summary=null;_progress=0;});
   NativeProcessingJob? job;
   try{
     job=await widget.controller.local.startLocalProcessing(algorithm:_algorithm,inputIds:_ids(_input.text),overlayIds:_ids(_overlay.text),parametersJson:_params.text);
@@ -37,21 +37,21 @@ class _ProcessingPageState extends State<ProcessingPage>{
     }
     if(_cancel){throw StateError('CANCELLED');}
     final result=await job.takeProcessingJson();final summary=jsonDecode(result) as Map<String,dynamic>;
-    if(mounted&&scope==widget.controller.selected)setState((){_result=result;_summary=summary;_progress=100;});
+    if(mounted&&scope==widget.controller.selected)setState((){_result=result;_resultScope=scope;_summary=summary;_progress=100;});
   }catch(_){if(mounted)setState(()=>_error=_cancel?'Cancelled — no output published':'Processing failed: check input IDs, parameters, CRS and topology');}
   finally{if(job!=null){try{await job.close();}catch(_){}}_job=null;if(mounted)setState(()=>_busy=false);}
  }
  Future<void> _publish()async{
-  final result=_result;if(result==null||_busy||_summary?['epsg']!=4326)return;
+  final result=_result;if(result==null||_busy||_summary?['epsg']!=4326||_resultScope!=widget.controller.selected)return;
   setState(()=>_busy=true);
   try{await widget.controller.publishResult(result);if(mounted)Navigator.pop(context);}
   catch(_){if(mounted)setState(()=>_error='Publication failed or outcome unknown; check workspace list before retry.');}
   finally{if(mounted)setState(()=>_busy=false);}
  }
  Future<void> _export()async{
-  final result=_result;if(result==null||_busy)return;
+  final result=_result;if(result==null||_busy||_resultScope!=widget.controller.selected)return;
   final confirm=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Export processing result'),content:const Text('Share CRS-tagged WKB JSON with attributes and lineage. This is not GeoJSON or a GeoPackage.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),TextButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Share'))]));
-  if(confirm!=true||!mounted)return;
+  if(confirm!=true||!mounted||_resultScope!=widget.controller.selected)return;
   try{final dir=await(await getTemporaryDirectory()).createTemp('ovg-result-');final f=await File(dir.path+'/result.ovg.json').writeAsString(result,flush:true);await Share.shareXFiles([XFile(f.path,mimeType:'application/json')]);}
   catch(_){if(mounted)setState(()=>_error='Export failed');}
  }
