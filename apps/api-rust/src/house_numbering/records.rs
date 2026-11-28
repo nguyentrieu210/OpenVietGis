@@ -1,6 +1,7 @@
 //! Reconciliation, protected household data, search, import history, document
 //! history and stored document/export downloads.
 
+use super::module_private;
 use std::collections::HashMap;
 
 use axum::body::Bytes;
@@ -205,6 +206,7 @@ async fn download_export(
         .await?
         .level
         == EffectiveProjectLevel::Manage;
+    let can_manage = can_manage && super::has_module_permission(&mut read, "ext.house_numbering.export_sensitive").await?;
     let (artifact, _) = store::download_export(
         &mut read,
         audit_actor(&auth),
@@ -395,6 +397,9 @@ async fn upsert_private(
     }
     let protected = Value::Object(body.protected_data);
     let mut edit = module_manage(&state, &auth, org, project).await?;
+    if !super::has_module_permission(&mut edit, "ext.house_numbering.private_read").await? {
+        return Err(ovg_core::AppError::forbidden("missing extension permission: ext.house_numbering.private_read").into());
+    }
     let result = store::upsert_private(
         &mut edit,
         audit_actor(&auth),
@@ -426,7 +431,7 @@ async fn read_private(
         .get("purpose")
         .filter(|value| text_len(value, 1, 500))
         .ok_or(HouseNumberingError::InvalidRequest)?;
-    let mut edit = module_manage(&state, &auth, org, project).await?;
+    let mut edit = module_private(&state, &auth, org, project).await?;
     let result = store::read_private(&mut edit, audit_actor(&auth), building_id, purpose).await?;
     edit.commit().await?;
     Ok(Json(result))

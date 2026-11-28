@@ -2,6 +2,7 @@
 
 pub mod marketplace;
 pub mod partner;
+pub mod permissions;
 pub mod records;
 pub mod validation;
 
@@ -723,7 +724,7 @@ pub(crate) async fn activation_row(
     .ok_or_else(|| AppError::not_found("extension activation not found"))
 }
 
-pub(crate) async fn active_manifest(
+pub async fn active_manifest(
     read: &mut ProjectRead<'_>,
     extension_key: &str,
 ) -> Result<ManifestContractRow, AppError> {

@@ -17,11 +17,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use ovg_core::AppError;
-use ovg_module_sdk::ModuleManifest;
 use ovg_storage::catalog::{ProjectRead, ProjectReadPolicy};
 use ovg_storage::editing::{EditError, ServiceAuth};
 use ovg_storage::house_numbering;
-use ovg_storage::integration_hub::{self, EffectiveProjectLevel};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
@@ -111,35 +109,21 @@ struct BuildingQuery {
     route_id: Option<Uuid>,
 }
 
-async fn ensure_module_active(
-    state: &AppState,
-    read: &mut ProjectRead<'_>,
-) -> Result<(), HouseNumberingError> {
-    let active = house_numbering::active_manifest_contract(read)
-        .await
-        .map_err(HouseNumberingError::Domain)?;
-    let shipped = state
-        .modules
-        .list_manifests()
-        .into_iter()
-        .find(|manifest| manifest.extension_key == "house_numbering");
+const MODULE_KEY: &str = "house_numbering";
 
-    let compatible = active
-        .and_then(|(contract, enabled)| {
-            serde_json::from_value::<ModuleManifest>(contract)
-                .ok()
-                .map(|stored| (stored, enabled))
-        })
-        .zip(shipped)
-        .is_some_and(|((stored, enabled), shipped)| {
-            shipped.runtime_contract_matches(&stored, enabled)
-        });
+async fn ensure_module_active(state:&AppState,read:&mut ProjectRead<'_>)->HnResult<()> {
+    crate::extensions::module_permissions::verified_manifest(state,read,MODULE_KEY).await?;
+    Ok(())
+}
 
-    if !compatible {
-        return Err(HouseNumberingError::Domain(AppError::not_found(
-            "official module activation does not match shipped runtime",
-        )));
-    }
+// A project role is always checked first; an explicit plugin allowlist can only narrow it.
+pub(super) async fn has_module_permission(read:&mut ProjectRead<'_>,permission:&str)->HnResult<bool>{
+    Ok(ovg_storage::extensions::permissions::allows(read,MODULE_KEY,"ext.house_numbering.read").await?
+        && ovg_storage::extensions::permissions::allows(read,MODULE_KEY,permission).await?)
+}
+
+async fn require_module_permission(read:&mut ProjectRead<'_>,permission:&str)->HnResult<()> {
+    if !has_module_permission(read,permission).await?{return Err(AppError::forbidden(format!("missing extension permission: {permission}")).into());}
     Ok(())
 }
 
@@ -149,6 +133,7 @@ async fn module_scope<'a>(
     organization_id: Uuid,
     project_id: Uuid,
     policy: ProjectReadPolicy,
+    permission: &str,
 ) -> Result<ProjectRead<'a>, HouseNumberingError> {
     // The global Python project_access_guard does not whitelist module paths.
     // Unrestricted policies therefore preserve the scoped-GIS fail-closed behavior.
@@ -156,6 +141,7 @@ async fn module_scope<'a>(
         .await
         .map_err(HouseNumberingError::Access)?;
     ensure_module_active(state, &mut read).await?;
+    require_module_permission(&mut read, permission).await?;
     Ok(read)
 }
 
@@ -181,6 +167,7 @@ pub(super) async fn module_service_read<'a>(
     .await
     .map_err(service_scope_error)?;
     ensure_module_active(state, &mut read).await?;
+    require_module_permission(&mut read, "ext.house_numbering.read").await?;
     Ok(read)
 }
 
@@ -196,6 +183,7 @@ pub(super) async fn module_read<'a>(
         organization_id,
         project_id,
         ProjectReadPolicy::Unrestricted,
+        "ext.house_numbering.read",
     )
     .await
 }
@@ -212,6 +200,7 @@ pub(super) async fn module_edit<'a>(
         organization_id,
         project_id,
         ProjectReadPolicy::UnrestrictedEdit,
+        "ext.house_numbering.edit",
     )
     .await
 }
@@ -232,6 +221,7 @@ async fn create_rule(
             .as_ref()
             .is_some_and(|value| value.chars().count() > 500)
         || !matches!(body.status.as_str(), "draft" | "authoritative")
+        || (body.status == "authoritative" && body.authority_ref.as_deref().is_none_or(|v| v.trim().is_empty()))
         || !matches!(body.suffix_style.as_str(), "letters" | "dash")
         || !body.max_distance_m.is_finite()
         || !(body.max_distance_m > 0.0 && body.max_distance_m <= 5_000.0)
@@ -239,17 +229,7 @@ async fn create_rule(
         return Err(HouseNumberingError::InvalidRequest);
     }
 
-    let mut edit = module_edit(&state, &auth, organization_id, project_id).await?;
-    let level = integration_hub::catalog_context(&mut edit, auth.actor_id())
-        .await
-        .map_err(HouseNumberingError::Domain)?
-        .level;
-    if level != EffectiveProjectLevel::Manage {
-        return Err(HouseNumberingError::Permission(
-            "missing permission: project.manage",
-        ));
-    }
-
+    let mut edit = module_manage(&state, &auth, organization_id, project_id).await?;
     let actor = house_numbering::AuditActor {
         id: auth.actor_id(),
         display_name: auth.display_name(),
@@ -512,20 +492,22 @@ pub(super) fn audit_actor(auth: &HumanSession) -> house_numbering::AuditActor<'_
     }
 }
 
-pub(super) async fn module_manage<'a>(
-    state: &'a AppState,
-    auth: &HumanSession,
-    organization_id: Uuid,
-    project_id: Uuid,
-) -> HnResult<ProjectRead<'a>> {
-    let mut edit = module_edit(state, auth, organization_id, project_id).await?;
-    let level = integration_hub::catalog_context(&mut edit, auth.actor_id())
-        .await?
-        .level;
-    if level != EffectiveProjectLevel::Manage {
-        return Err(HouseNumberingError::Permission(
-            "missing permission: project.manage",
-        ));
-    }
-    Ok(edit)
+pub(super) async fn module_manage<'a>(state:&'a AppState,auth:&HumanSession,organization_id:Uuid,project_id:Uuid)->HnResult<ProjectRead<'a>> {
+    module_scope(state,auth,organization_id,project_id,ProjectReadPolicy::UnrestrictedManage,"ext.house_numbering.manage").await
+}
+
+pub(super) async fn module_assign<'a>(state:&'a AppState,auth:&HumanSession,organization_id:Uuid,project_id:Uuid)->HnResult<ProjectRead<'a>> {
+    module_scope(state,auth,organization_id,project_id,ProjectReadPolicy::UnrestrictedEdit,"ext.house_numbering.assign").await
+}
+
+pub(super) async fn module_survey<'a>(state:&'a AppState,auth:&HumanSession,organization_id:Uuid,project_id:Uuid)->HnResult<ProjectRead<'a>> {
+    module_scope(state,auth,organization_id,project_id,ProjectReadPolicy::UnrestrictedEdit,"ext.house_numbering.survey").await
+}
+
+pub(super) async fn module_approve<'a>(state:&'a AppState,auth:&HumanSession,organization_id:Uuid,project_id:Uuid)->HnResult<ProjectRead<'a>> {
+    module_scope(state,auth,organization_id,project_id,ProjectReadPolicy::UnrestrictedManage,"ext.house_numbering.approve").await
+}
+
+pub(super) async fn module_private<'a>(state:&'a AppState,auth:&HumanSession,organization_id:Uuid,project_id:Uuid)->HnResult<ProjectRead<'a>> {
+    module_scope(state,auth,organization_id,project_id,ProjectReadPolicy::UnrestrictedManage,"ext.house_numbering.private_read").await
 }

@@ -1,6 +1,7 @@
 //! Location inspection, numbering previews and preview application
 //! (port of the `HouseNumberingService` numbering workflow).
 
+use super::module_assign;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use axum::body::Bytes;
@@ -23,7 +24,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::{
-    audit_actor, csrf, decode, module_edit, module_read, path_id, scope_ids, HnResult,
+    audit_actor, csrf, decode, module_read, path_id, scope_ids, HnResult,
     HouseNumberingError, BASE,
 };
 use crate::identity::HumanSession;
@@ -281,7 +282,7 @@ async fn preview(
         )
         .into());
     }
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     let result = preview_assignment(&mut edit, &auth, &body).await?;
     edit.commit().await?;
     Ok((StatusCode::CREATED, Json(result)))
@@ -533,7 +534,7 @@ async fn apply_preview(
     csrf(&state, &auth, &headers)?;
     let (org, project) = scope_ids(&params)?;
     let preview_id = path_id(&params, "preview_id")?;
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     let tree_conflict = |parents: &store::RouteParents, rows: &[store::TreeOccupant]| {
         let occupants: Vec<Occupant> = rows
             .iter()

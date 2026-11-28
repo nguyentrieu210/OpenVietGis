@@ -1,6 +1,7 @@
 //! Building→route assignment review, unlinked-building audit, alias/prefix
 //! recovery and cluster corrections (port of the `building-assignment/*` routes).
 
+use super::module_assign;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt;
 
@@ -25,7 +26,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use super::{
-    audit_actor, csrf, decode, module_edit, module_read, scope_ids, text_len, HnResult,
+    audit_actor, csrf, decode, module_read, scope_ids, text_len, HnResult,
     HouseNumberingError, BASE,
 };
 use crate::identity::HumanSession;
@@ -411,7 +412,7 @@ async fn preview(
         strict: body.strict,
         building_ids: body.building_ids,
     };
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     let result = run_preview(&mut edit, &args).await?;
     edit.commit().await?;
     Ok(Json(result))
@@ -446,7 +447,7 @@ async fn apply(
         strict: body.strict,
         building_ids: body.building_ids,
     };
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     store::assignment_lock(&mut edit).await?;
     let plan = run_preview(&mut edit, &args).await?;
     if plan["preview_token"] != body.preview_token.as_str() {
@@ -616,7 +617,7 @@ async fn catalog_apply(
         )
         .into());
     }
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     store::assignment_lock(&mut edit).await?;
     let window = Window {
         search: "",
@@ -785,7 +786,7 @@ async fn correction_preview(
         body.max_distance_m,
     )?;
     correction_batch(&body.building_ids)?;
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     let result = run_correction(
         &mut edit,
         &body.cluster,
@@ -831,7 +832,7 @@ async fn correction_apply(
             "Cần chọn nhà và ghi lý do đối soát rõ ràng",
         ));
     }
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_assign(&state, &auth, org, project).await?;
     store::assignment_lock(&mut edit).await?;
     store::route_for_update(&mut edit, body.route_id).await?;
     let plan = run_correction(

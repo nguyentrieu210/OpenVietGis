@@ -1,5 +1,6 @@
 //! Numbering proposal queue and approval workflow routes.
 
+use super::module_approve;
 use std::collections::HashMap;
 
 use axum::body::Bytes;
@@ -14,7 +15,7 @@ use uuid::Uuid;
 
 use super::hierarchy::query_int;
 use super::{
-    audit_actor, csrf, decode, module_edit, module_manage, module_read, opt_text_len, path_id,
+    audit_actor, csrf, decode, module_edit, module_read, opt_text_len, path_id,
     scope_ids, HnResult, HouseNumberingError, BASE,
 };
 use crate::identity::HumanSession;
@@ -137,7 +138,7 @@ async fn transition_proposal(
     }
     let reviewer = matches!(body.action.as_str(), "approve" | "reject");
     let mut edit = if reviewer {
-        module_manage(&state, &auth, org, project).await?
+        module_approve(&state, &auth, org, project).await?
     } else {
         module_edit(&state, &auth, org, project).await?
     };

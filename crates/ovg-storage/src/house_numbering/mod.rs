@@ -95,49 +95,6 @@ pub(crate) fn db_error(error: sqlx::Error) -> AppError {
     AppError::internal("house-numbering database operation failed")
 }
 
-pub async fn active_manifest_contract(
-    read: &mut ProjectRead<'_>,
-) -> Result<Option<(Value, bool)>, AppError> {
-    let row = sqlx::query(
-        "SELECT
-            m.extension_key, m.version, m.api_compatibility,
-            m.display_name, m.description, m.permissions, m.commands,
-            m.capabilities, m.entity_schemas, m.ui_contributions, m.enabled
-         FROM extensions.project_activations a
-         JOIN extensions.manifests m
-           ON m.organization_id = a.organization_id
-          AND m.id = a.manifest_id
-          AND m.extension_key = a.extension_key
-         WHERE a.organization_id = $1
-           AND a.project_id = $2
-           AND a.extension_key = 'house_numbering'
-           AND a.status = 'active'",
-    )
-    .bind(read.organization_id())
-    .bind(read.project_id())
-    .fetch_optional(&mut **read.transaction())
-    .await
-    .map_err(db_error)?;
-
-    row.map(|row| {
-        let enabled: bool = row.try_get("enabled").map_err(db_error)?;
-        let contract = json!({
-            "extension_key": row.try_get::<String, _>("extension_key").map_err(db_error)?,
-            "version": row.try_get::<String, _>("version").map_err(db_error)?,
-            "api_compatibility": row.try_get::<String, _>("api_compatibility").map_err(db_error)?,
-            "display_name": row.try_get::<String, _>("display_name").map_err(db_error)?,
-            "description": row.try_get::<String, _>("description").map_err(db_error)?,
-            "permissions": row.try_get::<Value, _>("permissions").map_err(db_error)?,
-            "commands": row.try_get::<Value, _>("commands").map_err(db_error)?,
-            "capabilities": row.try_get::<Value, _>("capabilities").map_err(db_error)?,
-            "entity_schemas": row.try_get::<Value, _>("entity_schemas").map_err(db_error)?,
-            "ui_contributions": row.try_get::<Value, _>("ui_contributions").map_err(db_error)?,
-        });
-        Ok((contract, enabled))
-    })
-    .transpose()
-}
-
 async fn json_rows(
     read: &mut ProjectRead<'_>,
     sql: &str,

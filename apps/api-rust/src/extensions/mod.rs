@@ -3,6 +3,7 @@
 pub mod activations;
 pub mod manifests;
 pub mod marketplace;
+pub(crate) mod module_permissions;
 pub mod marketplace_developers;
 pub mod partner_platform;
 pub mod records;
@@ -30,6 +31,7 @@ const MAX_BODY_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .merge(activations::router())
+        .merge(module_permissions::router())
         .merge(manifests::router())
         .merge(records::router())
         .merge(marketplace::router())

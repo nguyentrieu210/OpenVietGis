@@ -1,5 +1,7 @@
 //! Field survey, assignment, progress and survey sign-off routes.
 
+use super::module_approve;
+use super::module_survey;
 use std::collections::HashMap;
 
 use axum::body::Bytes;
@@ -15,7 +17,7 @@ use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use super::{
-    audit_actor, csrf, decode, module_edit, module_manage, module_read, path_id, scope_ids,
+    audit_actor, csrf, decode, module_manage, module_read, path_id, scope_ids,
     HnResult, HouseNumberingError, BASE,
 };
 use crate::identity::HumanSession;
@@ -216,7 +218,7 @@ async fn review_survey(
     if body.expected_revision <= 0 || !matches!(body.decision.as_str(), "accepted" | "rejected") {
         return Err(HouseNumberingError::InvalidRequest);
     }
-    let mut edit = module_manage(&state, &auth, org, project).await?;
+    let mut edit = module_approve(&state, &auth, org, project).await?;
     let result = store::review_survey(
         &mut edit,
         audit_actor(&auth),
@@ -242,11 +244,12 @@ async fn sync_surveys(
     if !(1..=500).contains(&body.operations.len()) {
         return Err(HouseNumberingError::InvalidRequest);
     }
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_survey(&state, &auth, org, project).await?;
     let can_manage = integration_hub::catalog_context(&mut edit, auth.actor_id())
         .await?
         .level
         == EffectiveProjectLevel::Manage;
+    let can_manage = can_manage && super::has_module_permission(&mut edit, "ext.house_numbering.manage").await?;
     let operations: Vec<Value> = body.operations.into_iter().map(Value::Object).collect();
     let result = store::sync_surveys(
         &mut edit,
@@ -308,7 +311,7 @@ async fn sign_scope(
         Some(value) => Some(stripped(value, 0, 1000)?),
         None => None,
     };
-    let mut edit = module_manage(&state, &auth, org, project).await?;
+    let mut edit = module_approve(&state, &auth, org, project).await?;
     let result = store::sign_scope(
         &mut edit,
         audit_actor(&auth),
@@ -334,7 +337,7 @@ async fn revoke_signoff(
     let signoff_id = path_id(&params, "signoff_id")?;
     let body: RevokeBody = decode(&body)?;
     let reason = stripped(&body.reason, 3, 1000)?;
-    let mut edit = module_manage(&state, &auth, org, project).await?;
+    let mut edit = module_approve(&state, &auth, org, project).await?;
     let result = store::revoke_signoff(&mut edit, audit_actor(&auth), signoff_id, reason).await?;
     edit.commit().await?;
     Ok(Json(result))
@@ -406,7 +409,7 @@ async fn upload_photo(
     let (org, project) = scope_ids(&params)?;
     let (content_type, data) =
         multipart_file(&headers, &body).ok_or(HouseNumberingError::InvalidRequest)?;
-    let mut edit = module_edit(&state, &auth, org, project).await?;
+    let mut edit = module_survey(&state, &auth, org, project).await?;
     let result = store::upload_photo(
         &mut edit,
         audit_actor(&auth),

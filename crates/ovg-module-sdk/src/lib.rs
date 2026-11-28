@@ -381,6 +381,11 @@ impl ModuleRegistry {
     }
 
     #[must_use]
+    pub fn manifest(&self, extension_key: &str) -> Option<&ModuleManifest> {
+        self.modules.get(extension_key).map(|entry| &entry.manifest)
+    }
+
+    #[must_use]
     pub fn len(&self) -> usize {
         self.modules.len()
     }
