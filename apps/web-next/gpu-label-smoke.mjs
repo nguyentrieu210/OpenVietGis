@@ -29,8 +29,9 @@ try {
   const source=m.getSource("ovg-gpu-labels");let writes=0;const original=source.setData.bind(source);source.setData=(...args)=>{writes++;return original(...args)};
   m.easeTo({center:[106.58,10.59],zoom:17,duration:400});await wait("moveend");await wait("idle");
   const animated=visible();
+  const stableWrites=writes; m.jumpTo({center:[106.561,10.571],zoom:17});await wait("idle");const partial=visible();
   renderer.dispose();const removed=!m.getSource("ovg-gpu-labels");m.remove();host.remove();
-  return {initial,zoomed,animated,writes,removed,errors};
+  return {initial,zoomed,animated,partial,writes,stableWrites,removed,errors};
  });
  console.log(JSON.stringify(result));
  assert.ok(result.initial.includes("Điểm thử"),"point label rendered");
@@ -38,7 +39,9 @@ try {
  assert.ok(result.initial.includes("Đường thử"),"line label rendered");
  assert.equal(result.zoomed.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label across tiles");
  assert.equal(result.animated.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label during zoom");
- assert.equal(result.writes,0,"camera must not update label geometry");
+ assert.equal(result.stableWrites,0,"camera must not update stable label geometry");
+ assert.equal(result.partial.filter(v=>v==="Vùng thử").length,1,"partial polygon must keep exactly one visible label");
+ assert.ok(result.writes>=1,"partial polygon updates anchor only after settling");
  assert.equal(result.removed,true);assert.deepEqual(result.errors,[]);assert.deepEqual(errors,[]);
  console.log("PASS native WebGL labels: Vietnamese, point, polygon, line, background, zoom and cleanup");
 } finally {await browser.close()}

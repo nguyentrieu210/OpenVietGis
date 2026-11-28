@@ -8,7 +8,7 @@ const server=process.env.OVG_TEST_URL?null:await preview({root:dirname(fileURLTo
 const address=server?.httpServer.address();
 const testUrl=process.env.OVG_TEST_URL??"http://127.0.0.1:"+address.port+"/app";
 if(new URL(testUrl).hostname!=="127.0.0.1")throw Error("Synthetic fixture must stay on loopback");
-const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
  // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
@@ -61,7 +61,39 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_COLUMNS_ONLY==="1"){
+ if(process.env.OVG_LAYER070_ONLY==="1"){
+  const firstRow=page.locator('[data-layer-id="layer1"]'),secondRow=page.locator('[data-layer-id="layer2"]');
+  await first.click();await second.click({modifiers:["Control"]});
+  await page.getByRole("button",{name:"2 lớp · Thao tác",exact:true}).click();
+  const batch=page.getByRole("group",{name:"Thao tác hàng loạt"});
+  await batch.getByRole("button",{name:"Cấm chọn",exact:true}).click();
+  assert.equal(await firstRow.getByRole("button",{name:"Cho phép chọn Buildings"}).getAttribute("aria-pressed"),"false");
+  assert.equal(await secondRow.getByRole("button",{name:"Cho phép chọn Second layer"}).getAttribute("aria-pressed"),"false");
+  await batch.getByRole("button",{name:"Cho chọn",exact:true}).click();
+  await page.getByRole("button",{name:"2 lớp · Thao tác",exact:true}).click();
+  await firstRow.getByRole("button",{name:"Nhãn Buildings",exact:true}).click({button:"right"});
+  const quick=page.getByRole("dialog",{name:"Nhãn nhanh",exact:true});await quick.waitFor();
+  await quick.locator("select").selectOption({index:1});
+  await quick.getByText("Nền nhãn",{exact:true}).click();
+  await quick.getByRole("button",{name:"Thiết lập nhãn…"}).click();
+  const styling=page.getByRole("complementary",{name:"Layer Styling"});await styling.waitFor();
+  await styling.getByRole("button",{name:"Đóng Layer Styling"}).click();
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  const order=page.locator(".ovg-render-order");await order.getByRole("button",{name:"Đưa lên Second layer",exact:true}).click();
+  assert.ok((await order.locator("div").first().innerText()).includes("Second layer"));
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  const base=page.getByRole("button",{name:/Bản đồ nền/}).filter({hasText:"Bản đồ nền"}).first();
+  await base.click();assert.equal(await base.getAttribute("aria-expanded"),"false");await base.click();
+  await page.getByLabel("Lọc trạng thái lớp").selectOption("label");
+  assert.equal(await firstRow.count(),1);assert.equal(await secondRow.count(),0);
+  await page.getByLabel("Lọc trạng thái lớp").selectOption("all");
+  await page.reload({waitUntil:"domcontentloaded"});await first.waitFor();await second.waitFor();
+  assert.equal(await firstRow.getByRole("button",{name:"Nhãn Buildings",exact:true}).getAttribute("aria-pressed"),"true");
+  await page.getByRole("button",{name:"Thứ tự vẽ",exact:true}).click();
+  assert.ok((await page.locator(".ovg-render-order div").first().innerText()).includes("Second layer"));
+  assert.deepEqual(errors,[]);
+  console.log("PASS SPEC 070: batch selection, label quick editor, styling dock, render order, basemap collapse, filters and persistence");
+ }else if(process.env.OVG_COLUMNS_ONLY==="1"){
   const openTable=async()=>{await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("ATTR");await command.press("Enter");const t=page.locator("section.qgis-table");await t.waitFor();await t.getByLabel("Layer bảng thuộc tính").selectOption("layer1");await t.locator("tbody tr").first().waitFor();return t};
   const table=await openTable();await table.getByRole("button",{name:"Cột",exact:true}).click();
   const width=table.getByLabel("Độ rộng cột height_m");await width.fill("240");await width.press("Enter");
