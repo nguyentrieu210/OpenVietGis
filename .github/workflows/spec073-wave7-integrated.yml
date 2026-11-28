@@ -1,0 +1,44 @@
+name: SPEC 073 W7 integrated candidate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline:
+    uses: ./.github/workflows/spec073-baseline.yml
+  contract:
+    uses: ./.github/workflows/spec073-contract-baseline.yml
+  native:
+    uses: ./.github/workflows/spec073-wave1.yml
+  raster:
+    uses: ./.github/workflows/spec073-wave2-raster.yml
+  managed:
+    uses: ./.github/workflows/spec073-wave4-managed.yml
+  identity:
+    uses: ./.github/workflows/spec073-wave4-identity.yml
+  sdk:
+    uses: ./.github/workflows/spec073-wave4-sdk.yml
+  plugin:
+    uses: ./.github/workflows/spec073-wave5.yml
+  android:
+    uses: ./.github/workflows/spec073-wave1-flutter.yml
+  evidence:
+    if: always()
+    needs: [baseline, contract, native, raster, managed, identity, sdk, plugin, android]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check evidence gate tests
+        run: python3 -m unittest discover -s infra/mobile/release -p 'test_*.py'
+      - name: Record exact candidate evidence gaps
+        run: |
+          mkdir -p "$RUNNER_TEMP/w7"
+          python3 infra/mobile/release/check_gate.py --root specs/073-native-mobile-platform --sha "$GITHUB_SHA" --out "$RUNNER_TEMP/w7/gate.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: w7-gate
+          path: ${{ runner.temp }}/w7
+          if-no-files-found: error

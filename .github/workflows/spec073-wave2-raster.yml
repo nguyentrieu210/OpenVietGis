@@ -4,6 +4,7 @@ on:
     branches: ["073-native-mobile-platform"]
     paths: ["infra/mobile/native/raster_window*", ".github/workflows/spec073-wave2-raster.yml"]
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
