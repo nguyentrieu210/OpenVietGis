@@ -11,6 +11,7 @@ export default function DesktopEntry(){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [result,setResult]=useState("");
+  const [jobActive,setJobActive]=useState(false);
   const active=useRef<Opened|undefined>(undefined);
   const running=useRef(false);
   const mounted=useRef(true);
@@ -53,7 +54,7 @@ export default function DesktopEntry(){
   const transform=()=>execute(async()=>{
     const w=active.current;if(!w)return;setResult("");
     const id=await desktop.transform(w.handle,4326,3857,[106.7,11]);
-    job.current={handle:w.handle,id};
+    job.current={handle:w.handle,id};setJobActive(true);
     try{
       for(let i=0;i<200;i++){
         if(!mounted.current||job.current?.id!==id)return;
@@ -63,10 +64,10 @@ export default function DesktopEntry(){
         await new Promise(r=>setTimeout(r,50));
       }
       await desktop.cancel(w.handle,id);throw new Error("JOB_TIMEOUT");
-    }finally{if(job.current?.id===id)job.current=undefined}
+    }finally{if(job.current?.id===id){job.current=undefined;if(mounted.current)setJobActive(false)}}
   });
   const cancel=async()=>{
-    const j=job.current;if(!j)return;job.current=undefined;
+    const j=job.current;if(!j)return;job.current=undefined;setJobActive(false);
     try{await desktop.cancel(j.handle,j.id)}catch(e){setMessage(String(e))}
   };
   return <div className="ovg-desktop">
@@ -81,7 +82,7 @@ export default function DesktopEntry(){
         <h2>Khả năng</h2>
         <p>Cloud, đồng bộ và tile dữ liệu: chưa kích hoạt.</p>
         <button disabled={!opened||busy||!caps?.transform} onClick={()=>void transform()}>Thử chuyển CRS 4326 → 3857</button>
-        <button disabled={!job.current} onClick={()=>void cancel()}>Hủy tác vụ</button>
+        <button disabled={!jobActive} onClick={()=>void cancel()}>Hủy tác vụ</button>
         {result&&<output>{result}</output>}
       </aside>
       <main><div ref={canvas} className="ovg-desktop-map" aria-label="Khung bản đồ"/><p>Khung bản đồ offline; hiển thị layer dự án được triển khai ở Wave 2.</p></main>
