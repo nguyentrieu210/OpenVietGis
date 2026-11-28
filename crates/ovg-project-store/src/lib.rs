@@ -237,7 +237,7 @@ impl Store{
   let fk:i64=db.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0))?;
   let bad:i64=db.query_row("SELECT count(*) FROM feature f LEFT JOIN feature_index i ON i.fid=f.fid WHERE i.fid IS NULL OR i.minx>f.minx OR i.maxx<f.maxx OR i.miny>f.miny OR i.maxy<f.maxy",[],|r|r.get(0))?;
   let orphan:i64=db.query_row("SELECT count(*) FROM feature_index i LEFT JOIN feature f ON f.fid=i.fid WHERE f.fid IS NULL",[],|r|r.get(0))?;
-  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0)
+  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0&&asset_store::verify_assets(&db)?)
  }
 }
 
