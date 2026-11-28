@@ -867,7 +867,7 @@ async fn approved_reproject(
             return Ok(projection.expression(geometry_expression));
         }
     }
-    if native == target {
+    if native == target && matches!(native, 4326 | 3857) {
         return Ok(geometry_expression.to_owned());
     }
     let profile = u32::try_from(native)
