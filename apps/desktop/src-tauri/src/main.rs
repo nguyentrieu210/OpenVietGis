@@ -3,6 +3,8 @@ mod host;
 mod mvt;
 mod gpkg_import;
 mod resource_files;
+#[cfg(test)]
+mod recovery_tests;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
 mod protocol;
 use host::{Host, Opened, Poll, Project, Raster, AssetInfo};
