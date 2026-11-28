@@ -12,8 +12,16 @@ from tempfile import TemporaryDirectory
 from uuid import UUID, uuid4
 
 import psycopg
-
-from attribute_query import OWNER, RUNTIME, ROOT, baseline, configure_python, project_path, rust_client, session_headers
+from attribute_query import (
+    OWNER,
+    ROOT,
+    RUNTIME,
+    baseline,
+    configure_python,
+    project_path,
+    rust_client,
+    session_headers,
+)
 from run import scoped_member, verify_database_role
 
 
@@ -184,7 +192,7 @@ def check(c,f,second,fixtures,directory):
     import sqlite3
 
     import ezdxf
-    from e12_adapter_transfer import _seed_layer, _mutate_gpkg_for_sync
+    from e12_adapter_transfer import _mutate_gpkg_for_sync, _seed_layer
     lid,_sid,src=_seed_layer(c,path,auth,"Spec065 QGIS")
     root="/integration-hub/adapters/qgis/layers/"+lid
     gpkg=c.get(path+root+"/export?format=geopackage",headers=auth,timeout=60)
