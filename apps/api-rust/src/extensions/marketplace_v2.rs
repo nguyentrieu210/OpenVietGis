@@ -255,9 +255,14 @@ async fn catalog(
     State(state): State<AppState>,
     Query(profile): Query<Profile>,
 ) -> Result<Response, ExtensionError> {
-    let runtime_enabled = state.config.marketplace_v2_runtime_enabled
-        && profile.host == "web"
-        && profile.api == "1.0.0";
+    let platform = ovg_module_sdk::host_profile::Platform::parse(&profile.host)
+        .map_err(ExtensionError::Domain)?;
+    let availability = ovg_module_sdk::host_profile::availability(
+        platform,
+        &profile.api,
+        state.config.marketplace_v2_runtime_enabled,
+    );
+    let runtime_enabled = availability.online_execution;
     let items: Vec<Value> = load_verified(state.config.clone(), profile)
         .await?
         .into_iter()
@@ -265,7 +270,7 @@ async fn catalog(
         .collect();
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({"items":items,"profile":"metadata_only","web_read_only_enabled":runtime_enabled})),
+        Json(json!({"items":items,"profile":"metadata_only","web_read_only_enabled":runtime_enabled,"host_availability":availability})),
     )
         .into_response())
 }

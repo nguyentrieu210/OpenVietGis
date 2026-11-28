@@ -16,9 +16,7 @@ use axum::{
     Json, Router,
 };
 use ovg_core::{ActorContext, ActorType, AppError, Permission, TenantScope};
-use ovg_module_sdk::declarative::{
-    authorize, ActiveGrant, CommandPolicy, Consent, Document, FieldType, Invocation,
-};
+use ovg_module_sdk::declarative::{authorize, ActiveGrant, CommandPolicy, Document, Invocation};
 use ovg_storage::{
     catalog::{ProjectRead, ProjectReadPolicy},
     extensions::runtime_v2::{
@@ -72,67 +70,13 @@ fn qualify(pin: &ActivePin, releases: &[VerifiedRelease]) -> Result<Ready, AppEr
     {
         return Err(invalid("unsupported runtime profile"));
     }
-    let caps = pin.manifest["capabilities"]
-        .as_array()
-        .ok_or_else(|| invalid("invalid capabilities"))?;
-    let mut policies = BTreeMap::new();
-    for (command, cap) in [
-        ("host_context", "host_context"),
-        ("host_notice", "host_notice"),
-        ("gis_layers", "map_view"),
-        ("gis_layer", "map_view"),
-    ] {
-        if caps.iter().any(|v| v.as_str() == Some(cap)) {
-            policies.insert(
-                command.to_owned(),
-                CommandPolicy {
-                    permission: format!("ext.{key}.{cap}"),
-                    consent: Consent::Read,
-                },
-            );
-        }
-    }
+    let caps: BTreeSet<String> = serde_json::from_value(pin.manifest["capabilities"].clone())
+        .map_err(|_| invalid("invalid capabilities"))?;
+    let policies = ovg_module_sdk::host_profile::read_only_policies(key, &caps);
     let permissions: BTreeSet<String> = serde_json::from_value(e["permissions"].clone())
         .map_err(|_| invalid("invalid permissions"))?;
-    if permissions
-        .iter()
-        .any(|p| !policies.values().any(|policy| policy.permission == *p))
-    {
-        return Err(invalid("unsupported runtime permission"));
-    }
     let doc = Document::parse(&release.document)?;
-    doc.validate(&permissions, &policies)?;
-    for action in &doc.actions {
-        let valid = match action.command_id.as_str() {
-            "host_context" => action.input.is_empty(),
-            "gis_layers" => {
-                action.input.is_empty()
-                    || (action.input.len() == 1
-                        && action
-                            .input
-                            .get("after_id")
-                            .is_some_and(|f| !f.required && f.kind == FieldType::Text))
-            }
-            "gis_layer" => {
-                action.input.len() == 1
-                    && action
-                        .input
-                        .get("layer_id")
-                        .is_some_and(|f| f.required && f.kind == FieldType::Text)
-            }
-            "host_notice" => {
-                action.input.len() == 1
-                    && action
-                        .input
-                        .get("text")
-                        .is_some_and(|f| f.kind == FieldType::Text && f.required)
-            }
-            _ => false,
-        };
-        if !valid {
-            return Err(invalid("host command input contract mismatch"));
-        }
-    }
+    ovg_module_sdk::host_profile::validate_read_only(&doc, &permissions, &policies)?;
     Ok(Ready {
         doc,
         permissions,
