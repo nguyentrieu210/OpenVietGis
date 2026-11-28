@@ -126,9 +126,9 @@ def check_processing(post,get,foreign,fixtures):
             registered=post("/spatial/sources",{"reference_key":f"reference_points_{src}_{region}","name":f"SPEC065 {region} {src}"})
             sid=registered["resource_id"]
             layer=post("/layers",{"source_id":sid,"name":f"SPEC065 {region} {src} layer"})
-            pin=pinned_layer(layer["resource_id"],sid)
-            assert pin["feature_count"]==3
-            transformed,_=result(job("reproject",pin,{"target_srid":dst}),3,0)
+            regional_pin=pinned_layer(layer["resource_id"],sid)
+            assert regional_pin["feature_count"]==3
+            transformed,_=result(job("reproject",regional_pin,{"target_srid":dst}),3,0)
             assert transformed["output_crs"]==dst
     # Whole-layer same-datum projection with attributes and feature IDs unchanged.
     extended,_=result(job("reproject",regional,{"target_srid":3405}),regional["feature_count"],0)

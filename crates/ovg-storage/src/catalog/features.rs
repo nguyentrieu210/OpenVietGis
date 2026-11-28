@@ -42,8 +42,8 @@ struct Snapshot {
     fields: HashSet<String>,
     target: Option<(u32, Value)>,
     edge: Option<&'static TransformationProfile>,
-    native_projection:Option<crate::native_projection::NativeProjection>,
-    datum_read:Option<super::regional_crs::VerifiedDatumRead>,
+    native_projection: Option<crate::native_projection::NativeProjection>,
+    datum_read: Option<super::regional_crs::VerifiedDatumRead>,
 }
 
 impl ProjectRead<'_> {
@@ -138,22 +138,38 @@ impl ProjectRead<'_> {
             .ok_or_else(|| AppError::internal("ready source requires native CRS"))?;
         let mut target = None;
         let mut edge = None;
-        let mut native_projection=None;
-        let mut datum_read=None;
+        let mut native_projection = None;
+        let mut datum_read = None;
         if request.include_geometry {
             let code = request.response_crs.unwrap_or(native);
-            let reference =
-                native_storage_coordinate_wire(code).ok_or_else(|| AppError::unsupported_crs(code))?;
-            if code==4326 && ovg_core::crs::is_extended_native_vn2000(native){
-                if self.gis_scoped{return Err(out_of_area());}
-                let org=self.tx.organization_id();
-                datum_read=Some(super::regional_crs::verify_extended_datum_read(self.tx.tx_mut(),org,self.project_id,source_id,native,"f.geometry").await?);
-            } else if code != native && crate::native_projection::is_native_pair(native,code) {
-                if self.gis_scoped{return Err(out_of_area())}
-                let projection=crate::native_projection::NativeProjection::new(native,code)?;
-                let org=self.tx.organization_id();
-                projection.verify_source(self.tx.tx_mut(),org,self.project_id,source_id).await?;
-                native_projection=Some(projection);
+            let reference = native_storage_coordinate_wire(code)
+                .ok_or_else(|| AppError::unsupported_crs(code))?;
+            if code == 4326 && ovg_core::crs::is_extended_native_vn2000(native) {
+                if self.gis_scoped {
+                    return Err(out_of_area());
+                }
+                let org = self.tx.organization_id();
+                datum_read = Some(
+                    super::regional_crs::verify_extended_datum_read(
+                        self.tx.tx_mut(),
+                        org,
+                        self.project_id,
+                        source_id,
+                        native,
+                        "f.geometry",
+                    )
+                    .await?,
+                );
+            } else if code != native && crate::native_projection::is_native_pair(native, code) {
+                if self.gis_scoped {
+                    return Err(out_of_area());
+                }
+                let projection = crate::native_projection::NativeProjection::new(native, code)?;
+                let org = self.tx.organization_id();
+                projection
+                    .verify_source(self.tx.tx_mut(), org, self.project_id, source_id)
+                    .await?;
+                native_projection = Some(projection);
             } else if code != native {
                 edge = Some(
                     reference_transformation(native, code)
@@ -164,10 +180,22 @@ impl ProjectRead<'_> {
         } else if request.response_crs.is_some() {
             return Err(invalid_request("response CRS requires geometry"));
         }
-        if let Some(candidate)=edge.filter(|e|e.fixture_requirement!=FixtureRequirement::None){
-            if self.gis_scoped{return Err(out_of_area())}
-            let org=self.tx.organization_id();
-            edge=Some(super::regional_crs::verify_regional_source(self.tx.tx_mut(),org,self.project_id,source_id,candidate).await?);
+        if let Some(candidate) = edge.filter(|e| e.fixture_requirement != FixtureRequirement::None)
+        {
+            if self.gis_scoped {
+                return Err(out_of_area());
+            }
+            let org = self.tx.organization_id();
+            edge = Some(
+                super::regional_crs::verify_regional_source(
+                    self.tx.tx_mut(),
+                    org,
+                    self.project_id,
+                    source_id,
+                    candidate,
+                )
+                .await?,
+            );
         }
         let fields = wire["schema"]["fields"]
             .as_array()
@@ -227,8 +255,12 @@ impl ProjectRead<'_> {
                 step.target_code
             );
         }
-        if let Some(projection)=&snapshot.native_projection{response=projection.expression("f.geometry");}
-        if let Some(datum)=&snapshot.datum_read{response=datum.expression.clone();}
+        if let Some(projection) = &snapshot.native_projection {
+            response = projection.expression("f.geometry");
+        }
+        if let Some(datum) = &snapshot.datum_read {
+            response = datum.expression.clone();
+        }
         let (filter, key, maximum) = match selection {
             Selection::Page { after, limit } => (
                 r#"($4::text IS NULL OR f.feature_id COLLATE "C" > $4)"#,
@@ -270,7 +302,10 @@ impl ProjectRead<'_> {
             .fetch_all(&mut **self.tx.tx_mut())
             .await
             .map_err(|error| {
-                if steps.is_empty() && snapshot.native_projection.is_none() && snapshot.datum_read.is_none() {
+                if steps.is_empty()
+                    && snapshot.native_projection.is_none()
+                    && snapshot.datum_read.is_none()
+                {
                     db_error(error)
                 } else {
                     transformation_unavailable()
@@ -332,13 +367,21 @@ impl ProjectRead<'_> {
                         return Err(out_of_area());
                     }
                 }
-                if snapshot.native_projection.is_some()||snapshot.datum_read.is_some(){
-                    let response_srid:Option<i32>=row.try_get("response_srid").map_err(db_error)?;
-                    let valid:bool=row.try_get("response_valid").map_err(db_error)?;
-                    let wkb:Option<Vec<u8>>=row.try_get("response_wkb").map_err(db_error)?;
-                    if !valid||response_srid!=i32::try_from(*code).ok(){return Err(transformation_unavailable());}
-                    output=geometry(wkb.as_deref(),&snapshot.family).ok_or_else(transformation_unavailable)?;
-                    if let Some(datum)=&snapshot.datum_read{if !within(&output["coordinates"],&datum.bounds){return Err(out_of_area());}}
+                if snapshot.native_projection.is_some() || snapshot.datum_read.is_some() {
+                    let response_srid: Option<i32> =
+                        row.try_get("response_srid").map_err(db_error)?;
+                    let valid: bool = row.try_get("response_valid").map_err(db_error)?;
+                    let wkb: Option<Vec<u8>> = row.try_get("response_wkb").map_err(db_error)?;
+                    if !valid || response_srid != i32::try_from(*code).ok() {
+                        return Err(transformation_unavailable());
+                    }
+                    output = geometry(wkb.as_deref(), &snapshot.family)
+                        .ok_or_else(transformation_unavailable)?;
+                    if let Some(datum) = &snapshot.datum_read {
+                        if !within(&output["coordinates"], &datum.bounds) {
+                            return Err(out_of_area());
+                        }
+                    }
                 }
                 output["coordinate_reference"] = reference.clone();
                 item["geometry"] = output;

@@ -174,7 +174,11 @@ pub fn validate_algorithm_parameters(
         ),
         AlgorithmId::Reproject => {
             let srid = parameters.get("target_srid").and_then(Value::as_i64);
-            if parameters.len() != 1 || !srid.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_processing_crs) {
+            if parameters.len() != 1
+                || !srid
+                    .and_then(|v| u32::try_from(v).ok())
+                    .is_some_and(ovg_core::crs::is_processing_crs)
+            {
                 return Err(AppError::validation("INVALID_PARAMETERS", "target_srid must be an approved web or native VN-2000 CRS; regional evidence is checked at execution"));
             }
             Ok(json!({"target_srid": srid}))

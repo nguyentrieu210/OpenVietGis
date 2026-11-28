@@ -548,7 +548,11 @@ fn validate_ready(
     srid: i32,
     output_roundoff: bool,
 ) -> Option<()> {
-    if !u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_processing_crs) || family.is_some_and(|f| f != geom.family()) {
+    if !u32::try_from(srid)
+        .ok()
+        .is_some_and(ovg_core::crs::is_processing_crs)
+        || family.is_some_and(|f| f != geom.family())
+    {
         return None;
     }
     let parts = geom.parts();
@@ -588,7 +592,17 @@ fn validate_ready(
             let ok = match srid {
                 4326 | 4756 => (-180.0..=180.0).contains(&x) && (-90.0..=90.0).contains(&y),
                 3857 => x.abs() <= WEB_MERCATOR_MAX + slack && y.abs() <= WEB_MERCATOR_MAX + slack,
-                _ if u32::try_from(srid).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000) => ovg_spatial::transform::project_native_vn2000(srid as u32,4756,ovg_spatial::Coord2D::new(x,y)).is_ok(),
+                _ if u32::try_from(srid)
+                    .ok()
+                    .is_some_and(ovg_core::crs::is_extended_native_vn2000) =>
+                {
+                    ovg_spatial::transform::project_native_vn2000(
+                        srid as u32,
+                        4756,
+                        ovg_spatial::Coord2D::new(x, y),
+                    )
+                    .is_ok()
+                }
                 _ => true,
             };
             if !ok {
@@ -2072,12 +2086,16 @@ pub fn plan_export_mapping(
     output_crs: i32,
     has_long_text: bool,
 ) -> std::result::Result<ExportMappingPlan, String> {
-    let native_extended=|code:i32|u32::try_from(code).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000);
-    if native_extended(source_crs)||native_extended(output_crs){
-        if source_crs!=output_crs||!matches!(output_format,"geopackage"|"shapefile_zip"){
+    let native_extended = |code: i32| {
+        u32::try_from(code)
+            .ok()
+            .is_some_and(ovg_core::crs::is_extended_native_vn2000)
+    };
+    if native_extended(source_crs) || native_extended(output_crs) {
+        if source_crs != output_crs || !matches!(output_format, "geopackage" | "shapefile_zip") {
             return Err("Extended VN-2000 export requires native CRS GeoPackage or Shapefile; use Reproject before changing datum or projection.".into());
         }
-    }else if !SUPPORTED_CRS.contains(&source_crs) || !SUPPORTED_CRS.contains(&output_crs) {
+    } else if !SUPPORTED_CRS.contains(&source_crs) || !SUPPORTED_CRS.contains(&output_crs) {
         return Err("Unsupported CRS code".into());
     }
     let op_id = Transform::resolve(source_crs, output_crs)
