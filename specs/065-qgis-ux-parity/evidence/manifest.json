@@ -811,9 +811,26 @@
         "apps/web-next/src/local-ept.test.ts",
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/raster-temporal-plan.ts",
-        "apps/web-next/src/raster-temporal-plan.test.ts"
+        "apps/web-next/src/raster-temporal-plan.test.ts",
+        "apps/web-next/src/laz-decoder.ts",
+        "apps/web-next/src/laz-real.test.ts",
+        "apps/web-next/src/load-laz.ts",
+        "apps/web-next/src/remote-copc.ts",
+        "apps/web-next/src/remote-copc.test.ts",
+        "apps/web-next/src/remote-ept.test.ts",
+        "apps/web-next/src/point-cloud-lod.ts",
+        "apps/web-next/src/point-cloud-lod.test.ts",
+        "apps/web-next/src/netcdf-classic.ts",
+        "apps/web-next/src/netcdf-classic.test.ts",
+        "apps/web-next/src/netcdf4.ts",
+        "apps/web-next/src/netcdf4.test.ts",
+        "apps/web-next/src/netcdf.worker.ts",
+        "apps/web-next/src/load-netcdf.ts",
+        "apps/web-next/src/mesh-sms-dat.ts",
+        "apps/web-next/src/mesh-sms-dat.test.ts",
+        "apps/web-next/src/fixtures/point-cloud/README.md"
       ],
-      "blocker": "Vector and raster temporal playback (operator-assigned UTC observations over up to 32 authorized pre-rendered raster layers), local LAS/2DM, scalar/vector magnitude JSON mesh, EPT binary directory. Raster preview uses per-layer rendered tile scale, no native multidimensional raster or harmonized pixel scale. No LAZ/COPC/zstandard, remote octree, SMS DAT/NetCDF or persisted mesh provider. New tests not executed; paired QGIS acceptance pending."
+      "blocker": "Current implementation includes bounded local LAS/LAZ decoding (LAS 1.2–1.4 subset), public HTTPS remote COPC range reads pinned to ETag, local/remote binary EPT LOD, classic CDF-1/2 and NetCDF4/HDF5 mesh-node datasets, plus JSON/SMS DAT mesh datasets. Consumer unit job in E17 run 46178329115 on 1998ce1 passed laz-real, remote-copc, remote-ept, local-ept, point-cloud-lod, netcdf-classic, netcdf4, mesh-dataset and SMS DAT suites; these provider files are unchanged through current candidate. Remaining: authenticated in-project upload/source/permission/render flow and paired QGIS 3.44 fixture comparison have not passed on the exact final SHA; provider support is intentionally bounded (public CORS/range access only, capped bytes/nodes/points, limited CRS/codec/schema); no durable server-side mesh provider or full provider parity is claimed."
     },
     {
       "id": "OUTPUT-01",
