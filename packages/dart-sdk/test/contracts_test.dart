@@ -58,6 +58,16 @@ void main(){
   await c.route(106,10,107,11,consent:true);expect(t.request!.url.path,'/api/v1/routing/route');
   t.status=503;await expectLater(c.geocode('address',consent:true),throwsA(isA<ProtocolError>()));
  });
+ test('collaboration memory snapshots clear on offline, scope switch and revocation',()async{
+  final s=scope(),t=FixtureTransport(scope());final c=ManagedClient(s,t);
+  Scope? active=s;var online=true;
+  final state=CollaborationState(c,currentScope:()=>active,online:()=>online);
+  await state.rooms();expect(state.snapshot('rooms'),{});
+  online=false;await expectLater(state.send(uid,'test'),throwsStateError);
+  online=true;expect(state.snapshot('rooms'),null);
+  await state.reconnect();expect(state.snapshot('tasks'),{});
+  active=scope('https://other.example.invalid');expect(()=>state.snapshot('tasks'),throwsStateError);expect(t.closed,true);
+ });
  test('refresh single flight and fail closed',()async{
   final gate=RefreshGate<int>();var calls=0;final completer=Completer<int>();
   final a=gate.run((){calls++;return completer.future;});final b=gate.run(()async{calls++;return 2;});
