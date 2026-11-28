@@ -47,6 +47,21 @@ impl Cad{
    }
    if !found||out.is_empty(){return Err("INVALID_DXF")}Ok(Self{features:out})
  }
+ pub fn viewport(&self,b:[f64;4])->Result<Vec<u8>>{
+   if b.iter().any(|n|!n.is_finite())||b[0]>b[2]||b[1]>b[3]||!xy(b[0],b[1])||!xy(b[2],b[3]){return Err("INVALID_BBOX")}
+   let mut rows=Vec::new();
+   for f in &self.features{
+     let g=&f["geometry"];let c=&g["coordinates"];
+     let coord=|p:&Value|->Option<(f64,f64)>{Some((p[0].as_f64()?,p[1].as_f64()?))};
+     let Some(a)=(if g["type"]=="Point"{coord(c)}else{coord(&c[0])})else{return Err("INVALID_DXF")};
+     let z=if g["type"]=="Point"{a}else{coord(&c[1]).ok_or("INVALID_DXF")?};
+     if a.0.min(z.0)<=b[2]&&a.0.max(z.0)>=b[0]&&a.1.min(z.1)<=b[3]&&a.1.max(z.1)>=b[1]{
+       if rows.len()==512{return Err("VIEWPORT_DENSITY_LIMIT")}rows.push(f);
+     }
+   }
+   let out=serde_json::to_vec(&json!({"type":"FeatureCollection","features":rows})).map_err(|_|"INVALID_DXF")?;
+   if out.len()>2*1024*1024{return Err("RESOURCE_LIMIT")}Ok(out)
+ }
  pub fn count(&self)->u64{self.features.len()as u64}
  pub fn chunk(&self,n:u32)->Result<Vec<u8>>{
   let start=(n as usize).checked_mul(CHUNK as usize).ok_or("INVALID_CHUNK")?;
