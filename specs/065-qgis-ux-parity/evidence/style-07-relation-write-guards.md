@@ -1,15 +1,15 @@
 # STYLE-07 relation write guard verification
 
-Status: partial. The test is in the PR-triggered PostGIS integration job. Two initial attempts exposed test-fixture defects; the current corrected version is pending CI and is not acceptance evidence until it passes.
+Status: partial. The targeted restricted-role PostGIS integration test passes in CI. STYLE-07 remains partial because personal relation configuration, shared form layout, and paired QGIS/browser acceptance are still open.
 
-Migration `0049_relation_constraints.py` already creates deferred constraint triggers for writes to `spatial.reference_features`. The test seeds a valid project relation definition in the owner fixture setup because relation management is served by the Rust API, while this integration app is FastAPI-only. It then attempts direct writes as the restricted runtime database role, outside the changeset endpoint:
+Migration `0049_relation_constraints.py` installs deferred constraint triggers for writes to `spatial.reference_features`. Under the restricted runtime role, the test attempts direct SQL writes outside the changeset endpoint:
 
 - delete a referenced target row;
 - change a local key to a missing target;
 - duplicate a target key when cardinality is `one`.
 
-Each write must fail at transaction commit with SQLSTATE OV409 and the relation-constraint diagnostic, then roll back; the test also confirms the relation definition remains stored. The fixture aligns all 3,000 local polygon keys with unique target point keys before creating the rule. This covers database enforcement independent of the canonical changeset implementation.
+Each write must fail at transaction commit with SQLSTATE OV409 and the relation-constraint diagnostic, then roll back. The test also confirms the relation definition remains stored. All 3,000 local polygon keys are aligned to unique target point keys before fixture setup.
 
-Run: `.github/workflows/e06-e08-retention.yml` → retained-postgis-contracts job (includes this integration test).
+The valid relation definition is seeded with admin SQL because relation management is served by the Rust API, which is not registered in this FastAPI integration app. The tested feature writes still run as the restricted runtime role. Migration 0049 also pins the GIS ACL predicate to `pg_catalog` and qualifies PostGIS calls in `public`, so it remains resolvable when invoked through the relation trigger's restricted search path.
 
-STYLE-07 remains partial: relation form configuration/layout and paired QGIS/browser acceptance are still open.
+Verification: `.github/workflows/e06-e08-retention.yml` → `retained-postgis-contracts` passed for commit `77af5af45e94619545d5f783704a7756fa46c858` (run [46148890322](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46148890322)).
