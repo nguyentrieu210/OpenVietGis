@@ -56,3 +56,27 @@ describe("layer-specific screen snap tolerances",()=>{
   expect(findScreenSnap([0,0],25,"intersection",[],[{...a,radius:8},b])?.point).toEqual([0,6]);
  });
 });
+
+import {toSnapMercator,fromSnapMercator,mercatorSnapBox,cleanSnapLayerMeters,snapMetersFor} from "./digitizing";
+describe("projected snapping",()=>{
+ it("uses EPSG:3857 units and roundtrips Vietnam coordinates",()=>{
+  const p:[number,number]=[106.7,10.8],m=toSnapMercator(p)!;
+  expect(m[0]).toBeCloseTo(11877789.667642,2);
+  const q=fromSnapMercator(m)!;expect(q[0]).toBeCloseTo(p[0],10);expect(q[1]).toBeCloseTo(p[1],10);
+  expect(toSnapMercator([0,90])).toBeNull();
+  expect(fromSnapMercator([21000000,0])).toBeNull();
+ });
+ it("bounds search without clipping the tolerance or crossing the world boundary",()=>{
+  const project=(p:[number,number])=>toSnapMercator(p)!;
+  const box=mercatorSnapBox([0,0],10,project,[0,0])!;
+  expect(box[0][0]).toBeCloseTo(-10,8);expect(box[1][1]).toBeCloseTo(10,8);
+  expect(mercatorSnapBox([0,0],200,project,[0,0])).toBeNull();
+  expect(mercatorSnapBox([20037508,0],10,project,[20037508,0])).toBeNull();
+ });
+ it("keeps metric overrides separate and rejects invalid persisted values",()=>{
+  const p=cleanSnapLayerMeters(JSON.parse('{"a":0.1,"b":1000,"bad":0,"large":1001,"__proto__":10}'));
+  expect(p).toEqual({a:0.1,b:1000});
+  expect(snapMetersFor(10,p,"a")).toBe(.1);expect(snapMetersFor(10,p,"bad")).toBe(10);
+  expect(findScreenSnap([0,0],10,"edge",[],[{a:[-20,2],b:[20,2],radius:1}])).toBeNull();
+ });
+});
