@@ -1,7 +1,8 @@
 """Authenticated topology and split/merge golden fixture for Spec 065."""
-from uuid import UUID
 import json
 import math
+from uuid import UUID
+
 import psycopg
 from attribute_query import OWNER, baseline, project_path, session_headers
 
