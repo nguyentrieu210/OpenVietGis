@@ -44,7 +44,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
-| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, editing.relations/changesets; có code ràng buộc dùng chung, chờ nghiệm thu | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
+| STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, RelationValuePicker, editing.relations/changesets và deferred DB triggers; có code chọn khóa và ràng buộc dùng chung, chờ nghiệm thu | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
 | STYLE-08 | Metadata, diagrams, actions, map tips | U | Metadata cơ bản; phần còn lại chưa xác nhận | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
 | STYLE-09 | Layer styling panel live preview | P | LayerProperties modal, LayerLabels | Panel styling preview và apply rõ ràng; cancel không ghi đè dữ liệu | P2 |
 

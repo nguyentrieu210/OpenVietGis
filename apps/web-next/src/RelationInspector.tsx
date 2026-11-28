@@ -3,6 +3,7 @@ import {loadCsrfToken,executeLayerQuery,getEffectivePermissions,type ApiClient,t
 import type {StudioRow} from "./studio-contract";
 import {readRelationSpec,readableRelationLayer,queryableRelationLayer,relationMatches,queryRelation,auditRelation,type RelationAudit,type RelatedRecord,type RelationSpec} from "./relation-inspector";
 import {uiConfirm} from "./ui-dialog";
+import {relationRules,type ProjectRelation} from "./relation-values";
 import {readPreference,writePreference} from "./spatial-resume";
 const empty:RelationSpec={target:"",localField:"",targetField:"",cardinality:"many"};
 export function RelationInspector({row,layers,rows,storageKey,restricted,navigate,disabled,client,org,pid,navigateRemote}:{row:StudioRow;layers:SpatialLayer[];rows:StudioRow[];storageKey:string;restricted:boolean;navigate:(key:string)=>void;disabled:boolean;client:ApiClient;org:string;pid:string;navigateRemote:(layer:SpatialLayer,id:string,current:()=>boolean)=>Promise<void>}){
@@ -16,11 +17,11 @@ export function RelationInspector({row,layers,rows,storageKey,restricted,navigat
  const pin=JSON.stringify([org,pid,row.key,row.layer.id,row.layer.source.content_revision,row.layer.source.schema_revision,spec,target?.source_id,target?.source.content_revision,target?.source.schema_revision,canQuery,opened,restricted,disabled]);
  const latest=useRef(pin),generation=useRef(0);latest.current=pin;
  useEffect(()=>{generation.current++;setRemote(null);setAudit(null);setAuditProgress("");setRemoteError("");setBusy(false);return()=>{generation.current++}},[pin]);
- type SharedRelation={id:string;source_id:string;local_field:string;target_source_id:string;target_field:string;cardinality:"one"|"many"};
+ type SharedRelation=ProjectRelation;
  const relationPath="/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(pid)+"/editing/relations";
  const [shared,setShared]=useState<SharedRelation[]>([]),[sharedError,setSharedError]=useState(""),[sharedBusy,setSharedBusy]=useState(false),[canManage,setCanManage]=useState(false);
  const sharedScope=useRef("");const scopeKey=JSON.stringify([org,pid,row.layer.source_id,opened,restricted]);sharedScope.current=scopeKey;
- useEffect(()=>{let live=true;setShared([]);setSharedError("");setSharedBusy(false);setCanManage(false);if(opened&&!restricted){client.request<{items:SharedRelation[]}>(relationPath).then(r=>{if(live)setShared(r.items)}).catch(e=>{if(live)setSharedError(e instanceof Error?e.message:String(e))});getEffectivePermissions(client,org,{project_id:pid}).then(p=>{if(live)setCanManage(p.permissions.includes("project.manage"))}).catch(()=>{if(live)setCanManage(false)})}return()=>{live=false}},[client,relationPath,scopeKey,org,pid]);
+ useEffect(()=>{let live=true;setShared([]);setSharedError("");setSharedBusy(false);setCanManage(false);if(opened&&!restricted){client.request<{items:SharedRelation[]}>(relationPath).then(r=>{if(live){relationRules(r,org,pid,row.layer.source_id);setShared(r.items)}}).catch(e=>{if(live)setSharedError(e instanceof Error?e.message:String(e))});getEffectivePermissions(client,org,{project_id:pid}).then(p=>{if(live)setCanManage(p.permissions.includes("project.manage"))}).catch(()=>{if(live)setCanManage(false)})}return()=>{live=false}},[client,relationPath,scopeKey,org,pid]);
  const mutateShared=async(remove?:string)=>{
   if(sharedBusy||disabled||restricted||!opened||!source||!canManage)return;
   if(!remove&&(!target||!local||!readRelationSpec(spec)))return;
@@ -30,7 +31,7 @@ export function RelationInspector({row,layers,rows,storageKey,restricted,navigat
   try{
    const csrf=await loadCsrfToken(client);if(!current())return;
    await client.request(remove?relationPath+"/"+encodeURIComponent(remove)+"/delete":relationPath,{method:"POST",headers:{"x-openvietgis-csrf":csrf},body:JSON.stringify(remove?{}:{source_id:source.source_id,local_field:spec.localField,target_source_id:target!.source_id,target_field:spec.targetField,cardinality:spec.cardinality,source_schema_revision:source.source.schema_revision,target_schema_revision:target!.source.schema_revision})});
-   if(current()){const r=await client.request<{items:SharedRelation[]}>(relationPath);if(current())setShared(r.items)}
+   if(current()){const r=await client.request<{items:SharedRelation[]}>(relationPath);if(current()){relationRules(r,org,pid,row.layer.source_id);setShared(r.items)}}
   }catch(e){if(current())setSharedError(e instanceof Error?e.message:String(e))}finally{if(sharedScope.current===key)setSharedBusy(false)}
  };
  const patch=(p:Partial<RelationSpec>)=>{setSpec(v=>({...v,...p}))};
