@@ -12,7 +12,7 @@ publish = false
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-ovg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "b6c00b0707f7e4f8502f3e8ebebacea0ead11353" }
+ovg-project-store = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "4edf007c2256763a2ce646afed664ca5762eefd0" }
 flutter_rust_bridge = "=2.11.1"
 ovg-mobile-engine = { path = "../ovg-mobile-engine" }
 ovg-local-storage = { path = "../ovg-local-storage" }
