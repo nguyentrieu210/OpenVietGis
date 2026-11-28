@@ -1,7 +1,7 @@
 """Deferred database relation guards cover canonical and alternate SQL write paths.
 
-The application API creates the relation; direct writes run as the restricted
-runtime role to prove constraints do not depend on the Rust changeset path.
+A synthetic relation definition is seeded as fixture data; direct writes run as
+the restricted runtime role to exercise the deferred database guards.
 """
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from sqlalchemy.exc import DBAPIError
 from openvietgis_api.adapters.persistence.db import get_engine
 from tests.fixtures.db_admin import get_admin_engine
 from tests.fixtures.identity_tenancy import seed_access_world
-from tests.integration.spatial.test_sources import _client, _get, _register
+from tests.integration.spatial.test_sources import _client, _register
 from tests.integration.spatial.test_sources import _path as _source_path
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -57,9 +57,6 @@ def test_relation_constraints_reject_direct_runtime_writes_and_rollback() -> Non
         target_mutation = _register(client, source_path, "reference_polygons_4326", "Target relation source")
         local_id = local_mutation["resource_id"]
         target_id = target_mutation["resource_id"]
-        local = _get(client, source_path, local_id)
-        target = _get(client, source_path, target_id)
-
         # Create one valid reference using synthetic rows and an independently
         # chosen key; other target keys remain unique.
         with get_admin_engine().begin() as connection:
