@@ -106,9 +106,11 @@
       "candidate_paths": [
         "apps/web-next/dock-sizing.test.mjs",
         "apps/web-next/src/DockLayout.tsx",
-        "apps/web-next/workspace-preferences.test.mjs"
+        "apps/web-next/workspace-preferences.test.mjs",
+        "apps/web-next/src/Splitter.tsx",
+        "apps/web-next/src/dock-sizing.ts"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Pointer-ID scoped resize, cancel/blur/Escape/unmount cleanup, keyboard Home/End/fine step and ARIA values implemented; new tests written but not executed. Authenticated browser dock dragging, viewport and paired QGIS acceptance remain."
     },
     {
       "id": "DOCK-02",
@@ -190,12 +192,16 @@
     {
       "id": "DOCK-09",
       "task": "T027",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CoreMapTools.tsx",
-        "apps/web-next/src/SpatialWorkspace.tsx"
+        "apps/web-next/src/SpatialWorkspace.tsx",
+        "apps/web-next/src/SecondaryMapView.tsx",
+        "apps/web-next/src/secondary-map-plan.ts",
+        "apps/web-next/src/secondary-map-plan.test.ts",
+        "apps/web-next/src/LiveApp.tsx"
       ],
-      "blocker": "Secondary map view and independent order not demonstrated."
+      "blocker": "Existing bounded secondary MapLibre comparison view with personal vector layer order and camera is implemented in source. Full primary independent render order, raster/basemap/labels/vector tiles and authenticated browser/QGIS acceptance remain."
     },
     {
       "id": "DOCK-10",
