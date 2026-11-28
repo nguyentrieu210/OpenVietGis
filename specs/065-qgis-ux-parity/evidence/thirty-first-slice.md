@@ -1,0 +1,7 @@
+# Thirty-first implementation slice (GitHub only)
+Base 30f160943d88e069f18be55bd76703d93f13d98a.
+- COLLAB-06: partner activation exact manifest ID/key/version and unique active row; iframe keyed by activation revision and panel contract. Per-frame tool generations, live callback references, single approval and lifecycle checks before forwarding, pending request expiry, stale open/mutation guard, account/project remount. Namespaced PARTNER_* command descriptors feed the shared locator/toolbar registry, with collision detection and GIS mode/busy/read guards. The map bridge rejects CAD/3D partner map operations; first-party workspace RPC still needs separate cross-mode acceptance.
+- Saved overlays filtered by enabled active manifest and map_overlay capability. Official plugin selection cleared when access becomes restricted/unknown or refresh fails, module load generation invalidated on scope change. No uninstall deletion of business data. Existing server-side lifecycle retained.
+- Added pure lifecycle/command tests. No tests executed, no compile/browser/CI verification. Remote iframe SDK and actual lifecycle/permission transitions need acceptance; no matrix promotion or deploy.
+
+Follow-up static review preserves native scoped-plugin behavior and first-party workspace RPC map access; GIS-only gate applies to partner bridge methods, not first-party AI. Saved tools-only contributions remain available, while each saved overlay/tool is independently filtered by capability. No build or test confirmation.

@@ -1,0 +1,1 @@
+Synthetic ellipsoid LAZ and COPC fixtures copied unchanged from https://github.com/connormanning/copc.js/tree/9515f411a7588e067c242dc908143eeb308d4868/src/test/data under the upstream MIT license (included). Used only for decoder and bounded range regression tests. No production data.

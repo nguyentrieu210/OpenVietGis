@@ -48,11 +48,16 @@ struct InputRef {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum Algorithm {
     Buffer,
     Clip,
     Dissolve,
+    Difference,
+    Intersection,
+    Union,
+    Reproject,
+    SpatialJoin,
     Band,
     Ndvi,
     Ndwi,
@@ -69,13 +74,27 @@ enum Algorithm {
 
 impl Algorithm {
     const fn vector(self) -> bool {
-        matches!(self, Self::Buffer | Self::Clip | Self::Dissolve)
+        matches!(
+            self,
+            Self::Buffer
+                | Self::Clip
+                | Self::Dissolve
+                | Self::Difference
+                | Self::Intersection
+                | Self::Union
+                | Self::Reproject
+                | Self::SpatialJoin
+        )
     }
 
     const fn always_two_inputs(self) -> bool {
         matches!(
             self,
             Self::Clip
+                | Self::Difference
+                | Self::Intersection
+                | Self::Union
+                | Self::SpatialJoin
                 | Self::Ndvi
                 | Self::Ndwi
                 | Self::Ndbi
@@ -393,6 +412,11 @@ fn validate_node(node: &mut Node) -> Result<(), ()> {
             Algorithm::Buffer => VectorAlgorithm::Buffer,
             Algorithm::Clip => VectorAlgorithm::Clip,
             Algorithm::Dissolve => VectorAlgorithm::Dissolve,
+            Algorithm::Difference => VectorAlgorithm::Difference,
+            Algorithm::Intersection => VectorAlgorithm::Intersection,
+            Algorithm::Union => VectorAlgorithm::Union,
+            Algorithm::Reproject => VectorAlgorithm::Reproject,
+            Algorithm::SpatialJoin => VectorAlgorithm::SpatialJoin,
             _ => unreachable!(),
         };
         let normalized =

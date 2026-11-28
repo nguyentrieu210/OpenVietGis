@@ -625,6 +625,7 @@ async fn sync_outbox(
         .commit_changeset(
             pkg.source_id,
             CommitRequest {
+                acknowledge_native_crs: None,
                 operation_id: core_op,
                 base_content_revision: pkg.base_rev,
                 base_schema_revision: None,

@@ -17,6 +17,8 @@ describe("typed sort and revision scope",()=>{
   expect(compareTableValue("12345678901234567890.001","12345678901234567890.002","decimal","asc")).toBeLessThan(0);
   expect(compareTableValue("-0.02","-0.01","decimal","asc")).toBeLessThan(0);
   expect(compareTableValue("2","10","integer","asc")).toBeLessThan(0);
+  expect(compareTableValue("1.5","2","integer","asc")).toBeGreaterThan(0);
+  expect(compareTableValue("2","1.5","integer","asc")).toBeLessThan(0);
   expect(compareTableValue(null,1,"integer","desc")).toBeGreaterThan(0);
   expect(compareTableValue(false,true,"boolean","asc")).toBeLessThan(0);
  });

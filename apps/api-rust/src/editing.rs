@@ -46,6 +46,14 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{PROJECT}/changesets/{{changeset_id}}/revert"),
             post(revert_changeset),
         )
+        .route(
+            &format!("{PROJECT}/editing/relations"),
+            get(list_relations).post(create_relation),
+        )
+        .route(
+            &format!("{PROJECT}/editing/relations/{{relation_id}}/delete"),
+            post(delete_relation),
+        )
         .route(&format!("{PROJECT}/editing/snap"), post(compute_snap))
         .route(
             &format!("{PROJECT}/collaboration/activities"),
@@ -168,6 +176,58 @@ fn platform(error: AppError) -> Failure {
 
 type Ids = Path<(String, String, String)>;
 
+async fn list_relations(
+    State(state): State<AppState>,
+    Path((organization, project)): Path<(String, String)>,
+    request: Request,
+) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization).await?;
+    let Some(mut scope) = open(&state, &actor, &organization, &project, Guard::Read).await? else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    let result = scope.list_relations().await?;
+    scope.commit().await?;
+    Ok(Json(result))
+}
+
+async fn create_relation(
+    State(state): State<AppState>,
+    Path((organization, project)): Path<(String, String)>,
+    request: Request,
+) -> Result<Json<Value>, Failure> {
+    let (actor, headers, body) = authenticate_json(&state, request, &organization).await?;
+    let Some(mut scope) =
+        open(&state, &actor, &organization, &project, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    require_csrf(&state, &actor, &headers)?;
+    let body: ovg_storage::editing::RelationRequest = decode(body)?;
+    let result = scope.create_relation(body).await?;
+    scope.commit().await?;
+    Ok(Json(result))
+}
+
+async fn delete_relation(
+    State(state): State<AppState>,
+    Path((organization, project, id)): Ids,
+    request: Request,
+) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization).await?;
+    let Some(mut scope) =
+        open(&state, &actor, &organization, &project, Guard::ScopedDenied).await?
+    else {
+        return Err(EditError::InvalidRequest.into());
+    };
+    require_csrf(&state, &actor, &parts.headers)?;
+    let id = Uuid::parse_str(&id).map_err(|_| EditError::InvalidRequest)?;
+    let result = scope.delete_relation(id).await?;
+    scope.commit().await?;
+    Ok(Json(result))
+}
+
 async fn commit_changeset(
     State(state): State<AppState>,
     Path((organization, project, source)): Ids,
@@ -183,6 +243,15 @@ async fn commit_changeset(
     )
     .await?;
     require_csrf(&state, &session, &headers)?;
+    let mut body = body;
+    let prevent_overlap = match body.as_mut().and_then(Value::as_object_mut) {
+        Some(object) => match object.remove("prevent_overlap") {
+            None | Some(Value::Bool(false)) => false,
+            Some(Value::Bool(true)) => true,
+            _ => return Err(EditError::InvalidRequest.into()),
+        },
+        None => false,
+    };
     let body: CommitRequest = decode(body)?;
     let schema_ok = body
         .base_schema_revision
@@ -194,7 +263,11 @@ async fn commit_changeset(
     let (Some(mut scope), Ok(source_id)) = (scope, Uuid::parse_str(&source)) else {
         return Err(EditError::InvalidRequest.into());
     };
-    let result = scope.commit_changeset(source_id, body).await?;
+    let result = if prevent_overlap {
+        scope.commit_changeset_no_overlap(source_id, body).await?
+    } else {
+        scope.commit_changeset(source_id, body).await?
+    };
     scope.commit().await?;
     Ok((StatusCode::CREATED, Json(result)))
 }

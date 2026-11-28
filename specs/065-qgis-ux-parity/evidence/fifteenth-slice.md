@@ -1,0 +1,7 @@
+# Fifteenth implementation slice
+Base 5ae32f3294e27aa1c7f1daff9c488bc87dcb6cc5.
+
+- OUTPUT-03: classified legend from current categorized/graduated renderer, custom colors, hidden categories, geometry type and first map-frame zoom. Marks incomplete loaded samples; signals overflow. No independent saved per-frame styles or full-source category census.
+- TABLE-01/02/05 and EDIT-03: remote-page pin includes source, layer, content/schema revision and read authorization; stale page hidden immediately. Validate page geometry flag and unique FIDs; server feature detail verifies source/geometry context. Unhydrated remote row checkboxes disabled until opened, page selection only includes hydrated matching layer/revision. Professional geometry, attribute and statistics tools refuse incomplete or cross-layer selections; bulk delete refuses missing selected IDs. Deselect clears stale inspector focus in covered paths.
+- TypeScript exit 0; 88 Vitest + 37 Node tests PASS; production build exit 0 (8ad56528d9fe887a2d0f769c); targeted Chromium parity exit 0, including unhydrated tile row then open/selection. Layout smoke exit 0 (PDF/PNG/SVG and two-page Atlas/stale revision). Synthetic APIs and basemap fixtures; no authenticated Rust/PostGIS or QGIS pairing.
+- No new acceptance promotion: 39 partial, 32 unverified, 0 accepted. Source-wide attribute-only query, full-source classified legend, interoperable roundtrip, raster and other tasks remain. Do not waive gate.

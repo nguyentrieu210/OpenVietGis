@@ -587,6 +587,19 @@ def plan_export_mapping(
                 affected_fields=tuple(decimal_fields),
             )
         )
+    text_fields = tuple(f.field_id for f in fields if f.type == FieldType.TEXT)
+    if text_fields:
+        disclosures.append(
+            ConversionDisclosure(
+                code="DBF_TEXT_NULL_EMPTY",
+                message=(
+                    "DBF character fields cannot preserve the distinction between "
+                    "NULL, empty and padded text."
+                ),
+                requires_approval=True,
+                affected_fields=text_fields,
+            )
+        )
     if has_long_text:
         disclosures.append(
             ConversionDisclosure(

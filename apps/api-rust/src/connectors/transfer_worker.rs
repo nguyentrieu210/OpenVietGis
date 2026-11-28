@@ -58,6 +58,10 @@ const MODULES: &[(&str, &str)] = &[
         include_str!("../../../api/openvietgis_api/adapters/formats/geopackage.py"),
     ),
     (
+        "openvietgis_api/adapters/formats/shapefile_zip.py",
+        include_str!("../../../api/openvietgis_api/adapters/formats/shapefile_zip.py"),
+    ),
+    (
         "openvietgis_api/adapters/formats/postgis_sql.py",
         include_str!("../../../api/openvietgis_api/adapters/formats/postgis_sql.py"),
     ),
@@ -104,8 +108,8 @@ from openvietgis_api.domains.integration_hub.sync_diff import (
 )
 from openvietgis_api.domains.platform_errors import PlatformValidationError
 from openvietgis_api.domains.spatial.domain import FieldType, GeometryDimensions, NativeGeometry
-from openvietgis_api.domains.transfers.domain import ExportFieldMapping
-from openvietgis_api.domains.transfers.ports import TransferFormatError
+from openvietgis_api.domains.transfers.domain import ExportFieldMapping, normalize_encoding
+from openvietgis_api.domains.transfers.ports import TransferFormatError, TransferLimitExceededError
 
 
 def _to_tuple_coords(coords):
@@ -253,6 +257,12 @@ try:
                     field_mappings=mappings,
                     features=features,
                 )
+            elif fmt == "shapefile_zip":
+                from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
+                payload, ext, media_type = write_shapefile_zip(
+                    layer_name=layer_name, crs_code=crs_code, geometry_family=geometry_family,
+                    field_mappings=mappings, features=features,
+                )
             elif fmt == "geojson":
                 payload, ext, media_type = write_geojson(
                     field_mappings=mappings,
@@ -266,6 +276,8 @@ try:
                     field_mappings=mappings,
                     features=features,
                 )
+        if req.get("bounded_transfer") and len(payload)>64*1024*1024:
+            raise TransferLimitExceededError("ARTIFACT_SIZE_EXCEEDED","Binary export exceeds 64 MiB.")
         out_path = Path(req["output_path"])
         out_path.write_bytes(payload)
         print(json.dumps({
@@ -274,6 +286,51 @@ try:
             "media_type": media_type,
             "sha256": hashlib.sha256(payload).hexdigest(),
         }))
+    elif action == "inspect_import":
+        raw = Path(req["upload_path"]).read_bytes()
+        fmt = req["format"]
+        encoding = req.get("encoding")
+        if encoding is not None:
+            encoding = normalize_encoding(encoding)
+            if encoding is None: raise ValueError("Unsupported encoding")
+        if fmt == "geopackage":
+            members = inspect_geopackage(raw)
+        elif fmt == "shapefile_zip":
+            from openvietgis_api.adapters.formats.shapefile_zip import inspect_shapefile_zip, parse_shapefile_member
+            members = inspect_shapefile_zip(raw, encoding=encoding)
+        else:
+            raise ValueError("Unsupported import format")
+        if len(members) > 64 or any(len(m.name) > 200 for m in members):
+            raise ValueError("Too many or oversized dataset members")
+        eligible = [m for m in members if m.eligible]
+        chosen = req.get("member")
+        if chosen is None and len(eligible) == 1:
+            chosen = eligible[0].name
+        member = next((m for m in members if m.name == chosen), None)
+        parsed = None
+        if member and member.eligible:
+            # Never infer an unknown native CRS from coordinates or a user override.
+            if member.detected_crs is not None:
+                if fmt == "geopackage":
+                    parsed = parse_geopackage_member(raw, member_name=member.name)
+                else:
+                    parsed = parse_shapefile_member(raw, member_name=member.name, declared_encoding=encoding)
+        result = {"members":[m.to_wire() for m in members], "selected_member":chosen}
+        if parsed is not None:
+            result["parsed"] = {
+                "family":parsed.geometry_family.value, "dimensions":parsed.dimensions.value,
+                "crs":parsed.detected_crs, "encoding":parsed.detected_encoding,
+                "requires_encoding":parsed.requires_encoding_resolution,
+                "fields":[f.to_wire() for f in parsed.fields],
+                "findings":[f.to_wire() for f in parsed.findings],
+                "records":[{"id":r.feature_id,"attrs":r.attributes,"geometry":{"type":r.geometry.type,"coordinates":r.geometry.coordinates}} for r in parsed.features],
+                "extent":parsed.extent,
+            }
+        # Output is bounded on disk rather than an unbounded subprocess stdout pipe.
+        resource.setrlimit(resource.RLIMIT_FSIZE, (32*1024*1024,32*1024*1024))
+        with open(req["output_path"],"w",encoding="utf-8") as out:
+            json.dump(result,out,ensure_ascii=False,allow_nan=False,separators=(",",":"))
+        print(json.dumps({"ok":True}))
     elif action == "sync_diff":
         raw = Path(req["upload_path"]).read_bytes()
         expected_crs_code = int(req["expected_crs_code"])
@@ -375,7 +432,13 @@ try:
         }))
     else:
         raise ValueError(f"unsupported action: {action}")
-except (PlatformValidationError, TransferFormatError) as exc:
+except TransferLimitExceededError as exc:
+    print(json.dumps({"ok":False,"status":413,"code":exc.code,"message":exc.message}))
+    sys.exit(2)
+except TransferFormatError as exc:
+    print(json.dumps({"ok": False, "status": 422, "code": exc.code, "message": exc.message}))
+    sys.exit(2)
+except PlatformValidationError as exc:
     print(json.dumps({"ok": False, "status": 422, "message": exc.message}))
     sys.exit(2)
 except ValueError as exc:
@@ -392,6 +455,7 @@ static SEM: Semaphore = Semaphore::const_new(WORKERS);
 
 #[derive(Debug)]
 pub(crate) struct WorkerError {
+    pub(crate) code: Option<&'static str>,
     pub(crate) status: StatusCode,
     pub(crate) message: String,
 }
@@ -418,6 +482,7 @@ pub(crate) async fn run_export(mut req: Value) -> Result<ExportArtifact, WorkerE
     let bytes = tokio::fs::read(&out_path)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("read export artifact failed: {err}"),
         })?;
@@ -438,6 +503,7 @@ pub(crate) async fn run_sync_diff(
 ) -> Result<Value, WorkerError> {
     let work = WorkDir(std::env::temp_dir().join(format!("ovg-e12-diff-{}", Uuid::new_v4())));
     std::fs::create_dir_all(&work.0).map_err(|err| WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("create worker dir failed: {err}"),
     })?;
@@ -445,6 +511,7 @@ pub(crate) async fn run_sync_diff(
     tokio::fs::write(&upload_path, upload_bytes)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write upload artifact failed: {err}"),
         })?;
@@ -452,8 +519,51 @@ pub(crate) async fn run_sync_diff(
     invoke(&work.0, req).await
 }
 
+pub(crate) async fn run_import(upload: &[u8], mut req: Value) -> Result<Value, WorkerError> {
+    let work = WorkDir(std::env::temp_dir().join(format!("ovg-e07-import-{}", Uuid::new_v4())));
+    let error = |message: &str| WorkerError {
+        code: None,
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        message: message.to_owned(),
+    };
+    tokio::fs::create_dir_all(&work.0)
+        .await
+        .map_err(|_| error("create import directory"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(&work.0, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|_| error("secure import directory"))?;
+    }
+    let input = work.0.join("upload.bin");
+    let output = work.0.join("inspection.json");
+    tokio::fs::write(&input, upload)
+        .await
+        .map_err(|_| error("write import file"))?;
+    req["upload_path"] = Value::String(input.to_string_lossy().into_owned());
+    req["output_path"] = Value::String(output.to_string_lossy().into_owned());
+    invoke(&work.0, req).await?;
+    let size = tokio::fs::metadata(&output)
+        .await
+        .map_err(|_| error("missing import result"))?
+        .len();
+    if size > 32 * 1024 * 1024 {
+        return Err(WorkerError {
+            code: None,
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: "Import decoded result exceeds budget".into(),
+        });
+    }
+    let raw = tokio::fs::read(output)
+        .await
+        .map_err(|_| error("read import result"))?;
+    serde_json::from_slice(&raw).map_err(|_| error("invalid import worker result"))
+}
+
 async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let _permit = SEM.acquire().await.map_err(|_| WorkerError {
+        code: None,
         status: StatusCode::SERVICE_UNAVAILABLE,
         message: "worker semaphore closed".to_owned(),
     })?;
@@ -461,20 +571,34 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     tokio::fs::create_dir_all(work_dir)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("create worker root: {err}"),
         })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        tokio::fs::set_permissions(work_dir, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(|_| WorkerError {
+                code: None,
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "secure worker directory failed".into(),
+            })?;
+    }
     for init in PACKAGE_INITS {
         let p = work_dir.join(init);
         if let Some(parent) = p.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|err| WorkerError {
+                    code: None,
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     message: format!("create pkg dir: {err}"),
                 })?;
         }
         tokio::fs::write(&p, b"").await.map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write pkg init: {err}"),
         })?;
@@ -485,6 +609,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|err| WorkerError {
+                    code: None,
                     status: StatusCode::INTERNAL_SERVER_ERROR,
                     message: format!("create mod dir: {err}"),
                 })?;
@@ -492,6 +617,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
         tokio::fs::write(&p, body)
             .await
             .map_err(|err| WorkerError {
+                code: None,
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: format!("write module: {err}"),
             })?;
@@ -500,23 +626,32 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let req_path = work_dir.join("req.json");
     let drv_path = work_dir.join("driver.py");
     let req_bytes = serde_json::to_vec(&request).map_err(|err| WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("serialize worker request: {err}"),
     })?;
     tokio::fs::write(&req_path, req_bytes)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write req.json: {err}"),
         })?;
     tokio::fs::write(&drv_path, DRIVER)
         .await
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("write driver.py: {err}"),
         })?;
 
-    let mut cmd = tokio::process::Command::new("/usr/bin/python3");
+    let python = if request["action"] == "inspect_import" || request["format"] == "shapefile_zip" {
+        std::env::var("OPENVIETGIS_VECTOR_CODEC_PYTHON")
+            .unwrap_or_else(|_| "/usr/bin/python3".into())
+    } else {
+        "/usr/bin/python3".into()
+    };
+    let mut cmd = tokio::process::Command::new(python);
     cmd.args(["-E", "-s", "-B"])
         .arg(&drv_path)
         .arg(&req_path)
@@ -531,10 +666,12 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let out = tokio::time::timeout(TIMEOUT, cmd.output())
         .await
         .map_err(|_| WorkerError {
+            code: None,
             status: StatusCode::SERVICE_UNAVAILABLE,
             message: "transfer worker timed out".to_owned(),
         })?
         .map_err(|err| WorkerError {
+            code: None,
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("spawn transfer worker: {err}"),
         })?;
@@ -542,18 +679,36 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
     let stdout = String::from_utf8_lossy(&out.stdout);
     if let Some(last_line) = stdout.lines().rfind(|l| !l.trim().is_empty()) {
         if let Ok(val) = serde_json::from_str::<Value>(last_line) {
-            if val.get("ok").and_then(Value::as_bool) == Some(true) {
+            if val.get("ok").and_then(Value::as_bool) == Some(true) && out.status.success() {
                 return Ok(val);
             }
-            let code = val.get("status").and_then(Value::as_u64).unwrap_or(500);
-            let status =
-                StatusCode::from_u16(code as u16).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+            let status = match val.get("status").and_then(Value::as_u64) {
+                Some(422) => StatusCode::UNPROCESSABLE_ENTITY,
+                Some(413) => StatusCode::PAYLOAD_TOO_LARGE,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
             let msg = val
                 .get("message")
                 .and_then(Value::as_str)
                 .unwrap_or("transfer worker failed")
                 .to_owned();
             return Err(WorkerError {
+                code: match val
+                    .get("code")
+                    .and_then(Value::as_str)
+                    .filter(|_| !status.is_server_error())
+                {
+                    Some("ARCHIVE_PATH_TRAVERSAL") => Some("ARCHIVE_PATH_TRAVERSAL"),
+                    Some("ARCHIVE_SYMLINK_REJECTED") => Some("ARCHIVE_SYMLINK_REJECTED"),
+                    Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED") => Some("ARCHIVE_ENTRY_LIMIT_EXCEEDED"),
+                    Some("ARCHIVE_ENCRYPTED") => Some("ARCHIVE_ENCRYPTED"),
+                    Some("ARCHIVE_DUPLICATE_ENTRY") => Some("ARCHIVE_DUPLICATE_ENTRY"),
+                    Some("ARCHIVE_SIZE_EXCEEDED") => Some("ARCHIVE_SIZE_EXCEEDED"),
+                    Some("ARCHIVE_BOMB_REJECTED") => Some("ARCHIVE_BOMB_REJECTED"),
+                    Some("INVALID_ZIP") => Some("INVALID_ZIP"),
+                    Some("INVALID_GEOPACKAGE") => Some("INVALID_GEOPACKAGE"),
+                    _ => None,
+                },
                 status,
                 message: msg,
             });
@@ -562,6 +717,7 @@ async fn invoke(work_dir: &Path, request: Value) -> Result<Value, WorkerError> {
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     Err(WorkerError {
+        code: None,
         status: StatusCode::INTERNAL_SERVER_ERROR,
         message: format!("transfer worker error: {stderr}"),
     })

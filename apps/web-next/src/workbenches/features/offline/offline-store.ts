@@ -18,7 +18,7 @@ export type Draft = {
   geometry?: { type: "Point"; coordinates: Point };
   capture?: { source: "manual" | "device"; time: string; accuracy: number | null };
 };
-export type Receipt = { id: string; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts?: OfflineOperationReceipt[] };
+export type Receipt = { id: string; package_id?: string; operation_id?: string; submitted_ops_count?: number; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts?: OfflineOperationReceipt[] };
 export type PackageRecord = {
   id: string; actorId: string; organizationId: string; projectId: string; name: string;
   snapshotBytes: ArrayBuffer; snapshotSha: string; gpkgBytes: ArrayBuffer; gpkgSha: string;
@@ -56,7 +56,8 @@ function decode(bytes: ArrayBuffer): Snapshot {
 }
 
 export async function verifyRecord(record: PackageRecord): Promise<Snapshot> {
-  if (record.locked || Date.parse(record.expiresAt) <= Date.now()) throw new Error("Gói bị khóa hoặc hết hạn.");
+  if (record.locked || !Number.isFinite(Date.parse(record.expiresAt)) || Date.parse(record.expiresAt) <= Date.now()) throw new Error("Gói bị khóa hoặc hết hạn.");
+  if (record.snapshotBytes.byteLength > 25 * 1024 * 1024 || record.gpkgBytes.byteLength > 75 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(record.gpkgSha) || !/^[a-f0-9]{64}$/.test(record.snapshotSha)) throw new Error("Gói vượt giới hạn hoặc thiếu checksum.");
   if (new TextDecoder().decode(record.gpkgBytes.slice(0,16)) !== "SQLite format 3\0") throw new Error("Gói dữ liệu hỏng hoặc không đúng GeoPackage.");
   if (await sha256(record.gpkgBytes) !== record.gpkgSha || await sha256(record.snapshotBytes) !== record.snapshotSha) {
     throw new Error("Gói dữ liệu hỏng hoặc bị sửa đổi.");
@@ -164,7 +165,11 @@ async function writeRecord(record: PackageRecord, expected: number | null, remov
           return;
         }
         if (remove) store.delete(record.id);
-        else store.put(next);
+        else {
+          try { if(current) assertRecordTransition(current,next); }
+          catch(e) { problem=e instanceof Error?e:new Error("Thay đổi gói không hợp lệ.");tx.abort();return; }
+          store.put(next);
+        }
       };
       tx.oncomplete = () => resolve(next);
       tx.onerror = () => reject(problem ?? tx.error ?? new Error("Lỗi lưu ngoại tuyến."));
@@ -211,6 +216,7 @@ export function normalizeField(field: Field, input: string, isNull: boolean): Va
 }
 
 export function queueDraft(record: PackageRecord, draft: Draft): PackageRecord {
+  if (record.locked || Date.parse(record.expiresAt)<=Date.now()) throw new Error("Gói bị khóa hoặc hết hạn.");
   if (record.batch?.attempted) throw new Error("Nhóm đã thử gửi; không thể thay đổi nội dung.");
   const previous = record.drafts.find(d => d.feature_id === draft.feature_id);
   const identified = {...draft, client_operation_id: previous?.client_operation_id ?? crypto.randomUUID()};
@@ -223,4 +229,33 @@ export function wireDrafts(drafts: Draft[]) {
     op_type, feature_id, properties, ...(geometry ? { geometry } : {}),
     ...(client_operation_id !== undefined ? { client_operation_id } : {})
   }));
+}
+
+/** Verify the actual Rust sync_wire contract, including legacy drafts without operation IDs. */
+export function verifySyncReceipt(record:PackageRecord,receipt:Receipt):Receipt{
+ const fail=()=>{throw new Error("Biên nhận đồng bộ không khớp nhóm đã gửi. Giữ nguyên nhóm để kiểm tra lại.")};
+ if(!record.batch?.attempted||!receipt||typeof receipt.id!=="string"||!receipt.id||receipt.package_id!==record.id||receipt.operation_id!==record.batch.id||receipt.submitted_ops_count!==record.drafts.length||!["applied","conflict"].includes(receipt.status)||!Array.isArray(receipt.conflicts)||!Array.isArray(receipt.applied_changeset_ids)||!Array.isArray(receipt.operation_receipts))return fail();
+ const applied=receipt.status==="applied",ids=receipt.applied_changeset_ids;
+ if(applied?(ids.length!==1||typeof ids[0]!=="string"||!ids[0]||receipt.conflicts.length!==0):(ids.length!==0||receipt.conflicts.length===0))return fail();
+ const identified=record.drafts.filter(d=>d.client_operation_id!==undefined),byId=new Map(identified.map(d=>[d.client_operation_id,d])),seen=new Set<string>(),core=new Set<string>();
+ if(byId.size!==identified.length||receipt.operation_receipts.length!==identified.length)return fail();
+ for(const r of receipt.operation_receipts){
+  const draft=byId.get(r.client_operation_id);
+  if(!draft||seen.has(r.client_operation_id)||r.local_feature_id!==draft.feature_id||r.status!==(applied?"applied":"not_applied"))return fail();
+  seen.add(r.client_operation_id);
+  if(applied){
+   if(r.changeset_id!==ids[0]||typeof r.core_feature_id!=="string"||!r.core_feature_id||core.has(r.core_feature_id)||(draft.op_type==="update"?r.core_feature_id!==draft.feature_id:r.core_feature_id===draft.feature_id))return fail();
+   core.add(r.core_feature_id);
+  }else if(r.changeset_id!==null||r.core_feature_id!==null)return fail();
+ }
+ return receipt;
+}
+/** Enforce immutable attempted intent inside IndexedDB CAS, not just UI controls. */
+export function assertRecordTransition(before:PackageRecord,after:PackageRecord){
+ if(before.id!==after.id||before.actorId!==after.actorId||before.organizationId!==after.organizationId||before.projectId!==after.projectId||before.snapshotSha!==after.snapshotSha||before.gpkgSha!==after.gpkgSha||before.expiresAt!==after.expiresAt||before.locked&&!after.locked)throw new Error("Không thể thay đổi định danh hoặc mở lại gói bị thu hồi.");
+ if(before.batch?.attempted){
+  if(!after.batch?.attempted||after.batch.id!==before.batch.id||JSON.stringify(wireDrafts(before.drafts))!==JSON.stringify(wireDrafts(after.drafts)))throw new Error("Không thể thay đổi nhóm đã thử gửi.");
+  if(before.batch.receipt&&JSON.stringify(before.batch.receipt)!==JSON.stringify(after.batch.receipt))throw new Error("Không thể thay đổi biên nhận đã lưu.");
+ }
+ if(after.batch?.receipt&&!before.batch?.receipt)verifySyncReceipt(after,after.batch.receipt);
 }

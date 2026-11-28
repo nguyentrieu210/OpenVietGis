@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, createOfflinePackage, getCurrentUser, getSpatialFeature, getSpatialLayer,
   listOfflinePackages, listSpatialLayers, loadCsrfToken, syncOfflineOutbox,
   type OfflinePackage, type SpatialLayer } from "@openvietgis/client-sdk";
@@ -7,7 +7,7 @@ import { apiClient } from "../../app/api";
 import { OfflineMap } from "./OfflineMap";
 import { activeOfflineActor, installRecord, listLocalPackages, lockLocalScope, lockOfflineActor, makeRecord,
   normalizeField, observeOnlineActor, queueDraft, removeRecord, saveRecord,
-  unlockOfflineActor, verifyRecord, wireDrafts,
+  unlockOfflineActor, verifyRecord, verifySyncReceipt, wireDrafts,
   type Draft, type PackageRecord, type Snapshot, type Bounds, type Value } from "./offline-store";
 import "./offline.css";
 
@@ -133,6 +133,9 @@ function OpenPackage({ record, snapshot, online, save, sync, disabled }: {
 
 export function OfflineFieldPage() {
   const { organizationId: org = "", projectId: prj = "" } = useParams();
+  return <ScopedOfflinePage key={org+":"+prj} org={org} prj={prj}/>;
+}
+function ScopedOfflinePage({org,prj}:{org:string;prj:string}) {
   const [online, setOnline] = useState(navigator.onLine);
   const [shellReady, setShellReady] = useState(Boolean(navigator.serviceWorker?.controller));
   const [actor, setActor] = useState<string | null>(null);
@@ -151,15 +154,18 @@ export function OfflineFieldPage() {
   const [bbox, setBbox] = useState<Record<keyof Bounds, string>>({min_x:"",min_y:"",max_x:"",max_y:""});
   const [consent, setConsent] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const generation=useRef(0),mounted=useRef(true),flight=useRef(false);
+  const currentActor=useRef(actor);currentActor.current=actor;
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;++generation.current}},[]);
   const record = records.find(r => r.id === active);
   const chosen = layers.find(l => l.id === layerId);
 
   useEffect(() => {
-    const status = () => {setOnline(navigator.onLine); setRefresh(n => n + 1);};
+    const status = () => {++generation.current;currentActor.current=null;setActor(null);setSnapshot(null);setOnline(navigator.onLine); setRefresh(n => n + 1);};
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     window.addEventListener("online", status); window.addEventListener("offline", status);
     window.addEventListener("storage", status);
-    const onFocus = () => {if (navigator.onLine) setRefresh(n => n + 1);};
+    const onFocus = () => {if (navigator.onLine&&!flight.current) status();};
     window.addEventListener("focus", onFocus);
     let mounted = true;
     const checkShell = () => {if (mounted) setShellReady(Boolean(navigator.serviceWorker?.controller));};
@@ -169,7 +175,7 @@ export function OfflineFieldPage() {
     return () => {mounted = false; clearInterval(timer);window.removeEventListener("online", status);window.removeEventListener("offline", status);window.removeEventListener("storage", status);window.removeEventListener("focus", onFocus);navigator.serviceWorker?.removeEventListener("controllerchange", checkShell);};
   }, []);
   useEffect(() => {
-    let live = true;
+    let live = true;const seq=++generation.current;currentActor.current=null;
     setActor(null); setSnapshot(null); setRecords([]); setServer([]); setLayers([]);
     async function load() {
       let actorId: string | null = activeOfflineActor();
@@ -178,28 +184,28 @@ export function OfflineFieldPage() {
         let layerRows: SpatialLayer[] = [];
         if (online) {
           const user = await getCurrentUser(apiClient);
-          if (!live) return;
+          if (!live||generation.current!==seq) return;
           observeOnlineActor(user.id);
           actorId = user.status === "active" ? user.id : null;
           if (!actorId) { lockOfflineActor(); return; }
           const [p,l] = await Promise.all([listOfflinePackages(apiClient, org, prj), listSpatialLayers(apiClient, org, prj, {limit:100})]);
-          if (!live) return;
-          packages = p.items; layerRows = l.items.filter(layer => layer.source.kind !== "reference_fixture" && layer.source.validation_state === "ready" && layer.source.lifecycle === "active" && layer.capabilities.some(c => c.name === "edit" && c.available));
+          if (!live||generation.current!==seq) return;
+          packages = p.items; layerRows = l.items.filter(layer => layer.source.kind !== "reference_fixture" && layer.source.validation_state === "ready" && layer.source.lifecycle === "active" && layer.capabilities.some(c => c.name === "edit" && c.available && c.actor_authorized));
         } else actorId = activeOfflineActor();
         if (!actorId) throw new Error("Thiết bị chưa được mở khóa ngoại tuyến bởi tài khoản hợp lệ.");
         let local = await listLocalPackages(actorId, org, prj);
-        if (!live) return;
+        if (!live||generation.current!==seq) return;
         if (online) {
           local = await Promise.all(local.map(r => {
             const p = packages.find(item => item.id === r.id);
             return !r.locked && (!p || p.revoked_at || p.sha256 !== r.gpkgSha) ? saveRecord({...r, locked:true}) : Promise.resolve(r);
           }));
         }
-        if (!live) return;
-        setRecords(local); setServer(packages); setLayers(layerRows); setActor(actorId);
+        if (!live||generation.current!==seq) return;
+        currentActor.current=actorId;setRecords(local); setServer(packages); setLayers(layerRows); setActor(actorId);
         setError("");
       } catch (err) {
-        if (!live) return;
+        if (!live||generation.current!==seq) return;
         if (err instanceof ApiError && [401,403,404].includes(err.status)) {
           lockOfflineActor();
           if (actorId && [403,404].includes(err.status)) {
@@ -223,21 +229,25 @@ export function OfflineFieldPage() {
   }, [record, actor]);
 
   function ensureActor(): string {
-    if (!actor) throw new Error("Cần xác thực tài khoản.");
+    if (!mounted.current||!actor||currentActor.current!==actor) throw new Error("Cần xác thực tài khoản.");
     if (!online && activeOfflineActor() !== actor) throw new Error("Phiên ngoại tuyến đã khóa.");
     return actor;
   }
   async function verifyOnlineActor() {
-    const expected = ensureActor();
+    const expected = ensureActor(),seq=generation.current;
+    if(!navigator.onLine)throw new Error("Cần kết nối để xác thực tài khoản.");
     const user = await getCurrentUser(apiClient);
+    if(!mounted.current||generation.current!==seq||currentActor.current!==expected)throw new Error("Phiên đã thay đổi.");
     if (user.id !== expected || user.status !== "active") {
-      lockOfflineActor(); setActor(null); setSnapshot(null); throw new Error("Tài khoản đã thay đổi; dữ liệu được khóa.");
+      ++generation.current;currentActor.current=null;lockOfflineActor(); setActor(null); setSnapshot(null);setRecords([]); throw new Error("Tài khoản đã thay đổi; dữ liệu được khóa.");
     }
     return expected;
   }
   async function persist(next: PackageRecord) {
     if (ensureActor() !== next.actorId) throw new Error("Gói không thuộc tài khoản.");
+    const seq=generation.current;
     const updated = await saveRecord(next);
+    if(!mounted.current||generation.current!==seq||currentActor.current!==next.actorId)throw new Error("Gói đã lưu; phiên thay đổi, hãy mở lại để kiểm tra.");
     setRecords(rows => rows.map(r => r.id === updated.id ? updated : r));
   }
   async function download(pkg: OfflinePackage, actorId: string) {
@@ -250,14 +260,17 @@ export function OfflineFieldPage() {
     ]);
     const verified = await makeRecord(pkg, await projection.arrayBuffer(), await gpkg.arrayBuffer(), actorId, org, prj);
     await verifyOnlineActor();
+    const seq=generation.current;
     const installed = await installRecord(verified);
+    if(!mounted.current||generation.current!==seq||currentActor.current!==actorId)throw new Error("Gói đã lưu nhưng phiên thay đổi; không mở khóa thiết bị.");
     unlockOfflineActor(actorId);
     setRecords(rows => [...rows, installed]); setActive(pkg.id);
     setNotice("Gói đã kiểm tra checksum và lưu trên thiết bị.");
   }
   async function withBusy(fn: () => Promise<void>) {
+    if(flight.current)return;flight.current=true;const seq=generation.current;
     setBusy(true); setError(""); setNotice("");
-    try {await fn();} catch (err) {setError(errorText(err));} finally {setBusy(false);}
+    try {await fn();} catch (err) {if(mounted.current&&generation.current===seq)setError(errorText(err));} finally {flight.current=false;if(mounted.current)setBusy(false);}
   }
 
   async function issue() {
@@ -279,25 +292,30 @@ export function OfflineFieldPage() {
       await verifyRecord(record);
       await verifyOnlineActor();
       // Commit attempted state first, so retry after shutdown uses identical group ID/content.
+      const seq=generation.current;
       let pending = record;
       if (!record.batch?.attempted) {
         if (!record.batch) throw new Error("Không có nhóm bản nháp.");
         pending = await saveRecord({...record, batch:{...record.batch, attempted:true}});
+        if(!mounted.current||generation.current!==seq||currentActor.current!==pending.actorId)throw new Error("Nhóm đã đóng băng; mở lại gói để tiếp tục.");
         setRecords(rows => rows.map(r => r.id === pending.id ? pending : r));
       }
       if (!pending.batch) throw new Error("Không có nhóm bản nháp.");
       try {
         const csrf = await loadCsrfToken(apiClient);
-        const receipt = await syncOfflineOutbox(apiClient, org, prj, pending.id, {operation_id:pending.batch.id,operations:wireDrafts(pending.drafts)}, csrf);
+        await verifyOnlineActor();
+        if(generation.current!==seq)throw new Error("Phiên đã thay đổi.");
+        const receipt = verifySyncReceipt(pending,await syncOfflineOutbox(apiClient, org, prj, pending.id, {operation_id:pending.batch.id,operations:wireDrafts(pending.drafts)}, csrf));
+        if(!mounted.current||generation.current!==seq||currentActor.current!==pending.actorId)throw new Error("Phiên đã thay đổi; mở lại và gửi đúng nhóm để lấy biên nhận.");
         const completed = {...pending, batch:{...pending.batch, receipt}};
         await persist(completed);
         setNotice("Đã lưu kết quả máy chủ; bản nháp được giữ để đối chiếu.");
       } catch (err) {
         if (err instanceof ApiError && [401,403,404].includes(err.status)) {
-          lockOfflineActor(); setActor(null); setSnapshot(null); setRecords([]); setServer([]); setLayers([]);
+          if(mounted.current&&generation.current===seq&&currentActor.current===pending.actorId){++generation.current;currentActor.current=null;lockOfflineActor(); setActor(null); setSnapshot(null); setRecords([]); setServer([]); setLayers([]);setError("Quyền truy cập không còn hợp lệ.");}
           if ([403,404].includes(err.status)) await lockLocalScope(pending.actorId, org, prj);
         } else if (err instanceof ApiError && [409,422].includes(err.status)) {
-          await persist({...pending,batch:{...pending.batch, receipt:{id:"",status:"rejected",applied_changeset_ids:[],conflicts:["Máy chủ từ chối; hãy kiểm tra lại phạm vi và phiên bản."]}}});
+          throw new Error("Máy chủ báo lỗi "+err.status+". Chưa có biên nhận xác minh; giữ nguyên nhóm đã gửi để đối chiếu. Không tự đổi mã hoặc nội dung nhóm.");
         }
         throw err;
       }
@@ -345,7 +363,7 @@ export function OfflineFieldPage() {
           ensureActor(); await removeRecord(r); setRecords(rows=>rows.filter(x=>x.id!==r.id)); if(active===r.id)setActive("");
         })}>Xóa gói</button>
       </li>)}</ul>
-      <button type="button" onClick={()=>{lockOfflineActor();setActor(null);setSnapshot(null);setRecords([]);}}>Khóa thiết bị ngoại tuyến</button>
+      <button type="button" onClick={()=>{++generation.current;currentActor.current=null;lockOfflineActor();setActor(null);setSnapshot(null);setRecords([]);}}>Khóa thiết bị ngoại tuyến</button>
     </section>}
     {record && snapshot && actor === record.actorId && !record.locked && Date.parse(record.expiresAt)>now &&
       <OpenPackage key={record.id} record={record} snapshot={snapshot} online={online} disabled={busy}

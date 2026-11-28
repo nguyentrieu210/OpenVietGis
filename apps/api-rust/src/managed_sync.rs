@@ -330,7 +330,8 @@ async fn commit(
         return Err(invalid());
     };
     let request = CommitRequest {
-        operation_id,
+        acknowledge_native_crs: None,
+                operation_id,
         base_content_revision: body.base_content_revision,
         base_schema_revision: body.base_schema_revision,
         summary,

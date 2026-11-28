@@ -18,7 +18,7 @@ try{
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Khảo sát số nhà xã Bình Hưng",status:"active"}];
   else if(p.endsWith("/map")&&method==="GET")body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/map")&&method==="PUT"){const payload=route.request().postDataJSON();mapSavePayload=payload;body={operation_id:payload.operation_id,configuration_revision:2};}
-  else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={operation_id:payload.operation_id};}
+  else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={id:"fixture-changeset",source_id:p.split("/").at(-2),operation_id:payload.operation_id,base_content_revision:payload.base_content_revision,status:"committed",operation_count:payload.operations.length,resulting_content_revision:"c".repeat(64)};}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Synthetic buffer",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Synthetic clip",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Synthetic dissolve",required_inputs:["input_layer"],parameters_schema:{}}]};
@@ -32,7 +32,7 @@ try{
   else if(p.includes("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Vùng đệm",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Cắt lớp",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Gộp vùng",required_inputs:["input_layer"],parameters_schema:{}}]};
   else if(p.includes("/processing/jobs")&&method==="GET")body={items:[]};
   else if(p.endsWith("/areas")||p.endsWith("/routes")||p.endsWith("/rules")||p.endsWith("/buildings")){pluginCalls++;body={items:[]};}
-  else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{source_id:"source"+part,project_id:pid,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
+  else if(p.endsWith("/features")){const part=p.includes("layer2")?2:1;body={context:{organization_id:org,source_id:"source"+part,layer_id:"layer"+part,project_id:pid,content_revision:layer(part).source.content_revision,schema_revision:layer(part).source.schema_revision,geometry_included:true,response_crs:{code:4326}},items:features(part),next_after_feature_id:null};}
   else return route.fulfill({status:404,json:{}});
   return route.fulfill({json:body});
  });
@@ -53,5 +53,26 @@ try{
  await command("EDIT");await page.getByText(/Đang chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();await command("EDIT");await page.getByText(/Đã thôi chỉnh sửa Khảo sát số nhà · Phần 01/).waitFor();console.log("PASS direct edit toggle");
  await command("PLOT");const layout=page.getByRole("dialog",{name:"Layout Designer"});await layout.waitFor();await page.getByRole("button",{name:"Đóng Layout Designer"}).click();await layout.waitFor({state:"detached"});console.log("PASS layout designer");
  for(const cmd of ["LA","IMPORT","QUERY","BUFFER","CLIP","DISSOLVE","DXF","WMS","FIELD","REVIEW","OPS"]){await command(cmd);await page.locator(".core-workbench").waitFor();await page.locator(".core-workbench-body").waitFor();await page.waitForTimeout(350);if(["BUFFER","CLIP","DISSOLVE"].includes(cmd)){const titles={BUFFER:"Vùng đệm (Buffer)",CLIP:"Cắt lớp (Clip)",DISSOLVE:"Gộp vùng (Dissolve)"};await page.getByRole("dialog",{name:titles[cmd]}).waitFor();await page.getByTestId("processing-workbench").waitFor()}await page.getByRole("button",{name:"Đóng công cụ GIS"}).click();await page.locator(".core-workbench").waitFor({state:"detached"});console.log("PASS panel "+cmd)}
+ await command("WORKSPACE");const settings=page.getByRole("dialog",{name:"Tùy chỉnh workspace"});await settings.waitFor();
+ await settings.getByLabel("Bật snapping",{exact:true}).check();
+ await settings.getByText("Dung sai riêng từng lớp (pixel)",{exact:true}).click();
+ const layerName="Khảo sát số nhà · Phần 01";
+ await settings.getByLabel("Dung sai snapping "+layerName,{exact:true}).selectOption("15");
+ await settings.getByLabel("Đơn vị snapping",{exact:true}).selectOption("mercator");
+ await settings.getByLabel("Dung sai bản đồ",{exact:true}).selectOption("20");
+ await settings.getByText("Dung sai bản đồ từng lớp",{exact:true}).click();
+ await settings.getByLabel("Dung sai bản đồ "+layerName,{exact:true}).selectOption("5");
+ await settings.getByRole("button",{name:"Xong",exact:true}).click();await settings.waitFor({state:"detached"});
+ await page.reload({waitUntil:"domcontentloaded"});await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await command("WORKSPACE");await settings.waitFor();
+ assert.equal(await settings.getByLabel("Đơn vị snapping",{exact:true}).inputValue(),"mercator");
+ assert.equal(await settings.getByLabel("Dung sai bản đồ",{exact:true}).inputValue(),"20");
+ await settings.getByText("Dung sai bản đồ từng lớp",{exact:true}).click();
+ assert.equal(await settings.getByLabel("Dung sai bản đồ "+layerName,{exact:true}).inputValue(),"5");
+ await settings.getByLabel("Đơn vị snapping",{exact:true}).selectOption("pixel");
+ await settings.getByText("Dung sai riêng từng lớp (pixel)",{exact:true}).click();
+ assert.equal(await settings.getByLabel("Dung sai snapping "+layerName,{exact:true}).inputValue(),"15");
+ await settings.getByRole("button",{name:"Xong",exact:true}).click();
+ console.log("PASS scoped pixel and projected snapping preferences persist independently across reload (synthetic)");
  await page.screenshot({path:"/tmp/ovg-core-toolkit-smoke.png"});assert.equal(errors.length,0,errors.join("\n"));console.log("PASS command, measurement, layer visibility, map save, create feature, edit toggle, layout designer, and 11 workbench commands");
 }finally{await browser.close()}

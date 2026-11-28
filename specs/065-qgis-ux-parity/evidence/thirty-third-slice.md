@@ -1,0 +1,8 @@
+# Thirty-third implementation slice (GitHub only)
+Base 59c453053c3e5c682733d45a91c44c0fc527edd5.
+- SHELL-07 / COLLAB-03: scoped CAD resume preference stores only verified document ID, version and SHA256, or explicit vault state. Resume exact current catalog record; mismatched or unavailable revision returns to vault, never silently opens another drawing. Update pin after verified open/save in relay and native DXF paths. Existing linked-feature flow takes priority. No autosave of drafts or layout state.
+- CAD navigation no longer closes drawing before GIS/3D transition result; dirty/save state forwarded synchronously from relay, native DXF now reports actual busy/dirty state rather than permanently locking the mode. CAD task reentry prevented. On failed navigation the editor remains mounted.
+- Empty globe camera preference scoped to account/org/project, bounded and normalized, sampled during active globe and pagehide. Initial 3D restore only uses this camera for plain globe; scene/model/tileset restoration remains explicitly separate. Return to GIS guarded against stale navigation/access. 
+- Added unit cases for exact CAD pin and valid camera. No runtime, build, or browser tests performed. Current external CAD relay does not expose Model/Layout switching capability; no fake button or claim of layout parity. No saved-scene or physical 3D cross-mode acceptance, no merge/deploy.
+
+Follow-up static review: native DXF exact resume enabled, obsolete always-busy native editor effect removed; relay editor shows navigation failure in its own selection panel and prevents duplicate navigation. Still untested.

@@ -105,8 +105,10 @@ from .managed_client import (
     diff_managed_snapshots,
     fetch_managed_delta,
     get_managed_commit_receipt,
+    iter_managed_events,
     list_desktop_commands,
     load_managed_layers,
+    managed_reconnect_delay,
     native_geometry_wkt,
     respond_desktop_command,
     send_pending_commit,
@@ -275,6 +277,7 @@ class _ManagedRealtimeWorker(QThread):
 
     def run(self) -> None:
         url = build_managed_events_url(self._config, self._session_id)
+        failures = 0
         while not self._stop_requested:
             req = urllib.request.Request(
                 url,
@@ -290,31 +293,29 @@ class _ManagedRealtimeWorker(QThread):
                 resp = urllib.request.urlopen(req, timeout=65.0)
                 self._active_response = resp
                 self.status_changed.emit("🟢 Đã kết nối · Đang nhận cập nhật từ Web")
-                current_event = ""
-                while not self._stop_requested:
-                    raw_line = resp.readline()
-                    if not raw_line:
-                        break
-                    line = raw_line.decode("utf-8", errors="ignore").strip()
-                    if line.startswith("event:"):
-                        current_event = line.split(":", 1)[1].strip()
-                    elif line.startswith("data:"):
-                        if current_event == "spatial_change":
-                            self.spatial_changed.emit()
-                        elif current_event == "session_revoked":
-                            self.session_revoked.emit()
-                            return
-                        elif current_event == "desktop_command":
-                            self.desktop_command.emit()
-                        current_event = ""
-                    elif not line:
-                        current_event = ""
+                # Catch changes missed while disconnected; polling remains a fallback.
+                self.spatial_changed.emit()
+                self.desktop_command.emit()
+                connected_at = time.monotonic()
+                for event in iter_managed_events(resp, lambda: self._stop_requested):
+                    if self._stop_requested:
+                        return
+                    failures = 0
+                    if event == "spatial_change":
+                        self.spatial_changed.emit()
+                    elif event == "session_revoked":
+                        self.session_revoked.emit()
+                        return
+                    elif event == "desktop_command":
+                        self.desktop_command.emit()
+                if time.monotonic() - connected_at >= 30:
+                    failures = 0
             except urllib.error.HTTPError as exc:
-                if exc.code in (401, 403):
+                if exc.code in (401, 403, 410):
                     self.session_revoked.emit()
                     break
                 self.status_changed.emit("🟡 Đang kết nối lại...")
-            except (urllib.error.URLError, OSError, TimeoutError):
+            except (urllib.error.URLError, OSError, TimeoutError, ApiError, ValueError):
                 if not self._stop_requested:
                     self.status_changed.emit("🟡 Mất kết nối · Đang thử lại...")
             finally:
@@ -324,7 +325,8 @@ class _ManagedRealtimeWorker(QThread):
                     with contextlib.suppress(OSError, ValueError):
                         resp.close()
             if not self._stop_requested:
-                for _ in range(30):
+                failures += 1
+                for _ in range(int(managed_reconnect_delay(failures) * 10)):
                     if self._stop_requested:
                         break
                     time.sleep(0.1)
@@ -1923,7 +1925,12 @@ class OpenVietGisConnectorDialog(QDialog):
         self._managed_worker = None
         if worker is not None:
             worker.stop()
-            worker.wait(1500)
+            if not worker.wait(1500):
+                # The thread may still be in an HTTP read. Keep its Qt parent and
+                # ignore any late queued signals using the sender checks above.
+                worker.finished.connect(worker.deleteLater)
+            else:
+                worker.deleteLater()
 
     def _qgis_field_type(self, data_type: str) -> Any:
         dt = data_type.lower()
@@ -2157,10 +2164,10 @@ class OpenVietGisConnectorDialog(QDialog):
 
             self.r029_save_button.setEnabled(sess.can_edit and bool(self._managed_layers))
             worker = _ManagedRealtimeWorker(config, sess.id, self)
-            worker.spatial_changed.connect(lambda: self._managed_delta_debounce.start())
-            worker.session_revoked.connect(self._on_managed_session_revoked)
-            worker.desktop_command.connect(self._on_managed_desktop_command)
-            worker.status_changed.connect(self.realtime_status.setText)
+            worker.spatial_changed.connect(self._on_managed_worker_spatial)
+            worker.session_revoked.connect(self._on_managed_worker_revoked)
+            worker.desktop_command.connect(self._on_managed_worker_command)
+            worker.status_changed.connect(self._on_managed_worker_status)
             self._managed_worker = worker
             worker.start()
             self._managed_poll.start()
@@ -2185,11 +2192,29 @@ class OpenVietGisConnectorDialog(QDialog):
             QMessageBox.warning(self, "Kết nối bản đồ", reason)
             self.ws_status.setText(f"Không thể mở bản đồ: {reason}")
 
+    def _on_managed_worker_spatial(self) -> None:
+        if self.sender() is self._managed_worker and self._managed_session is not None:
+            self._managed_delta_debounce.start()
+
+    def _on_managed_worker_revoked(self) -> None:
+        if self.sender() is self._managed_worker and self._managed_session is not None:
+            self._on_managed_session_revoked()
+
+    def _on_managed_worker_command(self) -> None:
+        if self.sender() is self._managed_worker and self._managed_session is not None:
+            self._on_managed_desktop_command()
+
+    def _on_managed_worker_status(self, message: str) -> None:
+        if self.sender() is self._managed_worker and self._managed_session is not None:
+            self.realtime_status.setText(message)
+
     def _on_managed_session_revoked(self) -> None:
         self._cancel_managed_delta()
         self._cancel_managed_commit()
         self._checkpoint_managed_drafts()
         self._managed_poll.stop()
+        self._managed_delta_debounce.stop()
+        self._draft_timer.stop()
         self.managed_auto_save.setChecked(False)
         self._managed_session = None
         self._stop_managed_worker()

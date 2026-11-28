@@ -3,12 +3,12 @@ export type AttributeField={name:string;type:string;nullable:boolean};
 export function attributeValue(f:AttributeField,raw:string,isNull=false):string|number|boolean|null{
  const bad=(reason:string):never=>{throw Error(f.name+": "+reason)};
  if(isNull)return f.nullable?null:bad("không cho phép NULL");
- if(f.type==="text")return raw;
+ if(f.type==="text")return Array.from(raw).length<=4096?raw:bad("tối đa 4096 ký tự");
  if(f.type==="integer"){const n=Number(raw);return /^-?\d+$/.test(raw)&&Number.isSafeInteger(n)&&n>=-2147483648&&n<=2147483647?n:bad("số nguyên 32 bit không hợp lệ")}
  if(f.type==="decimal"){
   if(!/^[+-]?\d+(\.\d+)?$/.test(raw))return bad("nhập số thập phân bằng dấu chấm");
   const [whole,frac=""]=raw.replace(/^[+-]/,"").split("."),i=whole!.replace(/^0+/,"")||"0",d=frac.replace(/0+$/,"");
-  if((i==="0"?0:i.length)+d.length>38||d.length>18)return bad("tối đa 38 chữ số, 18 chữ số thập phân");
+  if(i.length+d.length>38||d.length>18)return bad("tối đa 38 chữ số, 18 chữ số thập phân");
   return (raw.startsWith("-")&&(i!=="0"||d)?"-":"")+i+(d?"."+d:"");
  }
  if(f.type==="boolean")return raw==="true"?true:raw==="false"?false:bad("chọn true hoặc false");

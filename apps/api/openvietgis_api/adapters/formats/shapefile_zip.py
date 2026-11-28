@@ -7,8 +7,9 @@ import io
 import math
 import re
 import zipfile
+import zlib
 from collections.abc import Sequence
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any
 
 import shapefile  # type: ignore[import-untyped]
@@ -67,15 +68,17 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
             )
         total_expanded = 0
         files: dict[str, bytes] = {}
+        seen_names: set[str] = set()
         for info in infos:
-            if info.is_dir():
-                continue
             name = info.filename.replace("\\", "/")
-            if name.startswith("/") or ".." in name.split("/") or ":" in name:
+            if (
+                not name or name.startswith("/") or ".." in name.split("/") or ":" in name
+                or "\x00" in info.orig_filename
+            ):
                 raise TransferFormatError(
                     "ARCHIVE_PATH_TRAVERSAL", "Archive contains unsafe entry path."
                 )
-            # Reject symlinks (UNIX mode 0o120000 in upper 16 bits)
+            # Validate directory entries too; a symlink must never be silently skipped.
             if ((info.external_attr >> 16) & 0o170000) == 0o120000:
                 raise TransferFormatError(
                     "ARCHIVE_SYMLINK_REJECTED", "Archive symbolic links are not permitted."
@@ -84,30 +87,42 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
                 raise TransferFormatError(
                     "ARCHIVE_ENCRYPTED", "Encrypted ZIP archives are not supported."
                 )
+            if info.is_dir():
+                if info.file_size != 0:
+                    raise TransferFormatError("INVALID_ZIP", "Directory entry contains data.")
+                continue
             if info.file_size > MAX_ZIP_EXPANDED_BYTES:
                 raise TransferLimitExceededError(
                     "ARCHIVE_SIZE_EXCEEDED", "Archive entry exceeds expanded size limit."
                 )
-            chunks = []
-            read_total = 0
-            with zf.open(info, "r") as handle:
-                while True:
-                    chunk = handle.read(65536)
-                    if not chunk:
-                        break
-                    read_total += len(chunk)
-                    total_expanded += len(chunk)
-                    if total_expanded > MAX_ZIP_EXPANDED_BYTES:
-                        raise TransferLimitExceededError(
-                            "ARCHIVE_BOMB_REJECTED",
-                            "Archive expansion exceeds safe byte budget.",
-                        )
-                    chunks.append(chunk)
             lower_key = name.lower()
-            if lower_key in files:
+            if lower_key in seen_names:
                 raise TransferFormatError(
                     "ARCHIVE_DUPLICATE_ENTRY", "Archive contains duplicate member names."
                 )
+            seen_names.add(lower_key)
+            chunks = []
+            read_total = 0
+            try:
+                with zf.open(info, "r") as handle:
+                    while True:
+                        chunk = handle.read(65536)
+                        if not chunk:
+                            break
+                        read_total += len(chunk)
+                        total_expanded += len(chunk)
+                        if total_expanded > MAX_ZIP_EXPANDED_BYTES:
+                            raise TransferLimitExceededError(
+                                "ARCHIVE_BOMB_REJECTED",
+                                "Archive expansion exceeds safe byte budget.",
+                            )
+                        chunks.append(chunk)
+            except (zipfile.BadZipFile, EOFError, NotImplementedError, OSError, zlib.error) as exc:
+                raise TransferFormatError(
+                    "INVALID_ZIP", "Archive contains corrupt or unsupported compressed data."
+                ) from exc
+            if read_total != info.file_size:
+                raise TransferFormatError("INVALID_ZIP", "Archive entry size does not match.")
             files[name] = b"".join(chunks)
         return files
 
@@ -399,6 +414,11 @@ def parse_shapefile_member(
                 ValidationFinding("error", "NULL_GEOMETRY", "Feature has null/empty geometry.", idx)
             )
             continue
+        if shp.shapeType != reader.shapeType:
+            findings.append(ValidationFinding(
+                "error", "UNSUPPORTED_GEOMETRY", "Shape type disagrees with member.", idx
+            ))
+            continue
         for pt in shp.points:
             if not (math.isfinite(pt[0]) and math.isfinite(pt[1])):
                 findings.append(
@@ -461,7 +481,7 @@ def parse_shapefile_member(
             elif fld.type == FieldType.INTEGER:
                 attrs[fld.field_id] = int(raw_v)
             elif fld.type == FieldType.DECIMAL:
-                attrs[fld.field_id] = str(Decimal(str(raw_v)).normalize())
+                attrs[fld.field_id] = format(Decimal(str(raw_v)), "f")
             elif isinstance(raw_v, dt.date):
                 attrs[fld.field_id] = raw_v.isoformat()
             else:
@@ -549,16 +569,36 @@ def write_shapefile_zip(
         elif geom.type == "LineString":
             writer.line([[[float(p[0]), float(p[1])] for p in gcoords]])
         else:
-            writer.poly([[[float(p[0]), float(p[1])] for p in ring] for ring in gcoords])
+            # ESRI exterior clockwise, interior counterclockwise; preserve holes.
+            rings=[]
+            for index,ring in enumerate(gcoords):
+                pts=[[float(p[0]),float(p[1])] for p in ring]
+                signed=sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(pts,pts[1:],strict=False))
+                if (signed>0)==(index==0):
+                    pts.reverse()
+                rings.append(pts)
+            writer.poly(rings)
         rec: list[Any] = [fid]
         for m in field_mappings:
             v = attrs.get(m.field_id)
             if v is None:
                 rec.append(None)
             elif m.type == FieldType.DECIMAL:
-                rec.append(float(Decimal(str(v))))
+                with localcontext() as ctx:
+                    ctx.prec=50
+                    fixed=format(Decimal(str(v)).quantize(Decimal("0.000001")),"f")
+                if len(fixed)>19:
+                    raise TransferFormatError(
+                        "DBF_NUMERIC_OVERFLOW",
+                        "Decimal exceeds DBF width; export GeoPackage or GeoJSON.",
+                    )
+                # pyshp formats numeric through float. Reject width overflow after formatting too.
+                numeric=float(fixed)
+                if len(format(numeric,".6f"))>19:
+                    raise TransferFormatError("DBF_NUMERIC_OVERFLOW","Decimal exceeds DBF width.")
+                rec.append(numeric)
             elif m.type == FieldType.TEXT:
-                rec.append(str(v)[:254])
+                rec.append(str(v).encode("utf-8")[:254].decode("utf-8",errors="ignore"))
             else:
                 rec.append(v)
         writer.record(*rec)

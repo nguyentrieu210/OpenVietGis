@@ -2,6 +2,7 @@ import {useCallback,useEffect,useRef,useState} from "react";
 import {ApiClient,ApiError,loadCsrfToken} from "@openvietgis/client-sdk";
 import {EmojiPicker} from "./EmojiPicker";
 import "./org-chat.css";
+import {RoomDraftStore,mergeChatWindow} from "./chat-draft-store";
 
 type Person={id:string;display_name:string;contact?:boolean;request?:"incoming"|"outgoing"|null};
 type Room={id:string;kind:"org"|"group"|"direct";name:string;member_count:number;unread:number;mentioned:boolean;peer:Person|null;last_message:{body:string;author_name:string}|null};
@@ -10,6 +11,9 @@ type Contact={user_id:string;display_name:string;id?:string};
 type Contacts={items:Contact[];incoming:Contact[];outgoing:Contact[]};
 type ImageDraft={kind:"image";data_url:string;width:number;height:number};
 type Items<T>={items:T[]};
+type Draft={body:string;reply:Message|null;mentions:Person[];images:ImageDraft[]};
+const blankDraft=():Draft=>({body:"",reply:null,mentions:[],images:[]});
+export const createOrgDraftStore=()=>new RoomDraftStore(blankDraft,8);
 const emojis=["❤️","👍","😆","😮","😢","🔥"];
 const emptyContacts:Contacts={items:[],incoming:[],outgoing:[]};
 
@@ -21,53 +25,61 @@ export async function prepareChatImage(file:File):Promise<ImageDraft>{
  return {kind:"image",data_url:data,width:img.naturalWidth,height:img.naturalHeight};
 }
 
-export function OrgChat({client,org,accountId,close}:{client:ApiClient;org:string;accountId:string;close:()=>void}){
+export function OrgChat({client,org,accountId,close,drafts}:{client:ApiClient;org:string;accountId:string;close:()=>void;drafts:RoomDraftStore<Draft>}){
  const base="/organizations/"+encodeURIComponent(org)+"/chat";
  const [rooms,setRooms]=useState<Room[]>([]),[roomId,setRoomId]=useState(""),[messages,setMessages]=useState<Message[]>([]),[pins,setPins]=useState<Message[]>([]);
  const [roomSearch,setRoomSearch]=useState("");
  const [tab,setTab]=useState<"rooms"|"people"|"contacts"|"group">("rooms"),[q,setQ]=useState(""),[people,setPeople]=useState<Person[]>([]),[contacts,setContacts]=useState<Contacts>(emptyContacts);
- const [draft,setDraft]=useState(""),[reply,setReply]=useState<Message|null>(null),[mentions,setMentions]=useState<Person[]>([]),[images,setImages]=useState<ImageDraft[]>([]),[emoji,setEmoji]=useState(false),[tag,setTag]=useState(false);
+ const [compose,setCompose]=useState<Draft>(blankDraft),[emoji,setEmoji]=useState(false),[tag,setTag]=useState(false);
+ const {body:draft,reply,mentions,images}=compose;
  const [groupName,setGroupName]=useState(""),[groupUsers,setGroupUsers]=useState<Person[]>([]),[groupAction,setGroupAction]=useState<"create"|"invite">("create");
  const [error,setError]=useState(""),[busy,setBusy]=useState(false),[connected,setConnected]=useState(false),[showPins,setShowPins]=useState(false),[more,setMore]=useState(true);
  const accessRevoked=useRef(false),active=useRef(""),requestSeq=useRef(0),rosterSeq=useRef(0),alive=useRef(true),sending=useRef(false),scroller=useRef<HTMLDivElement>(null);
+ const change=<K extends keyof Draft>(k:K,value:Draft[K]|((old:Draft[K])=>Draft[K]))=>{if(!active.current||accessRevoked.current||sending.current)return;const next=drafts.update(active.current,old=>({...old,[k]:typeof value==="function"?(value as (old:Draft[K])=>Draft[K])(old[k]):value}));setCompose(next)};
+ const setDraft=(v:string|((old:string)=>string))=>change("body",v),setReply=(v:Message|null)=>change("reply",v),setMentions=(v:Person[]|((old:Person[])=>Person[]))=>change("mentions",v),setImages=(v:ImageDraft[]|((old:ImageDraft[])=>ImageDraft[]))=>change("images",v);
  const selected=rooms.find(r=>r.id===roomId);
  const visibleRooms=rooms.filter(r=>r.name.toLocaleLowerCase("vi").includes(roomSearch.toLocaleLowerCase("vi")));
  const report=useCallback(async(e:unknown)=>{const detail=e instanceof ApiError?await e.readPayload():null;if(alive.current)setError(detail?.detail||detail?.validationMessages.join("; ")||(e instanceof Error?e.message:"Không thực hiện được thao tác."))},[]);
  const get=useCallback(<T,>(path:string)=>client.request<T>(base+path,{cache:"no-store"}),[client,base]);
  const mutate=useCallback(async<T,>(path:string,method:string,body?:unknown)=>{await loadCsrfToken(client);return client.request<T>(base+path,{method,...(body===undefined?{}:{body:JSON.stringify(body)})})},[client,base]);
- const refreshRooms=useCallback(async()=>{const r=await get<Items<Room>>("/rooms");if(alive.current&&!accessRevoked.current)setRooms(r.items);return r.items},[get]);
+ const refreshRooms=useCallback(async()=>{const r=await get<Items<Room>>("/rooms");if(alive.current&&!accessRevoked.current){drafts.retain(new Set(r.items.map(room=>room.id)));setRooms(r.items)}return r.items},[get,drafts]);
  const refreshContacts=useCallback(async()=>{const r=await get<Contacts>("/contacts");if(alive.current&&!accessRevoked.current)setContacts(r)},[get]);
  const refreshMessages=useCallback(async(id:string,read=true)=>{
   const seq=++requestSeq.current;
   const r=await get<Items<Message>>("/rooms/"+id+"/messages?limit=50");
-  if(!alive.current||active.current!==id||seq!==requestSeq.current)return;
-  setMessages(old=>{const first=r.items[0]?.created_at;return [...old.filter(m=>first&&m.created_at<first&&!r.items.some(n=>n.id===m.id)),...r.items]});
+  if(!alive.current||accessRevoked.current||active.current!==id||seq!==requestSeq.current)return;
+  setMessages(old=>mergeChatWindow(old,r.items));
   if(read&&document.visibilityState==="visible")await mutate("/rooms/"+id+"/read","POST").catch(()=>{});
  },[get,mutate]);
- const choose=useCallback((id:string)=>{if(active.current===id){setTab("rooms");return}active.current=id;++requestSeq.current;setRoomId(id);setMessages([]);setPins([]);setShowPins(false);setMore(true);setDraft("");setReply(null);setMentions([]);setImages([]);setTag(false);setError("");setTab("rooms");void refreshMessages(id).then(()=>refreshRooms()).catch(report)},[refreshMessages,refreshRooms,report]);
+ const choose=useCallback((id:string)=>{if(active.current===id){setTab("rooms");return}active.current=id;++requestSeq.current;setRoomId(id);setMessages([]);setPins([]);setShowPins(false);setMore(true);setCompose(drafts.get(id));setTag(false);setError("");setTab("rooms");void refreshMessages(id).then(()=>refreshRooms()).catch(report)},[refreshMessages,refreshRooms,report,drafts]);
  useEffect(()=>{alive.current=true;accessRevoked.current=false;let cancelled=false;let revoked=false;let timer:ReturnType<typeof setTimeout>|undefined;
-  const sync=()=>{if(cancelled||revoked||accessRevoked.current||document.visibilityState!=="visible")return;void refreshRooms().then(rs=>{if(cancelled||revoked)return;if(!active.current&&rs.length)choose(rs.find(r=>r.kind==="org")?.id??rs[0].id);else if(active.current&&!rs.some(r=>r.id===active.current)){active.current="";setRoomId("");setMessages([])}else if(active.current)void refreshMessages(active.current,Boolean(rs.find(r=>r.id===active.current)?.unread)).catch(report)}).catch(report)};
+  const sync=()=>{if(cancelled||revoked||accessRevoked.current||document.visibilityState!=="visible")return;void refreshRooms().then(rs=>{if(cancelled||revoked)return;if(!active.current&&rs.length)choose(rs.find(r=>r.kind==="org")?.id??rs[0].id);else if(active.current&&!rs.some(r=>r.id===active.current)){drafts.remove(active.current);active.current="";++requestSeq.current;setRoomId("");setMessages([]);setPins([]);setCompose(blankDraft())}else if(active.current)void refreshMessages(active.current,Boolean(rs.find(r=>r.id===active.current)?.unread)).catch(report)}).catch(report)};
   const es=new EventSource(client.url(base+"/events"),{withCredentials:true});
   es.addEventListener("ready",()=>{setConnected(true);sync()});
   es.addEventListener("chat",()=>{clearTimeout(timer);timer=setTimeout(sync,250)});
   es.addEventListener("contacts",()=>{void refreshContacts().catch(report);void refreshRooms().catch(report)});
-  es.addEventListener("revoked",()=>{revoked=true;accessRevoked.current=true;++requestSeq.current;++rosterSeq.current;es.close();setConnected(false);setRooms([]);setMessages([]);setPins([]);setPeople([]);setContacts(emptyContacts);setDraft("");setImages([]);setMentions([]);setReply(null);active.current="";setRoomId("");setError("Quyền truy cập chat đã bị thu hồi.")});
+  es.addEventListener("revoked",()=>{revoked=true;accessRevoked.current=true;++requestSeq.current;++rosterSeq.current;es.close();setConnected(false);setRooms([]);setMessages([]);setPins([]);setPeople([]);setContacts(emptyContacts);drafts.clear();setCompose(blankDraft());active.current="";setRoomId("");setError("Quyền truy cập chat đã bị thu hồi.")});
   es.addEventListener("unavailable",()=>{setConnected(false);es.close()});
   es.onerror=()=>setConnected(false);
   const poll=setInterval(sync,30000);document.addEventListener("visibilitychange",sync);sync();
   return()=>{cancelled=true;alive.current=false;es.close();clearTimeout(timer);clearInterval(poll);document.removeEventListener("visibilitychange",sync)};
- },[base,client,choose,refreshRooms,refreshMessages,refreshContacts,report]);
+ },[base,client,choose,refreshRooms,refreshMessages,refreshContacts,report,drafts]);
  useEffect(()=>{if(tab!=="people"&&tab!=="group"&&!tag)return;const seq=++rosterSeq.current;const timer=setTimeout(()=>{void get<Items<Person>>("/people?q="+encodeURIComponent(q.slice(0,80))).then(r=>{if(alive.current&&!accessRevoked.current&&seq===rosterSeq.current)setPeople(r.items)}).catch(report)},250);return()=>{clearTimeout(timer);++rosterSeq.current}},[tab,tag,q,get,report]);
  useEffect(()=>{if(tab==="contacts")void refreshContacts().catch(report)},[tab,refreshContacts,report]);
  const last=messages.at(-1)?.id;useEffect(()=>{scroller.current?.scrollTo({top:scroller.current.scrollHeight})},[last,roomId]);
  const run=async(fn:()=>Promise<unknown>)=>{if(sending.current||accessRevoked.current)return;sending.current=true;setBusy(true);setError("");try{await fn()}catch(e){await report(e)}finally{sending.current=false;if(alive.current)setBusy(false)}};
  const direct=(id:string)=>run(async()=>{const r=await mutate<Room>("/rooms/direct","POST",{user_id:id});await refreshRooms();choose(r.id)});
  const group=()=>run(async()=>{if(groupAction==="invite"){await mutate("/rooms/"+roomId+"/members","POST",{user_ids:groupUsers.map(p=>p.id)});await refreshRooms();setTab("rooms")}else{const r=await mutate<Room>("/rooms","POST",{name:groupName.trim(),member_ids:groupUsers.map(p=>p.id)});await refreshRooms();choose(r.id)}setGroupName("");setGroupUsers([])});
- const addImages=async(files:File[])=>{const id=active.current;try{const next=await Promise.all(files.slice(0,4-images.length).map(prepareChatImage));if(active.current!==id||!alive.current||accessRevoked.current)return;setImages(old=>[...old,...next].slice(0,4))}catch(e){await report(e)}};
- const send=()=>run(async()=>{const id=roomId;if(!id||(!draft.trim()&&!images.length))return;await mutate("/rooms/"+id+"/messages","POST",{body:draft.trim(),reply_to_id:reply?.id??null,mention_ids:mentions.map(p=>p.id),attachments:images});if(active.current!==id)return;setDraft("");setReply(null);setMentions([]);setImages([]);await refreshMessages(id);await refreshRooms()});
- const action=(m:Message,kind:"pin"|"reaction",value?:string)=>run(async()=>{const id=roomId;await mutate("/messages/"+m.id+"/"+(kind==="pin"?"pin":"reactions"),kind==="pin"&&m.pinned?"DELETE":"POST",kind==="reaction"?{emoji:value}:undefined);if(active.current!==id)return;await refreshMessages(id);if(showPins)setPins((await get<Items<Message>>("/rooms/"+id+"/pins")).items)});
- const openPins=()=>run(async()=>{if(showPins){setShowPins(false);return}const id=roomId;const p=await get<Items<Message>>("/rooms/"+id+"/pins");if(active.current===id){setPins(p.items);setShowPins(true)}});
- const older=()=>run(async()=>{const id=roomId;const first=messages[0]?.id;if(!first)return;const r=await get<Items<Message>>("/rooms/"+id+"/messages?limit=50&before="+first);if(active.current===id){setMessages(old=>[...r.items.filter(m=>!old.some(n=>n.id===m.id)),...old]);setMore(r.items.length===50)}});
+ const addImages=async(files:File[])=>{const id=active.current;try{const next=await Promise.all(files.slice(0,4-images.length).map(prepareChatImage));if(active.current!==id||!alive.current||accessRevoked.current||sending.current)return;setImages(old=>[...old,...next].slice(0,4))}catch(e){await report(e)}};
+ const send=()=>run(async()=>{const id=roomId;if(!id||(!draft.trim()&&!images.length))return;const submitted=drafts.get(id);if(!drafts.claim(id))throw Error("Tin nhắn phòng này đang được gửi. Kiểm tra lịch sử khi thao tác kết thúc.");
+  try{let saved:Message;try{saved=await mutate<Message>("/rooms/"+id+"/messages","POST",{body:submitted.body.trim(),reply_to_id:submitted.reply?.id??null,mention_ids:submitted.mentions.map(p=>p.id),attachments:submitted.images})}catch(e){if(!(e instanceof ApiError)||e.status>=500)throw Error("Chưa xác minh tin đã gửi; kiểm tra lịch sử trước khi gửi lại. Bản nháp được giữ.");throw e}
+  if(!saved.id||saved.author_id!==accountId)throw Error("Biên nhận tin nhắn không khớp; kiểm tra lịch sử trước khi gửi lại.");
+  if(drafts.get(id)===submitted)drafts.remove(id);
+  if(!alive.current||accessRevoked.current||active.current!==id)return;setCompose(drafts.get(id));setMessages(old=>old.some(m=>m.id===saved.id)?old:[...old,saved]);await refreshMessages(id);await refreshRooms()}finally{drafts.release(id)}});
+
+ const action=(m:Message,kind:"pin"|"reaction",value?:string)=>run(async()=>{const id=roomId;await mutate("/messages/"+m.id+"/"+(kind==="pin"?"pin":"reactions"),kind==="pin"&&m.pinned?"DELETE":"POST",kind==="reaction"?{emoji:value}:undefined);if(!alive.current||accessRevoked.current||active.current!==id)return;await refreshMessages(id);if(showPins){const result=await get<Items<Message>>("/rooms/"+id+"/pins");if(alive.current&&!accessRevoked.current&&active.current===id)setPins(result.items)}});
+ const openPins=()=>run(async()=>{if(showPins){setShowPins(false);return}const id=roomId;const p=await get<Items<Message>>("/rooms/"+id+"/pins");if(alive.current&&!accessRevoked.current&&active.current===id){setPins(p.items);setShowPins(true)}});
+ const older=()=>run(async()=>{const id=roomId;const first=messages[0]?.id;if(!first)return;const r=await get<Items<Message>>("/rooms/"+id+"/messages?limit=50&before="+first);if(alive.current&&!accessRevoked.current&&active.current===id){setMessages(old=>[...r.items.filter(m=>!old.some(n=>n.id===m.id)),...old]);setMore(r.items.length===50)}});
  const contactAction=(path:string,method="POST",body?:unknown)=>run(async()=>{await mutate(path,method,body);await refreshContacts();setPeople((await get<Items<Person>>("/people?q="+encodeURIComponent(q.slice(0,80)))).items)});
  const showGroup=(mode:"create"|"invite")=>{setGroupAction(mode);setGroupUsers([]);setGroupName("");setQ("");setTab("group")};
  const tagPeople=selected?.kind==="direct"?people.filter(p=>p.id===selected.peer?.id):people;

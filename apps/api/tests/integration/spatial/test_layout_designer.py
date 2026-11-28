@@ -28,6 +28,7 @@ def test_layout_designer_revision_scope_and_geometry(migrated_database):
                 "h": 140,
                 "camera": camera,
                 "grid": True,
+                "locked": True,
             },
             {
                 "id": b,
@@ -57,7 +58,12 @@ def test_layout_designer_revision_scope_and_geometry(migrated_database):
         assert r.status_code == 201, r.text
         saved = r.json()
         assert saved["revision"] == 1 and len(saved["document"]["items"]) == 4
+        assert saved["document"]["items"][0]["locked"] is True
+        assert "locked" not in saved["document"]["items"][1]
         assert c.get(base).json()["items"] == [saved]
+        invalid = copy.deepcopy(doc)
+        invalid["items"][0]["locked"] = "true"
+        assert c.post(base, json=payload | {"document": invalid}).status_code == 422
         invalid = copy.deepcopy(doc)
         invalid["items"][0]["w"] = 300
         assert c.post(base, json=payload | {"document": invalid}).status_code == 422

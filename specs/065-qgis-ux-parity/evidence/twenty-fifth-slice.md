@@ -1,0 +1,5 @@
+# Twenty-fifth implementation slice (GitHub only)
+Base 46c34b6a7fbaaac20d7eda0e75b43193cf25e06a.
+- TABLE-07: per-scope column configuration with legacy hidden-only migration, schema-pruned order and 70–600 px width, selected copy requires every selected key in current readable revision-pinned rows and scope. Formula-safe TSV preserved. Added unit and targeted browser test; no claim that new tests ran.
+- DOCK-08: personal theme snapshots retain current layer/source/schema pins, skip mismatched/new/unauthorized layers, retain edit lock/selectability and saved style library; reject duplicate/reserved names and cap 20 themes/100 layers. Legacy snapshots without pins cannot apply. Theme stores vector display configuration, not shared/project basic colors; exclusive group consistency and paired QGIS remain.
+- Direct GitHub source changes only. No VPS execution, production build, Chromium or CI result confirmed for this commit. Previous direct column-helper assertions passed on worktree; final GitHub reconstruction and new theme code unverified. Keep matrix acceptance unchanged until evidence.

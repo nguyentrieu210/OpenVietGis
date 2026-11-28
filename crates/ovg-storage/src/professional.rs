@@ -782,12 +782,63 @@ pub async fn geometry_preview(
     }))
 }
 
+/// Check the exact pinned population before running a topology rule.
+async fn topology_population(
+    scope: &mut EditScope<'_>,
+    source: &PinnedSource,
+    selection: &Selection,
+) -> Result<(i64, i64), EditError> {
+    if source.feature_count > 50_000 {
+        return Err(EditError::detail(
+            422,
+            "Topology supports at most 50000 source features",
+        ));
+    }
+    let row = sqlx::query(
+        "SELECT count(*) AS total,
+            count(*) FILTER (WHERE geometry_state = 'present' AND geometry IS NOT NULL) AS present,
+            count(*) FILTER (WHERE content_revision <> $5 OR schema_revision <> $6) AS stale
+         FROM spatial.reference_features
+         WHERE organization_id = $1 AND project_id = $2 AND source_id = $3
+           AND (cardinality($4::text[]) = 0 OR feature_id = ANY($4))",
+    )
+    .bind(scope.organization_id())
+    .bind(scope.project_id())
+    .bind(source.id)
+    .bind(&selection.feature_ids)
+    .bind(&source.content_revision)
+    .bind(&source.schema_revision)
+    .fetch_one(&mut **scope.tx_mut())
+    .await
+    .map_err(op_err)?;
+    let total: i64 = row.try_get("total").map_err(db_err)?;
+    let present: i64 = row.try_get("present").map_err(db_err)?;
+    let stale: i64 = row.try_get("stale").map_err(db_err)?;
+    let expected = if selection.feature_ids.is_empty() {
+        source.feature_count
+    } else {
+        selection.feature_ids.len() as i64
+    };
+    if total != expected || stale != 0 {
+        return Err(EditError::detail(
+            409,
+            "Topology population changed or requested features are missing",
+        ));
+    }
+    Ok((total, present))
+}
+
 pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<Value, EditError> {
     set_timeout(scope).await?;
     let src = pinned(scope, &req.primary, false, false).await?;
     let org_id = scope.organization_id();
     let project_id = scope.project_id();
     let check = req.check.as_str();
+    let (requested_count, scanned_count) = topology_population(scope, &src, &req.primary).await?;
+    let skipped_count = requested_count - scanned_count;
+    if req.secondary.is_some() && !matches!(check, "outside" | "gap") {
+        return Err(EditError::InvalidRequest);
+    }
 
     let primary_sql = selection_sql(
         "$3",
@@ -800,6 +851,7 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
 
     let mut target_src_id: Option<Uuid> = None;
     let mut target_ids: Vec<String> = Vec::new();
+    let mut secondary_pin = Value::Null;
     if matches!(check, "outside" | "gap") {
         let Some(ref sec) = req.secondary else {
             return Err(EditError::detail(422, "Reference boundary layer required"));
@@ -811,6 +863,26 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
                 "Reference boundary must be polygon with <=5000 objects",
             ));
         }
+        if target.id == src.id {
+            return Err(EditError::detail(
+                422,
+                "Reference boundary must be a different source",
+            ));
+        }
+        let (requested, present) = topology_population(scope, &target, sec).await?;
+        if requested == 0 || present != requested {
+            return Err(EditError::detail(
+                422,
+                "Reference boundary has missing geometry or is empty",
+            ));
+        }
+        if check == "gap" && skipped_count != 0 {
+            return Err(EditError::detail(
+                422,
+                "Gap check needs complete primary geometry",
+            ));
+        }
+        secondary_pin = json!({"source_id":target.id,"content_revision":target.content_revision,"schema_revision":target.schema_revision});
         target_src_id = Some(target.id);
         target_ids = sec.feature_ids.clone();
     }
@@ -847,13 +919,18 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
             if src.geometry_family != "Polygon" {
                 return Err(EditError::detail(422, "Polygon required"));
             }
+            let pair = if req.primary.feature_ids.is_empty() {
+                "b.feature_id > a.feature_id"
+            } else {
+                "b.feature_id <> a.feature_id AND (b.feature_id > a.feature_id OR NOT (b.feature_id = ANY($4)))"
+            };
             let sql = format!(
                 "WITH a AS ({primary_sql}) \
                  SELECT a.feature_id, b.feature_id AS other, \
                         ST_AsGeoJSON(ST_Intersection(a.geometry, b.geometry), 15) AS geo \
                  FROM a JOIN spatial.reference_features b \
                    ON b.organization_id = $1 AND b.project_id = $2 AND b.source_id = $3 \
-                  AND b.feature_id > a.feature_id AND b.geometry_state = 'present' \
+                  AND ({pair}) AND b.geometry_state = 'present' \
                   AND b.geometry && a.geometry \
                  WHERE ST_Relate(a.geometry, b.geometry, '2********') LIMIT 201"
             );
@@ -869,8 +946,8 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
             }
             let sql = format!(
                 "WITH a AS ({primary_sql}), \
-                 ends AS (SELECT feature_id, ST_StartPoint(geometry) AS p FROM a \
-                          UNION ALL SELECT feature_id, ST_EndPoint(geometry) FROM a) \
+                 ends AS (SELECT feature_id, ST_StartPoint(geometry) AS p FROM a WHERE NOT ST_IsClosed(geometry) \
+                          UNION ALL SELECT feature_id, ST_EndPoint(geometry) FROM a WHERE NOT ST_IsClosed(geometry)) \
                  SELECT e.feature_id, NULL::text AS other, ST_AsGeoJSON(e.p, 15) AS geo \
                  FROM ends e WHERE NOT EXISTS ( \
                      SELECT 1 FROM spatial.reference_features b \
@@ -922,7 +999,7 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
                     "WITH a AS ({p_sql}), b AS ({s_sql}), \
                      coverage AS (SELECT ST_UnaryUnion(ST_Collect(geometry)) AS g FROM a), \
                      mask AS (SELECT ST_UnaryUnion(ST_Collect(geometry)) AS g FROM b), \
-                     parts AS (SELECT (ST_Dump(ST_Difference(mask.g, coverage.g))).geom AS g \
+                     parts AS (SELECT (ST_Dump(ST_Difference(mask.g, COALESCE(coverage.g, ST_GeomFromText('POLYGON EMPTY',4326))))).geom AS g \
                                FROM coverage CROSS JOIN mask) \
                      SELECT NULL::text AS feature_id, NULL::text AS other, ST_AsGeoJSON(g, 15) AS geo \
                      FROM parts WHERE NOT ST_IsEmpty(g) LIMIT 201"
@@ -941,7 +1018,7 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
         _ => return Err(EditError::InvalidRequest),
     };
 
-    let complete = qrows.len() <= 200;
+    let complete = qrows.len() <= 200 && skipped_count == 0;
     let mut items = Vec::with_capacity(qrows.len().min(200));
     for qr in qrows.iter().take(200) {
         let feature_id: Option<String> = qr.try_get("feature_id").map_err(op_err)?;
@@ -964,6 +1041,12 @@ pub async fn topology(scope: &mut EditScope<'_>, req: TopologyParams) -> Result<
     Ok(json!({
         "source_id": src.id,
         "content_revision": src.content_revision,
+        "schema_revision": src.schema_revision,
+        "secondary_pin": secondary_pin,
+        "requested_count": requested_count,
+        "scanned_count": scanned_count,
+        "skipped_count": skipped_count,
+        "truncated": qrows.len() > 200,
         "complete": complete,
         "items": items,
     }))

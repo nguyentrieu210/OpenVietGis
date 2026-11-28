@@ -5,7 +5,7 @@ pub mod http;
 pub mod profile;
 pub mod provider_policy;
 mod transfer;
-mod transfer_worker;
+pub(crate) mod transfer_worker;
 
 pub(crate) fn router() -> axum::Router<crate::AppState> {
     http::router()

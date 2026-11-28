@@ -1,3 +1,4 @@
+import {createHash} from "node:crypto";
 import {preview} from "vite";
 import {fileURLToPath} from "node:url";
 import {dirname} from "node:path";
@@ -12,10 +13,13 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
  // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
  await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
+ if(process.env.OVG_SHELL_ONLY==="1")await page.addInitScript(()=>{const key="ovg-workspace:v1:fixture:fixture-org:fixture-project:camera";if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({center:[106.66,10.76],zoom:14,bearing:20,pitch:30}))});
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
- const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
- const saved=[],edits=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
+ const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,technical_supported:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
+ const raster={id:"12345678-1234-1234-1234-123456789abc",name:"QA DEM",method:"band",width:3,height:3,bands:1,output_bands:1,epsg:3857,bounds:[106.66,10.76,106.662,10.762],maxzoom:12,tile_count:1,byte_size:123,legend:[0,20],stats:{valid:8,nodata:1,min:0,max:20,mean:10,std:8}};
+ let rasterPosts=0;const binaryRequests=[];const binaryBytes=Buffer.from("synthetic artifact, not GIS file");const binaryHash=createHash("sha256").update(binaryBytes).digest("hex");let binaryOp="";
+ const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
  await page.route("**/api/v1/**",async route=>{
@@ -26,12 +30,25 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
-  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
+  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
-  else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer"}],next_after_id:null};
-  else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1)return route.fulfill({status:503,json:{}});body={operation_id:payload.operation_id,source_id:"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
-  else if(p.endsWith("/features"))body={context:{source_id:p.includes("layer2")?"source2":"source1",project_id:pid,response_crs:{code:4326}},items:[feature],next_after_feature_id:null};
+  else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
+  else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
+  else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer",source:{...layer.source,feature_count:1001}}],next_after_id:null};
+  else if(p.endsWith("/pro/topology")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.primary.layer_id,"layer1");body={source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,requested_count:1,scanned_count:0,skipped_count:1,truncated:false,complete:false,secondary_pin:null,items:[]}}
+  else if(p.endsWith("/exports/preview")&&m==="POST"){const q=route.request().postDataJSON();body={...q,source_id:"source1",source_crs:4326,feature_count:1,geometry_family:"Polygon",confirmable:true,preview_fingerprint:"f".repeat(64),field_mappings:[],disclosures:[{code:"DBF_TEST",message:"Chuyển đổi QA cần xác nhận",requires_approval:true,affected_fields:["height_m"]}]}}
+  else if(p.endsWith("/exports/confirm")&&m==="POST"){const q=route.request().postDataJSON();binaryRequests.push(q);binaryOp=q.operation_id;assert.deepEqual(q.approved_disclosures,["DBF_TEST"]);if(binaryRequests.length===1)return route.fulfill({status:503,json:{}});body={id:"export-job",operation_id:binaryOp,kind:"export",status:"succeeded",organization_id:org,project_id:pid,target_source_id:"source1",target_layer_id:"layer1",artifact_id:"artifact-test"}}
+  else if(p.endsWith("/artifacts/artifact-test"))body={id:"artifact-test",job_id:"export-job",organization_id:org,project_id:pid,source_id:"source1",layer_id:"layer1",source_content_revision:layer.source.content_revision,source_schema_revision:layer.source.schema_revision,output_format:"shapefile_zip",output_crs:4326,state:"ready",sha256:binaryHash,byte_size:binaryBytes.length,content_type:"application/zip",comparison_report:{exported_feature_count:1}};
+  else if(p.endsWith("/artifacts/artifact-test/download"))return route.fulfill({contentType:"application/zip",headers:{"x-content-sha256":binaryHash},body:binaryBytes});
+  else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
+  else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
+  else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
+  else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1||edits.length===3)return route.fulfill({status:503,json:{}});body={id:"receipt-"+edits.length,operation_id:payload.operation_id,source_id:p.includes("/sources/source2/")?"source2":"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
+  else if(p.endsWith("/query")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.attribute_only,true);body={attribute_only:true,layer_id:"layer1",source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,stored_crs:4326,limit:q.limit,offset:q.offset,query_fingerprint:"d".repeat(64),total_count:2,has_more:false,selection_feature_ids:["building","missing"],items:[{feature_id:"building",geometry_state:"present",geometry:null,attributes:{height_m:25}},{feature_id:"missing",geometry_state:"absent",geometry:null,attributes:{height_m:null}}]};}
+  else if(p.includes("/integration-hub/adapters/qgis/layers/")&&p.endsWith("/export")){const raw=JSON.stringify({type:"FeatureCollection",features:[{type:"Feature",id:"building",geometry:feature.geometry,properties:feature.attributes}]});return route.fulfill({status:200,contentType:"application/geo+json",headers:{"x-content-sha256":createHash("sha256").update(raw).digest("hex"),"x-openvietgis-crs":"EPSG:4326","x-openvietgis-content-revision":layer.source.content_revision,"x-openvietgis-schema-revision":layer.source.schema_revision,"x-openvietgis-feature-count":"1"},body:raw})}
+  else if(p.endsWith("/features")){const second=p.includes("layer2");body={context:{organization_id:org,project_id:pid,layer_id:second?"layer2":"layer1",source_id:second?"source2":"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,response_crs:{code:4326},geometry_included:true},items:[feature],next_after_feature_id:null};}
+  else if(p.includes("/pro/tiles/"))return route.fulfill({status:200,contentType:"application/vnd.mapbox-vector-tile",body:Buffer.alloc(0)});
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
     if(m==="POST"){if(holdSave)await new Promise(resolve=>{releaseSave=resolve});const x=ver();saved.unshift(x);body=x}
     else body={items:p.endsWith("/versions")?saved:saved.slice(0,1)};
@@ -44,6 +61,155 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
+ if(process.env.OVG_COLUMNS_ONLY==="1"){
+  const openTable=async()=>{await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("ATTR");await command.press("Enter");const t=page.locator("section.qgis-table");await t.waitFor();await t.getByLabel("Layer bảng thuộc tính").selectOption("layer1");await t.locator("tbody tr").first().waitFor();return t};
+  const table=await openTable();await table.getByRole("button",{name:"Cột",exact:true}).click();
+  const width=table.getByLabel("Độ rộng cột height_m");await width.fill("240");await width.press("Enter");
+  assert.equal(await table.getByRole("columnheader",{name:"height_m",exact:true}).evaluate(e=>e.style.width),"240px");
+  await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+  await page.reload({waitUntil:"domcontentloaded",timeout:45000});const reopened=await openTable();
+  assert.equal(await reopened.getByRole("columnheader",{name:"height_m",exact:true}).evaluate(e=>e.style.width),"240px");
+  const copy=reopened.getByRole("button",{name:"Sao chép vùng chọn",exact:true});assert.equal(await copy.isEnabled(),false);
+  await reopened.locator("tbody tr").first().getByRole("checkbox").check();assert.equal(await copy.isEnabled(),true);
+  console.log("PASS column width persisted through F5 and selected-copy guard (synthetic)");
+ }else if(process.env.OVG_EXPORT_ONLY==="1"){
+  await first.click();await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("EXPORT");await command.press("Enter");
+  const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+  await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
+  await xp.getByRole("radio",{name:/Shapefile/}).click();
+  await xp.getByRole("button",{name:"Kiểm tra trước khi xuất"}).click();
+  const confirm=xp.getByRole("button",{name:/⬇ Xuất/});await confirm.waitFor();
+  assert.equal(await confirm.isEnabled(),false);
+  await xp.getByLabel(/Chuyển đổi QA cần xác nhận/).check();await confirm.click();
+  await xp.getByRole("status").filter({hasText:"Lỗi:"}).waitFor();assert.equal(binaryRequests.length,1);
+  const [download]=await Promise.all([page.waitForEvent("download"),confirm.click()]);
+  assert.ok(download.suggestedFilename().endsWith(".zip"));await xp.getByText(/Đã tải 1 tệp/).waitFor();
+  assert.equal(binaryRequests.length,2);assert.deepEqual(binaryRequests[0],binaryRequests[1]);
+  console.log("PASS binary export approval, exact operation retry and checksum-gated download (synthetic)");
+ }else if(process.env.OVG_SHELL_ONLY==="1"){
+  const cameraKey="ovg-workspace:v1:fixture:fixture-org:fixture-project:camera";
+  const canvas=page.locator(".maplibregl-canvas").first();
+  await canvas.waitFor();await page.waitForTimeout(400);
+  const camera=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),cameraKey);
+  assert.equal((await camera()).zoom,14);assert.equal((await camera()).bearing,20);assert.equal((await camera()).pitch,30);
+  const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});
+  await page.keyboard.press("Control+k");
+  assert.equal(await command.evaluate(e=>e===document.activeElement),true);
+  await command.fill("layer: Second layer");
+  await command.press("Enter");
+  const locator=page.getByRole("dialog",{name:"Kết quả tra cứu"});
+  await locator.waitFor();
+  await locator.getByRole("button",{name:/Second layer · Layer/}).click();
+  await locator.waitFor({state:"detached"});
+  assert.ok(await second.evaluate(e=>e.closest("[data-layer-id]").classList.contains("active")));
+  console.log("PASS SHELL-CMD-001 synthetic command search selects the matching layer");
+  const menuTrigger=page.locator(".core-ribbon").getByRole("button",{name:"Lớp",exact:true});await menuTrigger.click();
+  const menu=page.getByRole("region",{name:"Menu Lớp",exact:true});await menu.waitFor();
+  await page.waitForFunction(()=>!!document.activeElement?.closest(".core-ribbon-menu-fixed"));
+  await page.keyboard.press("ArrowDown");
+  assert.ok(await menu.locator(".core-menu-items button:focus").count());
+  await page.keyboard.press("Escape");await menu.waitFor({state:"detached"});
+  assert.equal(await menuTrigger.evaluate(e=>document.activeElement===e),true);
+  const grip=page.getByRole("button",{name:"Di chuyển bộ công cụ Điều hướng",exact:true});
+  await grip.focus();await grip.press("ArrowDown");
+  await page.locator('[data-tool-slot="dock:1"] [data-toolgroup="map"]').waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[data-toolgroup="map"]')!==null);
+  await grip.press("Enter");await page.locator('.qgis-floating-palette [data-toolgroup="map"]').waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[data-toolgroup="map"]')!==null);
+  await grip.press("Enter");await page.locator('[data-tool-slot="dock:0"] [data-toolgroup="map"]').waitFor();
+  await page.getByRole("button",{name:"Khôi phục thanh công cụ"}).click();
+  const status=page.getByRole("button",{name:"Xem hiệu năng GIS"});
+  await status.focus();await status.press("Enter");
+  const perf=page.getByRole("dialog",{name:"Hiệu năng GIS · phiên hiện tại"});await perf.waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[aria-label="Hiệu năng GIS · phiên hiện tại"]')!==null);
+  await menuTrigger.evaluate(e=>e.focus());
+  assert.ok(await perf.evaluate(e=>e.contains(document.activeElement)));
+  const firstControl=perf.getByRole("button",{name:"Đóng",exact:true}).first(),lastControl=perf.getByRole("button",{name:"Đóng",exact:true}).last();
+  await firstControl.focus();await page.keyboard.press("Shift+Tab");assert.ok(await lastControl.evaluate(e=>document.activeElement===e));
+  await page.keyboard.press("Escape");await perf.waitFor({state:"detached"});
+  await page.waitForFunction(()=>document.activeElement?.getAttribute("aria-label")==="Xem hiệu năng GIS");
+  const sizes=[];
+  for(const width of [1280,1440,1920,390,1280]){
+   const start=performance.now();await page.setViewportSize({width,height:width===390?844:850});
+   await page.waitForFunction(()=>{const c=document.querySelector(".maplibregl-canvas"),p=c?.closest(".maplibregl-map");if(!c||!p)return false;const r=c.getBoundingClientRect();return r.width>=100&&r.height>=100&&Math.abs(r.width-p.clientWidth)<2&&Math.abs(r.height-p.clientHeight)<2});
+   const rect=await canvas.boundingBox();sizes.push({viewport:width,canvas:[Math.round(rect.width),Math.round(rect.height)],settle_ms:Math.round(performance.now()-start)});console.log("RESIZE",JSON.stringify(sizes.at(-1)));
+  }
+  console.log("SHELL_RESIZE "+JSON.stringify(sizes));
+  await page.reload({waitUntil:"domcontentloaded",timeout:45000});await first.waitFor({timeout:45000});await canvas.waitFor();await page.waitForTimeout(400);
+  assert.equal((await camera()).zoom,14);assert.equal((await camera()).bearing,20);assert.equal((await camera()).pitch,30);
+  console.log("PASS shell camera resume beats default view, ribbon and toolbar keyboard, modal focus, responsive canvas resize");
+  const shared=page.locator(".ovg-shared-tools");await shared.waitFor();
+  await shared.evaluate(el=>el.dataset.qaIdentity="same");
+  const modes=page.getByRole("group",{name:"Không gian làm việc"});
+  await modes.getByRole("button",{name:"CAD",exact:true}).click();
+  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+  assert.equal(await shared.getAttribute("data-qa-identity"),"same");
+  await modes.getByRole("button",{name:"GIS",exact:true}).click();await canvas.waitFor();
+  assert.equal(await shared.getAttribute("data-qa-identity"),"same");
+  console.log("PASS synthetic shared header survives GIS/CAD mode switching");
+
+ }else if(process.env.OVG_TOPOLOGY_ONLY==="1"){
+  await first.click();
+  const invoke=async(alias)=>{await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill(alias);await command.press("Enter")};
+  await invoke("TOPOLOGY");
+  const topo=page.getByRole("dialog",{name:"Topology · kiểm tra chất lượng"});await topo.waitFor();
+  await topo.getByRole("button",{name:"Chạy kiểm tra"}).click();
+  await topo.getByText("Chưa thể kết luận sạch lỗi").waitFor();
+  await topo.getByText(/0\/1 đối tượng có hình học đã quét · 1 bỏ qua/).waitFor();
+  await topo.getByRole("button",{name:"Đóng công cụ",exact:true}).click();
+  const props=page.getByRole("dialog",{name:/Thuộc tính layer/});
+  async function editRules(){
+   await invoke("LAYER");await props.waitFor();
+   await props.getByRole("tab",{name:"Ký hiệu",exact:true}).click();
+   await props.getByLabel("Kiểu ký hiệu").selectOption("rules");
+   await props.getByRole("button",{name:"＋ Thêm quy tắc",exact:true}).click();
+   await props.getByLabel("Tên quy tắc 1").fill("Cao hơn 20");
+   await props.getByLabel("Điều kiện quy tắc 1").selectOption("gt");
+   await props.getByLabel("Giá trị quy tắc 1").fill("20");
+   await props.getByText("Quy tắc 1 · 1 đối tượng đã tải").waitFor();
+   await props.getByLabel(/Xem trước màu ký hiệu trên bản đồ/).check();
+   await props.getByRole("button",{name:"Xuất QML (QGIS)"}).waitFor();
+   assert.equal(await props.getByRole("button",{name:"Xuất QML (QGIS)"}).isEnabled(),false);
+  }
+  const savedView=()=>page.evaluate(()=>JSON.parse(localStorage.getItem("ovg-workspace:v1:fixture:fixture-org:fixture-project")??"{}").layerViews?.layer1?.renderer??"default");
+  await editRules();await page.waitForTimeout(400);assert.notEqual(await savedView(),"rules");
+  await props.getByRole("button",{name:"Hủy",exact:true}).click();await props.waitFor({state:"detached"});assert.notEqual(await savedView(),"rules");
+  await editRules();await props.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();await props.waitFor({state:"detached"});
+  assert.equal(await savedView(),"rules");
+  await page.getByRole("button",{name:"Mở ký hiệu Buildings"}).click();
+  await page.getByLabel("Hiển thị nhóm Cao hơn 20").waitFor();
+  console.log("PASS synthetic topology skipped-count review and rule styling preview/cancel/apply/legend");
+ }else if(process.env.OVG_RASTER_ONLY==="1"){
+  await page.getByRole("button",{name:"Chi tiết raster QA DEM"}).click();
+  await page.getByText(/NoData 1/).waitFor();
+  await page.getByLabel("Nội suy QA DEM").selectOption("linear");
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"linear");
+  await page.getByLabel("Hiển thị raster QA DEM").uncheck();
+  await page.reload();await page.getByRole("button",{name:"Chi tiết raster QA DEM"}).click();
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"linear");
+  assert.equal(await page.getByLabel("Hiển thị raster QA DEM").isChecked(),false);
+  await page.getByRole("button",{name:"Đặt lại hiển thị"}).click();
+  assert.equal(await page.getByLabel("Nội suy QA DEM").inputValue(),"nearest");
+  await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill("NDVI");await command.press("Enter");
+  const panel=page.getByRole("dialog",{name:"Phân tích Raster"});await panel.waitFor();
+  await panel.getByLabel("Nguồn A").selectOption(raster.id);
+  const save=panel.getByRole("button",{name:/Lưu thành layer dự án/});
+  assert.equal(await save.isEnabled(),false);
+  await panel.getByLabel("Band B").fill("1");assert.equal(await save.isEnabled(),true);
+  await save.click();await panel.getByRole("alert").filter({hasText:"Chưa xác minh kết quả lưu"}).waitFor();
+  assert.equal(await save.isEnabled(),false);assert.equal(rasterPosts,1);
+  await panel.getByRole("button",{name:"Đóng phân tích raster"}).click();
+  console.log("PASS raster metadata and display persistence, same-source band guard, ambiguous save blocked");
+ }else{
+
+ await page.locator(".qgis-crs").click();
+ const crs=page.getByRole("dialog",{name:"Hệ tọa độ hiển thị"});await crs.waitFor();
+ await crs.getByRole("option",{name:/WGS 84 \/ UTM múi 48N/}).first().click();
+ await crs.getByRole("button",{name:"OK",exact:true}).click();
+ assert.equal(await page.getByLabel("Tọa độ hiển thị · chỉ đọc",{exact:true}).getAttribute("readonly"),"");
+ await page.locator(".qgis-crs").click();await crs.getByRole("option",{name:/WGS 84 \(kinh độ, vĩ độ\)/}).first().click();await crs.getByRole("button",{name:"OK",exact:true}).click();
+ console.log("PASS synthetic Chromium: display CRS cannot be mistaken for coordinate input");
+
  await first.click();await first.press("ArrowDown");assert.equal(await second.evaluate(e=>e===document.activeElement),true);
  await second.press("Shift+ArrowUp");assert.equal(await page.locator('[data-layer-id][aria-selected="true"]').count(),2);
  await first.press("Shift+F10");const menu=page.getByRole("menu").filter({hasText:"Zoom tới layer"});await menu.waitFor();
@@ -91,7 +257,7 @@ try{
  await table.getByRole("button",{name:"Hiện tất cả cột",exact:true}).click();
  await table.getByRole("button",{name:"height_m",exact:true}).click();
  assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"ascending");
- await table.getByRole("button",{name:/height_m/}).click();
+ await table.getByRole("columnheader").filter({hasText:"height_m"}).getByRole("button",{name:/^height_m(?:\s+[↑↓])?$/}).click();
  assert.equal(await table.getByRole("columnheader").filter({hasText:"height_m"}).getAttribute("aria-sort"),"descending");
  await table.getByRole("button",{name:"Biểu mẫu",exact:true}).click();
  await table.getByLabel("Thông tin đối tượng",{exact:true}).waitFor();
@@ -99,6 +265,14 @@ try{
  await table.getByRole("button",{name:"Bảng",exact:true}).click();
  await table.locator("tbody tr").first().waitFor();
  console.log("PASS synthetic Chromium: sortable typed headers and read-only feature form");
+ await table.getByRole("button",{name:"Truy vấn máy chủ",exact:true}).click();
+ await table.getByRole("button",{name:"Chạy truy vấn",exact:true}).click();
+ await table.getByText("Thiếu hình học",{exact:true}).waitFor();
+ assert.equal(await table.getByRole("button",{name:"missing",exact:true}).isEnabled(),false);
+ assert.equal(await table.getByRole("button",{name:"building",exact:true}).isEnabled(),true);
+ await table.getByRole("button",{name:"Truy vấn máy chủ",exact:true}).click();
+ console.log("PASS synthetic Chromium: attribute-only result includes absent geometry");
+
  await table.locator("tbody tr").first().click();
  await page.keyboard.press("Control+k");await command.fill("ATTR_EDIT");await command.press("Enter");
  const editor=page.getByRole("dialog",{name:"Sửa thuộc tính đối tượng"});await editor.waitFor();
@@ -110,6 +284,22 @@ try{
  await editor.getByRole("button",{name:"Thử lại lưu"}).click();await editor.waitFor({state:"detached"});
  assert.equal(edits.length,2);assert.deepEqual(edits[0],edits[1]);assert.equal(edits[0].operations[0].properties.height_m,30);
  console.log("PASS synthetic Chromium: typed attribute edit and identical idempotent retry");
+ await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("POLYGON 106.66,10.76 106.662,10.76 106.662,10.762 106.66,10.76");await command.press("Enter");
+ await page.locator(".core-sketch").waitFor();await command.press("Enter");
+ const create=page.getByRole("dialog",{name:"Tạo đối tượng GIS"});await create.waitFor();
+ await create.getByLabel("NULL Height",{exact:true}).uncheck();
+ await create.getByLabel("Height",{exact:true}).fill("2147483648");
+ assert.equal(await create.getByRole("button",{name:"Lưu đối tượng",exact:true}).isEnabled(),false);
+ await create.getByLabel("Height",{exact:true}).fill("32");
+ await create.getByRole("button",{name:"Lưu đối tượng",exact:true}).click();
+ await create.getByRole("button",{name:"Thử lại lưu",exact:true}).waitFor();
+ assert.equal(await create.getByLabel("Height",{exact:true}).isEnabled(),false);
+ await create.getByRole("button",{name:"Thử lại lưu",exact:true}).click();try{await create.waitFor({state:"detached"})}catch(e){console.error("CREATE DEBUG",edits.slice(2),await create.innerText(),await page.locator("body").innerText().then(t=>t.slice(-2000)));throw e}
+ assert.equal(edits.length,4);assert.deepEqual(edits[2],edits[3]);assert.equal(edits[2].operations[0].properties.height_m,32);
+ assert.equal(edits[2].operations[0].geometry.coordinates[0].length,4);
+ console.log("PASS synthetic Chromium: explicit closed polygon, typed values and immutable create retry");
+
  await page.keyboard.press("Control+k");await command.fill("WORKSPACE");await command.press("Enter");
  const workspace=page.getByRole("dialog",{name:"Tùy chỉnh workspace"});await workspace.waitFor();
  await workspace.getByLabel("Phạm vi snapping").selectOption("selected");
@@ -131,10 +321,83 @@ try{
  await sketch.getByRole("button",{name:"Hủy vẽ",exact:true}).click();
  await sketch.waitFor({state:"detached"});
  console.log("PASS synthetic Chromium: exact spherical segment constraints");
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");
+ const processing=page.getByTestId("processing-workbench");await processing.waitFor();
+ const inputLayer=processing.getByLabel("Lớp đầu vào",{exact:true});
+ await inputLayer.selectOption("layer1");
+ await processing.getByRole("button",{name:"Chạy tác vụ",exact:true}).click();
+ await processing.getByRole("button",{name:"Xác minh / gửi lại tác vụ",exact:true}).waitFor();
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ await processing.waitFor({state:"detached"});
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");
+ await processing.waitFor();
+ await processing.getByRole("button",{name:"Xác minh / gửi lại tác vụ",exact:true}).click();
+ await processing.getByText(/ID job-test/).waitFor();
+ assert.equal(processingRequests.length,2);assert.deepEqual(processingRequests[0],processingRequests[1]);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ console.log("PASS synthetic Chromium: processing request survives workbench close with exact operation ID");
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");await processing.waitFor();
+ await processing.getByLabel("Lớp đầu vào",{exact:true}).selectOption("layer1");
+ await processing.getByLabel("Tên lớp kết quả mới",{exact:true}).fill("Batch A");
+ await processing.getByRole("button",{name:"Thêm vào batch",exact:true}).click();
+ await processing.getByLabel("Tên lớp kết quả mới",{exact:true}).fill("Batch B");
+ await processing.getByRole("button",{name:"Thêm vào batch",exact:true}).click();
+ const batchPanel=processing.getByRole("region",{name:"Batch Processing"});await batchPanel.getByText("Batch B",{exact:true}).waitFor();
+ await batchPanel.getByRole("button",{name:"Chạy batch",exact:true}).click();
+ await batchPanel.getByRole("button",{name:"Xác minh / tiếp tục batch",exact:true}).waitFor();
+ await batchPanel.getByText(/503/).waitFor();
+ assert.equal(processingRequests.length,4);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();await processing.waitFor({state:"detached"});
+ await page.keyboard.press("Control+k");await command.fill("BUFFER");await command.press("Enter");await processing.waitFor();
+ await batchPanel.getByRole("button",{name:"Xác minh / tiếp tục batch",exact:true}).click();
+ await batchPanel.getByText(/job-batch-5/).waitFor();
+ assert.equal(processingRequests.length,5);assert.deepEqual(processingRequests[3],processingRequests[4]);assert.notEqual(processingRequests[2].operation_id,processingRequests[3].operation_id);
+ await page.getByRole("button",{name:"Đóng công cụ GIS",exact:true}).click();
+ console.log("PASS synthetic Chromium: batch row recovery without replaying received jobs");
+ await page.keyboard.press("Control+k");await command.fill("TILES");await command.press("Enter");
+ await page.locator(".qgis-footer-message").filter({hasText:"đã tải · Tiles"}).waitFor();
+ await page.locator('[data-layer-id="layer2"]').waitFor();
+ await page.waitForTimeout(800);
+ if(!await table.isVisible()){await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");await table.waitFor();}
+ await table.getByLabel("Layer bảng thuộc tính").selectOption("layer2");
+ const remoteRow=table.locator("tbody tr").first();await remoteRow.waitFor();
+ assert.equal(await remoteRow.getByRole("checkbox").isEnabled(),false);
+ await remoteRow.click();await page.waitForFunction(()=>!document.querySelector("section.qgis-table tbody input")?.disabled);
+ assert.equal(await remoteRow.getByRole("checkbox").isChecked(),true);
+ await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
+ await page.keyboard.press("Control+k");await command.fill("TILES");await command.press("Enter");
+ await page.locator(".qgis-footer-message").filter({hasText:"đang hiển thị"}).waitFor();await page.waitForTimeout(800);
+ console.log("PASS synthetic Chromium: unloaded tile rows cannot be selected before hydration");
+ await second.click();
+ await page.keyboard.press("Control+k");await command.fill("EXPORT");await command.press("Enter");
+ const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+ await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
+ await xp.getByRole("radio",{name:/Excel \/ CSV/}).click();
+ await xp.getByText(/Lớp chưa nạp đầy đủ/).waitFor();
+ assert.equal(await xp.getByRole("button",{name:/⬇ Xuất/}).isEnabled(),false);
+ await xp.getByRole("radio",{name:/GeoJSON/}).click();
+ const [download]=await Promise.all([page.waitForEvent("download"),xp.getByRole("button",{name:/⬇ Xuất/}).click()]);
+ assert.ok(download.suggestedFilename().endsWith(".geojson"));
+ await xp.getByText(/Đã tải 1 tệp/).waitFor();
+ await xp.getByRole("button",{name:"Đóng",exact:true}).last().click();
+ console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified");
+
+ await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
+ const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();
+ await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).waitFor();
+ assert.equal(await modeler.getByRole("button",{name:/Dissolve · Gộp vùng/}).count(),0);
+ await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).click();
+ await modeler.getByText(/Chọn đầu vào A của Buffer/).waitFor();
+ assert.equal(await modeler.getByRole("button",{name:/Chạy mô hình/}).isEnabled(),false);
+ console.log("PASS synthetic Chromium: modeler registry and explicit input validation");
 
 
 
 
+
+
+
+ }
  assert.equal(errors.length,0,errors.join("\n"));
  console.log("PASS synthetic Chromium: layer range, context keyboard/focus, Ctrl+K and input Space");
 }finally{await browser.close();server?.httpServer.close();server?.httpServer.closeAllConnections?.();server?.httpServer.unref()}

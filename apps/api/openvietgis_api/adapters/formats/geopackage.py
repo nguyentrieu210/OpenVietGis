@@ -9,7 +9,7 @@ import sqlite3
 import struct
 import tempfile
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Context, Decimal
 from pathlib import Path
 from typing import Any
@@ -173,10 +173,15 @@ def _open_readonly_gpkg(data: bytes) -> tuple[sqlite3.Connection, Path]:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
         conn = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True)
+        conn.execute("PRAGMA trusted_schema=OFF")
+        conn.execute("PRAGMA query_only=ON")
         conn.row_factory = sqlite3.Row
         tables = {
             row[0]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND upper(ltrim(sql)) NOT LIKE 'CREATE VIRTUAL TABLE%'"
+            ).fetchall()
         }
         if "gpkg_contents" not in tables or "gpkg_geometry_columns" not in tables:
             conn.close()
@@ -248,6 +253,14 @@ def inspect_geopackage(data: bytes) -> tuple[InspectedMember, ...]:
             has_z = int(row["z"] or 0) > 0
             has_m = int(row["m"] or 0) > 0
             epsg = _resolve_gpkg_epsg(conn, row["srs_id"])
+            if not conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name=? AND type='table' "
+                "AND upper(ltrim(sql)) NOT LIKE 'CREATE VIRTUAL TABLE%'",
+                (tname,),
+            ).fetchone():
+                raise TransferFormatError(
+                    "INVALID_GEOPACKAGE", "Vector member must be an ordinary table."
+                )
             count = int(conn.execute(f"SELECT count(*) FROM {_quote_ident(tname)}").fetchone()[0])
             cols = conn.execute(f"PRAGMA table_info({_quote_ident(tname)})").fetchall()
             geom_col = str(row["geom_col"])
@@ -508,7 +521,9 @@ def _coerce_gpkg_value(ftype: FieldType, val: Any) -> AttributeValue:
         if not isinstance(val, str) or not _ISO_TS_RE.match(val):
             raise ValueError("expected ISO-8601 timestamp")
         parsed = datetime.fromisoformat(val.replace("Z", "+00:00"))
-        return parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if isinstance(val, (bytes, bytearray)):
+        raise ValueError("binary attribute is not supported")
     text = str(val)
     if len(text) > MAX_STRING_LEN:
         raise ValueError("text exceeds 4096 characters")
