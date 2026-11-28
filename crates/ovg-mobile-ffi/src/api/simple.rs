@@ -282,6 +282,15 @@ impl NativeUnifiedProject{
  pub fn append_survey(&self,layer_id:String,track_id:String,fix_json:String,expected:String)->Result<String,String>{
   self.inner.append_survey(&layer_id,&track_id,&fix_json,&expected).map_err(unified_error)
  }
+ pub fn vector_tile(&self,layer_id:String,z:u8,x:u32,y:u32,expected:String)->Result<Vec<u8>,String>{
+  self.inner.vector_tile(&layer_id,z,x,y,&expected).map_err(unified_error)
+ }
+ pub fn tile_archive(&self,layers:Vec<String>,west:f64,south:f64,east:f64,north:f64,z:u8,expected:String,cache_root:String)->Result<String,String>{
+  self.inner.tile_archive(&layers,[west,south,east,north],z,&expected,Path::new(&cache_root)).map_err(unified_error)
+ }
+ pub fn release_tile_archive(&self,lease:String)->Result<(),String>{
+  self.inner.release_tile_archive(&lease).map_err(unified_error)
+ }
  pub fn survey_tracks(&self,layer_id:String,after:String,expected:String)->Result<String,String>{
   self.inner.survey_tracks(&layer_id,&after,&expected).map_err(unified_error)
  }
