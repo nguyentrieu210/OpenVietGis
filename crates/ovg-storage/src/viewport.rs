@@ -262,8 +262,7 @@ impl ProjectRead<'_> {
             .render_snapshot(layer_id, pins, RenderRead::Tile)
             .await?;
         if snapshot.transformation.is_some() || snapshot.datum_read.is_some() {
-            // shortcut: projected sources are viewport-only; add a fixed pipeline per CRS when tiles need them.
-            return Err(unsupported_transformation());
+            return self.projected_vector_tile(&snapshot,pins,z,x,y).await;
         }
         let (west, south, east, north) = tile_geographic_bounds(z, x, y);
         let covers_world = z == 0
@@ -399,6 +398,49 @@ impl ProjectRead<'_> {
         Ok((tile, candidates == included))
     }
 
+    // Projected tiles use the same proven and bounded WGS84 snapshot as viewport.
+    // Do not apply a geographic tile envelope to native projected coordinates.
+    async fn projected_vector_tile(&mut self,snapshot:&Snapshot,pins:&ReadPins<'_>,z:u32,x:u32,y:u32)->Result<(Vec<u8>,bool),AppError>{
+        let expected=snapshot.expected_count.ok_or_else(read_unavailable)?;
+        let display=display_ctes(snapshot.transformation,snapshot.datum_read.as_ref());
+        let max=WEB_MERCATOR_MAX_COORDINATE_METRE;
+        let sql=format!("{display}, summary AS (
+          SELECT count(*) AS n,COALESCE(bool_and(valid IS TRUE),true) AS valid FROM display
+        ), bounds AS (
+          SELECT ST_TileEnvelope($8,$9,$10) AS tile,
+          ST_InverseTransformPipeline(ST_Intersection(ST_TileEnvelope($8,$9,$10,margin=>$11),
+           ST_MakeEnvelope(-{max},{neg},{max},{max},3857)),'{WEB_MERCATOR_PIPELINE}',4326) AS area
+        ), candidate AS MATERIALIZED (
+          SELECT feature_id,geometry,ST_NPoints(geometry) AS positions FROM display CROSS JOIN bounds CROSS JOIN summary
+          WHERE summary.valid AND display.valid AND ST_Intersects(geometry,area)
+          ORDER BY feature_id COLLATE \"C\" LIMIT $12
+        ), ranked AS (
+          SELECT feature_id,geometry,row_number() OVER(ORDER BY feature_id COLLATE \"C\") AS ordinal,
+          sum(positions) OVER(ORDER BY feature_id COLLATE \"C\" ROWS UNBOUNDED PRECEDING) AS cumulative_positions FROM candidate
+        ), prefix AS MATERIALIZED (
+          SELECT feature_id,geometry FROM ranked WHERE ordinal<=$13 AND cumulative_positions<=$14
+        ), encoded AS (
+          SELECT feature_id,ST_AsMVTGeom(ST_TransformPipeline(ST_ClipByBox2D(geometry,area::box2d),'{WEB_MERCATOR_PIPELINE}',3857),
+          tile,$15,$16,true) AS geom FROM prefix CROSS JOIN bounds
+        ) SELECT summary.n,summary.valid,(SELECT count(*) FROM candidate) AS candidates,
+          (SELECT count(*) FROM prefix) AS included,
+          (SELECT ST_AsMVT(t,'features',$15,'geom' ORDER BY t.feature_id COLLATE \"C\")
+            FROM (SELECT feature_id,geom FROM encoded WHERE geom IS NOT NULL AND NOT ST_IsEmpty(geom)) t) AS tile
+          FROM summary",neg=-max);
+        let row=self.bind_snapshot(sqlx::query(&sql),snapshot,pins)
+          .bind(z as i32).bind(x as i32).bind(y as i32)
+          .bind(f64::from(TILE_BUFFER)/f64::from(TILE_EXTENT))
+          .bind(MAX_TILE_FEATURES+1).bind(MAX_TILE_FEATURES).bind(MAX_TILE_POSITIONS)
+          .bind(TILE_EXTENT).bind(TILE_BUFFER).fetch_one(&mut **self.tx.tx_mut()).await.map_err(unavailable)?;
+        validate_summary(expected,row.try_get("n").map_err(unavailable)?,row.try_get("valid").map_err(unavailable)?)?;
+        let tile:Option<Vec<u8>>=row.try_get("tile").map_err(unavailable)?;
+        let tile=tile.unwrap_or_default();
+        if tile.len()>MAX_TILE_BYTES{return Err(read_unavailable());}
+        let candidates:i64=row.try_get("candidates").map_err(unavailable)?;
+        let included:i64=row.try_get("included").map_err(unavailable)?;
+        Ok((tile,candidates==included))
+    }
+
     /// Layer -> source -> pins -> CRS -> render profile, in the Python order.
     async fn render_snapshot(
         &mut self,
@@ -473,11 +515,12 @@ impl ProjectRead<'_> {
         let expected_count = match read {
             // The tile candidate query already applies the actor's RLS scope.
             // A whole-source count or size cap here would defeat bounded tile reads.
-            RenderRead::Tile => None,
+            RenderRead::Tile if native==4326 => None,
+            RenderRead::Tile => Some(self.whole_source_count(source_id,&source).await?),
             RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
         };
         if extended{
-            if self.gis_scoped||matches!(read,RenderRead::Tile){return Err(unsupported_transformation());}
+            if self.gis_scoped{return Err(unsupported_transformation());}
             let org=self.tx.organization_id();
             datum_read=Some(crate::catalog::regional_crs::verify_extended_datum_read(self.tx.tx_mut(),org,self.project_id,source_id,native,"geometry").await?);
         }
