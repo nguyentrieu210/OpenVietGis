@@ -166,6 +166,20 @@ impl NativeProject{
   let b=Batch{operation:id(operation)?,expected_project:revision(expected_project)?,edits:vec![Edit{layer:id(layer)?,feature:id(feature)?,expected:revision(expected_feature)?,image:Some(Image{wkb,attributes:decode(attributes_json)?})}],links:vec![]};
   self.apply(&json(&b)?)
  }
+ pub fn create_survey(&self,layer:&str,track:&str,name:&str,expected:&str)->Result<String>{
+  self.with(|s|encode(&s.create_survey(id(layer)?,id(track)?,name,revision(expected)?)?))
+ }
+ pub fn survey_state(&self,layer:&str,track:&str,action:&str,expected:&str)->Result<String>{
+  self.with(|s|encode(&s.survey_state(id(layer)?,id(track)?,action,revision(expected)?)?))
+ }
+ pub fn recover_surveys(&self,expected:&str)->Result<String>{
+  self.with(|s|Ok(s.recover_surveys(revision(expected)?)?.to_string()))
+ }
+ pub fn append_survey(&self,layer:&str,track:&str,fix_json:&str,expected:&str)->Result<String>{
+  if fix_json.len()>4096{return Err(Error::Limit)}
+  let fix:ovg_mobile_engine::survey::Fix=decode(fix_json)?;
+  self.with(|s|encode(&s.append_survey(id(layer)?,id(track)?,&fix,revision(expected)?)?))
+ }
  pub fn survey_tracks(&self,layer:&str,after:&str,expected:&str)->Result<String>{
   self.with(|s|encode(&s.survey_tracks(id(layer)?,after,100,revision(expected)?)?))
  }
