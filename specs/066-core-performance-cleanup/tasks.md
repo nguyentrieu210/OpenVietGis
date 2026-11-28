@@ -37,7 +37,7 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 ## W5 engines
 - [x] T026 [P0] Profile allocations, blocking Tokio work and bounded Rayon/jobs — paths: `apps/api-rust/src; crates/ovg-core; crates/ovg-processing`. Acceptance: Comparable benchmark and no correctness change.
 - [x] T027 [P0] EXPLAIN with representative PostGIS data, index/pool/query optimization — paths: `crates/ovg-storage; apps/api-rust/src/queries.rs; catalog.rs`. Acceptance: Plans and latency evidence; no unsafe index removal.
-- [ ] T028 [P1] Batch/paginate/stream suitable payloads and cancellation — paths: `apps/api-rust/src/map_render.rs; tilesets.rs; transfers`. Acceptance: Bounded payload and concurrency; contract tests.
+- [x] T028 [P1] Batch/paginate/stream suitable payloads and cancellation — paths: `apps/api-rust/src/map_render.rs; tilesets.rs; transfers`. Acceptance: Bounded payload and concurrency; contract tests.
 - [x] T029 [P0] Viewport BBOX, LOD, incremental render and virtual table — paths: `apps/web-next/src/ProfessionalTiles.ts; SpatialWorkspace.tsx; QgisWorkspace.tsx`. Acceptance: 10k/100k/1m tests; source geometry unchanged.
 - [ ] T030 [P1] CAD selection/snap/culling/undo/autosave profile — paths: `apps/web-next/src/CadTool.tsx; native-dxf.ts; packages/spatial-workspace`. Acceptance: CAD accuracy, undo/redo and performance evidence.
 - [x] T031 [P1] Lazy Cesium, LOD and texture/GPU lifecycle, optimize copy — paths: `apps/web-next/src/Spatial3DSettings.tsx; TilesetPanel.tsx; vite.config.ts`. Acceptance: No 3D initialization outside 3D; measured frame/bytes.

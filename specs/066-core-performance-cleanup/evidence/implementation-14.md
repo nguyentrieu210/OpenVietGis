@@ -13,6 +13,9 @@ Parent candidate: 1862bc9fa006f0949b8c3a59d1332e2bcb4b1a26.
 - Geometry correctness is separately covered by exact WKB/EWKB child-order/SRID/round-trip/non-finite tests and the differential geometry gate (T033). No source geometry mutation, source rewrite or production DB change is introduced here.
 - This closes T029 for the specified 10k/100k/1m scale classes. It does not claim production CWV, GPU memory or final soak; those remain T044.
 
-## T028 status in this slice
-- Existing implementation already keyset-pages export rows in batches of 1,000, flushes staged export data at 64 KiB, streams artifact downloads in 64 KiB chunks, caps uploads at 25 MiB and transfer features at 50,000, and exposes an authorized job-cancel endpoint.
-- Additional unit coverage for terminal-safe cancellation, explicit transfer bounds and exact bounded file streaming is being qualified separately. T028 remains open until those tests PASS on the pinned Rust toolchain.
+## T028 — bounded transfer payloads, streaming and cancellation
+- Export reads use keyset paging in batches of 1,000 and flush staged export data at 64 KiB. Download bodies stream in exact 64 KiB chunks instead of materializing the complete artifact in memory.
+- Uploads are capped at 25 MiB and transfer feature count at 50,000. The existing authorized cancel endpoint now shares a pure terminal-safe cancellation transition: succeeded/failed/denied/cancelled jobs are immutable; queued/active/recoverable_failed jobs transition to cancelled with a completion timestamp and actor-cancel code.
+- Focused Rust 1.85.1 no-default-features tests PASS with exit 0: cancellation + explicit transfer bounds 2/2; bounded file stream 1/1. The stream fixture writes CHUNK*2+17 bytes, asserts exact chunk sizes [64 KiB, 64 KiB, 17], and verifies byte-for-byte concatenation.
+- Slow download bodies are created only after the scoped project DB transaction/lock has been released; cache headers remain private/no-store.
+- This closes T028. Format/parity correctness remains independently covered by T033 and the retained transfer boundary suites.

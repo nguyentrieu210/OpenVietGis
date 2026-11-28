@@ -1292,6 +1292,19 @@ async fn get_transfer_job(
     Ok(Json(job.wire).into_response())
 }
 
+fn cancellation_update(status: &str) -> Option<JobUpdate> {
+    if matches!(status, "succeeded" | "failed" | "denied" | "cancelled") {
+        return None;
+    }
+    Some(JobUpdate {
+        status: "cancelled",
+        error_code: Some("CANCELLED_BY_ACTOR"),
+        error_message: Some("Cancelled before publication.".into()),
+        completed_at: Some(now_micros()),
+        ..JobUpdate::default()
+    })
+}
+
 async fn cancel_transfer_job(
     State(state): State<AppState>,
     auth: HumanSession,
@@ -1299,23 +1312,11 @@ async fn cancel_transfer_job(
     Path(params): Params,
 ) -> Reply {
     let (mut scope, job) = job_prelude(&state, &auth, &headers, &params, true).await?;
-    if matches!(
-        job.status.as_str(),
-        "succeeded" | "failed" | "denied" | "cancelled"
-    ) {
+    let Some(update) = cancellation_update(&job.status) else {
         return Ok(Json(job.wire).into_response());
-    }
+    };
     let updated = scope
-        .update_job(
-            job.id,
-            JobUpdate {
-                status: "cancelled",
-                error_code: Some("CANCELLED_BY_ACTOR"),
-                error_message: Some("Cancelled before publication.".into()),
-                completed_at: Some(now_micros()),
-                ..JobUpdate::default()
-            },
-        )
+        .update_job(job.id, update)
         .await?;
     scope.commit().await?;
     Ok(Json(updated.wire).into_response())
@@ -1481,4 +1482,30 @@ async fn download_derived_artifact(
     response_headers.insert("x-content-sha256", header_value(&artifact.sha256)?);
     response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok(response)
+}
+
+#[cfg(test)]
+mod transfer_unit_tests {
+    use super::*;
+
+    #[test]
+    fn cancellation_is_terminal_safe_and_marks_active_work() {
+        for status in ["succeeded", "failed", "denied", "cancelled"] {
+            assert!(cancellation_update(status).is_none());
+        }
+        for status in ["active", "queued", "recoverable_failed"] {
+            let update = cancellation_update(status).expect("cancellable status");
+            assert_eq!(update.status, "cancelled");
+            assert_eq!(update.error_code, Some("CANCELLED_BY_ACTOR"));
+            assert!(update.completed_at.is_some());
+        }
+    }
+
+    #[test]
+    fn transfer_limits_are_bounded() {
+        assert_eq!(PAGE_ROWS, 1000);
+        assert_eq!(FLUSH_BYTES, 64 * 1024);
+        assert_eq!(MAX_TRANSFER_FEATURES, 50_000);
+        assert_eq!(MAX_UPLOAD_BYTES, 25 * 1024 * 1024);
+    }
 }
