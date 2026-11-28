@@ -3,17 +3,22 @@
 use super::images::{self,Dimensions,Limits};
 use sha2::{Digest,Sha256};
 use std::{fs::{self,File,OpenOptions},io::{Read,Write},path::{Path,PathBuf}};
-#[derive(Debug)]pub enum Error{Invalid,Limit,Io(std::io::Error),Header(images::Error),Changed}
+#[derive(Debug)]pub enum Error{Invalid,Limit,Io(std::io::Error),Header(images::Error),Changed,Cancelled}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
 #[derive(Debug,Clone)]pub struct Entry{pub name:String,pub source:PathBuf,pub sha256:String,pub bytes:u64,pub dimensions:Dimensions}
 #[derive(Debug,Clone,Copy)]pub struct Policy{pub max_files:usize,pub max_file_bytes:u64,pub max_total_bytes:u64,pub header:Limits}
 pub fn stage_jpeg(root:&Path,paths:&[PathBuf],p:Policy)->Result<Vec<Entry>,Error>{
+ stage_jpeg_controlled(root,paths,p,||false,|_,_|{})
+}
+/// Progress reports completed files and bytes copied; caller owns partial-directory cleanup.
+pub fn stage_jpeg_controlled(root:&Path,paths:&[PathBuf],p:Policy,mut cancelled:impl FnMut()->bool,mut progress:impl FnMut(usize,u64))->Result<Vec<Entry>,Error>{
  if !root.is_absolute()||paths.len()<2||paths.len()>p.max_files||p.max_files>100_000||
  p.max_file_bytes==0||p.max_file_bytes>1024*1024*1024||p.max_total_bytes==0||p.header.max_header_bytes==0||p.header.max_header_bytes>4*1024*1024{
  return Err(Error::Invalid);}
  let mut entries=Vec::with_capacity(paths.len());let mut total=0u64;let mut seen=std::collections::BTreeSet::new();
  // Preflight before creating a new job; partial stage never becomes a usable job.
  for path in paths{
+ if cancelled(){return Err(Error::Cancelled);}
  let m=fs::symlink_metadata(path)?;if !m.is_file()||m.file_type().is_symlink(){return Err(Error::Invalid);}
  let path=path.canonicalize()?;if !seen.insert(path.clone()){return Err(Error::Invalid);}
  if m.len()==0||m.len()>p.max_file_bytes{return Err(Error::Limit);}
@@ -23,16 +28,20 @@ pub fn stage_jpeg(root:&Path,paths:&[PathBuf],p:Policy)->Result<Vec<Entry>,Error
  entries.push(Entry{name:format!("image_{:06}.jpg",entries.len()+1),source:path,sha256:String::new(),bytes:m.len(),dimensions});
  }
  fs::create_dir(root)?;fs::create_dir(root.join("images"))?;fs::create_dir(root.join("sparse"))?;
- for e in &mut entries{
+ let mut copied=0u64;
+ for (i,e) in entries.iter_mut().enumerate(){
+ if cancelled(){return Err(Error::Cancelled);}
  let mut src=File::open(&e.source)?;
  let mut dst=OpenOptions::new().create_new(true).write(true).open(root.join("images").join(&e.name))?;
  let mut h=Sha256::new();let mut n=0u64;let mut b=[0u8;64*1024];
- loop{let k=src.read(&mut b)?;if k==0{break;}n=n.checked_add(k as u64).ok_or(Error::Limit)?;
- if n>e.bytes{return Err(Error::Changed);}h.update(&b[..k]);dst.write_all(&b[..k])?;}
+ loop{if cancelled(){return Err(Error::Cancelled);}let k=src.read(&mut b)?;if k==0{break;}n=n.checked_add(k as u64).ok_or(Error::Limit)?;
+ if n>e.bytes{return Err(Error::Changed);}h.update(&b[..k]);dst.write_all(&b[..k])?;copied=copied.checked_add(k as u64).ok_or(Error::Limit)?;progress(i,copied);}
  if n!=e.bytes{return Err(Error::Changed);}dst.sync_all()?;e.sha256=format!("{:x}",h.finalize());
  let mut header=Vec::new();File::open(root.join("images").join(&e.name))?.take(p.header.max_header_bytes as u64).read_to_end(&mut header)?;
  if images::jpeg_dimensions(&header,p.header).map_err(Error::Header)?!=e.dimensions{return Err(Error::Changed);}
+ progress(i+1,copied);
  }
+ if cancelled(){return Err(Error::Cancelled);}
  let manifest:Vec<StageRecord>=entries.iter().map(|e|StageRecord{name:e.name.clone(),sha256:e.sha256.clone(),bytes:e.bytes,width:e.dimensions.width,height:e.dimensions.height}).collect();
  let json=serde_json::to_vec(&manifest).map_err(|_|Error::Invalid)?;
  if json.len()>32*1024*1024{return Err(Error::Limit);}
@@ -90,6 +99,12 @@ pub fn verify_staged(root:&Path,expected_count:u32,max_total_bytes:u64,mut cance
  let hash=verify_staged(&root,2,200,||false).unwrap();assert!(super::super::digest(&hash));
  let file=root.join("images/image_000001.jpg");let mut bytes=fs::read(&file).unwrap();bytes[6]^=1;fs::write(file,bytes).unwrap();
  assert!(matches!(verify_staged(&root,2,200,||false),Err(Error::Changed)));}
+ #[test]fn cancellation_does_not_write_completed_manifest(){
+ let(t,paths)=fixture();let root=t.0.join("stage");
+ let stop=std::cell::Cell::new(false);
+ let r=stage_jpeg_controlled(&root,&paths,policy(),||stop.get(),|_,n|{if n>0{stop.set(true);}});
+ assert!(matches!(r,Err(Error::Cancelled)));assert!(!root.join("input-manifest.json").exists());
+ }
  #[test]fn duplicate_and_total_cap(){
  let(t,paths)=fixture();let mut p=policy();p.max_total_bytes=10;
  assert!(matches!(stage_jpeg(&t.0.join("a"),&paths,p),Err(Error::Limit)));
