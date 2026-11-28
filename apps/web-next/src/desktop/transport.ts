@@ -1,4 +1,5 @@
 export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean;local_edit:boolean;viewport:boolean;raster_archive:boolean};
+export type LayerInfo={id:string;name:string;source_epsg:number|null;source_table:string|null};
 export type Project = {id:string};
 export type Opened = {id:string; handle:string};
 export type Poll = {status:"pending"} | {status:"complete";xy:number[]};
@@ -18,6 +19,9 @@ function host():Host {
 // Deliberately not a general invoke facade. All exposed calls are typed and bounded by Rust.
 export const desktop={
   capabilities:()=>host().core.invoke<Capabilities>("desktop_capabilities"),
+  listLayers:(handle:string)=>host().core.invoke<LayerInfo[]>("desktop_list_layers",{handle}),
+  createLayer:(handle:string,name:string,grant:string|null=null,table:string|null=null)=>host().core.invoke<LayerInfo>("desktop_create_layer",{handle,name,grant,table}),
+  openLayer:(handle:string,layer:string)=>host().core.invoke<Opened>("desktop_open_layer",{handle,layer}),
   list:()=>host().core.invoke<Project[]>("desktop_list"),
   restoreSnapshot:()=>host().core.invoke<Project|null>("desktop_restore_snapshot"),
   create:()=>host().core.invoke<Project>("desktop_create"),
