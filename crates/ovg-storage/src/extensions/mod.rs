@@ -1,6 +1,7 @@
 //! E14 extension platform storage repository over canonical RLS tables.
 
 pub mod marketplace;
+pub mod trust;
 pub mod commerce;
 pub mod installation;
 pub mod processing;

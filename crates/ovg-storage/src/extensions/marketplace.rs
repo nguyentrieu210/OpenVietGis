@@ -18,6 +18,7 @@ pub struct PublisherRow {
     pub name: String,
     pub public_key: String,
     pub created_at: DateTime<Utc>,
+    pub key_revision: i64,
 }
 
 impl PublisherRow {
@@ -28,6 +29,7 @@ impl PublisherRow {
             "name": self.name,
             "public_key": self.public_key,
             "created_at": iso_z(self.created_at),
+            "key_revision":self.key_revision,
         })
     }
 }
@@ -73,6 +75,7 @@ fn publisher_from_row(row: &sqlx::postgres::PgRow) -> Result<PublisherRow, AppEr
         name: row.try_get("name").map_err(db_error)?,
         public_key: row.try_get("public_key").map_err(db_error)?,
         created_at: row.try_get("created_at").map_err(db_error)?,
+        key_revision: row.try_get("key_revision").map_err(db_error)?,
     })
 }
 
@@ -94,7 +97,7 @@ fn submission_from_row(row: &sqlx::postgres::PgRow) -> Result<SubmissionRow, App
 
 const SELECT_SUBMISSION: &str = "
     SELECT s.id, s.publisher_id, s.owner_user_id, s.manifest, s.signature, s.status,
-           s.review_note, s.reviewed_at, s.created_at, p.name AS publisher_name, p.public_key
+           s.review_note, s.reviewed_at, s.created_at, p.name AS publisher_name, s.signing_public_key AS public_key
     FROM extensions.marketplace_submissions s
     JOIN extensions.marketplace_publishers p ON p.id = s.publisher_id
 ";
@@ -179,7 +182,7 @@ impl<'a> DeveloperTx<'a> {
 
     pub async fn get_publisher(&mut self) -> Result<Option<PublisherRow>, AppError> {
         let row = sqlx::query(
-            "SELECT id, name, public_key, created_at
+            "SELECT id, name, public_key, created_at,key_revision
              FROM extensions.marketplace_publishers
              WHERE owner_user_id = $1",
         )
@@ -211,7 +214,7 @@ impl<'a> DeveloperTx<'a> {
         let row = sqlx::query(
             "INSERT INTO extensions.marketplace_publishers (id, owner_user_id, name, public_key)
              VALUES ($1, $2, $3, $4)
-             RETURNING id, name, public_key, created_at",
+             RETURNING id, name, public_key, created_at,key_revision",
         )
         .bind(pid)
         .bind(self.actor_id)
@@ -492,5 +495,53 @@ impl DeveloperTx<'_> {
             return Err(AppError::forbidden("withdrawal unavailable"));
         }
         self.v2_detail(id).await
+    }
+}
+
+impl DeveloperTx<'_> {
+    /// Caller verified two ownership signatures over exact current revision.
+    pub async fn rotate_key(
+        &mut self,
+        publisher_id: &str,
+        expected: i64,
+        old: &str,
+        new: &str,
+        old_proof: &str,
+        new_proof: &str,
+    ) -> Result<PublisherRow, AppError> {
+        self.lock_user().await?;
+        let current = self
+            .get_publisher()
+            .await?
+            .ok_or_else(|| AppError::not_found("publisher not found"))?;
+        if current.id != publisher_id
+            || current.key_revision != expected
+            || current.public_key != old
+            || old == new
+            || expected <= 0
+        {
+            return Err(AppError::conflict(
+                "STALE_PUBLISHER_KEY",
+                "publisher key changed",
+            ));
+        }
+        let prior:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM extensions.marketplace_publisher_rotations WHERE publisher_id=$1 AND (old_public_key=$2 OR new_public_key=$2))")
+          .bind(publisher_id).bind(new).fetch_one(&mut *self.tx).await.map_err(db_error)?;
+        if prior {
+            return Err(AppError::conflict(
+                "REUSED_PUBLISHER_KEY",
+                "use a new signing key",
+            ));
+        }
+        let revision = expected
+            .checked_add(1)
+            .ok_or_else(|| AppError::internal("publisher revision overflow"))?;
+        sqlx::query("INSERT INTO extensions.marketplace_publisher_rotations(publisher_id,owner_user_id,revision,old_public_key,new_public_key,old_proof,new_proof) VALUES($1,$2,$3,$4,$5,$6,$7)")
+          .bind(publisher_id).bind(self.actor_id).bind(revision).bind(old).bind(new).bind(old_proof).bind(new_proof)
+          .execute(&mut *self.tx).await.map_err(db_error)?;
+        let row=sqlx::query("UPDATE extensions.marketplace_publishers SET public_key=$1,key_revision=$2 WHERE id=$3 AND owner_user_id=$4 AND key_revision=$5 AND public_key=$6 RETURNING id,name,public_key,created_at,key_revision")
+          .bind(new).bind(revision).bind(publisher_id).bind(self.actor_id).bind(expected).bind(old)
+          .fetch_optional(&mut *self.tx).await.map_err(db_error)?.ok_or_else(||AppError::conflict("STALE_PUBLISHER_KEY","publisher key changed"))?;
+        publisher_from_row(&row)
     }
 }

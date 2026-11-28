@@ -16,6 +16,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::Signature;
 use ovg_core::AppError;
 use ovg_module_sdk::release_v2::{verify_bundle, Bundle, ContributionEnvelope, ReleaseTrust};
+use ovg_module_sdk::trust::{verify_policy, TrustPolicy, VerifiedTrust};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -216,44 +217,127 @@ fn verified_items(
     });
     Ok(items)
 }
-fn load(config: &AppConfig, p: &Profile) -> Result<Vec<VerifiedRelease>, AppError> {
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SignedPolicy {
+    policy: TrustPolicy,
+    signature: String,
+}
+fn bounded_file(path: &str, max: u64) -> Result<Vec<u8>, AppError> {
+    let mut raw = Vec::new();
+    File::open(path)
+        .map_err(|_| invalid())?
+        .take(max + 1)
+        .read_to_end(&mut raw)
+        .map_err(|_| invalid())?;
+    if raw.len() as u64 > max {
+        return Err(invalid());
+    }
+    Ok(raw)
+}
+fn load(
+    config: &AppConfig,
+    p: &Profile,
+) -> Result<(Vec<VerifiedRelease>, Option<VerifiedTrust>), AppError> {
     let Some(path) = config.marketplace_v2_catalog_path.as_deref() else {
-        return Ok(vec![]);
+        if config.marketplace_v2_runtime_enabled {
+            return Err(invalid());
+        }
+        return Ok((vec![], None));
     };
     let epoch = config.marketplace_v2_epoch.ok_or_else(invalid)?;
     let key = config
         .marketplace_operator_public_key
         .as_deref()
         .ok_or_else(invalid)?;
-    let mut raw = Vec::new();
-    File::open(path)
-        .map_err(|_| invalid())?
-        .take(MAX_FILE + 1)
-        .read_to_end(&mut raw)
-        .map_err(|_| invalid())?;
-    if raw.len() as u64 > MAX_FILE {
+    let root = decode_ed25519_public_key(
+        config
+            .marketplace_trust_root_public_key
+            .as_deref()
+            .ok_or_else(invalid)?,
+    )
+    .map_err(|_| invalid())?;
+    let operator = decode_ed25519_public_key(key).map_err(|_| invalid())?;
+    let c: Catalog =
+        serde_json::from_slice(&bounded_file(path, MAX_FILE)?).map_err(|_| invalid())?;
+    let membership = hash(&catalog_membership(&c)?);
+    let signed: SignedPolicy = serde_json::from_slice(&bounded_file(
+        config
+            .marketplace_trust_policy_path
+            .as_deref()
+            .ok_or_else(invalid)?,
+        1048576,
+    )?)
+    .map_err(|_| invalid())?;
+    let trust = verify_policy(
+        signed.policy,
+        &signature(&signed.signature)?,
+        &root,
+        &operator,
+        epoch,
+        &membership,
+        chrono::Utc::now(),
+    )?;
+    let legacy = load_catalog(config)?;
+    if legacy.iter().any(|r| {
+        decode_ed25519_public_key(&r.publisher_public_key)
+            .ok()
+            .as_ref()
+            == Some(&root)
+    }) {
         return Err(invalid());
     }
-    let c: Catalog = serde_json::from_slice(&raw).map_err(|_| invalid())?;
-    verified_items(c, &load_catalog(config)?, key, epoch, p)
+    let mut items = verified_items(c, &legacy, key, epoch, p)?;
+    items.retain(|r| {
+        trust.permits(
+            r.metadata["release_digest"].as_str().unwrap_or_default(),
+            r.metadata["envelope"]["key_id"]
+                .as_str()
+                .unwrap_or_default(),
+        )
+    });
+    Ok((items, Some(trust)))
 }
 pub(super) async fn load_verified(
-    config: std::sync::Arc<AppConfig>,
+    state: &AppState,
     profile: Profile,
 ) -> Result<Vec<VerifiedRelease>, ExtensionError> {
+    // The bounded slot spans verification and admission, including when a
+    // caller holds its existing project transaction. No plugin-controlled
+    // global lock is held across the scoped command.
     let slot = VERIFY_SLOTS.try_acquire().map_err(|_| {
         ExtensionError::Domain(AppError::service_unavailable(
             "PLUGIN_CATALOG_BUSY",
             "catalog verification capacity exhausted",
         ))
     })?;
-    tokio::task::spawn_blocking(move || {
-        let _slot = slot;
-        load(&config, &profile)
-    })
-    .await
-    .map_err(|_| ExtensionError::Domain(invalid()))?
-    .map_err(ExtensionError::Domain)
+    let config = state.config.clone();
+    let (result, slot) = tokio::task::spawn_blocking(move || (load(&config, &profile), slot))
+        .await
+        .map_err(|_| ExtensionError::Domain(invalid()))?;
+    let (items, trust) = result.map_err(ExtensionError::Domain)?;
+    if let Some(trust) = trust {
+        let pool = state.db_pool.as_ref().ok_or_else(|| {
+            ExtensionError::Domain(AppError::service_unavailable(
+                "PLUGIN_TRUST_UNAVAILABLE",
+                "global trust checkpoint unavailable",
+            ))
+        })?;
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            ovg_storage::extensions::trust::admit_policy(pool, &trust),
+        )
+        .await
+        .map_err(|_| {
+            ExtensionError::Domain(AppError::service_unavailable(
+                "PLUGIN_TRUST_BUSY",
+                "global trust checkpoint unavailable",
+            ))
+        })?
+        .map_err(ExtensionError::Domain)?;
+    }
+    drop(slot);
+    Ok(items)
 }
 async fn catalog(
     State(state): State<AppState>,
@@ -267,7 +351,7 @@ async fn catalog(
         state.config.marketplace_v2_runtime_enabled,
     );
     let runtime_enabled = availability.online_execution;
-    let items: Vec<Value> = load_verified(state.config.clone(), profile)
+    let items: Vec<Value> = load_verified(&state, profile)
         .await?
         .into_iter()
         .map(|r| r.metadata)
@@ -374,6 +458,67 @@ mod tests {
             assert!(!doc.actions.is_empty());
             assert_eq!(row.metadata["runtime_available"], false);
         }
+    }
+    #[test]
+    fn configured_catalog_requires_trust_and_filters_revoked_release_and_key() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/spec075/python-signed-catalog.json"
+        ))
+        .unwrap();
+        let dir = std::env::temp_dir().join(format!("ovg075-trust-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let v1 = dir.join("v1.json");
+        let v2 = dir.join("v2.json");
+        let trust = dir.join("trust.json");
+        std::fs::write(&v1, serde_json::to_vec(&fixture["v1"]).unwrap()).unwrap();
+        std::fs::write(&v2, serde_json::to_vec(&fixture["v2"]).unwrap()).unwrap();
+        let root = SigningKey::from_bytes(&[77; 32]);
+        let mut cfg = AppConfig::default();
+        cfg.marketplace_catalog_path = Some(v1.to_string_lossy().into_owned());
+        cfg.marketplace_v2_catalog_path = Some(v2.to_string_lossy().into_owned());
+        cfg.marketplace_v2_epoch = Some(2);
+        cfg.marketplace_operator_public_key =
+            Some(fixture["operator_public_key"].as_str().unwrap().into());
+        let p = Profile {
+            host: "web".into(),
+            api: "1.0.0".into(),
+        };
+        assert!(load(&cfg, &p).is_err());
+        cfg.marketplace_trust_root_public_key =
+            Some(STANDARD.encode(root.verifying_key().as_bytes()));
+        cfg.marketplace_trust_policy_path = Some(trust.to_string_lossy().into_owned());
+        let c: Catalog = serde_json::from_value(fixture["v2"].clone()).unwrap();
+        let key =
+            decode_ed25519_public_key(cfg.marketplace_operator_public_key.as_deref().unwrap())
+                .unwrap();
+        let now = chrono::Utc::now();
+        let mut policy = TrustPolicy {
+            schema: "openvietgis.trust.policy.v1".into(),
+            sequence: 1,
+            catalog_epoch: 2,
+            catalog_membership_digest: hash(&catalog_membership(&c).unwrap()),
+            operator_key_id: hash(key.as_bytes()),
+            issued_at: (now - chrono::Duration::seconds(1)).to_rfc3339(),
+            expires_at: (now + chrono::Duration::days(1)).to_rfc3339(),
+            revoked_release_digests: vec![hash(&canonical(&c.releases[0].envelope).unwrap())],
+            revoked_publisher_keys: vec![],
+            revoked_operator_keys: vec![],
+        };
+        let save = |p: &TrustPolicy| {
+            std::fs::write(&trust,serde_json::to_vec(&json!({"policy":p,"signature":STANDARD.encode(root.sign(&canonical(p).unwrap()).to_bytes())})).unwrap()).unwrap()
+        };
+        save(&policy);
+        let (rows, proof) = load(&cfg, &p).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert!(proof.is_some());
+        policy.sequence = 2;
+        policy.revoked_publisher_keys = vec![c.releases[0].envelope.key_id.clone()];
+        save(&policy);
+        assert!(load(&cfg, &p).unwrap().0.is_empty());
+        policy.catalog_membership_digest = "a".repeat(64);
+        save(&policy);
+        assert!(load(&cfg, &p).is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn v2_metadata_uses_existing_catalog_trust() {

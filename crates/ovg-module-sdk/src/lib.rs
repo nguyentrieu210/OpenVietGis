@@ -4,6 +4,7 @@
 //! compile-time dependencies on any vertical module (`house_numbering`, `land_asset`, etc.).
 
 pub mod release_v2;
+pub mod trust;
 pub mod declarative;
 pub mod host_profile;
 pub mod commerce;

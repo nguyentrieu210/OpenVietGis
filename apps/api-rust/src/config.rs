@@ -38,6 +38,8 @@ pub struct AppConfig {
     pub artifact_store_dir: PathBuf,
     pub marketplace_catalog_path: Option<String>,
     pub marketplace_v2_catalog_path: Option<String>,
+    pub marketplace_trust_policy_path: Option<String>,
+    pub marketplace_trust_root_public_key: Option<String>,
     pub marketplace_v2_epoch: Option<u64>,
     pub marketplace_v2_runtime_enabled: bool,
     pub plugin_sandbox_payment_public_key: Option<String>,
@@ -70,6 +72,8 @@ impl Default for AppConfig {
             artifact_store_dir: PathBuf::from("/tmp/openvietgis-artifacts"),
             marketplace_catalog_path: None,
             marketplace_v2_catalog_path: None,
+            marketplace_trust_policy_path: None,
+            marketplace_trust_root_public_key: None,
             marketplace_v2_epoch: None,
             marketplace_v2_runtime_enabled: false,
             plugin_sandbox_payment_public_key: None,
@@ -152,6 +156,14 @@ impl AppConfig {
         cfg.marketplace_v2_catalog_path = std::env::var("OPENVIETGIS_MARKETPLACE_V2_CATALOG_PATH")
             .ok()
             .filter(|v| !v.is_empty());
+        cfg.marketplace_trust_policy_path =
+            std::env::var("OPENVIETGIS_MARKETPLACE_TRUST_POLICY_PATH")
+                .ok()
+                .filter(|v| !v.is_empty());
+        cfg.marketplace_trust_root_public_key =
+            std::env::var("OPENVIETGIS_MARKETPLACE_TRUST_ROOT_PUBLIC_KEY")
+                .ok()
+                .filter(|v| !v.is_empty());
         cfg.marketplace_v2_epoch = std::env::var("OPENVIETGIS_MARKETPLACE_V2_EPOCH")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())

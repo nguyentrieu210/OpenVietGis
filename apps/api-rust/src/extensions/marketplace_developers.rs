@@ -28,6 +28,7 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(&format!("{BASE}/me"), get(my_developer_state))
         .route(&format!("{BASE}/publisher"), post(register_publisher))
+        .route(&format!("{BASE}/publisher/rotate-key"), post(rotate_key))
         .route(&format!("{BASE}/submissions"), post(submit_release))
         .route(
             &format!("{BASE}/submissions/{{submission_id}}/withdraw"),
@@ -406,4 +407,112 @@ async fn decide_submission(
     Ok(private_no_store(Json(
         row.wire(uid, is_published(&row, &catalog)),
     )))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RotationBody {
+    publisher_id: String,
+    expected_revision: i64,
+    old_public_key: String,
+    new_public_key: String,
+    old_proof: String,
+    new_proof: String,
+}
+fn verify_rotation(uid: Uuid, b: &RotationBody) -> Result<(), AppError> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use ed25519_dalek::Signature;
+    let deny = || AppError::validation("INVALID_KEY_ROTATION", "invalid dual signing proof");
+    if b.expected_revision <= 0
+        || b.expected_revision >= 9_007_199_254_740_991
+        || b.old_public_key == b.new_public_key
+        || b.publisher_id.len() > 32
+    {
+        return Err(deny());
+    }
+    let payload = ovg_module_sdk::release_v2::canonical(
+        &json!({"purpose":"openvietgis.publisher.rotate.v1","user_id":uid,"publisher_id":b.publisher_id,
+   "expected_revision":b.expected_revision,"old_public_key":b.old_public_key,"new_public_key":b.new_public_key}),
+    )?;
+    for (k, s) in [
+        (&b.old_public_key, &b.old_proof),
+        (&b.new_public_key, &b.new_proof),
+    ] {
+        let key = decode_ed25519_public_key(k).map_err(|_| deny())?;
+        if key.is_weak() || s.len() != 88 {
+            return Err(deny());
+        }
+        let raw = STANDARD.decode(s).map_err(|_| deny())?;
+        if STANDARD.encode(&raw) != *s {
+            return Err(deny());
+        }
+        let sig = Signature::from_slice(&raw).map_err(|_| deny())?;
+        key.verify_strict(&payload, &sig).map_err(|_| deny())?;
+    }
+    Ok(())
+}
+async fn rotate_key(
+    State(state): State<AppState>,
+    request: Request<axum::body::Body>,
+) -> Result<Response, ExtensionError> {
+    let (parts, body) = request.into_parts();
+    let bytes = axum::body::to_bytes(body, 4096)
+        .await
+        .map_err(|_| ExtensionError::InvalidRequest)?;
+    let (auth, headers, body) = authenticate_human_json(
+        &state,
+        Request::from_parts(parts, axum::body::Body::from(bytes)),
+    )
+    .await?;
+    require_csrf(&state, &auth, &headers)
+        .map_err(|e| ExtensionError::Access(CatalogError::Identity(e)))?;
+    let b: RotationBody = decode_body(body)?;
+    verify_rotation(auth.actor_id(), &b).map_err(ExtensionError::Domain)?;
+    let mut tx = DeveloperTx::begin(db_pool(&state)?, auth.actor_id(), auth.session_id(), false)
+        .await
+        .map_err(ExtensionError::from_catalog_app)?;
+    let row = tx
+        .rotate_key(
+            &b.publisher_id,
+            b.expected_revision,
+            &b.old_public_key,
+            &b.new_public_key,
+            &b.old_proof,
+            &b.new_proof,
+        )
+        .await
+        .map_err(ExtensionError::Domain)?;
+    tx.commit().await.map_err(ExtensionError::Domain)?;
+    Ok(private_no_store(Json(row.wire())))
+}
+#[cfg(test)]
+mod rotation_tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use ed25519_dalek::{Signer, SigningKey};
+    #[test]
+    fn rotation_binds_both_keys_and_revision() {
+        let uid = Uuid::new_v4();
+        let a = SigningKey::from_bytes(&[91; 32]);
+        let b = SigningKey::from_bytes(&[92; 32]);
+        let mut r = RotationBody {
+            publisher_id: "dev_aaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            expected_revision: 1,
+            old_public_key: STANDARD.encode(a.verifying_key().as_bytes()),
+            new_public_key: STANDARD.encode(b.verifying_key().as_bytes()),
+            old_proof: String::new(),
+            new_proof: String::new(),
+        };
+        let payload=ovg_module_sdk::release_v2::canonical(&json!({"purpose":"openvietgis.publisher.rotate.v1","user_id":uid,"publisher_id":r.publisher_id,
+    "expected_revision":1,"old_public_key":r.old_public_key,"new_public_key":r.new_public_key})).unwrap();
+        r.old_proof = STANDARD.encode(a.sign(&payload).to_bytes());
+        r.new_proof = STANDARD.encode(b.sign(&payload).to_bytes());
+        assert!(verify_rotation(uid, &r).is_ok());
+        assert!(verify_rotation(Uuid::new_v4(), &r).is_err());
+        r.expected_revision = 2;
+        assert!(verify_rotation(uid, &r).is_err());
+        r.expected_revision = 1;
+        r.new_proof = r.old_proof.clone();
+        assert!(verify_rotation(uid, &r).is_err());
+    }
 }

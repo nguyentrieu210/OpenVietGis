@@ -191,7 +191,7 @@ fn plan(
 }
 async fn catalog(state: &AppState) -> Result<Vec<VerifiedRelease>, ExtensionError> {
     load_verified(
-        state.config.clone(),
+        state,
         Profile {
             host: "web".into(),
             api: "1.0.0".into(),

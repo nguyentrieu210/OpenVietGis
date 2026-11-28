@@ -1,7 +1,7 @@
 import type {ApiClient} from "./http";
 import type {MarketplaceRelease} from "./external-plugins";
 
-export type DeveloperPublisher={id:string;name:string;public_key:string;created_at:string};
+export type DeveloperPublisher={id:string;name:string;public_key:string;created_at:string;key_revision:number};
 export type PublisherRegistration={name:string;public_key:string;proof:string};
 export type SignedSubmission=Pick<MarketplaceRelease,"publisher_id"|"manifest"|"signature">;
 export type SubmissionStatus="pending"|"approved"|"rejected"|"withdrawn";
@@ -29,3 +29,6 @@ export const attachDeveloperV2=(c:ApiClient,id:string,bundle:unknown)=>c.request
 export const decideDeveloperV2=(c:ApiClient,id:string,decision:"approved"|"rejected",note:string)=>c.request<DeveloperV2Submission>(v2Path(id)+"/decision",post({decision,note}));
 export const withdrawDeveloperV2=(c:ApiClient,id:string,reason:string)=>c.request<DeveloperV2Submission>(v2Path(id)+"/withdraw",post({reason}));
 export const exportDeveloperV2=(c:ApiClient,id:string)=>c.request<{bundle:unknown;publisher_public_key:string;release_digest:string;requires_offline_operator_signature:true}>(v2Path(id)+"/export",{cache:"no-store"});
+
+export type PublisherRotation={publisher_id:string;expected_revision:number;old_public_key:string;new_public_key:string;old_proof:string;new_proof:string};
+export const rotateDeveloperPublisherKey=(c:ApiClient,body:PublisherRotation)=>c.request<DeveloperPublisher>(root+"/publisher/rotate-key",post(body));

@@ -90,7 +90,7 @@ async fn create(
     }
     // A quote is synthetic and user-defined; do not treat this as a price offer.
     let catalog = load_verified(
-        state.config.clone(),
+        &state,
         Profile {
             host: "web".into(),
             api: "1.0.0".into(),
