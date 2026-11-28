@@ -7,7 +7,7 @@ use serde_json::{json,Value};
 use std::{collections::HashMap,io::{BufRead,BufReader,Write,Read},path::PathBuf,process::{Command,Stdio},sync::{Arc,Mutex,atomic::{AtomicBool,Ordering}},time::{Instant,Duration}};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
-#[derive(Clone)]struct App{key:Arc<String>,work:PathBuf,active:Arc<Mutex<HashMap<Uuid,Arc<AtomicBool>>>>}
+#[derive(Clone)]struct App{key:Arc<String>,work:PathBuf,active:Arc<Mutex<HashMap<Uuid,Arc<AtomicBool>>>>,seen:Arc<Mutex<HashMap<Uuid,Instant>>>}
 fn auth(a:&App,h:&HeaderMap)->bool{
     h.get("authorization").and_then(|v|v.to_str().ok()).and_then(|v|v.strip_prefix("Bearer ")).is_some_and(|v|v.as_bytes().ct_eq(a.key.as_bytes()).into())
 }
@@ -70,7 +70,14 @@ async fn run(State(a):State<App>,h:HeaderMap,Json(input):Json<Input>)->Result<Js
     if !auth(&a,&h){return Err(StatusCode::UNAUTHORIZED)}
     if !input.valid()||!acp::Remote::agents().contains(&input.agent){return Err(StatusCode::UNPROCESSABLE_ENTITY)}
     let id=input.run_id;let cancel=Arc::new(AtomicBool::new(false));
-    {let mut active=a.active.lock().map_err(|_|StatusCode::SERVICE_UNAVAILABLE)?;if !active.is_empty(){return Err(StatusCode::TOO_MANY_REQUESTS)}active.insert(id,cancel.clone());}
+    {
+        let mut active=a.active.lock().map_err(|_|StatusCode::SERVICE_UNAVAILABLE)?;
+        let mut seen=a.seen.lock().map_err(|_|StatusCode::SERVICE_UNAVAILABLE)?;
+        seen.retain(|_,t|t.elapsed()<Duration::from_secs(900));
+        if seen.contains_key(&id){return Err(StatusCode::CONFLICT)}
+        if !active.is_empty()||seen.len()>=256{return Err(StatusCode::TOO_MANY_REQUESTS)}
+        seen.insert(id,Instant::now());active.insert(id,cancel.clone());
+    }
     // Move ownership of slot cleanup into the blocking worker: disconnecting HTTP does
     // not free capacity until the child process really exits.
     let active=a.active.clone();let root=a.work.clone();
@@ -86,6 +93,13 @@ async fn cancel(State(a):State<App>,h:HeaderMap,Json(v):Json<Cancel>)->Result<Js
     if !auth(&a,&h){return Err(StatusCode::UNAUTHORIZED)}
     let active=a.active.lock().map_err(|_|StatusCode::SERVICE_UNAVAILABLE)?;
     if let Some(flag)=active.get(&v.run_id){flag.store(true,Ordering::SeqCst);}
+    else{
+        let mut seen=a.seen.lock().map_err(|_|StatusCode::SERVICE_UNAVAILABLE)?;
+        seen.retain(|_,t|t.elapsed()<Duration::from_secs(900));
+        if seen.len()>=256&&!seen.contains_key(&v.run_id){return Err(StatusCode::TOO_MANY_REQUESTS)}
+        // Tombstone covers cancel arriving before the start request.
+        seen.insert(v.run_id,Instant::now());
+    }
     Ok(Json(json!({"cancel_requested":true})))
 }
 #[tokio::main]async fn main(){
@@ -93,7 +107,7 @@ async fn cancel(State(a):State<App>,h:HeaderMap,Json(v):Json<Cancel>)->Result<Js
     assert_eq!(std::env::var("OVG_ACP_ISOLATED_WORKER").as_deref(),Ok("1"),"Dedicated sandbox required");
     let key=std::env::var("OVG_ACP_RUNNER_KEY").expect("runner key required");assert!(key.len()>=32&&key.len()<=512);
     let work=PathBuf::from(std::env::var("OVG_ACP_WORK_ROOT").expect("work root required"));assert!(work.is_absolute()&&work.is_dir());
-    let app=App{key:Arc::new(key),work,active:Arc::new(Mutex::new(HashMap::new()))};
+    let app=App{key:Arc::new(key),work,active:Arc::new(Mutex::new(HashMap::new())),seen:Arc::new(Mutex::new(HashMap::new()))};
     let router=Router::new().route("/v1/acp/run",post(run)).route("/v1/acp/cancel",post(cancel)).layer(DefaultBodyLimit::max(24000)).with_state(app);
     let listener=tokio::net::TcpListener::bind("127.0.0.1:9199").await.expect("bind isolated runner");axum::serve(listener,router).await.expect("serve runner");
 }

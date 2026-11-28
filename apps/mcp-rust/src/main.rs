@@ -569,6 +569,8 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":true,"allow_writes":false,"api_key":"not-accepted"})).send().await.unwrap().status(),422);
         assert_eq!(provider_req(sa,ta,"providers",json!({})).send().await.unwrap().status(),200);
         assert_eq!(provider_req(sa,ta,"status",json!({"run_id":Uuid::new_v4()})).send().await.unwrap().status(),404);
+        assert_eq!(provider_req(sa,ta,"acp",json!({"agent":"codex","task":"inspect","consent":false})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"acp",json!({"agent":"codex","task":"inspect","consent":true,"command":"shell"})).send().await.unwrap().status(),422);
 
         let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
         assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
