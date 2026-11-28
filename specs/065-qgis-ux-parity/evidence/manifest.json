@@ -726,9 +726,12 @@
         "apps/web-next/src/SecondaryMapView.tsx",
         "packages/spatial-workspace/src/gltf.ts",
         "packages/spatial-workspace/src/tileset.ts",
-        "packages/spatial-workspace/src/terrain.ts"
+        "packages/spatial-workspace/src/terrain.ts",
+        "apps/web-next/src/local-las.ts",
+        "apps/web-next/src/local-las.test.ts",
+        "packages/spatial-workspace/src/cesium3d.ts"
       ],
-      "blocker": "Bounded UTC day playback plus custom UTC interval/step, optional end timestamp field, half-open window overlap and empty frames for fully loaded authorized revision-pinned vector layers (5,000 features/frames). Raster temporal series, tile support, mesh dataset and point cloud adapters remain unsupported. New tests written, not yet executed; browser/QGIS acceptance pending."
+      "blocker": "Bounded UTC day playback plus custom UTC interval/step, optional end timestamp field, half-open window overlap and empty frames for fully loaded authorized revision-pinned vector layers (5,000 features/frames). Raster temporal series, tile support, mesh dataset and point cloud adapters remain unsupported. New tests written, not yet executed; browser/QGIS acceptance pending. Local uncompressed LAS 1.2/1.3 preview added with explicit CRS/height confirmation and 100000 sampled points; LAZ/COPC/EPT, project persistence and mesh data provider remain unsupported. Not accepted."
     },
     {
       "id": "OUTPUT-01",

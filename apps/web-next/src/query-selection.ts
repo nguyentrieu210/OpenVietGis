@@ -1,5 +1,5 @@
 import {parseExpression,evaluateExpression} from "./label-expr";
-import {tableTsv} from "./table-columns";
+import {tableTsv,tsvCell} from "./table-columns";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import type {FilterRow} from "./workbenches/features/platform/query-filters";
 import {tableQueryBody,verifyTableQuery,TABLE_QUERY_LIMIT} from "./table-query";
@@ -93,7 +93,7 @@ export async function exportSelectedAttributes(layer:SpatialLayer,selected:Reado
   fingerprint=page.query_fingerprint;
   for(const row of page.items){
    if(seen.has(row.feature_id))throw Error("Trùng FID giữa các trang.");seen.add(row.feature_id);
-   if(ids.has(row.feature_id)){push(tableTsv([row.feature_id,row.geometry_state??"",...fields.map(f=>row.attributes[f.field_id]??"")],[]));ids.delete(row.feature_id)}
+   if(ids.has(row.feature_id)){push([row.feature_id,row.geometry_state??"",...fields.map(f=>row.attributes[f.field_id]??"")].map(tsvCell).join("\t"));ids.delete(row.feature_id)}
   }
   scanned+=page.items.length;progress(scanned,expected);
   if(!page.has_more)break;

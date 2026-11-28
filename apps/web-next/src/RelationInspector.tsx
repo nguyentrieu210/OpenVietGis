@@ -18,7 +18,7 @@ export function RelationInspector({row,layers,rows,storageKey,restricted,navigat
  <label>Lớp đích<select value={spec.target} onChange={e=>patch({target:e.target.value,targetField:""})}><option value="">Chọn lớp</option>{targets.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
  <label>Trường đích<select value={spec.targetField} onChange={e=>patch({targetField:e.target.value})}><option value="">Chọn trường cùng kiểu</option>{targetFields.map(f=><option key={f.field_id} value={f.field_id}>{f.name}</option>)}</select></label>
  <label>Cardinality<select value={spec.cardinality} onChange={e=>patch({cardinality:e.target.value==="one"?"one":"many"})}><option value="many">Một–nhiều</option><option value="one">Nhiều–một (kiểm tra khóa đang chọn)</option></select></label>
- <button type="button" disabled={!result} onClick={()=>writePreference(storageKey,JSON.stringify(spec))}>Lưu cấu hình cá nhân</button><button type="button" onClick={()=>{setSpec(empty);writePreference(storageKey,"null")}}>Xóa cấu hình</button></fieldset>
+ <button type="button" disabled={!result} onClick={()=>writePreference(storageKey,spec)}>Lưu cấu hình cá nhân</button><button type="button" onClick={()=>{setSpec(empty);writePreference(storageKey,null)}}>Xóa cấu hình</button></fieldset>
  {error&&<p role="alert">{error}</p>}{result&&<><p>{result.length} đối tượng khớp</p>{result.map(r=><button key={r.key} type="button" disabled={disabled} onClick={()=>navigate(r.key)}>{r.layer.name} · {r.feature.feature_id}</button>)}</>}
  </details>
 }

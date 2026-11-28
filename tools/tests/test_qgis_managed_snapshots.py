@@ -214,8 +214,10 @@ def test_reopen_changed_cache_uses_delta_and_revalidates(monkeypatch):
 
 def test_managed_sse_frames_and_reconnect_bounds():
     import io
+
     from integrations.qgis_plugin.openvietgis_connector.managed_client import (
-        iter_managed_events, managed_reconnect_delay,
+        iter_managed_events,
+        managed_reconnect_delay,
     )
     wire = (b": heartbeat\n\n"
             b"event: spatial_change\ndata: first\ndata: second\n\n"

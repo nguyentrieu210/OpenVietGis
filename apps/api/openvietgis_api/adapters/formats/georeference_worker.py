@@ -87,7 +87,10 @@ def warp_north_up(ds, output, geo, native, s, method):
                or b.GetColorInterpretation()==gdal.GCI_AlphaBand
                or b.GetColorTable() is not None for b in bands)
     ):
-        raise ValueError("North-up warp requires equal finite NoData, homogeneous bands and no custom masks or palettes")
+        raise ValueError(
+            "North-up warp requires equal finite NoData, homogeneous bands "
+            "and no custom masks or palettes"
+        )
     west,south=native.min(axis=0)
     east,north=native.max(axis=0)
     dx=math.hypot(geo[1],geo[4])
