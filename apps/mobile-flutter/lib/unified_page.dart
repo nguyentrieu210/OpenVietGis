@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'src/rust/api/simple.dart';
+import 'unified_map.dart';
 
 String _uuid(){
   final r=Random.secure();
@@ -79,6 +80,12 @@ class _UnifiedPageState extends State<UnifiedPage>{
     await p.addLayer(layerId:id,name:name,expected:_revision!);
     await _refresh();if(mounted)setState(()=>_layer=id);
   }
+  Future<void> _openMap()async{
+    final p=_project,l=_layer,r=_revision;
+    if(p==null||l==null||r==null)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedMap(project:p,layer:l,revision:r,uuid:_uuid)));
+    if(mounted)await _refresh();
+  }
   Future<void> _draw()async{
     final p=_project;if(p==null||_layer==null||_revision==null)return;
     final lon=double.tryParse(_lon.text),lat=double.tryParse(_lat.text);
@@ -142,6 +149,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
         for(final id in _ids)ListTile(title:Text(id),leading:Icon(id==_selected?Icons.check_circle:Icons.folder),enabled:ready,onTap:()=>unawaited(_run(()=>_open(id)))),
         if(_project!=null)...[
           Text('Revision ${_revision??"?"}'),
+          FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
           for(final l in _layers)ListTile(title:Text(l['name'].toString()),leading:Icon(l['id']==_layer?Icons.check_circle:Icons.layers),enabled:ready,onTap:()=>setState((){_layer=l['id'].toString();_rows=[];_cursor=null;})),
           TextField(controller:_name,enabled:ready,maxLength:256,decoration:const InputDecoration(labelText:'Tên lớp')),
           OutlinedButton(onPressed:ready&&_revision!=null?()=>unawaited(_run(_add)):null,child:const Text('Thêm lớp')),
