@@ -989,7 +989,7 @@ export function syncOfflineOutbox(
   packageId: string,
   body: { operation_id: string; operations: Array<Record<string, unknown>> },
   csrf: string
-): Promise<{ id: string; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts?: OfflineOperationReceipt[] }> {
+): Promise<{ id: string; package_id: string; operation_id: string; submitted_ops_count: number; status: string; applied_changeset_ids: string[]; conflicts: unknown[]; operation_receipts: OfflineOperationReceipt[] }> {
   return client.request(
     `${projBase(orgId, projectId)}/field/packages/${encodeURIComponent(packageId)}/sync`,
     { method: "POST", body: JSON.stringify(body), headers: csrfHeaders(csrf) }
