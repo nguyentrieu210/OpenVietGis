@@ -103,3 +103,38 @@ export async function exportSelectedAttributes(layer:SpatialLayer,selected:Reado
  ensure();if(ids.size)throw Error("Không tìm thấy đầy đủ FID đã chọn trong nguồn hiện tại.");
  return {tsv:records.join("\n"),count:records.length-1};
 }
+
+export type SpatialSelectionPredicate="intersects"|"within"|"contains";
+export type SpatialSelectionInput={reference:SpatialLayer}|{bounds:[number,number,number,number]};
+export async function collectSpatialSelection(layer:SpatialLayer,input:SpatialSelectionInput,predicate:SpatialSelectionPredicate,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean,progress:(count:number,total:number)=>void){
+ if(!["intersects","within","contains"].includes(predicate))throw Error("Quan hệ không gian không hợp lệ.");
+ let spatial:Record<string,unknown>;
+ if("reference" in input){
+  const r=input.reference;
+  if(!r.id||!selectionLayerCurrent(r,r))throw Error("Lớp tham chiếu không đủ quyền.");
+  spatial={predicate,reference_layer_id:r.id};
+ }else{
+  const [w,s,e,n]=input.bounds;
+  if(![w,s,e,n].every(Number.isFinite)||w < -180||e>180||s < -85.05112878||n>85.05112878||w>=e||s>=n||e-w>180)throw Error("Khung tọa độ WGS84 không hợp lệ.");
+  spatial={predicate,crs_code:4326,geometry:{type:"Polygon",coordinates:[[[w,s],[e,s],[e,n],[w,n],[w,s]]]}};
+ }
+ const keys=new Set<string>();let fp:string|undefined,total:number|undefined;
+ const ensure=()=>{if(!current())throw Error("Nguồn, tham chiếu hoặc vùng chọn đã thay đổi.")};
+ for(let offset=0;;offset+=TABLE_QUERY_LIMIT){
+  ensure();
+  const page=await execute({spatial_filter:spatial,expected_content_revision:layer.source.content_revision,expected_schema_revision:layer.source.schema_revision,limit:TABLE_QUERY_LIMIT,offset,sort_direction:"asc",...(fp?{expected_query_fingerprint:fp}:{})});ensure();
+  if(!page||page.attribute_only||page.layer_id!==layer.id||page.source_id!==layer.source_id||page.content_revision!==layer.source.content_revision||page.schema_revision!==layer.source.schema_revision||page.offset!==offset||page.limit!==TABLE_QUERY_LIMIT||!Number.isSafeInteger(page.total_count)||page.total_count<0||page.total_count>QUERY_SELECTION_LIMIT||!page.query_fingerprint||typeof page.query_fingerprint!=="string"||page.query_fingerprint.length>512||fp&&fp!==page.query_fingerprint||total!==undefined&&total!==page.total_count||!Array.isArray(page.selection_feature_ids)||!Array.isArray(page.items)||page.items.length!==Math.min(TABLE_QUERY_LIMIT,Math.max(0,page.total_count-offset))||page.selection_feature_ids.length!==page.items.length||page.has_more!==(offset+page.items.length<page.total_count))throw Error("Kết quả không gian không khớp phiên bản hoặc vượt 5.000 FID.");
+  const pin=page.reference_pin;
+  if("reference" in input){const r=input.reference;if(!pin||pin.layer_id!==r.id||pin.source_id!==r.source_id||pin.content_revision!==r.source.content_revision||pin.schema_revision!==r.source.schema_revision)throw Error("Lớp tham chiếu đổi revision.");}
+  else if(pin!=null)throw Error("Máy chủ trả về tham chiếu ngoài yêu cầu.");
+  fp=page.query_fingerprint;total=page.total_count;
+  for(let i=0;i<page.items.length;i++){
+   const id=page.selection_feature_ids[i],item=page.items[i];
+   if(typeof id!=="string"||!id||id.length>512||!item||item.feature_id!==id||!item.geometry)throw Error("FID hoặc hình học không hợp lệ.");
+   const key=layer.source_id+":"+id;if(keys.has(key))throw Error("Trùng FID giữa các trang.");keys.add(key);
+  }
+  progress(keys.size,total);if(!page.has_more)break;
+ }
+ ensure();if(keys.size!==total)throw Error("Kết quả không đầy đủ.");
+ return {keys,missingGeometry:0};
+}

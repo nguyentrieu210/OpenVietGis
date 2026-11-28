@@ -382,9 +382,11 @@
         "apps/api-rust/src/queries.rs",
         "apps/web-next/src/table-query.test.ts",
         "apps/web-next/src/query-selection.ts",
-        "apps/web-next/src/query-selection.test.ts"
+        "apps/web-next/src/query-selection.test.ts",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "crates/ovg-storage/src/queries/mod.rs"
       ],
-      "blocker": "Source-wide attribute query selection plus typed Boolean/NULL expression selection over complete revision-pinned population (5000 FIDs), replace/add/remove/intersect/invert via query. Spatial/location selection parity and authenticated browser/QGIS acceptance remain. New tests not executed."
+      "blocker": "Source-wide attribute/AST and PostGIS spatial selection by reference layer or WGS84 rectangle (intersects/within/contains), fingerprint plus source/reference revision pins, 5000 FIDs and replace/add/remove/intersect. Invert via full attribute query; interactive drawn polygon and paired authenticated browser/QGIS acceptance remain. New tests not executed."
     },
     {
       "id": "TABLE-04",

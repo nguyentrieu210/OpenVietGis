@@ -1,22 +1,23 @@
-import {collectQuerySelection,collectExpressionSelection,exportSelectedAttributes,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode} from "./query-selection";
+import {collectQuerySelection,collectExpressionSelection,exportSelectedAttributes,collectSpatialSelection,combineQuerySelection,sameKeys,selectionLayerCurrent,QUERY_SELECTION_LIMIT,type QuerySelectionMode,type SpatialSelectionPredicate,type SpatialSelectionInput} from "./query-selection";
 import {parseExpression} from "./label-expr";
 import React,{useEffect,useRef,useState} from "react";
 import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import {availableOperators,type FilterRow,type QueryOperator} from "./workbenches/features/platform/query-filters";
 import {tableTsv} from "./table-columns";
 import {TABLE_QUERY_LIMIT,TABLE_QUERY_MAX_OFFSET,tableQueryBody,verifyTableQuery} from "./table-query";
-type Props={layer:SpatialLayer;execute:(layer:SpatialLayer,body:Record<string,unknown>)=>Promise<LayerQueryResponse>;openFeature:(layer:SpatialLayer,id:string,isCurrent:()=>boolean)=>Promise<void>;selection?:ReadonlySet<string>;applySelection?:(layer:SpatialLayer,before:ReadonlySet<string>,next:Set<string>)=>void};
+type Props={layer:SpatialLayer;layers?:SpatialLayer[];execute:(layer:SpatialLayer,body:Record<string,unknown>)=>Promise<LayerQueryResponse>;openFeature:(layer:SpatialLayer,id:string,isCurrent:()=>boolean)=>Promise<void>;selection?:ReadonlySet<string>;applySelection?:(layer:SpatialLayer,before:ReadonlySet<string>,next:Set<string>)=>void};
 const blank=():FilterRow=>({field:"",op:"eq",value:"",negate:false});
 const labels:Record<QueryOperator,string>={eq:"=",neq:"≠",gt:">",gte:"≥",lt:"<",lte:"≤",contains:"Chứa (phân biệt hoa thường)",is_null:"NULL",is_not_null:"Không NULL"};
-export function AttributeServerQuery({layer,execute,openFeature,selection,applySelection}:Props){
+export function AttributeServerQuery({layer,layers=[],execute,openFeature,selection,applySelection}:Props){
  const fields=layer.source.schema.fields;
  const [filters,setFilters]=useState<FilterRow[]>([blank()]),[group,setGroup]=useState<"and"|"or">("and");
  const [sort,setSort]=useState(""),[direction,setDirection]=useState<"asc"|"desc">("asc");
  const [result,setResult]=useState<LayerQueryResponse|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");
  const [selectionMode,setSelectionMode]=useState<QuerySelectionMode>("replace"),[selectionProgress,setSelectionProgress]=useState(""),[selecting,setSelecting]=useState(false);
  const [expression,setExpression]=useState("");
+ const [spatialMode,setSpatialMode]=useState<"bounds"|"reference">("bounds"),[spatialBounds,setSpatialBounds]=useState(["","","",""]),[spatialRef,setSpatialRef]=useState(""),[predicate,setPredicate]=useState<SpatialSelectionPredicate>("intersects");
  const expressionError=(()=>{if(!expression.trim())return "";try{parseExpression(expression,fields.map(f=>f.field_id));return ""}catch(e){return e instanceof Error?e.message:String(e)}})();
- const latest=useRef({layer,selection,applySelection});latest.current={layer,selection,applySelection};
+ const latest=useRef({layer,layers,selection,applySelection});latest.current={layer,layers,selection,applySelection};
  const epoch=useRef(0),lock=useRef(false);
  useEffect(()=>()=>{epoch.current++;lock.current=false},[]);
  const invalidate=()=>{epoch.current++;lock.current=false;setBusy(false);setResult(null);setError("");setSelectionProgress("");setSelecting(false)};
@@ -49,6 +50,22 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
   }catch(e){if(epoch.current===seq){setSelectionProgress("");setError(e instanceof Error?e.message:"Không áp dụng được vùng chọn.")}}
   finally{if(epoch.current===seq){lock.current=false;setBusy(false);setSelecting(false)}}
  }
+ async function selectSpatial(){
+  if(lock.current||!selection||!applySelection||selectionMode==="invert")return;
+  const base=layer,before=new Set(selection),mode=selectionMode,reference=layers.find(l=>l.id===spatialRef);
+  let input:SpatialSelectionInput;
+  if(spatialMode==="reference"){if(!reference){setError("Chọn lớp tham chiếu.");return}input={reference}}
+  else{if(spatialBounds.some(x=>!x.trim())){setError("Nhập đủ bốn tọa độ.");return}input={bounds:spatialBounds.map(Number) as [number,number,number,number]}}
+  const seq=++epoch.current;lock.current=true;setBusy(true);setSelecting(true);setSelectionProgress("");setError("");
+  const current=()=>epoch.current===seq&&selectionLayerCurrent(latest.current.layer,base)&&!!latest.current.selection&&sameKeys(latest.current.selection,before)&&(!("reference" in input)||selectionLayerCurrent(latest.current.layers.find(l=>l.id===input.reference.id),input.reference));
+  try{
+   const found=await collectSpatialSelection(base,input,predicate,body=>execute(base,body),current,(n,total)=>{if(current())setSelectionProgress("Đã kiểm tra "+n+"/"+total+" FID…")});
+   if(!current()||!latest.current.applySelection)throw Error("Phạm vi đã thay đổi.");
+   latest.current.applySelection(base,before,combineQuerySelection(before,base.source_id,found.keys,mode));
+   setSelectionProgress("Đã áp dụng "+found.keys.size+" kết quả không gian.");
+  }catch(e){if(epoch.current===seq){setSelectionProgress("");setError(e instanceof Error?e.message:String(e))}}
+  finally{if(epoch.current===seq){lock.current=false;setBusy(false);setSelecting(false)}}
+ }
  async function exportSelection(){
   if(lock.current||!selection)return;
   const seq=++epoch.current,before=new Set(selection),base=layer;
@@ -78,6 +95,7 @@ export function AttributeServerQuery({layer,execute,openFeature,selection,applyS
    <button type="submit" disabled={busy}>Chạy truy vấn</button>
   </form>
   {selection&&applySelection&&<details><summary>Chọn theo biểu thức AST (toàn nguồn)</summary><p>Biểu thức Boolean; NULL không được chọn. Tối đa 5.000 bản ghi, đọc theo revision đã xác minh, không thực thi SQL.</p><label>Biểu thức<textarea rows={3} maxLength={500} disabled={busy} value={expression} onChange={e=>{setExpression(e.target.value);setSelectionProgress("")}} placeholder={'"ma" IS NOT NULL'}/></label><div>{fields.slice(0,50).map(f=><button key={f.field_id} type="button" disabled={busy} onClick={()=>setExpression(v=>(v+'"'+f.field_id.replaceAll('"','""')+'"').slice(0,500))}>{f.name}</button>)}</div>{expressionError&&<p role="alert">{expressionError}</p>}<label>Thao tác<select value={selectionMode} disabled={busy} onChange={e=>setSelectionMode(e.target.value as QuerySelectionMode)}><option value="replace">Thay vùng chọn nguồn này</option><option value="add">Thêm</option><option value="remove">Bỏ</option><option value="intersect">Giao</option>{selectionMode==="invert"&&<option value="invert" disabled>Đảo (chỉ truy vấn)</option>}</select></label><button type="button" disabled={busy||!expression.trim()||!!expressionError||selectionMode==="invert"||layer.source.feature_count==null||layer.source.feature_count>QUERY_SELECTION_LIMIT} onClick={()=>void selectMatches(true)}>Áp dụng biểu thức</button></details>}
+  {selection&&applySelection&&<details><summary>Chọn theo vị trí / vùng tọa độ</summary><p>PostGIS thực hiện quan hệ không gian trên nguồn và CRS đã xác minh, tối đa 5.000 kết quả. Không chọn đối tượng thiếu hình học.</p><label>Quan hệ<select disabled={busy} value={predicate} onChange={e=>setPredicate(e.target.value as SpatialSelectionPredicate)}><option value="intersects">Giao nhau</option><option value="within">Nằm trong</option><option value="contains">Chứa</option></select></label><label>Tham chiếu<select disabled={busy} value={spatialMode} onChange={e=>setSpatialMode(e.target.value==="reference"?"reference":"bounds")}><option value="bounds">Khung WGS84</option><option value="reference">Lớp khác</option></select></label>{spatialMode==="bounds"?<div>{["Tây (kinh độ)","Nam (vĩ độ)","Đông (kinh độ)","Bắc (vĩ độ)"].map((name,i)=><label key={name}>{name}<input disabled={busy} inputMode="decimal" value={spatialBounds[i]} onChange={e=>setSpatialBounds(old=>old.map((x,j)=>i===j?e.target.value:x))}/></label>)}</div>:<label>Lớp tham chiếu<select disabled={busy} value={spatialRef} onChange={e=>setSpatialRef(e.target.value)}><option value="">Chọn lớp</option>{layers.filter(l=>l.id!==layer.id&&selectionLayerCurrent(l,l)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label>}<label>Thao tác<select disabled={busy} value={selectionMode} onChange={e=>setSelectionMode(e.target.value as QuerySelectionMode)}><option value="replace">Thay</option><option value="add">Thêm</option><option value="remove">Bỏ</option><option value="intersect">Giao</option>{selectionMode==="invert"&&<option value="invert" disabled>Đảo (chỉ truy vấn)</option>}</select></label><button type="button" disabled={busy||selectionMode==="invert"} onClick={()=>void selectSpatial()}>Áp dụng vùng chọn không gian</button></details>}
   {selection&&<section aria-label="Xuất thuộc tính vùng chọn"><button type="button" disabled={busy||![...selection].some(k=>k.startsWith(layer.source_id+":"))} onClick={()=>void exportSelection()}>Xuất toàn bộ thuộc tính đã chọn (TSV)</button><small>Gồm cả FID chưa tải ở trang hiện tại, không xuất hình học; kiểm tra phiên bản trước khi tải tệp.</small></section>}
   {busy&&!selecting&&<p role="status">Đang tải từ máy chủ…</p>}{selectionProgress&&<p role="status">{selectionProgress}</p>}{error&&<p role="alert">{error}</p>}
   {result&&<><p role="status">{result.total_count.toLocaleString("vi-VN")} đối tượng phù hợp · trang {Math.floor(result.offset/TABLE_QUERY_LIMIT)+1}</p>
