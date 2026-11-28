@@ -41,6 +41,14 @@ class MediaKeys(context: Context) {
         private var viewer: AlertDialog? = null
         fun dismissPreview() { synchronized(guard) { viewer }?.dismiss() }
         fun attach(a: Activity) { synchronized(guard) { activity = WeakReference(a) } }
+        fun capturePending(code: Int): Boolean = synchronized(guard) { pending?.code == code }
+        fun completeCapture(code: Int, bytes: ByteArray?) {
+            synchronized(guard) {
+                val p = pending
+                if (p?.code == code && p.done.count == 1L) { p.bytes = bytes; p.done.countDown() }
+                else bytes?.fill(0)
+            }
+        }
         fun cameraResult(code: Int, result: Int, data: Intent?): Boolean {
             val p = synchronized(guard) { pending?.takeIf { it.code == code } } ?: return false
             var bytes: ByteArray? = null
@@ -65,8 +73,7 @@ class MediaKeys(context: Context) {
             return true
         }
     }
-    // ACTION_IMAGE_CAPTURE preview only; no output URI or gallery write requested.
-    // Native camera app itself is outside our process and trust boundary.
+    // In-app CameraX capture; JPEG bytes stay in native process memory.
     fun capturePreview(): ByteArray? {
         if (Looper.myLooper() == Looper.getMainLooper()) return null
         val a = synchronized(guard) { activity.get() } ?: return null
@@ -79,7 +86,7 @@ class MediaKeys(context: Context) {
         a.runOnUiThread {
             try {
                 if (a.isFinishing || a.isDestroyed) p.done.countDown()
-                else a.startActivityForResult(Intent(MediaStore.ACTION_IMAGE_CAPTURE), p.code)
+                else a.startActivity(Intent(a, CameraCaptureActivity::class.java).putExtra("request_id", p.code))
             } catch (_: Exception) { p.done.countDown() }
         }
         val ok = try { p.done.await(90, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
