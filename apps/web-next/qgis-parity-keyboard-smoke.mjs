@@ -546,6 +546,19 @@ try{
  await modeler.getByText(/Chọn đầu vào A của Buffer/).waitFor();
  assert.equal(await modeler.getByRole("button",{name:/Chạy mô hình/}).isEnabled(),false);
  console.log("PASS synthetic Chromium: modeler registry and explicit input validation");
+ const modelerViewport=page.viewportSize();
+ for(const theme of ["light","dark"]){
+  await page.evaluate(value=>{document.documentElement.dataset.ovgTheme=value},theme);
+  for(const width of [390,1280]){
+   await page.setViewportSize({width,height:850});
+   const layout=await modeler.evaluate(el=>{const r=el.getBoundingClientRect(),body=el.querySelector(".modeler-body"),header=el.querySelector(".modeler-header");return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,bg:getComputedStyle(el).backgroundColor,headerScroll:header.scrollWidth,headerClient:header.clientWidth,bodyHeight:body.clientHeight}});
+   assert.ok(layout.left>=-1&&layout.right<=width+1&&layout.bottom<=850&&layout.headerScroll<=layout.headerClient+1&&layout.bodyHeight>0,JSON.stringify(layout));
+   assert.equal(layout.bg,theme==="dark"?"rgb(32, 43, 52)":"rgb(255, 255, 255)");
+   if(process.env.OVG_UI_SCREENSHOTS)await modeler.screenshot({path:process.env.OVG_UI_SCREENSHOTS+"/modeler-"+theme+"-"+width+".png",animations:"disabled"});
+  }
+ }
+ await page.evaluate(()=>{document.documentElement.dataset.ovgTheme="light"});await page.setViewportSize(modelerViewport);
+ console.log("PASS SPEC072 modeler four responsive/theme combinations");
 
 
 
