@@ -1,7 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {blankDxf,parseDxf,appendDxf,editDxf} from "./src/native-dxf.ts";
+import {blankDxf,parseDxf,appendDxf,editDxf,visibleDxfShapes} from "./src/native-dxf.ts";
 test("create real R12 line, circle, point and edit coordinates without changing other groups",()=>{
  let t=blankDxf;
  for(const [k,v] of [["LINE",[0,0,10,10]],["CIRCLE",[5,5,2]],["POINT",[2,3]]])t=appendDxf(parseDxf(t),k,v);
@@ -21,4 +21,11 @@ test("unsafe or unsupported drawings fail closed",()=>{
  assert.throws(()=>appendDxf(parseDxf(blankDxf),"LINE",[0,0,0,0]));
  const d=parseDxf(blankDxf.replace("0\nENDSEC\n0\nEOF","0\nINSERT\n8\n0\n0\nENDSEC\n0\nEOF"));
  assert.equal(d.unsupported,1);assert.equal(d.canAppend,false);
+});
+
+test("viewport culling keeps only intersecting CAD shapes and stays bounded at 100k",()=>{
+ const shapes=Array.from({length:100_000},(_,i)=>({id:i,kind:"LINE",layer:"0",points:[[i,0],[i+0.5,0.5]],fields:[],editable:false}));
+ const started=performance.now(),visible=visibleDxfShapes(shapes,{x:500,y:-1,w:100,h:2}),elapsed=performance.now()-started;
+ assert.equal(visible.length,101);assert.equal(visible[0].id,500);assert.equal(visible.at(-1).id,600);
+ assert.ok(elapsed<1000,`100k CAD culling took ${elapsed.toFixed(1)} ms`);
 });

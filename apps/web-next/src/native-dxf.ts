@@ -57,3 +57,14 @@ export function appendDxf(d:Drawing,kind:Kind,values:number[]):string{
  if(kind==="LINE")pairs.push("11",String(v[2]),"21",String(v[3]),"31","0");if(kind==="CIRCLE")pairs.push("40",String(v[2]));
  const lines=[...d.lines];lines.splice(d.entitiesEnd,0,...pairs);return lines.join(d.eol);
 }
+
+export type DxfView={x:number;y:number;w:number;h:number};
+export function visibleDxfShapes(shapes:readonly Shape[],view:DxfView):Shape[]{
+ const right=view.x+view.w,bottom=view.y+view.h;
+ return shapes.filter(shape=>{
+  let left=Infinity,top=Infinity,r=-Infinity,b=-Infinity;
+  const radius=shape.radius??0;
+  for(const [x,y0] of shape.points){const y=-y0;left=Math.min(left,x-radius);r=Math.max(r,x+radius);top=Math.min(top,y-radius);b=Math.max(b,y+radius)}
+  return Number.isFinite(left)&&r>=view.x&&left<=right&&b>=view.y&&top<=bottom;
+ });
+}
