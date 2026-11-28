@@ -30,6 +30,10 @@ pub(crate) fn router() -> Router<AppState> {
             "/organizations/{organization_id}/marketplace/sandbox/offers/preview",
             post(preview_offer),
         )
+        .route(
+            "/organizations/{organization_id}/marketplace/sandbox/offers/accept",
+            post(accept_offer),
+        )
         .route(BASE, post(create))
         .route(&format!("{BASE}/{{order_id}}"), get(snapshot))
         .route(&format!("{BASE}/{{order_id}}/events"), post(event))
@@ -278,6 +282,21 @@ async fn preview_offer(
     Path(org): Path<String>,
     req: Request,
 ) -> Result<Response, ExtensionError> {
+    offer_operation(state, org, req, false).await
+}
+async fn accept_offer(
+    State(state): State<AppState>,
+    Path(org): Path<String>,
+    req: Request,
+) -> Result<Response, ExtensionError> {
+    offer_operation(state, org, req, true).await
+}
+async fn offer_operation(
+    state: AppState,
+    org: String,
+    req: Request,
+    accept: bool,
+) -> Result<Response, ExtensionError> {
     let disabled = || ExtensionError::Domain(AppError::not_found("signed sandbox offers disabled"));
     let provider = key(&state)?;
     let raw = state
@@ -352,11 +371,16 @@ async fn preview_offer(
         )));
     }
     let mut tx = open_org_scope(&state, &actor, org_id).await?;
-    tx.check_sandbox_admin()
-        .await
-        .map_err(ExtensionError::Domain)?;
+    let result = if accept {
+        tx.accept_sandbox_offer(&proof, &sig, &offer_key, Utc::now())
+            .await
+            .map_err(ExtensionError::Domain)?
+    } else {
+        tx.check_sandbox_admin()
+            .await
+            .map_err(ExtensionError::Domain)?;
+        serde_json::json!({"sandbox":true,"offer":o,"offer_digest":proof.digest(),"checkout_created":false})
+    };
     tx.commit().await.map_err(ExtensionError::Domain)?;
-    Ok(response(
-        serde_json::json!({"sandbox":true,"offer":o,"offer_digest":proof.digest(),"checkout_created":false}),
-    ))
+    Ok(response(result))
 }

@@ -118,7 +118,7 @@ export function createPluginSandboxOrder(client:ApiClient,quote:PluginSandboxQuo
  return client.request<{sandbox:true;quote:PluginSandboxQuote;release_digest:string}>(sandboxOrderPath(quote.organization_id),{method:"POST",body:JSON.stringify({quote,release_digest:releaseDigest})});
 }
 export function getPluginSandboxOrder(client:ApiClient,org:string,id:string){
- return client.request<{sandbox:true;order_id:string;release_digest:string;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number;event_count:number;receipts:unknown[]}>(sandboxOrderPath(org)+"/"+encodeURIComponent(id),{cache:"no-store"});
+ return client.request<{sandbox:true;order_id:string;release_digest:string;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number;event_count:number;receipts:unknown[];checkout_offer_digest?:string|null;checkout_expires_at?:string|null}>(sandboxOrderPath(org)+"/"+encodeURIComponent(id),{cache:"no-store"});
 }
 export function submitPluginSandboxEvent(client:ApiClient,event:PluginSandboxEvent,signature:string){
  return client.request<{sandbox:true;replayed:boolean;receipt:unknown;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number}>(sandboxOrderPath(event.organization_id)+"/"+encodeURIComponent(event.order_id)+"/events",{method:"POST",body:JSON.stringify({event,signature})});
@@ -170,4 +170,8 @@ export function reconcileSignedSandboxSettlement(client:ApiClient,statement:Sand
 export type SignedSandboxPriceOffer={schema:"openvietgis.checkout.sandbox.offer.v1";audience:string;release_digest:string;publisher_id:string;quote:PluginSandboxQuote;issued_at:string;expires_at:string};
 export function previewSandboxPriceOffer(client:ApiClient,offer:SignedSandboxPriceOffer,signature:string){
  return client.request<{sandbox:true;offer:SignedSandboxPriceOffer;offer_digest:string;checkout_created:false}>("/organizations/"+encodeURIComponent(offer.quote.organization_id)+"/marketplace/sandbox/offers/preview",{method:"POST",body:JSON.stringify({offer,signature})});
+}
+
+export function acceptSandboxPriceOffer(client:ApiClient,offer:SignedSandboxPriceOffer,signature:string){
+ return client.request<{sandbox:true;checkout_created:true;provider_session_created:false;replayed:boolean;order_id:string;offer_digest:string;expires_at:string}>("/organizations/"+encodeURIComponent(offer.quote.organization_id)+"/marketplace/sandbox/offers/accept",{method:"POST",body:JSON.stringify({offer,signature})});
 }
