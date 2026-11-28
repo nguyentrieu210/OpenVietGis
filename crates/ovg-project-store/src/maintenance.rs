@@ -44,6 +44,28 @@ impl Store{
   if cancel.load(Ordering::Acquire){return Err(Error::Conflict)}
   tx.commit()?;Ok(count)
  }
+ /// Copy first, then repair the derived index. No change to the input database.
+ pub fn rebuilt_copy(&self,dest:&Path,expected:u64,cancel:&AtomicBool)->Result<()>{
+  if dest.exists(){return Err(Error::Invalid)}
+  let stage=tempfile::tempdir_in(dest.parent().ok_or(Error::Invalid)?).map_err(|_|Error::Storage)?;
+  let candidate=stage.path().join("rebuild.sqlite");
+  {
+   let db=self.db.lock().map_err(lock_err)?;
+   if rev(&db)?!=expected{return Err(Error::Conflict)}
+   let mut copy=Connection::open(&candidate)?;
+   let backup=rusqlite::backup::Backup::new(&db,&mut copy)?;
+   let deadline=std::time::Instant::now()+std::time::Duration::from_secs(120);
+   loop{
+    if cancel.load(Ordering::Acquire)||std::time::Instant::now()>deadline{return Err(Error::Conflict)}
+    match backup.step(128)?{rusqlite::backup::StepResult::Done=>break,_=>std::thread::sleep(std::time::Duration::from_millis(2))}
+   }
+  }
+  {let verified=Store::reopen(&candidate)?;verified.rebuild_index(expected,cancel)?;
+   if !verified.integrity()?{return Err(Error::Invalid)}verified.checkpoint()?;}
+  if cancel.load(Ordering::Acquire){return Err(Error::Conflict)}
+  std::fs::File::open(&candidate).and_then(|f|f.sync_all()).map_err(|_|Error::Storage)?;
+  std::fs::hard_link(&candidate,dest).map_err(|_|Error::Storage)?;Ok(())
+ }
  /// Compact into a verified new file. The source remains untouched.
  pub fn compact_copy(&self,dest:&Path,expected:u64)->Result<()>{
   let parent=dest.parent().ok_or(Error::Invalid)?;
