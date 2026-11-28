@@ -40,7 +40,7 @@ export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsC
   const finish=(req:MapRequest,ok:boolean,result:unknown,render=true)=>{
     if(pending.current!==req)return;
     pending.current=null;clearTimeout(req.timer);
-    try{req.port.postMessage({protocol,type:"map_response",ok,result})}finally{req.port.close()}
+    try{req.port.postMessage({protocol,type:"map_response",ok,result})}catch{/* port closed by frame */}finally{req.port.close()}
     if(render){setRequest(null);setChecking(false)}
   };
   const cancel=(reason:string,render=true)=>{if(pending.current)finish(pending.current,false,reason,render)};
@@ -102,8 +102,8 @@ export function ExternalPluginFrame({manifest, panel, bridge, authorize,onToolsC
     }catch(e){finish(req,false,errorText(e))}finally{if(approvalFlight.current===req)approvalFlight.current=null}
   };
   const persist=async(clear=false)=>{
-    if(!save||saving)return;const original=session.current;setSaving(true);setStorageStatus("");
-    try{await save(clear?{overlay:null,tools:[]}:{overlay:overlayRef.current,tools:tools.current});if(!mounted.current||!original||session.current!==original)return;bridge.current?.clearOverlay();setOverlayTitle("");setStorageStatus(clear?"Đã gỡ đóng góp đã lưu.":"Đã lưu đóng góp cho dự án.")}
+    if(!latest.current.save||saving)return;const saveCurrent=latest.current.save,original=session.current;setSaving(true);setStorageStatus("");
+    try{await saveCurrent(clear?{overlay:null,tools:[]}:{overlay:overlayRef.current,tools:tools.current});if(!mounted.current||!original||session.current!==original)return;bridge.current?.clearOverlay();setOverlayTitle("");setStorageStatus(clear?"Đã gỡ đóng góp đã lưu.":"Đã lưu đóng góp cho dự án.")}
     catch(e){if(mounted.current&&session.current===original)setStorageStatus(errorText(e))}finally{if(mounted.current)setSaving(false)}
   };
   const restore=async()=>{
