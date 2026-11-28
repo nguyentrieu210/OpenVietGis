@@ -1,3 +1,4 @@
+import {filterCrs} from "@openvietgis/ui-react/gis/model";
 import {TableScrollRef} from "./ui/primitives";
 import {virtualTableRange} from "./virtual-table";
 import {Vn2000Projection,type ProjectionContext} from "./Vn2000Projection";
@@ -355,7 +356,8 @@ const SCALES=[500,1000,2000,2500,5000,10000,25000,50000,100000,250000,500000,100
 function CrsPicker({preferenceScope,current,close,choose,projection}:{preferenceScope:string;current:DisplayCrs;close:()=>void;choose:(c:DisplayCrs)=>void;projection?:ProjectionContext}){
  const [q,setQ]=useState(""),[sel,setSel]=useState(current);
  const recent=(()=>{try{const r=JSON.parse(localStorage.getItem(preferenceScope+":recent-crs")??"[]");return (Array.isArray(r)?r:[]).map(id=>DISPLAY_CRS.find(c=>c.id===id)).filter((c):c is DisplayCrs=>!!c)}catch{return []}})();
- const hit=(c:DisplayCrs)=>!q||n(c.name+" "+c.id+" "+c.group+" EPSG:"+(c.epsg??"")).includes(n(q));
+ const hits=new Set(filterCrs(DISPLAY_CRS.map(c=>({...c,description:"EPSG:"+(c.epsg??"")})),q).map(c=>c.id));
+ const hit=(c:DisplayCrs)=>hits.has(c.id);
  const groups=[...new Set(DISPLAY_CRS.map(c=>c.group))];
  const row=(c:DisplayCrs,k:string)=><button key={k} type="button" role="option" aria-selected={sel.id===c.id} className={"crs-row"+(sel.id===c.id?" active":"")} onClick={()=>setSel(c)} onDoubleClick={()=>choose(c)}><span>{c.name}</span><small>{c.epsg?"EPSG:"+c.epsg:""}</small></button>;
  return <Modal title="Hệ tọa độ hiển thị" size="lg" resizeScope={preferenceScope+":crs-dialog"} close={close}><div className="crs-picker">

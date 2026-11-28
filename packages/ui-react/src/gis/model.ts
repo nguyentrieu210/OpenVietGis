@@ -11,7 +11,9 @@ export function layerLeaves(nodes:readonly LayerNode[]):LayerLeaf[]{
 }
 export function visibilityIntent(nodes:readonly LayerNode[],visible:boolean){return layerLeaves(nodes).filter(n=>n.canVisibility&&n.visible!==visible).map(n=>({id:n.id,visible}))}
 export type CrsOption={id:string;name:string;group:string;unit:'degree'|'metre'|'foot'|'other';axisOrder:'xy'|'yx';description?:string};
-export function filterCrs(options:readonly CrsOption[],query:string){const q=query.normalize('NFC').toLocaleLowerCase('vi').trim();return options.filter(x=>[x.id,x.name,x.group,x.description??''].some(v=>v.normalize('NFC').toLocaleLowerCase('vi').includes(q)))}
+export const normalizeCrsSearch=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[đĐ]/g,'d').toLowerCase();
+export function filterCrs<T extends Pick<CrsOption,'id'|'name'|'group'|'description'>>(options:readonly T[],query:string){const q=normalizeCrsSearch(query.trim());return options.filter(x=>normalizeCrsSearch([x.name,x.id,x.group,x.description??''].join(' ')).includes(q))}
+
 export type CoordinateContext={crsId:string;unit:CrsOption['unit'];axisOrder:CrsOption['axisOrder'];geographic?:boolean};
 export type CoordinateIntent={context:CoordinateContext;mode:'absolute'|'relative';x:number;y:number};
 const decimal=/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;

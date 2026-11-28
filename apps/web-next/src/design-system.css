@@ -4,6 +4,7 @@
 @import "tailwindcss/utilities.css" layer(utilities) prefix(ovg);
 @import "../../../packages/design-tokens/generated/tokens.css";
 @import "../../../packages/design-tokens/generated/tailwind.css";
+@import "../../../packages/ui-react/src/preferences/styles.css";
 .ovg-ui-button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .ovg-ui-scroll{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
 .ovg-ui-table-scroll{max-width:100%;min-width:0;overflow:auto;overscroll-behavior:contain}

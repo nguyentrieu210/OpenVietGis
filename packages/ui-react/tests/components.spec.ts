@@ -3,7 +3,8 @@ test('dialog focus, labelled fields, Escape, restore and fixed footer',async({pa
  await page.goto('/');const trigger=page.getByRole('button',{name:'Open dialog'});await trigger.click();
  const dialog=page.getByRole('dialog',{name:'Layer properties'});await expect(dialog).toBeVisible();
  await expect(dialog.getByLabel('Layer name')).toHaveAttribute('aria-invalid','true');
- for(let i=0;i<9;i++){await page.keyboard.press('Tab');expect(await dialog.evaluate(el=>el.contains(document.activeElement))).toBe(true)}
+ await expect.poll(()=>dialog.evaluate(el=>el.contains(document.activeElement))).toBe(true);
+ for(const key of [...Array(9).fill('Tab'),...Array(9).fill('Shift+Tab')]){await page.keyboard.press(key);await expect.poll(()=>dialog.evaluate(el=>el.contains(document.activeElement))).toBe(true)}
  await page.keyboard.press('Escape');await expect(dialog).toBeHidden();await expect(trigger).toBeFocused();
  await trigger.click();await dialog.getByRole('button',{name:'Save'}).click();await expect(dialog).toBeHidden();
 });

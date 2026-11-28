@@ -36,12 +36,30 @@ try{
   return route.fulfill({json:body});
  });
  await page.goto(url,{waitUntil:"domcontentloaded"});
- await page.getByText(/200 đang hiển thị/).waitFor({timeout:5000}).catch(async e=>{console.log("BODY", (await page.locator("body").innerText()).slice(0,3000));console.log("URL",page.url());throw e});
+ await page.getByText(/200 đang hiển thị/).waitFor({timeout:30000}).catch(async e=>{console.log("BODY", (await page.locator("body").innerText()).slice(0,3000));console.log("URL",page.url());throw e});
  assert.equal(pluginCalls,0);assert.equal(chunkCalls,0);
  assert.equal(await page.getByRole("button",{name:"Địa bàn",exact:true}).count(),0);
  assert.equal(await page.locator(".live-left label.live-layer").count(),2);
 
  if(process.env.OVG_CAPTURE_DIR){const fs=await import('node:fs/promises');await fs.mkdir(process.env.OVG_CAPTURE_DIR,{recursive:true});for(const width of [360,390,768,1024,1440,1920]){await page.setViewportSize({width,height:900});await page.waitForTimeout(200);const metrics=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,canvas:!!document.querySelector('canvas'),transfer:performance.getEntriesByType('resource').filter(r=>r.name.includes('/assets/')&&r.name.endsWith('.js')).reduce((s,r)=>s+r.transferSize,0)}));console.log('SPEC077_VIEWPORT',JSON.stringify(metrics));await page.screenshot({path:process.env.OVG_CAPTURE_DIR+'/'+width+'.png'});}await page.setViewportSize({width:1440,height:900});}
+ page.setDefaultTimeout(12000);
+ const account=page.getByRole("button",{name:"Menu tài khoản",exact:true});
+ await account.click();console.log("SPEC077_ACCOUNT_OPEN");
+ await page.getByLabel("Giao diện sáng tối").selectOption("dark");
+ await page.getByLabel("Mật độ giao diện").selectOption("touch");
+ await page.getByLabel("Tương phản giao diện").selectOption("high");
+ await page.getByLabel("Chuyển động giao diện").selectOption("reduce");
+ await page.waitForFunction(()=>document.documentElement.dataset.ovgTheme==="dark"&&document.documentElement.dataset.ovgDensity==="touch"&&document.documentElement.dataset.ovgContrast==="high"&&document.documentElement.dataset.ovgMotion==="reduce");
+ console.log("SPEC077_PREFERENCES_SET");
+ await page.reload();await page.getByText(/200 đang hiển thị/).waitFor({timeout:20000});
+ await page.waitForFunction(()=>document.documentElement.dataset.ovgDensity==="touch");
+ await account.click();await page.getByLabel("Giao diện sáng tối").selectOption("light");await page.getByLabel("Mật độ giao diện").selectOption("compact");await page.getByLabel("Tương phản giao diện").selectOption("normal");await page.getByLabel("Chuyển động giao diện").selectOption("system");await account.click();
+ console.log("SPEC077_PREFERENCES_RESTORED");
+ await page.locator(".qgis-crs").click();
+ const crs=page.getByRole("dialog",{name:"Hệ tọa độ hiển thị"});await crs.waitFor();await crs.getByLabel("Lọc hệ tọa độ").fill("binh phuoc");
+ await crs.getByRole("option",{name:/Bình Phước/}).first().click();await crs.getByRole("button",{name:"OK",exact:true}).click();
+ assert.equal(await page.getByLabel("Tọa độ hiển thị · chỉ đọc",{exact:true}).getAttribute("readonly"),"");
+ console.log("PASS account preferences persistence and shared CRS search");
  const command=async(t)=>{const input=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await input.fill(t);await input.press("Enter")};
  await command("NEWLAYER");
  const d=page.getByRole("dialog",{name:"Tạo layer rỗng"});await d.waitFor();

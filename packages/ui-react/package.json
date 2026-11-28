@@ -13,7 +13,10 @@
     "./commands": "./src/commands/index.ts",
     "./preferences": "./src/preferences/index.ts",
     "./preferences.css": "./src/preferences/styles.css",
-    "./plugin": "./src/plugin/index.tsx"
+    "./plugin": "./src/plugin/index.tsx",
+    "./preferences/model": "./src/preferences/model.ts",
+    "./gis/model": "./src/gis/model.ts",
+    "./primitives": "./src/primitives.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

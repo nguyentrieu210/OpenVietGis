@@ -1,8 +1,2 @@
-export type Preferences={theme:'light'|'dark'|'system';density:'compact'|'comfortable'|'touch';locale:'vi'|'en';contrast:'normal'|'high';motion:'system'|'reduce'};
-export const defaults:Preferences={theme:'system',density:'compact',locale:'vi',contrast:'normal',motion:'system'};
-export function cleanPreferences(x:unknown):Preferences{const p=(x&&typeof x==='object'?x:{}) as Partial<Preferences>;return {theme:p.theme==='light'||p.theme==='dark'?p.theme:'system',density:p.density==='comfortable'||p.density==='touch'?p.density:'compact',locale:p.locale==='en'?'en':'vi',contrast:p.contrast==='high'?'high':'normal',motion:p.motion==='reduce'?'reduce':'system'}}
-export function preferenceKey(account:string){if(!account||account.length>128)throw Error('Invalid account');return 'ovg:preferences:v1:'+encodeURIComponent(account)}
-export function readPreferences(storage:Pick<Storage,'getItem'>,account:string){try{return cleanPreferences(JSON.parse(storage.getItem(preferenceKey(account))??'null'))}catch{return {...defaults}}}
-export function writePreferences(storage:Pick<Storage,'setItem'>,account:string,p:Preferences){try{storage.setItem(preferenceKey(account),JSON.stringify(cleanPreferences(p)));return true}catch{return false}}
-export function applyPreferences(root:HTMLElement,p:Preferences){root.dataset.ovgTheme=p.theme;root.dataset.ovgDensity=p.density;root.dataset.ovgContrast=p.contrast;root.dataset.ovgMotion=p.motion;root.lang=p.locale}
+export * from './model';
 export {PreferencesPanel} from './panel';
