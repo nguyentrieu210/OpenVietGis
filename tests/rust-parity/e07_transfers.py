@@ -373,7 +373,7 @@ def main():
                             b'{"type":"FeatureCollection","crs":{},"features":[]}',
                             "LEGACY_GEOJSON_CRS",
                         ),
-                        ("traversal.zip", unsafe_archive(), "ARCHIVE_PATH_TRAVERSAL"),
+                        ("traversal.zip", unsafe_archive("../escape.shp"), "ARCHIVE_PATH_TRAVERSAL"),
                         (
                             "dir-traversal.zip", unsafe_archive("../escape/"),
                             "ARCHIVE_PATH_TRAVERSAL",
