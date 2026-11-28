@@ -362,13 +362,14 @@ mod projection_tests{
 // Narrow embedded editor profile: ASCII DXF POINT/LINE, WGS84 XY, no
 // entity creation/deletion or CRS transformation. Exact non-coordinate lines
 // remain untouched, including handles, layers, styles and unsupported sections.
-fn load_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64)->R<(tempfile::TempDir,PathBuf,ovg_project_store::asset_store::AssetMeta,crate::resource_files::Cad)>{
+fn load_dxf(store:&ovg_project_store::Store,asset:Uuid,revision:u64)->R<(tempfile::TempDir,PathBuf,ovg_project_store::asset_store::AssetMeta,crate::resource_files::Cad)>{load_dxf_profile(store,asset,revision,false)}
+fn load_dxf_profile(store:&ovg_project_store::Store,asset:Uuid,revision:u64,allow_empty:bool)->R<(tempfile::TempDir,PathBuf,ovg_project_store::asset_store::AssetMeta,crate::resource_files::Cad)>{
  if store.revision().map_err(|_|"STORE_QUERY_FAILED")?!=revision{return Err("REVISION_CONFLICT")}
  let a=store.assets().map_err(|_|"STORE_QUERY_FAILED")?.into_iter().find(|a|a.id==asset).ok_or("STALE_ASSET")?;
  if a.kind!="cad-native-dxf"||a.bytes>4*1024*1024{return Err("DXF_PROFILE_REQUIRED")}
  let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;let p=dir.path().join("source.dxf");
  store.materialize_asset(asset,&p,&AtomicBool::new(false)).map_err(|_|"CAD_ASSET_READ_FAILED")?;
- let cad=crate::resource_files::Cad::open(&p)?;Ok((dir,p,a,cad))
+ let cad=if allow_empty{crate::resource_files::Cad::open_linked(&p)?}else{crate::resource_files::Cad::open(&p)?};Ok((dir,p,a,cad))
 }
 fn replacement(g:&Value)->R<Vec<(u16,f64)>>{
  let xy=|v:&Value|->R<(f64,f64)>{
@@ -578,6 +579,7 @@ pub async fn native_cad_sync_layer(window:WebviewWindow,u:State<'_,Unified>,hand
  if !assert_wgs84{return Err("EXPLICIT_CRS_REQUIRED".into())}
  work(window,u.inner().clone(),move|s|s.with(handle,|store|{
   let rev=unified::number(&expected)?;
+  if store.cad_link(layer,rev).map_err(|_|"STORE_QUERY_FAILED")?.is_some(){return Err("USE_LINKED_CAD_RECONCILE")}
   if let Some(c)=child{let r=sync_cad_to_gis(store,layer,asset,c,rev,operation)?;Ok(serde_json::json!({"revision":r.revision.to_string(),"features":r.features.len()}))}
   else{let r=sync_gis_to_cad(store,layer,asset,rev)?;Ok(serde_json::json!({"asset":r.id,"sha256":r.sha256}))}
  })).await
@@ -621,3 +623,11 @@ pub async fn native_cad_sync_layer(window:WebviewWindow,u:State<'_,Unified>,hand
   assert_eq!(s.feature(l,f,8).unwrap().1.attributes["cad_asset"],back.id.to_string());assert!(s.integrity().unwrap());
  }
 }
+
+#[path="cad_link_logic.rs"]
+mod link_logic;
+#[path="cad_link_bridge.rs"]
+pub mod linked;
+
+#[path="cad_engine.rs"]
+pub mod engine;

@@ -33,3 +33,8 @@ CREATE TABLE cad_version(asset TEXT PRIMARY KEY REFERENCES project_asset(id) ON 
 CREATE INDEX cad_version_parent ON cad_version(parent);
 -- V7 additive native media capture
 CREATE TABLE media_capture(id TEXT PRIMARY KEY REFERENCES encrypted_media(id) ON DELETE CASCADE,mime TEXT NOT NULL CHECK(mime='image/jpeg'));
+
+-- V8 additive CAD GIS links
+CREATE TABLE cad_link(layer TEXT PRIMARY KEY REFERENCES layer(id),asset TEXT NOT NULL REFERENCES project_asset(id) ON DELETE RESTRICT,root TEXT NOT NULL UNIQUE REFERENCES project_asset(id) ON DELETE RESTRICT,automatic INTEGER NOT NULL CHECK(automatic IN(0,1)));
+CREATE TABLE cad_binding(layer TEXT NOT NULL REFERENCES cad_link(layer) ON DELETE CASCADE,handle TEXT NOT NULL CHECK(length(handle)>0 AND length(handle)<=16),feature TEXT NOT NULL,PRIMARY KEY(layer,handle),UNIQUE(layer,feature),FOREIGN KEY(layer,feature) REFERENCES feature_revision(layer,id));
+CREATE TABLE cad_link_publication(revision INTEGER PRIMARY KEY CHECK(revision>0),layer TEXT NOT NULL REFERENCES cad_link(layer),previous TEXT NOT NULL REFERENCES project_asset(id),asset TEXT NOT NULL REFERENCES project_asset(id),CHECK(previous<>asset));

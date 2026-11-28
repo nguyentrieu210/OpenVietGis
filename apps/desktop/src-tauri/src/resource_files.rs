@@ -22,19 +22,22 @@ fn xy(x:f64,y:f64)->bool{x.is_finite()&&y.is_finite()&&x.abs()<=180.&&y.abs()<=9
 pub struct Cad { features:Vec<Value> }
 impl Cad{
  // WGS84 XY must be explicitly asserted by the caller. No implicit CAD CRS.
- pub fn open(path:&Path)->Result<Self>{
+ pub fn open(path:&Path)->Result<Self>{Self::open_profile(path,false)}
+ pub fn open_linked(path:&Path)->Result<Self>{Self::open_profile(path,true)}
+ fn open_profile(path:&Path,allow_empty:bool)->Result<Self>{
    let b=small(path)?;let s=std::str::from_utf8(&b).map_err(|_|"UNSUPPORTED_DXF")?;
    let lines:Vec<_>=s.lines().collect();if lines.len()%2!=0||lines.len()>200_000{return Err("INVALID_DXF")}
    let mut pairs=Vec::new();for p in lines.chunks_exact(2){pairs.push((p[0].trim().parse::<u16>().map_err(|_|"INVALID_DXF")?,p[1].trim()));}
    let mut entities=false;let mut found=false;let mut out=Vec::new();let mut handles=std::collections::HashSet::new();let mut i=0;
    while i<pairs.len(){
-     if pairs[i]==(0,"SECTION")&&pairs.get(i+1)==Some(&(2,"ENTITIES")){entities=true;found=true;i+=2;continue}
+     if pairs[i]==(0,"SECTION")&&pairs.get(i+1)==Some(&(2,"ENTITIES")){if allow_empty&&found{return Err("INVALID_DXF")}entities=true;found=true;i+=2;continue}
      if pairs[i]==(0,"ENDSEC"){entities=false;i+=1;continue}
      if !entities{i+=1;continue}
      let (code,kind)=pairs[i];if code!=0{return Err("INVALID_DXF")}
      let start=i+1;i=start;while i<pairs.len()&&pairs[i].0!=0{i+=1;}
      let fields=&pairs[start..i];
      if !matches!(kind,"POINT"|"LINE"){return Err("UNSUPPORTED_DXF_ENTITY")}
+     if allow_empty&&fields.iter().any(|(c,v)|(*c==67&&*v!="0")||(*c==410&&!v.eq_ignore_ascii_case("Model"))){return Err("PAPER_SPACE_UNSUPPORTED")}
      let field=|c:u16|->Result<&str>{let mut v=fields.iter().filter(|p|p.0==c);let f=v.next().ok_or("INVALID_DXF")?.1;if v.next().is_some(){return Err("INVALID_DXF")}Ok(f)};
      let num=|c|->Result<f64>{field(c)?.parse::<f64>().ok().filter(|v|v.is_finite()).ok_or("INVALID_DXF")};
      let a=[num(10)?,num(20)?];if !xy(a[0],a[1]){return Err("INVALID_CRS_COORDINATE")}
@@ -43,11 +46,12 @@ impl Cad{
      for (c,default) in [(210,0.),(220,0.),(230,1.)]{if let Some((_,v))=fields.iter().find(|p|p.0==c){if v.parse::<f64>().ok()!=Some(default){return Err("UNSUPPORTED_DXF_OCS")}}}
      let geom=if kind=="POINT"{json!({"type":"Point","coordinates":a})}else{let z=[num(11)?,num(21)?];if !xy(z[0],z[1]){return Err("INVALID_CRS_COORDINATE")}json!({"type":"LineString","coordinates":[a,z]})};
      let handle=field(5)?.to_ascii_uppercase();let layer=field(8)?;
+     if allow_empty&&(handle.starts_with('0')||u64::from_str_radix(&handle,16).ok().is_none()){return Err("INVALID_DXF_IDENTITY")}
      if handle.is_empty()||handle.len()>16||!handle.bytes().all(|b|b.is_ascii_hexdigit())||!handles.insert(handle.clone())||layer.is_empty()||layer.len()>256||layer.chars().any(char::is_control){return Err("INVALID_DXF_IDENTITY")}
      out.push(json!({"type":"Feature","geometry":geom,"properties":{"handle":handle,"layer":layer,"entity":kind}}));
      if out.len()>8192{return Err("RESOURCE_LIMIT")}
    }
-   if !found||out.is_empty(){return Err("INVALID_DXF")}Ok(Self{features:out})
+   if !found||entities||(allow_empty&&pairs.last()!=Some(&(0,"EOF")))||(!allow_empty&&out.is_empty()){return Err("INVALID_DXF")}Ok(Self{features:out})
  }
  pub fn viewport(&self,b:[f64;4])->Result<Vec<u8>>{
    if b.iter().any(|n|!n.is_finite())||b[0]>b[2]||b[1]>b[3]||!xy(b[0],b[1])||!xy(b[2],b[3]){return Err("INVALID_BBOX")}

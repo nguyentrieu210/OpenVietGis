@@ -5,7 +5,10 @@ on:
     paths:
       - '.github/workflows/spec074-cad-sidecar.yml'
       - 'infra/desktop/package_cad_sidecar.py'
-      - 'apps/desktop/src-tauri/tauri.cad.conf.json'
+      - 'infra/desktop/verify_cad_package.py'
+      - 'apps/desktop/src-tauri/**'
+      - 'apps/web-next/src/desktop/**'
+      - 'crates/ovg-project-store/**'
 permissions:
   contents: read
 jobs:
@@ -67,6 +70,13 @@ jobs:
           cargo install --locked tauri-cli --version 2.11.4
           cd apps/desktop
           cargo tauri icon ../../infra/desktop/candidate-icon.svg --output src-tauri/icons
+      - name: Native CAD contract smoke
+        shell: bash
+        run: |
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --features native-cad cad_bridge::engine::tests
+          python infra/desktop/verify_cad_package.py --resource-root apps/desktop/src-tauri
+          export OVG_CAD_ENGINE_BINARY="$(python -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' apps/desktop/src-tauri/native-cad/OpenCADStudio${{ matrix.suffix }})"
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --features native-cad cad_bridge::engine::tests::packaged_engine_roundtrip -- --ignored
       - name: Build unsigned candidate installer
         shell: bash
         run: |

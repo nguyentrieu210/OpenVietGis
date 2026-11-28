@@ -13,6 +13,7 @@ pub mod tile_archive;
 pub mod survey;
 pub mod media;
 pub mod asset_store;
+pub mod cad_link;
 pub mod bulk_import;
 pub mod migration;
 pub mod maintenance;
@@ -26,7 +27,8 @@ type Result<T>=std::result::Result<T,Error>;
 fn json<T:Serialize>(v:&T)->Result<String>{serde_json::to_string(v).map_err(|_|Error::Invalid)}
 fn decode<T:serde::de::DeserializeOwned>(v:&str)->Result<T>{serde_json::from_str(v).map_err(|_|Error::Invalid)}
 const APP:i64=0x4f564750;
-const VERSION:i64=7;
+const VERSION:i64=8;
+const V8_MARKER:&str="-- V8 additive CAD GIS links";
 const V7_MARKER:&str="-- V7 additive native media capture";
 const V6_MARKER:&str="-- V6 additive native CAD versions";
 const V5_MARKER:&str="-- V5 additive encrypted media";
@@ -93,6 +95,9 @@ fn validate_image(db:&Connection,l:Uuid,img:&Image)->Result<([f64;4],String)>{
  if b.min_x< -180.||b.max_x>180.||b.min_y< -90.||b.max_y>90.{return Err(Error::Invalid)}
  Ok(([b.min_x,b.max_x,b.min_y,b.max_y],a))
 }
+fn commit_batch(tx:rusqlite::Transaction<'_>)->Result<()>{
+ tx.commit().map_err(|e|match e{rusqlite::Error::SqliteFailure(ref info,_) if info.code==rusqlite::ErrorCode::ConstraintViolation=>Error::Relation,_=>Error::Storage})
+}
 impl Store{
  pub fn create(path:&Path)->Result<Self>{
   // Exclusive creation; never overwrite a legacy database.
@@ -115,14 +120,15 @@ impl Store{
   db.pragma_update(None,"trusted_schema","OFF")?;
   let app:i64=db.pragma_query_value(None,"application_id",|r|r.get(0))?;
   let version:i64=db.pragma_query_value(None,"user_version",|r|r.get(0))?;
-  if app!=APP||!matches!(version,2|3|4|5|6|VERSION){return Err(Error::Unsupported)}
+  if app!=APP||!matches!(version,2|3|4|5|6|7|VERSION){return Err(Error::Unsupported)}
   let schema=include_str!("schema.sql");
-  let (v6,v7_addition)=schema.split_once(V7_MARKER).ok_or(Error::Unsupported)?;
+  let (v7,v8_addition)=schema.split_once(V8_MARKER).ok_or(Error::Unsupported)?;
+  let (v6,v7_addition)=v7.split_once(V7_MARKER).ok_or(Error::Unsupported)?;
   let (v5,v6_addition)=v6.split_once(V6_MARKER).ok_or(Error::Unsupported)?;
   let (v4,v5_addition)=v5.split_once(V5_MARKER).ok_or(Error::Unsupported)?;
   let (v3,v4_addition)=v4.split_once(V4_MARKER).ok_or(Error::Unsupported)?;
   let (v2,v3_addition)=v3.split_once(V3_MARKER).ok_or(Error::Unsupported)?;
-  let oracle=Connection::open_in_memory()?;oracle.execute_batch(match version{2=>v2,3=>v3,4=>v4,5=>v5,6=>v6,_=>schema})?;
+  let oracle=Connection::open_in_memory()?;oracle.execute_batch(match version{2=>v2,3=>v3,4=>v4,5=>v5,6=>v6,7=>v7,_=>schema})?;
   if schema_signature(&db)?!=schema_signature(&oracle)?{return Err(Error::Unsupported)}
   db.pragma_update(None,"trusted_schema","ON")?;
   let check:String=db.pragma_query_value(None,"quick_check",|r|r.get(0))?;
@@ -134,9 +140,13 @@ impl Store{
    if version<=3{tx.execute_batch(v4_addition)?;}
    if version<=4{tx.execute_batch(v5_addition)?;}
    if version<=5{tx.execute_batch(v6_addition)?;}
-   tx.execute_batch(v7_addition)?;tx.pragma_update(None,"user_version",VERSION)?;tx.commit()?;
+   if version<=6{tx.execute_batch(v7_addition)?;}
+   tx.execute_batch(v8_addition)?;tx.pragma_update(None,"user_version",VERSION)?;tx.commit()?;
   }
   Ok(Self{db:Mutex::new(db)})
+ }
+ pub fn feature_state(&self,layer:Uuid,feature:Uuid,expected:u64)->Result<(u64,Option<Image>)>{
+  let db=self.db.lock().map_err(lock_err)?;if rev(&db)?!=expected{return Err(Error::Conflict)}known_layer(&db,layer)?;current(&db,layer,feature)
  }
  pub fn revision(&self)->Result<u64>{rev(&*self.db.lock().map_err(lock_err)?)}
  pub fn add_layer(&self,id:Uuid,name:&str,expected:u64)->Result<u64>{
@@ -162,11 +172,15 @@ impl Store{
   tx.execute("INSERT INTO relation VALUES(?1,?2,?3,?4)",params![id.to_string(),source.to_string(),target.to_string(),kind])?;tx.commit()?;Ok(n)
  }
  pub fn apply(&self,b:&Batch)->Result<Receipt>{
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let receipt=Self::apply_tx(&tx,b)?;
+  commit_batch(tx)?;Ok(receipt)
+ }
+ fn apply_tx(tx:&rusqlite::Transaction<'_>,b:&Batch)->Result<Receipt>{
   if b.operation.is_nil()||b.edits.len()+b.links.len()==0||b.edits.len()+b.links.len()>MAX_BATCH{return Err(Error::Limit)}
   let encoded=serde_json::to_vec(b).map_err(|_|Error::Invalid)?;
   if encoded.len()>MAX_BYTES{return Err(Error::Limit)}
   let digest=Sha256::digest(&encoded);
-  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let old=tx.query_row("SELECT digest,reply FROM receipt WHERE operation=?1",[b.operation.to_string()],|r|Ok((r.get::<_,Vec<u8>>(0)?,r.get::<_,String>(1)?))).optional()?;
   if let Some((hash,reply))=old{if hash.as_slice()!=&digest[..]{return Err(Error::Reused)}return decode(&reply)}
   if tx.query_row("SELECT EXISTS(SELECT 1 FROM legacy_receipt WHERE operation=?1 UNION ALL SELECT 1 FROM legacy_command WHERE command=?1)",[b.operation.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}
@@ -209,7 +223,7 @@ impl Store{
   let receipt=Receipt{revision:n,features};
   tx.execute("INSERT INTO receipt VALUES(?1,?2,?3,?4)",params![b.operation.to_string(),&digest[..],n,json(&receipt)?])?;
   tx.execute("INSERT INTO journal VALUES(?1,?2,?3,?4)",params![n,b.operation.to_string(),json(&(before,link_before))?,json(b)?])?;
-  tx.commit().map_err(|e|match e{rusqlite::Error::SqliteFailure(ref info,_) if info.code==rusqlite::ErrorCode::ConstraintViolation=>Error::Relation,_=>Error::Storage})?;Ok(receipt)
+  Ok(receipt)
  }
  // Undo the last feature/link batch via a new transaction. Undoing the
  // compensating batch redoes it; never rewind feature or project revisions.
@@ -217,6 +231,7 @@ impl Store{
  pub fn compensate_latest(&self,operation:Uuid,expected_project:u64)->Result<Receipt>{
   let (mut edits,links):(Vec<Edit>,Vec<Link>)={
     let db=self.db.lock().map_err(lock_err)?;
+    if db.query_row("SELECT EXISTS(SELECT 1 FROM cad_link_publication WHERE revision=?1)",[expected_project],|r|r.get::<_,bool>(0))?{return Err(Error::Unsupported)}
     let data:String=db.query_row("SELECT before_json FROM journal WHERE revision=?1",[expected_project],|r|r.get(0)).optional()?.ok_or(Error::Unsupported)?;
     decode(&data)?
   };
@@ -254,7 +269,7 @@ impl Store{
   let fk:i64=db.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0))?;
   let bad:i64=db.query_row("SELECT count(*) FROM feature f LEFT JOIN feature_index i ON i.fid=f.fid WHERE i.fid IS NULL OR i.minx>f.minx OR i.maxx<f.maxx OR i.miny>f.miny OR i.maxy<f.maxy",[],|r|r.get(0))?;
   let orphan:i64=db.query_row("SELECT count(*) FROM feature_index i LEFT JOIN feature f ON f.fid=i.fid WHERE f.fid IS NULL",[],|r|r.get(0))?;
-  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0&&asset_store::verify_assets(&db)?&&survey::verify(&db)?&&media::verify(&db)?)
+  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0&&asset_store::verify_assets(&db)?&&cad_link::verify(&db)?&&survey::verify(&db)?&&media::verify(&db)?)
  }
 }
 
