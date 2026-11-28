@@ -34,3 +34,18 @@ receipt; no production deployment has been inferred from build timing.
 Validate rules with `promtool check rules infra/observability/spec066.rules.yml`.
 After an authorized rollout, `python3 infra/release/deployment_receipt.py --help`
 provides the read-only exact-digest timing receipt. No service is started by it.
+
+## SPEC 066 dashboard
+
+Import `spec066.dashboard.json` into the privately managed Grafana instance after
+selecting an authorized Prometheus datasource. It charts aggregate p95/p99 latency,
+5xx ratio, request rate, resident memory and tile-cache hit/capacity counters using
+the recording rules above. The JSON contains no datasource credentials and does
+not configure an externally exposed monitoring service.
+
+The dashboard's text panel explains the separate structured timing receipts:
+`release-qualification.json` records exact-run build/publish durations and
+`deployment-observation.json` records operator-supplied rollout duration only
+after local digest and health checks. Neither receipt authorizes release. Keep
+Grafana and Prometheus private and isolate environments; do not add tenant, actor,
+route, feature or token labels to the aggregate API metrics.
