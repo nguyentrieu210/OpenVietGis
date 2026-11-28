@@ -56,10 +56,14 @@ def test_qgis_sync_contracts_are_part_of_package_ci() -> None:
     workflow = yaml.load(
         (ROOT / ".github/workflows/qgis-connector.yml").read_text(), Loader=yaml.BaseLoader,
     )
-    runs = "\n".join(step.get("run", "") for step in workflow["jobs"]["qgis-package"]["steps"])
+    runs = next(step["run"] for step in workflow["jobs"]["qgis-package"]["steps"]
+                if step.get("name") == "Test manual bilateral sync and deterministic ZIP")
     for name in ("test_managed_snapshot_contract", "test_managed_delta_contract",
                  "test_managed_sync_cancellation"):
         path = f"tools/tests/{name}.py"
         assert path in workflow["on"]["pull_request"]["paths"]
         assert path in runs
+    managed = "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py"
+    assert managed in workflow["on"]["pull_request"]["paths"]
+    assert managed in runs
     assert "native-qgis-smoke" in workflow["jobs"]

@@ -48,6 +48,7 @@ pub mod state;
 pub(crate) mod team;
 pub(crate) mod tenancy;
 pub(crate) mod three_d;
+pub mod tile_cache;
 pub(crate) mod tilesets;
 pub(crate) mod tilesets_codec;
 pub(crate) mod transfers;

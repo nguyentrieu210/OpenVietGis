@@ -54,6 +54,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start build timing
+        id: clock
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Build and publish exactly once per role
         id: image
         uses: docker/build-push-action@v6
@@ -87,10 +90,22 @@ jobs:
               "source_sha": os.environ["SOURCE_SHA"],
           }) + "\n")
           PY
+      - name: Record aggregate build qualification
+        env:
+          ROLE: ${{ matrix.role }}
+          SOURCE_SHA: ${{ github.sha }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          STARTED: ${{ steps.clock.outputs.started }}
+        run: |
+          python3 infra/release/qualification.py --role "$ROLE" --source-sha "$SOURCE_SHA" \
+            --digest "$DIGEST" --started "$STARTED" --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" --output qualification.json
       - uses: actions/upload-artifact@v4
         with:
           name: receipt-${{ matrix.role }}
-          path: receipt.json
+          path: |
+            receipt.json
+            qualification.json
           if-no-files-found: error
           retention-days: 30
           overwrite: true
@@ -125,6 +140,12 @@ jobs:
                          for role in ("api", "web", "migrate", "postgres")},
           }
           Path("release-images.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          from infra.release.qualification import combine
+          qualification = combine(manifest, {
+              role: json.loads(Path(f"receipts/receipt-{role}/qualification.json").read_text())
+              for role in ("api", "web", "migrate", "postgres")
+          }, os.environ["GITHUB_RUN_ID"], int(os.environ["GITHUB_RUN_ATTEMPT"]))
+          Path("release-qualification.json").write_text(json.dumps(qualification, indent=2) + "\n")
           PY
           python3 infra/release/image_manifest.py release-images.json --repository "${GITHUB_REPOSITORY,,}" --candidate "$SOURCE_SHA" > release-images.override.yml
       - uses: actions/upload-artifact@v4
@@ -133,6 +154,7 @@ jobs:
           path: |
             release-images.json
             release-images.override.yml
+            release-qualification.json
           if-no-files-found: error
           retention-days: 90
           overwrite: true

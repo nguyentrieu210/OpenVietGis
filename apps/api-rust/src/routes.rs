@@ -134,6 +134,7 @@ async fn ops_health_live() -> Json<Value> {
 async fn ops_metrics(State(state): State<AppState>) -> impl IntoResponse {
     // FastAPI lines first (scrape parity), then the Rust process counters.
     let mut body = crate::ops::prometheus_metrics(&state).await;
+    body.push_str(&state.tile_cache.render_prometheus());
     body.push_str(
         &state
             .metrics

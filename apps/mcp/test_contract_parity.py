@@ -111,16 +111,14 @@ def test_python_and_rust_tool_discovery_constraints_match():
             assert {item.get("type") for item in variants} == {"string", "null"}
 
 
-def test_offline_parity_evidence_command_runs_the_same_contract_gate():
+def test_offline_parity_evidence_command_runs_the_same_contract_gate(capsys):
+    import runpy
     import subprocess
-    import sys
 
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "tools/benchmark/spec066/mcp-contract-parity.py")],
-        cwd=ROOT, capture_output=True, text=True, timeout=30, check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    report = json.loads(result.stdout)
+    # Run the exact CLI entry point in this process. Starting a second MCP/RSA
+    # runtime made a functional contract check depend on host paging pressure.
+    runpy.run_path(str(ROOT / "tools/benchmark/spec066/mcp-contract-parity.py"), run_name="__main__")
+    report = json.loads(capsys.readouterr().out)
     assert report["workspace_schema_mismatches"] == []
     assert report["python_tools"] == 39
     assert report["candidate_sha"] == subprocess.check_output(

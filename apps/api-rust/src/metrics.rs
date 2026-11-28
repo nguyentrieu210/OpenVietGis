@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-const HTTP_BUCKETS_MS: [u64; 8] = [5, 10, 25, 50, 100, 250, 500, 1000];
+const HTTP_BUCKETS_MS: [u64; 12] = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000];
 
 #[derive(Debug, Clone)]
 pub struct MetricsRegistry {
@@ -12,7 +12,7 @@ pub struct MetricsRegistry {
     http_requests_total: Arc<AtomicU64>,
     http_errors_total: Arc<AtomicU64>,
     http_duration_micros_total: Arc<AtomicU64>,
-    http_duration_buckets: Arc<[AtomicU64; 9]>,
+    http_duration_buckets: Arc<[AtomicU64; HTTP_BUCKETS_MS.len() + 1]>,
     db_ready_gauge: Arc<AtomicU8>,
 }
 
@@ -40,9 +40,15 @@ impl MetricsRegistry {
         if status_code >= 500 {
             self.http_errors_total.fetch_add(1, Ordering::Relaxed);
         }
-        self.http_duration_micros_total.fetch_add(elapsed.as_micros().min(u128::from(u64::MAX)) as u64, Ordering::Relaxed);
+        self.http_duration_micros_total.fetch_add(
+            elapsed.as_micros().min(u128::from(u64::MAX)) as u64,
+            Ordering::Relaxed,
+        );
         let ms = elapsed.as_millis().min(u128::from(u64::MAX)) as u64;
-        let bucket = HTTP_BUCKETS_MS.iter().position(|upper| ms <= *upper).unwrap_or(HTTP_BUCKETS_MS.len());
+        let bucket = HTTP_BUCKETS_MS
+            .iter()
+            .position(|upper| ms <= *upper)
+            .unwrap_or(HTTP_BUCKETS_MS.len());
         self.http_duration_buckets[bucket].fetch_add(1, Ordering::Relaxed);
     }
 
@@ -57,13 +63,17 @@ impl MetricsRegistry {
         let errors = self.http_errors_total.load(Ordering::Relaxed);
         let db_ready = self.db_ready_gauge.load(Ordering::Relaxed);
         let uptime = self.started_at.elapsed().as_secs_f64();
-        let duration_sum = self.http_duration_micros_total.load(Ordering::Relaxed) as f64 / 1_000_000.0;
+        let duration_sum =
+            self.http_duration_micros_total.load(Ordering::Relaxed) as f64 / 1_000_000.0;
         let rss = process_rss_bytes().unwrap_or(0);
         let mut cumulative = 0_u64;
         let mut duration = String::from("# HELP ovg_http_request_duration_seconds HTTP request latency without route or tenant labels.\n# TYPE ovg_http_request_duration_seconds histogram\n");
         for (idx, upper) in HTTP_BUCKETS_MS.iter().enumerate() {
             cumulative += self.http_duration_buckets[idx].load(Ordering::Relaxed);
-            duration.push_str(&format!("ovg_http_request_duration_seconds_bucket{{le=\"{:.3}\"}} {cumulative}\n", *upper as f64 / 1000.0));
+            duration.push_str(&format!(
+                "ovg_http_request_duration_seconds_bucket{{le=\"{:.3}\"}} {cumulative}\n",
+                *upper as f64 / 1000.0
+            ));
         }
         cumulative += self.http_duration_buckets[HTTP_BUCKETS_MS.len()].load(Ordering::Relaxed);
         duration.push_str(&format!("ovg_http_request_duration_seconds_bucket{{le=\"+Inf\"}} {cumulative}\novg_http_request_duration_seconds_sum {duration_sum:.6}\novg_http_request_duration_seconds_count {requests}\n"));
@@ -97,7 +107,13 @@ impl MetricsRegistry {
 
 fn process_rss_bytes() -> Option<u64> {
     let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    let kb = status.lines().find_map(|line| line.strip_prefix("VmRSS:"))?.split_whitespace().next()?.parse::<u64>().ok()?;
+    let kb = status
+        .lines()
+        .find_map(|line| line.strip_prefix("VmRSS:"))?
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()?;
     kb.checked_mul(1024)
 }
 

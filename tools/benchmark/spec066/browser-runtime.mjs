@@ -4,9 +4,10 @@ import {readFile,stat} from "node:fs/promises";
 import {resolve,extname,sep} from "node:path";
 import {performance} from "node:perf_hooks";
 
-const [distArg,label,sha,countArg="30"]=process.argv.slice(2);
+const [distArg,label,sha,countArg="30",soakArg="0"]=process.argv.slice(2);
 if(!distArg||!label||!/^[0-9a-f]{40}$/.test(sha||""))throw Error("usage: browser-runtime.mjs DIST LABEL SHA [COUNT]");
-const dist=resolve(distArg),count=Number(countArg);
+const dist=resolve(distArg),count=Number(countArg),soakSeconds=Number(soakArg);
+if(!Number.isInteger(soakSeconds)||soakSeconds<0||soakSeconds>7200)throw Error("invalid soak duration");
 if(!Number.isInteger(count)||count<1||count>100)throw Error("invalid count");
 const mime={".html":"text/html; charset=utf-8",".js":"text/javascript",".mjs":"text/javascript",".css":"text/css",".json":"application/json",".svg":"image/svg+xml",".png":"image/png",".woff2":"font/woff2"};
 const server=createServer(async(req,res)=>{
@@ -73,13 +74,14 @@ for(let i=0;i<count;i++){
  }catch(error){failures.push({phase:"shell",iteration:i,message:error instanceof Error?error.message:String(error)})}
  await context.close();
 }
-for(let i=0;i<5;i++){
+for(let i=0;i<count;i++){
  const {context,page}=await newFixturePage();
  try{const t=performance.now();await page.goto(origin+"/app",{waitUntil:"domcontentloaded"});await gisReady(page);coldGis.push(performance.now()-t)}
  catch(error){failures.push({phase:"cold-gis",iteration:i,message:error instanceof Error?error.message:String(error)})}
  await context.close();
 }
 const {context:modeContext,page:modePage}=await newFixturePage();
+const soakSamples=[];let measuredTransitions=0,soakStarted=null;
 try{
  await modePage.goto(origin+"/app",{waitUntil:"domcontentloaded"});await gisReady(modePage);
  const modes=modePage.getByRole("group",{name:"Không gian làm việc"}),mapModes=modePage.getByRole("group",{name:"Chế độ bản đồ"});
@@ -88,7 +90,13 @@ try{
  await modes.getByRole("button",{name:"GIS",exact:true}).click();await modePage.locator(".qgis-map-region .maplibregl-canvas").waitFor({state:"visible"});
  await mapModes.getByRole("button",{name:"Địa cầu",exact:true}).click();await modePage.locator('[data-ovg-alternate-active="3d"] canvas').first().waitFor({state:"visible"});
  await mapModes.getByRole("button",{name:"2D",exact:true}).click();await modePage.locator(".qgis-map-region .maplibregl-canvas").waitFor({state:"visible"});
- for(let i=0;i<count;i++){
+ soakStarted=performance.now();let nextMemorySample=soakStarted;
+ for(let i=0;i<count||(soakSeconds>0&&performance.now()-soakStarted<soakSeconds*1000);i++){
+  if(performance.now()>=nextMemorySample){
+   soakSamples.push({elapsed_seconds:(performance.now()-soakStarted)/1000,...await modePage.evaluate(()=>({dom_nodes:document.getElementsByTagName("*").length,js_heap_bytes:performance.memory?.usedJSHeapSize??null}))});
+   nextMemorySample=performance.now()+60000;
+  }
+  measuredTransitions++;
   let t=performance.now();await modes.getByRole("button",{name:"CAD",exact:true}).click();await modePage.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();samples.gis_to_cad_ms.push(performance.now()-t);
   t=performance.now();await modes.getByRole("button",{name:"GIS",exact:true}).click();await modePage.locator(".qgis-map-region .maplibregl-canvas").waitFor({state:"visible"});samples.cad_to_gis_ms.push(performance.now()-t);
   t=performance.now();await mapModes.getByRole("button",{name:"Địa cầu",exact:true}).click();await modePage.locator('[data-ovg-alternate-active="3d"] canvas').first().waitFor({state:"visible"});samples.gis_to_3d_ms.push(performance.now()-t);
@@ -101,5 +109,5 @@ samples.cold_shell_ms=shell.cold;samples.warm_shell_ms=shell.warm;
 delete samples.warm_gis_ms;
 await browser.close();await new Promise(resolve=>server.close(resolve));
 const metrics=Object.fromEntries(Object.entries(samples).map(([k,v])=>[k,summary(v)]));
-console.log(JSON.stringify({label,sha,node:process.version,chromium:chromium.name(),iterations:count,failures,metrics,raw:samples,method:"30 independent cold/warm shell contexts; five independent cold GIS engine samples; 30 initialized CAD/3D mode transitions in one warmed context; synthetic loopback API; service worker blocked; external provider requests aborted. Measures browser/client transition timing only, not production network/server latency."},null,2));
+console.log(JSON.stringify({label,sha,node:process.version,chromium:chromium.name(),iterations:count,measured_transitions:measuredTransitions,soak:{requested_seconds:soakSeconds,elapsed_seconds:soakStarted===null?0:(performance.now()-soakStarted)/1000,samples:soakSamples,scope:"Chromium DOM and optional JS heap in one continuous warmed context; no GPU or process-RSS claim"},failures,metrics,raw:samples,method:`${count} independent cold/warm shell contexts; ${count} independent cold GIS engine samples; ${measuredTransitions} initialized CAD/3D mode transitions in one warmed context; synthetic loopback API; service worker blocked; external provider requests aborted. Measures browser/client transition timing only, not production network/server latency.`},null,2));
 if(failures.length)process.exitCode=2;

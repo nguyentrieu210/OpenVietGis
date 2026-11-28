@@ -5,6 +5,7 @@ on:
     paths:
       - "integrations/qgis_plugin/**"
       - "apps/api/tests/unit/integration_hub/test_qgis_workspace.py"
+      - "apps/api/tests/unit/integration_hub/test_r029_managed_sync.py"
       - "tools/package_qgis_plugin.py"
       - "tools/smoke_qgis_native.py"
       - "tools/tests/test_package_qgis_plugin.py"
@@ -51,11 +52,13 @@ jobs:
           uv run --project apps/api ruff check \
             integrations/qgis_plugin/openvietgis_connector \
             apps/api/tests/unit/integration_hub/test_qgis_workspace.py \
+            apps/api/tests/unit/integration_hub/test_r029_managed_sync.py \
             tools/package_qgis_plugin.py tools/tests/test_package_qgis_plugin.py
       - name: Test manual bilateral sync and deterministic ZIP
         run: |
           uv run --project apps/api python -m pytest -q \
             apps/api/tests/unit/integration_hub/test_qgis_workspace.py \
+            apps/api/tests/unit/integration_hub/test_r029_managed_sync.py \
             tools/tests/test_package_qgis_plugin.py \
             tools/tests/test_qgis_connector_simple_ui.py \
             tools/tests/test_qgis_managed_snapshots.py \
