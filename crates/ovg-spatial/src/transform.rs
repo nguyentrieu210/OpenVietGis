@@ -143,7 +143,9 @@ fn transform(
     let has_required_provenance = match profile.fixture_requirement {
         FixtureRequirement::None => true,
         FixtureRequirement::QuangNinh => provenance.is_some(),
-        FixtureRequirement::DaNangCircular | FixtureRequirement::HaiPhongCircular | FixtureRequirement::DongNaiCircular => false,
+        FixtureRequirement::DaNangCircular
+        | FixtureRequirement::HaiPhongCircular
+        | FixtureRequirement::DongNaiCircular => false,
         FixtureRequirement::QuangNinhHvs => {
             provenance == Some(VerifiedReferenceProvenance::QuangNinhHvs)
         }
@@ -493,39 +495,91 @@ fn tmerc_inverse(
 
 pub use ovg_core::crs::{NativeVn2000Zone, NATIVE_VN2000_ZONES};
 fn native_zone(code: u32) -> Result<&'static NativeVn2000Zone, AppError> {
-    NATIVE_VN2000_ZONES.iter().find(|z| z.code == code).ok_or_else(|| AppError::unsupported_crs(code))
+    NATIVE_VN2000_ZONES
+        .iter()
+        .find(|z| z.code == code)
+        .ok_or_else(|| AppError::unsupported_crs(code))
 }
 fn native_vn2000_bounds(c: Coord2D, zone: Option<&NativeVn2000Zone>) -> Result<(), AppError> {
-    let [w,s,e,n] = zone.map_or([102.14,8.33,109.53,23.4], |z| z.bounds);
-    let valid = c.x.is_finite() && c.y.is_finite() && c.x >= w-1e-8 && c.x <= e+1e-8 && c.y >= s-1e-8 && c.y <= n+1e-8;
-    let in_zone = zone.map_or(true, |z| (c.x-z.central_meridian).abs() <= if z.scale_factor == 0.9996 {3.0+1e-8} else {1.5+1e-8});
+    let [w, s, e, n] = zone.map_or([102.14, 8.33, 109.53, 23.4], |z| z.bounds);
+    let valid = c.x.is_finite()
+        && c.y.is_finite()
+        && c.x >= w - 1e-8
+        && c.x <= e + 1e-8
+        && c.y >= s - 1e-8
+        && c.y <= n + 1e-8;
+    let in_zone = zone.map_or(true, |z| {
+        (c.x - z.central_meridian).abs()
+            <= if z.scale_factor == 0.9996 {
+                3.0 + 1e-8
+            } else {
+                1.5 + 1e-8
+            }
+    });
     if !valid || !in_zone {
-        return Err(AppError::transformation_out_of_area("Coordinate outside the declared VN-2000 projection rectangle or zone."));
+        return Err(AppError::transformation_out_of_area(
+            "Coordinate outside the declared VN-2000 projection rectangle or zone.",
+        ));
     }
     Ok(())
 }
 /// No WGS84 is accepted. A caller must explicitly certify native VN-2000 datum.
 /// Supports both directions and projected-to-projected through EPSG:4756.
-pub fn project_native_vn2000(source: u32, target: u32, point: Coord2D) -> Result<Coord2D, AppError> {
+pub fn project_native_vn2000(
+    source: u32,
+    target: u32,
+    point: Coord2D,
+) -> Result<Coord2D, AppError> {
     if !point.x.is_finite() || !point.y.is_finite() {
-        return Err(AppError::validation("INVALID_COORDINATE", "Coordinates must be finite."));
+        return Err(AppError::validation(
+            "INVALID_COORDINATE",
+            "Coordinates must be finite.",
+        ));
     }
-    let src = if source == 4756 { None } else { Some(native_zone(source)?) };
-    let dst = if target == 4756 { None } else { Some(native_zone(target)?) };
+    let src = if source == 4756 {
+        None
+    } else {
+        Some(native_zone(source)?)
+    };
+    let dst = if target == 4756 {
+        None
+    } else {
+        Some(native_zone(target)?)
+    };
     let geographic = match src {
         Some(z) => {
-            if !(100_000.0..=900_000.0).contains(&point.x) || !(0.0..=3_000_000.0).contains(&point.y) {
-                return Err(AppError::transformation_out_of_area("Invalid projected VN-2000 XY coordinate."));
+            if !(100_000.0..=900_000.0).contains(&point.x)
+                || !(0.0..=3_000_000.0).contains(&point.y)
+            {
+                return Err(AppError::transformation_out_of_area(
+                    "Invalid projected VN-2000 XY coordinate.",
+                ));
             }
-            tmerc_inverse(point, z.central_meridian, z.scale_factor, 500_000.0, 0.0, 0.0)?
-        },
+            tmerc_inverse(
+                point,
+                z.central_meridian,
+                z.scale_factor,
+                500_000.0,
+                0.0,
+                0.0,
+            )?
+        }
         None => point,
     };
     native_vn2000_bounds(geographic, src)?;
     native_vn2000_bounds(geographic, dst)?;
-    if source == target { return Ok(point); }
+    if source == target {
+        return Ok(point);
+    }
     match dst {
-        Some(z) => tmerc_forward(geographic, z.central_meridian, z.scale_factor, 500_000.0, 0.0, 0.0),
+        Some(z) => tmerc_forward(
+            geographic,
+            z.central_meridian,
+            z.scale_factor,
+            500_000.0,
+            0.0,
+            0.0,
+        ),
         None => Ok(geographic),
     }
 }
@@ -561,14 +615,20 @@ mod native_vn2000_tests {
         ];
         assert_eq!(controls.len(), NATIVE_VN2000_ZONES.len());
         for (code, lon, lat, easting, northing) in controls {
-            let xy = project_native_vn2000(4756, code, Coord2D::new(lon,lat)).unwrap();
-            assert!((xy.x-easting).abs()<0.02 && (xy.y-northing).abs()<0.02, "EPSG:{code}: {xy:?}");
-            let back = project_native_vn2000(code,4756,xy).unwrap();
-            assert!((back.x-lon).abs()<1e-8 && (back.y-lat).abs()<1e-8, "EPSG:{code}: {back:?}");
+            let xy = project_native_vn2000(4756, code, Coord2D::new(lon, lat)).unwrap();
+            assert!(
+                (xy.x - easting).abs() < 0.02 && (xy.y - northing).abs() < 0.02,
+                "EPSG:{code}: {xy:?}"
+            );
+            let back = project_native_vn2000(code, 4756, xy).unwrap();
+            assert!(
+                (back.x - lon).abs() < 1e-8 && (back.y - lat).abs() < 1e-8,
+                "EPSG:{code}: {back:?}"
+            );
         }
-        assert!(project_native_vn2000(4326,9212,Coord2D::new(106.7,11.5)).is_err());
-        assert!(project_native_vn2000(4756,3405,Coord2D::new(109.0,11.0)).is_err());
-        assert!(project_native_vn2000(4756,9212,Coord2D::new(105.0,11.5)).is_err());
+        assert!(project_native_vn2000(4326, 9212, Coord2D::new(106.7, 11.5)).is_err());
+        assert!(project_native_vn2000(4756, 3405, Coord2D::new(109.0, 11.0)).is_err());
+        assert!(project_native_vn2000(4756, 9212, Coord2D::new(105.0, 11.5)).is_err());
     }
 }
 
