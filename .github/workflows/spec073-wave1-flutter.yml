@@ -4,6 +4,7 @@ on:
     branches: ["073-native-mobile-platform"]
     paths: ["apps/mobile-flutter/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -87,6 +88,15 @@ jobs:
           unzip -q "$apk" 'lib/arm64-v8a/*.so' -d "$RUNNER_TEMP/w1-elf"
           python3 "$GITHUB_WORKSPACE/infra/mobile/native/verify_elf.py" "$RUNNER_TEMP/w1-elf"/lib/arm64-v8a/*.so > "$RUNNER_TEMP/w1-elf.json"
           sha256sum "$apk" > "$RUNNER_TEMP/w1-apk.sha256"
+          mkdir -p "$RUNNER_TEMP/release-evidence"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/release/android/inspect_candidate.py" --apk "$apk" --tools "$ANDROID_HOME/build-tools/36.0.0" --commit "$GITHUB_SHA" --kind debug-candidate --out "$RUNNER_TEMP/release-evidence"
+          cargo metadata --locked --manifest-path rust/Cargo.toml --format-version 1 > "$RUNNER_TEMP/release-evidence/cargo-metadata.json"
+          dart pub deps --json > "$RUNNER_TEMP/release-evidence/pub-deps.json"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/release/android/dependency_inventory.py" --cargo "$RUNNER_TEMP/release-evidence/cargo-metadata.json" --cargo-lock rust/Cargo.lock --dart "$RUNNER_TEMP/release-evidence/pub-deps.json" --pub-lock pubspec.lock --commit "$GITHUB_SHA" --out "$RUNNER_TEMP/release-evidence/partial-sbom.cdx.json"
+          flutter --version --machine > "$RUNNER_TEMP/release-evidence/flutter-version.json"
+          rustc --version --verbose > "$RUNNER_TEMP/release-evidence/rust-version.txt"
+          cp "$GITHUB_WORKSPACE/LICENSE" "$RUNNER_TEMP/release-evidence/LICENSE"
+          printf '%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_SHA" > "$RUNNER_TEMP/release-evidence/source.txt"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -99,4 +109,5 @@ jobs:
             ${{ runner.temp }}/openvietgis_mobile/build/app/outputs/flutter-apk/app-debug.apk
             ${{ runner.temp }}/w1-elf.json
             ${{ runner.temp }}/w1-apk.sha256
+            ${{ runner.temp }}/release-evidence
           if-no-files-found: warn
