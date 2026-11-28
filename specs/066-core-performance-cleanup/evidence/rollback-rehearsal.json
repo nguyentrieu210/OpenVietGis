@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "candidate_sha": "beb4fdbe93ced1a54983e1ff261372a96261cac1",
+  "scope": "isolated synthetic docker network and volume only",
+  "database": {"migration_revision": "0046_map_display_config", "candidate_ready_status": 200, "dump_sha256": "6f0f11e69a144d9027c4fabc194ddadbb1e8671fadb62db8bb4946a2d7ea29c0", "dump_bytes": 601938, "restored_database": "ovgrestore", "restored_revision": "0046_map_display_config", "restored_probe": "candidate"},
+  "application_rollback": {"candidate_image_id": "sha256:b3b096f8fe5c58d8829c079f90b9e08de7b00535d27dacde3edc0c53a7410685", "retained_previous_image_id": "sha256:17b905b6ee16f75e0e2a9679d7f764b190864369582ed18c7ec38f1360a4d20d", "previous_image_ready_status": 200, "candidate_reapplied_ready_status": 200, "probe_after_round_trip": "candidate"},
+  "recovery_unit_tests": {"result": "PASS", "files": ["tools/tests/test_backup_restore.py", "tools/tests/test_recovery_authority.py"]},
+  "limitations": ["Synthetic database only; no production backup, volume or secret was accessed.", "Database rollback was restore-to-new-database, never an in-place downgrade.", "Final production digest rollback still requires an approved registry receipt."]
+}
