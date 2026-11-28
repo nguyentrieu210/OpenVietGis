@@ -367,9 +367,11 @@
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/ProfessionalTools.tsx",
         "apps/web-next/src/edit-transaction.ts",
-        "apps/web-next/src/edit-transaction.test.ts"
+        "apps/web-next/src/edit-transaction.test.ts",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Create/delete now require pinned edit authorization and verified receipts, retry holds exact request; actual authenticated edit conflict/receipt tests still missing."
+      "blocker": "Actual typed attribute update, conflict, atomic rollback and revert pass; complete widget parity and QGIS pairing remain."
     },
     {
       "id": "TABLE-06",
@@ -439,9 +441,11 @@
         "apps/web-next/src/ProfessionalTools.tsx",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/edit-transaction.ts",
-        "apps/web-next/src/edit-transaction.test.ts"
+        "apps/web-next/src/edit-transaction.test.ts",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Revision, local lock, edit capability, receipt pin and immutable create/delete retry. Unresolved ambiguous requests remain locked; no durable reconciliation after browser closes."
+      "blocker": "Actual Rust/PostGIS two distinct authorized editor sessions: one commits, second 409, exact replay and atomic rollback. Browser durable request recovery, complete topology and paired QGIS still missing."
     },
     {
       "id": "EDIT-04",
@@ -493,9 +497,11 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; real concurrent conflict, persisted revert and rollback remain"
+      "blocker": "Authenticated Rust changeset conflict and persisted inverse revert/replay verified; paired QGIS and full persisted redo/history UX still missing."
     },
     {
       "id": "EDIT-09",
@@ -539,9 +545,11 @@
         "apps/api-rust/src/processing.rs",
         "crates/ovg-storage/src/processing_jobs.rs",
         "fixtures/qgis-parity/generate.py",
-        "fixtures/qgis-parity/vector-oracle.sql"
+        "fixtures/qgis-parity/vector-oracle.sql",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Independent PostGIS 3.7.0 fixture oracle passed; Rust API and QGIS paired outputs not captured."
+      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain."
     },
     {
       "id": "PROC-04",
@@ -549,9 +557,11 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated Rust/PostGIS acceptance not executed; pending request recovery within browser tab; real queue, cancel and retry races not tested"
+      "blocker": "Authenticated queued/cancel/retry/terminal transitions and replay/conflict passed. In-flight cancellation races, persistent progress and QGIS pairing still missing."
     },
     {
       "id": "PROC-05",
@@ -578,13 +588,15 @@
     {
       "id": "PROC-07",
       "task": "T069",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/ProjectRaster.tsx",
         "apps/web-next/src/RasterWorkbench.tsx",
-        "apps/api-rust/src/raster_compute.rs"
+        "apps/api-rust/src/raster_compute.rs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Authenticated unprivileged raster worker, band persistence, stored source IDs, NoData, file download and tenant isolation verified; display properties and provider-specific pairing still missing."
     },
     {
       "id": "PROC-08",
@@ -594,9 +606,11 @@
         "apps/web-next/src/RasterWorkbench.tsx",
         "apps/web-next/src/RasterReportWorkbench.tsx",
         "apps/api-rust/src/raster_compute.rs",
-        "fixtures/qgis-parity/generate.py"
+        "fixtures/qgis-parity/generate.py",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Generated GeoTIFF and independent GDAL oracle verified; actual OVG API output and lineage not verified."
+      "blocker": "Authenticated real raster analyze and persisted NDVI lineage, slope and aspect match analytical fixtures. Other calculator/resampling/reports, raster UI and QGIS pairing remain."
     },
     {
       "id": "PROC-09",
@@ -627,9 +641,11 @@
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/PrintDesigner.tsx",
         "apps/api-rust/src/cartography",
-        "apps/web-next/layout-smoke.mjs"
+        "apps/web-next/layout-smoke.mjs",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Paired QGIS and authenticated Rust API acceptance not executed. Two-frame synthetic browser save/reopen passes; server revision conflicts not exercised."
+      "blocker": "Authenticated two-frame layout persisted, second editor updates revision, stale write and invalid map link rejected. Browser synthetic export previously passed; paired QGIS still missing."
     },
     {
       "id": "OUTPUT-02",
@@ -698,14 +714,16 @@
     {
       "id": "OUTPUT-07",
       "task": "T081",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/TransferTool.tsx",
         "apps/web-next/src/ExportDialog.tsx",
         "apps/web-next/export-formats.test.mjs",
-        "apps/api-rust/src/transfers"
+        "apps/api-rust/src/transfers",
+        "tests/spec065/edit_processing.py",
+        "tests/spec065/run-attribute-query.sh"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Authenticated GeoJSON roundtrip, UTF-8/null/false/zero and artifact digest, idempotency and tenant denial verified. GeoPackage/SHP/CSV/DXF/full CRS and QGIS interoperability still missing."
     },
     {
       "id": "OUTPUT-08",
