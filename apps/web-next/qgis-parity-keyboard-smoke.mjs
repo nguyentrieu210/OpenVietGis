@@ -1,3 +1,4 @@
+import {createHash} from "node:crypto";
 import {preview} from "vite";
 import {fileURLToPath} from "node:url";
 import {dirname} from "node:path";
@@ -14,7 +15,7 @@ try{
  await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
- const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
+ const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
  const saved=[],edits=[],processingRequests=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
  await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
@@ -35,6 +36,7 @@ try{
   else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
   else if(p.endsWith("/changesets")&&m==="POST"){const payload=route.request().postDataJSON();edits.push(payload);if(edits.length===1||edits.length===3)return route.fulfill({status:503,json:{}});body={id:"receipt-"+edits.length,operation_id:payload.operation_id,source_id:p.includes("/sources/source2/")?"source2":"source1",base_content_revision:payload.base_content_revision,resulting_content_revision:"c".repeat(64),status:"committed",operation_count:1};}
   else if(p.endsWith("/query")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.attribute_only,true);body={attribute_only:true,layer_id:"layer1",source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,stored_crs:4326,limit:q.limit,offset:q.offset,query_fingerprint:"d".repeat(64),total_count:2,has_more:false,selection_feature_ids:["building","missing"],items:[{feature_id:"building",geometry_state:"present",geometry:null,attributes:{height_m:25}},{feature_id:"missing",geometry_state:"absent",geometry:null,attributes:{height_m:null}}]};}
+  else if(p.includes("/integration-hub/adapters/qgis/layers/")&&p.endsWith("/export")){const raw=JSON.stringify({type:"FeatureCollection",features:[{type:"Feature",id:"building",geometry:feature.geometry,properties:feature.attributes}]});return route.fulfill({status:200,contentType:"application/geo+json",headers:{"x-content-sha256":createHash("sha256").update(raw).digest("hex"),"x-openvietgis-crs":"EPSG:4326","x-openvietgis-content-revision":layer.source.content_revision,"x-openvietgis-schema-revision":layer.source.schema_revision,"x-openvietgis-feature-count":"1"},body:raw})}
   else if(p.endsWith("/features")){const second=p.includes("layer2");body={context:{organization_id:org,project_id:pid,layer_id:second?"layer2":"layer1",source_id:second?"source2":"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,response_crs:{code:4326},geometry_included:true},items:[feature],next_after_feature_id:null};}
   else if(p.includes("/pro/tiles/"))return route.fulfill({status:200,contentType:"application/vnd.mapbox-vector-tile",body:Buffer.alloc(0)});
   else if(p.endsWith("/cad/documents")||p.endsWith("/cad/documents/"+id+"/versions")){
@@ -215,6 +217,20 @@ try{
  await page.keyboard.press("Control+k");await command.fill("TILES");await command.press("Enter");
  await page.locator(".qgis-footer-message").filter({hasText:"đang hiển thị"}).waitFor();await page.waitForTimeout(800);
  console.log("PASS synthetic Chromium: unloaded tile rows cannot be selected before hydration");
+ await second.click();
+ await page.keyboard.press("Control+k");await command.fill("EXPORT");await command.press("Enter");
+ const xp=page.getByRole("dialog",{name:"Xuất dữ liệu"});await xp.waitFor();
+ await xp.getByRole("radio",{name:"Toàn bộ lớp",exact:true}).click();
+ await xp.getByRole("radio",{name:/Excel \/ CSV/}).click();
+ await xp.getByText(/Lớp chưa nạp đầy đủ/).waitFor();
+ assert.equal(await xp.getByRole("button",{name:/⬇ Xuất/}).isEnabled(),false);
+ await xp.getByRole("radio",{name:/GeoJSON/}).click();
+ const [download]=await Promise.all([page.waitForEvent("download"),xp.getByRole("button",{name:/⬇ Xuất/}).click()]);
+ assert.ok(download.suggestedFilename().endsWith(".geojson"));
+ await xp.getByText(/Đã tải 1 tệp/).waitFor();
+ await xp.getByRole("button",{name:"Đóng",exact:true}).last().click();
+ console.log("PASS synthetic Chromium: incomplete whole-layer CSV blocked, server GeoJSON checksum verified");
+
  await page.keyboard.press("Control+k");await command.fill("MODELER");await command.press("Enter");
  const modeler=page.getByRole("dialog",{name:"Processing Modeler"});await modeler.waitFor();
  await modeler.getByRole("button",{name:/Buffer · Vùng đệm/}).waitFor();

@@ -176,6 +176,59 @@ def check(c,f,second,fixtures,directory):
     props=[v["properties"] for v in rt["geojson"]["features"]]
     assert {"code":"Điểm A","rank":0,"active":False} in props and {"code":"","rank":None,"active":None} in props,props
     print("PASS actual GeoJSON import/inspect/confirm/export/reimport, Unicode, null, false, zero, digest and replay",flush=True)
+    # Integration Hub uses a separate bounded codec path for GPKG and DXF.
+    import hashlib
+    import io
+    import sqlite3
+    import ezdxf
+    from e12_adapter_transfer import _seed_layer, _mutate_gpkg_for_sync
+    lid,sid,src=_seed_layer(c,path,auth,"Spec065 QGIS")
+    root="/integration-hub/adapters/qgis/layers/"+lid
+    gpkg=c.get(path+root+"/export?format=geopackage",headers=auth,timeout=60)
+    assert gpkg.status_code==200,(gpkg.status_code,gpkg.text[:500])
+    assert gpkg.content.startswith(b"SQLite format 3\x00")
+    assert gpkg.headers["x-content-sha256"]==hashlib.sha256(gpkg.content).hexdigest()
+    assert gpkg.headers["x-openvietgis-content-revision"]==src["content_revision"]
+    assert gpkg.headers["x-openvietgis-schema-revision"]==src["schema_revision"]
+    assert gpkg.headers["x-openvietgis-crs"]=="EPSG:4326"
+    assert gpkg.headers["x-openvietgis-feature-count"]=="2"
+    g=directory/"export.gpkg";g.write_bytes(gpkg.content)
+    with sqlite3.connect(g) as conn:
+        table,srs=conn.execute("SELECT table_name,srs_id FROM gpkg_contents WHERE data_type='features'").fetchone()
+        assert srs==4326
+        quoted='"'+table.replace('"','""')+'"'
+        assert conn.execute(f"SELECT ovg_feature_id,fld_name FROM {quoted} ORDER BY ovg_feature_id").fetchall()==[("pt_1","Alpha"),("pt_2","Beta")]
+    dxf=c.get(path+"/integration-hub/adapters/autocad/layers/"+lid+"/export?format=dxf",headers=auth,timeout=60)
+    assert dxf.status_code==200,(dxf.status_code,dxf.text[:500])
+    assert dxf.headers["x-openvietgis-crs"]=="EPSG:32648" and dxf.headers["x-openvietgis-attribute-loss"]=="true"
+    assert dxf.headers["x-content-sha256"]==hashlib.sha256(dxf.content).hexdigest()
+    assert len([e for e in ezdxf.read(io.StringIO(dxf.content.decode("utf-8"))).modelspace() if e.dxftype()=="POINT"])==2
+    sql=c.get(path+"/integration-hub/adapters/postgis/layers/"+lid+"/export?format=postgis_sql",headers=auth,timeout=60)
+    assert sql.status_code==200 and b"CREATE TABLE" in sql.content and b"ST_GeomFromText" in sql.content
+    assert c.get(path+root+"/export?format=geopackage",headers=foreign).status_code==404
+    print("PASS actual Integration Hub GPKG SQLite feature IDs/schema, DXF UTM entities and loss disclosure, PostGIS SQL, digest and tenant denial",flush=True)
+    edited=_mutate_gpkg_for_sync(gpkg.content)
+    parts={"file":("sync.gpkg",edited,"application/geopackage+sqlite3")}
+    pins={"base_content_revision":src["content_revision"],"base_schema_revision":src["schema_revision"]}
+    def sync(action,data,headers=auth,expected=200):
+        r=c.post(path+root+"/sync-"+action,headers=headers,files=parts,data=data,timeout=60)
+        assert r.status_code==expected,(r.status_code,r.text[:500])
+        return r.json()
+    preview=sync("preview",pins)
+    assert preview["can_commit"] and not preview["stale_revision"] and preview["deletions_blocked"]
+    assert preview["create_count"]==preview["update_count"]==1 and preview["omitted_server_feature_ids"]==["pt_2"]
+    sync("preview",pins,foreign,404)
+    push=pins|{"operation_id":"spec065-gpkg-push","expected_diff_sha256":preview["diff_sha256"]}
+    sync("push",push|{"expected_diff_sha256":"0"*64},expected=409)
+    committed=sync("push",push,expected=201)
+    assert committed["operation_count"]==2 and committed["diff_sha256"]==preview["diff_sha256"]
+    sync("push",push,expected=409)
+    after=c.get(path+root+"/export?format=geojson",headers=auth,timeout=60)
+    assert after.status_code==200 and after.headers["x-openvietgis-feature-count"]=="3"
+    assert {r["properties"]["fld_name"] for r in after.json()["features"]}=={"AlphaEdited","Beta","Gamma"}
+    assert sync("preview",pins)["stale_revision"]
+    print("PASS GPKG file sync preview/push, missing FID protected, stale/replayed upload blocked, 3 resulting features",flush=True)
+
 
 
 def main():

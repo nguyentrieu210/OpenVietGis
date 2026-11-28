@@ -721,20 +721,26 @@
         "apps/web-next/export-formats.test.mjs",
         "apps/api-rust/src/transfers",
         "tests/spec065/edit_processing.py",
-        "tests/spec065/run-attribute-query.sh"
+        "tests/spec065/run-attribute-query.sh",
+        "apps/web-next/src/transfer-verification.ts",
+        "apps/web-next/src/transfer-verification.test.ts",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Authenticated GeoJSON roundtrip, UTF-8/null/false/zero and artifact digest, idempotency and tenant denial verified. GeoPackage/SHP/CSV/DXF/full CRS and QGIS interoperability still missing."
+      "blocker": "Actual Rust Integration Hub GeoPackage, DXF UTM and PostGIS SQL export pass; GeoJSON general import/export roundtrip pass. Browser checks digest/revision and refuses incomplete whole-layer CSV/KML. General new-layer GPKG/SHP imports remain unsupported; no paired desktop, full format/CRS matrix or precise view intersection."
     },
     {
       "id": "OUTPUT-08",
       "task": "T082",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/QgisBindingManager.tsx",
         "apps/web-next/src/QgisConnectPage.tsx",
-        "apps/api-rust/src/managed_sync.rs"
+        "apps/api-rust/src/managed_sync.rs",
+        "apps/web-next/src/IntegrationCatalog.tsx",
+        "apps/web-next/src/transfer-verification.ts",
+        "tests/spec065/edit_processing.py"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Authenticated Rust GeoPackage file sync preview/push tested: create/update, omitted ID protected, wrong hash/stale replay rejected. UI verifies preview and receipt and blocks uncertain resend within current panel. No actual QGIS Desktop/plugin or R029 realtime acceptance, durable cross-panel reconciliation."
     },
     {
       "id": "COLLAB-01",
