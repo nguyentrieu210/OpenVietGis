@@ -17,6 +17,8 @@ pub mod survey;
 pub mod ortho;
 pub mod depth;
 pub mod surface;
+pub mod seam;
+pub mod mesh;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
