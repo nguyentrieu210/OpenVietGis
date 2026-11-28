@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import DBAPIError
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
 
 from openvietgis_api.domains.authorization.service import (
     AuthorizationDeniedError,
@@ -236,3 +238,12 @@ def install_error_handlers(app: FastAPI) -> None:
         exc: Exception,
     ) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    @app.middleware("http")
+    async def private_no_store_error_responses(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        response = await call_next(request)
+        if response.status_code in {401, 403, 404} and "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "private, no-store"
+        return response
