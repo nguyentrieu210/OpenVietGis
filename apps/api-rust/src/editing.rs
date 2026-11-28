@@ -46,8 +46,14 @@ pub(crate) fn router() -> Router<AppState> {
             &format!("{PROJECT}/changesets/{{changeset_id}}/revert"),
             post(revert_changeset),
         )
-        .route(&format!("{PROJECT}/editing/relations"), get(list_relations).post(create_relation))
-        .route(&format!("{PROJECT}/editing/relations/{{relation_id}}/delete"), post(delete_relation))
+        .route(
+            &format!("{PROJECT}/editing/relations"),
+            get(list_relations).post(create_relation),
+        )
+        .route(
+            &format!("{PROJECT}/editing/relations/{{relation_id}}/delete"),
+            post(delete_relation),
+        )
         .route(&format!("{PROJECT}/editing/snap"), post(compute_snap))
         .route(
             &format!("{PROJECT}/collaboration/activities"),
@@ -172,48 +178,52 @@ type Ids = Path<(String, String, String)>;
 
 async fn list_relations(
     State(state): State<AppState>,
-    Path((organization,project)): Path<(String,String)>,
+    Path((organization, project)): Path<(String, String)>,
     request: Request,
-) -> Result<Json<Value>,Failure> {
-    let (mut parts,_) = request.into_parts();
-    let actor=authenticate_actor(&state,&mut parts,&organization).await?;
-    let Some(mut scope)=open(&state,&actor,&organization,&project,Guard::Read).await? else {
+) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization).await?;
+    let Some(mut scope) = open(&state, &actor, &organization, &project, Guard::Read).await? else {
         return Err(EditError::InvalidRequest.into());
     };
-    let result=scope.list_relations().await?;
+    let result = scope.list_relations().await?;
     scope.commit().await?;
     Ok(Json(result))
 }
 
 async fn create_relation(
     State(state): State<AppState>,
-    Path((organization,project)): Path<(String,String)>,
+    Path((organization, project)): Path<(String, String)>,
     request: Request,
-) -> Result<Json<Value>,Failure> {
-    let (actor,headers,body)=authenticate_json(&state,request,&organization).await?;
-    let Some(mut scope)=open(&state,&actor,&organization,&project,Guard::ScopedDenied).await? else {
+) -> Result<Json<Value>, Failure> {
+    let (actor, headers, body) = authenticate_json(&state, request, &organization).await?;
+    let Some(mut scope) =
+        open(&state, &actor, &organization, &project, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
-    require_csrf(&state,&actor,&headers)?;
-    let body: ovg_storage::editing::RelationRequest=decode(body)?;
-    let result=scope.create_relation(body).await?;
+    require_csrf(&state, &actor, &headers)?;
+    let body: ovg_storage::editing::RelationRequest = decode(body)?;
+    let result = scope.create_relation(body).await?;
     scope.commit().await?;
     Ok(Json(result))
 }
 
 async fn delete_relation(
     State(state): State<AppState>,
-    Path((organization,project,id)): Ids,
+    Path((organization, project, id)): Ids,
     request: Request,
-) -> Result<Json<Value>,Failure> {
-    let (mut parts,_) = request.into_parts();
-    let actor=authenticate_actor(&state,&mut parts,&organization).await?;
-    let Some(mut scope)=open(&state,&actor,&organization,&project,Guard::ScopedDenied).await? else {
+) -> Result<Json<Value>, Failure> {
+    let (mut parts, _) = request.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &organization).await?;
+    let Some(mut scope) =
+        open(&state, &actor, &organization, &project, Guard::ScopedDenied).await?
+    else {
         return Err(EditError::InvalidRequest.into());
     };
-    require_csrf(&state,&actor,&parts.headers)?;
-    let id=Uuid::parse_str(&id).map_err(|_|EditError::InvalidRequest)?;
-    let result=scope.delete_relation(id).await?;
+    require_csrf(&state, &actor, &parts.headers)?;
+    let id = Uuid::parse_str(&id).map_err(|_| EditError::InvalidRequest)?;
+    let result = scope.delete_relation(id).await?;
     scope.commit().await?;
     Ok(Json(result))
 }

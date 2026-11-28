@@ -164,13 +164,14 @@ pub fn validate_algorithm_parameters(
             "unknown clip parameter",
         )),
         AlgorithmId::Dissolve => validate_dissolve(parameters),
-        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union if parameters.is_empty() => {
+        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union
+            if parameters.is_empty() =>
+        {
             Ok(json!({}))
         }
-        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union => Err(AppError::validation(
-            "INVALID_PARAMETERS",
-            "unknown overlay parameter",
-        )),
+        AlgorithmId::Difference | AlgorithmId::Intersection | AlgorithmId::Union => Err(
+            AppError::validation("INVALID_PARAMETERS", "unknown overlay parameter"),
+        ),
         AlgorithmId::Reproject => {
             let srid = parameters.get("target_srid").and_then(Value::as_i64);
             if parameters.len() != 1 || !matches!(srid, Some(4326 | 3857 | 4756 | 5899)) {
@@ -179,16 +180,30 @@ pub fn validate_algorithm_parameters(
             Ok(json!({"target_srid": srid}))
         }
         AlgorithmId::SpatialJoin => {
-            if parameters.keys().any(|k| !matches!(k.as_str(), "predicate" | "join_type" | "match_mode")) {
-                return Err(AppError::validation("INVALID_PARAMETERS", "unknown spatial join parameter"));
+            if parameters
+                .keys()
+                .any(|k| !matches!(k.as_str(), "predicate" | "join_type" | "match_mode"))
+            {
+                return Err(AppError::validation(
+                    "INVALID_PARAMETERS",
+                    "unknown spatial join parameter",
+                ));
             }
             let pick = |key: &str, default: &str, allowed: &[&str]| -> Result<String, AppError> {
                 let value = match parameters.get(key) {
                     None => default,
-                    Some(v) => v.as_str().ok_or_else(|| AppError::validation("INVALID_PARAMETERS", "spatial join parameter must be a string"))?,
+                    Some(v) => v.as_str().ok_or_else(|| {
+                        AppError::validation(
+                            "INVALID_PARAMETERS",
+                            "spatial join parameter must be a string",
+                        )
+                    })?,
                 };
                 if !allowed.contains(&value) {
-                    return Err(AppError::validation("INVALID_PARAMETERS", "unsupported spatial join option"));
+                    return Err(AppError::validation(
+                        "INVALID_PARAMETERS",
+                        "unsupported spatial join option",
+                    ));
                 }
                 Ok(value.to_owned())
             };
@@ -341,11 +356,20 @@ mod tests {
     fn validates_new_vector_algorithms() {
         assert_eq!(algorithm_registry().len(), 8);
         assert_eq!(validate(AlgorithmId::Union, json!({})).unwrap(), json!({}));
-        assert_eq!(validate(AlgorithmId::Reproject, json!({"target_srid":3857})).unwrap(), json!({"target_srid":3857}));
+        assert_eq!(
+            validate(AlgorithmId::Reproject, json!({"target_srid":3857})).unwrap(),
+            json!({"target_srid":3857})
+        );
         assert!(validate(AlgorithmId::Reproject, json!({"target_srid":"3857"})).is_err());
         assert!(validate(AlgorithmId::Reproject, json!({"target_srid":3405})).is_err());
-        assert_eq!(validate(AlgorithmId::Reproject,json!({"target_srid":5899})).unwrap(),json!({"target_srid":5899}));
-        assert_eq!(validate(AlgorithmId::SpatialJoin, json!({})).unwrap(), json!({"predicate":"intersects","join_type":"left","match_mode":"all"}));
+        assert_eq!(
+            validate(AlgorithmId::Reproject, json!({"target_srid":5899})).unwrap(),
+            json!({"target_srid":5899})
+        );
+        assert_eq!(
+            validate(AlgorithmId::SpatialJoin, json!({})).unwrap(),
+            json!({"predicate":"intersects","join_type":"left","match_mode":"all"})
+        );
         assert!(validate(AlgorithmId::SpatialJoin, json!({"predicate":"ST_Anything"})).is_err());
         assert!(validate(AlgorithmId::SpatialJoin, json!({"match_mode":"random"})).is_err());
     }

@@ -66,7 +66,7 @@ it("rejects altered persisted parameters and mismatched reprojection receipt",()
  expect(readPendingProcessing(JSON.stringify({...u,parameters:{unsupported:true}}))).toBeNull();
  expect(readPendingProcessing(JSON.stringify({...u,expected_overlay:u.expected_input}))).toBeNull();
  const r=processingRequest("reproject",a,undefined,"","","","Projected",op,{targetSrid:3857});
- const job={id:"job",operation_id:op,algorithm_id:"reproject",output_name:"Projected",status:"queued",output_crs:3857,input_refs:{input_source_id:r.expected_input!.source_id,input_content_revision:r.expected_input!.content_revision,input_schema_revision:r.expected_input!.schema_revision}} as ProcessingJob;
+ const job={id:"job",operation_id:op,algorithm_id:"reproject",output_name:"Projected",status:"queued",output_crs:3857,engine_version:"PostGIS/test",attempt_count:1,output_source_id:null,output_layer_id:null,feature_count:null,created_at:"2026-11-28T00:00:00Z",completed_at:null,input_refs:{input_source_id:r.expected_input!.source_id,input_content_revision:r.expected_input!.content_revision,input_schema_revision:r.expected_input!.schema_revision}} as ProcessingJob;
  expect(verifyProcessingReceipt(job,r)).toBe(job);
  expect(()=>verifyProcessingReceipt({...job,output_crs:4326},r)).toThrow();
 });

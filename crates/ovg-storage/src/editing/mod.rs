@@ -746,24 +746,38 @@ impl<'a> EditScope<'a> {
     /// List persistent constraints, not personal relation-inspector preferences.
     pub async fn list_relations(&mut self) -> Result<Value, EditError> {
         self.authorize(Permission::Read).await?;
-        if self.scoped { return Err(gis_denied()); }
+        if self.scoped {
+            return Err(gis_denied());
+        }
         let org = self.organization_id();
         let project = self.project_id();
         let rows: Vec<Value> = sqlx::query_scalar(
             "SELECT to_jsonb(r) FROM editing.relations r
-             WHERE organization_id=$1 AND project_id=$2 ORDER BY id")
-            .bind(org).bind(project).fetch_all(&mut **self.tx_mut()).await.map_err(db_error)?;
+             WHERE organization_id=$1 AND project_id=$2 ORDER BY id",
+        )
+        .bind(org)
+        .bind(project)
+        .fetch_all(&mut **self.tx_mut())
+        .await
+        .map_err(db_error)?;
         Ok(json!({"items": rows}))
     }
 
     pub async fn create_relation(&mut self, request: RelationRequest) -> Result<Value, EditError> {
         self.authorize(Permission::Manage).await?;
-        if self.scoped { return Err(gis_denied()); }
+        if self.scoped {
+            return Err(gis_denied());
+        }
         let org = self.organization_id();
         let project = self.project_id();
         if !matches!(request.cardinality.as_str(), "one" | "many")
-            || request.source_id == request.target_source_id && request.local_field == request.target_field {
-            return Err(EditError::validation("INVALID_RELATION", "invalid relation definition"));
+            || request.source_id == request.target_source_id
+                && request.local_field == request.target_field
+        {
+            return Err(EditError::validation(
+                "INVALID_RELATION",
+                "invalid relation definition",
+            ));
         }
         let tx = self.tx_mut();
         let fields: Vec<(Uuid, String, String, String)> = sqlx::query_as(
@@ -773,33 +787,74 @@ impl<'a> EditScope<'a> {
              WHERE f.organization_id=$1 AND f.project_id=$2 AND s.lifecycle='active'
                AND s.validation_state='ready' AND f.schema_revision=s.schema_revision
                AND ((f.source_id=$3 AND f.field_id=$4) OR (f.source_id=$5 AND f.field_id=$6))
-             ORDER BY f.source_id,f.field_id FOR SHARE OF f,s")
-             .bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
-             .bind(request.target_source_id).bind(&request.target_field)
-             .fetch_all(&mut **tx).await.map_err(db_error)?;
-        let local = fields.iter().find(|f| f.0==request.source_id && f.1==request.local_field);
-        let target = fields.iter().find(|f| f.0==request.target_source_id && f.1==request.target_field);
-        let (Some(local),Some(target)) = (local,target) else {
-            return Err(EditError::validation("INVALID_RELATION", "relation fields must exist in ready project sources"));
+             ORDER BY f.source_id,f.field_id FOR SHARE OF f,s",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(request.source_id)
+        .bind(&request.local_field)
+        .bind(request.target_source_id)
+        .bind(&request.target_field)
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        let local = fields
+            .iter()
+            .find(|f| f.0 == request.source_id && f.1 == request.local_field);
+        let target = fields
+            .iter()
+            .find(|f| f.0 == request.target_source_id && f.1 == request.target_field);
+        let (Some(local), Some(target)) = (local, target) else {
+            return Err(EditError::validation(
+                "INVALID_RELATION",
+                "relation fields must exist in ready project sources",
+            ));
         };
-        if local.2!=target.2 || local.3!=request.source_schema_revision || target.3!=request.target_schema_revision {
-            return Err(EditError::conflict("STALE_RELATION_SCHEMA", "relation field types or schema revisions changed"));
+        if local.2 != target.2
+            || local.3 != request.source_schema_revision
+            || target.3 != request.target_schema_revision
+        {
+            return Err(EditError::conflict(
+                "STALE_RELATION_SCHEMA",
+                "relation field types or schema revisions changed",
+            ));
         }
         let existing: Option<Value> = sqlx::query_scalar(
             "SELECT to_jsonb(r) FROM editing.relations r WHERE organization_id=$1 AND project_id=$2
-             AND source_id=$3 AND local_field=$4 AND target_source_id=$5 AND target_field=$6")
-            .bind(org).bind(project).bind(request.source_id).bind(&request.local_field)
-            .bind(request.target_source_id).bind(&request.target_field)
-            .fetch_optional(&mut **tx).await.map_err(db_error)?;
-        if let Some(row)=existing {
-            if row["cardinality"].as_str()==Some(request.cardinality.as_str()) {
+             AND source_id=$3 AND local_field=$4 AND target_source_id=$5 AND target_field=$6",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(request.source_id)
+        .bind(&request.local_field)
+        .bind(request.target_source_id)
+        .bind(&request.target_field)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        if let Some(row) = existing {
+            if row["cardinality"].as_str() == Some(request.cardinality.as_str()) {
                 return Ok(row);
             }
-            return Err(EditError::conflict("RELATION_EXISTS","remove existing relation before changing cardinality"));
+            return Err(EditError::conflict(
+                "RELATION_EXISTS",
+                "remove existing relation before changing cardinality",
+            ));
         }
-        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM editing.relations WHERE organization_id=$1 AND project_id=$2")
-            .bind(org).bind(project).fetch_one(&mut **tx).await.map_err(db_error)?;
-        if count>=100 { return Err(EditError::validation("RELATION_LIMIT","at most 100 constraints per project")); }
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM editing.relations WHERE organization_id=$1 AND project_id=$2",
+        )
+        .bind(org)
+        .bind(project)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        if count >= 100 {
+            return Err(EditError::validation(
+                "RELATION_LIMIT",
+                "at most 100 constraints per project",
+            ));
+        }
         let row: Value = sqlx::query_scalar(
             "INSERT INTO editing.relations AS r (id,organization_id,project_id,source_id,local_field,target_source_id,target_field,cardinality,field_type)
              VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING to_jsonb(r)")
@@ -818,23 +873,38 @@ impl<'a> EditScope<'a> {
 
     pub async fn delete_relation(&mut self, id: Uuid) -> Result<Value, EditError> {
         self.authorize(Permission::Manage).await?;
-        if self.scoped { return Err(gis_denied()); }
-        let org=self.organization_id();
-        let project=self.project_id();
-        let result=sqlx::query("DELETE FROM editing.relations WHERE organization_id=$1 AND project_id=$2 AND id=$3")
-            .bind(org).bind(project).bind(id).execute(&mut **self.tx_mut()).await.map_err(db_error)?;
-        let deleted = result.rows_affected()==1;
+        if self.scoped {
+            return Err(gis_denied());
+        }
+        let org = self.organization_id();
+        let project = self.project_id();
+        let result = sqlx::query(
+            "DELETE FROM editing.relations WHERE organization_id=$1 AND project_id=$2 AND id=$3",
+        )
+        .bind(org)
+        .bind(project)
+        .bind(id)
+        .execute(&mut **self.tx_mut())
+        .await
+        .map_err(db_error)?;
+        let deleted = result.rows_affected() == 1;
         if deleted {
-            self.audit_relation(id, "editing.relation.delete", json!({"project_id":project})).await?;
+            self.audit_relation(id, "editing.relation.delete", json!({"project_id":project}))
+                .await?;
         }
         Ok(json!({"id":id,"deleted":deleted}))
     }
 
-    async fn audit_relation(&mut self, id: Uuid, action: &str, metadata: Value) -> Result<(), EditError> {
-        let org=self.organization_id();
-        let actor=self.actor_id();
-        let kind=self.actor_kind();
-        let label=self.display_name().to_owned();
+    async fn audit_relation(
+        &mut self,
+        id: Uuid,
+        action: &str,
+        metadata: Value,
+    ) -> Result<(), EditError> {
+        let org = self.organization_id();
+        let actor = self.actor_id();
+        let kind = self.actor_kind();
+        let label = self.display_name().to_owned();
         sqlx::query("INSERT INTO audit.audit_events
             (id,organization_id,actor_type,actor_id,actor_display_snapshot,action,resource_type,resource_id,outcome,metadata,created_at)
             VALUES ($1,$2,$3,$4,$5,$6,'relation',$7,'success',$8,$9)")
@@ -848,9 +918,9 @@ impl<'a> EditScope<'a> {
     // Scoped relation-bound edits are denied before entering internal ACL mode.
     // Return only a generic conflict, never another source's keys or identifiers.
     async fn validate_relations(&mut self, source: Uuid) -> Result<(), EditError> {
-        let org=self.organization_id();
-        let project=self.project_id();
-        let tx=self.tx_mut();
+        let org = self.organization_id();
+        let project = self.project_id();
+        let tx = self.tx_mut();
         let bad: bool=sqlx::query_scalar(
             "SELECT EXISTS (
                 SELECT 1 FROM editing.relations r
@@ -879,8 +949,11 @@ impl<'a> EditScope<'a> {
             )")
             .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(db_error)?;
         if bad {
-            return Err(EditError::conflict("RELATION_CONSTRAINT","relation constraint would be violated; no data saved")
-                .with_details(json!({"draft_preserved":true})));
+            return Err(EditError::conflict(
+                "RELATION_CONSTRAINT",
+                "relation constraint would be violated; no data saved",
+            )
+            .with_details(json!({"draft_preserved":true})));
         }
         Ok(())
     }
@@ -925,9 +998,14 @@ impl<'a> EditScope<'a> {
             let relation_bound: bool = sqlx::query_scalar(
                 "SELECT EXISTS (SELECT 1 FROM editing.relations
                   WHERE organization_id=$1 AND project_id=$2
-                  AND (source_id=$3 OR target_source_id=$3))")
-                .bind(org).bind(proj).bind(source_id)
-                .fetch_one(&mut **self.tx.tx_mut()).await.map_err(db_error)?;
+                  AND (source_id=$3 OR target_source_id=$3))",
+            )
+            .bind(org)
+            .bind(proj)
+            .bind(source_id)
+            .fetch_one(&mut **self.tx.tx_mut())
+            .await
+            .map_err(db_error)?;
             if relation_bound {
                 return Err(gis_denied());
             }

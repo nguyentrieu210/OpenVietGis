@@ -30,7 +30,10 @@ use crate::spatial_pins::{
 pub const MAX_PROCESSING_FEATURES: i64 = 50_000;
 
 fn overlay_algorithm(algorithm: &str) -> bool {
-    matches!(algorithm, "clip" | "difference" | "intersection" | "union" | "spatial_join")
+    matches!(
+        algorithm,
+        "clip" | "difference" | "intersection" | "union" | "spatial_join"
+    )
 }
 pub const MAX_PROCESSING_POSITIONS: i64 = 1_000_000;
 const PROCESSING_STATEMENT_TIMEOUT: &str = "30s";
@@ -519,7 +522,8 @@ pub async fn submit_job_pinned(
 ) -> Result<SubmitJobResult, EditError> {
     if expected_input.is_some_and(|p| !p.valid())
         || expected_overlay.is_some_and(|p| !p.valid())
-        || expected_overlay.is_some() && (!overlay_algorithm(algorithm_id) || expected_input.is_none())
+        || expected_overlay.is_some()
+            && (!overlay_algorithm(algorithm_id) || expected_input.is_none())
         || expected_input.is_some() && overlay_algorithm(algorithm_id) && expected_overlay.is_none()
     {
         return Err(EditError::validation(
@@ -619,7 +623,10 @@ pub async fn submit_job_pinned(
                 "overlay changed after request preparation",
             ));
         }
-        if overlay_source.id == input_source.id || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon") || (algorithm_id == "union" && input_source.geometry_family != "Polygon") {
+        if overlay_source.id == input_source.id
+            || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon")
+            || (algorithm_id == "union" && input_source.geometry_family != "Polygon")
+        {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",
                 "overlay requires distinct compatible sources; union requires two Polygon layers",
@@ -649,13 +656,26 @@ pub async fn submit_job_pinned(
         .await
         .map_err(edit_db_error)?;
     let engine_version = format!("PostGIS/{pg_ver}");
-    let output_crs = if algorithm_id=="reproject" {
-        let target=clean_params.get("target_srid").and_then(Value::as_i64).and_then(|v| i32::try_from(v).ok())
-            .filter(|v| matches!(v,4326|3857|4756|5899))
-            .ok_or_else(|| EditError::validation("INVALID_PARAMETERS","unsupported target CRS"))?;
-        approved_reproject(scope.tx_mut(),org_id,project_id,input_source.id,input_source.stored_crs,target).await?;
+    let output_crs = if algorithm_id == "reproject" {
+        let target = clean_params
+            .get("target_srid")
+            .and_then(Value::as_i64)
+            .and_then(|v| i32::try_from(v).ok())
+            .filter(|v| matches!(v, 4326 | 3857 | 4756 | 5899))
+            .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
+        approved_reproject(
+            scope.tx_mut(),
+            org_id,
+            project_id,
+            input_source.id,
+            input_source.stored_crs,
+            target,
+        )
+        .await?;
         target
-    } else { input_source.stored_crs };
+    } else {
+        input_source.stored_crs
+    };
     let now = now_micros();
     let job_id = Uuid::new_v4();
     let actor_type = scope.actor_kind();
@@ -811,29 +831,66 @@ fn web_transform_expr(
     ))
 }
 
-async fn approved_reproject(tx:&mut sqlx::Transaction<'_,sqlx::Postgres>,org:Uuid,project:Uuid,source:Uuid,native:i32,target:i32)->Result<String,EditError>{
-    if native==target && matches!(native,4326|3857) {return Ok("rf.geometry".to_owned());}
-    let profile=u32::try_from(native).ok().zip(u32::try_from(target).ok())
-        .and_then(|(a,b)|reference_transformation(a,b))
-        .ok_or_else(||EditError::validation("UNSUPPORTED_TRANSFORMATION","no approved directed CRS operation for this pair"))?;
-    if profile.fixture_requirement==FixtureRequirement::None {
-        let (expr,_,_)=web_transform_expr("rf.geometry",native,target)?;
-        require_web_domain(tx,org,project,WebDomainCheck{source_id:source,native_srid:native,expression:"geometry",expression_srid:native,margin:0.0}).await?;
+async fn approved_reproject(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org: Uuid,
+    project: Uuid,
+    source: Uuid,
+    native: i32,
+    target: i32,
+) -> Result<String, EditError> {
+    if native == target && matches!(native, 4326 | 3857) {
+        return Ok("rf.geometry".to_owned());
+    }
+    let profile = u32::try_from(native)
+        .ok()
+        .zip(u32::try_from(target).ok())
+        .and_then(|(a, b)| reference_transformation(a, b))
+        .ok_or_else(|| {
+            EditError::validation(
+                "UNSUPPORTED_TRANSFORMATION",
+                "no approved directed CRS operation for this pair",
+            )
+        })?;
+    if profile.fixture_requirement == FixtureRequirement::None {
+        let (expr, _, _) = web_transform_expr("rf.geometry", native, target)?;
+        require_web_domain(
+            tx,
+            org,
+            project,
+            WebDomainCheck {
+                source_id: source,
+                native_srid: native,
+                expression: "geometry",
+                expression_srid: native,
+                margin: 0.0,
+            },
+        )
+        .await?;
         Ok(expr)
-    }else{
+    } else {
         // Regional outputs must remain independently verifiable from an original
         // fixture. Derived inputs may return to WGS84, but not create another
         // regional hop whose provenance the catalog cannot yet validate.
-        if matches!(target,4756|5899) {
+        if matches!(target, 4756 | 5899) {
             let kind: String=sqlx::query_scalar("SELECT kind FROM spatial.data_sources WHERE organization_id=$1 AND project_id=$2 AND id=$3")
                 .bind(org).bind(project).bind(source).fetch_one(&mut **tx).await.map_err(edit_db_error)?;
-            if kind!="reference_fixture" {
+            if kind != "reference_fixture" {
                 return Err(EditError::validation("TRANSFORMATION_OUT_OF_AREA","Regional output requires original verified reference fixture; multi-hop regional provenance is not supported"));
             }
         }
-        crate::catalog::regional_crs::verify_regional_source(tx,org,project,source,profile).await
-            .map_err(|error|EditError::Platform{status:error.status_code(),code:error.code(),message:error.to_string(),details:None})?;
-        Ok(crate::catalog::regional_crs::profile_expression(profile,"rf.geometry"))
+        crate::catalog::regional_crs::verify_regional_source(tx, org, project, source, profile)
+            .await
+            .map_err(|error| EditError::Platform {
+                status: error.status_code(),
+                code: error.code(),
+                message: error.to_string(),
+                details: None,
+            })?;
+        Ok(crate::catalog::regional_crs::profile_expression(
+            profile,
+            "rf.geometry",
+        ))
     }
 }
 
@@ -988,20 +1045,40 @@ pub async fn lock_and_prepare_execution(
 type ProcessingField = (String, String, String, bool);
 
 async fn processing_source_fields(
-    sp: &mut sqlx::Transaction<'_, sqlx::Postgres>, org: Uuid, project: Uuid, source: Uuid,
+    sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    org: Uuid,
+    project: Uuid,
+    source: Uuid,
 ) -> Result<Vec<ProcessingField>, EditError> {
     sqlx::query_as::<_, ProcessingField>(
         "SELECT field_id,name,type,nullable FROM spatial.source_fields
-         WHERE organization_id=$1 AND project_id=$2 AND source_id=$3 ORDER BY ordinal,field_id")
-        .bind(org).bind(project).bind(source).fetch_all(&mut **sp).await.map_err(edit_db_error)
+         WHERE organization_id=$1 AND project_id=$2 AND source_id=$3 ORDER BY ordinal,field_id",
+    )
+    .bind(org)
+    .bind(project)
+    .bind(source)
+    .fetch_all(&mut **sp)
+    .await
+    .map_err(edit_db_error)
 }
 
-fn processing_raw_row(row: &PgRow, feature_id: String, attributes: Value) -> Result<RawOutputRow, EditError> {
+fn processing_raw_row(
+    row: &PgRow,
+    feature_id: String,
+    attributes: Value,
+) -> Result<RawOutputRow, EditError> {
     Ok(RawOutputRow {
-        feature_id, attributes,
+        feature_id,
+        attributes,
         srid: row.try_get("srid").map_err(edit_db_error)?,
-        total_count: row.try_get::<Option<i64>, _>("total_count").map_err(edit_db_error)?.unwrap_or(0),
-        total_positions: row.try_get::<Option<i64>, _>("total_positions").map_err(edit_db_error)?.unwrap_or(0),
+        total_count: row
+            .try_get::<Option<i64>, _>("total_count")
+            .map_err(edit_db_error)?
+            .unwrap_or(0),
+        total_positions: row
+            .try_get::<Option<i64>, _>("total_positions")
+            .map_err(edit_db_error)?
+            .unwrap_or(0),
         wkb: row.try_get("wkb").map_err(edit_db_error)?,
     })
 }
@@ -1027,7 +1104,10 @@ async fn prepare_inside_savepoint(
     if overlay_algorithm(&algorithm_id) {
         let overlay_source =
             validate_pinned_source(sp, org_id, project_id, &input_refs, "overlay").await?;
-        if overlay_source.id == input_source.id || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon") || (algorithm_id == "union" && input_source.geometry_family != "Polygon") {
+        if overlay_source.id == input_source.id
+            || (algorithm_id != "spatial_join" && overlay_source.geometry_family != "Polygon")
+            || (algorithm_id == "union" && input_source.geometry_family != "Polygon")
+        {
             return Err(EditError::validation(
                 "INVALID_OVERLAY",
                 "overlay requires distinct compatible sources; union requires two Polygon layers",
@@ -1324,11 +1404,23 @@ async fn prepare_inside_savepoint(
             }
         }
         "reproject" => {
-            output_srid = parameters.get("target_srid").and_then(Value::as_i64)
+            output_srid = parameters
+                .get("target_srid")
+                .and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
                 .filter(|v| matches!(v, 4326 | 3857 | 4756 | 5899))
-                .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
-            let expr=approved_reproject(sp,org_id,project_id,input_src_id,input_srid,output_srid).await?;
+                .ok_or_else(|| {
+                    EditError::validation("INVALID_PARAMETERS", "unsupported target CRS")
+                })?;
+            let expr = approved_reproject(
+                sp,
+                org_id,
+                project_id,
+                input_src_id,
+                input_srid,
+                output_srid,
+            )
+            .await?;
             output_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
             let sql = format!(
                 "WITH transformed AS (
@@ -1336,43 +1428,92 @@ async fn prepare_inside_savepoint(
                    FROM spatial.reference_features rf
                    WHERE organization_id=$1 AND project_id=$2 AND source_id=$3
                  ) SELECT feature_id, attributes, {geom_cols}
-                   FROM transformed ORDER BY feature_id LIMIT $4");
-            let rows = sqlx::query(&sql).bind(org_id).bind(project_id)
-                .bind(input_src_id).bind(max_rows).fetch_all(&mut **sp).await.map_err(edit_db_error)?;
+                   FROM transformed ORDER BY feature_id LIMIT $4"
+            );
+            let rows = sqlx::query(&sql)
+                .bind(org_id)
+                .bind(project_id)
+                .bind(input_src_id)
+                .bind(max_rows)
+                .fetch_all(&mut **sp)
+                .await
+                .map_err(edit_db_error)?;
             for row in rows {
-                raw_rows.push(processing_raw_row(&row, row.try_get("feature_id").map_err(edit_db_error)?,
-                    row.try_get("attributes").map_err(edit_db_error)?)?);
+                raw_rows.push(processing_raw_row(
+                    &row,
+                    row.try_get("feature_id").map_err(edit_db_error)?,
+                    row.try_get("attributes").map_err(edit_db_error)?,
+                )?);
             }
         }
         "union" | "spatial_join" => {
-            let overlay_src_id = Uuid::parse_str(input_refs.get("overlay_source_id").and_then(Value::as_str).unwrap_or_default())
-                .map_err(|_| EditError::conflict("STALE_INPUT_PIN", "invalid overlay source pin"))?;
-            let overlay_srid = input_refs.get("overlay_stored_crs").and_then(Value::as_i64)
+            let overlay_src_id = Uuid::parse_str(
+                input_refs
+                    .get("overlay_source_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )
+            .map_err(|_| EditError::conflict("STALE_INPUT_PIN", "invalid overlay source pin"))?;
+            let overlay_srid = input_refs
+                .get("overlay_stored_crs")
+                .and_then(Value::as_i64)
                 .and_then(|v| i32::try_from(v).ok())
                 .ok_or_else(|| EditError::conflict("STALE_INPUT_PIN", "invalid overlay crs pin"))?;
             let transformed = if overlay_srid == input_srid {
                 "ov.geometry".to_owned()
             } else {
                 let (expr, _, _) = web_transform_expr("ov.geometry", overlay_srid, input_srid)?;
-                require_web_domain(sp, org_id, project_id, WebDomainCheck {
-                    source_id: overlay_src_id, native_srid: overlay_srid,
-                    expression: "geometry", expression_srid: overlay_srid, margin: 0.0,
-                }).await?;
+                require_web_domain(
+                    sp,
+                    org_id,
+                    project_id,
+                    WebDomainCheck {
+                        source_id: overlay_src_id,
+                        native_srid: overlay_srid,
+                        expression: "geometry",
+                        expression_srid: overlay_srid,
+                        margin: 0.0,
+                    },
+                )
+                .await?;
                 expr
             };
-            let input_fields = processing_source_fields(sp, org_id, project_id, input_src_id).await?;
-            let overlay_fields = processing_source_fields(sp, org_id, project_id, overlay_src_id).await?;
+            let input_fields =
+                processing_source_fields(sp, org_id, project_id, input_src_id).await?;
+            let overlay_fields =
+                processing_source_fields(sp, org_id, project_id, overlay_src_id).await?;
             let mut fields = vec![
-                ("source_feature_id".into(), "Source Feature ID".into(), "text".into(), true),
-                ("overlay_feature_id".into(), "Overlay Feature ID".into(), "text".into(), true),
+                (
+                    "source_feature_id".into(),
+                    "Source Feature ID".into(),
+                    "text".into(),
+                    true,
+                ),
+                (
+                    "overlay_feature_id".into(),
+                    "Overlay Feature ID".into(),
+                    "text".into(),
+                    true,
+                ),
             ];
             for (prefix, original) in [("input", &input_fields), ("overlay", &overlay_fields)] {
                 for (i, (_, name, kind, _)) in original.iter().enumerate() {
-                    fields.push((format!("{prefix}_{i}"), format!("{prefix} {}: {name}", i+1).chars().take(200).collect(), kind.clone(), true));
+                    fields.push((
+                        format!("{prefix}_{i}"),
+                        format!("{prefix} {}: {name}", i + 1)
+                            .chars()
+                            .take(200)
+                            .collect(),
+                        kind.clone(),
+                        true,
+                    ));
                 }
             }
-            if fields.len()>100 {
-                return Err(EditError::validation("PROCESSING_LIMIT","combined schema exceeds 100 fields"));
+            if fields.len() > 100 {
+                return Err(EditError::validation(
+                    "PROCESSING_LIMIT",
+                    "combined schema exceeds 100 fields",
+                ));
             }
             output_fields = fields;
             let cte = format!("WITH a AS (
@@ -1383,7 +1524,8 @@ async fn prepare_inside_savepoint(
                 FROM spatial.reference_features ov WHERE organization_id=$1 AND project_id=$2 AND source_id=$4
               )");
             let sql = if algorithm_id == "union" {
-                format!("{cte}, am AS (SELECT ST_Union(ag) AS g FROM a),
+                format!(
+                    "{cte}, am AS (SELECT ST_Union(ag) AS g FROM a),
                     bm AS (SELECT ST_Union(bg) AS g FROM b),
                     pieces AS (
                       SELECT aid, bid, aa, ba, ST_Intersection(ag,bg) AS g
@@ -1401,22 +1543,43 @@ async fn prepare_inside_savepoint(
                       FROM pieces CROSS JOIN LATERAL ST_Dump(g) part
                     ) SELECT aid,bid,aa,ba,{geom_cols} FROM dumped
                       WHERE ST_GeometryType(geom)='ST_Polygon' AND NOT ST_IsEmpty(geom)
-                      ORDER BY aid NULLS FIRST,bid NULLS FIRST,path LIMIT $5")
+                      ORDER BY aid NULLS FIRST,bid NULLS FIRST,path LIMIT $5"
+                )
             } else {
                 let predicate = match parameters.get("predicate").and_then(Value::as_str) {
-                    Some("intersects") => "ST_Intersects", Some("within") => "ST_Within",
-                    Some("contains") => "ST_Contains", Some("touches") => "ST_Touches",
-                    Some("overlaps") => "ST_Overlaps", Some("crosses") => "ST_Crosses",
+                    Some("intersects") => "ST_Intersects",
+                    Some("within") => "ST_Within",
+                    Some("contains") => "ST_Contains",
+                    Some("touches") => "ST_Touches",
+                    Some("overlaps") => "ST_Overlaps",
+                    Some("crosses") => "ST_Crosses",
                     Some("equals") => "ST_Equals",
-                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported spatial predicate")),
+                    _ => {
+                        return Err(EditError::validation(
+                            "INVALID_PARAMETERS",
+                            "unsupported spatial predicate",
+                        ))
+                    }
                 };
                 let join = match parameters.get("join_type").and_then(Value::as_str) {
-                    Some("left") => "LEFT JOIN", Some("inner") => "JOIN",
-                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported join type")),
+                    Some("left") => "LEFT JOIN",
+                    Some("inner") => "JOIN",
+                    _ => {
+                        return Err(EditError::validation(
+                            "INVALID_PARAMETERS",
+                            "unsupported join type",
+                        ))
+                    }
                 };
                 let limit = match parameters.get("match_mode").and_then(Value::as_str) {
-                    Some("first") => "LIMIT 1", Some("all") => "",
-                    _ => return Err(EditError::validation("INVALID_PARAMETERS", "unsupported match mode")),
+                    Some("first") => "LIMIT 1",
+                    Some("all") => "",
+                    _ => {
+                        return Err(EditError::validation(
+                            "INVALID_PARAMETERS",
+                            "unsupported match mode",
+                        ))
+                    }
                 };
                 format!("{cte}, joined AS (
                     SELECT aid, hit.bid, aa, hit.ba, ag AS geom
@@ -1425,8 +1588,15 @@ async fn prepare_inside_savepoint(
                     ) hit ON true
                 ) SELECT aid,bid,aa,ba,{geom_cols} FROM joined ORDER BY aid,bid NULLS FIRST LIMIT $5")
             };
-            let rows = sqlx::query(&sql).bind(org_id).bind(project_id).bind(input_src_id)
-                .bind(overlay_src_id).bind(max_rows).fetch_all(&mut **sp).await.map_err(edit_db_error)?;
+            let rows = sqlx::query(&sql)
+                .bind(org_id)
+                .bind(project_id)
+                .bind(input_src_id)
+                .bind(overlay_src_id)
+                .bind(max_rows)
+                .fetch_all(&mut **sp)
+                .await
+                .map_err(edit_db_error)?;
             for (i, row) in rows.iter().enumerate() {
                 let aid: Option<String> = row.try_get("aid").map_err(edit_db_error)?;
                 let bid: Option<String> = row.try_get("bid").map_err(edit_db_error)?;
@@ -1435,12 +1605,25 @@ async fn prepare_inside_savepoint(
                 let mut attrs = Map::new();
                 attrs.insert("source_feature_id".into(), json!(aid));
                 attrs.insert("overlay_feature_id".into(), json!(bid));
-                for (prefix, original, values) in [("input", &input_fields, aa.as_ref()), ("overlay", &overlay_fields, ba.as_ref())] {
+                for (prefix, original, values) in [
+                    ("input", &input_fields, aa.as_ref()),
+                    ("overlay", &overlay_fields, ba.as_ref()),
+                ] {
                     for (j, (id, _, _, _)) in original.iter().enumerate() {
-                        attrs.insert(format!("{prefix}_{j}"), values.and_then(|v| v.get(id)).cloned().unwrap_or(Value::Null));
+                        attrs.insert(
+                            format!("{prefix}_{j}"),
+                            values
+                                .and_then(|v| v.get(id))
+                                .cloned()
+                                .unwrap_or(Value::Null),
+                        );
                     }
                 }
-                raw_rows.push(processing_raw_row(row, format!("{algorithm_id}_{}", i+1), Value::Object(attrs))?);
+                raw_rows.push(processing_raw_row(
+                    row,
+                    format!("{algorithm_id}_{}", i + 1),
+                    Value::Object(attrs),
+                )?);
             }
         }
         "dissolve" => {

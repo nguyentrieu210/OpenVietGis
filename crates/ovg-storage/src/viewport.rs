@@ -472,10 +472,19 @@ impl ProjectRead<'_> {
             RenderRead::Tile => None,
             RenderRead::WholeSource => Some(self.whole_source_count(source_id, &source).await?),
         };
-        if let Some(edge)=transformation.filter(|edge|requires_fixture(edge)) {
-            if self.gis_scoped {return Err(out_of_area());}
-            let org=self.tx.organization_id();
-            crate::catalog::regional_crs::verify_regional_source(self.tx.tx_mut(),org,self.project_id,source_id,edge).await?;
+        if let Some(edge) = transformation.filter(|edge| requires_fixture(edge)) {
+            if self.gis_scoped {
+                return Err(out_of_area());
+            }
+            let org = self.tx.organization_id();
+            crate::catalog::regional_crs::verify_regional_source(
+                self.tx.tx_mut(),
+                org,
+                self.project_id,
+                source_id,
+                edge,
+            )
+            .await?;
         }
         let extent = source["extent"].as_object().and_then(|e| {
             Some([
@@ -583,7 +592,7 @@ fn display_ctes(transformation: Option<&TransformationProfile>) -> String {
             )"
         );
     };
-    let transform=crate::catalog::regional_crs::profile_expression(edge,"geometry");
+    let transform = crate::catalog::regional_crs::profile_expression(edge, "geometry");
     let area = edge.geographic_bounds;
     format!(
         "WITH native AS NOT MATERIALIZED ({native}),

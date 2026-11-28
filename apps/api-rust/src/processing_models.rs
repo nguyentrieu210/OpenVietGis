@@ -76,7 +76,14 @@ impl Algorithm {
     const fn vector(self) -> bool {
         matches!(
             self,
-            Self::Buffer | Self::Clip | Self::Dissolve | Self::Difference | Self::Intersection | Self::Union | Self::Reproject | Self::SpatialJoin
+            Self::Buffer
+                | Self::Clip
+                | Self::Dissolve
+                | Self::Difference
+                | Self::Intersection
+                | Self::Union
+                | Self::Reproject
+                | Self::SpatialJoin
         )
     }
 
