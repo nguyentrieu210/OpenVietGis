@@ -242,7 +242,7 @@ pub fn restore_unified_project(root_path:String,exchange_root:String,name:String
  unified::restore_project(Path::new(&root_path),Path::new(&exchange_root),&name).map_err(unified_error)
 }
 impl NativeUnifiedProject{
- pub fn close(&self)->Result<(),String>{self.inner.close().map_err(unified_error)}
+ pub fn close(&self)->Result<(),String>{crate::media_transfer::cancel(id(&self.inner.project_id())?);self.inner.close().map_err(unified_error)}
  pub fn catalog(&self)->Result<String,String>{self.inner.catalog().map_err(unified_error)}
  pub fn add_layer(&self,layer_id:String,name:String,expected:String)->Result<String,String>{
   self.inner.add_layer(&layer_id,&name,&expected).map_err(unified_error)
@@ -303,6 +303,42 @@ impl NativeUnifiedProject{
   let raw=self.inner.read_media_native(id(&attachment_id)?,&expected,&crate::media_keys::PlatformKeys).map_err(unified_error)?;
   crate::media_keys::PlatformKeys::show_preview(&raw).map_err(unified_error)
  }
+ pub fn begin_media_key_transfer(&self,layer_id:String,expected:String)->Result<String,String>{
+  use crate::media_keys::PlatformKeys;
+  if !PlatformKeys::available(){return Err("NATIVE_KEY_PROVIDER_UNAVAILABLE".into())}
+  let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let scope=id(v["scope"].as_str().ok_or("NO_MEDIA_DOMAIN")?)?;
+  let req=crate::media_transfer::begin(id(&self.inner.project_id())?,scope).map_err(unified_error)?;
+  let fp=crate::media_transfer::fingerprint(&req).map_err(unified_error)?;
+  Ok(serde_json::json!({"request":req,"fingerprint":fp,"ttl_seconds":300}).to_string())
+ }
+ pub fn media_transfer_fingerprint(&self,request:String)->Result<String,String>{
+  crate::media_transfer::fingerprint(&request).map_err(unified_error)
+ }
+ pub fn seal_media_key_transfer(&self,layer_id:String,expected:String,request:String,confirmed_fingerprint:String)->Result<String,String>{
+  use ovg_project_store::media::MediaKeys;
+  let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let scope=id(v["scope"].as_str().ok_or("NO_MEDIA_DOMAIN")?)?;
+  let key=crate::media_keys::PlatformKeys.key_for(scope).map_err(unified_error)?;
+  crate::media_transfer::seal(scope,&request,&confirmed_fingerprint,&key).map_err(unified_error)
+ }
+ pub fn receive_media_key_transfer(&self,layer_id:String,attachment_id:String,expected:String,envelope:String)->Result<bool,String>{
+  use ovg_project_store::{Error,media::MediaKeys};
+  use zeroize::Zeroizing;
+  struct Trial{scope:Uuid,key:Zeroizing<[u8;32]>}
+  impl MediaKeys for Trial{fn key_for(&self,scope:Uuid)->Result<Zeroizing<[u8;32]>,Error>{if scope!=self.scope{return Err(Error::Invalid)}Ok(Zeroizing::new(*self.key))}}
+  let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
+  let scope=id(v["scope"].as_str().ok_or("NO_MEDIA_DOMAIN")?)?;
+  let raw=crate::media_transfer::open(id(&self.inner.project_id())?,scope,&envelope).map_err(unified_error)?;
+  let trial=Trial{scope,key:raw};
+  // The restored attachment provides the AEAD oracle. Reject a wrong
+  // transferred key before touching permanent platform key storage.
+  let proof=self.inner.read_media_native(id(&attachment_id)?,&expected,&trial).map_err(unified_error)?;
+  drop(proof);
+  crate::media_keys::PlatformKeys::install(scope,&trial.key).map_err(unified_error)?;
+  Ok(true)
+ }
+ pub fn cancel_media_key_transfer(&self)->Result<(),String>{crate::media_transfer::cancel(id(&self.inner.project_id())?);Ok(())}
  pub fn media_key_status(&self,layer_id:String,expected:String)->Result<String,String>{
   use ovg_project_store::media::MediaKeys;
   let v:serde_json::Value=serde_json::from_str(&self.inner.media_inventory(&layer_id,"",&expected).map_err(unified_error)?).map_err(|_|"INVALID_INVENTORY".to_owned())?;
