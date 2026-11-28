@@ -11,6 +11,7 @@ license = "AGPL-3.0-or-later"
 tauri-build = { version = "2", features = [] }
 
 [features]
+remote-range = ["ovg-native-providers/remote-range"]
 default = []
 native-ogr = ["ovg-native-providers/ogr"]
 native-analytics = ["ovg-native-providers/analytics"]
