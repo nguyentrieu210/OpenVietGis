@@ -26,6 +26,8 @@ pub mod distributed;
 pub mod geotiff;
 pub mod disk_store;
 pub mod pipeline;
+pub mod colmap_model;
+pub mod ingest;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
