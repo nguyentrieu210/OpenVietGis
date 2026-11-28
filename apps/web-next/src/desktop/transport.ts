@@ -1,4 +1,8 @@
 export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean;local_edit:boolean;viewport:boolean;raster_archive:boolean};
+export type ViewState={lon:number;lat:number;zoom:number;bearing:number;pitch:number};
+export type LayerStyle={color:string;opacity:number};
+export type ProjectState={version:1;revision:number;view:ViewState;active:string;layers:{id:string;visible:boolean;style:LayerStyle}[]};
+export type AttributeField={name:string;kind:"text"|"integer"|"number"|"boolean";required:boolean;max_length:number|null;min:number|null;max:number|null};
 export type LayerInfo={id:string;name:string;source_epsg:number|null;source_table:string|null};
 export type Project = {id:string};
 export type Opened = {id:string; handle:string};
@@ -19,6 +23,9 @@ function host():Host {
 // Deliberately not a general invoke facade. All exposed calls are typed and bounded by Rust.
 export const desktop={
   capabilities:()=>host().core.invoke<Capabilities>("desktop_capabilities"),
+  projectState:(handle:string)=>host().core.invoke<ProjectState>("desktop_project_state",{handle}),
+  saveProjectState:(handle:string,state:ProjectState)=>host().core.invoke<ProjectState>("desktop_save_project_state",{handle,state,expected:state.revision}),
+  setSchema:(handle:string,fields:AttributeField[],confirmed:boolean)=>host().core.invoke<void>("desktop_set_schema",{handle,fields,confirmed}),
   listLayers:(handle:string)=>host().core.invoke<LayerInfo[]>("desktop_list_layers",{handle}),
   createLayer:(handle:string,name:string,grant:string|null=null,table:string|null=null)=>host().core.invoke<LayerInfo>("desktop_create_layer",{handle,name,grant,table}),
   openLayer:(handle:string,layer:string)=>host().core.invoke<Opened>("desktop_open_layer",{handle,layer}),
