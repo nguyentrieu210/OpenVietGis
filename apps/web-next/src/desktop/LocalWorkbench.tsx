@@ -22,6 +22,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const [asset,setAsset]=useState<AssetInfo>(),[assetPreview,setAssetPreview]=useState("");
   const cad=useRef<AssetInfo|undefined>(undefined);
   const [lasEpsg,setLasEpsg]=useState("4326");
+  const [copcBounds,setCopcBounds]=useState("0,0,0,1,1,1"),[copcLevel,setCopcLevel]=useState("0"),[pointPage,setPointPage]=useState(0);
   const [kind,setKind]=useState<Kind>(),[count,setCount]=useState(0);
   const draft=useRef<number[]>([]),mode=useRef<Kind|undefined>(undefined),alive=useRef(true);
   const sequence=useRef(0),pending=useRef(false),dirty=useRef(false),working=useRef(false);
@@ -156,16 +157,16 @@ export default function LocalWorkbench({handle}:{handle:string}){
     return()=>{for(const marker of vertexMarkers.current)marker.remove();vertexMarkers.current=[];vertexGeometry.current=undefined;(m.getSource("draft") as GeoJSONSource|undefined)?.setData(empty())};
     // Geometry text updates on drag end, rebuilding marker coordinates.
   },[vertexMode,selected,geometryText,ready]);
-  const openAsset=(kind:"cad"|"las"|"glb")=>run(async()=>{
+  const openAsset=(kind:"cad"|"las"|"laz"|"copc"|"glb")=>run(async()=>{
     if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
-    const epsg=kind==="cad"?4326:kind==="las"?Number(lasEpsg):null;
+    const epsg=kind==="cad"?4326:kind==="glb"?null:Number(lasEpsg);
     if(kind==="cad"&&!window.confirm("Xác nhận DXF POINT/LINE sử dụng tọa độ XY WGS84, không phải hệ mét CAD?"))return;
-    if(kind==="las"&&(!Number.isSafeInteger(epsg)||Number(epsg)<=0||Number(epsg)>4294967295))throw Error("EPSG không hợp lệ");
+    if(kind!=="cad"&&kind!=="glb"&&(!Number.isSafeInteger(epsg)||Number(epsg)<=0||Number(epsg)>4294967295))throw Error("EPSG không hợp lệ");
     const a=await desktop.openAsset(handle,kind,epsg);if(!a)return;
-    setAsset(a);
+    setAsset(a);setPointPage(0);
     const prefix=`ovg://v1/workspaces/${handle}`;
     if(a.kind==="cad"){cad.current=a;invalidate();setAssetPreview(a.count+" đối tượng DXF")}
-    else if(a.kind==="las"){
+    else if(a.kind==="las"||a.kind==="laz"||a.kind==="copc"){
       const b=await desktop.resource(`${prefix}/pointcloud/${a.id}/revisions/0/nodes/0`);
       if(b.byteLength%24!==0)throw Error("INVALID_LAS_CHUNK");
       const d=new DataView(b);const first=b.byteLength>=24?[d.getFloat64(0,true),d.getFloat64(8,true),d.getFloat64(16,true)]:[];
@@ -174,6 +175,19 @@ export default function LocalWorkbench({handle}:{handle:string}){
       const b=await desktop.resource(`${prefix}/assets/${a.id}/revisions/0/content`);
       setAssetPreview(`GLB tự chứa: ${b.byteLength} byte; renderer 3D ở Wave 3`);
     }
+  });
+  const readPointPage=(n:number)=>run(async()=>{
+    if(!asset||asset.kind==="cad"||asset.kind==="glb"||n<0||n*2048>=asset.count)return;
+    const b=await desktop.resource(`ovg://v1/workspaces/${handle}/pointcloud/${asset.id}/revisions/0/nodes/${n}`);
+    if(b.byteLength%24)throw Error("INVALID_POINT_CHUNK");
+    setPointPage(n);setAssetPreview(`Khối ${n}: ${b.byteLength/24} / ${asset.count} điểm; EPSG:${asset.epsg}`);
+  });
+  const queryCopc=()=>run(async()=>{
+    if(asset?.kind!=="copc")return;
+    const b=copcBounds.split(",").map(Number),level=Number(copcLevel);
+    if(b.length!==6||b.some(n=>!Number.isFinite(n))||!Number.isInteger(level))throw Error("INVALID_QUERY");
+    const data=await desktop.copcQuery(handle,asset.id,b as [number,number,number,number,number,number],level);
+    setAssetPreview(`COPC LOD ${level}: ${data.byteLength/24} điểm trong bbox`);
   });
   const closeAsset=()=>run(async()=>{
     if(!asset)return;
@@ -222,7 +236,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
       <button disabled={busy||!ready} aria-pressed={tiles} onClick={()=>void run(()=>setVectorTiles(!tiles))}>MVT vector tile</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const c=await desktop.inspectGPKG(handle);if(c){setCatalog(c);setTable(c.layers[0]?.table??"")}})}>Mở danh sách lớp GPKG</button>
       {catalog&&<><select aria-label="Lớp GeoPackage" value={table} onChange={e=>setTable(e.target.value)}>{catalog.layers.map(l=><option key={l.table} value={l.table}>{l.table} · EPSG:{l.epsg}</option>)}</select><button disabled={busy||!table} onClick={()=>void run(async()=>{await desktop.importLayer(handle,catalog.id,table);await afterMutation()})}>Nhập lớp vào dự án hiện tại</button></>}
-      <button disabled={busy||!ready||!!asset} onClick={()=>void openAsset("cad")}>Mở DXF XY</button><label>EPSG LAS <input aria-label="EPSG LAS" value={lasEpsg} maxLength={10} onChange={e=>setLasEpsg(e.target.value)}/></label><button disabled={busy||!!asset} onClick={()=>void openAsset("las")}>Đọc LAS</button><button disabled={busy||!!asset} onClick={()=>void openAsset("glb")}>Đọc GLB</button><button disabled={busy||!asset} onClick={()=>void closeAsset()}>Đóng tài nguyên</button>
+      <button disabled={busy||!ready||!!asset} onClick={()=>void openAsset("cad")}>Mở DXF XY</button><label>EPSG LAS <input aria-label="EPSG LAS" value={lasEpsg} maxLength={10} onChange={e=>setLasEpsg(e.target.value)}/></label><button disabled={busy||!!asset} onClick={()=>void openAsset("las")}>Đọc LAS</button><button disabled={busy||!!asset} onClick={()=>void openAsset("laz")}>Đọc LAZ</button><button disabled={busy||!!asset} onClick={()=>void openAsset("copc")}>Đọc COPC</button><button disabled={busy||!!asset} onClick={()=>void openAsset("glb")}>Đọc GLB</button><button disabled={busy||!asset} onClick={()=>void closeAsset()}>Đóng tài nguyên</button>
       <button disabled={busy||!ready} onClick={()=>void openRaster()}>Mở MBTiles PNG</button>
       <button disabled={busy||!raster} onClick={()=>void closeRaster()}>Đóng raster</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGeoJSON(handle);if(n!==null)await afterMutation()})}>Nhập GeoJSON</button>
@@ -236,6 +250,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,true);await afterMutation()})}>Redo</button>
     </div>
     <div ref={canvas} className="ovg-local-map" aria-label="Bản đồ dữ liệu cục bộ"/>
+    {asset&&["las","laz","copc"].includes(asset.kind)&&<div className="ovg-local-tools"><button disabled={busy||pointPage===0} onClick={()=>void readPointPage(pointPage-1)}>Khối điểm trước</button><button disabled={busy||(pointPage+1)*2048>=asset.count} onClick={()=>void readPointPage(pointPage+1)}>Khối điểm tiếp</button>{asset.kind==="copc"&&<><input aria-label="COPC bbox XYZ min max" value={copcBounds} onChange={e=>setCopcBounds(e.target.value)}/><input aria-label="LOD" value={copcLevel} onChange={e=>setCopcLevel(e.target.value)}/><button disabled={busy} onClick={()=>void queryCopc()}>Truy vấn COPC LOD</button></>}</div>}
     <div role="status" className="ovg-local-status">{notice}{assetPreview&&" · "+assetPreview}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
     <div className="ovg-local-table">
       <div><label>Tìm thuộc tính <input value={filter} maxLength={128} onChange={e=>setFilter(e.target.value)}/></label>
