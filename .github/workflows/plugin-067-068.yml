@@ -1,0 +1,110 @@
+name: Plugin 067-068 qualification
+
+on:
+  push:
+    branches: ["067-068-plugin-foundation"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "apps/api-rust/**"
+      - "apps/api/**"
+      - "crates/**"
+      - "modules/**"
+      - "packages/**"
+      - "apps/web-next/**"
+      - "tests/plugin-runtime/**"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plugin-067-068-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_PROJECT_NAME: ovg-plugin-qualification
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
+jobs:
+  qualify:
+    if: github.ref_name == '067-068-plugin-foundation'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require complete Wave 24 source
+        run: test -f modules/house_numbering/storage/src/persistence/certificate_locations.rs
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "12.21.0"
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+      - name: Install host test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+          uv sync --project apps/api --frozen
+          pnpm install --frozen-lockfile
+      - name: Build API once in Debian-compatible environment
+        id: build
+        run: |
+          mkdir -p dist/qualification
+          docker run --rm -v "$PWD:/work" -w /work -e CARGO_INCREMENTAL=0 -e CARGO_PROFILE_DEV_DEBUG=0 rust:1.85.1-slim-bookworm cargo build --locked -p openvietgis-api-rust
+          sudo chown -R "$(id -u):$(id -g)" target
+          target/debug/openvietgis-api-rust --help > dist/qualification/api-help.txt 2>&1 || true
+      - name: Architecture and frontend build
+        run: |
+          python3 tools/check_architecture.py
+          pnpm --filter @openvietgis/web-next build
+      - name: Start isolated PostGIS
+        run: docker compose -f infra/dev/compose.yaml up -d --wait --wait-timeout 180 postgres-test
+      - name: Module runtime HTTP
+        run: |
+          set -o pipefail
+          uv run --project apps/api python tests/plugin-runtime/bindings-http-smoke.py --candidate target/debug/openvietgis-api-rust --pure-commands --module-events 2>&1 | tee dist/qualification/bindings.log
+      - name: Address approval and issuance HTTP
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          uv run --project apps/api python tests/plugin-runtime/proposal-approval-smoke.py --candidate target/debug/openvietgis-api-rust 2>&1 | tee dist/qualification/approval.log
+      - name: Exact SQL regression
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          uv run --project apps/api python tests/plugin-runtime/proposal-approval-smoke.py --candidate target/debug/openvietgis-api-rust --sql-only 2>&1 | tee dist/qualification/sql.log
+      - name: Survey receipt HTTP
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          set -o pipefail
+          uv run --project apps/api python tests/plugin-runtime/survey-sync-v2-smoke.py --candidate target/debug/openvietgis-api-rust 2>&1 | tee dist/qualification/survey.log
+      - name: Package qualified candidate
+        if: success()
+        run: |
+          mkdir -p dist/candidate
+          cp target/debug/openvietgis-api-rust dist/candidate/
+          tar -C apps/web-next/dist -czf dist/candidate/web-dist.tar.gz .
+          git rev-parse HEAD > dist/candidate/REVISION
+          (cd dist/candidate && sha256sum openvietgis-api-rust web-dist.tar.gz REVISION > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ovg-plugin-candidate-${{ github.sha }}
+          path: dist/candidate/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ovg-plugin-qualification-logs
+          path: dist/qualification/
+          if-no-files-found: ignore
+          retention-days: 14
