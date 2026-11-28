@@ -17,6 +17,20 @@ PROJECT = "c498bd02-fdd3-47b1-a897-ca2b1d59f60a"
 LAYER = "859cc005-3e22-4707-8763-707d08183407"
 P = f"/api/v1/organizations/{ORG}/projects/{PROJECT}"
 L = f"{P}/layers/{LAYER}"
+# E07 is still FastAPI-owned; protect the whole transfer family at the gateway.
+E07_CASES = [
+    ("POST", f"{P}/imports/upload", "python", 200),
+    ("POST", f"{P}/imports/inspect", "python", 200),
+    ("POST", f"{P}/imports/confirm", "python", 200),
+    ("POST", f"{P}/exports/preview", "python", 200),
+    ("POST", f"{P}/exports/confirm", "python", 200),
+    ("GET", f"{P}/jobs?limit=50", "python", 200),
+    ("GET", f"{P}/jobs/{LAYER}", "python", 200),
+    ("POST", f"{P}/jobs/{LAYER}/cancel", "python", 200),
+    ("POST", f"{P}/jobs/{LAYER}/retry", "python", 200),
+    ("GET", f"{P}/artifacts/{LAYER}", "python", 200),
+    ("GET", f"{P}/artifacts/{LAYER}/download", "python", 200),
+]
 
 
 @contextmanager
@@ -33,6 +47,7 @@ def upstream(name):
                 "cookie": self.headers.get("Cookie"),
                 "authorization": self.headers.get("Authorization"),
                 "csrf": self.headers.get("X-OpenVietGIS-CSRF"),
+                "content_type": self.headers.get("Content-Type"),
                 "body": body.decode(),
             }).encode()
             self.send_response(418 if self.path.endswith("?status=418") else 200)
@@ -58,13 +73,15 @@ def upstream(name):
             worker.join()
 
 
-def request(port, method, target, body=None, *, authorization=None):
+def request(port, method, target, body=None, *, authorization=None, content_type=None):
     headers = {
         "Cookie": "session=fixture",
         "X-OpenVietGIS-CSRF": "fixture",
     }
     if authorization is not None:
         headers["Authorization"] = authorization
+    if content_type is not None:
+        headers["Content-Type"] = content_type
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=4)
     try:
         connection.request(method, target, body, headers)
@@ -72,6 +89,24 @@ def request(port, method, target, body=None, *, authorization=None):
         return response.status, response.getheader("X-Test-Upstream"), response.read()
     finally:
         connection.close()
+
+
+def e07_request_payload(method, target):
+    if target.endswith("/imports/upload"):
+        boundary = "ovg-e07-fixture"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="roads.gpkg"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+            "SQLite format 3\x00synthetic fixture\r\n"
+            f"--{boundary}--\r\n"
+        )
+        return body, f"multipart/form-data; boundary={boundary}"
+    if target.startswith((f"{P}/imports/", f"{P}/exports/")):
+        return "{}", "application/json"
+    if method in ("POST", "PUT"):
+        return "{}", None
+    return None, None
 
 
 def main():
@@ -130,7 +165,7 @@ def main():
                 ("GET", f"{L}/viewport/unmapped", "python", 200),
                 ("GET", f"{L}/%76iewport", "python", 200),
                 ("GET", "/api/v1/auth/oidc/keycloak/start", "python", 200),
-                ("POST", f"{P}/imports/upload", "python", 200),
+                *E07_CASES,
                 ("GET", f"{P}/cartography/layouts", "python", 200),
                 ("GET", f"{P}/processing/algorithms", "rust", 200),
                 ("POST", f"{P}/processing/jobs", "rust", 200),
@@ -155,9 +190,16 @@ def main():
             )
             assert (status, backend) == (200, "rust")
             for method, target, expected, expected_status in cases:
-                sent = "{}" if method in ("POST", "PUT") else None
-                status, backend, raw = request(port, method, target, sent)
-                assert (status, backend) == (expected_status, expected), (method, target, status, backend)
+                sent, content_type = e07_request_payload(method, target)
+                status, backend, raw = request(
+                    port, method, target, sent, content_type=content_type
+                )
+                assert (status, backend) == (expected_status, expected), (
+                    method,
+                    target,
+                    status,
+                    backend,
+                )
                 if method != "HEAD":
                     assert json.loads(raw) == {
                         "backend": expected,
@@ -166,6 +208,7 @@ def main():
                         "cookie": "session=fixture",
                         "authorization": None,
                         "csrf": "fixture",
+                        "content_type": content_type,
                         "body": sent or "",
                     }, (method, target, raw)
 
@@ -179,13 +222,57 @@ def main():
                 assert (status, backend) == (200, expected)
                 assert json.loads(raw)["authorization"] == "Bearer fixture"
 
+            for method, target, expected, expected_status in E07_CASES:
+                sent, content_type = e07_request_payload(method, target)
+                status, backend, raw = request(
+                    port,
+                    method,
+                    target,
+                    sent,
+                    authorization="Bearer fixture",
+                    content_type=content_type,
+                )
+                assert (status, backend) == (expected_status, expected), (
+                    "E07 bearer",
+                    method,
+                    target,
+                    status,
+                    backend,
+                )
+                assert json.loads(raw) == {
+                    "backend": expected,
+                    "method": method,
+                    "target": target,
+                    "cookie": "session=fixture",
+                    "authorization": "Bearer fixture",
+                    "csrf": "fixture",
+                    "content_type": content_type,
+                    "body": sent or "",
+                }, ("E07 bearer contract", method, target, raw)
+
             upstream_stack.close()
             assert request(port, "GET", f"{L}/viewport")[:2] == (502, None)
             assert request(port, "GET", f"{P}/cartography/layouts")[:2] == (200, "python")
+            for method, target, expected, expected_status in E07_CASES:
+                sent, content_type = e07_request_payload(method, target)
+                status, backend, raw = request(
+                    port, method, target, sent, content_type=content_type
+                )
+                assert (status, backend) == (expected_status, expected), (
+                    "E07 after Rust outage",
+                    method,
+                    target,
+                    status,
+                    backend,
+                )
+                assert json.loads(raw)["body"] == (sent or "")
         finally:
             nginx.terminate()
             nginx.wait(timeout=5)
-    print(f"{len(cases) + 3} routing and forwarding checks and two outage checks passed")
+    print(
+        f"{len(cases)} cookie routes, {len(E07_CASES)} E07 bearer routes, "
+        f"{len(E07_CASES)} retained E07 routes after Rust outage, and two outage checks passed"
+    )
 
 
 if __name__ == "__main__":
