@@ -155,7 +155,7 @@ export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overl
       }
       draw();
     }catch(e){setNotice(String(e));setVertexMode(false)}
-    return()=>{for(const marker of vertexMarkers.current)marker.remove();vertexMarkers.current=[];vertexGeometry.current=undefined;(m.getSource("draft") as GeoJSONSource|undefined)?.setData(empty())};
+    return()=>{for(const marker of vertexMarkers.current)marker.remove();vertexMarkers.current=[];vertexGeometry.current=undefined;if(map.current===m)(m.getSource("draft") as GeoJSONSource|undefined)?.setData(empty())};
     // Geometry text updates on drag end, rebuilding marker coordinates.
   },[vertexMode,selected,geometryText,ready]);
   useEffect(()=>{
