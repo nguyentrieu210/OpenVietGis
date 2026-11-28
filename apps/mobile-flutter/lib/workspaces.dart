@@ -17,6 +17,9 @@ class WorkspaceController extends ChangeNotifier{
   NativeWorkspace? _workspace;
   bool _disposed=false;
   int dataEpoch=0;
+  int focusEpoch=0;
+  List<double>? focusPoint;
+  void focus(double lon,double lat){focusPoint=[lon,lat];focusEpoch++;_notify();}
   void _notify(){if(!_disposed)notifyListeners();}
   Future<void> boot()async{
     try{
@@ -38,7 +41,7 @@ class WorkspaceController extends ChangeNotifier{
     final next=await openLocalWorkspace(rootPath:_root!,workspaceId:id);
     if(_disposed){await next.close();return;}
     final previous=_workspace;
-    _workspace=next;selected=id;dataEpoch++;
+    _workspace=next;selected=id;dataEpoch++;focusPoint=null;
     if(previous!=null)await previous.close();
     await _prefs!.setString('selected-local-workspace',id);
   }
@@ -87,6 +90,11 @@ class WorkspaceController extends ChangeNotifier{
   Future<void> history(bool redo)async{
     if(busy)return;final w=local;busy=true;_notify();
     try{if(await w.undoRedo(redo:redo))dataEpoch++;}
+    finally{busy=false;_notify();}
+  }
+  Future<void> publishResult(String result)async{
+    if(busy||!ready)throw StateError('WORKSPACE_UNAVAILABLE');busy=true;_notify();
+    try{final id=await publishProcessingResult(rootPath:_root!,resultJson:result);ids=await listLocalWorkspaces(rootPath:_root!);await _open(id);}
     finally{busy=false;_notify();}
   }
   Future<void> toggleLanguage()async{vi=!vi;_notify();await _prefs?.setBool('vi',vi);}

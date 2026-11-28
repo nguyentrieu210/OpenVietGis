@@ -206,6 +206,18 @@ impl LocalStore {
         };
         let a=read(ids)?;let b=read(overlay)?;tx.commit()?;Ok((a,b))
     }
+    pub fn search_features(&self,query:&str,after:i64,limit:u32)->Result<String,Error>{
+        if query.trim().is_empty()||query.len()>256||after<0||limit==0||limit>100{return Err(Error::Invalid);}
+        let db=self.lock()?;let mut stmt=db.prepare("SELECT fid,stable_id,revision,geom,attributes FROM features WHERE fid>?1 AND (instr(lower(stable_id),lower(?2))>0 OR instr(lower(attributes),lower(?2))>0) ORDER BY fid LIMIT ?3")?;
+        let mut rows=stmt.query(params![after,query,limit])?;let mut out=Vec::new();let mut bytes=0usize;
+        while let Some(r)=rows.next()?{
+            let blob:Vec<u8>=r.get(3)?;let attributes:String=r.get(4)?;
+            let (_,b)=parse_geometry(unpack(&blob)?)?;
+            bytes+=attributes.len()+128;if bytes>1024*1024{if out.is_empty(){return Err(Error::Limit);}break;}
+            out.push(serde_json::json!({"fid":r.get::<_,i64>(0)?,"id":r.get::<_,String>(1)?,"revision":r.get::<_,u64>(2)?,"bbox":[b.min_x,b.min_y,b.max_x,b.max_y],"attributes":serde_json::from_str::<serde_json::Value>(&attributes).map_err(|_|Error::Invalid)?}));
+        }
+        Ok(serde_json::Value::Array(out).to_string())
+    }
     pub fn checkpoint(&self)->Result<(),Error>{
         let db=self.lock()?;
         let busy:i32=db.query_row("PRAGMA wal_checkpoint(TRUNCATE)",[],|r|r.get(0))?;

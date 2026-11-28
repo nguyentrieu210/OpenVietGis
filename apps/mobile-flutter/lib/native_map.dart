@@ -28,7 +28,7 @@ class NativeLocalMap extends StatefulWidget{
 class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObserver{
   MapLibreMapController? _map;
   bool _loaded=false,_visible=true,_running=false,_pending=false,_truncated=false,_failed=false,_foreground=true;
-  int _epoch=0,_seen=-1;
+  int _epoch=0,_seen=-1,_focusSeen=-1;
   String? _scope,_selected,_drawing;
   final List<LatLng> _vertices=[];
   bool _snapping=true,_editingBusy=false;
@@ -42,6 +42,11 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
   }
   void _changed(){
     final c=widget.controller;
+    if(_focusSeen!=c.focusEpoch){
+      _focusSeen=c.focusEpoch;
+      final p=c.focusPoint;final map=_map;
+      if(p!=null&&map!=null){unawaited(map.animateCamera(CameraUpdate.newLatLngZoom(LatLng(p[1],p[0]),16)));}
+    }
     if(_scope==c.selected&&_seen==c.dataEpoch)return;
     _scope=c.selected;_seen=c.dataEpoch;_selected=null;_epoch++;
     _schedule();

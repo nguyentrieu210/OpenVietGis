@@ -41,6 +41,33 @@ pub fn create_local_workspace(root_path:String)->Result<String,String>{
         Err(e)=>{let _=fs::remove_dir_all(&dir);Err(e.to_string())}
     }
 }
+/// Publish a completed standalone WGS84 result to a new private workspace.
+/// Projected results remain explicit CRS-tagged WKB export, not mislabeled GPKG.
+pub fn publish_processing_result(root_path:String,result_json:String)->Result<String,String>{
+    if result_json.len()>20*1024*1024{return Err("RESOURCE_LIMIT".into());}
+    let r:ovg_mobile_engine::processing::ResultSet=serde_json::from_str(&result_json).map_err(|_|"INVALID_RESULT".to_owned())?;
+    if r.epsg!=4326||r.rows.len()>4096||r.adapter!="geo-0.31-mobile-bounded-v1"{return Err("UNSUPPORTED_OUTPUT_CRS_OR_PROFILE".into());}
+    if list_local_workspaces(root_path.clone())?.len()>=MAX_LOCAL_WORKSPACES{return Err("WORKSPACE_LIMIT".into());}
+    let root=root(&root_path)?;let id=Uuid::new_v4().to_string();let stage=root.join(format!(".processing-{id}"));let dst=root.join(&id);
+    fs::create_dir(&stage).map_err(|_|"CREATE_WORKSPACE_FAILED".to_owned())?;
+    let result=(||->Result<(),String>{
+        let store=LocalStore::open(&stage.join("workspace.gpkg"),QUOTA).map_err(|e|e.to_string())?;
+        let mut mutations=Vec::new();
+        for row in r.rows{
+            ovg_mobile_engine::edit::validate(&row.wkb).map_err(|e|e.to_string())?;
+            mutations.push(Mutation{operation_id:Uuid::new_v4(),feature_id:Uuid::new_v4(),expected_revision:0,wkb:Some(row.wkb),attributes:serde_json::json!({"attributes":row.attributes,"provenance":{"algorithm":r.algorithm,"parameters":r.parameters,"source_ids":row.source_ids,"overlay_ids":row.overlay_ids,"adapter":r.adapter}})});
+        }
+        if !mutations.is_empty(){store.apply_batch(&mutations).map_err(|e|e.to_string())?;}
+        store.checkpoint().map_err(|e|e.to_string())?;drop(store);
+        fs::File::open(stage.join("workspace.gpkg")).and_then(|f|f.sync_all()).map_err(|_|"SYNC_FAILED".to_owned())?;
+        fs::File::open(&stage).and_then(|f|f.sync_all()).map_err(|_|"SYNC_FAILED".to_owned())?;
+        if dst.exists(){return Err("WORKSPACE_EXISTS".into());}
+        fs::rename(&stage,&dst).map_err(|_|"PUBLISH_FAILED".to_owned())?;
+        fs::File::open(&root).and_then(|f|f.sync_all()).map_err(|_|"PUBLISH_OUTCOME_UNKNOWN".to_owned())?;
+        Ok(())
+    })();
+    if result.is_err(){let _=fs::remove_dir_all(&stage);}result?;Ok(id)
+}
 struct State { engine:Engine, session:Session, workspace:Workspace, store:LocalStore }
 impl Drop for State {fn drop(&mut self){let _=self.engine.close_session(self.session);}}
 #[flutter_rust_bridge::frb(opaque)]
@@ -92,6 +119,9 @@ impl NativeWorkspace {
     }
     pub fn attribute_page(&self,after:String,limit:u32,contains:String)->Result<String,String>{
         self.with_state(|s|s.store.attribute_page(after.parse().map_err(|_|"INVALID_CURSOR".to_owned())?,limit,&contains).map_err(|e|e.to_string()))
+    }
+    pub fn search_features(&self,query:String,after:String,limit:u32)->Result<String,String>{
+        self.with_state(|s|s.store.search_features(&query,after.parse().map_err(|_|"INVALID_CURSOR".to_owned())?,limit).map_err(|e|e.to_string()))
     }
     pub fn feature_json(&self,feature_id:String)->Result<String,String>{
         self.with_state(|s|s.store.feature_json(id(&feature_id)?).map_err(|e|e.to_string()))

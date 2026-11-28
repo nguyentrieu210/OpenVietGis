@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'native_map.dart';
 import 'survey_page.dart';
 import 'attribute_page.dart';
+import 'processing_page.dart';
+import 'search_page.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,7 +30,9 @@ final router=GoRouter(routes:[
   GoRoute(path:'/',builder:(context,state)=>const MapPage()),
   GoRoute(path:'/workspaces',builder:(context,state)=>const WorkspacePage()),
   GoRoute(path:'/survey',builder:(context,state)=>const SurveyRoute()),
-  GoRoute(path:'/attributes',builder:(context,state)=>const AttributesRoute())
+  GoRoute(path:'/attributes',builder:(context,state)=>const AttributesRoute()),
+  GoRoute(path:'/processing',builder:(context,state)=>const ProcessingRoute()),
+  GoRoute(path:'/search',builder:(context,state)=>const SearchRoute())
 ]);
 void main(){
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +53,7 @@ class MapPage extends ConsumerWidget{
     final c=ref.watch(controllerProvider); final vi=c.vi;
     return Scaffold(
       appBar:AppBar(title:const Text('OpenVietGIS'),actions:[
+        IconButton(tooltip:tr(vi,'Tìm kiếm','Search'),onPressed:c.ready&&!c.busy?()=>context.push('/search'):null,icon:const Icon(Icons.search)),
         IconButton(tooltip:tr(vi,'Không gian làm việc','Workspaces'),onPressed:()=>context.push('/workspaces'),icon:const Icon(Icons.folder_open)),
         IconButton(tooltip:tr(vi,'Đổi ngôn ngữ','Change language'),onPressed:c.toggleLanguage,icon:const Icon(Icons.language)),
       ]),
@@ -70,6 +75,7 @@ class MapPage extends ConsumerWidget{
           ListTile(leading:const Icon(Icons.share),title:Text(tr(vi,'Xuất GeoJSON','Export GeoJSON')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);unawaited(exportFile(context,c));}),
           ListTile(leading:const Icon(Icons.table_chart),title:Text(tr(vi,'Bảng thuộc tính','Attribute table')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/attributes');}),
           ListTile(leading:const Icon(Icons.gps_fixed),title:Text(tr(vi,'Khảo sát GPS','GPS survey')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/survey');}),
+          ListTile(leading:const Icon(Icons.account_tree),title:Text(tr(vi,'Xử lý không gian','Spatial processing')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/processing');}),
           ListTile(leading:const Icon(Icons.cloud_off),title:Text(tr(vi,'Kết nối máy chủ','Connect server')),subtitle:Text(tr(vi,'Chưa đủ điều kiện xác thực Mobile','Mobile authentication not qualified')),enabled:false),
           ListTile(leading:const Icon(Icons.extension),title:Text(tr(vi,'Plugin','Plugins')),subtitle:Text(tr(vi,'Chưa có runtime đã nghiệm thu','Runtime not qualified')),enabled:false),
         ]))),
@@ -147,4 +153,13 @@ class SurveyRoute extends ConsumerWidget{
 class AttributesRoute extends ConsumerWidget{
  const AttributesRoute({super.key});
  @override Widget build(BuildContext context,WidgetRef ref)=>AttributePage(controller:ref.watch(controllerProvider));
+}
+
+class ProcessingRoute extends ConsumerWidget{
+ const ProcessingRoute({super.key});
+ @override Widget build(BuildContext context,WidgetRef ref)=>ProcessingPage(controller:ref.watch(controllerProvider));
+}
+class SearchRoute extends ConsumerWidget{
+ const SearchRoute({super.key});
+ @override Widget build(BuildContext context,WidgetRef ref)=>SearchPage(controller:ref.watch(controllerProvider));
 }
