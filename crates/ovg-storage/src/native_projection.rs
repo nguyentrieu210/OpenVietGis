@@ -140,7 +140,9 @@ mod tests {
         assert!(!is_native_pair(5899, 4756));
         assert!(is_native_pair(9212, 3405));
         let p = NativeProjection::new(9212, 3405).unwrap();
-        let sql = p.expression("f.geometry");
+        let sql = p.expression("ov.geometry");
+        assert!(sql.contains("ov.geometry"));
+        assert!(!sql.contains("rf.geometry"));
         assert!(sql.contains("ST_InverseTransformPipeline"));
         assert!(sql.contains("+lon_0=106.25"));
         assert!(sql.contains("+lon_0=105"));
