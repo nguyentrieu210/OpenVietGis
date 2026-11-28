@@ -367,6 +367,29 @@ impl Host {
         self.mutate(handle,|s|s.history_step(redo).map_err(store_err))
     }
     // Path is obtained exclusively from the native dialog; never from renderer IPC.
+    pub fn import_csv(&self,handle:Uuid,path:&Path,x:&str,y:&str,epsg:u32,delimiter:u8)->Result<u32>{
+        if x.is_empty()||y.is_empty()||x==y||x.len()>128||y.len()>128||!matches!(delimiter,b','|b';'|b'\t'){return Err("INVALID_CSV_OPTIONS")}
+        regular(path)?;
+        let mut buf=Vec::new();fs::File::open(path).map_err(|_|"STORAGE_UNAVAILABLE")?.take(MAX_IMPORT+1).read_to_end(&mut buf).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        if buf.len()as u64>MAX_IMPORT{return Err("RESOURCE_LIMIT")}
+        self.mutate(handle,|s|s.import_csv(&buf,x,y,epsg,delimiter).map_err(store_err))
+    }
+    pub fn compact_layer_copy(&self,handle:Uuid,dest:&Path)->Result<()>{
+        if dest.exists(){return Err("DESTINATION_EXISTS")}
+        let stage=tempfile::tempdir_in(dest.parent().ok_or("INVALID_STORAGE")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        let source=stage.path().join("snapshot.gpkg");
+        self.snapshot(handle,&source)?;
+        let compact=stage.path().join("compact.gpkg");
+        {
+            let db=rusqlite::Connection::open_with_flags(&source,rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(|_|"INVALID_STORAGE")?;
+            db.execute("VACUUM INTO ?1",[compact.to_str().ok_or("INVALID_STORAGE")?]).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        }
+        let verified=stage.path().join("verified");fs::create_dir(&verified).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        crate::snapshot_restore::restore(&compact,&verified)?;
+        let out=verified.join("workspace.gpkg");
+        fs::hard_link(&out,dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;
+        Ok(())
+    }
     pub fn import_geojson(&self,handle:Uuid,path:&Path)->Result<u32>{
         regular(path)?;
         if fs::metadata(path).map_err(|_|"STORAGE_UNAVAILABLE")?.len()>MAX_IMPORT{return Err("RESOURCE_LIMIT")}
