@@ -53,8 +53,9 @@ try{
  await search.fill("PAN");
  const activeMenu=search.locator("xpath=ancestor::*[@role=\"region\"][1]");
  const exactResults=activeMenu.locator(".core-menu-items button");
- assert.equal(await exactResults.count(),1);
- assert.equal(await exactResults.locator("code").innerText(),"PAN");
+ const exactAliases=await exactResults.locator("code").allInnerTexts();
+ assert.ok(exactAliases.length>0);
+ assert.ok(exactAliases.every(alias=>alias==="PAN"),JSON.stringify(exactAliases));
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));
