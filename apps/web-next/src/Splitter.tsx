@@ -21,7 +21,13 @@ export function Splitter({storageKey,cssVar,axis,edge,min,max,label,defaultSize,
   el.focus({preventScroll:true});try{el.setPointerCapture(pointer)}catch{/* window listeners remain active */}
   let last=base,moved=false,done=false;
   const ghost=document.createElement("div");ghost.className="ovg-split-ghost ovg-split-ghost-"+axis;document.body.appendChild(ghost);
-  const place=(v:number)=>{if(axis==="x")ghost.style.left=v-1+"px";else ghost.style.top=v-1+"px"};place(from);
+  const place=(v:number)=>{
+   const panel=el.parentElement?.getBoundingClientRect();if(!panel)return;
+   // Draw only along the resized panel, never across the rest of the workspace.
+   const left=Math.max(0,panel.left),right=Math.min(innerWidth,panel.right),top=Math.max(0,panel.top),bottom=Math.min(innerHeight,panel.bottom);
+   if(axis==="x"){ghost.style.left=(v-1)+"px";ghost.style.top=top+"px";ghost.style.height=Math.max(0,bottom-top)+"px"}
+   else{ghost.style.top=(v-1)+"px";ghost.style.left=left+"px";ghost.style.width=Math.max(0,right-left)+"px"}
+  };place(from);
   const move=(ev:PointerEvent)=>{if(ev.pointerId!==pointer)return;const delta=(axis==="x"?ev.clientX:ev.clientY)-from;moved=moved||delta!==0;const factor=centered?2:1;last=clampSize(base+sign*delta*factor,min,limit());place(from+sign*(last-base)/factor)};
   const finish=(commit:boolean)=>{if(done)return;done=true;abort.current=null;ghost.remove();
    window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up);window.removeEventListener("pointercancel",cancel);el.removeEventListener("lostpointercapture",cancel);window.removeEventListener("blur",stop);window.removeEventListener("keydown",escape,true);

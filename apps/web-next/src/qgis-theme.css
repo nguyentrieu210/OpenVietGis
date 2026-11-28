@@ -178,7 +178,7 @@
 .qgis-studio .core-sketch-actions button{min-height:26px;padding:2px 10px;border:1px solid var(--ovg-line);border-radius:3px;background:#fff;font-size:12px}
 .qgis-studio .core-sketch-actions button.primary{background:var(--ovg-primary);border-color:var(--ovg-primary);color:#fff;min-width:64px}
 
-.ovg-split-ghost{position:fixed;z-index:3000;background:#1565a9aa;pointer-events:none}.ovg-split-ghost-x{top:0;bottom:0;width:2px}.ovg-split-ghost-y{left:0;right:0;height:2px}
+.ovg-split-ghost{position:fixed;z-index:3000;background:#1565a9aa;pointer-events:none}.ovg-split-ghost-x{width:2px}.ovg-split-ghost-y{height:2px}
 /* layer tree rows: left aligned like QGIS */
 .qgis-studio .qgis-layer-row .qgis-layer-name{justify-content:flex-start!important;text-align:left!important;flex:1;min-width:0}
 .qgis-studio .qgis-layer-row .qgis-layer-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

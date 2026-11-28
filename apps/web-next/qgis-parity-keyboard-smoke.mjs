@@ -65,7 +65,11 @@ try{
   const firstRow=page.locator('[data-layer-id="layer1"]'),secondRow=page.locator('[data-layer-id="layer2"]');
   await first.click();
   const dock=page.locator(".qgis-dock"),widthHandle=page.getByRole("separator",{name:"Đổi chiều rộng cây layer"});
-  const drag=async(handle,dx,dy)=>{const b=await handle.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+dx,b.y+b.height/2+dy,{steps:6});await page.mouse.up()};
+  const drag=async(handle,dx,dy)=>{const b=await handle.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2+dx,b.y+b.height/2+dy,{steps:6});
+   const scope=await handle.evaluate(e=>{const r=e.parentElement.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,axis:e.getAttribute("aria-orientation")}});
+   const ghost=page.locator(".ovg-split-ghost"),g=await ghost.boundingBox();assert.ok(g,"resize preview is visible");
+   if(scope.axis==="horizontal"){assert.ok(g.x>=scope.left-1&&g.x+g.width<=scope.right+1,"horizontal guide stays within panel width")}else{assert.ok(g.y>=scope.top-1&&g.y+g.height<=scope.bottom+1,"vertical guide stays within panel height")}
+   await page.mouse.up();assert.equal(await ghost.count(),0,"preview removed after pointer release")};
   const w0=(await dock.boundingBox()).width;await drag(widthHandle,55,0);
   const w1=(await dock.boundingBox()).width;assert.ok(w1>=w0+45,"dock must grow by pointer delta");
   const browserPanel=page.locator(".qgis-browser"),browserHandle=page.getByRole("separator",{name:"Chiều cao Trình duyệt"});
