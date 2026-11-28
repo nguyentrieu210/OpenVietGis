@@ -38,6 +38,7 @@ pub mod geotiff;
 pub mod disk_store;
 pub mod pipeline;
 pub mod prepared_render;
+pub mod flight;
 pub mod preview;
 pub mod xyz;
 pub mod xyz_cache;
