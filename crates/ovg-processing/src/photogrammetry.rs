@@ -49,6 +49,7 @@ pub mod glb_export;
 pub mod export_worker;
 pub mod tileset;
 pub mod dense_io;
+pub mod fused_ply;
 pub mod dense_job;
 
 use serde::{Deserialize, Serialize};

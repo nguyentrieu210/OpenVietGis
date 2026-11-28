@@ -1,0 +1,2 @@
+# W09 fusion output verification
+Streaming strict COLMAP binary little-endian vertex-only PLY reader, supports float XYZ with optional normals and uchar RGB, bounded header/points/bytes, finite coordinate and extent checks, exact record count and EOF, cancellation. No arbitrary PLY schema, georeferencing or point cloud reconstruction. This helper is available to the future qualified dense Executor; not yet wired to a concrete GPU runner. Tests authored, unexecuted.
