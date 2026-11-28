@@ -1,0 +1,6 @@
+# Output, Desktop and release lanes v2
+Output COG, LAS/LAZ/COPC, GLB/3D Tiles with declared CRS, bounds, units, nodata/confidence, independent reader validation and manifest revision. Single COG generated on export; shards remain immutable. Point scale/offset and hierarchy validated; 3D local origin and global transform tested. Splats visualization-only. Existing project registers asset references, not duplicate authoritative vector store.
+
+SPEC 074 typed IPC control; logical resource handles and bounded read plane for raster, COPC and 3D. No raw paths from frontend. Viewport priority, cancellation, LOD and bounded cache. React/Tauri reused; MapLibre/Cesium baseline, native GPU renderer only measured ADR. Standalone offline import and processing; explicit authorized publish/sync via existing SDK. No direct cloud database access.
+
+Windows x64 NVIDIA first. Linux CUDA/HIP and Windows AMD each require hardware/driver evidence; macOS arm64 and CPU sparse/fast separately qualify; CPU/Metal dense requires independent provider. Capability matrix per operation/OS/device; missing pack disabled, no silent upload. Signed optional packs independently installed/removed, offline import and rollback. Package size reported separately from base desktop. Release lanes A–F in plan; no optional feature blocks already qualified 2D.

@@ -21,6 +21,8 @@ pub mod seam;
 pub mod mesh;
 pub mod streaming;
 pub mod incremental;
+pub mod multispectral;
+pub mod distributed;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
