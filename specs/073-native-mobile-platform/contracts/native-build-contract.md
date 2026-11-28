@@ -1,0 +1,10 @@
+# Native build and distribution contract v2
+Owner E01/E16. Android arm64-v8a first; x86_64 emulator for correctness; iOS arm64 device/simulator separately, macOS runner required. 
+Pin Flutter/Dart, Rust MSRV and targets, Android SDK/NDK/CMake/Gradle/JDK, MapLibre, GDAL/GEOS/PROJ/SQLite and FRB generator in infra/mobile/toolchain manifest; capture source checksums, build flags, ABI, driver list and license. No automatic toolchain upgrade without shared workspace regression. Bundle PROJ db/grid versions and offline resources with checksums; no hidden network download for local GIS.
+## Android 16 KB
+All packaged native ELF libraries (including transitive dependencies) must support 4 KiB and 16 KiB page sizes. Verify ELF PT_LOAD alignment, uncompressed APK zip alignment (zipalign -c -P 16 -v 4), AAB bundle alignment and generated split APKs. Use current official NDK/AGP guidance and record exact versions in W0. Run installed release on 16 KB emulator/device (getconf PAGE_SIZE=16384) and ordinary 4 KB device; exercise native map, FFI, IO, PROJ, SQLite, plugin host. No workaround relying on compatibility mode. 
+## iOS
+Build native slices with compatible SDK, deployment target, frameworks and signing; test device and simulator separately. No downloaded native/Dart code. Verify actual policy for interpreted plugins and native API access before submission. iOS absence blocks only iOS profile, not Android.
+## Distribution
+Stable application ID, signed AAB/APK with offline-managed keys; CI secret isolation and artifact digest. Source offer/NOTICE/SBOM and license obligations reviewed; no AGPL relicensing without rights. Reproducible unsigned payload and dependency lock; signing metadata may differ; compare payloads and report deviations. Android sideload and store qualification separate; no store approval asserted. 
+Acceptance: locked build twice, artifact inventory and ABI/load tests, 4K/16K real runtime, installed upgrade and rollback/recovery, device lifecycle, no secrets in APK. References: https://developer.android.com/guide/practices/page-sizes ; https://developer.apple.com/app-store/review/guidelines/ . Exact policy reverified at release.
