@@ -8,7 +8,9 @@
 - [x] T006a Run static audit and unit tests: 6/6 scopes and 3/3 tests PASS.
 - [ ] T006b Capture baseline runtime screenshots/performance on a provisioned runner and close W0 qualification. No UI migration until baseline and candidate gates.
 ## W1 token system
-- [ ] T101 Define semantic tokens + validation; generate deterministic CSS/Tailwind/Dart; test light/dark/density/contrast and compatibility aliases.
+- [x] T101a Define semantic tokens + validation; generate deterministic CSS/Tailwind/Dart; test light/dark/density/contrast and compatibility aliases.
+- [x] T101b Run generator drift check, Node unit tests and isolated Chromium computed-style smoke.
+- [ ] T101c Qualify Tailwind compiler integration and Flutter SDK tests on provisioned runners after W0 runtime gate; activate adapters through coordinated integration.
 ## W2 React foundation
 - [ ] T201 Candidate spike/pins/license notices; extract primitives and dialog/menu/tooltip/popover/form; focus/keyboard/portal/overflow tests; facade SPEC072.
 ## W3 workbench

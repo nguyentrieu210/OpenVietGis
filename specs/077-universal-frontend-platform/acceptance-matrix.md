@@ -9,3 +9,12 @@
 | A06 plugin boundary | schema validation, unknown component/capability denial, tenant isolation, v1 compatibility | W7 pending |
 | A07 release | integrated CI, native packages, rollback; approved deploy | W11 pending |
 Source checks alone are not runtime acceptance. Missing external branch objects fail --all; default --verify checks main baseline only. Baseline counts are scoped tracked blobs, not repository-wide metrics.
+
+## W1 token acceptance
+| Gate | Status |
+|---|---|
+| 59 typed token values, light/dark and three density modes, contrast/touch/reduced-motion validation | PASS |
+| Deterministic generated CSS/Tailwind/Dart, checked artifact drift | PASS |
+| SPEC072 aliases and isolated Chromium computed style, 8 checks | PASS |
+| Production Tailwind compile and integrated screenshots | pending W0/T101c |
+| Flutter analyze/test and device theme integration | pending T101c |
