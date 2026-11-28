@@ -105,3 +105,24 @@ export const desktop={
   },
   menu:(fn:(id:string)=>void)=>host().event?.listen<string>("desktop-menu",e=>fn(e.payload))??Promise.resolve(()=>{}),
 };
+
+export type UnifiedFilter={op:"exists";field:string}|{op:"eq";field:string;value:unknown}|{op:"contains";field:string;text:string}|{op:"number_range";field:string;min:number;max:number};
+export type UnifiedPlan={layer:string;bbox:[number,number,number,number];filters:UnifiedFilter[];relation:{relation:string;source:string}|null};
+export type UnifiedCursor={revision:string;plan_digest:string;after:string};
+export type UnifiedCatalog={revision:string;layers:{id:string;name:string;fields:AttributeField[]|null}[];relations:{id:string;source:string;target:string;kind:string}[]};
+export type UnifiedEdit={layer:string;feature:string;expected:string;geometry:GeoJSON.Geometry|null;attributes:Attributes};
+export type UnifiedLink={relation:string;source:string;target:string;add:boolean};
+export type UnifiedBatch={operation:string;expected_project:string;edits:UnifiedEdit[];links:UnifiedLink[]};
+export const unified={
+ list:()=>host().core.invoke<Project[]>("unified_list"),
+ create:()=>host().core.invoke<Project>("unified_create"),
+ open:(id:string)=>host().core.invoke<Opened>("unified_open",{id}),
+ close:(handle:string)=>host().core.invoke<void>("unified_close",{handle}),
+ catalog:(handle:string)=>host().core.invoke<UnifiedCatalog>("unified_catalog",{handle}),
+ addLayer:(handle:string,name:string,expected:string)=>host().core.invoke<string>("unified_add_layer",{handle,name,expected}),
+ addRelation:(handle:string,source:string,target:string,kind:string,expected:string)=>host().core.invoke<string>("unified_add_relation",{handle,source,target,kind,expected}),
+ apply:(handle:string,input:UnifiedBatch)=>host().core.invoke<{revision:string;features:[string,string,string][]}>("unified_apply",{handle,input}),
+ query:(handle:string,plan:UnifiedPlan,cursor:UnifiedCursor|null,expected:string)=>host().core.invoke<{data:GeoJSON.FeatureCollection;next:UnifiedCursor|null;scanned:number}>("unified_query",{handle,plan,cursor,expected}),
+ compensate:(handle:string,operation:string,expected:string)=>host().core.invoke<string>("unified_compensate",{handle,operation,expected}),
+ schema:(handle:string,layer:string,fields:AttributeField[],expected:string)=>host().core.invoke<string>("unified_schema",{handle,layer,fields,expected}),
+};
