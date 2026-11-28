@@ -120,6 +120,9 @@ def main() -> int:
             csrf_a = parity.session_headers(
                 f["session_a_token"], **{"x-openvietgis-csrf": f["csrf_a_token"]}
             )
+            csrf_b = parity.session_headers(
+                f["session_b_token"], **{"x-openvietgis-csrf": f["csrf_b_token"]}
+            )
 
             dxf_lossy = _make_dxf_bytes([(11872000.0, 1204000.0), (11872050.0, 1204050.0)], include_unsupported_text=True)
             dxf_local = _make_dxf_bytes([(10.0, 20.0), (40.0, 60.0)])
@@ -284,6 +287,24 @@ def main() -> int:
                     ig_r = rust.post(f"{base_r}/cad/documents/{did_r}/versions/1/inspect-georef", headers=csrf_a, json=georef_req)
                     offline_helpers.compare("E10 inspect-georef 200", ig_o, ig_r, norm=_norm_inspect, expect_status=200)
 
+                    # A foreign tenant must not inspect another project's CAD version.
+                    foreign_inspect_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/inspect-georef",
+                        headers=csrf_b,
+                        json=georef_req,
+                    )
+                    foreign_inspect_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/inspect-georef",
+                        headers=csrf_b,
+                        json=georef_req,
+                    )
+                    offline_helpers.compare(
+                        "E10 inspect-georef foreign tenant denied",
+                        foreign_inspect_o,
+                        foreign_inspect_r,
+                        expect_status=(403, 404),
+                    )
+
                     # import-georef 201
                     imp_g_o = oracle.post(
                         f"{base_o}/cad/documents/{did_o}/versions/1/import-georef",
@@ -308,6 +329,37 @@ def main() -> int:
                         },
                     )
                     offline_helpers.compare("E10 import-georef 201", imp_g_o, imp_g_r, norm=_norm_import, expect_status=201)
+
+                    # Replaying a valid import request as a foreign tenant must not
+                    # expose the existing conversion or create another layer.
+                    foreign_import_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/import-georef",
+                        headers=csrf_b,
+                        json={
+                            **georef_req,
+                            "layer_name": "Local Calibrated",
+                            "expected_sha256": ig_o.json()["sha256"],
+                            "expected_inspection_fingerprint": ig_o.json()["inspection_fingerprint"],
+                            "acknowledge_loss": True,
+                        },
+                    )
+                    foreign_import_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/import-georef",
+                        headers=csrf_b,
+                        json={
+                            **georef_req,
+                            "layer_name": "Local Calibrated",
+                            "expected_sha256": ig_r.json()["sha256"],
+                            "expected_inspection_fingerprint": ig_r.json()["inspection_fingerprint"],
+                            "acknowledge_loss": True,
+                        },
+                    )
+                    offline_helpers.compare(
+                        "E10 import-georef foreign tenant denied",
+                        foreign_import_o,
+                        foreign_import_r,
+                        expect_status=(403, 404),
+                    )
 
                     # 5. export-georef-draft preview + download
                     layer_meta_o = oracle.get(f"{base_o}/layers/{imp_g_o.json()['layer_id']}", headers=csrf_a).json()["source"]
@@ -335,6 +387,46 @@ def main() -> int:
                         norm=_norm_draft,
                         expect_status=200,
                     )
+
+                    foreign_draft_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/export-georef-draft",
+                        headers=csrf_b,
+                        json=draft_req_o,
+                    )
+                    foreign_draft_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/export-georef-draft",
+                        headers=csrf_b,
+                        json=draft_req_r,
+                    )
+                    offline_helpers.compare(
+                        "E10 export-georef-draft foreign tenant denied",
+                        foreign_draft_o,
+                        foreign_draft_r,
+                        expect_status=(403, 404),
+                    )
+
+                    stale_revision = (
+                        "0" * 64
+                        if draft_req_o["expected_content_revision"] != "0" * 64
+                        else "1" * 64
+                    )
+                    stale_draft_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/export-georef-draft",
+                        headers=csrf_a,
+                        json=draft_req_o | {"expected_content_revision": stale_revision},
+                    )
+                    stale_draft_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/export-georef-draft",
+                        headers=csrf_a,
+                        json=draft_req_r | {"expected_content_revision": stale_revision},
+                    )
+                    offline_helpers.compare(
+                        "E10 export-georef-draft stale content revision",
+                        stale_draft_o,
+                        stale_draft_r,
+                        expect_status=409,
+                    )
+
                     for side, response in (("oracle", dp_o), ("rust", dp_r)):
                         fingerprint = response.json()["preview_fingerprint"]
                         require(
@@ -342,6 +434,36 @@ def main() -> int:
                             and all(ch in "0123456789abcdef" for ch in fingerprint),
                             f"{side} draft preview fingerprint is not a sha256 hex digest",
                         )
+
+                    wrong_fingerprint = (
+                        "0" * 64
+                        if dp_o.json()["preview_fingerprint"] != "0" * 64
+                        else "1" * 64
+                    )
+                    stale_download_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/export-georef-draft",
+                        headers=csrf_a,
+                        json={
+                            **draft_req_o,
+                            "expected_preview_fingerprint": wrong_fingerprint,
+                            "acknowledge_loss": True,
+                        },
+                    )
+                    stale_download_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/export-georef-draft",
+                        headers=csrf_a,
+                        json={
+                            **draft_req_r,
+                            "expected_preview_fingerprint": wrong_fingerprint,
+                            "acknowledge_loss": True,
+                        },
+                    )
+                    offline_helpers.compare(
+                        "E10 export-georef-draft stale preview rejected",
+                        stale_download_o,
+                        stale_download_r,
+                        expect_status=409,
+                    )
 
                     dd_o = oracle.post(
                         f"{base_o}/cad/documents/{did_o}/versions/1/export-georef-draft",
@@ -391,6 +513,56 @@ def main() -> int:
                         json={"conversion_id": imp_g_r.json()["id"], "expected_candidate_sha256": v2_r["sha256"]},
                     )
                     offline_helpers.compare("E10 preview-native-import 200", pn_o, pn_r, norm=_norm_native, expect_status=200)
+
+                    foreign_native_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/preview-native-import",
+                        headers=csrf_b,
+                        json={
+                            "conversion_id": imp_g_o.json()["id"],
+                            "expected_candidate_sha256": v2_o["sha256"],
+                        },
+                    )
+                    foreign_native_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/preview-native-import",
+                        headers=csrf_b,
+                        json={
+                            "conversion_id": imp_g_r.json()["id"],
+                            "expected_candidate_sha256": v2_r["sha256"],
+                        },
+                    )
+                    offline_helpers.compare(
+                        "E10 preview-native-import foreign tenant denied",
+                        foreign_native_o,
+                        foreign_native_r,
+                        expect_status=(403, 404),
+                    )
+
+                    wrong_candidate_sha = (
+                        "0" * 64 if v2_o["sha256"] != "0" * 64 else "1" * 64
+                    )
+                    stale_native_o = oracle.post(
+                        f"{base_o}/cad/documents/{did_o}/versions/1/preview-native-import",
+                        headers=csrf_a,
+                        json={
+                            "conversion_id": imp_g_o.json()["id"],
+                            "expected_candidate_sha256": wrong_candidate_sha,
+                        },
+                    )
+                    stale_native_r = rust.post(
+                        f"{base_r}/cad/documents/{did_r}/versions/1/preview-native-import",
+                        headers=csrf_a,
+                        json={
+                            "conversion_id": imp_g_r.json()["id"],
+                            "expected_candidate_sha256": wrong_candidate_sha,
+                        },
+                    )
+                    offline_helpers.compare(
+                        "E10 preview-native-import stale candidate rejected",
+                        stale_native_o,
+                        stale_native_r,
+                        expect_status=409,
+                    )
+
                     require(len(pn_r.json()["operations"]) == 1, f"expected 1 native delta op, got {pn_r.json()}")
             finally:
                 get_engine().dispose()
