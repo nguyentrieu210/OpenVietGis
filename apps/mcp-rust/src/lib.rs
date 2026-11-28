@@ -3,6 +3,7 @@
 //! GIS permissions. All operations are scoped to the authenticated owner.
 pub mod tools;
 pub mod skills;
+pub mod agent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
