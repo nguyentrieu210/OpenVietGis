@@ -21,7 +21,9 @@ use ovg_module_sdk::declarative::{
 };
 use ovg_storage::{
     catalog::{ProjectRead, ProjectReadPolicy},
-    extensions::runtime_v2::{active_pin, receipt, ActivePin, ReceiptInput},
+    extensions::runtime_v2::{
+        active_pin, grant_status, receipt, set_grant, ActivePin, ReceiptInput,
+    },
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -41,6 +43,7 @@ pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(BASE, get(document))
         .route(&format!("{BASE}/invoke"), post(invoke))
+        .route(&format!("{BASE}/grant"), post(change_grant))
 }
 struct Ready {
     doc: Document,
@@ -48,8 +51,8 @@ struct Ready {
     policies: BTreeMap<String, CommandPolicy>,
     digest: String,
 }
-/// Only reviewed v1 host_context/host_notice capabilities can be translated.
-/// These commands cannot read resource contents or perform material mutations.
+/// Only reviewed host capabilities can be translated. GIS reads are restricted to metadata.
+/// No material mutations are permitted.
 fn qualify(pin: &ActivePin, releases: &[VerifiedRelease]) -> Result<Ready, AppError> {
     let md =
         hash(&marketplace_canonical(&pin.manifest).map_err(|_| invalid("manifest serialization"))?);
@@ -72,12 +75,17 @@ fn qualify(pin: &ActivePin, releases: &[VerifiedRelease]) -> Result<Ready, AppEr
         .as_array()
         .ok_or_else(|| invalid("invalid capabilities"))?;
     let mut policies = BTreeMap::new();
-    for command in ["host_context", "host_notice"] {
-        if caps.iter().any(|v| v.as_str() == Some(command)) {
+    for (command, cap) in [
+        ("host_context", "host_context"),
+        ("host_notice", "host_notice"),
+        ("gis_layers", "map_view"),
+        ("gis_layer", "map_view"),
+    ] {
+        if caps.iter().any(|v| v.as_str() == Some(cap)) {
             policies.insert(
                 command.to_owned(),
                 CommandPolicy {
-                    permission: format!("ext.{key}.{command}"),
+                    permission: format!("ext.{key}.{cap}"),
                     consent: Consent::Read,
                 },
             );
@@ -96,6 +104,21 @@ fn qualify(pin: &ActivePin, releases: &[VerifiedRelease]) -> Result<Ready, AppEr
     for action in &doc.actions {
         let valid = match action.command_id.as_str() {
             "host_context" => action.input.is_empty(),
+            "gis_layers" => {
+                action.input.is_empty()
+                    || (action.input.len() == 1
+                        && action
+                            .input
+                            .get("after_id")
+                            .is_some_and(|f| !f.required && f.kind == FieldType::Text))
+            }
+            "gis_layer" => {
+                action.input.len() == 1
+                    && action
+                        .input
+                        .get("layer_id")
+                        .is_some_and(|f| f.required && f.kind == FieldType::Text)
+            }
             "host_notice" => {
                 action.input.len() == 1
                     && action
@@ -169,10 +192,87 @@ async fn document(
         .await
         .map_err(ExtensionError::Domain)?;
     let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
-    let result = json!({"document":ready.doc,"release_digest":ready.digest,"activation_revision":pin.revision,
+    let grant = grant_status(&mut read, &pin, &ready.digest)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    let result = json!({"granted":grant.granted,"grant_revision":grant.sequence.to_string(),"permissions":ready.permissions,"document":ready.doc,"release_digest":ready.digest,"activation_revision":pin.revision,
         "manifest_id":pin.manifest_id,"profile":"web_read_only"});
     read.commit().await.map_err(ExtensionError::Domain)?;
     Ok(no_store(result))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GrantBody {
+    release_digest: String,
+    activation_revision: i64,
+    enabled: bool,
+    grant_revision: String,
+}
+async fn change_grant(
+    State(state): State<AppState>,
+    Path((org, project, manifest)): Path<(String, String, String)>,
+    request: Request<axum::body::Body>,
+) -> Result<Response, ExtensionError> {
+    check_enabled(&state)?;
+    let (parts, body) = request.into_parts();
+    let bytes = axum::body::to_bytes(body, 4096)
+        .await
+        .map_err(|_| ExtensionError::InvalidRequest)?;
+    let (actor, headers, body) = authenticate_json(
+        &state,
+        Request::from_parts(parts, axum::body::Body::from(bytes)),
+        &org,
+    )
+    .await?;
+    check_human(&actor)?;
+    require_actor_csrf(&state, &actor, &headers)?;
+    let body: GrantBody = decode_body(body)?;
+    let mut read = open_project_scope(
+        &state,
+        &actor,
+        parse_uuid(&org)?,
+        parse_uuid(&project)?,
+        ProjectReadPolicy::UnrestrictedManage,
+    )
+    .await?;
+    let pin = active_pin(&mut read, parse_uuid(&manifest)?)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    if pin.revision != body.activation_revision {
+        return Err(ExtensionError::Domain(AppError::conflict(
+            "STALE_PLUGIN_ACTIVATION",
+            "activation changed",
+        )));
+    }
+    // Approval always requires fresh signed catalog; revocation is allowed even if removed from catalog.
+    if body.enabled {
+        let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
+        if ready.digest != body.release_digest {
+            return Err(ExtensionError::Domain(AppError::conflict(
+                "STALE_PLUGIN_RELEASE",
+                "release changed",
+            )));
+        }
+    }
+    let expected = body
+        .grant_revision
+        .parse::<i64>()
+        .ok()
+        .filter(|v| *v >= 0)
+        .ok_or(ExtensionError::InvalidRequest)?;
+    let grant = set_grant(
+        &mut read,
+        &pin,
+        &body.release_digest,
+        body.enabled,
+        expected,
+    )
+    .await
+    .map_err(ExtensionError::Domain)?;
+    read.commit().await.map_err(ExtensionError::Domain)?;
+    Ok(no_store(
+        json!({"granted":grant.granted,"grant_revision":grant.sequence.to_string()}),
+    ))
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -183,8 +283,13 @@ struct InvokeBody {
     action_id: String,
     input: Value,
 }
-fn run(
-    read: &ProjectRead<'_>,
+/// Allowlisted metadata only; never return source URLs, features, coordinates, attributes or credentials.
+fn layer_summary(layer: &Value) -> Value {
+    json!({"id":layer["id"],"name":layer["name"],"lifecycle":layer["lifecycle"],"layer_revision":layer["layer_revision"],
+        "geometry_family":layer["source"]["schema"]["geometry_family"],"feature_count":layer["source"]["feature_count"]})
+}
+async fn run(
+    read: &mut ProjectRead<'_>,
     ready: &Ready,
     body: &InvokeBody,
 ) -> Result<(String, Value), AppError> {
@@ -218,6 +323,30 @@ fn run(
     let a = authorize(&ready.doc, &scope, &grant, &request, &ready.policies)?;
     let output = match a.command_id.as_str() {
         "host_context" => json!({"locale":"vi-VN","sdk_version":"2.0","profile":"web_read_only"}),
+        "gis_layers" => {
+            let cursor = body
+                .input
+                .get("after_id")
+                .map(|v| {
+                    Uuid::parse_str(v.as_str().unwrap_or_default())
+                        .map_err(|_| invalid("invalid layer cursor"))
+                })
+                .transpose()?;
+            let result = read.list_layers(cursor, 50).await?;
+            let rows = result["items"]
+                .as_array()
+                .ok_or_else(|| invalid("invalid layer catalog"))?;
+            json!({"items":rows.iter().map(layer_summary).collect::<Vec<_>>(),"next_after_id":result["next_after_id"],"limit":50})
+        }
+        "gis_layer" => {
+            let id = Uuid::parse_str(
+                body.input["layer_id"]
+                    .as_str()
+                    .ok_or_else(|| invalid("layer id required"))?,
+            )
+            .map_err(|_| invalid("invalid layer id"))?;
+            layer_summary(&read.get_layer(id).await?)
+        }
         "host_notice" => {
             let text = body.input["text"]
                 .as_str()
@@ -272,7 +401,18 @@ async fn invoke(
         )));
     }
     let ready = qualify(&pin, &releases(&state).await?).map_err(ExtensionError::Domain)?;
-    let (command, output) = run(&read, &ready, &body).map_err(ExtensionError::Domain)?;
+    if !grant_status(&mut read, &pin, &ready.digest)
+        .await
+        .map_err(ExtensionError::Domain)?
+        .granted
+    {
+        return Err(ExtensionError::Domain(AppError::forbidden(
+            "project manager approval required",
+        )));
+    }
+    let (command, output) = run(&mut read, &ready, &body)
+        .await
+        .map_err(ExtensionError::Domain)?;
     let digest = hash(
         &marketplace_canonical(&json!({"action_id":body.action_id,"input":body.input}))
             .map_err(|_| ExtensionError::InvalidRequest)?,
@@ -317,10 +457,24 @@ mod tests {
         )
     }
     #[test]
+    fn layer_summary_excludes_sensitive_source_fields() {
+        let row = json!({"id":"layer","name":"A","lifecycle":"active","layer_revision":2,
+            "source":{"schema":{"geometry_family":"Polygon"},"feature_count":3,"url":"private","extent":[1,2,3,4],"fields":[{"name":"private"}]}});
+        let result = layer_summary(&row);
+        assert_eq!(
+            result,
+            json!({"id":"layer","name":"A","lifecycle":"active","layer_revision":2,"geometry_family":"Polygon","feature_count":3})
+        );
+    }
+    #[test]
     fn runtime_policy_is_fail_closed() {
         let (p, r) = fixture("host_context", "host_context", "read");
         assert!(qualify(&p, &r).is_ok());
         let (p, r) = fixture("host_context", "host_context", "mutation");
+        assert!(qualify(&p, &r).is_err());
+        let (p, r) = fixture("map_view", "gis_layers", "read");
+        assert!(qualify(&p, &r).is_ok());
+        let (p, r) = fixture("host_context", "gis_layers", "read");
         assert!(qualify(&p, &r).is_err());
         let (p, r) = fixture("map_view", "map_view", "read");
         assert!(qualify(&p, &r).is_err());

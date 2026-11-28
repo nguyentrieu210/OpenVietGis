@@ -1,16 +1,17 @@
 import React,{useEffect,useRef,useState} from "react";
-import {getPluginV2Runtime,invokePluginV2,loadCsrfToken,type ApiClient,type PluginV2Runtime,type PluginV2Widget} from "@openvietgis/client-sdk";
+import {getPluginV2Runtime,invokePluginV2,setPluginV2Grant,loadCsrfToken,type ApiClient,type PluginV2Runtime,type PluginV2Widget} from "@openvietgis/client-sdk";
 
-export function DeclarativePluginPanel({client,org,project,manifest,onClose}:{client:ApiClient;org:string;project:string;manifest:string;onClose:()=>void}){
+export function DeclarativePluginPanel({client,org,project,manifest,canManage,onClose}:{client:ApiClient;org:string;project:string;manifest:string;canManage:boolean;onClose:()=>void}){
  const [runtime,setRuntime]=useState<PluginV2Runtime|null>(null),[values,setValues]=useState<Record<string,string>>({}),[output,setOutput]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
  const active=useRef<AbortController|null>(null),flight=useRef(false);
  useEffect(()=>{
   const ctrl=new AbortController();active.current=ctrl;setRuntime(null);setValues({});setOutput("");setError("");setBusy(false);flight.current=false;
-  void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted)setRuntime(r)}).catch(()=>{if(!ctrl.signal.aborted)setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")});
-  return()=>{ctrl.abort();active.current=null};
+  const refresh=()=>{if(flight.current)return;void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted&&!flight.current){setRuntime(r);if(!r.granted)setOutput("")}}).catch(()=>{if(!ctrl.signal.aborted&&!flight.current){setRuntime(null);setOutput("");setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")}})};
+  refresh();const timer=window.setInterval(refresh,15000);
+  return()=>{window.clearInterval(timer);ctrl.abort();active.current=null};
  },[client,org,project,manifest]);
  const execute=async(actionId:string)=>{
-  const ctrl=active.current;if(!runtime||!ctrl||ctrl.signal.aborted||flight.current)return;
+  const ctrl=active.current;if(!runtime||!runtime.granted||!ctrl||ctrl.signal.aborted||flight.current)return;
   const action=runtime.document.actions.find(a=>a.id===actionId);
   if(!action||action.consent!=="read")return;
   const input:Record<string,unknown>=Object.create(null) as Record<string,unknown>;
@@ -29,6 +30,15 @@ export function DeclarativePluginPanel({client,org,project,manifest,onClose}:{cl
   }catch{if(!ctrl.signal.aborted){setError("Không thể thực hiện. Quyền hoặc phiên bản plugin có thể đã thay đổi; hãy đóng và mở lại.");setRuntime(null)}}
   finally{if(!ctrl.signal.aborted){flight.current=false;setBusy(false)}}
  };
+ const changeGrant=async(enabled:boolean)=>{
+  const ctrl=active.current;if(!canManage||!runtime||!ctrl||ctrl.signal.aborted||flight.current)return;
+  flight.current=true;setBusy(true);setError("");setOutput("");
+  try{await loadCsrfToken(client);if(ctrl.signal.aborted)return;
+   const result=await setPluginV2Grant(client,org,project,runtime,enabled,ctrl.signal);
+   if(!ctrl.signal.aborted)setRuntime({...runtime,granted:result.granted,grant_revision:result.grant_revision});
+  }catch{if(!ctrl.signal.aborted)setError("Không thể cập nhật quyền. Hãy mở lại plugin.")}
+  finally{if(!ctrl.signal.aborted){flight.current=false;setBusy(false)}}
+ };
  const render=(nodes:PluginV2Widget[],depth=1):React.ReactNode=>depth>16?null:nodes.map(node=>{
   switch(node.kind){
    case "text":return <p key={node.id}>{node.text}</p>;
@@ -38,5 +48,5 @@ export function DeclarativePluginPanel({client,org,project,manifest,onClose}:{cl
    default:return null;
   }
  });
- return <section className="partner-form" aria-label="Plugin khai báo v2"><button onClick={onClose}>Đóng plugin v2</button><p className="live-note">Runtime thử nghiệm · chỉ đọc · không chạy mã tải về.</p>{!runtime&&!error&&<p>Đang xác minh plugin…</p>}{runtime&&render(runtime.document.widgets)}{error&&<p role="alert">{error}</p>}{output&&<pre aria-live="polite">{output}</pre>}</section>
+ return <section className="partner-form" aria-label="Plugin khai báo v2"><button onClick={onClose}>Đóng plugin v2</button><p className="live-note">Runtime thử nghiệm · chỉ đọc · không chạy mã tải về.</p>{!runtime&&!error&&<p>Đang xác minh plugin…</p>}{runtime&&<div><p>Quyền thực thi: {runtime.granted?"Đã cấp":"Chưa cấp"}</p><ul>{runtime.permissions.map(p=><li key={p}>{p.endsWith(".map_view")?"Đọc tên lớp, loại hình học, số đối tượng và mã lớp trong dự án":p}</li>)}</ul>{canManage&&<button disabled={busy} onClick={()=>void changeGrant(!runtime.granted)}>{runtime.granted?"Thu hồi quyền":"Cấp quyền cho phiên bản này"}</button>}{runtime.granted&&render(runtime.document.widgets)}</div>}{error&&<p role="alert">{error}</p>}{output&&<pre aria-live="polite">{output}</pre>}</section>
 }

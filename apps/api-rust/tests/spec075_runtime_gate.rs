@@ -26,7 +26,7 @@ async fn runtime_default_disabled_and_catalog_does_not_advertise_execution() {
         serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap()).unwrap();
     assert_eq!(value["items"], serde_json::json!([]));
     assert_eq!(value["web_read_only_enabled"], false);
-    for (method, suffix) in [("GET", ""), ("POST", "/invoke")] {
+    for (method, suffix) in [("GET", ""), ("POST", "/invoke"), ("POST", "/grant")] {
         let response = app
             .clone()
             .oneshot(

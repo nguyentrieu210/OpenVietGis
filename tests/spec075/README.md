@@ -5,3 +5,4 @@
 - `cargo test --locked -p openvietgis-api-rust --no-default-features --test spec075_runtime_gate` exercises disabled runtime routes.
 - `pnpm --filter @openvietgis/client-sdk exec vitest run tests/plugin-v2.test.ts`.
 - The SQL receipt fixture is for an EMPTY disposable PostgreSQL/PostGIS database only. Run receipt_fixture.sql, then exact upgrade SQL from migration 0052, then test_receipt_rls.sql with psql ON_ERROR_STOP=1. Fixture implements minimal FK/ACL interfaces, not the full migration chain. Do not run fixture against any shared or production database.
+- For the grant event fixture, apply exact migrations 0052 and 0053 after receipt_fixture.sql, then run test_receipt_rls.sql and test_grant_rls.sql. The latter checks append-only privilege, forged actor denial, cross-tenant scope and latest revoke event. It does not replace manager authorization E2E with canonical ProjectRead and the full database schema.

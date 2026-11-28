@@ -44,7 +44,7 @@ def publisher(args):
     if not envelope["extension_key"].startswith("partner_" + envelope["publisher_id"] + "_"):
         raise ValueError("publisher namespace mismatch")
     allowed = set(manifest["permissions"])
-    allowed.update("ext." + envelope["extension_key"] + "." + cap for cap in ("host_context", "host_notice") if cap in manifest.get("capabilities", []))
+    allowed.update("ext." + envelope["extension_key"] + "." + cap for cap in ("host_context", "host_notice", "map_view") if cap in manifest.get("capabilities", []))
     if not set(envelope["permissions"]).issubset(allowed):
         raise ValueError("permission escalation")
     if envelope["contribution_digest"] != sha(data):

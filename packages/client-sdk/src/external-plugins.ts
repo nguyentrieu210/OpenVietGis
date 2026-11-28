@@ -95,11 +95,15 @@ export function listMarketplaceV2(client: ApiClient, host: "web"|"android"|"ios"
 export type PluginV2Field = {kind:"text"|"number"|"integer"|"boolean";required:boolean};
 export type PluginV2Widget = {kind:"text";id:string;text:string} | {kind:"input";id:string;label:string;field:string} | {kind:"button";id:string;label:string;action:string} | {kind:"group";id:string;children:PluginV2Widget[]};
 export type PluginV2Document = {slot:"workspace"|"map_tool"|"form"|"dashboard";widgets:PluginV2Widget[];actions:{id:string;command_id:string;permission:string;consent:"read";timeout_ms:number;input:Record<string,PluginV2Field>}[]};
-export type PluginV2Runtime = {document:PluginV2Document;release_digest:string;activation_revision:number;manifest_id:string;profile:"web_read_only"};
+export type PluginV2Runtime = {document:PluginV2Document;release_digest:string;activation_revision:number;manifest_id:string;profile:"web_read_only";granted:boolean;grant_revision:string;permissions:string[]};
 const pluginV2Path=(org:string,project:string,manifest:string)=>"/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(project)+"/extensions/"+encodeURIComponent(manifest)+"/v2-runtime";
 export function getPluginV2Runtime(client:ApiClient,org:string,project:string,manifest:string,signal?:AbortSignal){
  return client.request<PluginV2Runtime>(pluginV2Path(org,project,manifest),{signal:signal??null,cache:"no-store"});
 }
 export function invokePluginV2(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,actionId:string,input:Record<string,unknown>,requestId:string,signal?:AbortSignal){
  return client.request<{receipt_id:string;command_id:string;output:unknown}>(pluginV2Path(org,project,runtime.manifest_id)+"/invoke",{method:"POST",signal:signal??null,body:JSON.stringify({request_id:requestId,release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,action_id:actionId,input})});
+}
+
+export function setPluginV2Grant(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,enabled:boolean,signal?:AbortSignal){
+ return client.request<{granted:boolean;grant_revision:string}>(pluginV2Path(org,project,runtime.manifest_id)+"/grant",{method:"POST",signal:signal??null,body:JSON.stringify({release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,grant_revision:runtime.grant_revision,enabled})});
 }

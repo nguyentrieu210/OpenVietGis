@@ -29,7 +29,7 @@ def generate():
             path.write_bytes(key.private_bytes(Encoding.PEM,PrivateFormat.PKCS8,NoEncryption()))
             path.chmod(0o600)
         (d/"pub.key").write_text(public_key(pk))
-        for name, cap in (("context","host_context"),("notice","host_notice")):
+        for name, cap in (("context","host_context"),("notice","host_notice"),("layers","map_view")):
             key="partner_fixture_"+name
             manifest={"extension_key":key,"version":"1.0.0","api_compatibility":"1.x",
                       "display_name":"Fixture "+name,"description":"Synthetic test only","permissions":[],"commands":[],

@@ -127,9 +127,9 @@ fn verified_items(
             serde_json::from_value(legacy.manifest["permissions"].clone())
                 .map_err(|_| invalid())?;
         // V1 partner capabilities are deliberately not extension permissions.
-        // Derive only the two read-only host capabilities, never general grants.
+        // Derive only reviewed read-only capabilities; GIS reads additionally require manager approval.
         if let Some(caps) = legacy.manifest["capabilities"].as_array() {
-            for cap in ["host_context", "host_notice"] {
+            for cap in ["host_context", "host_notice", "map_view"] {
                 if caps.iter().any(|v| v.as_str() == Some(cap)) {
                     allowed.insert(format!("ext.{}.{cap}", e.extension_key));
                 }
@@ -313,7 +313,7 @@ mod tests {
         )
     }
     #[test]
-    fn python_signed_reference_catalog_verifies_both_releases() {
+    fn python_signed_reference_catalog_verifies_all_releases() {
         let fixture: Value = serde_json::from_str(include_str!(
             "../../../../fixtures/spec075/python-signed-catalog.json"
         ))
@@ -339,10 +339,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(rows.len(), 2);
+        assert_eq!(rows.len(), 3);
         for row in rows {
             let doc = ovg_module_sdk::declarative::Document::parse(&row.document).unwrap();
-            assert_eq!(doc.actions.len(), 1);
+            assert!(!doc.actions.is_empty());
             assert_eq!(row.metadata["runtime_available"], false);
         }
     }

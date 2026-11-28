@@ -114,3 +114,85 @@ pub async fn receipt(
       .bind(input.release_digest).bind(input.request_digest).bind(input.command_id).execute(&mut **read.transaction()).await.map_err(db_error)?;
     Ok(id)
 }
+
+/// The newest event for an activation is authoritative. Any activation revision,
+/// manifest or release change invalidates prior approval, including rollback.
+pub struct GrantState {
+    pub granted: bool,
+    pub sequence: i64,
+}
+pub async fn grant_status(
+    read: &mut ProjectRead<'_>,
+    pin: &ActivePin,
+    digest: &str,
+) -> Result<GrantState, AppError> {
+    if read.is_gis_scoped() || read.actor_type() != "human" {
+        return Err(AppError::forbidden("unrestricted human project required"));
+    }
+    let row=sqlx::query("SELECT sequence,activation_revision,manifest_id,release_digest,enabled FROM extensions.plugin_v2_grant_events
+      WHERE organization_id=$1 AND project_id=$2 AND activation_id=$3 ORDER BY sequence DESC LIMIT 1")
+      .bind(read.organization_id()).bind(read.project_id()).bind(pin.activation_id)
+      .fetch_optional(&mut **read.transaction()).await.map_err(db_error)?;
+    match row {
+        None => Ok(GrantState {
+            granted: false,
+            sequence: 0,
+        }),
+        Some(row) => Ok(GrantState {
+            sequence: row.try_get("sequence").map_err(db_error)?,
+            granted: row.try_get::<bool, _>("enabled").map_err(db_error)?
+                && row
+                    .try_get::<i64, _>("activation_revision")
+                    .map_err(db_error)?
+                    == pin.revision
+                && row.try_get::<Uuid, _>("manifest_id").map_err(db_error)? == pin.manifest_id
+                && row
+                    .try_get::<String, _>("release_digest")
+                    .map_err(db_error)?
+                    == digest,
+        }),
+    }
+}
+/// The manager proof is derived by ProjectRead::begin, never from a client flag.
+/// The canonical project FOR UPDATE lock serializes with invocation FOR SHARE.
+pub async fn set_grant(
+    read: &mut ProjectRead<'_>,
+    pin: &ActivePin,
+    digest: &str,
+    enabled: bool,
+    expected_sequence: i64,
+) -> Result<GrantState, AppError> {
+    if !read.is_project_manager() || read.is_gis_scoped() || read.actor_type() != "human" {
+        return Err(AppError::forbidden("human project manager required"));
+    }
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(AppError::validation(
+            "INVALID_PLUGIN_RELEASE",
+            "invalid digest",
+        ));
+    }
+    let current = grant_status(read, pin, digest).await?;
+    if current.sequence != expected_sequence {
+        return Err(AppError::conflict(
+            "STALE_PLUGIN_GRANT",
+            "approval changed; reload plugin",
+        ));
+    }
+    if enabled && current.granted {
+        return Ok(current);
+    }
+    let sequence:i64=sqlx::query_scalar("INSERT INTO extensions.plugin_v2_grant_events
+      (organization_id,project_id,activation_id,activation_revision,manifest_id,actor_id,release_digest,enabled)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING sequence")
+      .bind(read.organization_id()).bind(read.project_id()).bind(pin.activation_id).bind(pin.revision)
+      .bind(pin.manifest_id).bind(read.actor_id()).bind(digest).bind(enabled)
+      .fetch_one(&mut **read.transaction()).await.map_err(db_error)?;
+    Ok(GrantState {
+        granted: enabled,
+        sequence,
+    })
+}
