@@ -426,3 +426,22 @@ mod active_unified_survey_tests{
   w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
  }
 }
+
+#[cfg(test)]
+mod unified_tile_bridge_tests{
+ use super::*;
+ #[test]fn binary_tile_revision_and_archive_lease(){
+  let dir=std::env::temp_dir().join(format!("ovg-tile-bridge-{}",Uuid::new_v4()));let root=dir.join("projects").to_string_lossy().to_string();
+  let cache=dir.join("cache").to_string_lossy().to_string();let p=create_unified_project(root.clone()).unwrap();let w=open_unified_project(root,p).unwrap();
+  let c:serde_json::Value=serde_json::from_str(&w.catalog().unwrap()).unwrap();let l=c["layers"][0]["id"].as_str().unwrap().to_owned();
+  w.draw_point(l.clone(),Uuid::new_v4().to_string(),Uuid::new_v4().to_string(),"1".into(),106.,11.,"{}".into()).unwrap();
+  assert!(!w.vector_tile(l.clone(),0,0,0,"2".into()).unwrap().is_empty());
+  assert!(w.vector_tile(l.clone(),0,0,0,"1".into()).is_err());
+  let create=||w.tile_archive(vec![l.clone()],105.99,10.99,106.01,11.01,8,"2".into(),cache.clone());
+  let first:serde_json::Value=serde_json::from_str(&create().unwrap()).unwrap();let second:serde_json::Value=serde_json::from_str(&create().unwrap()).unwrap();
+  let path=std::path::PathBuf::from(first["archive"]["path"].as_str().unwrap());assert!(path.exists());
+  assert!(create().is_err());w.release_tile_archive(first["lease"].as_str().unwrap().into()).unwrap();assert!(!path.exists());
+  let path=std::path::PathBuf::from(second["archive"]["path"].as_str().unwrap());assert!(path.exists());
+  w.close().unwrap();assert!(!path.exists());drop(w);fs::remove_dir_all(dir).unwrap();
+ }
+}
