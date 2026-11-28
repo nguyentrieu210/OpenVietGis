@@ -206,7 +206,13 @@ export const remoteCopc={
  cancel:remoteTiff.cancel
 };
 
+export type CadEditorStatus={session:string;state:"editing"|"ready"|"recoverable";format:"dwg"|"dxf";changed:boolean;bytes:number;sha256:string};
 export const nativeCad={
+ editOpen:(handle:string)=>host().core.invoke<CadEditorStatus|null>("native_cad_edit_open",{handle}),
+ editList:(handle:string)=>host().core.invoke<CadEditorStatus[]>("native_cad_edit_list",{handle}),
+ editPoll:(handle:string,session:string)=>host().core.invoke<CadEditorStatus>("native_cad_edit_poll",{handle,session}),
+ editSave:(handle:string,session:string,expected:string)=>host().core.invoke<{bytes:number;sha256:string;format:"dwg"|"dxf"}|null>("native_cad_edit_save",{handle,session,expected}),
+ editDiscard:(handle:string,session:string)=>host().core.invoke<void>("native_cad_edit_discard",{handle,session}),
  status:()=>host().core.invoke<{available:boolean;source_revision:string;mode:string}>("native_cad_status"),
  convert:(handle:string,requestId:string)=>host().core.invoke<{bytes:number;sha256:string;format:"dwg"|"dxf"}|null>("native_cad_convert",{handle,requestId}),
  cancel:remoteTiff.cancel
