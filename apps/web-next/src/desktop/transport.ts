@@ -59,9 +59,16 @@ export const desktop={
   closeAsset:(handle:string,id:string)=>host().core.invoke<void>("desktop_close_asset",{handle,id}),
   openRaster:(handle:string)=>host().core.invoke<{id:string;attribution:string}|null>("desktop_open_raster",{handle}),
   closeRaster:(handle:string)=>host().core.invoke<void>("desktop_close_raster",{handle}),
-  resource:async(uri:string):Promise<ArrayBuffer>=>{
+  resource:async(uri:string,signal?:AbortSignal):Promise<ArrayBuffer>=>{
     if(uri.length>512||!uri.startsWith("ovg://v1/"))throw Error("INVALID_RESOURCE");
-    const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_resource",{uri});
+    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
+    const requestId=crypto.randomUUID();
+    const cancel=()=>{void host().core.invoke<void>("desktop_cancel_resource",{requestId}).catch(()=>{})};
+    signal?.addEventListener("abort",cancel,{once:true});
+    let raw:ArrayBuffer|number[];
+    try{raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_resource",{uri,requestId});}
+    finally{signal?.removeEventListener("abort",cancel)}
+    if(signal?.aborted)throw new DOMException("Aborted","AbortError");
     const b=raw instanceof ArrayBuffer?raw:Uint8Array.from(raw).buffer;
     if(b.byteLength>4*1024*1024)throw Error("RESOURCE_LIMIT");
     return b;
