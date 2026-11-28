@@ -50,3 +50,18 @@ pub async fn native_point_summary(window:WebviewWindow,u:State<'_,Unified>,handl
  }
  #[cfg(not(feature="native-analytics"))]{let _=(u,handle,layer,expected,spatial);trusted(&window)?;Err("NATIVE_ANALYTICS_NOT_LINKED".into())}
 }
+
+#[tauri::command]
+pub async fn native_raster_preview(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,band:usize)->Reply<Option<Value>>{
+ #[cfg(feature="native-ogr")]{
+  let app=window.app_handle().clone();
+  work(window,u.inner().clone(),move|s|{
+   s.with(handle,|_|Ok(()))?;
+   let Some(file)=app.dialog().file().add_filter("Local GeoTIFF",&["tif","tiff"]).blocking_pick_file() else{return Ok(None)};
+   let p=file.into_path().map_err(|_|"INVALID_STORAGE")?;
+   let v=ovg_native_providers::ogr::raster_preview(&p,band)?;
+   serde_json::to_value(v).map(Some).map_err(|_|"INVALID_RASTER")
+  }).await
+ }
+ #[cfg(not(feature="native-ogr"))]{let _=(u,handle,band);trusted(&window)?;Err("NATIVE_OGR_NOT_LINKED".into())}
+}
