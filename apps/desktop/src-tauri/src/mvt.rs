@@ -28,7 +28,7 @@ fn path(line:&LineString<f64>,ring:Option<bool>,last:&mut Pt,out:&mut Vec<u8>)->
  if ring.is_some(){command(7,1,out);}true
 }
 fn lat(y:f64)->f64{(std::f64::consts::PI*(1.-2.*y)).sinh().atan().to_degrees()}
-fn bounds(z:u8,x:u32,y:u32)->Result<[f64;4]>{
+pub(crate) fn bounds(z:u8,x:u32,y:u32)->Result<[f64;4]>{
  if z>22||x>=1u32<<z||y>=1u32<<z{return Err("INVALID_TILE")}
  let n=(1u32<<z)as f64;let b=BUFFER as f64/EXTENT as f64;
  Ok([((x as f64-b)/n*360.-180.).max(-180.),lat((y as f64+1.+b)/n),((x as f64+1.+b)/n*360.-180.).min(180.),lat((y as f64-b)/n)])
@@ -67,16 +67,30 @@ pub fn tile(store:&LocalStore,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::Atomic
  let rows=store.query(b,0,MAX_FEATURES+1).map_err(|_|"STORAGE_UNAVAILABLE")?;
  let last=rows.last().map_or(0,|r|r.0);
  if rows.len()>MAX_FEATURES as usize||!store.query(b,last,1).map_err(|_|"STORAGE_UNAVAILABLE")?.is_empty(){return Err("TILE_DENSITY_LIMIT")}
+ encode(rows.into_iter().map(|(_,f)|(f.feature_id,f.wkb)),z,x,y,cancel)
+}
+pub fn unified_tile(store:&ovg_project_store::Store,layer:uuid::Uuid,revision:u64,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
+ let bbox=bounds(z,x,y)?;let mut after=0;let mut items=Vec::new();let mut size=0usize;
+ loop{
+  if cancel.load(std::sync::atomic::Ordering::Acquire){return Err("CANCELLED")}
+  let page=store.query(layer,bbox,after,200,revision).map_err(|e|if e==ovg_project_store::Error::Conflict{"STALE_REVISION"}else{"STORAGE_UNAVAILABLE"})?;
+  for r in page.rows{size=size.saturating_add(r.image.wkb.len());if size>16*1024*1024||items.len()>=MAX_FEATURES as usize{return Err("TILE_DENSITY_LIMIT")}items.push((r.id,r.image.wkb));}
+  match page.next{Some(n) if n>after=>after=n,Some(_)=>return Err("INVALID_CURSOR"),None=>break}
+ }
+ encode(items,z,x,y,cancel)
+}
+fn encode(rows:impl IntoIterator<Item=(uuid::Uuid,Vec<u8>)>,z:u8,x:u32,y:u32,cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
+ use std::sync::atomic::Ordering;
  let mut layer=Vec::new();bytes(1,b"local",&mut layer);number(15,2,&mut layer);number(5,EXTENT as u64,&mut layer);
  bytes(3,b"stable_id",&mut layer);
  let mut values=Vec::new();
- for (_,f) in rows{
+ for (id,wkb) in rows{
    if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
    // Shared validator rejects unsupported dimensions and invalid topology.
-   let g=parse_xy_wkb(&f.wkb,&ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?.geometry;
+   let g=parse_xy_wkb(&wkb,&ValidationLimits::default()).map_err(|_|"INVALID_GEOMETRY")?.geometry;
    let (kind,geom)=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||geometry(g,z,x,y))).map_err(|_|"INVALID_GEOMETRY")??;
    if geom.is_empty(){continue}
-   let mut value=Vec::new();bytes(1,f.feature_id.to_string().as_bytes(),&mut value);
+   let mut value=Vec::new();bytes(1,id.to_string().as_bytes(),&mut value);
    let mut tags=Vec::new();varint(0,&mut tags);varint(values.len() as u64,&mut tags);values.push(value);
    let mut feature=Vec::new();bytes(2,&tags,&mut feature);number(3,kind,&mut feature);bytes(4,&geom,&mut feature);bytes(2,&feature,&mut layer);
    if layer.len()>MAX_TILE{return Err("RESOURCE_LIMIT")}
