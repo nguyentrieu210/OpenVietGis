@@ -2,7 +2,10 @@ name: SPEC 073 Wave 1 Flutter integration
 on:
   push:
     branches: ["073-native-mobile-platform", "073-unified-store-integration"]
-    paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
+    paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", "infra/mobile/**", ".github/workflows/spec073-wave1-flutter.yml"]
+  pull_request:
+    branches: ["073-native-mobile-platform"]
+    paths: ["apps/mobile-flutter/**", "crates/ovg-mobile-ffi/**", "infra/mobile/**", ".github/workflows/spec073-wave1-flutter.yml"]
   workflow_dispatch:
   workflow_call:
 permissions:
