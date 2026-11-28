@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/desktop/**'
+      - 'crates/ovg-project-store/**'
       - 'apps/web-next/src/desktop/**'
       - 'apps/web-next/src/main.tsx'
       - '.github/workflows/spec074-wave1.yml'
@@ -46,3 +47,21 @@ jobs:
             apps/desktop/src-tauri/Cargo.lock
             apps/desktop/src-tauri/target/debug/openvietgis-desktop
             apps/desktop/src-tauri/target/debug/openvietgis-desktop.exe
+  universal-store:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.1
+      - run: cargo generate-lockfile --manifest-path crates/ovg-project-store/Cargo.toml
+      - run: cargo test --locked --manifest-path crates/ovg-project-store/Cargo.toml
+      - run: cargo metadata --locked --manifest-path crates/ovg-project-store/Cargo.toml --format-version 1 > project-store-metadata.json
+      - run: python3 infra/desktop/wave0/check_native_graph.py project-store-metadata.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: universal-store-candidate
+          path: |
+            crates/ovg-project-store/Cargo.lock
+            project-store-metadata.json
