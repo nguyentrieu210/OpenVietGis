@@ -103,6 +103,8 @@ struct Route {
     to_lon: f64,
     to_lat: f64,
     profile: Option<String>,
+    via: Option<String>,
+    alternatives: Option<u8>,
 }
 fn label(p: &Value) -> String {
     let parts = [
@@ -163,16 +165,100 @@ async fn search(_auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Val
     }
     normalize_places(request(url).await?)
 }
+fn nominatim_place(v: &Value) -> Option<Value> {
+    let lon = v.get("lon")?.as_str()?.parse::<f64>().ok()?;
+    let lat = v.get("lat")?.as_str()?.parse::<f64>().ok()?;
+    if !point(lon, lat) {
+        return None;
+    }
+    let extent = v
+        .get("boundingbox")
+        .and_then(Value::as_array)
+        .and_then(|b| {
+            if b.len() != 4 {
+                return None;
+            }
+            let nums = b
+                .iter()
+                .map(|n| n.as_str()?.parse::<f64>().ok())
+                .collect::<Option<Vec<_>>>()?;
+            if !point(nums[2], nums[0]) || !point(nums[3], nums[1]) {
+                return None;
+            }
+            Some(json!([nums[2], nums[0], nums[3], nums[1]]))
+        });
+    Some(
+        json!({"label":v.get("display_name")?.as_str()?,"point":[lon,lat],"extent":extent,"osm_id":v.get("osm_id"),"osm_type":v.get("osm_type"),"source":"OpenStreetMap / Nominatim"}),
+    )
+}
+fn place_response(items: Vec<Value>) -> Json<Value> {
+    Json(json!({"items":items,"crs":"EPSG:4326","attribution":"© OpenStreetMap contributors"}))
+}
+async fn geocode(auth: HumanSession, Query(q): Query<Search>) -> Result<Json<Value>, ApiError> {
+    let term = q.q.trim().to_owned();
+    if term.chars().count() < 2 || term.chars().count() > 200 || term.chars().any(char::is_control)
+    {
+        return Err(invalid("Search must contain 2–200 characters."));
+    }
+    if !matches!((q.lon, q.lat), (None, None))
+        && !matches!((q.lon,q.lat),(Some(lon),Some(lat)) if point(lon,lat))
+    {
+        return Err(invalid("Invalid search bias coordinates."));
+    }
+    match search(auth, Query(q)).await {
+        Ok(response)
+            if response.0["items"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty()) =>
+        {
+            Ok(response)
+        }
+        _ => {
+            let mut url = endpoint("OVG_NOMINATIM_URL", "/search")?;
+            url.query_pairs_mut()
+                .append_pair("q", &term)
+                .append_pair("format", "jsonv2")
+                .append_pair("countrycodes", "vn")
+                .append_pair("limit", "10")
+                .append_pair("accept-language", "vi,en");
+            let v = request(url).await?;
+            let items = v
+                .as_array()
+                .ok_or_else(unavailable)?
+                .iter()
+                .take(10)
+                .filter_map(nominatim_place)
+                .collect();
+            Ok(place_response(items))
+        }
+    }
+}
 async fn reverse(_auth: HumanSession, Query(q): Query<Reverse>) -> Result<Json<Value>, ApiError> {
     if !point(q.lon, q.lat) {
         return Err(invalid("Invalid coordinates."));
     }
-    let mut url = endpoint("OVG_PHOTON_URL", "/reverse")?;
+    if let Ok(mut url) = endpoint("OVG_PHOTON_URL", "/reverse") {
+        url.query_pairs_mut()
+            .append_pair("lon", &q.lon.to_string())
+            .append_pair("lat", &q.lat.to_string())
+            .append_pair("limit", "5");
+        if let Ok(v) = request(url).await {
+            if let Ok(r) = normalize_places(v) {
+                if r.0["items"].as_array().is_some_and(|a| !a.is_empty()) {
+                    return Ok(r);
+                }
+            }
+        }
+    }
+    let mut url = endpoint("OVG_NOMINATIM_URL", "/reverse")?;
     url.query_pairs_mut()
         .append_pair("lon", &q.lon.to_string())
         .append_pair("lat", &q.lat.to_string())
-        .append_pair("limit", "5");
-    normalize_places(request(url).await?)
+        .append_pair("format", "jsonv2")
+        .append_pair("accept-language", "vi,en");
+    Ok(place_response(
+        nominatim_place(&request(url).await?).into_iter().collect(),
+    ))
 }
 async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value>, ApiError> {
     if !point(q.from_lon, q.from_lat) || !point(q.to_lon, q.to_lat) {
@@ -186,7 +272,36 @@ async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value
         return Err(invalid("Unsupported routing profile."));
     }
     let mut url = endpoint("OVG_VALHALLA_URL", "/route")?;
-    let payload = json!({"locations":[{"lon":q.from_lon,"lat":q.from_lat},{"lon":q.to_lon,"lat":q.to_lat}],"costing":profile,"units":"kilometers","language":"en-US","shape_format":"polyline6"});
+    let mut locations = vec![json!({"lon":q.from_lon,"lat":q.from_lat})];
+    if let Some(via) = q.via {
+        if via.len() > 512 {
+            return Err(invalid("Too many route waypoints."));
+        }
+        for (i, segment) in via.split(';').enumerate() {
+            if i >= 8 {
+                return Err(invalid("At most 8 intermediate stops."));
+            }
+            let (lon, lat) = segment
+                .split_once(',')
+                .ok_or_else(|| invalid("Invalid waypoint."))?;
+            let lon = lon
+                .parse::<f64>()
+                .map_err(|_| invalid("Invalid waypoint longitude."))?;
+            let lat = lat
+                .parse::<f64>()
+                .map_err(|_| invalid("Invalid waypoint latitude."))?;
+            if !point(lon, lat) {
+                return Err(invalid("Invalid waypoint coordinates."));
+            }
+            locations.push(json!({"lon":lon,"lat":lat}));
+        }
+    }
+    locations.push(json!({"lon":q.to_lon,"lat":q.to_lat}));
+    let alternates = q.alternatives.unwrap_or(0);
+    if alternates > 2 {
+        return Err(invalid("At most two alternatives."));
+    }
+    let payload = json!({"locations":locations,"costing":profile,"units":"kilometers","language":"en-US","shape_format":"polyline6","alternates":alternates});
     url.query_pairs_mut()
         .append_pair("json", &payload.to_string());
     let v = request(url).await?;
@@ -200,8 +315,8 @@ async fn route(_auth: HumanSession, Query(q): Query<Route>) -> Result<Json<Value
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/search/suggest", get(search))
-        .route("/search", get(search))
-        .route("/geocode", get(search))
+        .route("/search", get(geocode))
+        .route("/geocode", get(geocode))
         .route("/geocode/reverse", get(reverse))
         .route("/routing/route", get(route))
 }
@@ -213,6 +328,15 @@ mod tests {
         assert!(point(106.8, 10.9));
         assert!(!point(181.0, 0.0));
         assert!(!point(f64::NAN, 0.0));
+    }
+    #[test]
+    fn nominatim_normalization() {
+        let r = nominatim_place(&json!({"lon":"106.8","lat":"10.9","display_name":"Biên Hòa","boundingbox":["10.8","11.0","106.7","106.9"]})).unwrap();
+        assert_eq!(r["point"], json!([106.8, 10.9]));
+        assert_eq!(r["extent"], json!([106.7, 10.8, 106.9, 11.0]));
+        assert!(
+            nominatim_place(&json!({"lon":"NaN","lat":"10.9","display_name":"Invalid"})).is_none()
+        );
     }
     #[test]
     fn place_normalization() {

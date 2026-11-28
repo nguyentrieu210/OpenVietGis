@@ -1,0 +1,59 @@
+# Isolated staging/provider host only. No production network or public ports.
+services:
+  nominatim:
+    image: ${NOMINATIM_IMAGE:?pin image by digest}
+    environment:
+      PBF_PATH: /osm/vietnam.osm.pbf
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:?set unique staging password}
+      IMPORT_STYLE: full
+      IMPORT_WIKIPEDIA: "false"
+      UPDATE_MODE: none
+      THREADS: "2"
+      POSTGRES_SHARED_BUFFERS: 1GB
+    volumes:
+      - ${OSM_SNAPSHOT_DIR:?set validated snapshot directory}:/osm:ro
+      - ${NOMINATIM_DATA_DIR:?set new versioned data directory}:/var/lib/postgresql/16/main
+    shm_size: 1gb
+    mem_limit: 6g
+    cpus: 2
+    ports: ["127.0.0.1:18080:8080"]
+    restart: "no"
+  photon-import:
+    profiles: ["import"]
+    image: ${JAVA_IMAGE:?pin Java 21+ image by digest}
+    working_dir: /index
+    environment:
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:?set unique staging password}
+    entrypoint: ["/bin/sh","-ec"]
+    command: ['test ! -e /index/photon_data; exec java -Xmx4g -jar /app/photon.jar import -host nominatim -port 5432 -database nominatim -user www-data -password "$$NOMINATIM_PASSWORD" -country-codes vn -languages vi,en']
+    volumes:
+      - ${PHOTON_JAR:?set verified JAR path}:/app/photon.jar:ro
+      - ${PHOTON_DATA_DIR:?set new versioned data directory}:/index
+    mem_limit: 6g
+    cpus: 2
+  photon:
+    profiles: ["serve"]
+    image: ${JAVA_IMAGE:?pin Java 21+ image by digest}
+    working_dir: /index
+    entrypoint: ["java","-Xmx2g","-jar","/app/photon.jar","serve","-listen-ip","0.0.0.0"]
+    volumes:
+      - ${PHOTON_JAR:?set verified JAR path}:/app/photon.jar:ro
+      - ${PHOTON_DATA_DIR:?set imported versioned data directory}:/index
+    mem_limit: 3g
+    cpus: 2
+    ports: ["127.0.0.1:12322:2322"]
+    restart: "no"
+  valhalla:
+    profiles: ["route"]
+    image: ${VALHALLA_IMAGE:?pin scripted image by digest}
+    environment:
+      server_threads: "2"
+      build_tar: "True"
+      use_tiles_ignore_pbf: "True"
+      build_elevation: "False"
+    volumes:
+      - ${VALHALLA_DATA_DIR:?set versioned graph directory}:/custom_files
+    mem_limit: 6g
+    cpus: 2
+    ports: ["127.0.0.1:18002:8002"]
+    restart: "no"
