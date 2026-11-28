@@ -170,3 +170,21 @@ fn project_state_backup_roundtrip(){
  let p2=h.restore_project(&file).unwrap();let w2=h.open(p2.id).unwrap();
  assert_eq!(h.project_state(w2.handle).unwrap(),saved);h.close(w2.handle).unwrap();h.close(w.handle).unwrap();
 }
+
+#[test]
+fn unified_export_keeps_original_project_authoritative(){
+ let d=tempfile::tempdir().unwrap();let h=Host::new(d.path().join("projects")).unwrap();
+ let p=h.create().unwrap();let w=h.open(p.id).unwrap();let l=h.create_layer(w.handle,"Survey".into(),None).unwrap();let child=h.open_layer(w.handle,l.id).unwrap();
+ let a=Uuid::new_v4();let b=Uuid::new_v4();
+ h.edit(w.handle,Uuid::new_v4(),a,"0".into(),Some("point".into()),vec![106.,11.],json!({})).unwrap();
+ h.edit(child.handle,Uuid::new_v4(),b,"0".into(),Some("point".into()),vec![107.,12.],json!({"name":"old"})).unwrap();
+ h.update_attributes(child.handle,b,"1".into(),json!({"name":"new"})).unwrap();
+ let file=d.path().join("unified.sqlite");let reports=h.export_unified_candidate(w.handle,&file).unwrap();
+ assert_eq!(reports.len(),2);assert_eq!(reports.iter().map(|r|r.live).sum::<u64>(),2);
+ let s=ovg_project_store::Store::reopen(&file).unwrap();assert!(s.integrity().unwrap());
+ assert_eq!(s.query(l.id,[0.,0.,180.,90.],0,10,1).unwrap().rows[0].revision,2);
+ assert!(h.export_unified_candidate(w.handle,&file).is_err());
+ assert!(h.history(child.handle,false).unwrap());assert_eq!(h.feature(child.handle,b).unwrap()["attributes"]["name"],"old");
+ assert_eq!(s.query(l.id,[0.,0.,180.,90.],0,10,1).unwrap().rows[0].image.attributes["name"],"new");
+ h.close(w.handle).unwrap();
+}
