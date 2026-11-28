@@ -1,0 +1,34 @@
+{
+  "slot": "form",
+  "nodes": [
+    {
+      "id": "title",
+      "kind": "text",
+      "label": "Kiểm tra đối tượng",
+      "children": []
+    },
+    {
+      "id": "id",
+      "kind": "input_text",
+      "label": "Mã đối tượng",
+      "children": []
+    }
+  ],
+  "actions": [
+    {
+      "id": "read",
+      "command_id": "core.read",
+      "capability": "data.read",
+      "permission": "ext.demo.read",
+      "mode": "online",
+      "consent": "none",
+      "timeout_ms": 1000,
+      "input": {
+        "id": "text"
+      },
+      "output": {
+        "name": "text"
+      }
+    }
+  ]
+}

@@ -28,6 +28,18 @@ jobs:
           dart pub get
           dart analyze
           dart test
+      - name: Official reference module tests
+        working-directory: modules/house_numbering/mobile
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Generator and architecture guard
+        run: |
+          node packages/flutter-plugin-sdk/tools/new_plugin.mjs demo inspection "$RUNNER_TEMP/ovg-plugin"
+          test -s "$RUNNER_TEMP/ovg-plugin/manifest.json"
+          test -s "$RUNNER_TEMP/ovg-plugin/contribution.json"
+          if grep -R -E 'package:(ovg_mobile|rust_lib|openvietgis_mobile)|dart:ffi' modules/house_numbering/mobile/lib modules/mobile_reference_sample; then exit 1; fi
   server:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

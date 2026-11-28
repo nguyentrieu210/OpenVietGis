@@ -1,0 +1,10 @@
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
+const [publisher,name,dest]=process.argv.slice(2);
+if(!/^[a-z][a-z0-9_]{1,31}$/.test(publisher??'')||!/^[a-z][a-z0-9_]{1,39}$/.test(name??'')||!dest)throw new Error('usage: node new_plugin.mjs publisher name new-directory');
+const dir=resolve(dest);await mkdir(dir,{recursive:false});
+const key=`partner_${publisher}_${name}`;
+const manifest={extension_key:key,version:'1.0.0',api_compatibility:'1.x',display_name:name,description:'',permissions:[`ext.${name}.read`],commands:[],capabilities:[],entity_schemas:[],ui_contributions:[]};
+const contribution={slot:'form',nodes:[{id:'title',kind:'text',label:name,children:[]}],actions:[]};
+for(const [file,value] of [['manifest.json',manifest],['contribution.json',contribution]])await writeFile(join(dir,file),JSON.stringify(value,null,2)+'\n',{flag:'wx'});
+console.log('Created unsigned contribution. Register manifest and obtain publisher/operator signatures before activation.');
