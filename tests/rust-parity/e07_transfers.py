@@ -233,10 +233,29 @@ def roundtrip(client, manifest, name, fmt, filename, data):
     }
 
 
-def unsafe_archive():
+def unsafe_archive(name="../escape.shp", *, symlink=False):
     buff = io.BytesIO()
     with zipfile.ZipFile(buff, "w") as archive:
-        archive.writestr("../escape.shp", b"not a shapefile")
+        info = zipfile.ZipInfo(name)
+        if symlink:
+            info.create_system = 3
+            info.external_attr = 0o120777 << 16
+        archive.writestr(info, b"" if name.endswith("/") else b"not a shapefile")
+    return buff.getvalue()
+
+
+def corrupt_archive():
+    buff = io.BytesIO()
+    with zipfile.ZipFile(buff, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("sample.shp", b"ORIGINAL")
+    return buff.getvalue().replace(b"ORIGINAL", b"CORRUPTD", 1)
+
+
+def duplicate_archive():
+    buff = io.BytesIO()
+    with zipfile.ZipFile(buff, "w") as archive:
+        archive.writestr("sample.shp", b"a")
+        archive.writestr("SAMPLE.SHP", b"b")
     return buff.getvalue()
 
 
@@ -302,6 +321,20 @@ def main():
                             "LEGACY_GEOJSON_CRS",
                         ),
                         ("traversal.zip", unsafe_archive(), "ARCHIVE_PATH_TRAVERSAL"),
+                        (
+                            "dir-traversal.zip", unsafe_archive("../escape/"),
+                            "ARCHIVE_PATH_TRAVERSAL",
+                        ),
+                        (
+                            "win-traversal.zip", unsafe_archive("C:/escape.shp"),
+                            "ARCHIVE_PATH_TRAVERSAL",
+                        ),
+                        (
+                            "symlink.zip", unsafe_archive("link.shp", symlink=True),
+                            "ARCHIVE_SYMLINK_REJECTED",
+                        ),
+                        ("duplicate.zip", duplicate_archive(), "ARCHIVE_DUPLICATE_ENTRY"),
+                        ("corrupt.zip", corrupt_archive(), "INVALID_ZIP"),
                     ]:
                         try:
                             for label, client in [("Python", oracle), ("Rust", rust)]:
