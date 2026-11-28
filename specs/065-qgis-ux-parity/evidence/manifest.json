@@ -742,9 +742,12 @@
         "apps/web-next/src/mesh-dataset.test.ts",
         "packages/spatial-workspace/src/maplibre3d.ts",
         "apps/web-next/src/local-ept.ts",
-        "apps/web-next/src/local-ept.test.ts"
+        "apps/web-next/src/local-ept.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/raster-temporal-plan.ts",
+        "apps/web-next/src/raster-temporal-plan.test.ts"
       ],
-      "blocker": "Vector temporal, local LAS/2DM and scalar/vector magnitude JSON temporal mesh playback. Local EPT 1.x binary directory with complete JSON hierarchy, scale/offset and bounded sampled preview added. No remote octree streaming, LAZ/COPC/zstandard, SMS DAT/NetCDF, raster temporal or persisted mesh provider. New tests unexecuted; QGIS acceptance pending."
+      "blocker": "Vector and raster temporal playback (operator-assigned UTC observations over up to 32 authorized pre-rendered raster layers), local LAS/2DM, scalar/vector magnitude JSON mesh, EPT binary directory. Raster preview uses per-layer rendered tile scale, no native multidimensional raster or harmonized pixel scale. No LAZ/COPC/zstandard, remote octree, SMS DAT/NetCDF or persisted mesh provider. New tests not executed; paired QGIS acceptance pending."
     },
     {
       "id": "OUTPUT-01",
