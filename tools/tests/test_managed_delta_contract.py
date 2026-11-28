@@ -60,3 +60,11 @@ def test_reset_allows_rewind_without_changes():
     assert validate_managed_delta(
         envelope(reset_required=True, next_cursor=1, changes=[]), cursor=3
     ).reset_required
+
+
+def test_delta_request_bounds_before_network(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    monkeypatch.setattr(client, "_json_request", lambda *a, **k: (_ for _ in ()).throw(AssertionError("network")))
+    for cursor, limit in [(-1, 200), (0, 0), (0, 501), (True, 200)]:
+        with pytest.raises(ApiError):
+            client.fetch_managed_delta(None, session_id="s", cursor=cursor, limit=limit)

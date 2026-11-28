@@ -248,6 +248,15 @@ def create_remote(
         sid, key = await current(request, data)
         return JSONResponse(workspace.store.close(sid, key))
 
+    # The MCP SDK-generated argument models allow unknown top-level fields by
+    # default. Rust rejects them. Keep discovery and runtime fail-closed on both
+    # implementations without changing the typed request models themselves.
+    from pydantic import ConfigDict
+    for tool in mcp._tool_manager._tools.values():
+        tool.parameters["additionalProperties"] = False
+        tool.fn_metadata.arg_model.model_config = ConfigDict(extra="forbid")
+        tool.fn_metadata.arg_model.model_rebuild(force=True)
+
     app = mcp.streamable_http_app(
         stateless_http=True,
         json_response=True,

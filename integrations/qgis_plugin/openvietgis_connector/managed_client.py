@@ -25,6 +25,13 @@ from .client import (
 )
 from .snapshot_cache import cache_path, read_cached_record, write_snapshot
 
+MAX_MANAGED_RESPONSE_BYTES = 32 * 1024 * 1024
+MAX_BOOTSTRAP_PAGE = 5_000
+MAX_DELTA_PAGE = 500
+MAX_MANAGED_FEATURES = 1_000_000
+MAX_MANAGED_OPERATIONS = 1_000
+MAX_MANAGED_LAYERS = 100
+
 
 @dataclass(frozen=True)
 class ManagedSessionInfo:
@@ -109,7 +116,9 @@ def _json_request(
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read()
+            raw = resp.read(MAX_MANAGED_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_MANAGED_RESPONSE_BYTES:
+                raise ApiError("Phản hồi managed API vượt quá 32 MiB.")
     except urllib.error.HTTPError as exc:
         detail = _extract_http_error_detail(exc, config.bearer_token)
         raise ApiError(f"HTTP {exc.code}: {detail}", status_code=exc.code) from None
@@ -175,6 +184,10 @@ def bootstrap_managed_layer(
     limit: int = 1000,
     offset: int = 0,
 ) -> ManagedBootstrapPage:
+    if type(limit) is not int or not 1 <= limit <= MAX_BOOTSTRAP_PAGE:
+        raise ApiError("Giới hạn trang bootstrap phải từ 1 đến 5000.")
+    if type(offset) is not int or offset < 0 or offset > MAX_MANAGED_FEATURES:
+        raise ApiError("Offset bootstrap không hợp lệ.")
     qs = urllib.parse.urlencode(
         {"layer_id": layer_id, "session_id": session_id, "limit": limit, "offset": offset}
     )
@@ -204,6 +217,8 @@ def load_managed_snapshot(
     permission_epoch: int, limit: int = 1000, cancelled=lambda: False,
 ) -> tuple[ManagedBootstrapPage, list[dict[str, Any]]]:
     """Load a coherent native snapshot before materializing any QGIS layer."""
+    if type(limit) is not int or not 1 <= limit <= MAX_BOOTSTRAP_PAGE:
+        raise ApiError("Giới hạn snapshot phải từ 1 đến 5000.")
     first = None
     offset = 0
     features: list[dict[str, Any]] = []
@@ -250,6 +265,8 @@ def load_managed_snapshot(
                 raise ApiError("Mã đối tượng không hợp lệ hoặc trùng lặp.")
             ids.add(oid)
             features.append(item)
+            if len(features) > MAX_MANAGED_FEATURES:
+                raise ApiError("Snapshot vượt quá 1.000.000 đối tượng.")
         if not page.has_more:
             if page.next_offset is not None:
                 raise ApiError("Con trỏ trang cuối không hợp lệ.")
@@ -266,6 +283,10 @@ def fetch_managed_delta(
     cursor: int,
     limit: int = 200,
 ) -> ManagedDeltaPage:
+    if type(cursor) is not int or cursor < 0:
+        raise ApiError("Cursor đồng bộ không hợp lệ.")
+    if type(limit) is not int or not 1 <= limit <= MAX_DELTA_PAGE:
+        raise ApiError("Giới hạn delta phải từ 1 đến 500.")
     qs = urllib.parse.urlencode({"session_id": session_id, "cursor": cursor, "limit": limit})
     res = _json_request(config, "GET", f"{_managed_base(config)}/delta?{qs}")
     return validate_managed_delta(res, cursor=cursor)
@@ -322,6 +343,8 @@ def commit_managed_changes(
     summary: str = "QGIS Managed Realtime Edit",
     allow_deletes: bool = False,
 ) -> ManagedCommitReceipt:
+    if not isinstance(operations, list) or not 1 <= len(operations) <= MAX_MANAGED_OPERATIONS:
+        raise ApiError("Một commit managed phải có từ 1 đến 1000 thao tác.")
     payload: dict[str, Any] = {
         "session_id": session_id,
         "source_id": source_id,
@@ -416,6 +439,8 @@ def diff_managed_snapshots(
             ops.append({"op_type": "create", "feature_id": oid, **current[oid]})
         elif current[oid] != baseline[oid]:
             ops.append({"op_type": "update", "feature_id": oid, **current[oid]})
+    if len(ops) > MAX_MANAGED_OPERATIONS:
+        raise ApiError("Một lần lưu vượt quá 1000 thay đổi; hãy chia nhỏ thao tác.")
     return ops
 
 
@@ -490,6 +515,8 @@ def load_managed_layers(
     config, layer_ids, binding_id, cancelled=lambda: False, progress=lambda n: None, cache_root=None
 ):
     """Network-only initial load, safe to run outside the QGIS GUI thread."""
+    if not isinstance(layer_ids, (list, tuple)) or not 1 <= len(layer_ids) <= MAX_MANAGED_LAYERS:
+        raise ApiError("Mỗi phiên chỉ mở tối đa 100 lớp managed.")
     if cancelled():
         return None
     session = create_managed_session(config, binding_id=binding_id)

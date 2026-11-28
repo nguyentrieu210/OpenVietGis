@@ -81,3 +81,26 @@ def test_multi_workspace_resolution_and_mode_gating():
     with pytest.raises(BridgeError) as foreign:
         store.for_subject("mallory",sb["session_id"])
     assert foreign.value.status==404
+
+
+def test_workspace_result_bound_and_cancelled_call_cleanup():
+    import asyncio
+
+    from remote_workspace import Owner
+    from workspace_tools import result
+    store=OwnedBridge(BridgeStore(allow_workspace=True))
+    opened=store.create(Owner(ORG,"alice",ORG,PROJECT),2,"gis")
+    with pytest.raises(BridgeError,match="85 KB"):
+        result({"payload":"x"*85001})
+    async def cancelled():
+        task=asyncio.create_task(store.execute("alice","map_view",{},time.time()+60,opened["session_id"]))
+        for _ in range(20):
+            await asyncio.sleep(.01)
+            if store.store.sessions[opened["session_id"]].command is not None:
+                break
+        assert store.store.sessions[opened["session_id"]].command is not None
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert store.store.sessions[opened["session_id"]].command is None
+    asyncio.run(cancelled())
