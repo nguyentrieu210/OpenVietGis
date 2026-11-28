@@ -1,4 +1,4 @@
-//! Bounded SQLite/GeoPackage format worker for E13 offline packaging and sync validation.
+//! Bounded format worker for E07 binary exports and E13 offline packaging/sync validation.
 //! Rust owns the tenant transaction, CSRF/session checks, storage I/O, and changeset commits;
 //! the worker receives no database credentials or network configuration.
 
@@ -50,6 +50,10 @@ const MODULES: &[(&str, &str)] = &[
     (
         "openvietgis_api/adapters/formats/geopackage.py",
         include_str!("../../api/openvietgis_api/adapters/formats/geopackage.py"),
+    ),
+    (
+        "openvietgis_api/adapters/formats/shapefile_zip.py",
+        include_str!("../../api/openvietgis_api/adapters/formats/shapefile_zip.py"),
     ),
     (
         "openvietgis_api/adapters/formats/offline_snapshot.py",
@@ -169,6 +173,43 @@ try:
                 allow_nan=False,
             )
         )
+    elif action == "export_transfer":
+        resource.setrlimit(resource.RLIMIT_FSIZE, (75 * 1024 * 1024, 75 * 1024 * 1024))
+        srid = int(req["srid"])
+        mappings = [
+            ExportFieldMapping(m["field_id"], m["source_name"], m["output_name"], FieldType(m["type"]))
+            for m in req["mappings"]
+        ]
+        features = [
+            (
+                str(f["feature_id"]),
+                dict(f["properties"]),
+                NativeGeometry(
+                    type=str(f["geometry"]["type"]),
+                    coordinates=f["geometry"]["coordinates"],
+                    srid=srid,
+                ),
+            )
+            for f in req["features"]
+        ]
+        if req["format"] == "geopackage":
+            writer = write_geopackage
+        elif req["format"] == "shapefile_zip":
+            from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
+            writer = write_shapefile_zip
+        else:
+            raise ValueError("unsupported binary export format")
+        artifact, _, _ = writer(
+            layer_name=req["layer_name"],
+            crs_code=srid,
+            geometry_family=req["geometry_family"],
+            field_mappings=mappings,
+            features=features,
+        )
+        if not artifact or len(artifact) > 75 * 1024 * 1024:
+            raise PlatformValidationError("binary export exceeds format engine output limit")
+        Path(req["out_path"]).write_bytes(artifact)
+        print(json.dumps({"ok": True, "byte_size": len(artifact)}, allow_nan=False))
     elif action == "validate_ops":
         validate_offline_ops(req["snapshot"], req["operations"])
         scope_hash = hashlib.sha256(canonical_json(req["scope_tuple"])).hexdigest()[:48]
@@ -417,6 +458,43 @@ pub(crate) async fn build_package(
         gpkg_bytes,
         snapshot_sha256,
     })
+}
+
+/// Encode already-authorized, revision-pinned rows. The adapter receives no
+/// identity, session, database credentials, or permission to publish artifacts.
+pub(crate) async fn build_transfer_artifact(
+    format: &str,
+    layer_name: &str,
+    srid: i32,
+    geometry_family: &str,
+    mappings: &[Value],
+    features: Vec<Value>,
+) -> Result<Vec<u8>, WorkerError> {
+    let scratch = create_scratch().await?;
+    let out_path = scratch.0.join("transfer.bin");
+    let request = json!({
+        "action": "export_transfer",
+        "format": format,
+        "layer_name": layer_name,
+        "srid": srid,
+        "geometry_family": geometry_family,
+        "mappings": mappings,
+        "features": features,
+        "out_path": out_path.to_string_lossy(),
+    });
+    let report = run_driver(&scratch, &request).await?;
+    let metadata = tokio::fs::metadata(&out_path)
+        .await
+        .map_err(|_| unavailable("missing binary export artifact"))?;
+    if metadata.len() == 0
+        || metadata.len() > MAX_PACKAGE_BYTES as u64
+        || report.get("byte_size").and_then(Value::as_u64) != Some(metadata.len())
+    {
+        return Err(unavailable("invalid binary export artifact size"));
+    }
+    tokio::fs::read(&out_path)
+        .await
+        .map_err(|_| unavailable("unable to read binary export artifact"))
 }
 
 pub(crate) struct ValidatedOpsHashes {

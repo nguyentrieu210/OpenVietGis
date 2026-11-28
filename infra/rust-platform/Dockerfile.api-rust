@@ -24,6 +24,7 @@ COPY apps/api/openvietgis_api/adapters/cad/native_delta.py apps/api/openvietgis_
 COPY apps/api/openvietgis_api/adapters/formats/wkt_crs.py apps/api/openvietgis_api/adapters/formats/wkt_crs.py
 COPY apps/api/openvietgis_api/adapters/formats/geojson.py apps/api/openvietgis_api/adapters/formats/geojson.py
 COPY apps/api/openvietgis_api/adapters/formats/geopackage.py apps/api/openvietgis_api/adapters/formats/geopackage.py
+COPY apps/api/openvietgis_api/adapters/formats/shapefile_zip.py apps/api/openvietgis_api/adapters/formats/shapefile_zip.py
 COPY apps/api/openvietgis_api/adapters/formats/postgis_sql.py apps/api/openvietgis_api/adapters/formats/postgis_sql.py
 COPY apps/api/openvietgis_api/adapters/formats/offline_snapshot.py apps/api/openvietgis_api/adapters/formats/offline_snapshot.py
 COPY apps/api/openvietgis_api/domains/integration_hub/sync_diff.py apps/api/openvietgis_api/domains/integration_hub/sync_diff.py
@@ -46,7 +47,7 @@ RUN --mount=type=cache,id=ovg-cargo-registry-rust185,target=/usr/local/cargo/reg
     esac && install -D -m 0755 /src/target/release/openvietgis-api-rust /out/openvietgis-api-rust
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil python3-venv \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/ovg-cad-venv \
     && /opt/ovg-cad-venv/bin/pip install --no-cache-dir "ezdxf>=1.4.5" \

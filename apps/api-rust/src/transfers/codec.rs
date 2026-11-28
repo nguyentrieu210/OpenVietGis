@@ -461,7 +461,7 @@ impl Geom {
         }
     }
 
-    fn coordinates_value(&self) -> Value {
+    pub(super) fn coordinates_value(&self) -> Value {
         let pos = |p: &[f64; 2]| json!([p[0], p[1]]);
         match self {
             Geom::Point(p) => pos(p),

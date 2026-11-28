@@ -1,10 +1,9 @@
 //! E07 import/export and durable transfer job routes (R005), matching the FastAPI wire
 //! in `apps/api/openvietgis_api/adapters/http/transfers.py`.
 //!
-//! GeoJSON is migrated end to end; exports stream rows from PostGIS in keyset pages
-//! into the artifact file (bounded memory). GeoPackage and ZIP Shapefile bodies are
-//! deferred (see `evidence/e07-implementation.md`): their previews work, their
-//! uploads and confirmations answer `FORMAT_NOT_MIGRATED`.
+//! GeoJSON is migrated end to end. Binary exports use the bounded, unprivileged
+//! format adapter; Rust owns authorization, revision pins, jobs and publication.
+//! Binary imports remain gated until their inspection/confirmation parity is complete.
 
 mod codec;
 pub(crate) mod store;
@@ -39,6 +38,7 @@ use crate::AppState;
 
 const PAGE_ROWS: i64 = 1000;
 const FLUSH_BYTES: usize = 64 * 1024;
+const MAX_BINARY_EXPORT_INPUT: usize = 32 * 1024 * 1024;
 /// Multipart envelope allowance on top of the 25 MiB file limit.
 const MULTIPART_SLACK: usize = 64 * 1024;
 
@@ -1001,7 +1001,6 @@ async fn confirm_export(
         )
         .into());
     }
-    require_geojson(&request.output_format)?;
     let job_id = Uuid::new_v4();
     let now = now_micros();
     scope
@@ -1069,27 +1068,74 @@ async fn run_export(
         )
     })?;
     let artifact_id = Uuid::new_v4();
-    let storage_key = format!("artifacts/{}/{}/{artifact_id}.geojson", ids.0, ids.1);
-    let store = Store::new(state);
-    let mut staged = store.stage(&storage_key).await?;
-    let streamed = stream_geojson(
-        &mut scope,
-        &source,
-        content,
-        schema,
-        transform.as_ref(),
-        &preview.mappings,
-        &mut staged,
-    )
-    .await;
-    let null_counts = match streamed {
-        Ok(counts) => counts,
-        Err(error) => {
-            staged.abort().await;
-            return Err(error);
-        }
+    let (format, ext, content_type) = match request.output_format.as_str() {
+        "geojson" => ("geojson", "geojson", "application/geo+json"),
+        "geopackage" => ("geopackage", "gpkg", "application/geopackage+sqlite3"),
+        "shapefile_zip" => ("shapefile_zip", "zip", "application/zip"),
+        _ => return Err(TransferError::InvalidRequest),
     };
-    let (sha256, byte_size) = staged.finish().await?;
+    let storage_key = format!("artifacts/{}/{}/{artifact_id}.{ext}", ids.0, ids.1);
+    let store = Store::new(state);
+    let (null_counts, sha256, byte_size) = if format == "geojson" {
+        let mut staged = store.stage(&storage_key).await?;
+        let streamed = stream_export_rows(
+            &mut scope,
+            &source,
+            content,
+            schema,
+            transform.as_ref(),
+            &preview.mappings,
+            ExportTarget::GeoJson(&mut staged),
+        )
+        .await;
+        let counts = match streamed {
+            Ok(counts) => counts,
+            Err(error) => {
+                staged.abort().await;
+                return Err(error);
+            }
+        };
+        let (digest, size) = staged.finish().await?;
+        (counts, digest, size)
+    } else {
+        if source.feature_count > MAX_TRANSFER_FEATURES as i64 {
+            return Err(TransferError::coded(
+                413,
+                "FEATURE_LIMIT_EXCEEDED",
+                format!("Feature count exceeds limit of {MAX_TRANSFER_FEATURES}."),
+            ));
+        }
+        let mut rows = Vec::new();
+        let counts = stream_export_rows(
+            &mut scope,
+            &source,
+            content,
+            schema,
+            transform.as_ref(),
+            &preview.mappings,
+            ExportTarget::Binary(&mut rows),
+        )
+        .await?;
+        let mappings: Vec<Value> = preview.mappings.iter().map(Mapping::wire).collect();
+        let bytes = crate::field_worker::build_transfer_artifact(
+            format,
+            &source.layer_name,
+            output_crs,
+            &source.geometry_family,
+            &mappings,
+            rows,
+        )
+        .await
+        .map_err(|error| {
+            if error.status.is_server_error() {
+                TransferError::detail(error.status.as_u16(), "Transfer format engine unavailable.")
+            } else {
+                TransferError::validation("TRANSFER_FORMAT_FAILED", error.message)
+            }
+        })?;
+        let (digest, size) = store.put(&storage_key, &bytes).await?;
+        (counts, digest, size)
+    };
     let published = async {
         let done_at = now_micros();
         let count = source.feature_count;
@@ -1098,7 +1144,7 @@ async fn run_export(
             "layer_id": request.layer_id.to_string(),
             "source_content_revision": content,
             "source_schema_revision": schema,
-            "output_format": "geojson",
+            "output_format": format,
             "source_crs": stored,
             "output_crs": output_crs,
             "transformation_operation_id": preview.operation_id,
@@ -1107,7 +1153,7 @@ async fn run_export(
             "geometry_family": source.geometry_family,
             "field_mappings": preview.mappings.iter().map(Mapping::wire).collect::<Vec<_>>(),
             "approved_disclosures": approved,
-            "lossless_profile": false,
+            "lossless_profile": format == "geopackage",
             "null_counts_by_field": null_counts,
             "artifact_sha256": sha256,
             "artifact_byte_size": byte_size,
@@ -1121,14 +1167,14 @@ async fn run_export(
             layer_id: request.layer_id,
             content_revision: content.clone(),
             schema_revision: schema.clone(),
-            output_format: "geojson",
+            output_format: format,
             output_crs,
             filename: format!(
-                "{}-{}.geojson",
+                "{}-{}.{ext}",
                 sanitize_filename(&source.layer_name, "export"),
                 &content[..8]
             ),
-            content_type: "application/geo+json",
+            content_type,
             byte_size,
             sha256: sha256.clone(),
             storage_key: storage_key.clone(),
@@ -1147,21 +1193,27 @@ async fn run_export(
     published
 }
 
-/// Write the RFC 7946 document page by page; returns null counts per source field.
-async fn stream_geojson(
+enum ExportTarget<'a> {
+    GeoJson(&'a mut Staged),
+    Binary(&'a mut Vec<Value>),
+}
+
+/// Read and validate revision-pinned pages for both streaming and binary exports.
+async fn stream_export_rows(
     scope: &mut TransferScope<'_>,
     source: &ovg_storage::transfers::ExportSource,
     content: &str,
     schema: &str,
     transform: Option<&Transform>,
     mappings: &[Mapping],
-    staged: &mut Staged,
+    mut target: ExportTarget<'_>,
 ) -> Result<Map<String, Value>, TransferError> {
     let stored = source.stored_crs.unwrap_or_default();
     let family = source.geometry_family.as_str();
     let steps = transform.map_or(&[][..], |t| t.steps.as_slice());
     let mut nulls = vec![0_i64; source.fields.len()];
     let mut buffer = String::from(GEOJSON_HEAD);
+    let mut binary_bytes = 0_usize;
     let mut after: Option<String> = None;
     let mut index: i64 = 0;
     loop {
@@ -1193,16 +1245,38 @@ async fn stream_geojson(
                 None => native,
                 Some(t) => t.apply(&native, family, &row.geometry.wkb, &row.geometry.step_valid)?,
             };
-            if index > 0 {
-                buffer.push_str(", ");
+            match &mut target {
+                ExportTarget::GeoJson(_) => {
+                    if index > 0 {
+                        buffer.push_str(", ");
+                    }
+                    push_geojson_feature(
+                        &mut buffer,
+                        &row.feature_id,
+                        &geom,
+                        mappings,
+                        &row.attributes,
+                    )?;
+                }
+                ExportTarget::Binary(records) => {
+                    let record = json!({
+                        "feature_id": row.feature_id,
+                        "properties": row.attributes,
+                        "geometry": {"type": geom.family(), "coordinates": geom.coordinates_value()},
+                    });
+                    let encoded = serde_json::to_vec(&record)
+                        .map_err(|_| TransferError::internal("cannot encode format input"))?;
+                    binary_bytes = binary_bytes.saturating_add(encoded.len() + 1);
+                    if binary_bytes > MAX_BINARY_EXPORT_INPUT {
+                        return Err(TransferError::coded(
+                            413,
+                            "EXPORT_SIZE_EXCEEDED",
+                            "Binary export exceeds the safe format-engine input limit.",
+                        ));
+                    }
+                    records.push(record);
+                }
             }
-            push_geojson_feature(
-                &mut buffer,
-                &row.feature_id,
-                &geom,
-                mappings,
-                &row.attributes,
-            )?;
             for (count, field) in nulls.iter_mut().zip(&source.fields) {
                 if row
                     .attributes
@@ -1213,9 +1287,11 @@ async fn stream_geojson(
                 }
             }
             index += 1;
-            if buffer.len() >= FLUSH_BYTES {
-                staged.write(buffer.as_bytes()).await?;
-                buffer.clear();
+            if let ExportTarget::GeoJson(staged) = &mut target {
+                if buffer.len() >= FLUSH_BYTES {
+                    staged.write(buffer.as_bytes()).await?;
+                    buffer.clear();
+                }
             }
         }
         if rows.len() < usize::try_from(PAGE_ROWS).unwrap_or(usize::MAX) {
@@ -1223,8 +1299,10 @@ async fn stream_geojson(
         }
         after = rows.last().map(|r| r.feature_id.clone());
     }
-    buffer.push_str(GEOJSON_TAIL);
-    staged.write(buffer.as_bytes()).await?;
+    if let ExportTarget::GeoJson(staged) = &mut target {
+        buffer.push_str(GEOJSON_TAIL);
+        staged.write(buffer.as_bytes()).await?;
+    }
     if index != source.feature_count {
         return Err(TransferError::internal(
             "pinned feature count changed during export",

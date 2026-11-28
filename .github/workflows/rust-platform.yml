@@ -64,7 +64,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install SQLite and GDAL format engines
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp
 
       - name: Verify formatting
         run: cargo fmt --all -- --check
@@ -149,7 +149,7 @@ jobs:
         run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
 
       - name: Install SQLite and GDAL format engines
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp
 
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
