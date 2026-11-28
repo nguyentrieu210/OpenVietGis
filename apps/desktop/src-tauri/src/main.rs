@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod host;
+mod unified;
 mod mvt;
 mod gpkg_import;
 mod resource_files;
@@ -410,6 +411,7 @@ fn main(){
         .setup(|app|{
             let root=app.path().app_local_data_dir()?.join("standalone");
             app.manage(Host::new(root).map_err(std::io::Error::other)?);
+            app.manage(unified::Unified::new(app.path().app_local_data_dir()?.join("unified-candidate")).map_err(std::io::Error::other)?);
             let new=tauri::menu::MenuItemBuilder::with_id("new","New local workspace").accelerator("CmdOrCtrl+N").build(app)?;
             let close=tauri::menu::MenuItemBuilder::with_id("close-workspace","Close workspace").accelerator("CmdOrCtrl+Shift+W").build(app)?;
             let file=tauri::menu::SubmenuBuilder::new(app,"File").items(&[&new,&close]).build()?;
@@ -427,6 +429,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers,desktop_export_unified_candidate,desktop_import_csv,desktop_compact_layer])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema,desktop_direct_open,desktop_direct_page,desktop_direct_close,desktop_integrity,desktop_providers,desktop_export_unified_candidate,desktop_import_csv,desktop_compact_layer,unified::unified_list,unified::unified_create,unified::unified_open,unified::unified_close,unified::unified_catalog,unified::unified_add_layer,unified::unified_add_relation,unified::unified_apply,unified::unified_query,unified::unified_compensate,unified::unified_schema])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
