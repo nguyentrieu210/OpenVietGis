@@ -1,5 +1,5 @@
 # Tasks — SPEC 073
-All tasks open. No task is accepted on code presence alone. Each task must record exact commit, files, tests/fixtures, result and remaining blockers. Parallelize independent engines after contract freeze; integration owner controls shared ABI/API/schema. Targeted tests during development; full integrated CI at convergence.
+Revision 2: 78 stable parent tasks and 238 execution leaves in [execution-matrix.md](execution-matrix.md). All tasks open. No task is accepted on code presence alone. Each task must record exact commit, files, tests/fixtures, result and remaining blockers. Parallelize independent engines after contract freeze; integration owner controls shared ABI/API/schema. Targeted tests during development; full integrated CI at convergence.
 
 ## W0 — Baseline and feasibility
 - [ ] T001 [E01] [FR-003,029] Pin main; inventory routes, SDK, plugin schemas, existing portable functions and cargo dependency graph; map every reused/replaced adapter to evidence.
@@ -96,4 +96,4 @@ All tasks open. No task is accepted on code presence alone. Each task must recor
 - [ ] T078 [E16] [FR-026,029,030] Map every FR/SC to evidence, independent review, reconcile branch/main, final release gate A4. No live server deployment by default.
 
 ## Evidence and task close rules
-Each implementation evidence record includes target platform/profile, exact SHA, command, input/fixture digest, expected/observed result, negative cases, device details and review. Map SC-001–010 to gates A0–A4. Optional research may close with reviewed rejection; required supported capabilities may not be waived silently. No merge/release claim without actual gate results.
+Each implementation evidence record includes target platform/profile, exact SHA, command, input/fixture digest, expected/observed result, negative cases, device details and review. Map SC-001–010 to gates A0–A4 and separate iOS I1 using [acceptance-matrix.md](acceptance-matrix.md). T039 RTK, advanced features and T077 iOS have separate qualification; no implied Android dependency on T077. Parent close requires all required leaves, exact evidence and reviewed disposition of optional leaves. Optional research may close with reviewed rejection; required supported capabilities may not be waived silently. No merge/release claim without actual gate results.
