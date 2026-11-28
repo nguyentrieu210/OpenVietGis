@@ -1,6 +1,6 @@
 ---
 name: add-data
-description: Add data to the map — files (GeoJSON, CSV with coordinates, Shapefile, GeoPackage, GeoParquet, FlatGeobuf, KML, GPX, GeoTIFF, GRIB, LiDAR), web addresses, DuckDB SQL queries, STAC catalogs and Overture Maps — with the right coordinate system. Use for "open", "load", "add", "import", "show this file/URL".
+description: Inspect available layers and source CRS, create approved empty editable vector layers, and guide manual imports when no import tool exists.
 ---
 
 # OpenVietGIS adaptation

@@ -1,6 +1,6 @@
 ---
 name: thematic-map
-description: Style a layer by its data (graduated colours, categories, proportional symbols), label it and export the map. Use when asked to "map", "colour by", "show … by …" or make a choropleth.
+description: Inspect layer fields and values, recommend a thematic classification, adjust requested visibility, and prepare layouts. Applying symbology requires a supported tool or manual action.
 ---
 
 # OpenVietGIS adaptation

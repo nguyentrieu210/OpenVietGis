@@ -1,6 +1,6 @@
 ---
 name: geoprocessing
-description: Run geoprocessing tools and chain them — buffer, clip, erase, split, dissolve, join attributes, select by location or attributes, summarize within, summary statistics, simplify, export features, kernel density. Use for "within N km of", "inside", "merge by", "count per", "overlay", "join tables", "density surface", or any multi-step analysis.
+description: Run supported vector processing (buffer, clip, dissolve), preview geometry operations, validate topology and inspect results through approved tools.
 ---
 
 # OpenVietGIS adaptation

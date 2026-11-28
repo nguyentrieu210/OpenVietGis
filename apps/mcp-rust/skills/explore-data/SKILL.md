@@ -1,6 +1,6 @@
 ---
 name: explore-data
-description: Find out what's in a layer and answer questions from its data — fields, value ranges, top records, counts, filtering and summary statistics. Use for "what's in", "how many", "which … have", "largest", "average".
+description: Inspect layer schemas, page and filter authorized features, and report verified counts and statistics from available data.
 ---
 
 # OpenVietGIS adaptation

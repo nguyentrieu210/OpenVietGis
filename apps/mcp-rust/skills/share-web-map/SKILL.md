@@ -1,6 +1,6 @@
 ---
 name: share-web-map
-description: Share the map or a layer as files that work without a server — a web map (HTML page), a web layer (OGC API Features collection), a MapLibre style, a map image — and data stores. Use for "share", "publish", "web map", "send this map", "export as HTML", "MapLibre style".
+description: Export authorized vector, raster and layout files using supported download tools; explain limitations of public publishing or HTML sharing.
 ---
 
 # OpenVietGIS adaptation

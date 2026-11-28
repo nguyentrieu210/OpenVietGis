@@ -45,6 +45,7 @@ pub fn parse(text: &str) -> Result<Skill, String> {
     }
     let description = field("description").filter(|d| !d.is_empty()).ok_or("the front matter has no description")?;
     let body = body.trim().to_string();
+    if body.is_empty() { return Err("skill instructions are empty".into()); }
     Ok(Skill {
         name,
         description: description.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(1024).collect(),
@@ -66,7 +67,7 @@ pub fn built_in() -> Vec<Skill> {
      include_str!("../skills/geoprocessing/SKILL.md"),
      include_str!("../skills/add-data/SKILL.md"),
      include_str!("../skills/share-web-map/SKILL.md")]
-    .iter().filter_map(|text| parse(text).ok()).collect()
+    .iter().map(|text| parse(text).expect("checked-in skill must be valid")).collect()
 }
 /// Only compiled, public instructions are returned; no tenant data or execution.
 pub fn list() -> Value {
@@ -87,6 +88,22 @@ mod tests {
         let s = built_in(); assert_eq!(s.len(), 6);
         let names: std::collections::HashSet<_> = s.iter().map(|x| &x.name).collect(); assert_eq!(names.len(),6);
         for skill in s { assert!(!skill.description.is_empty()); assert!(skill.body.contains("workspace")); assert!(get(&json!({"name":skill.name})).is_some()); }
+    }
+    #[test] fn skill_tool_references_exist_in_registry() {
+        let registry = crate::tools::Registry::new();
+        let tool_names: std::collections::HashSet<&str> = registry.list().iter().filter_map(|t| t["name"].as_str()).collect();
+        let pattern = regex::Regex::new(r"`(gis_[a-z_]+|cad_[a-z_]+)`").unwrap();
+        for skill in built_in() {
+            for capture in pattern.captures_iter(&skill.body) {
+                assert!(tool_names.contains(&capture[1]), "{} references unknown tool {}", skill.name, &capture[1]);
+            }
+        }
+    }
+    #[test] fn parser_accepts_folded_description_and_crlf() {
+        let skill = parse("---\r\nname: valid-skill\r\ndescription: >\r\n  first line\r\n  second line\r\n---\r\nInstructions").unwrap();
+        assert_eq!(skill.description, "first line second line");
+        assert_eq!(skill.body, "Instructions");
+        assert!(parse("---\nname: empty\ndescription: x\n---\n ").is_err());
     }
     #[test] fn reject_unknown_or_hostile_input() {
         assert!(get(&json!({"name":"../../etc/passwd"})).is_none());

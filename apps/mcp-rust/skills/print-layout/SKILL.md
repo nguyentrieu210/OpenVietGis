@@ -1,6 +1,6 @@
 ---
 name: print-layout
-description: Make a printable page layout — map frame, title, legend, north arrow, scale bar — and export it to PDF or PNG. Use when asked for a "layout", "print", "PDF", "poster" or a map "with a legend".
+description: Create or update a revision-pinned print layout, with map frame, title, legend, north arrow and scale bar; export via approved tools.
 ---
 
 # OpenVietGIS adaptation
