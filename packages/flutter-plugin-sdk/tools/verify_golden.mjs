@@ -1,0 +1,13 @@
+import {readFile} from 'node:fs/promises';
+import {createHash,createPublicKey,verify} from 'node:crypto';
+import assert from 'node:assert/strict';
+const fixture=JSON.parse(await readFile(new URL('../test/fixtures/release-v2.json',import.meta.url),'utf8'));
+const canonical=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
+const digest=v=>createHash('sha256').update(canonical(v)).digest('hex');
+const key=b=>createPublicKey({key:Buffer.concat([Buffer.from('302a300506032b6570032100','hex'),Buffer.from(b,'base64')]),format:'der',type:'spki'});
+assert.equal(digest(fixture.manifest),fixture.release.manifest_digest);
+assert.equal(digest(fixture.contribution),fixture.release.contribution_digest);
+assert.equal(digest(fixture.release),fixture.review.release_digest);
+assert(verify(null,Buffer.from(canonical(fixture.release)),key(fixture.review.publisher_key),Buffer.from(fixture.publisher_signature,'base64')));
+assert(verify(null,Buffer.from(canonical(fixture.review)),key(fixture.operator_key),Buffer.from(fixture.operator_signature,'base64')));
+console.log('V2 independent Node canonical/signature fixture PASS');

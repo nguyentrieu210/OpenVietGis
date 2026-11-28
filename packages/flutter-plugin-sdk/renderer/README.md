@@ -1,0 +1,2 @@
+# Trusted Flutter renderer candidate
+The host creates a VerifiedRelease and scoped Broker, then mounts PluginPanel. Closing or replacing the scope disposes the broker. Supports text, nested form, text/number/date input and typed action calls. Select/table/map_tool renderers deliberately remain disabled until typed descriptors and native map ownership are implemented. Does not activate itself, fetch assets, access credentials, or create an independent marketplace.

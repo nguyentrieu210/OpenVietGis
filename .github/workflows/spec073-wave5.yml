@@ -34,8 +34,14 @@ jobs:
           dart pub get
           dart analyze
           dart test
+      - name: Flutter renderer candidate analysis
+        working-directory: packages/flutter-plugin-sdk/renderer
+        run: |
+          flutter pub get
+          flutter analyze lib
       - name: Generator and architecture guard
         run: |
+          node packages/flutter-plugin-sdk/tools/verify_golden.mjs
           node packages/flutter-plugin-sdk/tools/new_plugin.mjs demo inspection "$RUNNER_TEMP/ovg-plugin"
           test -s "$RUNNER_TEMP/ovg-plugin/manifest.json"
           test -s "$RUNNER_TEMP/ovg-plugin/contribution.json"
