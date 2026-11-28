@@ -62,5 +62,8 @@ mod tests{
         assert!(!is_native_pair(4326,9212));assert!(!is_native_pair(5899,4756));assert!(is_native_pair(9212,3405));
         let p=NativeProjection::new(9212,3405).unwrap();let sql=p.expression("f.geometry");
         assert!(sql.contains("ST_InverseTransformPipeline"));assert!(sql.contains("+lon_0=106.25"));assert!(sql.contains("+lon_0=105"));assert!(sql.ends_with(",3405)"));
+        let overlay_sql = p.expression("ov.geometry");
+        assert!(overlay_sql.contains("ov.geometry"), "{overlay_sql}");
+        assert!(!overlay_sql.contains("rf.geometry"), "{overlay_sql}");
     }
 }
