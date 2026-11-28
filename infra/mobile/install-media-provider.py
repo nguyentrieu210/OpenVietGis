@@ -39,6 +39,7 @@ if src.exists():
         raise SystemExit("activity template changed")
     p.write_text(f"""package {package.group(1)}
 
+import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import org.openvietgis.secure.MediaKeys
@@ -46,6 +47,7 @@ import org.openvietgis.secure.MediaKeys
 class MainActivity : FlutterActivity() {{
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {{
         super.configureFlutterEngine(flutterEngine)
+        MediaKeys.attach(this)
         try {{
             System.loadLibrary("{name}")
             MediaKeys(applicationContext).install()
@@ -54,6 +56,9 @@ class MainActivity : FlutterActivity() {{
         }} catch (_: Exception) {{
             // Provider remains unavailable.
         }}
+    }}
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {{
+        if (!MediaKeys.cameraResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }}
 }}
 """)
