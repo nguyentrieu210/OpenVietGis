@@ -42,7 +42,8 @@
 - [ ] T701b2 End-to-end server/revocation/version negotiation, Flutter renderer/transport qualification, remaining plugin migration.
 ## W8 commands
 - [x] T801a Command registry, palette, normalized shortcut collision, dynamic capability guard, vi/en labels and CoreCommand adapter.
-- [ ] T801b Integrate existing CoreCommandBar/ribbon/menu and all legacy aliases/context keys; keyboard/accessibility tests.
+- [x] T801b1 CoreCommandBar and ribbon consume shared discovery; exact host dispatch rechecks current enabled state and preserves arguments; legacy alias and keyboard behavior retained.
+- [ ] T801b2 Full command registration for all native/plugin surfaces and keyboard/accessibility parity.
 ## W9 theming/accessibility
 - [x] T901a Per-account preferences helpers and theme/density/locale/contrast/motion panel, tested dark/high contrast and normalization.
 - [x] T901b1 Web AccountMenu stores theme/density/contrast/motion through shared per-account settings; migration and persistence smoke PASS.
@@ -50,7 +51,8 @@
 ## W10 migration
 - [x] T1001a First reversible Web slice: generated token imports, remove duplicate SPEC072 token blocks, shared compatibility facade and pnpm lock; fixture baseline/candidate and Web tests.
 - [x] T1001b1 Web account settings, shared CRS search and table row window, modal/chat stacking fix; native and plugin stacked candidates.
-- [ ] T1001b2 Full per-domain adoption (GIS/CAD/DataGrid/Dockview/AI/photo/plugins), native branch convergence, verified legacy CSS removal.
+- [x] T1001b2a Move SPEC072 compatibility CSS and preference control CSS to shared package; no global reset or deleted domain selectors; build and smoke PASS.
+- [ ] T1001b2b Full per-domain adoption (GIS/CAD/DataGrid/Dockview/AI/photo/plugins), native branch convergence, verified legacy CSS removal.
 ## W11 qualification
 - [x] T1101a Package exports, demo and release checklist, dedicated UI qualification workflow, local evidence.
 - [x] T1101b1 Integrated local 21/21 UI regression, Web 314 Vitest + 53 Node, real MapLibre fixture, account/CRS/table/CRUD smoke. CI workflow duplicate key and observed Flutter import/focus failures repaired.

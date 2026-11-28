@@ -15,3 +15,5 @@ export function coreCommandViews(registry:CommandRegistry,context:()=>CommandCon
  return registry.list(context()).map(c=>({alias:c.id.toUpperCase(),label:c.label,group:c.group,disabled:!!c.reason,disabledReason:c.reason??undefined,run:async(args:string)=>{if(args.trim())throw Error('Unexpected arguments');await registry.execute(c.id,context)}}));
 }
 export {CommandPalette} from './palette';
+
+export * from './discovery';

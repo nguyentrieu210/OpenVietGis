@@ -17,7 +17,9 @@
     "./preferences/model": "./src/preferences/model.ts",
     "./gis/model": "./src/gis/model.ts",
     "./primitives": "./src/primitives.tsx",
-    "./data/window": "./src/data/window.ts"
+    "./data/window": "./src/data/window.ts",
+    "./commands/discovery": "./src/commands/discovery.ts",
+    "./compat.css": "./src/compat.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

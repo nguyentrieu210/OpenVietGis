@@ -5,17 +5,4 @@
 @import "../../../packages/design-tokens/generated/tokens.css";
 @import "../../../packages/design-tokens/generated/tailwind.css";
 @import "../../../packages/ui-react/src/preferences/styles.css";
-.ovg-ui-button{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
-.ovg-ui-scroll{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain}
-.ovg-ui-table-scroll{max-width:100%;min-width:0;overflow:auto;overscroll-behavior:contain}
-.ovg-ui-actions{display:flex;flex-wrap:wrap;gap:var(--ovg-ui-gap);align-items:center;min-width:0}
-.ovg-ui-actions>button{min-width:0;max-width:100%;white-space:normal}
-.ovg-ui-input{min-width:0;max-width:100%;box-sizing:border-box}
-/* The account theme applies to application chrome, not imagery, maps or print sheets. */
-.ovg-ui-form{display:grid;gap:12px;min-width:0}
-.ovg-ui-form>label{display:grid;gap:var(--ovg-ui-field-gap);min-width:0}
-.ovg-ui-form :is(input:not([type=checkbox],[type=radio]),select,textarea){width:100%;min-width:0;max-width:100%}
-.ovg-theme-picker{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px;font-size:12px}
-.ovg-theme-picker select{min-width:0;max-width:150px}
-
-.ovg-ui-tabs{display:flex;flex-wrap:wrap;gap:var(--ovg-ui-gap);min-width:0}.ovg-ui-field{display:grid;gap:var(--ovg-ui-field-gap);min-width:0}.ovg-ui-field>span{font-weight:500}
+@import "../../../packages/ui-react/src/compat.css";

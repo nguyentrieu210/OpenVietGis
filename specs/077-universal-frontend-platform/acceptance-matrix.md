@@ -67,3 +67,7 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | Mobile host integration PR #120 | code committed, native qualification pending |
 | SPEC075 host integration PR #121 | build, frozen lock, client SDK 100/100 and lifecycle 2/2 PASS; E2E/CI pending |
 | Full app migration, Cesium/CAD/native windows, remote CI and release | pending |
+
+| Shared command discovery and exact dispatch, stale disabled/duplicate rejection | PASS unit and Web smoke |
+| SPEC072 compatibility CSS ownership moved into shared package | PASS build and smoke |
+| Remote SPEC077 dedicated Web and Flutter jobs at bcd4bb5 | PASS run 46184820249; newer commits require own qualification |
