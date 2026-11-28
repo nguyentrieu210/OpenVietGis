@@ -7,6 +7,8 @@ export type PartnerTool = PartnerToolInput & {run:()=>void};
 export type NavigateTarget = {longitude:number; latitude:number; zoom:number};
 export type PartnerMapBridge = {
   view:()=>unknown;
+  /** First-party reviewed map pixels; not a partner RPC method. */
+  snapshot?:()=>Promise<{data:string;width:number;height:number}>;
   selection:()=>unknown;
   navigate:(target:NavigateTarget)=>void;
   overlay:(data:PartnerOverlay)=>void;

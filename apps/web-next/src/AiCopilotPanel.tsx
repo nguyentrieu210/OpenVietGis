@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState,type RefObject} from "react";
 import {createPortal} from "react-dom";
+import {requestAi} from "@openvietgis/client-sdk";
 import {executeCadCopilot} from "./ai-copilot/cad-actions";
 import {mountAiCopilot} from "./ai-copilot/first-party.js";
 import "./ai-copilot/first-party.css";
@@ -29,7 +30,7 @@ export function AiCopilotPanel({org,pid,bridge,mode}:{org:string;pid:string;brid
        if(metadata.resource!==origin+"/mcp"||!Array.isArray(metadata.authorization_servers)||
           !metadata.authorization_servers.includes(origin+"/realms/openvietgis"))return;
        if(controller.signal.aborted||!host.current)return;
-       unmount=mountAiCopilot(host.current,{organizationId:org,projectId:pid,getBridge:()=>bridge.current,getMode:()=>modeRef.current,getContextEpoch:()=>modeEpoch.current,runCad:(method,args)=>executeCadCopilot(org,pid,method,args)});
+       unmount=mountAiCopilot(host.current,{organizationId:org,projectId:pid,getBridge:()=>bridge.current,getMode:()=>modeRef.current,getContextEpoch:()=>modeEpoch.current,requestAgent:requestAi,runCad:(method,args)=>executeCadCopilot(org,pid,method,args)});
      }catch{/* Copilot remains unavailable until the approved service is ready. */}
    })();
    return()=>{controller.abort();unmount?.()};

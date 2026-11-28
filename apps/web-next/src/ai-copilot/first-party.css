@@ -1,8 +1,8 @@
-.ovg-ai-copilot{position:relative;display:inline-block}
+.ovg-ai-copilot{position:relative;display:inline-block;z-index:1300}
 .ovg-ai-copilot [hidden]{display:none!important}
 .ovg-ai-copilot [data-ai=toggle]{display:inline-flex;align-items:center;gap:7px;background:linear-gradient(130deg,#076953,#234b86);color:white;border:1px solid #489d8a;border-radius:9px;font-weight:700;padding:7px 12px;white-space:nowrap;box-shadow:0 2px 8px #07695333}
 .ovg-ai-copilot [data-ai=toggle] span{color:#c7ffe6;font-size:18px}
-.ovg-ai-copilot [data-ai=panel]{position:fixed;isolation:isolate;z-index:1200;right:18px;top:clamp(72px,14vh,145px);width:440px;max-width:calc(100vw - 36px);max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;background:white;border:1px solid #d4e1de;border-radius:16px;box-shadow:0 20px 70px #102b4355;font:14px/1.45 system-ui;color:#183930;text-align:left}
+.ovg-ai-copilot [data-ai=panel]{position:fixed;isolation:isolate;z-index:2147483000;right:18px;top:clamp(72px,14vh,145px);width:440px;max-width:calc(100vw - 36px);max-height:calc(100dvh - 160px);overflow:auto;box-sizing:border-box;background:white;border:1px solid #d4e1de;border-radius:16px;box-shadow:0 20px 70px #102b4355;font:14px/1.45 system-ui;color:#183930;text-align:left}
 .ovg-ai-copilot [data-ai=header]{display:flex;justify-content:space-between;gap:8px;padding:18px 20px;background:linear-gradient(135deg,#063f38,#173a63);color:#fff}
 .ovg-ai-copilot [data-ai=header] h2{margin:6px 0;font-size:22px;line-height:1.2;color:inherit}.ovg-ai-copilot [data-ai=header] p{margin:0;color:#d5e9eb;font-size:13px}
 .ovg-ai-copilot [data-ai=eyebrow]{font-size:10px;font-weight:800;letter-spacing:.12em;color:#a0f1d2}
@@ -21,3 +21,7 @@
 .ovg-ai-copilot button:disabled{opacity:.55;cursor:wait}.ovg-ai-copilot button:focus-visible,.ovg-ai-copilot input:focus-visible{outline:3px solid #499dee;outline-offset:2px}
 .ovg-ai-copilot [data-ai=footer]{border-top:1px solid #e4ebe7;padding:12px 18px 16px;color:#527063;font-size:12px}.ovg-ai-copilot [data-ai=footer] p{margin:4px 0}.ovg-ai-copilot code{word-break:break-all;color:#1d5971}
 @media(max-width:600px){.ovg-ai-copilot [data-ai=panel]{right:8px;max-width:calc(100vw - 16px);top:72px;max-height:calc(100dvh - 90px)}}
+
+.ovg-ai-copilot [data-ai=native]{display:grid;gap:8px;margin:14px 18px;padding:12px;border:1px solid #c8e5d6;border-radius:10px}.ovg-ai-copilot [data-ai=native] label{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.ovg-ai-copilot [data-ai=native] select,.ovg-ai-copilot [data-ai=native] textarea{font:inherit;max-width:100%;padding:7px;border:1px solid #cadbd4;border-radius:6px}.ovg-ai-copilot [data-ai=native] button{font:inherit;padding:7px 12px;border:1px solid #cadbd4;border-radius:6px;background:#eef8f3;cursor:pointer}.ovg-ai-copilot [data-ai=answer]{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;font:inherit;margin:0}
+
+.ovg-ai-copilot [data-ai=vision]{display:grid;gap:6px;border-top:1px solid #d4e1de;padding-top:8px}.ovg-ai-copilot [data-ai=preview]{display:block;max-width:100%;max-height:220px;object-fit:contain;border:1px solid #cadbd4;border-radius:6px}.ovg-ai-copilot [data-ai=image-status]{font-size:11px;color:#527063}

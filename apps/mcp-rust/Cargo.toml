@@ -6,6 +6,8 @@ rust-version = "1.85.1"
 license = "AGPL-3.0-or-later"
 publish = false
 
+default-run = "openvietgis-mcp-rust"
+
 [workspace]
 
 [dependencies]
@@ -21,8 +23,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time",
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 jsonwebtoken = { version = "9.3", default-features = false }
 
-[dev-dependencies]
 base64 = "0.22"
+
+[dev-dependencies]
 rsa = "0.9"
 rand = "0.8"
 

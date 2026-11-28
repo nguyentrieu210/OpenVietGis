@@ -8,6 +8,7 @@ const org="fixture-org",pid="fixture-project",errors=[];
 try{
  const page=await browser.newPage({viewport:{width:Number(process.env.OVG_TEST_WIDTH||1440),height:Number(process.env.OVG_TEST_HEIGHT||900)}});page.on("pageerror",e=>errors.push(e.message));
  let available=false,restricted=false,metadataChecks=0,sessionCalls=0,command=null,acks=[],closing=0;
+ let nativeEnabled=false,nativeRequests=0,acpRequests=0;
  await page.route("**/.well-known/oauth-protected-resource/mcp",route=>{
    metadataChecks++;
    return available?route.fulfill({json:{resource:origin+"/mcp",authorization_servers:[origin+"/realms/openvietgis"]}}):route.fulfill({status:404,json:{}});
@@ -15,13 +16,26 @@ try{
  await page.route("**/ai-copilot/sessions**",route=>{
    const r=route.request(),path=new URL(r.url()).pathname;
    assert.equal(r.headers()["x-ovg-ai"],"1");
-   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2,workspace_mode:"gis"});return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}})}
+   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2,workspace_mode:"gis"});return route.fulfill({status:201,json:{session_id:"12345678-1234-4234-8234-123456789abc",browser_token:"browser-secret",expires_in:900}})}
    assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
    if(path.endsWith("/poll")){const item=command;command=null;return route.fulfill({json:{command:item}})}
    if(path.endsWith("/ping"))return route.fulfill({json:{alive:true}});
    if(path.endsWith("/prepare"))return route.fulfill({json:{authorized:true,expires_in:20}});
    if(path.endsWith("/ack")){acks.push(r.postDataJSON());return route.fulfill({json:{accepted:true}})}
    if(path.endsWith("/close")){closing++;return route.fulfill({json:{closed:true}})}
+   return route.fulfill({status:404,json:{}});
+ });
+ await page.route("**/ai-copilot/agent/**",route=>{
+   const r=route.request(),path=new URL(r.url()).pathname;
+   assert.equal(r.headers()["x-ovg-ai"],"1");assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
+   if(path.endsWith("/providers"))return route.fulfill({json:{providers:nativeEnabled?[{id:"openai",model:"fixture",local:false,vision:true}]:[],acp_agents:nativeEnabled?["codex"]:[],platform:{version:1,capabilities:{}}}});
+   if(path.endsWith("/run")){
+     nativeRequests++;const payload=r.postDataJSON();const {snapshot,vision_consent,...rest}=payload;assert.deepEqual(rest,{provider:"openai",expected_model:"fixture",user:"Inspect map",skill:null,consent:true,allow_writes:false,multi_agent:false});if(nativeRequests===2){assert.equal(vision_consent,true);assert.ok(snapshot.width>=64&&snapshot.height>=64&&snapshot.data.length<=80000);assert.equal(Buffer.from(snapshot.data,"base64").subarray(0,2).toString("hex"),"ffd8");}else{assert.equal(snapshot,undefined);assert.equal(vision_consent,undefined)}
+     return route.fulfill({status:202,json:{run_id:"fixture-run",state:"running"}});
+   }
+   if(path.endsWith("/acp")){acpRequests++;assert.deepEqual(r.postDataJSON(),{agent:"codex",task:"Propose GIS code",consent:true});return route.fulfill({status:202,json:{run_id:"acp-fixture",state:"running"}})}
+   if(path.endsWith("/status")&&r.postDataJSON().run_id==="acp-fixture"){return route.fulfill({json:{state:"done",report:{stop:"complete",answer:"Advisory fixture",acp:true}}})}
+   if(path.endsWith("/status")){assert.deepEqual(r.postDataJSON(),{run_id:"fixture-run"});return route.fulfill({json:{state:"done",report:{stop:"complete",answer:"Verified fixture",calls:0,model_steps:1}}})}
    return route.fulfill({status:404,json:{}});
  });
  await page.route("**/api/v1/**",route=>{
@@ -42,7 +56,7 @@ try{
    return route.fulfill({json:body});
  });
  await page.route("https://tile.openstreetmap.org/**",r=>r.fulfill({status:200,contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPYce0sEDFAKABBrglttPhhlgAAAABJRU5ErkJggg==","base64")}));
- const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.getByRole("button",{name:/^◈ Plugin/}).waitFor({timeout:25000})};
+ const open=async()=>{await page.goto(url,{waitUntil:"domcontentloaded"});await page.getByRole("group",{name:"Không gian làm việc"}).waitFor({timeout:25000})};
  const button=page.getByRole("button",{name:"AI Copilot",exact:true});
  await open();await page.waitForFunction(()=>document.querySelector(".ai-copilot-host")!==null,{}, {timeout:25000});
  await page.waitForTimeout(500);assert.equal(metadataChecks,1);assert.equal(await button.count(),0);assert.equal(sessionCalls,0);
@@ -53,5 +67,22 @@ try{
  command={id:"two",method:"map_navigate",params:{longitude:105.8,latitude:21,zoom:12},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.getByText(/Đã thực hiện lệnh AI/).waitFor();await page.waitForTimeout(650);assert.equal(acks[1].ok,true);
  command={id:"three",method:"map_view",params:{},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.waitForFunction(()=>document.querySelector("[data-ai=review]").hidden);assert.equal(acks[2].ok,true);assert.ok(Math.abs(acks[2].result.center[0]-105.8)<.001);assert.ok(Math.abs(acks[2].result.center[1]-21)<.001);assert.ok(Math.abs(acks[2].result.zoom-12)<.01);
  await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();await page.waitForTimeout(300);assert.equal(closing,1);
+ nativeEnabled=true;await page.getByRole("button",{name:"Kết nối AI",exact:true}).click();
+ await page.locator('[data-ai="native"]').waitFor();
+ await page.locator('[data-ai="task"]').fill("Inspect map");
+ await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/xác nhận chia sẻ dữ liệu/).waitFor();assert.equal(nativeRequests,0);
+ await page.locator('[data-ai="provider-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Verified fixture/).waitFor();assert.equal(nativeRequests,1);assert.equal(await page.locator('[data-ai="provider-consent"]').isChecked(),false);
+ await page.getByRole("button",{name:"Chụp ảnh bản đồ",exact:true}).click();
+ await page.locator('[data-ai="preview"]').waitFor({timeout:8000});
+ await page.locator('[data-ai="provider-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Xác nhận riêng ảnh bản đồ/).waitFor();assert.equal(nativeRequests,1);
+ await page.locator('[data-ai="vision-consent"]').check();await page.getByRole("button",{name:"Thực thi",exact:true}).click();
+ await page.getByText(/Verified fixture/).waitFor();assert.equal(nativeRequests,2);
+ await page.locator('[data-ai="task"]').fill("Propose GIS code");
+ await page.getByRole("button",{name:"Chạy Coding Agent",exact:true}).click();await page.getByText(/xác nhận gửi văn bản/).waitFor();assert.equal(acpRequests,0);
+ await page.locator('[data-ai="acp-consent"]').check();await page.getByRole("button",{name:"Chạy Coding Agent",exact:true}).click();await page.getByText(/Advisory fixture/).waitFor();assert.equal(acpRequests,1);
+ await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();
  assert.deepEqual(errors,[]);console.log("PASS integrated GIS Copilot: disabled service, restricted project, no manual token, denial, real MapLibre navigation and view, disconnect");
 }finally{await browser.close()}

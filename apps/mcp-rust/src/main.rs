@@ -171,24 +171,27 @@ fn rpc(id:Value,v:Value)->Response{respond(200,json!({"jsonrpc":"2.0","id":id,"r
 fn rpc_error(id:Value,code:i64,msg:&str)->Response{respond(200,json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":msg}}))}
 fn tool_result(v:Value,error:bool)->Value{json!({"content":[{"type":"text","text":v.to_string()}],"structuredContent":v,"isError":error})}
 async fn operate(app:&App,claims:&Claims,name:&str,args:&Value)->Result<Value,Failure>{
+    operate_subject(app,&claims.sub,claims.exp,name,args).await
+}
+async fn operate_subject(app:&App,subject:&str,expires:u64,name:&str,args:&Value)->Result<Value,Failure>{
     let(target,params)=app.registry.call(name,args)?;
-    if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
-    if name=="gis_workspaces"{return Ok(json!({"workspaces":app.store()?.list(&claims.sub,app.now())}))}
+    if expires<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+    if name=="gis_workspaces"{return Ok(json!({"workspaces":app.store()?.list(subject,app.now())}))}
     if name=="gis_operation_status"{
         let ticket=uuid(&params["operation_ticket"])?;let now=app.now();let mut s=app.store()?;
-        let id=s.resolve(&claims.sub,target,now)?;return Ok(json!(s.result(&claims.sub,id,ticket,now)?))
+        let id=s.resolve(subject,target,now)?;return Ok(json!(s.result(subject,id,ticket,now)?))
     }
     let(method,version,ttl)=dispatch(name);let now=app.now();
-    let deadline=now.saturating_add(claims.exp.saturating_sub(unix_now()).saturating_mul(1000));
-    let(id,cid)=app.store()?.submit(&claims.sub,target,method,params,version,ttl,deadline,now)?;
+    let deadline=now.saturating_add(expires.saturating_sub(unix_now()).saturating_mul(1000));
+    let(id,cid)=app.store()?.submit(subject,target,method,params,version,ttl,deadline,now)?;
     if ttl>40_000{return Ok(json!({"state":"queued","session_id":id,"operation_ticket":cid,"expires_in":ttl.min(deadline.saturating_sub(now))/1000,"next":"Wait for browser approval; call gis_operation_status with the same session_id and ticket. Do not resubmit."}))}
     // Cancellation of the HTTP future also cancels an uncompleted command.
     struct Cancel<'a>{app:&'a App,subject:&'a str,id:Uuid,cid:Uuid}
     impl Drop for Cancel<'_>{fn drop(&mut self){if let Ok(mut s)=self.app.store(){let _=s.cancel(self.subject,self.id,self.cid,self.app.now());}}}
-    let _guard=Cancel{app,subject:&claims.sub,id,cid};
+    let _guard=Cancel{app,subject:subject,id,cid};
     loop{
-        if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
-        let r=app.store()?.result(&claims.sub,id,cid,app.now())?;
+        if expires<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+        let r=app.store()?.result(subject,id,cid,app.now())?;
         match r.state{
             CommandState::Done=>return Ok(json!({"acknowledged":true,"result":r.result})),
             CommandState::Denied|CommandState::Expired=>return Err(Failure::new(409,"GIS user declined or command expired")),
@@ -198,6 +201,233 @@ async fn operate(app:&App,claims:&Claims,name:&str,args:&Value)->Result<Value,Fa
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 }
+/// Wave 2 native host bridge. Call only with claims verified by the OAuth boundary.
+/// Wave 3 supplies the provider and user-facing entry; no new remote route here.
+#[allow(dead_code)]
+async fn run_workspace_agent<M, MF>(app:&App,claims:&Claims,session:Uuid,allowed:Vec<String>,skill:Option<&str>,user:String,cancel:tokio::sync::watch::Receiver<bool>,model:M)->Result<openvietgis_mcp_rust::agent::Report,Failure>
+where M:FnMut(openvietgis_mcp_rust::agent::ModelRequest)->MF, MF:std::future::Future<Output=Result<openvietgis_mcp_rust::agent::Reply,openvietgis_mcp_rust::agent::ProviderError>>{
+    if claims.exp<=unix_now(){return Err(Failure::new(401,"OAuth token expired"))}
+    app.store()?.resolve(&claims.sub,Some(session),app.now())?;
+    let mut agent=openvietgis_mcp_rust::agent::Agent::new(&app.registry,session,allowed,Duration::from_secs(300));
+    if let Some(name)=skill{agent=agent.with_skill(name).map_err(|_|Failure::new(422,"Unknown GIS skill"))?;}
+    Ok(agent.run(user,cancel,model,|call|async move{
+        match operate(app,claims,&call.name,&call.arguments).await{
+            Ok(value)=>openvietgis_mcp_rust::agent::from_dispatch(&call,value),
+            Err(_)=>openvietgis_mcp_rust::agent::ToolOutcome::Failed
+        }
+    }).await)
+}
+
+// Wave 3: opt-in first-party model gateway. Disabled unless the operator allowlists
+// a subject and configures a provider. Never accept a caller-supplied URL or key.
+fn provider_allowed(subject:&str)->bool{
+    std::env::var("OVG_AI_ALLOWED_SUBJECTS").ok().is_some_and(|s|s.split(',').any(|x|x.trim()==subject&&!subject.is_empty()))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool, #[serde(default)] multi_agent:bool, #[serde(default)] vision_consent:bool, snapshot:Option<openvietgis_mcp_rust::vision::Input>}
+async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    let v=parse(&body,&h)?;if v!=json!({}){return Err(Failure::new(422,"Invalid provider request"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    let providers=if provider_allowed(&owner.subject){openvietgis_mcp_rust::provider::Provider::ALL.into_iter().filter_map(openvietgis_mcp_rust::provider::Config::from_env).map(|c|c.descriptor()).collect::<Vec<_>>()}else{vec![]};
+    let acp_agents=if provider_allowed(&owner.subject)&&openvietgis_mcp_rust::acp::Remote::from_env().is_some(){openvietgis_mcp_rust::acp::Remote::agents()}else{vec![]};
+    Ok(respond(200,json!({"providers":providers,"acp_agents":acp_agents,"platform":openvietgis_mcp_rust::platform::manifest()})))
+}
+fn active_agents()->&'static Mutex<HashSet<String>>{
+    static ACTIVE:std::sync::OnceLock<Mutex<HashSet<String>>>=std::sync::OnceLock::new();
+    ACTIVE.get_or_init(||Mutex::new(HashSet::new()))
+}
+struct AgentSlot(String);
+impl AgentSlot{
+    fn acquire(subject:&str)->Result<Self,Failure>{let mut a=active_agents().lock().map_err(|_|Failure::new(503,"Agent unavailable"))?;if a.len()>=4||!a.insert(subject.into()){return Err(Failure::new(429,"Agent capacity reached"))}Ok(Self(subject.into()))}
+}
+impl Drop for AgentSlot{fn drop(&mut self){if let Ok(mut a)=active_agents().lock(){a.remove(&self.0);}}}
+// Bounded, process-local jobs. No raw GIS observations or provider-native reasoning are retained.
+struct AgentJob {owner:Owner,session:Uuid,created:Instant,cancel:tokio::sync::watch::Sender<bool>,result:Option<Value>}
+fn agent_jobs()->&'static Mutex<std::collections::HashMap<Uuid,AgentJob>>{
+    static JOBS:std::sync::OnceLock<Mutex<std::collections::HashMap<Uuid,AgentJob>>>=std::sync::OnceLock::new();
+    JOBS.get_or_init(||Mutex::new(std::collections::HashMap::new()))
+}
+fn prune_jobs(j:&mut std::collections::HashMap<Uuid,AgentJob>){
+    j.retain(|_,v|v.result.is_none()||v.created.elapsed()<Duration::from_secs(900));
+    while j.len()>=64{
+        let old=j.iter().filter(|(_,v)|v.result.is_some()).min_by_key(|(_,v)|v.created).map(|(id,_)|*id);
+        if let Some(id)=old{j.remove(&id);}else{break}
+    }
+}
+struct AgentJobGuard(Uuid);
+impl Drop for AgentJobGuard{
+    fn drop(&mut self){if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&self.0){if job.result.is_none(){job.result=Some(json!({"stop":"worker_interrupted","uncertain_call":"unknown","calls":null,"model_steps":null}));}}}}
+}
+async fn agent_job_action(State(app):State<App>,Path((id,action)):Path<(Uuid,String)>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    let v=parse(&body,&h)?;
+    if v.as_object().is_none_or(|o|o.len()!=1||!o.contains_key("run_id")){return Err(Failure::new(422,"Invalid agent job request"))}
+    let run=uuid(&v["run_id"])?;
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+    let job=jobs.get_mut(&run).filter(|j|j.owner==owner&&j.session==id).ok_or(Failure::new(404,"Agent job not found"))?;
+    match action.as_str(){
+        "status"=>Ok(respond(200,job.result.clone().map(|r|json!({"state":"done","report":r})).unwrap_or(json!({"state":"running"})))),
+        "cancel"=>{let _=job.cancel.send(true);Ok(respond(200,json!({"state":"cancel_requested"})))},
+        _=>Err(Failure::new(404,"Unknown agent action"))
+    }
+}
+// Wave 4: shared pacing and scope. The lock covers dispatch and its acknowledgement,
+// not model inference. Children never receive asynchronous raster or mutation tools.
+struct TeamHost<'a>{app:&'a App,headers:&'a HeaderMap,owner:&'a Owner,session:Uuid,deadline:u64,pace:tokio::sync::Mutex<tokio::time::Instant>}
+impl TeamHost<'_>{
+    async fn model(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,request:openvietgis_mcp_rust::agent::ModelRequest)->Result<openvietgis_mcp_rust::agent::Reply,openvietgis_mcp_rust::agent::ProviderError>{
+        use openvietgis_mcp_rust::agent::ProviderError;
+        if unix_now()>=self.deadline||!provider_allowed(&self.owner.subject){return Err(ProviderError::Fatal)}
+        match browser_identity(self.app,self.headers,self.session).await{Ok((fresh,_)) if fresh==*self.owner=>gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
+    }
+    async fn dispatch(&self,call:openvietgis_mcp_rust::agent::ToolCall)->openvietgis_mcp_rust::agent::ToolOutcome{
+        use openvietgis_mcp_rust::agent::{ToolOutcome,from_dispatch};
+        let mut next=self.pace.lock().await;
+        if call.arguments["session_id"]!=json!(self.session){return ToolOutcome::Failed}
+        if call.name!="gis_operation_status"{tokio::time::sleep_until(*next).await;}
+        if unix_now()>=self.deadline||!provider_allowed(&self.owner.subject){return ToolOutcome::Failed}
+        match browser_identity(self.app,self.headers,self.session).await{
+            Ok((fresh,_)) if fresh==*self.owner=>{
+                if call.name!="gis_operation_status"{*next=tokio::time::Instant::now()+Duration::from_millis(2050);}
+                match operate_subject(self.app,&self.owner.subject,self.deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed}
+            },
+            _=>ToolOutcome::Failed
+        }
+    }
+    async fn child(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,budget:Arc<openvietgis_mcp_rust::team::Budget>,parent:&[String],task:Option<openvietgis_mcp_rust::team::Task>,cancel:tokio::sync::watch::Receiver<bool>)->Option<Value>{
+        use openvietgis_mcp_rust::{agent::Agent,team};
+        let task=task?;
+        let child_gateway=gateway.fork();
+        let allowed=task.role.allowed(&self.app.registry,parent);
+        let agent=Agent::new(&self.app.registry,self.session,allowed,Duration::from_secs(self.deadline.saturating_sub(unix_now()))).with_team(budget,false).with_skill(task.role.skill()).ok()?;
+        let g=&child_gateway;
+        let report=agent.run(task.task,cancel,|request|self.model(g,request),|call|self.dispatch(call)).await;
+        Some(team::summary(task.role,&report))
+    }
+    async fn delegate(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,budget:Arc<openvietgis_mcp_rust::team::Budget>,parent:&[String],call:openvietgis_mcp_rust::agent::ToolCall,cancel:tokio::sync::watch::Receiver<bool>,reports:&Mutex<Vec<Value>>)->openvietgis_mcp_rust::agent::ToolOutcome{
+        use openvietgis_mcp_rust::{agent::ToolOutcome,team};
+        let Some(tasks)=team::tasks(&call.arguments)else{return ToolOutcome::Failed};
+        let expected_count=tasks.len();
+        if !budget.children(expected_count){return ToolOutcome::Failed}
+        let mut it=tasks.into_iter();
+        let (a,b,c)=tokio::join!(self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget,parent,it.next(),cancel));
+        let batch:Vec<Value>=[a,b,c].into_iter().flatten().collect();
+        let ok=batch.len()==expected_count&&batch.iter().all(|r|r["complete"]==true&&r["uncertain_call"].is_null()&&r["unresolved_ticket"].is_null());
+        if let Ok(mut r)=reports.lock(){r.extend(batch.clone());}
+        if ok{ToolOutcome::Completed(json!({"untrusted_agent_reports":batch}))}else{ToolOutcome::Failed}
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AcpInput{agent:String,task:String,consent:bool}
+async fn browser_acp(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    use openvietgis_mcp_rust::acp::{self,Remote};
+    let input:AcpInput=serde_json::from_value(parse(&body,&h)?).map_err(|_|Failure::new(422,"Invalid ACP request"))?;
+    let run_id=Uuid::new_v4();
+    let req=acp::Input{agent:input.agent,task:input.task,run_id};
+    if !input.consent||!req.valid(){return Err(Failure::new(422,"Explicit coding-agent consent required"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    if !provider_allowed(&owner.subject)||!Remote::agents().contains(&req.agent){return Err(Failure::new(403,"ACP agent not allowed"))}
+    let remote=Remote::from_env().ok_or(Failure::new(503,"Isolated runner not configured"))?;
+    let slot=AgentSlot::acquire(&owner.subject)?;
+    let(cancel_tx,mut cancel)=tokio::sync::watch::channel(false);
+    {
+        let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+        prune_jobs(&mut jobs);
+        if jobs.len()>=64{return Err(Failure::new(429,"Agent job capacity reached"))}
+        jobs.insert(run_id,AgentJob{owner:owner.clone(),session:id,created:Instant::now(),cancel:cancel_tx,result:None});
+    }
+    tokio::spawn(async move{
+        let _slot=slot;let _guard=AgentJobGuard(run_id);
+        let report=if *cancel.borrow()||!provider_allowed(&owner.subject){acp::Report::failed("cancelled")}else{
+            let work=remote.run(req);tokio::pin!(work);
+            loop{
+                tokio::select!{
+                    biased;
+                    _=cancel.wait_for(|v|*v)=>{remote.cancel(run_id).await;break acp::Report::failed("cancelled")},
+                    r=&mut work=>break r,
+                    _=tokio::time::sleep(Duration::from_secs(5))=>{
+                        if !provider_allowed(&owner.subject)||!matches!(browser_identity(&app,&h,id).await,Ok((fresh,_)) if fresh==owner){
+                            remote.cancel(run_id).await;break acp::Report::failed("cancelled")
+                        }
+                    }
+                }
+            }
+        };
+        let value=json!({"stop":report.stop,"answer":report.answer,"calls":0,"model_steps":null,"acp":true,"denied":report.denied,"frames":report.frames,"unverified_advice":true});
+        if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
+    });
+    Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
+}
+
+async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
+    use openvietgis_mcp_rust::{agent::Agent,provider::{Provider,Config,Gateway}};
+    let v=parse(&body,&h)?;let input:AgentInput=serde_json::from_value(v).map_err(|_|Failure::new(422,"Invalid agent request"))?;
+    if !input.consent||input.user.trim().is_empty()||input.user.len()>16000{return Err(Failure::new(422,"Explicit provider consent and request required"))}
+    let(owner,_)=browser_identity(&app,&h,id).await?;
+    if !provider_allowed(&owner.subject){return Err(Failure::new(403,"Model gateway not enabled for this account"))}
+    let p=Provider::parse(&input.provider).ok_or(Failure::new(422,"Unsupported provider"))?;
+    let cfg=Config::from_env(p).ok_or(Failure::new(503,"Provider not configured"))?;
+    if cfg.descriptor()["model"]!=input.expected_model.as_str(){return Err(Failure::new(409,"Provider model changed; refresh consent"))}
+    if input.snapshot.is_some()!=input.vision_consent{return Err(Failure::new(422,"Explicit image consent required"))}
+    let snapshot=match input.snapshot{
+        Some(img)=>{
+            if cfg.descriptor()["vision"]!=true{return Err(Failure::new(422,"Selected model not enabled for vision"))}
+            Some(openvietgis_mcp_rust::vision::Snapshot::validate(img).ok_or(Failure::new(422,"Invalid map snapshot"))?)
+        },None=>None
+    };
+    let vision_metadata=snapshot.as_ref().map(|s|s.metadata());
+    let _slot=AgentSlot::acquire(&owner.subject)?;
+    let mut gateway=Gateway::new(cfg).map_err(|_|Failure::new(503,"Provider unavailable"))?;
+    if let Some(img)=snapshot{gateway=gateway.with_snapshot(img).map_err(|_|Failure::new(422,"Vision unavailable"))?;}
+    let allowed=app.registry.list().iter().filter(|t|{
+        let name=t["name"].as_str().unwrap_or("");
+        // Administration remains excluded even when the user permits editing.
+        !["gis_plugin_activate","gis_plugin_disable","gis_plugin_create","gis_plugin_update","gis_plugin_records"].contains(&name)
+        && (input.allow_writes||t["annotations"]["readOnlyHint"]==true)
+    }).filter_map(|t|t["name"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+    // Validate the selected skill before accepting the run.
+    if let Some(skill)=input.skill.as_deref(){if openvietgis_mcp_rust::skills::get(&json!({"name":skill})).is_none(){return Err(Failure::new(422,"Unknown GIS skill"))}}
+    let (cancel_tx,cancel)=tokio::sync::watch::channel(false);
+    let run_id=Uuid::new_v4();
+    {
+        let mut jobs=agent_jobs().lock().map_err(|_|Failure::new(503,"Agent job store unavailable"))?;
+        prune_jobs(&mut jobs);
+        if jobs.len()>=64{return Err(Failure::new(429,"Agent job capacity reached"))}
+        jobs.insert(run_id,AgentJob{owner:owner.clone(),session:id,created:Instant::now(),cancel:cancel_tx,result:None});
+    }
+    let deadline=unix_now().saturating_add(300);
+    // The user explicitly started this job. The worker is bounded and every GIS/model
+    // call revalidates the same browser identity. The slot lives until the worker exits.
+    tokio::spawn(async move{
+        let _slot=_slot;
+        let _job_guard=AgentJobGuard(run_id);
+        let budget=Arc::new(openvietgis_mcp_rust::team::Budget::default());
+        let reports=Mutex::new(Vec::new());
+        let mut agent=Agent::new(&app.registry,id,allowed.clone(),Duration::from_secs(300)).with_team(budget.clone(),input.multi_agent);
+        if let Some(skill)=input.skill.as_deref(){
+            match agent.with_skill(skill){
+                Ok(a)=>agent=a,
+                Err(_)=>{if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(json!({"stop":"invalid_input","calls":0,"model_steps":0}));}}return}
+            }
+        }
+        let host=TeamHost{app:&app,headers:&h,owner:&owner,session:id,deadline,pace:tokio::sync::Mutex::new(tokio::time::Instant::now())};
+        let host_ref=&host;let g=&gateway;let b=&budget;let parent=&allowed;let child_cancel=&cancel;let logs=&reports;
+        let report=agent.run(input.user,cancel.clone(),|request|host_ref.model(g,request),|call|async move{
+            if call.name==openvietgis_mcp_rust::team::DELEGATE{
+                host_ref.delegate(g,b.clone(),parent,call,child_cancel.clone(),logs).await
+            }else{host_ref.dispatch(call).await}
+        }).await;
+        let totals=budget.snapshot();
+        let children=reports.lock().map(|r|r.clone()).unwrap_or_default();
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"snapshot":vision_metadata,"context":report.context,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
+    });
+    Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
+}
+
 async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     if !trusted_host(&h)||!origin_ok(&h){return respond(403,json!({"error":"Untrusted origin"}))}
     let claims=match verify(&app,&h).await{Ok(c)=>c,Err(_)=>return unauthorized()};
@@ -210,8 +440,10 @@ async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     let version=hdr(&h,"mcp-protocol-version");
     if !version.is_empty()&&!PROTOCOLS.contains(&version){return respond(400,json!({"error":"Unsupported MCP protocol version"}))}
     match method{
-        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false}},"instructions":"Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
+        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false},"prompts":{"listChanged":false},"experimental":{"openvietgis.aiPlatform":openvietgis_mcp_rust::platform::manifest()}},"instructions":"Discover built-in GIS workflows using prompts/list and prompts/get. Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
         "ping"=>rpc(id,json!({})),
+        "prompts/list"=>{if v.get("params").is_some_and(|p| !p.as_object().is_some_and(|o| o.is_empty())){rpc_error(id,-32602,"Invalid prompt list parameters")}else{rpc(id,openvietgis_mcp_rust::skills::list())}},
+        "prompts/get"=>match openvietgis_mcp_rust::skills::get(&v["params"]){Some(p)=>rpc(id,p),None=>rpc_error(id,-32602,"Unknown prompt or invalid arguments")},
         "tools/list"=>rpc(id,json!({"tools":app.registry.list()})),
         "tools/call"=>{let name=v["params"]["name"].as_str().unwrap_or("");let args=v["params"].get("arguments").cloned().unwrap_or(json!({}));
             match operate(&app,&claims,name,&args).await{
@@ -235,6 +467,10 @@ fn routes(app:App)->Router{
         .route("/mcp",post(mcp).get(mcp_get))
         .route("/ai-copilot/sessions",post(open))
         .route("/ai-copilot/sessions/{id}/{action}",post(browser_action))
+        .route("/ai-copilot/agent/{id}/providers",post(provider_list))
+        .route("/ai-copilot/agent/{id}/run",post(browser_agent))
+        .route("/ai-copilot/agent/{id}/acp",post(browser_acp))
+        .route("/ai-copilot/agent/{id}/{action}",post(agent_job_action))
         .route("/ai-copilot/sessions/{id}/commands/{cid}/{action}",post(browser_command))
         .layer(DefaultBodyLimit::max(128_000))
         .with_state(app)
@@ -292,7 +528,8 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
             .route("/api/v1/me/identity-links",get(||async{Json(json!([{"issuer":ISSUER,"subject":"alice"}]))}))
             .route("/api/v1/organizations/{org}/projects/{project}/access/mine",get(move|Path((o,p)):Path<(Uuid,Uuid)>|async move{Json(json!({"restricted":o!=org||(p!=project_a&&p!=project_b)}))}));
         let (core,core_task)=serve(core_router).await;
-        let (url,task)=serve(routes(app(format!("{core}/api/v1"),format!("{core}/jwks")).unwrap())).await;
+        let service=app(format!("{core}/api/v1"),format!("{core}/jwks")).unwrap();
+        let (url,task)=serve(routes(service.clone())).await;
         let client=reqwest::Client::new();
         let valid=sign(&key,claims("alice"));
         let mut wrong=claims("alice");wrong["aud"]=json!("other-resource");
@@ -304,6 +541,14 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(post_rpc(&client,&url,"invalid","tools/list",json!({})).await.status(),401);
         let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2026-07-28"})).await.json().await.unwrap();
         assert_eq!(init["result"]["protocolVersion"],"2026-07-28");
+        assert_eq!(init["result"]["capabilities"]["prompts"]["listChanged"],false);
+        let prompts:Value=post_rpc(&client,&url,&valid,"prompts/list",json!({})).await.json().await.unwrap();
+        assert_eq!(prompts["result"]["prompts"].as_array().unwrap().len(),6);
+        let skill:Value=post_rpc(&client,&url,&valid,"prompts/get",json!({"name":"explore-data"})).await.json().await.unwrap();
+        assert_eq!(skill["result"]["messages"][0]["content"]["type"],"text");
+        let invalid:Value=post_rpc(&client,&url,&valid,"prompts/get",json!({"name":"missing"})).await.json().await.unwrap();
+        assert_eq!(invalid["error"]["code"],-32602);
+        assert_eq!(post_rpc(&client,&url,"invalid","prompts/list",json!({})).await.status(),401);
         let legacy:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
         assert_eq!(legacy["result"]["protocolVersion"],"2025-11-25");
         let listed:Value=post_rpc(&client,&url,&valid,"tools/list",json!({})).await.json().await.unwrap();
@@ -314,6 +559,19 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         let b:Value=browser(&client,&url,"",None,json!({"organization_id":org,"project_id":project_b,"workspace_version":2})).await.json().await.unwrap();
         let sa=a["session_id"].as_str().unwrap();let sb=b["session_id"].as_str().unwrap();
         let ta=a["browser_token"].as_str().unwrap();let tb=b["browser_token"].as_str().unwrap();
+        // The new provider route must share the same browser identity and explicit consent.
+        let provider_req=|id:&str,token:&str,action:&str,payload:Value|{
+            client.post(format!("{url}/ai-copilot/agent/{id}/{action}")).header("host","openvietgis.cloud").header("origin",ORIGIN).header("x-ovg-ai","1").header("cookie","ovg_session=test-cookie").header("x-ovg-bridge",token).json(&payload)
+        };
+        assert_eq!(provider_req(sa,tb,"providers",json!({})).send().await.unwrap().status(),404);
+        assert_eq!(provider_req(sa,ta,"providers",json!({"url":"http://127.0.0.1"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":false,"allow_writes":false})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"run",json!({"provider":"openai","expected_model":"fixture","user":"inspect","skill":null,"consent":true,"allow_writes":false,"api_key":"not-accepted"})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"providers",json!({})).send().await.unwrap().status(),200);
+        assert_eq!(provider_req(sa,ta,"status",json!({"run_id":Uuid::new_v4()})).send().await.unwrap().status(),404);
+        assert_eq!(provider_req(sa,ta,"acp",json!({"agent":"codex","task":"inspect","consent":false})).send().await.unwrap().status(),422);
+        assert_eq!(provider_req(sa,ta,"acp",json!({"agent":"codex","task":"inspect","consent":true,"command":"shell"})).send().await.unwrap().status(),422);
+
         let many:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_workspaces","arguments":{}})).await.json().await.unwrap();
         assert_eq!(many["result"]["structuredContent"]["workspaces"].as_array().unwrap().len(),2);
         let amb:Value=post_rpc(&client,&url,&valid,"tools/call",json!({"name":"gis_live_view","arguments":{}})).await.json().await.unwrap();
@@ -336,6 +594,30 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(ack.status(),200);
         let result=call.await.unwrap();assert_eq!(result["result"]["structuredContent"]["acknowledged"],true);
         assert!(result["result"]["structuredContent"]["result"].get("unapproved_extra").is_none());
+        use openvietgis_mcp_rust::agent::{Reply,ToolCall,Stop};
+        let auth=verify(&service,&{
+            let mut headers=HeaderMap::new();
+            headers.insert(header::AUTHORIZATION,format!("Bearer {valid}").parse().unwrap());headers
+        }).await.unwrap();
+        let scoped=Uuid::parse_str(sa).unwrap();
+        let (_cancel_tx,cancel)=tokio::sync::watch::channel(false);
+        let mut turns=0;
+        let run=run_workspace_agent(&service,&auth,scoped,vec!["gis_live_view".into()],None,"inspect map".into(),cancel,|_|{
+            turns+=1;
+            std::future::ready(Ok(if turns==1{Reply{text:String::new(),calls:vec![ToolCall{id:"view".into(),name:"gis_live_view".into(),arguments:json!({})}]}}else{Reply{text:"verified".into(),calls:vec![]}}))
+        });
+        let browser_driver=async{
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let cmd:Value=browser(&client,&url,&format!("/{sa}/poll"),Some(ta),json!({})).await.json().await.unwrap();
+            let cid=cmd["command"]["id"].as_str().unwrap();
+            assert_eq!(cmd["command"]["method"],"map_view");
+            let prep=browser(&client,&url,&format!("/{sa}/commands/{cid}/prepare"),Some(ta),json!({})).await;
+            assert_eq!(prep.status(),200);
+            let ack=browser(&client,&url,&format!("/{sa}/commands/{cid}/ack"),Some(ta),json!({"ok":true,"result":{"crs":"EPSG:4326","center":[1,2],"bbox":[0,0,3,3],"zoom":6}})).await;
+            assert_eq!(ack.status(),200);
+        };
+        let (report,())=tokio::join!(run,browser_driver);
+        let report=report.unwrap();assert_eq!(report.stop,Stop::Complete);assert_eq!(report.calls,1);
         task.abort();core_task.abort();
     }
 }

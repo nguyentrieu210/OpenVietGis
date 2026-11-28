@@ -277,7 +277,7 @@ def check_binary_exports(client, base, headers, outsider, export):
         )
 
 
-def unsafe_archive():
+def unsafe_archive(name="../escape.shp", *, symlink=False):
     buff = io.BytesIO()
     with zipfile.ZipFile(buff, "w") as archive:
         info = zipfile.ZipInfo(name)
