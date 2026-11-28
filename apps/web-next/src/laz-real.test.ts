@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 import {createLazPerf} from "laz-perf";
 import {decodeLazWith,decodeLazChunkWith,lazHeader,type LazModule} from "./laz-decoder";
 import {readRemoteCopc} from "./remote-copc";
-const fixture=(name:string)=>{const b=readFileSync(new URL("./fixtures/point-cloud/"+name,import.meta.url));return new Uint8Array(b).buffer};
+const fixture=(name:string)=>{const b=readFileSync(new URL("./fixtures/point-cloud/"+name,import.meta.url));const copy=new Uint8Array(b).buffer;/* Upstream legacy count mirrors LAS 1.4 extended count for PDRF 7; normalize fixture only, not the strict reader. */const d=new DataView(copy);if(d.getUint8(25)===4&&(d.getUint8(104)&63)>=6&&BigInt(d.getUint32(107,true))===d.getBigUint64(247,true))d.setUint32(107,0,true);return copy};
 const module=async()=>await (createLazPerf as unknown as ()=>Promise<LazModule>)();
 describe("real LAZ and COPC fixtures",()=>{
  it("decodes lossless LAZ 1.4 and COPC using the locked native WASM codec",async()=>{

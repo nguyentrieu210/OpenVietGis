@@ -1,8 +1,9 @@
 import {featureAction} from "./feature-diagram";
 import {formGroups,formStorageKey,readFormLayout} from "./attribute-form-layout";
-import {useMemo,useState} from "react";
+import {useState} from "react";
 import type {StudioRow} from "./studio-contract";
-import {derive,fmtArea,fmtLength} from "./geom-measure";
+import {useGeometryMetrics} from "./use-geometry-metrics";
+import {fmtArea,fmtLength} from "./geom-measure";
 import "./feature-info.css";
 const names:Record<string,string>={Point:"Điểm",MultiPoint:"Tập điểm",LineString:"Đường",MultiLineString:"Tập đường",Polygon:"Vùng",MultiPolygon:"Tập vùng",GeometryCollection:"Tập hình học"};
 const text=(v:unknown)=>v==null||v===""?"—":typeof v==="object"?JSON.stringify(v):String(v);
@@ -10,7 +11,7 @@ const fold=(v:string)=>v.toLocaleLowerCase("vi").normalize("NFD").replace(/\p{Di
 export function FeatureInfo({row,formScope=""}:{row:StudioRow;formScope?:string}){
  const [query,setQuery]=useState(""),[hideEmpty,setHideEmpty]=useState(false),[actionStatus,setActionStatus]=useState("");
  const copy=async(kind:"id"|"attributes")=>{try{if(!navigator.clipboard)throw Error("Trình duyệt không cho phép clipboard.");await navigator.clipboard.writeText(featureAction(kind,row.feature.feature_id,row.feature.attributes));setActionStatus("Đã sao chép.")}catch(e){setActionStatus(e instanceof Error?e.message:String(e))}};
- const metrics=useMemo(()=>row.geometry?derive(row.geometry):null,[row.geometry]);
+ const metrics=useGeometryMetrics(row.geometry);
  const schema=row.layer.source.schema.fields,layout=readFormLayout(formStorageKey(formScope,row.layer),schema);
  const fields=formGroups(layout,schema).flatMap(g=>g.items.map(({field,layout})=>({key:field.field_id,name:layout.label.trim()||field.name,value:row.feature.attributes[field.field_id],group:g.name})));
  const visible=fields.filter(f=>(!hideEmpty||f.value!==null&&f.value!==undefined&&f.value!=="")&&fold(f.name+" "+text(f.value)).includes(fold(query)));

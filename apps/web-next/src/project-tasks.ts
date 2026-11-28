@@ -10,11 +10,12 @@ export const taskLayerId=(t:ProjectTask)=>LAYER_TAG.exec(t.description)?.[1]??nu
 export const isLate=(t:ProjectTask,today=new Date().toLocaleDateString("sv-SE"))=>t.status!=="done"&&!!t.due_date&&t.due_date<today;
 export type NewTask={feature?:{source_id:string;feature_id:string;label?:string};layer?:{id:string;name:string};position?:{longitude:number;latitude:number}};
 export const newTask=(d:NewTask)=>window.dispatchEvent(new CustomEvent("ovg:new-task",{detail:d}));
+const EMPTY_TASKS:ProjectTask[]=[];
 export function useProjectTasks(client:ApiClient,org:string,pid:string,enabled:boolean){
- const [tasks,setTasks]=useState<ProjectTask[]>([]);
- useEffect(()=>{if(!enabled){setTasks([]);return}let alive=true;
-  const load=async()=>{try{const r=await client.request<{items:ProjectTask[]}>("/organizations/"+org+"/projects/"+pid+"/collaboration/tasks?limit=200",{cache:"no-store"});if(alive)setTasks(r.items)}catch{/* keep the last list */}};
+ const [state,setState]=useState<{scope:string;tasks:ProjectTask[]}>({scope:"",tasks:[]});const scope=JSON.stringify([org,pid]);
+ useEffect(()=>{if(!enabled){setState({scope,tasks:[]});return}let alive=true;
+  const load=async()=>{try{const r=await client.request<{items:ProjectTask[]}>("/organizations/"+org+"/projects/"+pid+"/collaboration/tasks?limit=200",{cache:"no-store"});if(alive)setState({scope,tasks:r.items})}catch{/* keep the last list */}};
   void load();const t=setInterval(()=>void load(),60000),on=()=>void load();window.addEventListener("ovg:tasks-changed",on);
   return()=>{alive=false;clearInterval(t);window.removeEventListener("ovg:tasks-changed",on)}},[org,pid,enabled]);
- return tasks;
+ return enabled&&state.scope===scope?state.tasks:EMPTY_TASKS;
 }
