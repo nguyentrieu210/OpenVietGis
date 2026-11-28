@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "benchmark" / "rust-platform"))
 import benchmark_runner as baseline
 import e03_editing
-from e05_render import compare_render_reads
+from e05_render import check_cached_tile_revocation, compare_render_reads
 
 SEED = 20261125
 API = "/api/v1"
@@ -182,26 +182,27 @@ def project_path(org_id, project_id):
     return f"{API}/organizations/{org_id}/projects/{project_id}"
 
 
-def scoped_member(owner_url, fixture):
+def scoped_member(owner_url, fixture, identity="surveyor"):
     uid = uuid4()
     lid = uuid4()
     sid = uuid4()
     mid = uuid4()
     token, digest, _ = baseline.make_session_and_csrf(sid, baseline.DEFAULT_CSRF_SECRET)
+    display_name = f"Parity {identity}"
+    email = f"{identity}@example.test"
     with psycopg.connect(owner_url) as conn:
         conn.execute(
             """INSERT INTO identity.users
                (id, display_name, email_snapshot, status, created_at, updated_at)
-               VALUES (%s, 'Parity Surveyor', 'surveyor@example.test', 'active', now(), now())""",
-            (uid,),
+               VALUES (%s, %s, %s, 'active', now(), now())""",
+            (uid, display_name, email),
         )
         conn.execute(
             """INSERT INTO identity.identity_links
                (id, user_id, issuer, subject, email_snapshot, email_verified,
                 display_name_snapshot, created_at)
-               VALUES (%s, %s, 'https://parity-issuer.example', 'surveyor',
-                       'surveyor@example.test', true, 'Parity Surveyor', now())""",
-            (lid, uid),
+               VALUES (%s, %s, 'https://parity-issuer.example', %s, %s, true, %s, now())""",
+            (lid, uid, identity, email, display_name),
         )
         conn.execute(
             """INSERT INTO identity.web_sessions
@@ -819,6 +820,21 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
     suite.get("E02 committed map history", f"{root_a}/map/history", token=a)
     suite.get("E02 map operation receipt", f"{root_a}/map/operations/{map_operation}", token=a)
     suite.get("E02 missing map operation", f"{root_a}/map/operations/{uuid4()}", 404, token=a)
+
+    _, cache_membership_id, cache_reader = scoped_member(
+        owner_url, fixture, "cache-reader"
+    )
+    check_cached_tile_revocation(
+        suite,
+        lambda layer_id: f"{layers_a}/{layer_id}",
+        selected,
+        org_a,
+        fixture["project_a_id"],
+        cache_membership_id,
+        a,
+        cache_reader,
+        fixture["csrf_a_token"],
+    )
 
     rule, admin_headers = setup_gis_scope(
         suite.oracle,
