@@ -7,7 +7,6 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
  const [catalog,setCatalog]=useState<Awaited<ReturnType<typeof desktop.inspectGPKG>>>(null),[table,setTable]=useState("");
  const [presentation,setPresentation]=useState<ProjectState>();
  const view=useRef<ViewState>({lon:106.7,lat:11,zoom:5,bearing:0,pitch:0});
- const initialView=useRef(view.current);
  const current=useRef(handles);current.current=handles;const alive=useRef(true);const lock=useRef(false);
  const reload=useCallback(async()=>{const x=await desktop.listLayers(rootHandle);if(alive.current)setLayers(x)},[rootHandle]);
  const run=useCallback(async(f:()=>Promise<void>)=>{
@@ -18,16 +17,16 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
  useEffect(()=>{alive.current=true;void run(async()=>{
    await reload();const s=await desktop.projectState(rootHandle);
    if(!alive.current)return;
-   view.current=s.view;initialView.current=s.view;
+   view.current=s.view;
    const ids=s.layers.filter(l=>l.visible).map(l=>l.id);
    const opened:Record<string,string>={root:rootHandle};
    try{
-     for(const id of ids.filter(i=>i!=="root").slice(0,7)){
+     for(const id of [...new Set([s.active,...ids])].filter(i=>i!=="root").slice(0,7)){
        const w=await desktop.openLayer(rootHandle,id);if(!alive.current){await desktop.close(w.handle).catch(()=>{});throw Error("WORKSPACE_CLOSED")}
        opened[id]=w.handle;
      }
    }catch(e){for(const [id,h]of Object.entries(opened))if(id!=="root")await desktop.close(h).catch(()=>{});throw e}
-   current.current=opened;setHandles(opened);setVisible(ids.filter(id=>!!opened[id]));setActive(opened[s.active]?s.active:"root");setPresentation(s);
+   current.current=opened;setHandles(opened);setVisible([...new Set([...ids.filter(id=>!!opened[id]),opened[s.active]?s.active:"root"])]);setActive(opened[s.active]?s.active:"root");setPresentation(s);
  });return()=>{alive.current=false;for(const [id,h]of Object.entries(current.current))if(id!=="root")void desktop.close(h).catch(()=>{})}},[reload,run,rootHandle]);
  const ensure=async(id:string)=>{
    if(current.current[id])return current.current[id]!;
@@ -57,7 +56,7 @@ export default function DesktopProject({rootHandle}:{rootHandle:string}){
  const order=presentation?.layers.map(l=>l.id)??[];
  const ordered=[...new Set([...order,"root",...layers.map(l=>l.id)])].filter(id=>id==="root"||layers.some(l=>l.id===id));
  const styleFor=(id:string):LayerStyle=>presentation?.layers.find(l=>l.id===id)?.style??{color:"#1976a3",opacity:.25};
- const changeStyle=(id:string,style:LayerStyle)=>setPresentation(p=>p?{...p,layers:[...p.layers.filter(l=>l.id!==id),{id,visible:visible.includes(id),style}]}:p);
+ const changeStyle=(id:string,style:LayerStyle)=>setPresentation(p=>p?{...p,layers:ordered.map(k=>({id:k,visible:visible.includes(k),style:k===id?style:styleFor(k)}))}:p);
  const move=(id:string,d:number)=>setPresentation(p=>{if(!p)return p;const i=ordered.indexOf(id),j=i+d;if(j<0||j>=ordered.length)return p;const ids=[...ordered];[ids[i],ids[j]]=[ids[j]!,ids[i]!];return {...p,layers:ids.map(k=>({id:k,visible:visible.includes(k),style:styleFor(k)}))}});
  const save=async()=>{if(!presentation)return;const next:ProjectState={...presentation,view:view.current,active,layers:ordered.map(id=>({id,visible:visible.includes(id),style:styleFor(id)}))};setPresentation(await desktop.saveProjectState(rootHandle,next))};
  const overlays=ordered.filter(id=>visible.includes(id)).filter(id=>id!==active&&!!handles[id]).map(id=>({id,handle:handles[id]!,name:id==="root"?"Lớp mặc định":layers.find(l=>l.id===id)?.name??id,style:styleFor(id)}));
