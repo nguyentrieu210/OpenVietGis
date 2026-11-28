@@ -105,3 +105,7 @@ See [execution ledger](evidence/execution-ledger.md) and [W0 baseline evidence](
 
 ### W0 continued evidence
 See [execution ledger](evidence/execution-ledger.md), [auth/sync/plugin inventory](evidence/w0-auth-sync-plugin-inventory.md), and [threat model](evidence/w0-threat-model.md). Candidate qualification workflow and baseline auth/signature tests implemented; no mandatory parent accepted. Device/FFI proof, independent review and A0 remain open.
+
+
+### W1 implementation status
+See [W1 implementation checkpoint](evidence/w1-implementation-checkpoint.md) and [execution ledger](evidence/execution-ledger.md). Portable engine and local repository initial native tests passed; Flutter/FRB, shared CRS/geometry regression, device and recovery evidence outstanding. No parent or leaf accepted by this update; A0 open.

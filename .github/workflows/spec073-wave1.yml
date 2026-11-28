@@ -21,6 +21,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Preserve shared spatial contract and strict mobile XY profile
+        if: matrix.crate == 'ovg-mobile-engine'
+        run: cargo test --locked -p ovg-spatial
       - name: Targeted native tests and graph guard
         run: |
           set -euxo pipefail

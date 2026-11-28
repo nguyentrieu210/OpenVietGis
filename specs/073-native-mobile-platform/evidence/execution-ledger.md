@@ -11,16 +11,16 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 | E10 | 0 | T006 | Dart SDK/auth/sync | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 existing route/auth tests PASS | Verify existing negative cases; freeze mobile auth/lease contract |
 | E11 | 0 | T007 | Plugin runtime | T001 | 3 | SPIKE IN PROGRESS | 07b6ae9 marketplace v1 tests PASS | Run v1 golden and freeze separate v2 envelope |
 | E01 | 0 | T008 | Architecture / native build | T003, T004, T005, T006, T007 | 3 | BLOCKED | A0 not accepted | Requires all mandatory A0 evidence |
-| E02 | 1 | T009 | Portable kernel / FFI | T008 | 4 | WAITING | — | Await accepted dependencies |
-| E02 | 1 | T010 | Portable kernel / FFI | T009 | 3 | WAITING | — | Await accepted dependencies |
-| E02 | 1 | T011 | Portable kernel / FFI | T010 | 3 | WAITING | — | Await accepted dependencies |
-| E03 | 1 | T012 | Flutter shell | T008 | 3 | WAITING | — | Await accepted dependencies |
-| E03 | 1 | T013 | Flutter shell | T012 | 3 | WAITING | — | Await accepted dependencies |
-| E03 | 1 | T014 | Flutter shell | T012 | 3 | WAITING | — | Await accepted dependencies |
-| E08 | 1 | T015 | Storage | T009 | 3 | WAITING | — | Await accepted dependencies |
-| E08 | 1 | T016 | Storage | T015 | 3 | WAITING | — | Await accepted dependencies |
-| E08 | 1 | T017 | Storage | T016 | 3 | WAITING | — | Await accepted dependencies |
-| E16 | 1 | T018 | Security/QA/release | T011, T013, T014, T017 | 3 | WAITING | — | Await accepted dependencies |
+| E02 | 1 | T009 | Portable kernel / FFI | T008 | 4 | IN PROGRESS | e6a00ba portable graph PASS | Strict XY/shared regression and A0 |
+| E02 | 1 | T010 | Portable kernel / FFI | T009 | 3 | IN PROGRESS | fe7cef1; engine 3/3 PASS | Additional parallel close, layer handles and A0 |
+| E02 | 1 | T011 | Portable kernel / FFI | T010 | 3 | IN PROGRESS | bb6ca36; WKB test PASS | Generate bridge, device/copy and scoped batches |
+| E03 | 1 | T012 | Flutter shell | T008 | 3 | IN PROGRESS | bb6ca36 Flutter source | Build candidate and fresh offline device test |
+| E03 | 1 | T013 | Flutter shell | T012 | 3 | IN PROGRESS | bb6ca36 navigation and vi/en | 360px layout/accessibility and permission tests |
+| E03 | 1 | T014 | Flutter shell | T012 | 3 | IN PROGRESS | bb6ca36 native workspace host | Generated bridge and restart test |
+| E08 | 1 | T015 | Storage | T009 | 3 | IN PROGRESS | cbc45a2; local tests PASS | GPKG oracle, migration and device qualification |
+| E08 | 1 | T016 | Storage | T015 | 3 | IN PROGRESS | cbc45a2; snapshot test PASS | Disk full/crash injection and quota proof |
+| E08 | 1 | T017 | Storage | T016 | 3 | IN PROGRESS | cbc45a2 local journal PASS | Managed encrypted outbox/receipt/cursor not implemented |
+| E16 | 1 | T018 | Security/QA/release | T011, T013, T014, T017 | 3 | IN PROGRESS | 46168095743 native tests PASS | Final integration and regression; A0 not accepted |
 | E04 | 2 | T019 | Map rendering | T011, T013 | 3 | WAITING | — | Await accepted dependencies |
 | E04 | 2 | T020 | Map rendering | T019, T015 | 3 | WAITING | — | Await accepted dependencies |
 | E04 | 2 | T021 | Map rendering | T020 | 3 | WAITING | — | Await accepted dependencies |
@@ -100,3 +100,6 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 - Native compilation in run 46167470966 still active. MapLibre dependency resolution passed but analyzer failed for missing flutter_lints and deprecated Material import; ff52556 addresses both with explicit dependencies and new Material API. [Retry 46167650890](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167650890) active.
 - f3f032a implements real generated FRB qualification source with shared ovg-spatial transform, bounded batches, Rust and Dart tests; [FRB run 46167755969](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167755969) queued. No bridge acceptance or native APK claimed.
 - A0 remains blocked on native/bridge/device results, complete locked provenance and independent review. Physical Android 4KB/16KB and macOS device environment not verified. No task checkbox changed; qualification code and baseline tests are real partial progress.
+
+## W1 source implementation (owner-requested early work)
+See [W1 checkpoint](w1-implementation-checkpoint.md). W0 A0 not waived, no task formally accepted. Prior targeted native run passed five tests; latest strict XY and Flutter integration still need exact-candidate evidence.
