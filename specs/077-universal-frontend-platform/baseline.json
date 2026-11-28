@@ -111,7 +111,7 @@
     },
     {
       "name": "photo-desktop",
-      "commit": "24adb36c4924d6884cec6400c020d8e2bda33ed4",
+      "commit": "bac55b1583e9af8933662c71b7233616a038881a",
       "path": "apps/desktop",
       "tree": "c46ebe87d8c64d508cfa2562687aa981851a4795",
       "blobs": 20,

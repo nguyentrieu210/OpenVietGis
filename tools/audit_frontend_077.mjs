@@ -30,6 +30,7 @@ export function differences(scope,observed){
 export function main(args){
  if(args.some(a=>!['--verify','--all'].includes(a)))throw Error('Usage: node tools/audit_frontend_077.mjs [--verify] [--all]');
  const verify=args.includes('--verify'),all=args.includes('--all');
+ if(all&&!verify)throw Error('--all requires --verify for pinned branch snapshots');
  const data=JSON.parse(readFileSync(baselineFile,'utf8'));
  const scopes=all?data.scopes:data.scopes.slice(0,1);
  let failed=false;
