@@ -1,0 +1,26 @@
+import {useRef,useState,useEffect} from 'react';
+import {useReactTable,getCoreRowModel,flexRender,type ColumnDef,type SortingState,type RowSelectionState} from '@tanstack/react-table';
+import {useVirtualizer} from '@tanstack/react-virtual';
+import {Button,Input,Actions} from '../primitives';
+import {parseProperty,propertyText,type PropertyField,type PropertyValue} from '../gis/model';
+import './data.css';
+export type GridRow={id:string;revision:string;values:Record<string,PropertyValue>};
+export type GridColumn={id:string;label:string;field:Omit<PropertyField,'id'|'label'|'value'>};
+export type GridQuery={page:number;pageSize:number;filter:string;sorting:SortingState};
+export type GridEdit={id:string;revision:string;field:string;value:PropertyValue};
+export function DataGrid({rows,columns,total,query,onQuery,selection,onSelection,onEdit,loading=false}:{rows:GridRow[];columns:GridColumn[];total:number;query:GridQuery;onQuery:(q:GridQuery)=>void;selection:RowSelectionState;onSelection:(v:RowSelectionState)=>void;onEdit:(e:GridEdit)=>Promise<void>;loading?:boolean}){
+ const scroll=useRef<HTMLDivElement>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),flight=useRef(false);
+ const [edit,setEdit]=useState<{row:GridRow;col:GridColumn;raw:string}|null>(null);
+ useEffect(()=>{setEdit(null);scroll.current?.scrollTo({top:0})},[query.page,query.filter,query.sorting,query.pageSize]);
+ const defs:ColumnDef<GridRow>[]=[{id:'selection',header:'Select',cell:({row})=><input type="checkbox" aria-label={'Select '+row.original.id} checked={row.getIsSelected()} onChange={row.getToggleSelectedHandler()}/>},...columns.map(c=>({id:c.id,header:c.label,accessorFn:(r:GridRow)=>r.values[c.id],cell:({row}:{row:{original:GridRow}})=><button className="ovg-grid-cell" disabled={!c.field.editable||busy||loading} onClick={()=>{setError('');setEdit({row:row.original,col:c,raw:propertyText(row.original.values[c.id]??null)})}}>{propertyText(row.original.values[c.id]??null)}</button>}))];
+ const table=useReactTable({data:rows,columns:defs,getRowId:r=>r.id,getCoreRowModel:getCoreRowModel(),manualSorting:true,manualPagination:true,manualFiltering:true,state:{sorting:query.sorting,rowSelection:selection},onSortingChange:u=>onQuery({...query,page:0,sorting:typeof u==='function'?u(query.sorting):u}),onRowSelectionChange:u=>onSelection(typeof u==='function'?u(selection):u)});
+ const model=table.getRowModel().rows,virtual=useVirtualizer({count:model.length,getScrollElement:()=>scroll.current,estimateSize:()=>36,overscan:8,getItemKey:i=>model[i]?.id??i});
+ const commit=async()=>{if(!edit||flight.current||loading)return;const current=rows.find(r=>r.id===edit.row.id);if(!current||current.revision!==edit.row.revision){setError('Revision changed');return}const parsed=parseProperty({...edit.col.field,id:edit.col.id,label:edit.col.label,value:edit.row.values[edit.col.id]??null},edit.raw);if(!parsed.ok){setError('Invalid value');return}flight.current=true;setBusy(true);try{await onEdit({id:current.id,revision:current.revision,field:edit.col.id,value:parsed.value});setEdit(null);setError('')}catch{setError('Edit failed or conflict')}finally{flight.current=false;setBusy(false)}};
+ return <section aria-label="Attribute grid" className="ovg-grid"><Actions><Input aria-label="Filter attributes" value={query.filter} onChange={e=>onQuery({...query,page:0,filter:e.target.value})}/><Button disabled={loading||query.page<=0} onClick={()=>onQuery({...query,page:query.page-1})}>Previous page</Button><Button disabled={loading||(query.page+1)*query.pageSize>=total} onClick={()=>onQuery({...query,page:query.page+1})}>Next page</Button><output>{total} rows · {Object.values(selection).filter(Boolean).length} selected</output></Actions>
+ {edit&&<form onSubmit={e=>{e.preventDefault();void commit()}}><Input aria-label="Edit value" value={edit.raw} disabled={busy} onChange={e=>setEdit({...edit,raw:e.target.value})}/><Button type="submit" disabled={busy||loading}>Save cell</Button><Button disabled={busy} onClick={()=>setEdit(null)}>Cancel</Button></form>}{error&&<p role="alert">{error}</p>}
+ <div ref={scroll} className="ovg-grid-scroll" aria-busy={loading}><table aria-label="Attributes" aria-rowcount={total+1}><thead>{table.getHeaderGroups().map(g=><tr key={g.id}>{g.headers.map(h=><th key={h.id} aria-sort={h.column.getIsSorted()==='asc'?'ascending':h.column.getIsSorted()==='desc'?'descending':undefined}><button disabled={!h.column.getCanSort()} onClick={h.column.getToggleSortingHandler()}>{flexRender(h.column.columnDef.header,h.getContext())}</button></th>)}</tr>)}</thead><tbody>
+ {virtual.getVirtualItems()[0]?.start>0&&<tr aria-hidden="true"><td colSpan={defs.length} style={{height:virtual.getVirtualItems()[0].start,padding:0,border:0}}/></tr>}
+ {virtual.getVirtualItems().map(v=>{const row=model[v.index];return <tr key={row.id} data-grid-row aria-rowindex={query.page*query.pageSize+v.index+2} style={{height:36}}>{row.getVisibleCells().map(c=><td key={c.id}>{flexRender(c.column.columnDef.cell,c.getContext())}</td>)}</tr>})}
+ {virtual.getVirtualItems().length>0&&<tr aria-hidden="true"><td colSpan={defs.length} style={{height:Math.max(0,virtual.getTotalSize()-virtual.getVirtualItems().at(-1)!.end),padding:0,border:0}}/></tr>}</tbody></table></div></section>
+}
+export {VirtualTree,type TreeRow} from './tree';

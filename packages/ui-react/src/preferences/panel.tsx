@@ -1,0 +1,5 @@
+import {Field,Select} from '../primitives';
+import type {Preferences} from './index';
+const labels={vi:{theme:'Giao diện',density:'Mật độ',locale:'Ngôn ngữ',contrast:'Tương phản',motion:'Chuyển động'},en:{theme:'Theme',density:'Density',locale:'Language',contrast:'Contrast',motion:'Motion'}};
+const options={theme:['system','light','dark'],density:['compact','comfortable','touch'],locale:['vi','en'],contrast:['normal','high'],motion:['system','reduce']} as const;
+export function PreferencesPanel({value,onChange}:{value:Preferences;onChange:(v:Preferences)=>void}){return <section aria-label={value.locale==='vi'?'Tùy chọn':'Preferences'}>{(Object.keys(options) as (keyof Preferences)[]).map(k=><Field key={k} label={labels[value.locale][k]}>{p=><Select {...p} value={value[k]} onChange={e=>{if((options[k] as readonly string[]).includes(e.target.value))onChange({...value,[k]:e.target.value})}}>{options[k].map(v=><option key={v} value={v}>{v}</option>)}</Select>}</Field>)}</section>}

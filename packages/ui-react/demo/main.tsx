@@ -1,10 +1,12 @@
-import {GisDemo} from './gis-demo';
-import {WorkbenchDemo} from './workbench-demo';
-import {useState} from 'react';
+import {useState,lazy,Suspense} from 'react';
 import {createRoot} from 'react-dom/client';
-import {Button,Input,Select,Textarea,Field,Actions,TableScroll,Dialog,Menu,Popover,Tooltip,Checkbox,Switch,Tabs} from '../src';
+import {Button,Input,Select,Textarea,Field,Actions,TableScroll,Checkbox,Switch,Tabs} from '../src/primitives';
+import {Dialog,Menu,Popover,Tooltip} from '../src/overlays';
 import '../../design-tokens/generated/tokens.css';
 import '../src/styles.css';
+const PlatformDemo=lazy(()=>import('./platform-demo').then(m=>({default:m.PlatformDemo})));
+const GisDemo=lazy(()=>import('./gis-demo').then(m=>({default:m.GisDemo})));
+const WorkbenchDemo=lazy(()=>import('./workbench-demo').then(m=>({default:m.WorkbenchDemo})));
 function App(){
  const [open,setOpen]=useState(false),[checked,setChecked]=useState(false),[enabled,setEnabled]=useState(false),[tab,setTab]=useState('a'),[action,setAction]=useState('none');
  return <main style={{padding:16,display:'grid',gap:16,color:'var(--ovg-ui-ink)',background:'var(--ovg-ui-surface)'}}>
@@ -19,4 +21,4 @@ function App(){
  <TableScroll><table style={{minWidth:900}}><tbody><tr><td>Wide attribute data</td></tr></tbody></table></TableScroll>
  </div></Dialog></main>;
 }
-createRoot(document.getElementById('root')!).render(location.search.includes('gis')?<GisDemo/>:location.search.includes('workbench')?<WorkbenchDemo/>:<App/>);
+createRoot(document.getElementById('root')!).render(<Suspense fallback={<p>Loading…</p>}>{location.search.includes('platform')?<PlatformDemo/>:location.search.includes('gis')?<GisDemo/>:location.search.includes('workbench')?<WorkbenchDemo/>:<App/>}</Suspense>);
