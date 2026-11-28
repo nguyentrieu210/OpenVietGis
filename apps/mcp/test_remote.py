@@ -1,7 +1,6 @@
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
-from uuid import UUID
 
 import httpx
 import jwt
@@ -120,7 +119,7 @@ def test_disconnected_workspace_returns_actionable_result():
             ("gis_layers", {"request": {}}),
             ("gis_plugins", {"request": {}}),
             ("gis_live_view", {}),
-            ("gis_operation_status", {"operation_ticket": "missing"}),
+            ("gis_operation_status", {"operation_ticket": "00000000-0000-4000-8000-000000000099"}),
         ]:
             rpc = {
                 "jsonrpc": "2.0",

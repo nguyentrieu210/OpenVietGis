@@ -1,0 +1,963 @@
+{
+  "sha": "194225d59988464c63c10628e0c128f4ccd39f4e",
+  "manifests": {
+    "Cargo.toml": {
+      "name": null,
+      "workspace_members": [
+        "apps/api-rust",
+        "crates/ovg-core",
+        "crates/ovg-storage",
+        "crates/ovg-spatial",
+        "crates/ovg-sync",
+        "crates/ovg-processing",
+        "crates/ovg-module-sdk",
+        "modules/house_numbering/rust"
+      ],
+      "local_dependencies": {}
+    },
+    "apps/api-rust/Cargo.toml": {
+      "name": "openvietgis-api-rust",
+      "workspace_members": [],
+      "local_dependencies": {
+        "axum": {
+          "workspace": true
+        },
+        "base64": {
+          "workspace": true
+        },
+        "chrono": {
+          "workspace": true
+        },
+        "ed25519-dalek": {
+          "workspace": true
+        },
+        "hex": {
+          "workspace": true
+        },
+        "hmac": {
+          "workspace": true
+        },
+        "http": {
+          "workspace": true
+        },
+        "ovg-core": {
+          "workspace": true
+        },
+        "ovg-module-house-numbering": {
+          "workspace": true,
+          "optional": true
+        },
+        "ovg-module-sdk": {
+          "workspace": true
+        },
+        "ovg-processing": {
+          "workspace": true
+        },
+        "ovg-spatial": {
+          "workspace": true
+        },
+        "ovg-storage": {
+          "workspace": true
+        },
+        "ovg-sync": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "sha2": {
+          "workspace": true
+        },
+        "tokio": {
+          "workspace": true,
+          "features": [
+            "fs",
+            "io-util",
+            "process"
+          ]
+        },
+        "tower": {
+          "workspace": true
+        },
+        "tower-http": {
+          "workspace": true
+        },
+        "tracing": {
+          "workspace": true
+        },
+        "tracing-subscriber": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "apps/api/pyproject.toml": {
+      "name": "openvietgis-api",
+      "dependencies": [
+        "alembic==1.20.1",
+        "authlib==1.9.8",
+        "cryptography==50.0.2",
+        "ezdxf>=1.4.5",
+        "fastapi==0.163.1",
+        "httpx>=0.28",
+        "itsdangerous==2.2.0",
+        "pillow>=13.0.0",
+        "qrcode>=8,<9",
+        "psycopg[binary]>=3.2",
+        "pydantic-settings>=2.10",
+        "pyshp>=3.1.9",
+        "python-multipart>=0.0.34",
+        "sqlalchemy==2.1.9",
+        "uvicorn[standard]>=0.38"
+      ]
+    },
+    "apps/mcp-rust/Cargo.toml": {
+      "name": "openvietgis-mcp-rust",
+      "workspace_members": [],
+      "local_dependencies": {}
+    },
+    "apps/mcp/pyproject.toml": {
+      "name": "openvietgis-mcp",
+      "dependencies": [
+        "mcp>=2,<3",
+        "httpx>=0.28,<1",
+        "pyjwt[crypto]>=2.10,<3",
+        "starlette>=1,<2",
+        "uvicorn>=0.38,<1"
+      ]
+    },
+    "apps/web-next/package.json": {
+      "name": "@openvietgis/web-next",
+      "local_dependencies": {
+        "@openvietgis/client-sdk": "workspace:*",
+        "@openvietgis/spatial-workspace": "workspace:*"
+      },
+      "script_names": [
+        "build",
+        "dev",
+        "test",
+        "typecheck"
+      ]
+    },
+    "apps/web/package.json": {
+      "name": "@openvietgis/web",
+      "local_dependencies": {
+        "@openvietgis/client-sdk": "workspace:*"
+      },
+      "script_names": [
+        "build",
+        "dev",
+        "lint",
+        "test",
+        "typecheck"
+      ]
+    },
+    "crates/ovg-core/Cargo.toml": {
+      "name": "ovg-core",
+      "workspace_members": [],
+      "local_dependencies": {
+        "chrono": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "thiserror": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "crates/ovg-mcp-policy/Cargo.toml": {
+      "name": "ovg-mcp-policy",
+      "workspace_members": [],
+      "local_dependencies": {}
+    },
+    "crates/ovg-module-sdk/Cargo.toml": {
+      "name": "ovg-module-sdk",
+      "workspace_members": [],
+      "local_dependencies": {
+        "ovg-core": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "crates/ovg-processing/Cargo.toml": {
+      "name": "ovg-processing",
+      "workspace_members": [],
+      "local_dependencies": {
+        "chrono": {
+          "workspace": true
+        },
+        "ovg-core": {
+          "workspace": true
+        },
+        "rayon": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "tokio": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "crates/ovg-spatial/Cargo.toml": {
+      "name": "ovg-spatial",
+      "workspace_members": [],
+      "local_dependencies": {
+        "geo-types": {
+          "workspace": true
+        },
+        "ovg-core": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "thiserror": {
+          "workspace": true
+        }
+      }
+    },
+    "crates/ovg-storage/Cargo.toml": {
+      "name": "ovg-storage",
+      "workspace_members": [],
+      "local_dependencies": {
+        "base64": {
+          "workspace": true
+        },
+        "chrono": {
+          "workspace": true
+        },
+        "ovg-core": {
+          "workspace": true
+        },
+        "ovg-spatial": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true,
+          "features": [
+            "float_roundtrip"
+          ]
+        },
+        "sha2": {
+          "workspace": true
+        },
+        "sqlx": {
+          "workspace": true
+        },
+        "sqlx-postgres": {
+          "workspace": true
+        },
+        "tokio": {
+          "workspace": true
+        },
+        "tracing": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "crates/ovg-sync/Cargo.toml": {
+      "name": "ovg-sync",
+      "workspace_members": [],
+      "local_dependencies": {
+        "base64": {
+          "workspace": true
+        },
+        "chrono": {
+          "workspace": true
+        },
+        "ovg-core": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "sha2": {
+          "workspace": true
+        },
+        "tokio": {
+          "workspace": true
+        },
+        "uuid": {
+          "workspace": true
+        }
+      }
+    },
+    "modules/house_numbering/frontend/package.json": {
+      "name": "@openvietgis/module-house-numbering",
+      "local_dependencies": {
+        "@openvietgis/client-sdk": "workspace:*"
+      },
+      "script_names": [
+        "test",
+        "typecheck"
+      ]
+    },
+    "modules/house_numbering/rust/Cargo.toml": {
+      "name": "ovg-module-house-numbering",
+      "workspace_members": [],
+      "local_dependencies": {
+        "ovg-core": {
+          "workspace": true
+        },
+        "ovg-module-sdk": {
+          "workspace": true
+        },
+        "serde": {
+          "workspace": true
+        },
+        "serde_json": {
+          "workspace": true
+        },
+        "sha2": {
+          "workspace": true
+        },
+        "unicode-normalization": {
+          "workspace": true
+        }
+      }
+    },
+    "package.json": {
+      "name": "openvietgis",
+      "local_dependencies": {},
+      "script_names": [
+        "bootstrap",
+        "build:web",
+        "contracts:generate",
+        "db:migrate",
+        "dev:api",
+        "dev:db",
+        "dev:identity",
+        "dev:reset",
+        "dev:web",
+        "validate",
+        "validate:arch",
+        "validate:canonical-smoke",
+        "validate:contracts",
+        "validate:docs",
+        "validate:e2e",
+        "validate:e2e:bootstrap",
+        "validate:e2e:offline",
+        "validate:integration",
+        "validate:py",
+        "validate:runtime",
+        "validate:scope",
+        "validate:ts"
+      ]
+    },
+    "packages/client-sdk/package.json": {
+      "name": "@openvietgis/client-sdk",
+      "local_dependencies": {},
+      "script_names": [
+        "generate:contracts",
+        "lint",
+        "test",
+        "typecheck"
+      ]
+    },
+    "packages/spatial-workspace/package.json": {
+      "name": "@openvietgis/spatial-workspace",
+      "local_dependencies": {},
+      "script_names": [
+        "test",
+        "typecheck"
+      ]
+    },
+    "specs/031-engine-first/poc/geolibre/package.json": {
+      "name": "ovg-r031-geolibre-poc",
+      "local_dependencies": {},
+      "script_names": []
+    },
+    "specs/031-engine-first/poc/terra-draw/package.json": {
+      "name": "ovg-r031-terra-draw-poc",
+      "local_dependencies": {},
+      "script_names": []
+    }
+  },
+  "rust_embedded_files": [
+    {
+      "path": "apps/api-rust/assets/fonts/NotoSans-Regular.ttf",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cartography/renderer.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/cad/dxf_codec.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/cad/native_delta.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/geojson.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/geopackage.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/offline_snapshot.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/raster_compute.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/postgis_sql.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/raster_worker.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/raster_compute.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/terrain_worker.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/raster_compute.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/formats/wkt_crs.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/adapters/http/external_provider_transport.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/authorization/context.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/cad/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/cad/georeference.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/editing/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/cog_provider.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/provider.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/external_sources/tile_provider.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/integration_hub/sync_diff.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/platform_errors.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs",
+        "apps/api-rust/src/provider_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/spatial/crs.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/spatial/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/tenancy/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/cad_worker.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/domain.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/api/openvietgis_api/domains/transfers/ports.py",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api-rust/src/field_worker.rs"
+      ]
+    },
+    {
+      "path": "apps/mcp-rust/contracts/workspace-tools.json",
+      "tracked": true,
+      "consumers": [
+        "apps/mcp-rust/src/tools.rs"
+      ]
+    },
+    {
+      "path": "apps/mcp/fixtures/e16-navigation.tsv",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-mcp-policy/src/lib.rs"
+      ]
+    },
+    {
+      "path": "crates/ovg-spatial/tests/fixtures/r003_crs_controls.json",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-spatial/tests/crs_controls.rs"
+      ]
+    },
+    {
+      "path": "crates/ovg-spatial/tests/fixtures/vn2000_postgis_differential.json",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-spatial/src/transform.rs",
+        "crates/ovg-storage/tests/postgis_transform.rs"
+      ]
+    },
+    {
+      "path": "crates/ovg-sync/tests/fixtures/activity_cursor.json",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-sync/tests/activity_cursor.rs"
+      ]
+    },
+    {
+      "path": "fixtures/064-e12/cog-ranges.tsv",
+      "tracked": true,
+      "consumers": [
+        "apps/api-rust/src/connectors/provider_policy.rs"
+      ]
+    },
+    {
+      "path": "fixtures/rust-platform/e14/manifest-contract.json",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-module-sdk/src/lib.rs"
+      ]
+    },
+    {
+      "path": "modules/house_numbering/manifest.json",
+      "tracked": true,
+      "consumers": [
+        "modules/house_numbering/rust/src/module.rs",
+        "modules/house_numbering/rust/src/module.rs"
+      ]
+    },
+    {
+      "path": "specs/064-rust-platform/evidence/e13-fixtures.json",
+      "tracked": true,
+      "consumers": [
+        "crates/ovg-sync/src/field.rs"
+      ]
+    }
+  ],
+  "workflows": {
+    ".github/workflows/ci.yml": {
+      "name": "CI",
+      "job_ids": [
+        "backend",
+        "validate",
+        "secrets"
+      ],
+      "trigger_block": "  push:\n    branches: [main, \"001-platform-foundation\", \"takeover/002-identity-tenancy\"]\n  pull_request:\n  workflow_dispatch:\n    inputs:\n      browser_only:\n        description: \"Focused browser diagnosis only; never a full acceptance gate\"\n        type: boolean\n        required: false\n        default: false",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Install Python dependencies",
+        "Build native E08 backend for integration and browser tests",
+        "Install system GDAL runtime for raster fixtures",
+        "Validate Python, contracts, scope, architecture and docs",
+        "Start dedicated test database and reference identity provider",
+        "Record observed spatial test image",
+        "Verify reference realm discovery before browser tests",
+        "Apply guarded migrations and verify restricted runtime role",
+        "Validate restricted-runtime integration, migration and performance",
+        "Verify live synthetic Keycloak OIDC code and PKCE",
+        "Install JavaScript dependencies",
+        "Install Python dependencies",
+        "Build native E08 backend for integration and browser tests",
+        "Install system GDAL runtime for raster fixtures",
+        "Install Chromium",
+        "Start dedicated test database and reference identity provider",
+        "Record observed spatial test image",
+        "Verify reference realm discovery before browser tests",
+        "Apply guarded migrations and verify restricted runtime role",
+        "Test CAD and GIS draft review in Chromium",
+        "Run the full Node 26 root validation workflow",
+        "Upload Playwright diagnostics when root validation fails",
+        "Validate Engine-First editor and cache regression",
+        "Test canonical built workspace (synthetic API)",
+        "Test MCP contracts and ticket lifecycle",
+        "Run focused browser diagnosis",
+        "Scan explicit synthetic test evidence",
+        "Verify measured tenant timing evidence"
+      ]
+    },
+    ".github/workflows/e06-e08-retention.yml": {
+      "name": "E06 retention and E08 native integration",
+      "job_ids": [
+        "retained-postgis-contracts"
+      ],
+      "trigger_block": "  workflow_dispatch:\n  push:\n    branches: [\"064-**\"]\n    paths:\n      - \".github/workflows/e06-e08-retention.yml\"\n      - \"apps/api/**\"\n      - \"infra/dev/**\"\n      - \"tools/run_with_test_database.py\"\n      - \"tools/test_database.py\"\n  pull_request:\n    paths:\n      - \".github/workflows/e06-e08-retention.yml\"\n      - \"apps/api/**\"\n      - \"infra/dev/**\"\n      - \"tools/run_with_test_database.py\"\n      - \"tools/test_database.py\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Verify retained E06 and Rust-owned E08 under the restricted role"
+      ]
+    },
+    ".github/workflows/e11-outbox.yml": {
+      "name": "E11 Outbox Candidate",
+      "job_ids": [
+        "postgis-outbox"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-**\"]\n    paths:\n      - \"infra/rust-platform/e11/**\"\n      - \"apps/api-rust/**\"\n      - \"crates/ovg-storage/**\"\n      - \"crates/ovg-sync/**\"\n      - \"tests/rust-parity/e11/**\"\n      - \".github/workflows/e11-outbox.yml\"\n  pull_request:\n    paths:\n      - \"infra/rust-platform/e11/**\"\n      - \"apps/api-rust/**\"\n      - \"crates/ovg-storage/**\"\n      - \"crates/ovg-sync/**\"\n      - \"tests/rust-parity/e11/**\"\n      - \".github/workflows/e11-outbox.yml\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "E11 activity cursor and SSE parity (FastAPI oracle vs Rust)",
+        "E11 managed QGIS sync parity (FastAPI oracle vs Rust)",
+        "E11 project collaboration REST parity (FastAPI oracle vs Rust)",
+        "E11 organization chat REST parity (FastAPI oracle vs Rust)",
+        "E11 SSE listener cap parity (FastAPI oracle vs Rust)",
+        "E11 WebSocket presence parity (FastAPI oracle vs Rust)"
+      ]
+    },
+    ".github/workflows/e15-retention.yml": {
+      "name": "E15 retained Python module",
+      "job_ids": [
+        "python-retention"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-e15\", \"064-clients-completion\", \"064-integration\", \"064-finalize\", \"064-rust-platform\"]\n  pull_request:\n    paths:\n      - \"modules/house_numbering/**\"\n      - \"modules/land_asset/**\"\n      - \"tests/modules/**\"\n      - \"apps/api/openvietgis_api/main.py\"\n      - \"apps/api/uv.lock\"\n      - \"infra/rust-platform/**\"\n      - \"specs/064-rust-platform/contracts/engines/e15.json\"\n      - \".github/workflows/e15-retention.yml\"\n  workflow_dispatch:",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Start isolated PostGIS",
+        "Verify retained routes, business rules, tenant controls and coexistence",
+        "Stop isolated database"
+      ]
+    },
+    ".github/workflows/e16-mcp-retained.yml": {
+      "name": "E16 MCP adapter",
+      "job_ids": [
+        "adapter-contracts"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-**\"]\n    paths:\n      - 'apps/mcp/**'\n      - '.github/workflows/e16-mcp-retained.yml'\n  pull_request:\n    paths:\n      - 'apps/mcp/**'\n      - '.github/workflows/e16-mcp-retained.yml'\n  workflow_dispatch:",
+      "concurrency_present": false,
+      "command_step_names": [
+        "MCP protocol and relay policy contracts"
+      ]
+    },
+    ".github/workflows/e17-web-parity.yml": {
+      "name": "E17 Web parity",
+      "job_ids": [
+        "frontend"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-**\"]\n    paths:\n      - 'apps/web-next/**'\n      - 'apps/web/**'\n      - 'packages/**'\n      - 'pnpm-lock.yaml'\n      - 'package.json'\n      - 'pnpm-workspace.yaml'\n      - 'tests/e17/**'\n      - 'infra/rust-platform/hybrid-gateway.conf'\n      - 'tests/rust-parity/hybrid_gateway_smoke.py'\n      - '.github/workflows/e17-web-parity.yml'\n  pull_request:\n    paths:\n      - 'apps/web-next/**'\n      - 'apps/web/**'\n      - 'packages/**'\n      - 'pnpm-lock.yaml'\n      - 'package.json'\n      - 'pnpm-workspace.yaml'\n      - 'tests/e17/**'\n      - 'infra/rust-platform/hybrid-gateway.conf'\n      - 'tests/rust-parity/hybrid_gateway_smoke.py'\n      - '.github/workflows/e17-web-parity.yml'\n  workflow_dispatch:",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Frozen baseline, identical fixtures and raw benchmarks",
+        "Install locked dependencies",
+        "Consumer unit tests",
+        "Build canonical frontend",
+        "Chromium",
+        "Isolated browser consumer smoke",
+        "Evidence"
+      ]
+    },
+    ".github/workflows/e18-ops-safety.yml": {
+      "name": "E18 Operations Safety",
+      "job_ids": [
+        "safety",
+        "postgis-rehearsal"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-**\", \"main\", \"dev\"]\n    paths:\n      - \"infra/rust-platform/**\"\n      - \"tools/benchmark/rust-platform/**\"\n      - \".github/workflows/e18-ops-safety.yml\"\n  pull_request:\n    paths:\n      - \"infra/rust-platform/**\"\n      - \"tools/benchmark/rust-platform/**\"\n      - \".github/workflows/e18-ops-safety.yml\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Shell syntax",
+        "Fail-closed guards and collision tests",
+        "Python syntax",
+        "Start disposable PostGIS",
+        "Seed synthetic fixture",
+        "Backup and restore disposable fixture",
+        "Verify restored tenant isolation and row content",
+        "Remove disposable CI cluster"
+      ]
+    },
+    ".github/workflows/hybrid-staging-gateway.yml": {
+      "name": "Hybrid Staging Gateway",
+      "job_ids": [
+        "dispatch"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-**\"]\n    paths:\n      - \"infra/rust-platform/hybrid-gateway.conf\"\n      - \"tests/rust-parity/hybrid_gateway_smoke.py\"\n      - \".github/workflows/hybrid-staging-gateway.yml\"\n  pull_request:\n    paths:\n      - \"infra/rust-platform/hybrid-gateway.conf\"\n      - \"tests/rust-parity/hybrid_gateway_smoke.py\"\n      - \".github/workflows/hybrid-staging-gateway.yml\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Install Nginx",
+        "Qualify hybrid routing"
+      ]
+    },
+    ".github/workflows/hybrid-staging-runtime.yml": {
+      "name": "Hybrid Staging Runtime",
+      "job_ids": [
+        "runtime"
+      ],
+      "trigger_block": "  push:\n    branches: [\"064-convergence\", \"064-integration\"]\n    paths:\n      - \"Cargo.toml\"\n      - \"Cargo.lock\"\n      - \"apps/api-rust/**\"\n      - \"crates/**\"\n      - \"infra/rust-platform/**\"\n      - \"apps/api/**\"\n      - \".github/workflows/hybrid-staging-runtime.yml\"\n  workflow_dispatch:",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Check Compose configuration",
+        "Build both backends and the staging database image",
+        "Migrate and start hybrid staging",
+        "Exercise real HTTP traffic through the hybrid gateway",
+        "Capture staging failure logs",
+        "Stop disposable staging"
+      ]
+    },
+    ".github/workflows/qgis-connector.yml": {
+      "name": "QGIS Connector 1.0 - package and desktop smoke",
+      "job_ids": [
+        "qgis-package",
+        "native-qgis-smoke"
+      ],
+      "trigger_block": "  pull_request:\n    paths:\n      - \"integrations/qgis_plugin/**\"\n      - \"apps/api/tests/unit/integration_hub/test_qgis_workspace.py\"\n      - \"tools/package_qgis_plugin.py\"\n      - \"tools/smoke_qgis_native.py\"\n      - \"tools/tests/test_package_qgis_plugin.py\"\n      - \"tools/tests/test_qgis_connector_simple_ui.py\"\n      - \"tools/tests/test_qgis_managed_snapshots.py\"\n      - \"tools/tests/test_qgis_desktop_recovery.py\"\n      - \"apps/web-next/src/QgisConnectPage.tsx\"\n      - \"apps/api/tests/unit/integration_hub/test_qgis_plugin_client.py\"\n      - \".github/workflows/qgis-connector.yml\"\n  push:\n    branches: [\"main\"]\n  workflow_dispatch:\n    inputs:\n      native_qgis:\n        description: \"Install system QGIS and run native offscreen plugin UI smoke\"\n        required: false\n        default: true\n        type: boolean",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Install isolated API test dependencies",
+        "Lint reviewed QGIS files and release tool",
+        "Test manual bilateral sync and deterministic ZIP",
+        "Package installable experimental QGIS plugin",
+        "Install native QGIS with Qt offscreen support",
+        "Check QGIS version and plugin controls"
+      ]
+    },
+    ".github/workflows/rust-e04-benchmark.yml": {
+      "name": "E04 Query Benchmark",
+      "job_ids": [
+        "query-benchmark"
+      ],
+      "trigger_block": "  workflow_dispatch:\n  push:\n    branches: [\"064-e04\", \"064-data-engines-completion\", \"064-integration\", \"064-rust-platform\", \"064-convergence\"]\n    paths:\n      - \"apps/api-rust/src/queries.rs\"\n      - \"crates/ovg-storage/src/queries/**\"\n      - \"tests/rust-parity/e04_benchmark.py\"\n      - \".github/workflows/rust-e04-benchmark.yml\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Compare E04 over real HTTP and PostGIS"
+      ]
+    },
+    ".github/workflows/rust-e05-benchmark.yml": {
+      "name": "E05 Viewport and MVT Benchmark",
+      "job_ids": [
+        "viewport-benchmark"
+      ],
+      "trigger_block": "  workflow_dispatch:\n  push:\n    branches:\n      - \"064-e05\"\n      - \"064-e05-scale-qualification\"\n      - \"064-data-engines-completion\"\n      - \"064-integration\"\n      - \"064-convergence\"\n      - \"064-finalize\"\n      - \"064-rust-platform\"\n    paths:\n      - \"apps/api-rust/src/map_render.rs\"\n      - \"apps/api-rust/src/professional.rs\"\n      - \"apps/api/openvietgis_api/adapters/persistence/map_viewport.py\"\n      - \"apps/api/migrations/versions/004?_*.py\"\n      - \"crates/ovg-storage/src/viewport.rs\"\n      - \"crates/ovg-storage/src/catalog.rs\"\n      - \"tests/rust-parity/e05*benchmark.py\"\n      - \"tests/rust-parity/e04_benchmark.py\"\n      - \"tools/benchmark/rust-platform/**\"\n      - \".github/workflows/rust-e05-benchmark.yml\"\n  pull_request:\n    paths:\n      - \"apps/api-rust/src/map_render.rs\"\n      - \"apps/api-rust/src/professional.rs\"\n      - \"apps/api/openvietgis_api/adapters/persistence/map_viewport.py\"\n      - \"apps/api/migrations/versions/004?_*.py\"\n      - \"crates/ovg-storage/src/viewport.rs\"\n      - \"crates/ovg-storage/src/catalog.rs\"\n      - \"tests/rust-parity/e05*benchmark.py\"\n      - \"tests/rust-parity/e04_benchmark.py\"\n      - \"tools/benchmark/rust-platform/**\"\n      - \".github/workflows/rust-e05-benchmark.yml\"",
+      "concurrency_present": false,
+      "command_step_names": [
+        "Build the pinned Rust candidate",
+        "Measure E05 viewport over HTTP and PostGIS",
+        "Measure bounded MVT on 30k, 100k and 1M pinned points"
+      ]
+    },
+    ".github/workflows/rust-mcp.yml": {
+      "name": "Rust MCP Gateway",
+      "job_ids": [
+        "native-mcp"
+      ],
+      "trigger_block": "  pull_request:\n    paths:\n      - 'apps/mcp-rust/**'\n      - '.github/workflows/rust-mcp.yml'\n  push:\n    branches: [main, 064-e16-native-mcp]\n    paths:\n      - 'apps/mcp-rust/**'\n      - '.github/workflows/rust-mcp.yml'",
+      "concurrency_present": false,
+      "command_step_names": []
+    },
+    ".github/workflows/rust-platform.yml": {
+      "name": "Rust Platform CI",
+      "job_ids": [
+        "check-and-test",
+        "postgis-parity",
+        "security-audit"
+      ],
+      "trigger_block": "  workflow_dispatch:\n  push:\n    branches: [\"main\", \"dev\", \"064-rust-platform\", \"064-**\"]\n    paths:\n      - \"Cargo.toml\"\n      - \"Cargo.lock\"\n      - \"deny.toml\"\n      - \"rust-toolchain.toml\"\n      - \".cargo/**\"\n      - \"apps/api-rust/**\"\n      - \"apps/api/**\"\n      - \"infra/dev/compose.yaml\"\n      - \"infra/dev/postgres/**\"\n      - \"crates/**\"\n      - \"modules/*/rust/**\"\n      - \".github/workflows/rust-platform.yml\"\n      - \"tests/rust-parity/**\"\n      - \"tools/benchmark/rust-platform/**\"\n  pull_request:\n    paths:\n      - \"Cargo.toml\"\n      - \"Cargo.lock\"\n      - \"deny.toml\"\n      - \"rust-toolchain.toml\"\n      - \".cargo/**\"\n      - \"apps/api-rust/**\"\n      - \"apps/api/**\"\n      - \"infra/dev/compose.yaml\"\n      - \"infra/dev/postgres/**\"\n      - \"crates/**\"\n      - \"modules/*/rust/**\"\n      - \".github/workflows/rust-platform.yml\"\n      - \"tests/rust-parity/**\"\n      - \"tools/benchmark/rust-platform/**\"",
+      "concurrency_present": true,
+      "command_step_names": [
+        "Checkout repository",
+        "Install Rust toolchain (pinned via rust-toolchain.toml)",
+        "Cache Cargo registry and target",
+        "Install SQLite and GDAL format engines",
+        "Verify formatting",
+        "Verify architecture isolation (core crates must never depend on modules)",
+        "Run Clippy (deny all warnings)",
+        "Run workspace tests",
+        "Verify the core API with no official modules",
+        "Checkout repository",
+        "Install Rust toolchain (pinned via rust-toolchain.toml)",
+        "Cache Cargo registry and target",
+        "Install Python dependencies",
+        "Start dedicated PostGIS test database",
+        "Install SQLite and GDAL format engines",
+        "Build Rust API candidate",
+        "Test parity harness",
+        "Run differential parity",
+        "Run isolated E03 comparative benchmark",
+        "Run E07 transfer parity",
+        "Run E18 ops parity",
+        "Run E08 Rust-only HTTP and PostGIS regression tests",
+        "Run E02 catalog write parity",
+        "Run E14 extension, marketplace & partner parity",
+        "Run E06 cartography parity",
+        "Run E15 house numbering parity",
+        "Run E05 3D tilesets parity",
+        "Run E01/E10/E12 Mega-Wave parity",
+        "Run E13 field offline parity",
+        "Run E01 OIDC parity",
+        "Run E12 adapter transfer parity",
+        "Run E10 CAD/DXF parity",
+        "Record PostGIS version",
+        "Upload parity output",
+        "Checkout repository",
+        "Install stable toolchain for cargo-audit",
+        "Install pinned cargo-audit",
+        "Run cargo-audit",
+        "Install pinned cargo-deny",
+        "Run cargo-deny",
+        "Upload audit output"
+      ]
+    }
+  },
+  "limitations": [
+    "Static manifest and literal include inventory; not a complete import/route graph.",
+    "Required branch rules and external deployment consumers must be verified separately.",
+    "No deletion decision follows automatically from absence in this report."
+  ]
+}

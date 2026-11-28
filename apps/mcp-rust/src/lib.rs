@@ -258,6 +258,11 @@ mod tests {
         let (_,c)=s.submit("a",None,"map_view",json!({}),0,40_000,10_000,2000).unwrap();
         s.poll(id,&x.browser_token,&a,2001).unwrap();assert_eq!(s.prepare(id,&x.browser_token,&a,c,10_000),Err(Error::CommandUnavailable));assert_eq!(s.result("a",id,c,10_001).unwrap().state,CommandState::Expired);
     }
+    #[test] fn explicit_cancel_removes_pending_command(){
+        let mut s=Store::default();let a=owner("a");let x=s.open(a.clone(),2,0).unwrap();
+        let (id,c)=s.submit("a",Some(x.session_id),"map_view",json!({}),0,40_000,10_000,0).unwrap();
+        assert_eq!(s.cancel("a",id,c,1),Ok(()));assert_eq!(s.result("a",id,c,2),Err(Error::CommandUnavailable));
+    }
     #[test] fn wrong_owner_heartbeat_and_version(){
         let mut s=Store::default();let a=owner("a");let x=s.open(a.clone(),0,0).unwrap();let mut wrong=a.clone();wrong.project_id=Uuid::new_v4();
         assert_eq!(s.ping(x.session_id,&x.browser_token,&wrong,1),Err(Error::Unavailable));assert_eq!(s.submit("a",None,"gis_layers",json!({}),1,40_000,90_000,1),Err(Error::Version));assert_eq!(s.resolve("a",None,15_001),Err(Error::Unavailable));

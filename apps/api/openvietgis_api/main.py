@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.datastructures import MutableHeaders
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from openvietgis_api.adapters.http import (
     audit,
@@ -55,6 +57,26 @@ from openvietgis_api.adapters.http.official_modules import discover_official_mod
 from openvietgis_api.config import get_settings
 
 
+class PrivateDenialCacheMiddleware:
+    """Apply the same fail-closed HTTP cache policy as the Rust API.
+
+    Pure ASGI middleware preserves streaming and websocket behavior.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def send_response(message: Message) -> None:
+            if message["type"] == "http.response.start" and message["status"] in (401, 403, 404):
+                headers = MutableHeaders(scope=message)
+                if "cache-control" not in headers:
+                    headers["Cache-Control"] = "private, no-store"
+            await send(message)
+
+        await self.app(scope, receive, send_response if scope["type"] == "http" else send)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="OpenVietGIS API", version="0.2.0")
@@ -86,6 +108,8 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["content-type", "authorization", "x-openvietgis-csrf"],
     )
+
+    app.add_middleware(PrivateDenialCacheMiddleware)
 
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(health.router)

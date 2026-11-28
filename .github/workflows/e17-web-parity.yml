@@ -8,7 +8,6 @@ on:
     branches: ["064-**"]
     paths:
       - 'apps/web-next/**'
-      - 'apps/web/**'
       - 'packages/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
@@ -20,7 +19,6 @@ on:
   pull_request:
     paths:
       - 'apps/web-next/**'
-      - 'apps/web/**'
       - 'packages/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
@@ -30,13 +28,24 @@ on:
       - 'tests/rust-parity/hybrid_gateway_smoke.py'
       - '.github/workflows/e17-web-parity.yml'
   workflow_dispatch:
+    inputs:
+      spec066_soak:
+        description: "Run the 60-minute Spec 066 browser lab qualification"
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
+# Cancel superseded PR revisions, not main/release or manual qualification runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   frontend:
     # Keep browser/font rendering deterministic for parity evidence.
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.spec066_soak && 120 || 30 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,7 +64,7 @@ jobs:
           set -euo pipefail
           mkdir -p dist/e17
           git worktree add --detach "$RUNNER_TEMP/e17-baseline" 3e78ac142acfc050ec22d30da5c44ad0e6b8459a
-          git diff --stat 3e78ac142acfc050ec22d30da5c44ad0e6b8459a HEAD -- apps/web apps/web-next packages/client-sdk packages/spatial-workspace pnpm-lock.yaml > dist/e17/source-diff.txt
+          git diff --stat 3e78ac142acfc050ec22d30da5c44ad0e6b8459a HEAD -- apps/web-next packages/client-sdk packages/spatial-workspace pnpm-lock.yaml > dist/e17/source-diff.txt
           git rev-parse HEAD > dist/e17/candidate-sha.txt
           E17_ROOT="$RUNNER_TEMP/e17-baseline" node --test tests/e17/contract.mjs | tee dist/e17/baseline-contract.log
           node --test tests/e17/contract.mjs | tee dist/e17/candidate-contract.log
@@ -74,6 +83,15 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Isolated browser consumer smoke
         run: pnpm validate:canonical-smoke
+      - name: Spec 066 pinned browser qualification
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.spec066_soak }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$(git rev-parse HEAD)"
+          mkdir -p dist/e17/spec066
+          node tools/benchmark/spec066/browser-runtime.mjs apps/web-next/dist candidate "$candidate" 30 3600 > dist/e17/spec066/browser-runtime.json
+          python3 tools/benchmark/spec066/qualification_gate.py dist/e17/spec066/browser-runtime.json --candidate "$candidate" --require-soak | tee dist/e17/spec066/qualification.json
       - name: Evidence
         if: always()
         uses: actions/upload-artifact@v4

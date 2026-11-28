@@ -4,71 +4,55 @@ import { signInOwner } from "./frontend-auth-helpers";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
-test("public landing and dedicated login are separate surfaces", async ({ page }) => {
+test("public landing and login modal are separate surfaces", async ({ page }) => {
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", {
-      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
-    })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /OpenVietGIS.*GIS cho mọi người/i })).toBeVisible();
   await expect(page).toHaveURL("/");
 
-  await page.getByRole("navigation", { name: "Điều hướng trang giới thiệu" })
-    .getByRole("link", { name: /^Đăng nhập/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
-  ).toBeVisible();
-  await expect(page).toHaveURL("/login");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  const auth = await popupPromise;
+  await expect(page.getByRole("dialog", { name: "Tài khoản OpenVietGIS" })).toBeVisible();
+  await expect(auth.locator("#username")).toBeVisible();
+  await auth.close();
+  await expect(page).toHaveURL("/");
 });
 
-test("protected deep link returns to the intended canonical destination", async ({
-  page
-}) => {
+test("protected deep link returns to the intended canonical destination", async ({ page }) => {
   await signInOwner(page, "/app/account");
   await expect(page).toHaveURL("/app/account");
-  await expect(
-    page.getByRole("heading", { name: "Tài khoản & phiên đăng nhập" })
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Menu tài khoản" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".ovg-account-popover")).toBeVisible();
 });
 
-test("external return_to is rejected and falls back to /app", async ({ page }) => {
-  await page.goto(
-    "/login?return_to=" +
-      encodeURIComponent("https://evil.example.test/steal-session")
-  );
+test("external return_to is ignored and authentication remains same-origin", async ({ page }) => {
+  await page.goto("/?return_to=" + encodeURIComponent("https://evil.example.test/steal-session"));
+  await expect(page.getByRole("heading", { name: /OpenVietGIS.*GIS cho mọi người/i })).toBeVisible();
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
 
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
+  const auth = await popupPromise;
+  await auth.locator("#username").fill("owner-a");
+  await auth.locator("#password").fill("openvietgis-test-owner-a");
+  await auth.locator("#kc-login").click();
 
+  await expect(page.locator(".live-studio")).toBeVisible({timeout:20_000});
   await expect(page).toHaveURL("/app");
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  expect(new URL(page.url()).origin).toBe("http://127.0.0.1:5189");
 });
 
-test("sign out from a deep route invalidates the application session", async ({
-  page
-}) => {
+test("sign out from a deep route invalidates the application session", async ({ page }) => {
   await signInOwner(page, "/app/account");
 
-  await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
-  await page
-    .locator(".ovg-account-dropdown")
-    .getByRole("button", { name: "Đăng xuất", exact: true })
-    .click();
+  const account = page.getByRole("button", { name: "Menu tài khoản" });
+  if ((await account.getAttribute("aria-expanded")) !== "true") await account.click();
+  await page.locator(".ovg-account-popover").getByRole("button", { name: "Đăng xuất", exact: true }).click();
 
   await expect(page).toHaveURL("/");
-  await expect(
-    page.getByRole("heading", {
-      name: "Nền tảng GIS đám mây thế hệ mới cho dữ liệu không gian Việt Nam."
-    })
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /OpenVietGIS.*GIS cho mọi người/i })).toBeVisible();
 
   await page.goto("/app/account");
-  await expect.poll(() => page.url()).toContain("/login?return_to=");
+  await expect(page).toHaveURL("/app/account");
+  await expect(page.locator(".landing-page")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Đăng nhập", exact: true })).toBeVisible();
 });

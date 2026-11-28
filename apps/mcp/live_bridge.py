@@ -1,18 +1,21 @@
 """Ephemeral, scope-limited live map relay. Single process; no GIS credentials."""
 from __future__ import annotations
+
 import hashlib
 import math
+import re
 import secrets
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
+from uuid import UUID, uuid4
 
 TTL = 900
 HEARTBEAT_TTL = 15
 COMMAND_TTL = 40
 MAX_SESSIONS = 128
-METHODS = {"map_view", "map_selection", "map_navigate"}
+METHODS = {"map_view", "map_selection", "map_navigate", "cad_state", "cad_select_handle"}
 
 
 class BridgeError(Exception):
@@ -40,12 +43,46 @@ def command_params(method: str, params: Any) -> dict:
         return {"longitude": number(params["longitude"], -180, 180),
                 "latitude": number(params["latitude"], -85, 85),
                 "zoom": number(params["zoom"], 0, 22)}
+    if method == "cad_select_handle":
+        if set(params) != {"document_id", "version", "handle"}:
+            raise BridgeError(422, "Invalid CAD selection arguments")
+        try:
+            document_id = str(UUID(str(params["document_id"])))
+        except (ValueError, TypeError, AttributeError):
+            raise BridgeError(422, "Invalid CAD document") from None
+        version, handle = params["version"], params["handle"]
+        if (type(version) is not int or not 1 <= version <= 20 or not isinstance(handle, str)
+                or not re.fullmatch(r"[0-9a-fA-F]{1,16}", handle)
+                or not re.search(r"[1-9a-fA-F]", handle)):
+            raise BridgeError(422, "Invalid CAD selection arguments")
+        return {"document_id": document_id, "version": version, "handle": handle.upper()}
     if params:
         raise BridgeError(422, "Unexpected command arguments")
     return {}
 
 
 def clean_result(method: str, result: Any) -> Any:
+    if method == "cad_state":
+        allowed = {"document_id", "filename", "version", "dirty", "saving", "writable", "selected_handle"}
+        if not isinstance(result, dict) or set(result) - allowed:
+            raise BridgeError(422, "Invalid CAD state")
+        try:
+            document_id = str(UUID(str(result.get("document_id"))))
+        except (ValueError, TypeError, AttributeError):
+            raise BridgeError(422, "Invalid CAD state") from None
+        if (not isinstance(result.get("filename"), str) or not 1 <= len(result["filename"]) <= 255
+                or type(result.get("version")) is not int or not 1 <= result["version"] <= 20
+                or any(type(result.get(k)) is not bool for k in ("dirty", "saving", "writable"))):
+            raise BridgeError(422, "Invalid CAD state")
+        handle = result.get("selected_handle")
+        if handle is not None and (not isinstance(handle, str) or not re.fullmatch(r"[0-9a-fA-F]{1,16}", handle)):
+            raise BridgeError(422, "Invalid CAD state")
+        return {**result, "document_id": document_id, "selected_handle": handle.upper() if handle else None}
+    if method == "cad_select_handle":
+        if not isinstance(result, dict) or result.get("requested") is not True:
+            raise BridgeError(422, "Invalid CAD selection result")
+        params = command_params("cad_select_handle", {k: result.get(k) for k in ("document_id", "version", "handle")})
+        return {"requested": True, **params}
     if method == "map_navigate":
         if result is not None:
             raise BridgeError(422, "Unexpected navigation response")
@@ -119,7 +156,7 @@ class BridgeStore:
             self._purge()
             if len(self.sessions) >= MAX_SESSIONS:
                 raise BridgeError(429, "Bridge is busy")
-            sid, browser, ai = secrets.token_urlsafe(18), secrets.token_urlsafe(32), secrets.token_urlsafe(32)
+            sid, browser, ai = str(uuid4()), secrets.token_urlsafe(32), secrets.token_urlsafe(32)
             now = self.clock()
             self.sessions[sid] = Session(digest(browser), digest(ai), now + TTL, now)
             return {"session_id": sid, "browser_token": browser, "ai_token": ai, "expires_in": TTL}
@@ -160,7 +197,8 @@ class BridgeStore:
         with self.lock:
             s = self._get(sid, token, "ai")
             self._expire_command(s)
-            from workspace_tools import METHODS as WORKSPACE_METHODS, validate
+            from workspace_tools import METHODS as WORKSPACE_METHODS
+            from workspace_tools import validate
             if self.allow_workspace and method in WORKSPACE_METHODS:
                 params = validate(method, params)
             else:
@@ -202,7 +240,8 @@ class BridgeStore:
                 raise BridgeError(409, "Command unavailable")
             if type(ok) is not bool:
                 raise BridgeError(422, "Invalid acknowledgement")
-            from workspace_tools import METHODS as WORKSPACE_METHODS, result as workspace_result
+            from workspace_tools import METHODS as WORKSPACE_METHODS
+            from workspace_tools import result as workspace_result
             c.result = (workspace_result(result) if c.method in WORKSPACE_METHODS else clean_result(c.method, result)) if ok else None
             c.state = "done" if ok else "denied"
             return {"accepted": True}

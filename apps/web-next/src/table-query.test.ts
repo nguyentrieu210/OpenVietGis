@@ -1,6 +1,6 @@
 import {describe,it,expect} from "vitest";
 import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
-import {tableQueryBody,verifyTableQuery} from "./table-query";
+import {localTablePage,tableQueryBody,verifyTableQuery} from "./table-query";
 const layer={id:"layer",source_id:"source",source:{content_revision:"c",schema_revision:"s",schema:{fields:[{field_id:"name",name:"Name",type:"text",nullable:true}]}}} as unknown as SpatialLayer;
 const filter={field:"name",op:"contains" as const,value:"%_';",negate:false};
 const result={layer_id:"layer",source_id:"source",content_revision:"c",schema_revision:"s",offset:100,limit:100,query_fingerprint:"pin",attribute_only:true,stored_crs:4326,selection_feature_ids:["a"],total_count:101,has_more:false,items:[{feature_id:"a",geometry:null,geometry_state:"absent",attributes:{name:"a"}}]} as LayerQueryResponse;
@@ -34,4 +34,12 @@ it("rejects malformed attribute row identity and payload before use",()=>{
  }
  expect(()=>verifyTableQuery(layer,{...result,query_fingerprint:"x".repeat(513)},100)).toThrow();
  expect(()=>tableQueryBody(layer,filter,"name","asc",100,"x".repeat(513))).toThrow();
+describe("local attribute table pagination",()=>{
+ it("bounds DOM rows to 100 even for one million records",()=>{
+  const rows=Array.from({length:1_000_000},(_,i)=>i);
+  expect(localTablePage(rows,0)).toEqual(Array.from({length:100},(_,i)=>i));
+  expect(localTablePage(rows,9_999)).toHaveLength(100);
+  expect(localTablePage(rows,10_000)).toHaveLength(0);
+  expect(()=>localTablePage(rows,-1)).toThrow();
+ });
 });

@@ -1,9 +1,10 @@
 //! E07 import/export and durable transfer job routes (R005), matching the FastAPI wire
 //! in `apps/api/openvietgis_api/adapters/http/transfers.py`.
 //!
-//! GeoJSON is native end to end; GeoPackage and ZIP Shapefile imports use a
-//! bounded codec worker with Rust confirmation and PostGIS validation. Binary
-//! exports use the same worker with explicit conversion disclosures.
+//! GeoJSON is migrated end to end. Binary exports use the bounded, unprivileged
+//! format adapter; Rust owns authorization, revision pins, jobs and publication.
+//! Binary imports use the same bounded decoder; Rust controls selection, CRS policy,
+//! confirmation, revisions and database publication.
 
 mod codec;
 pub(crate) mod store;
@@ -27,10 +28,10 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use self::codec::{
-    build_geojson_inspection, build_native_inspection, canonical_attribute, content_digest,
-    detect_format, extent_value, fingerprint, is_ready, plan_export_mapping, push_geojson_feature,
-    sanitize_filename, schema_digest, sorted_unique, Field, InspectOptions, Inspection, Mapping,
-    SchemaField, Transform, GEOJSON_HEAD, GEOJSON_TAIL, MAX_TRANSFER_FEATURES, MAX_UPLOAD_BYTES,
+    build_geojson_inspection, canonical_attribute, content_digest, detect_format, extent_value,
+    fingerprint, is_ready, plan_export_mapping, push_geojson_feature, sanitize_filename,
+    schema_digest, sorted_unique, Field, InspectOptions, Inspection, Mapping, SchemaField,
+    Transform, GEOJSON_HEAD, GEOJSON_TAIL, MAX_TRANSFER_FEATURES, MAX_UPLOAD_BYTES,
 };
 use self::store::{Staged, Store};
 use crate::identity::HumanSession;
@@ -38,6 +39,7 @@ use crate::AppState;
 
 const PAGE_ROWS: i64 = 1000;
 const FLUSH_BYTES: usize = 64 * 1024;
+const MAX_BINARY_EXPORT_INPUT: usize = 32 * 1024 * 1024;
 /// Multipart envelope allowance on top of the 25 MiB file limit.
 const MULTIPART_SLACK: usize = 64 * 1024;
 
@@ -227,16 +229,38 @@ fn py_strip(value: &str) -> &str {
 }
 
 async fn inspect_payload(
+    asset: &Asset,
     payload: &[u8],
-    format: &str,
     opts: &InspectOptions<'_>,
 ) -> Result<Inspection, TransferError> {
-    if format == "geojson" {
+    if asset.detected_format == "geojson" {
         return build_geojson_inspection(payload, opts);
     }
-    let decoded = crate::connectors::transfer_worker::run_import(payload,json!({"action":"inspect_import","format":format,"member":opts.selected_member,"encoding":opts.declared_encoding})).await
-        .map_err(|e| TransferError::coded(e.status.as_u16(),e.code.unwrap_or("VECTOR_CODEC_FAILED"), if e.status.is_server_error() {"Vector decoder unavailable or resource budget exceeded.".into()} else {e.message}))?;
-    build_native_inspection(decoded, format, opts)
+    let normalized = match opts.declared_encoding {
+        Some(raw) => Some(codec::normalize_encoding(raw).ok_or_else(|| {
+            TransferError::validation(
+                "UNSUPPORTED_ENCODING",
+                "Declared text encoding is not in the accepted encoding profile.",
+            )
+        })?),
+        None => None,
+    };
+    let decoded = crate::field_worker::inspect_transfer_payload(
+        &asset.detected_format,
+        payload,
+        opts.selected_member,
+        opts.declared_source_crs,
+        normalized,
+    )
+    .await
+    .map_err(|error| {
+        if error.status.is_server_error() {
+            TransferError::detail(error.status.as_u16(), "Transfer format engine unavailable.")
+        } else {
+            TransferError::coded(error.status.as_u16(), error.code, error.message)
+        }
+    })?;
+    codec::build_binary_inspection(decoded, &asset.detected_format, opts)
 }
 
 fn too_large() -> TransferError {
@@ -318,19 +342,6 @@ async fn upload_import_asset(
         uploaded_by_display: scope.display_name().to_string(),
         created_at: now_micros(),
     };
-    let inspection = match inspect_payload(
-        payload,
-        format,
-        &inspect_options(&asset, None, None, None, None),
-    )
-    .await
-    {
-        Ok(v) => v,
-        Err(e) => {
-            store.delete(&storage_key).await;
-            return Err(e.into());
-        }
-    };
     let wire = scope.asset_wire(&asset);
     let persisted = match scope.create_source_asset(&asset).await {
         Ok(()) => scope.commit().await,
@@ -340,7 +351,12 @@ async fn upload_import_asset(
         store.delete(&storage_key).await;
         return Err(error.into());
     }
-
+    let inspection = inspect_payload(
+        &asset,
+        payload,
+        &inspect_options(&asset, None, None, None, None),
+    )
+    .await?;
     Ok((
         StatusCode::CREATED,
         Json(json!({"asset": wire, "inspection": inspection.wire})),
@@ -399,8 +415,8 @@ async fn inspect_import_asset(
     )
     .await?;
     let inspection = inspect_payload(
+        &asset,
         &payload,
-        &asset.detected_format,
         &inspect_options(
             &asset,
             request.selected_member.as_deref(),
@@ -442,8 +458,8 @@ async fn confirm_import(
     )
     .await?;
     let inspection = inspect_payload(
+        &asset,
         &payload,
-        &asset.detected_format,
         &inspect_options(
             &asset,
             Some(&request.selected_member),
@@ -637,14 +653,14 @@ async fn run_import(
     layer_name: &str,
 ) -> Result<Value, TransferError> {
     let spatial = || TransferError::internal("imported value failed spatial domain validation");
-    let native = inspection.wire["resolved_source_crs"]
-        .as_i64()
-        .and_then(|v| i32::try_from(v).ok())
-        .ok_or_else(|| TransferError::internal("confirmed import has no source CRS"))?;
     let target = inspection
         .target_crs
         .and_then(|t| i32::try_from(t).ok())
         .ok_or_else(|| TransferError::internal("confirmed import has no target CRS"))?;
+    let source_crs = inspection.wire["resolved_source_crs"]
+        .as_i64()
+        .and_then(|code| i32::try_from(code).ok())
+        .ok_or_else(|| TransferError::internal("confirmed import has no source CRS"))?;
     let member = inspection.selected_member.clone().unwrap_or_default();
     let parsed = inspection
         .parsed
@@ -666,24 +682,24 @@ async fn run_import(
     let family = parsed.family;
     let mut scope = reopen(state, auth, ids, true).await?;
     for (index, record) in parsed.records.iter().enumerate() {
-        if !is_ready(&record.geom, Some(family), native, false) {
+        if !is_ready(&record.geom, Some(family), source_crs, false) {
             return Err(TransferError::validation(
                 "INVALID_GEOMETRY",
                 format!("Feature at index {index} failed geometry validation."),
             ));
         }
     }
-    let transform = Transform::resolve(native, target).map_err(|_| {
+    let transform = Transform::resolve(source_crs, target).map_err(|_| {
         TransferError::validation(
             "UNSUPPORTED_TRANSFORMATION",
-            format!("No approved transformation from EPSG:{native} to EPSG:{target}."),
+            format!("No approved transformation from EPSG:{source_crs} to EPSG:{target}."),
         )
     })?;
     let steps = transform.as_ref().map_or(&[][..], |t| t.steps.as_slice());
     let mut geometries = Vec::with_capacity(parsed.records.len());
     for (batch, chunk) in parsed.records.chunks(2000).enumerate() {
         let wkts: Vec<String> = chunk.iter().map(|r| r.geom.wkt()).collect();
-        let rows = scope.check_and_transform(&wkts, native, steps).await?;
+        let rows = scope.check_and_transform(&wkts, source_crs, steps).await?;
         if rows.len() != chunk.len() {
             return Err(TransferError::internal("geometry batch size mismatch"));
         }
@@ -737,7 +753,7 @@ async fn run_import(
         features.push((record.feature_id.clone(), attrs, geom));
     }
     let schema_revision = schema_digest(&fields, family);
-    let content_revision = content_digest(&fields, &features, native, target, family);
+    let content_revision = content_digest(&fields, &features, source_crs, target, family);
     let source_id = Uuid::new_v4();
     let layer_id = Uuid::new_v4();
     let short = |id: Uuid| id.simple().to_string()[..12].to_string();
@@ -751,7 +767,7 @@ async fn run_import(
         "content_revision": content_revision,
         "schema_revision": schema_revision,
         "feature_count": features.len(),
-        "source_crs": native,
+        "source_crs": source_crs,
         "stored_crs": target,
         "transformation_operation_id": transform.as_ref().map(|t| t.operation_id),
         "encoding": inspection.resolved_encoding,
@@ -790,7 +806,7 @@ async fn run_import(
             .take(100)
             .collect(),
         manifest_digest: asset.sha256.clone(),
-        source_crs: native,
+        source_crs,
         stored_crs: target,
         geometry_family: family,
         feature_count: i64::try_from(features.len()).unwrap_or(i64::MAX),
@@ -872,11 +888,7 @@ async fn build_preview(
         TransferError::validation("MISSING_CRS", "Source has no verified stored CRS.")
     })?;
     if format != "geojson" && source.feature_count > MAX_TRANSFER_FEATURES as i64 {
-        return Err(TransferError::coded(
-            413,
-            "FEATURE_LIMIT_EXCEEDED",
-            "Binary export supports up to 50000 features.",
-        ));
+        return Err(TransferError::coded(413,"FEATURE_LIMIT_EXCEEDED","Binary export supports up to 50000 features."));
     }
     let fields: Vec<SchemaField<'_>> = source
         .fields
@@ -1096,61 +1108,73 @@ async fn run_export(
         )
     })?;
     let artifact_id = Uuid::new_v4();
-    let (format, ext, media) = match request.output_format.as_str() {
+    let (format, ext, content_type) = match request.output_format.as_str() {
         "geojson" => ("geojson", "geojson", "application/geo+json"),
         "geopackage" => ("geopackage", "gpkg", "application/geopackage+sqlite3"),
         "shapefile_zip" => ("shapefile_zip", "zip", "application/zip"),
-        _ => {
-            return Err(TransferError::validation(
-                "UNSUPPORTED_FORMAT",
-                "Unsupported export format.",
-            ))
-        }
+        _ => return Err(TransferError::InvalidRequest),
     };
     let storage_key = format!("artifacts/{}/{}/{artifact_id}.{ext}", ids.0, ids.1);
     let store = Store::new(state);
-    let (sha256, byte_size, null_counts) = if format == "geojson" {
+    let (null_counts, sha256, byte_size) = if format == "geojson" {
         let mut staged = store.stage(&storage_key).await?;
-        let counts = match stream_geojson(
+        let streamed = stream_export_rows(
             &mut scope,
             &source,
             content,
             schema,
             transform.as_ref(),
             &preview.mappings,
-            &mut staged,
+            ExportTarget::GeoJson(&mut staged),
         )
-        .await
-        {
-            Ok(v) => v,
-            Err(e) => {
+        .await;
+        let counts = match streamed {
+            Ok(counts) => counts,
+            Err(error) => {
                 staged.abort().await;
-                return Err(e);
+                return Err(error);
             }
         };
-        let (sha, size) = staged.finish().await?;
-        (sha, size, counts)
+        let (digest, size) = staged.finish().await?;
+        (counts, digest, size)
     } else {
-        let (features, counts) =
-            collect_binary_features(&mut scope, &source, content, schema, transform.as_ref())
-                .await?;
-        let mappings=preview.mappings.iter().map(|m|json!({"field_id":m.field_id,"source_name":m.source_name,"output_name":m.output_name,"field_type":m.field_type})).collect::<Vec<_>>();
-        let artifact=crate::connectors::transfer_worker::run_export(json!({"action":"export","format":format,"crs_code":output_crs,"geometry_family":source.geometry_family,"layer_name":source.layer_name,"field_mappings":mappings,"features":features,"bounded_transfer":true})).await
-            .map_err(|e|TransferError::coded(e.status.as_u16(),"VECTOR_CODEC_FAILED",if e.status.is_server_error(){"Vector export worker failed.".into()}else{e.message}))?;
-        if artifact.ext != ext
-            || artifact.media_type != media
-            || artifact.bytes.is_empty()
-            || artifact.bytes.len() > 64 * 1024 * 1024
-            || detect_format(&artifact.bytes)? != format
-        {
-            return Err(TransferError::internal("Unexpected binary artifact"));
+        if source.feature_count > MAX_TRANSFER_FEATURES as i64 {
+            return Err(TransferError::coded(
+                413,
+                "FEATURE_LIMIT_EXCEEDED",
+                format!("Feature count exceeds limit of {MAX_TRANSFER_FEATURES}."),
+            ));
         }
-        let (sha, size) = store.put(&storage_key, &artifact.bytes).await?;
-        if sha != artifact.sha256 {
-            store.delete(&storage_key).await;
-            return Err(TransferError::internal("Artifact digest mismatch"));
-        }
-        (sha, size, counts)
+        let mut rows = Vec::new();
+        let counts = stream_export_rows(
+            &mut scope,
+            &source,
+            content,
+            schema,
+            transform.as_ref(),
+            &preview.mappings,
+            ExportTarget::Binary(&mut rows),
+        )
+        .await?;
+        let mappings: Vec<Value> = preview.mappings.iter().map(Mapping::wire).collect();
+        let bytes = crate::field_worker::build_transfer_artifact(
+            format,
+            &source.layer_name,
+            output_crs,
+            &source.geometry_family,
+            &mappings,
+            rows,
+        )
+        .await
+        .map_err(|error| {
+            if error.status.is_server_error() {
+                TransferError::detail(error.status.as_u16(), "Transfer format engine unavailable.")
+            } else {
+                TransferError::validation("TRANSFER_FORMAT_FAILED", error.message)
+            }
+        })?;
+        let (digest, size) = store.put(&storage_key, &bytes).await?;
+        (counts, digest, size)
     };
     let published = async {
         let done_at = now_micros();
@@ -1169,7 +1193,7 @@ async fn run_export(
             "geometry_family": source.geometry_family,
             "field_mappings": preview.mappings.iter().map(Mapping::wire).collect::<Vec<_>>(),
             "approved_disclosures": approved,
-            "lossless_profile": false,
+            "lossless_profile": format == "geopackage",
             "null_counts_by_field": null_counts,
             "artifact_sha256": sha256,
             "artifact_byte_size": byte_size,
@@ -1190,7 +1214,7 @@ async fn run_export(
                 sanitize_filename(&source.layer_name, "export"),
                 &content[..8]
             ),
-            content_type: media,
+            content_type,
             byte_size,
             sha256: sha256.clone(),
             storage_key: storage_key.clone(),
@@ -1209,126 +1233,27 @@ async fn run_export(
     published
 }
 
-/// Bound decoded binary export request before invoking the file codec.
-async fn collect_binary_features(
-    scope: &mut TransferScope<'_>,
-    source: &ovg_storage::transfers::ExportSource,
-    content: &str,
-    schema: &str,
-    transform: Option<&Transform>,
-) -> Result<(Vec<Value>, Map<String, Value>), TransferError> {
-    let stored = source.stored_crs.unwrap_or_default();
-    let family = source.geometry_family.as_str();
-    let steps = transform.map_or(&[][..], |t| t.steps.as_slice());
-    let mut features = Vec::new();
-    let mut bytes = 0usize;
-    let mut nulls = vec![0_i64; source.fields.len()];
-    let mut after = None;
-    if source.feature_count > MAX_TRANSFER_FEATURES as i64 {
-        return Err(TransferError::coded(
-            413,
-            "FEATURE_LIMIT_EXCEEDED",
-            "Binary export exceeds feature limit.",
-        ));
-    }
-    loop {
-        let rows = scope
-            .fetch_export_rows(
-                source.source_id,
-                content,
-                schema,
-                steps,
-                after.as_deref(),
-                PAGE_ROWS,
-            )
-            .await?;
-        for row in &rows {
-            let native = row
-                .geometry
-                .wkb
-                .first()
-                .and_then(|b| b.as_ref())
-                .and_then(|b| codec::decode_wkb(b))
-                .filter(|g| {
-                    row.present
-                        && row.geometry.valid
-                        && row.native_srid == Some(stored)
-                        && is_ready(g, Some(family), stored, false)
-                })
-                .ok_or_else(|| {
-                    TransferError::validation(
-                        "INVALID_GEOMETRY",
-                        "Binary export encountered invalid geometry.",
-                    )
-                })?;
-            let geom = match transform {
-                None => native,
-                Some(t) => t.apply(&native, family, &row.geometry.wkb, &row.geometry.step_valid)?,
-            };
-            let mut attrs = Map::new();
-            for (count, f) in nulls.iter_mut().zip(&source.fields) {
-                let v = row
-                    .attributes
-                    .get(&f.field_id)
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                if v.is_null() {
-                    *count += 1;
-                }
-                attrs.insert(f.field_id.clone(), v);
-            }
-            let value = json!({"feature_id":row.feature_id,"attributes":attrs,"geometry":{"type":family,"coordinates":geom.coordinates_value()}});
-            bytes = bytes.saturating_add(
-                serde_json::to_vec(&value)
-                    .map_err(|_| TransferError::internal("Serialize export row"))?
-                    .len()
-                    + 1,
-            );
-            if bytes > 32 * 1024 * 1024 || features.len() >= MAX_TRANSFER_FEATURES {
-                return Err(TransferError::coded(
-                    413,
-                    "EXPORT_BUDGET_EXCEEDED",
-                    "Binary export decoded data exceeds bounded worker budget.",
-                ));
-            }
-            features.push(value);
-        }
-        if rows.len() < PAGE_ROWS as usize {
-            break;
-        }
-        after = rows.last().map(|r| r.feature_id.clone());
-    }
-    if features.len() as i64 != source.feature_count {
-        return Err(TransferError::internal(
-            "Pinned feature count changed during export",
-        ));
-    }
-    Ok((
-        features,
-        source
-            .fields
-            .iter()
-            .zip(nulls)
-            .map(|(f, n)| (f.field_id.clone(), Value::from(n)))
-            .collect(),
-    ))
+enum ExportTarget<'a> {
+    GeoJson(&'a mut Staged),
+    Binary(&'a mut Vec<Value>),
 }
 
-/// Write the RFC 7946 document page by page; returns null counts per source field.
-async fn stream_geojson(
+/// Read and validate revision-pinned pages for both streaming and binary exports.
+async fn stream_export_rows(
     scope: &mut TransferScope<'_>,
     source: &ovg_storage::transfers::ExportSource,
     content: &str,
     schema: &str,
     transform: Option<&Transform>,
     mappings: &[Mapping],
-    staged: &mut Staged,
+    mut target: ExportTarget<'_>,
 ) -> Result<Map<String, Value>, TransferError> {
     let stored = source.stored_crs.unwrap_or_default();
     let family = source.geometry_family.as_str();
     let steps = transform.map_or(&[][..], |t| t.steps.as_slice());
     let mut nulls = vec![0_i64; source.fields.len()];
     let mut buffer = String::from(GEOJSON_HEAD);
+    let mut binary_bytes = 0_usize;
     let mut after: Option<String> = None;
     let mut index: i64 = 0;
     loop {
@@ -1360,16 +1285,38 @@ async fn stream_geojson(
                 None => native,
                 Some(t) => t.apply(&native, family, &row.geometry.wkb, &row.geometry.step_valid)?,
             };
-            if index > 0 {
-                buffer.push_str(", ");
+            match &mut target {
+                ExportTarget::GeoJson(_) => {
+                    if index > 0 {
+                        buffer.push_str(", ");
+                    }
+                    push_geojson_feature(
+                        &mut buffer,
+                        &row.feature_id,
+                        &geom,
+                        mappings,
+                        &row.attributes,
+                    )?;
+                }
+                ExportTarget::Binary(records) => {
+                    let record = json!({
+                        "feature_id": row.feature_id,
+                        "properties": row.attributes,
+                        "geometry": {"type": geom.family(), "coordinates": geom.coordinates_value()},
+                    });
+                    let encoded = serde_json::to_vec(&record)
+                        .map_err(|_| TransferError::internal("cannot encode format input"))?;
+                    binary_bytes = binary_bytes.saturating_add(encoded.len() + 1);
+                    if binary_bytes > MAX_BINARY_EXPORT_INPUT {
+                        return Err(TransferError::coded(
+                            413,
+                            "EXPORT_SIZE_EXCEEDED",
+                            "Binary export exceeds the safe format-engine input limit.",
+                        ));
+                    }
+                    records.push(record);
+                }
             }
-            push_geojson_feature(
-                &mut buffer,
-                &row.feature_id,
-                &geom,
-                mappings,
-                &row.attributes,
-            )?;
             for (count, field) in nulls.iter_mut().zip(&source.fields) {
                 if row
                     .attributes
@@ -1380,9 +1327,11 @@ async fn stream_geojson(
                 }
             }
             index += 1;
-            if buffer.len() >= FLUSH_BYTES {
-                staged.write(buffer.as_bytes()).await?;
-                buffer.clear();
+            if let ExportTarget::GeoJson(staged) = &mut target {
+                if buffer.len() >= FLUSH_BYTES {
+                    staged.write(buffer.as_bytes()).await?;
+                    buffer.clear();
+                }
             }
         }
         if rows.len() < usize::try_from(PAGE_ROWS).unwrap_or(usize::MAX) {
@@ -1390,8 +1339,10 @@ async fn stream_geojson(
         }
         after = rows.last().map(|r| r.feature_id.clone());
     }
-    buffer.push_str(GEOJSON_TAIL);
-    staged.write(buffer.as_bytes()).await?;
+    if let ExportTarget::GeoJson(staged) = &mut target {
+        buffer.push_str(GEOJSON_TAIL);
+        staged.write(buffer.as_bytes()).await?;
+    }
     if index != source.feature_count {
         return Err(TransferError::internal(
             "pinned feature count changed during export",
@@ -1459,6 +1410,19 @@ async fn get_transfer_job(
     Ok(Json(job.wire).into_response())
 }
 
+fn cancellation_update(status: &str) -> Option<JobUpdate> {
+    if matches!(status, "succeeded" | "failed" | "denied" | "cancelled") {
+        return None;
+    }
+    Some(JobUpdate {
+        status: "cancelled",
+        error_code: Some("CANCELLED_BY_ACTOR"),
+        error_message: Some("Cancelled before publication.".into()),
+        completed_at: Some(now_micros()),
+        ..JobUpdate::default()
+    })
+}
+
 async fn cancel_transfer_job(
     State(state): State<AppState>,
     auth: HumanSession,
@@ -1466,24 +1430,10 @@ async fn cancel_transfer_job(
     Path(params): Params,
 ) -> Reply {
     let (mut scope, job) = job_prelude(&state, &auth, &headers, &params, true).await?;
-    if matches!(
-        job.status.as_str(),
-        "succeeded" | "failed" | "denied" | "cancelled"
-    ) {
+    let Some(update) = cancellation_update(&job.status) else {
         return Ok(Json(job.wire).into_response());
-    }
-    let updated = scope
-        .update_job(
-            job.id,
-            JobUpdate {
-                status: "cancelled",
-                error_code: Some("CANCELLED_BY_ACTOR"),
-                error_message: Some("Cancelled before publication.".into()),
-                completed_at: Some(now_micros()),
-                ..JobUpdate::default()
-            },
-        )
-        .await?;
+    };
+    let updated = scope.update_job(job.id, update).await?;
     scope.commit().await?;
     Ok(Json(updated.wire).into_response())
 }
@@ -1538,8 +1488,8 @@ async fn retry_transfer_job(
     let opts = &job.options;
     let text = |key: &str| opts.get(key).and_then(Value::as_str);
     let inspection = inspect_payload(
+        &asset,
         &payload,
-        &asset.detected_format,
         &inspect_options(
             &asset,
             text("selected_member"),
@@ -1650,4 +1600,30 @@ async fn download_derived_artifact(
     response_headers.insert("x-content-sha256", header_value(&artifact.sha256)?);
     response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok(response)
+}
+
+#[cfg(test)]
+mod transfer_unit_tests {
+    use super::*;
+
+    #[test]
+    fn cancellation_is_terminal_safe_and_marks_active_work() {
+        for status in ["succeeded", "failed", "denied", "cancelled"] {
+            assert!(cancellation_update(status).is_none());
+        }
+        for status in ["active", "queued", "recoverable_failed"] {
+            let update = cancellation_update(status).expect("cancellable status");
+            assert_eq!(update.status, "cancelled");
+            assert_eq!(update.error_code, Some("CANCELLED_BY_ACTOR"));
+            assert!(update.completed_at.is_some());
+        }
+    }
+
+    #[test]
+    fn transfer_limits_are_bounded() {
+        assert_eq!(PAGE_ROWS, 1000);
+        assert_eq!(FLUSH_BYTES, 64 * 1024);
+        assert_eq!(MAX_TRANSFER_FEATURES, 50_000);
+        assert_eq!(MAX_UPLOAD_BYTES, 25 * 1024 * 1024);
+    }
 }

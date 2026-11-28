@@ -1,0 +1,28 @@
+{
+  "baseline": {
+    "landingStaticClosure": {
+      "assets": 7,
+      "rawBytes": 3289563,
+      "gzipBytes": 903464
+    },
+    "offlinePrecache": {
+      "assets": 35,
+      "rawBytes": 3940266,
+      "gzipBytes": 1118353
+    }
+  },
+  "candidate": {
+    "landingStaticClosure": {
+      "assets": 13,
+      "rawBytes": 365250,
+      "gzipBytes": 109559
+    },
+    "offlinePrecache": {
+      "assets": 10,
+      "rawBytes": 328491,
+      "gzipBytes": 104178
+    }
+  },
+  "method": "Vite manifest static dependency closure and Node gzip per file; references, not actual network transfer; excludes HTML/public/provider/API payloads.",
+  "node": "v26.13.1"
+}

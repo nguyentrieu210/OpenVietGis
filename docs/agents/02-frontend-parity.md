@@ -1,17 +1,17 @@
-# Agent 02 — Frontend parity and consolidation
+# Agent 02 — Canonical frontend regression review
 
 ## Scope and ownership
 Own: documentation report docs/qa/agent-02-frontend.md only.
-Read: apps/web, apps/web-next, packages/client-sdk, infra/prod and public routing docs.
-No deploy, bundler installs or heavy builds. No deletion of either frontend.
+Read: apps/web-next, packages/client-sdk, packages/spatial-workspace, infra/prod, current architecture docs and the legacy history index.
+The removed apps/web tree is historical evidence only and must not be restored.
 
 ## Task
-1. Identify live entrypoint from docs/qa/2026-11-23-control-kit-audit.md, deployment manifest assumptions and Nginx configs if available.
-2. Build evidence-based route/feature parity: login, layers, editing, CAD, 3D, AI/copilot, layout/print, plugin number-house, offline, account roles, import/export.
-3. Record which frontend owns a feature, and label UNKNOWN where only labels/components exist without verified runtime.
-4. Trace concrete imports/route definitions, application state and API calls.
-5. Propose a non-breaking deprecation strategy and acceptance tests for one canonical frontend.
+1. Identify the canonical live entrypoint and release manifest assumptions.
+2. Review route/feature regressions: login, layers, editing, CAD, 3D, AI/copilot, layout/print, house numbering, offline, roles and import/export.
+3. Label UNKNOWN where runtime evidence is absent.
+4. Trace concrete imports, route definitions, state and API calls.
+5. Propose narrow regression tests; do not create a second frontend.
 
 ## Deliverable
-Produce docs/qa/agent-02-frontend.md with feature matrix, cited paths and P0 blockers.
-Do not claim a capability is live solely because code exists.
+Update docs/qa/agent-02-frontend.md only when a new dated audit is requested.
+Do not rewrite historical evidence and do not claim a capability is live solely because code exists.

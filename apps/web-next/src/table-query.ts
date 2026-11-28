@@ -2,6 +2,12 @@ import type {LayerQueryResponse,SpatialLayer} from "@openvietgis/client-sdk";
 import {buildQueryDefinition,type FilterRow} from "./workbenches/features/platform/query-filters";
 export const TABLE_QUERY_LIMIT=100;
 export const TABLE_QUERY_MAX_OFFSET=50000;
+export const LOCAL_TABLE_PAGE_SIZE=100;
+export function localTablePage<T>(rows:readonly T[],page:number):T[]{
+ if(!Number.isInteger(page)||page<0)throw Error("Trang không hợp lệ.");
+ const start=page*LOCAL_TABLE_PAGE_SIZE;
+ return rows.slice(start,start+LOCAL_TABLE_PAGE_SIZE);
+}
 export function tableQueryBody(layer:SpatialLayer,row:FilterRow|FilterRow[],sortField:string,direction:"asc"|"desc",offset:number,fingerprint?:string,group:"and"|"or"="and"){
  const fields=layer.source.schema.fields;
  if(!Number.isInteger(offset)||offset<0||offset>TABLE_QUERY_MAX_OFFSET||(offset>0&&!fingerprint)||!(direction==="asc"||direction==="desc")||(fingerprint!==undefined&&(typeof fingerprint!=="string"||!fingerprint||fingerprint.length>512)))throw Error("Phân trang vượt giới hạn hoặc thiếu phiên bản truy vấn.");

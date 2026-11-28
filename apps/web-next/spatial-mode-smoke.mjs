@@ -2,16 +2,17 @@ import {chromium} from "@playwright/test";
 import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
- const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
+ const context=await browser.newContext({viewport:{width:1280,height:850}});
+ const page=await context.newPage(),errors=[];
  // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
- await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
+ await context.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
  page.setDefaultTimeout(30000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"feature_read",available:true,actor_authorized:true}],source:{feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[]}}};
  const saved=[];let restricted=false,pluginActive=false,pluginCompatible=true,holdSave=false,releaseSave;
  const ver=()=>({id,filename:"building.dxf",format:"dxf",version:saved.length+1,byte_size:40,sha256:"a".repeat(64),created_at:"2026-01-01T00:00:00Z"});
- await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
- await page.route("**/api/v1/**",async route=>{
+ await context.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
+ await context.route("**/api/v1/**",async route=>{
   const p=new URL(route.request().url()).pathname,m=route.request().method();let body;
   if(p.endsWith("/me"))body={id:"fixture",display_name:"Spatial Test",status:"active"};
   else if(p.endsWith("/auth/providers"))body=[];
@@ -100,18 +101,31 @@ try{
  assert.equal(await page.getByRole("button",{name:"Tải xuống",exact:true}).count(),2);
  await modes.getByRole("button",{name:"GIS",exact:true}).click({noWaitAfter:true});
  await page.locator(".qgis-map-region .maplibregl-canvas").waitFor();
+ const peer=await context.newPage();peer.setDefaultTimeout(30000);
+ await peer.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ await peer.getByRole("group",{name:"Không gian làm việc"}).waitFor();
+ await peer.locator(".qgis-map-region .maplibregl-canvas").waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click({noWaitAfter:true});
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
  restricted=true;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.locator('[data-ovg-alternate-active]').waitFor({state:"detached"});
  await page.getByText("Tài khoản bị giới hạn phạm vi GIS hoặc chưa xác minh được quyền.",{exact:true}).waitFor();
  assert.equal(await modes.getByRole("button",{name:/^CAD/}).getAttribute("aria-disabled"),"true");
- restricted=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+ await peer.getByText("Tài khoản bị giới hạn phạm vi GIS hoặc chưa xác minh được quyền.",{exact:true}).waitFor();
+ assert.equal(await peer.getByRole("group",{name:"Không gian làm việc"}).getByRole("button",{name:/^CAD/}).getAttribute("aria-disabled"),"true");
+ console.log("PASS project access revocation invalidates another open tab");
+ restricted=false;await page.evaluate(()=>window.dispatchEvent(new Event("focus")));await peer.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await modes.getByRole("button",{name:"CAD",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ await peer.getByRole("group",{name:"Không gian làm việc"}).getByRole("button",{name:"CAD",exact:true}).waitFor();
+ await peer.close();
  console.log("PASS permission revocation, explicit restriction and restored access");
  pluginActive=true;await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ // A reload restores the last authorized CAD mode, even with a business module.
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ assert.equal(await page.locator(".maplibregl-canvas").count(),0);
+ await modes.getByRole("button",{name:"GIS",exact:true}).click();
  await page.getByRole("button",{name:"Địa bàn",exact:true}).waitFor();
  await modes.getByRole("button",{name:"CAD",exact:true}).click();
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();

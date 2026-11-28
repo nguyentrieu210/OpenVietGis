@@ -15,6 +15,7 @@ import {Modal} from "./studio-ui";
 import {RasterLayerList,type RasterCatalog} from "./ProjectRaster";
 import {Splitter} from "./Splitter";
 import {AttributeServerQuery} from "./AttributeServerQuery";
+import {localTablePage} from "./table-query";
 import {formatDms} from "./locator";
 import {FeatureInfo} from "./FeatureInfo";
 import {readColumnConfig,columnConfig,moveColumn,completeSelection,type ColumnConfig,togglePageSelection,tableTsv,compareTableValue} from "./table-columns";
@@ -297,7 +298,7 @@ export function QgisAttributeTable({formScope="",preferenceScope,executeServerQu
  const sorted=useMemo(()=>!sort?scoped:[...scoped].sort((a,b)=>compareTableValue(sort.field==="__fid"?a.feature.feature_id:a.feature.attributes[sort.field],sort.field==="__fid"?b.feature.feature_id:b.feature.attributes[sort.field],sortType,sort.direction)||a.key.localeCompare(b.key)),[scoped,sort,sortType]);
  useEffect(()=>{setSort(null);setFormKey("");setFormMode(false);setPage(0)},[columnKey]);
  const maxPage=Math.max(0,Math.ceil(sorted.length/100)-1),current=remoteLayer?page:Math.min(page,maxPage);
- const pageRows=remoteLayer?sorted:sorted.slice(current*100,current*100+100);
+ const pageRows=remoteLayer?sorted:localTablePage(sorted,current);
  const hydrated=useMemo(()=>new Set(rows.map(r=>JSON.stringify([r.layer.id,r.layer.source_id,r.layer.source.content_revision,r.layer.source.schema_revision,r.key]))),[rows]);
  const selectableRow=(r:StudioRow)=>!remoteLayer||hydrated.has(JSON.stringify([r.layer.id,r.layer.source_id,r.layer.source.content_revision,r.layer.source.schema_revision,r.key]));
  const selectablePage=pageRows.filter(selectableRow);

@@ -4,12 +4,14 @@ import {createHash} from "node:crypto";
 import {parseDxf,blankDxf} from "./src/native-dxf.ts";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
- const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[],versions=[];
+ const context=await browser.newContext({viewport:{width:1280,height:850}}),errors=[],versions=[];
+ await context.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1");localStorage.setItem("ovg:resume-mode:v1:fixture:fixture-org:fixture-project","cad")});
+ let page=await context.newPage();
  const org="fixture-org",pid="fixture-project",id="drawing-id";
- page.on("pageerror",e=>errors.push(e.message));
+ const watchErrors=()=>page.on("pageerror",e=>errors.push(e.message));watchErrors();
  const metadata=(buf,v)=>({id,filename:"Test.dxf",format:"dxf",version:v,byte_size:buf.length,sha256:createHash("sha256").update(buf).digest("hex"),created_at:"2026-01-01T00:00:00Z"});
- await page.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
- await page.route("**/api/v1/**",async route=>{
+ await context.route("**/*",route=>new URL(route.request().url()).hostname==="127.0.0.1"?route.continue():route.abort());
+ await context.route("**/api/v1/**",async route=>{
  const p=new URL(route.request().url()).pathname,m=route.request().method();let body;
  if(p.endsWith("/me"))body={id:"fixture",display_name:"CAD Test",status:"active"};
  else if(p.endsWith("/auth/providers"))body=[];
@@ -35,10 +37,15 @@ try{
  });
  await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
  const modes=page.getByRole("group",{name:"Không gian làm việc"});
- await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ const workspace=page.locator(".ovg-spatial-workspace");
+ await workspace.waitFor();
+ if(await workspace.getAttribute("data-workspace-mode")!=="cad"){
+  const cad=modes.getByRole("button",{name:"CAD",exact:true});await cad.waitFor();await cad.click();
+ }
  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
- page.once("dialog",d=>d.accept("Test"));
  await page.getByRole("button",{name:"Tạo DXF mới",exact:true}).click();
+ const prompt=page.getByRole("dialog",{name:"Nhập"});await prompt.getByRole("textbox").fill("Test");await prompt.getByRole("button",{name:"OK",exact:true}).click();
+ await page.getByText("Đã lưu phiên bản 1.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Mở & sửa",exact:true}).click();
  await page.getByText("Đã mở bản vẽ.",{exact:true}).waitFor();
  await page.getByRole("button",{name:"Vẽ đối tượng",exact:true}).click();
@@ -49,16 +56,39 @@ try{
  await page.getByRole("button",{name:"Lưu phiên bản",exact:true}).click();
  await page.getByText("Đã lưu phiên bản 2.",{exact:true}).waitFor();
  assert.deepEqual(parseDxf(versions[1].toString()).shapes.map(s=>s.kind),["LINE","CIRCLE"]);
- await page.getByRole("button",{name:"Về kho CAD",exact:true}).click();
+ assert.equal(await page.locator(".ovg-native-dxf").getAttribute("data-ovg-cad-dirty"),null);
+ // A clean editor must not block a mode switch.
+ await modes.getByRole("button",{name:"GIS",exact:true}).click();
+ await page.locator('.ovg-spatial-workspace[data-workspace-mode="gis"]').waitFor();
+ await modes.getByRole("button",{name:"CAD",exact:true}).click();
+ await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+ const docButton=page.locator(".ovg-cad-doc").filter({hasText:"Test.dxf"}).first();await docButton.waitFor();await docButton.click();
+ await page.locator(".ovg-cad-version").first().waitFor();
  await page.getByRole("button",{name:"Mở & sửa",exact:true}).click();
  await page.getByText("Đã mở bản vẽ.",{exact:true}).waitFor();
  assert.equal(await page.locator('[data-dxf-entity="LINE"]').count(),1);
- const select=page.getByLabel("Đối tượng",{exact:true});await select.selectOption({label:await select.locator("option").nth(1).innerText()});
+ let select=page.getByLabel("Đối tượng",{exact:true});await select.selectOption({label:await select.locator("option").nth(1).innerText()});
  await page.getByLabel("X2",{exact:true}).fill("25");
  await page.getByRole("button",{name:"Cập nhật tọa độ",exact:true}).click();
+ await page.getByRole("button",{name:"Hoàn tác",exact:true}).click();
+ assert.deepEqual((await page.getByLabel("Đối tượng",{exact:true}).locator("option").allTextContents()).length>1,true);
+ await page.getByRole("button",{name:"Làm lại",exact:true}).click();
+ await page.waitForTimeout(350);
+ assert.equal(await page.locator(".ovg-native-dxf").getAttribute("data-ovg-cad-dirty"),"true");
+ const draftRows=()=>page.evaluate(async()=>await new Promise((resolve,reject)=>{const r=indexedDB.open("ovg-cad-drafts-v1");r.onsuccess=()=>{const tx=r.result.transaction("drafts","readonly"),q=tx.objectStore("drafts").getAll();q.onsuccess=()=>{r.result.close();resolve(q.result)};q.onerror=()=>reject(q.error)};r.onerror=()=>reject(r.error)}));
+ await page.waitForFunction(async()=>await new Promise(resolve=>{const r=indexedDB.open("ovg-cad-drafts-v1");r.onsuccess=()=>{const tx=r.result.transaction("drafts","readonly"),q=tx.objectStore("drafts").count();q.onsuccess=()=>{r.result.close();resolve(q.result>0)};q.onerror=()=>resolve(false)};r.onerror=()=>resolve(false)}),undefined,{timeout:5000});
+ const beforeReload=await draftRows();assert.equal(beforeReload.length,1);assert.equal(beforeReload[0].version,2);
+ await page.close({runBeforeUnload:false});
+ page=await context.newPage();watchErrors();
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4187/rewrite/?live=1",{waitUntil:"domcontentloaded"});
+ // A crash-like close cannot run editor cleanup; the scoped draft must reopen automatically.
+ await page.getByText("Đã phục hồi bản nháp chưa lưu.",{exact:false}).waitFor();
+ select=page.getByLabel("Đối tượng",{exact:true});await select.selectOption({label:await select.locator("option").nth(1).innerText()});
+ assert.equal(await page.getByLabel("X2",{exact:true}).inputValue(),"25");
  await page.getByRole("button",{name:"Lưu phiên bản",exact:true}).click();
  await page.getByText("Đã lưu phiên bản 3.",{exact:true}).waitFor();
+ await page.waitForTimeout(350);assert.equal((await draftRows()).length,0);
  assert.deepEqual(parseDxf(versions[2].toString()).shapes[0].points,[[0,0],[25,10]]);
  assert.equal(versions[0].toString(),blankDxf);assert.equal(errors.length,0,errors.join("\n"));
- console.log("PASS native DXF create, draw line/circle, save real DXF bytes, reopen, edit and preserve original");
+ console.log("PASS native DXF create/edit, undo/redo, scoped dirty-draft recovery, save and source preservation");
 }finally{await browser.close()}

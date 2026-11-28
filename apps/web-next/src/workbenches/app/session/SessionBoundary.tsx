@@ -12,7 +12,6 @@ import {
   useRef,
   type ReactNode
 } from "react";
-import { Navigate, useLocation } from "react-router-dom";
 
 import { apiClient } from "../api";
 import { currentBrowserDestination } from "./return-destination";
@@ -38,7 +37,6 @@ export function useSession(): SessionContextValue {
 
 export function SessionBoundary({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const location = useLocation();
   const confirmedAccount = useRef<CurrentUser | null>(null);
 
   const user = useQuery({
@@ -75,6 +73,12 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
       predicate: (query) => query.queryKey[0] !== "identity-providers"
     });
   }, [queryClient, unauthorized]);
+  useEffect(() => {
+    if (!unauthorized) return;
+    // Re-enter through the canonical SessionEntry on the same protected URL.
+    // A client-side /login route no longer exists after the legacy SPA retirement.
+    window.location.replace(currentBrowserDestination());
+  }, [unauthorized]);
 
   const value = useMemo<SessionContextValue | null>(() => {
     if (!account) return null;
@@ -86,13 +90,11 @@ export function SessionBoundary({ children }: { children: ReactNode }) {
   }, [account, unauthorized, user.error, user.fetchStatus]);
 
   if (unauthorized) {
-    const returnTo = currentBrowserDestination();
     return (
-      <Navigate
-        replace
-        to={"/login?return_to=" + encodeURIComponent(returnTo)}
-        state={{ from: location.pathname }}
-      />
+      <main className="ovg-session-bootstrap" aria-busy="true">
+        <span className="ovg-brand-mark">OVG</span>
+        <p>Đang xác minh lại phiên đăng nhập…</p>
+      </main>
     );
   }
 

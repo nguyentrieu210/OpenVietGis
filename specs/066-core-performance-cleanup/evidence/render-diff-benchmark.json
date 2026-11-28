@@ -1,0 +1,32 @@
+{
+  "node": "v26.13.1",
+  "method": "20 timed iterations per implementation; regenerated scalar property objects, shared geometries, one selected point, isolated synthetic CPU benchmark; not MapLibre frame timing or network latency",
+  "rows": [
+    {
+      "features": 30000,
+      "baseline": {
+        "p50_ms": 82.09168199999976,
+        "p95_ms": 170.66821800000002,
+        "samples": 20
+      },
+      "candidate": {
+        "p50_ms": 69.68529799999988,
+        "p95_ms": 109.39790700000049,
+        "samples": 20
+      }
+    },
+    {
+      "features": 100000,
+      "baseline": {
+        "p50_ms": 359.22783199999685,
+        "p95_ms": 679.7567170000002,
+        "samples": 20
+      },
+      "candidate": {
+        "p50_ms": 240.88954100000046,
+        "p95_ms": 383.5212359999996,
+        "samples": 20
+      }
+    }
+  ]
+}

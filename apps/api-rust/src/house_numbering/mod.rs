@@ -3,8 +3,11 @@
 mod assignment;
 mod buildings;
 mod field;
+mod file_codec;
+mod files;
 mod hierarchy;
 mod numbering;
+mod progress_report;
 mod proposals;
 mod records;
 mod route_import;
@@ -52,6 +55,7 @@ pub(crate) fn router() -> Router<AppState> {
         .merge(proposals::router())
         .merge(field::router())
         .merge(records::router())
+        .merge(files::router())
         .merge(numbering::router())
         .merge(route_import::router())
 }

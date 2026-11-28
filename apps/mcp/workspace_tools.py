@@ -1,9 +1,10 @@
 """Typed, bounded first-party GIS tools. No raw URLs, SQL, credentials or shell."""
-from typing import Annotated, Literal, Any
-from uuid import UUID
 import json
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from typing import Annotated, Any, Literal
+from uuid import UUID
+
 from mcp.types import ToolAnnotations
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 ID = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,128}$")]
 Revision = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
@@ -121,6 +122,7 @@ MODELS={"gis_create_layer":ManualLayer,"gis_schema":Schema,"gis_export":Export,"
         "gis_geometry_preview":Preview,"gis_topology":Topology,"gis_overlay":Overlay,
         "gis_layer_visibility":Visibility,"gis_select":Select,"gis_revert":Revert}
 from advanced_tools import TOOLS as ADVANCED_TOOLS
+
 MODELS.update({name:spec[0] for name,spec in ADVANCED_TOOLS.items()})
 METHODS=frozenset(MODELS)
 def validate(method, params):
@@ -146,11 +148,11 @@ def result(value):
 
 def register(mcp,operate):
     def tool(name,model,description,readonly=True,destructive=False):
-        async def run(request):
-            return await operate(name,validate(name,request.model_dump(mode="json",exclude_none=True)))
+        async def run(request, session_id: UUID | None = None):
+            return await operate(name,validate(name,request.model_dump(mode="json",exclude_none=True)),session_id)
         run.__name__=name
         run.__doc__=description
-        run.__annotations__={"request":model,"return":dict[str,Any]}
+        run.__annotations__={"request":model,"session_id":UUID|None,"return":dict[str,Any]}
         mcp.tool(annotations=ToolAnnotations(read_only_hint=readonly,destructive_hint=destructive),structured_output=True)(run)
     tool("gis_create_layer",ManualLayer,"Create an editable WGS84 vector layer with attribute schema; stable operation UUID.",False)
     tool("gis_schema",Schema,"Add or rename a field on a pinned source.",False)

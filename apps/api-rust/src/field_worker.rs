@@ -1,4 +1,4 @@
-//! Bounded SQLite/GeoPackage format worker for E13 offline packaging and sync validation.
+//! Bounded format worker for E07 binary exports and E13 offline packaging/sync validation.
 //! Rust owns the tenant transaction, CSRF/session checks, storage I/O, and changeset commits;
 //! the worker receives no database credentials or network configuration.
 
@@ -52,10 +52,41 @@ const MODULES: &[(&str, &str)] = &[
         include_str!("../../api/openvietgis_api/adapters/formats/geopackage.py"),
     ),
     (
+        "openvietgis_api/adapters/formats/shapefile_zip.py",
+        include_str!("../../api/openvietgis_api/adapters/formats/shapefile_zip.py"),
+    ),
+    (
         "openvietgis_api/adapters/formats/offline_snapshot.py",
         include_str!("../../api/openvietgis_api/adapters/formats/offline_snapshot.py"),
     ),
 ];
+
+/// The production runtime intentionally uses Debian bookworm's system Python 3.11
+/// for the isolated format worker. Canonical Python sources are developed on a
+/// newer interpreter and may contain PEP 695 type aliases. The worker only
+/// needs those names for postponed annotations, so generate a syntax-compatible
+/// private copy without weakening the canonical source tree.
+fn worker_python_311_source(source: &str) -> String {
+    source
+        .lines()
+        .map(|line| {
+            let Some(alias) = line.strip_prefix("type ") else {
+                return line.to_owned();
+            };
+            let Some((name, rhs)) = alias.split_once(" = ") else {
+                return line.to_owned();
+            };
+            if name == "CoordinateTree" {
+                // Recursive alias syntax cannot be evaluated by Python 3.11;
+                // every use in the embedded domain module is annotation-only.
+                format!("{name} = tuple")
+            } else {
+                format!("{name} = {rhs}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 const PACKAGE_INITS: &[&str] = &[
     "openvietgis_api/__init__.py",
@@ -90,6 +121,7 @@ from openvietgis_api.domains.platform_errors import (
 )
 from openvietgis_api.domains.spatial.domain import FieldType, NativeGeometry
 from openvietgis_api.domains.transfers.domain import ExportFieldMapping
+from openvietgis_api.domains.transfers.ports import TransferError
 
 try:
     req = json.loads(Path(sys.argv[1]).read_text("utf-8"))
@@ -142,6 +174,102 @@ try:
                 allow_nan=False,
             )
         )
+    elif action == "inspect_transfer":
+        resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024, 64 * 1024 * 1024))
+        from openvietgis_api.adapters.formats.geopackage import (
+            inspect_geopackage, parse_geopackage_member,
+        )
+        data = Path(req["payload_path"]).read_bytes()
+        encoding = req["declared_encoding"]
+        source_crs = req["declared_source_crs"]
+        if req["format"] == "geopackage":
+            members = inspect_geopackage(data)
+        elif req["format"] == "shapefile_zip":
+            from openvietgis_api.adapters.formats.shapefile_zip import (
+                inspect_shapefile_zip, parse_shapefile_member,
+            )
+            members = inspect_shapefile_zip(data, encoding=encoding)
+        else:
+            raise ValueError("unsupported binary import format")
+        eligible = [m for m in members if m.eligible]
+        selected = req["selected_member"]
+        if selected is None and len(eligible) == 1:
+            selected = eligible[0].name
+        parsed = None
+        if any(m.name == selected for m in eligible):
+            if req["format"] == "geopackage":
+                parsed = parse_geopackage_member(
+                    data, member_name=selected, declared_crs=source_crs,
+                )
+            else:
+                parsed = parse_shapefile_member(
+                    data, member_name=selected, declared_crs=source_crs,
+                    declared_encoding=encoding,
+                )
+        report = {"members": [m.to_wire() for m in members], "parsed": None}
+        if parsed is not None:
+            report["parsed"] = {
+                "member_name": parsed.member_name,
+                "geometry_family": parsed.geometry_family.value,
+                "dimensions": parsed.dimensions.value,
+                "detected_crs": parsed.detected_crs,
+                "detected_encoding": parsed.detected_encoding,
+                "requires_encoding_resolution": parsed.requires_encoding_resolution,
+                "fields": [f.to_wire() for f in parsed.fields],
+                "findings": [f.to_wire() for f in parsed.findings],
+                "extent": parsed.extent,
+                "features": [
+                    {
+                        "feature_id": feature.feature_id,
+                        "attributes": feature.attributes,
+                        "geometry": {
+                            "type": feature.geometry.type,
+                            "coordinates": feature.geometry.coordinates,
+                        },
+                    }
+                    for feature in parsed.features
+                ],
+            }
+        with Path(req["out_path"]).open("w", encoding="utf-8") as handle:
+            json.dump(report, handle, allow_nan=False, ensure_ascii=False, separators=(",", ":"))
+        print(json.dumps({"ok": True}, allow_nan=False))
+    elif action == "export_transfer":
+        resource.setrlimit(resource.RLIMIT_FSIZE, (75 * 1024 * 1024, 75 * 1024 * 1024))
+        srid = int(req["srid"])
+        mappings = [
+            ExportFieldMapping(m["field_id"], m["source_name"], m["output_name"], FieldType(m["type"]))
+            for m in req["mappings"]
+        ]
+        features = [
+            (
+                str(f["feature_id"]),
+                dict(f["properties"]),
+                NativeGeometry(
+                    type=str(f["geometry"]["type"]),
+                    coordinates=f["geometry"]["coordinates"],
+                    srid=srid,
+                ),
+            )
+            for f in req["features"]
+        ]
+        if req["format"] == "geopackage":
+            writer = write_geopackage
+        elif req["format"] == "shapefile_zip":
+            from openvietgis_api.adapters.formats.shapefile_zip import write_shapefile_zip
+            writer = write_shapefile_zip
+        else:
+            raise ValueError("unsupported binary export format")
+        artifact, _, _ = writer(
+            layer_name=req["layer_name"],
+            crs_code=srid,
+            geometry_family=req["geometry_family"],
+            field_mappings=mappings,
+            features=features,
+        )
+        if not artifact or len(artifact) > 75 * 1024 * 1024:
+            raise PlatformValidationError("binary export exceeds format engine output limit")
+        Path(req["out_path"]).write_bytes(artifact)
+        print(json.dumps({"ok": True, "byte_size": len(artifact)}, allow_nan=False))
     elif action == "validate_ops":
         validate_offline_ops(req["snapshot"], req["operations"])
         scope_hash = hashlib.sha256(canonical_json(req["scope_tuple"])).hexdigest()[:48]
@@ -170,6 +298,11 @@ except PlatformDomainError as exc:
     if exc.details:
         err["details"] = exc.details
     print(json.dumps(err, allow_nan=False))
+except TransferError as exc:
+    print(json.dumps({
+        "ok": False, "status": exc.status_code,
+        "code": exc.code, "message": exc.message,
+    }, allow_nan=False))
 except Exception:
     print(
         json.dumps(
@@ -214,6 +347,28 @@ fn static_code(raw: &str) -> &'static str {
         "CONFLICT" => "CONFLICT",
         "FORBIDDEN" => "FORBIDDEN",
         "NOT_FOUND" => "NOT_FOUND",
+        "ARCHIVE_BOMB_REJECTED" => "ARCHIVE_BOMB_REJECTED",
+        "ARCHIVE_DUPLICATE_ENTRY" => "ARCHIVE_DUPLICATE_ENTRY",
+        "ARCHIVE_ENCRYPTED" => "ARCHIVE_ENCRYPTED",
+        "ARCHIVE_ENTRY_LIMIT_EXCEEDED" => "ARCHIVE_ENTRY_LIMIT_EXCEEDED",
+        "ARCHIVE_PATH_TRAVERSAL" => "ARCHIVE_PATH_TRAVERSAL",
+        "ARCHIVE_SIZE_EXCEEDED" => "ARCHIVE_SIZE_EXCEEDED",
+        "ARCHIVE_SYMLINK_REJECTED" => "ARCHIVE_SYMLINK_REJECTED",
+        "CRS_MISMATCH" => "CRS_MISMATCH",
+        "ENCODING_CONFLICT" => "ENCODING_CONFLICT",
+        "ENCODING_DECODE_FAILED" => "ENCODING_DECODE_FAILED",
+        "FEATURE_LIMIT_EXCEEDED" => "FEATURE_LIMIT_EXCEEDED",
+        "INVALID_ATTRIBUTE_VALUE" => "INVALID_ATTRIBUTE_VALUE",
+        "INVALID_GEOMETRY" => "INVALID_GEOMETRY",
+        "INVALID_GEOPACKAGE" => "INVALID_GEOPACKAGE",
+        "INVALID_ZIP" => "INVALID_ZIP",
+        "MISSING_SHAPEFILE_COMPONENTS" => "MISSING_SHAPEFILE_COMPONENTS",
+        "MIXED_GEOMETRY_FAMILY" => "MIXED_GEOMETRY_FAMILY",
+        "NULL_GEOMETRY" => "NULL_GEOMETRY",
+        "TOO_MANY_FIELDS" => "TOO_MANY_FIELDS",
+        "UNKNOWN_MEMBER" => "UNKNOWN_MEMBER",
+        "UNSUPPORTED_DIMENSIONS" => "UNSUPPORTED_DIMENSIONS",
+        "UNSUPPORTED_GEOMETRY" => "UNSUPPORTED_GEOMETRY",
         _ => "VALIDATION_ERROR",
     }
 }
@@ -256,7 +411,7 @@ async fn create_scratch() -> Result<WorkerScratch, WorkerError> {
                 .await
                 .map_err(|_| unavailable("offline scratch write failed"))?;
         }
-        tokio::fs::write(&file, source)
+        tokio::fs::write(&file, worker_python_311_source(source))
             .await
             .map_err(|_| unavailable("offline scratch write failed"))?;
     }
@@ -392,6 +547,80 @@ pub(crate) async fn build_package(
     })
 }
 
+/// Decode format bytes in an unprivileged process. The returned metadata is
+/// independently checked by the Rust inspection and storage policy.
+pub(crate) async fn inspect_transfer_payload(
+    format: &str,
+    payload: &[u8],
+    selected_member: Option<&str>,
+    declared_source_crs: Option<i64>,
+    declared_encoding: Option<&str>,
+) -> Result<Value, WorkerError> {
+    let scratch = create_scratch().await?;
+    let input = scratch.0.join("source.bin");
+    let output = scratch.0.join("inspection.json");
+    tokio::fs::write(&input, payload)
+        .await
+        .map_err(|_| unavailable("transfer input staging failed"))?;
+    let request = json!({
+        "action": "inspect_transfer",
+        "format": format,
+        "payload_path": input.to_string_lossy(),
+        "out_path": output.to_string_lossy(),
+        "selected_member": selected_member,
+        "declared_source_crs": declared_source_crs,
+        "declared_encoding": declared_encoding,
+    });
+    run_driver(&scratch, &request).await?;
+    let metadata = tokio::fs::metadata(&output)
+        .await
+        .map_err(|_| unavailable("missing transfer inspection"))?;
+    if metadata.len() == 0 || metadata.len() > MAX_REQUEST_BYTES as u64 {
+        return Err(unavailable("invalid transfer inspection size"));
+    }
+    let bytes = tokio::fs::read(&output)
+        .await
+        .map_err(|_| unavailable("transfer inspection read failed"))?;
+    serde_json::from_slice(&bytes).map_err(|_| unavailable("invalid transfer inspection data"))
+}
+
+/// Encode already-authorized, revision-pinned rows. The adapter receives no
+/// identity, session, database credentials, or permission to publish artifacts.
+pub(crate) async fn build_transfer_artifact(
+    format: &str,
+    layer_name: &str,
+    srid: i32,
+    geometry_family: &str,
+    mappings: &[Value],
+    features: Vec<Value>,
+) -> Result<Vec<u8>, WorkerError> {
+    let scratch = create_scratch().await?;
+    let out_path = scratch.0.join("transfer.bin");
+    let request = json!({
+        "action": "export_transfer",
+        "format": format,
+        "layer_name": layer_name,
+        "srid": srid,
+        "geometry_family": geometry_family,
+        "mappings": mappings,
+        "features": features,
+        "out_path": out_path.to_string_lossy(),
+    });
+    let report = run_driver(&scratch, &request).await?;
+    let metadata = tokio::fs::metadata(&out_path)
+        .await
+        .map_err(|_| unavailable("missing binary export artifact"))?;
+    if metadata.len() == 0
+        || metadata.len() > MAX_PACKAGE_BYTES as u64
+        || report.get("byte_size").and_then(Value::as_u64) != Some(metadata.len())
+    {
+        return Err(unavailable("invalid binary export artifact size"));
+    }
+    tokio::fs::read(&out_path)
+        .await
+        .map_err(|_| unavailable("unable to read binary export artifact"))
+}
+
 pub(crate) struct ValidatedOpsHashes {
     pub(crate) scope_hash: String,
     pub(crate) payload_hash: String,
@@ -433,6 +662,19 @@ pub(crate) async fn validate_ops(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn embedded_sources_are_python_311_syntax_compatible() {
+        for (_, source) in MODULES {
+            let compatible = worker_python_311_source(source);
+            assert!(!compatible.lines().any(|line| line.starts_with("type ")));
+            if source.contains("type CoordinateTree =") {
+                assert!(compatible
+                    .lines()
+                    .any(|line| line == "CoordinateTree = tuple"));
+            }
+        }
+    }
 
     #[tokio::test]
     async fn build_and_validate_offline_package_round_trip() {

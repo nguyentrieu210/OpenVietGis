@@ -70,7 +70,16 @@ cat >/dev/null
         # Load only pure guard functions, without optional benchmark dependencies.
         tree = ast.parse(RUNNER.read_text())
         names = {"assert_safe_admin_url", "assert_safe_bench_db", "assert_safe_http_target"}
-        module = ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names], type_ignores=[])
+        constants = {"SAFE_LOOPBACK_PG_PORTS"}
+        def selected(node):
+            if isinstance(node, ast.FunctionDef):
+                return node.name in names
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                return node.target.id in constants
+            if isinstance(node, ast.Assign):
+                return any(isinstance(target, ast.Name) and target.id in constants for target in node.targets)
+            return False
+        module = ast.Module(body=[node for node in tree.body if selected(node)], type_ignores=[])
         env = {"urlparse": urlparse, "re": re}
         exec(compile(module, str(RUNNER), "exec"), env)
         env["assert_safe_admin_url"]("postgresql://localhost:54330/postgres")

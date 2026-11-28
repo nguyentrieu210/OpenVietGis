@@ -21,6 +21,7 @@ on:
       - "tests/spec065/**"
       - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
+      - "specs/064-rust-platform/contracts/engines/**"
   pull_request:
     paths:
       - "Cargo.toml"
@@ -39,10 +40,11 @@ on:
       - "tests/spec065/**"
       - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
+      - "specs/064-rust-platform/contracts/engines/**"
 
 concurrency:
-  group: rust-platform-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -68,7 +70,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Install SQLite and GDAL format engines
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp
 
       - name: Verify formatting
         run: cargo fmt --all -- --check
@@ -120,8 +122,8 @@ jobs:
 
   postgis-parity:
     name: PostGIS Parity (FastAPI oracle vs Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
@@ -153,7 +155,7 @@ jobs:
         run: docker compose -f infra/dev/compose.yaml up --detach --wait --wait-timeout 180 postgres-test
 
       - name: Install SQLite and GDAL format engines
-        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp
 
       - name: Build Rust API candidate
         run: cargo build --locked -p openvietgis-api-rust --bin openvietgis-api-rust
@@ -328,6 +330,27 @@ jobs:
             OVG_SPEC065_EVIDENCE="$PWD/dist/parity/spec065/processing.json" \
             bash tests/spec065/run-attribute-query.sh processing 2>&1 | tee dist/parity/spec065/processing.log
           git rev-parse HEAD > dist/parity/spec065/candidate-sha.txt
+      - name: Verify private tile cache authorization and current revisions
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        run: |
+          uv run --project apps/api python tests/rust-parity/e05_cache_security.py \
+            --candidate target/debug/openvietgis-api-rust \
+            --output dist/parity/e05-cache-security.json
+
+      - name: Run retained raster, CAD catalog, connector and offline differential cases
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/parity
+          failures=0
+          for suite in e09_raster_catalog e09_raster_content e10_3d_reads e10_cad_documents e10_model_download e10_scene_writes e12_catalog e12_profiles e13_packages e13_download; do
+            if ! uv run --project apps/api python "tests/rust-parity/$suite.py" \
+              --candidate target/debug/openvietgis-api-rust 2>&1 | tee "dist/parity/$suite.log"; then
+              failures=$((failures + 1))
+            fi
+          done
+          test "$failures" -eq 0
 
       - name: Record PostGIS version
         if: always()

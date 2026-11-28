@@ -6,6 +6,7 @@ use axum::body::Bytes;
 use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, patch, post};
 use axum::{Json, Router};
 use ovg_storage::house_numbering as store;
@@ -42,6 +43,7 @@ pub(super) fn router() -> Router<AppState> {
             post(upload_photo).layer(DefaultBodyLimit::max(PHOTO_BODY_LIMIT)),
         )
         .route(&format!("{BASE}/progress"), get(progress))
+        .route(&format!("{BASE}/progress/report.xlsx"), get(progress_xlsx))
         .route(
             &format!("{BASE}/survey-signoffs"),
             get(list_signoffs).post(sign_scope),
@@ -270,6 +272,46 @@ async fn progress(
     let result = store::progress(&mut read).await?;
     read.commit().await?;
     Ok(Json(result))
+}
+
+async fn progress_xlsx(
+    State(state): State<AppState>,
+    auth: HumanSession,
+    Path(params): Path<HashMap<String, String>>,
+) -> HnResult<Response> {
+    static REPORT_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+    let (org, project) = scope_ids(&params)?;
+    let mut read = module_read(&state, &auth, org, project).await?;
+    let permit = REPORT_SLOTS.try_acquire().map_err(|_| {
+        HouseNumberingError::Detail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Progress report workers are busy.".to_owned(),
+        )
+    })?;
+    let summary = store::progress(&mut read).await?;
+    let rows = store::progress_report_rows(&mut read).await?;
+    read.commit().await?;
+    let bytes = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        super::progress_report::build(&summary, &rows)
+    })
+    .await
+    .map_err(|_| ovg_core::AppError::internal("progress report worker failed"))??;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                "attachment; filename=\"house-numbering-progress.xlsx\"",
+            ),
+            (header::CACHE_CONTROL, "private, no-store"),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 
 async fn list_signoffs(

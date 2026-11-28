@@ -34,4 +34,36 @@ test('one selection / edit among 35000 points produces one render update',async(
   assert.deepEqual(dropped.update[0].removeProperties,['color']);
   console.log('35k render diff ms:',(performance.now()-start).toFixed(1));
   assert.equal(renderDiff(rows,[...rows,rows[0]]),null);
+  assert.equal(renderDiff([{...rows[0],id:'dup'},{...rows[1],id:'dup'}],[{...rows[0],id:'dup'},{...rows[1],id:'dup'}]),null);
+});
+
+test('render property fast path preserves serialized comparison semantics',async()=>{
+  const {renderDiff}=await import('./src/SpatialSyncCore.ts');
+  const variants=[null,{}, {a:1,b:2},{b:2,a:1},{a:undefined},{a:null},{a:NaN},{a:0},{a:-0},{a:{x:1}},{a:[1,2]},{a:[2,1]},Object.assign(Object.create(null),{a:1})];
+  for(const a of variants)for(const b of variants){
+    const prev={id:'f',geometry:{type:'Point',coordinates:[1,2]},properties:a};
+    const next={...prev,properties:b};
+    assert.equal(renderDiff([prev],[next]).update.length,JSON.stringify(a)===JSON.stringify(b)?0:1);
+  }
+});
+
+test('realtime wakeups coalesce, preserve one pending rerun and stop cleanly',async()=>{
+  const {createCoalescedWake}=await import('./src/SpatialSyncCore.ts');
+  const callbacks=[];let runs=0,release;
+  const gate=createCoalescedWake(async()=>{
+    runs++;
+    if(runs===1)await new Promise(r=>{release=r});
+  },{set:(cb)=>{callbacks.push(cb);return cb},clear:t=>{const i=callbacks.indexOf(t);if(i>=0)callbacks.splice(i,1)}});
+  for(let i=0;i<50;i++)gate.trigger();
+  assert.equal(callbacks.length,1);
+  callbacks.shift()();await new Promise(r=>setTimeout(r,0));
+  assert.equal(runs,1);assert.equal(gate.isRunning(),true);
+  for(let i=0;i<50;i++)gate.trigger();
+  assert.equal(callbacks.length,0);
+  release();await new Promise(r=>setTimeout(r,0));
+  assert.equal(callbacks.length,1);
+  callbacks.shift()();await new Promise(r=>setTimeout(r,0));
+  assert.equal(runs,2);assert.equal(gate.isRunning(),false);
+  gate.trigger();assert.equal(callbacks.length,1);gate.stop();assert.equal(callbacks.length,0);
+  gate.trigger();assert.equal(callbacks.length,0);
 });

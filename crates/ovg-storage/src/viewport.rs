@@ -18,7 +18,7 @@ use sqlx::query::Query;
 use sqlx::{Postgres, Row};
 use uuid::Uuid;
 
-use crate::catalog::{db_error, ProjectRead};
+use crate::catalog::{db_error, ProjectRead, TileCacheScope};
 
 pub const MAX_VIEWPORT_FEATURES: i64 = 1000;
 pub const MAX_VIEWPORT_POSITIONS: i64 = 20_000;
@@ -242,6 +242,29 @@ impl ProjectRead<'_> {
             _ => ("empty", Value::Null),
         };
         Ok(json!({ "context": snapshot.context, "state": state, "bounds": bounds }))
+    }
+
+    /// Current authorization, source binding, revision and render support must
+    /// all be revalidated before even a warm private cache entry is consumed.
+    pub async fn tile_cache_scope(
+        &mut self,
+        layer_id: Uuid,
+        pins: &ReadPins<'_>,
+    ) -> Result<Option<TileCacheScope>, AppError> {
+        if self.gis_scoped {
+            return Ok(None);
+        }
+        let snapshot = self
+            .render_snapshot(layer_id, pins, RenderRead::Tile)
+            .await?;
+        if snapshot.transformation.is_some() {
+            return Err(unsupported_transformation());
+        }
+        Ok(Some(TileCacheScope::from_validated_read(
+            self,
+            layer_id,
+            snapshot.source_id,
+        )))
     }
 
     /// One Mapbox vector tile (`features` layer, `feature_id` property) for a

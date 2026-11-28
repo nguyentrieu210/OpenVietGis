@@ -1371,7 +1371,7 @@ pub struct Inspection {
 }
 
 /// `normalize_encoding`.
-fn normalize_encoding(raw: &str) -> Option<&'static str> {
+pub(super) fn normalize_encoding(raw: &str) -> Option<&'static str> {
     match raw.trim().to_lowercase().replace('_', "-").as_str() {
         "utf8" | "utf-8" | "utf-8-sig" => Some("utf-8"),
         "windows-1258" | "cp1258" | "1258" => Some("windows-1258"),
@@ -1553,298 +1553,381 @@ pub fn build_geojson_inspection(payload: &[u8], opts: &InspectOptions<'_>) -> Re
     })
 }
 
-/// Bounded decoded adapter result. Rust remains responsible for all persistence,
-/// schema/geometry validation, CRS transformation and confirmation.
-pub fn build_native_inspection(
+/// Convert the trusted format adapter's typed metadata into a Rust-owned
+/// inspection report. Coordinate policy, selection, fingerprints and approval
+/// are identical to the GeoJSON path; the decoder has no storage authority.
+pub(super) fn build_binary_inspection(
     decoded: Value,
     format: &str,
     opts: &InspectOptions<'_>,
 ) -> Result<Inspection> {
-    let invalid = || {
-        TransferError::validation(
-            "INVALID_VECTOR_MEMBER",
-            "Invalid or unsupported decoded vector member.",
+    fn invalid_report() -> TransferError {
+        TransferError::internal("invalid binary format inspection report")
+    }
+    let members = decoded["members"].as_array().ok_or_else(invalid_report)?;
+    let eligible: Vec<&Value> = members
+        .iter()
+        .filter(|member| member["eligible"].as_bool() == Some(true))
+        .collect();
+    let selected = if let Some(name) = opts.selected_member {
+        if !members.iter().any(|m| m["name"].as_str() == Some(name)) {
+            return Err(TransferError::validation(
+                "UNKNOWN_MEMBER",
+                "Selected dataset member does not exist.",
+            ));
+        }
+        Some(name.to_owned())
+    } else if eligible.len() == 1 {
+        Some(
+            eligible[0]["name"]
+                .as_str()
+                .ok_or_else(invalid_report)?
+                .to_owned(),
         )
+    } else {
+        None
     };
-    let members = decoded["members"].as_array().ok_or_else(invalid)?;
-    let selected = decoded["selected_member"].as_str().map(str::to_owned);
-    if opts.selected_member.is_some() && selected.as_deref() != opts.selected_member {
-        return Err(invalid());
-    }
-    let member = selected
-        .as_ref()
-        .and_then(|name| members.iter().find(|m| m["name"].as_str() == Some(name)));
-    if selected.is_some() && member.is_none() {
-        return Err(TransferError::validation(
-            "UNKNOWN_MEMBER",
-            "Selected vector member not found.",
-        ));
-    }
-    let mut findings = Vec::new();
+    let requires_selection = selected.is_none() && eligible.len() > 1;
+    let mut findings: Vec<Value> = Vec::new();
+    let mut first_error = None;
     let mut conversions = Vec::new();
-    let mut parsed = None;
-    let source = member.and_then(|m| m["detected_crs"].as_i64());
-    let target = opts.target_crs.or(source);
-    let data = &decoded["parsed"];
-    let mut encoding = data["encoding"]
-        .as_str()
-        .or_else(|| member.and_then(|m| m["detected_encoding"].as_str()))
-        .map(str::to_owned);
-    let requested_encoding = opts
+    let mut source = opts.declared_source_crs;
+    let mut target = opts.target_crs;
+    let mut encoding = opts
         .declared_encoding
-        .map(|s| {
-            normalize_encoding(s).ok_or_else(|| {
-                TransferError::validation("UNSUPPORTED_ENCODING", "Unsupported declared encoding.")
-            })
-        })
-        .transpose()?;
-    let requires_encoding = data["requires_encoding"].as_bool() == Some(true);
-    if requires_encoding {
-        encoding = None;
+        .and_then(normalize_encoding)
+        .map(str::to_owned);
+    let mut requires_crs = false;
+    let mut requires_encoding = false;
+    let mut count = 0;
+    let mut family = Value::Null;
+    let mut dims = Value::Null;
+    let mut extent = Value::Null;
+    let mut fields = Vec::new();
+    let mut parsed_result = None;
+
+    // The adapter returns findings as wire records. Preserve them and use
+    // a static allowlist for the error envelope (no leaking dynamic strings).
+    fn finding_code(code: &str) -> &'static str {
+        match code {
+            "ARCHIVE_BOMB_REJECTED" => "ARCHIVE_BOMB_REJECTED",
+            "ARCHIVE_DUPLICATE_ENTRY" => "ARCHIVE_DUPLICATE_ENTRY",
+            "ARCHIVE_ENCRYPTED" => "ARCHIVE_ENCRYPTED",
+            "ARCHIVE_ENTRY_LIMIT_EXCEEDED" => "ARCHIVE_ENTRY_LIMIT_EXCEEDED",
+            "ARCHIVE_PATH_TRAVERSAL" => "ARCHIVE_PATH_TRAVERSAL",
+            "ARCHIVE_SIZE_EXCEEDED" => "ARCHIVE_SIZE_EXCEEDED",
+            "ARCHIVE_SYMLINK_REJECTED" => "ARCHIVE_SYMLINK_REJECTED",
+            "CRS_MISMATCH" => "CRS_MISMATCH",
+            "ENCODING_CONFLICT" => "ENCODING_CONFLICT",
+            "ENCODING_DECODE_FAILED" => "ENCODING_DECODE_FAILED",
+            "FEATURE_LIMIT_EXCEEDED" => "FEATURE_LIMIT_EXCEEDED",
+            "INVALID_ATTRIBUTE_VALUE" => "INVALID_ATTRIBUTE_VALUE",
+            "INVALID_GEOMETRY" => "INVALID_GEOMETRY",
+            "INVALID_GEOPACKAGE" => "INVALID_GEOPACKAGE",
+            "INVALID_ZIP" => "INVALID_ZIP",
+            "MISSING_SHAPEFILE_COMPONENTS" => "MISSING_SHAPEFILE_COMPONENTS",
+            "MIXED_GEOMETRY_FAMILY" => "MIXED_GEOMETRY_FAMILY",
+            "NULL_GEOMETRY" => "NULL_GEOMETRY",
+            "TOO_MANY_FIELDS" => "TOO_MANY_FIELDS",
+            "UNKNOWN_MEMBER" => "UNKNOWN_MEMBER",
+            "UNSUPPORTED_DIMENSIONS" => "UNSUPPORTED_DIMENSIONS",
+            "UNSUPPORTED_GEOMETRY" => "UNSUPPORTED_GEOMETRY",
+            _ => "IMPORT_NOT_CONFIRMABLE",
+        }
     }
-    let eligible_count = members.iter().filter(|m| m["eligible"] == true).count();
-    if let Some(m) = member {
-        if m["eligible"] != true {
-            findings.push(Finding::new(
+    fn add_finding(
+        findings: &mut Vec<Value>,
+        first_error: &mut Option<(&'static str, String)>,
+        code: &'static str,
+        message: impl Into<String>,
+    ) {
+        let message = message.into();
+        if first_error.is_none() {
+            *first_error = Some((code, message.clone()));
+        }
+        findings.push(Finding::new(code, message, None).wire());
+    }
+
+    if let Some(name) = selected.as_deref() {
+        let member = members
+            .iter()
+            .find(|m| m["name"].as_str() == Some(name))
+            .ok_or_else(invalid_report)?;
+        if member["eligible"].as_bool() != Some(true) {
+            add_finding(
+                &mut findings,
+                &mut first_error,
                 "INELIGIBLE_MEMBER",
-                m["reason"].as_str().unwrap_or("Unsupported vector member"),
-                None,
-            ));
-        }
-        if source.is_none() {
-            findings.push(Finding::new(
-                "UNKNOWN_SOURCE_CRS",
-                "A recognized CRS in the file is required for this import profile.",
-                None,
-            ));
-        }
-        if opts.declared_source_crs.is_some() && opts.declared_source_crs != source {
-            findings.push(Finding::new(
-                "CRS_DECLARATION_CONFLICT",
-                "Declared CRS differs from file CRS.",
-                None,
-            ));
-        }
-        if requires_encoding {
-            findings.push(Finding::new(
-                "ENCODING_REQUIRED",
-                "Declare the Shapefile text encoding.",
-                None,
-            ));
-        }
-        if requested_encoding.is_some()
-            && encoding
-                .as_deref()
-                .is_some_and(|e| Some(e) != requested_encoding)
-        {
-            findings.push(Finding::new(
-                "ENCODING_DECLARATION_CONFLICT",
-                "Declared encoding differs from file encoding.",
-                None,
-            ));
-        }
-        if let (Some(s), Some(t)) = (
-            source.and_then(|n| i32::try_from(n).ok()),
-            target.and_then(|n| i32::try_from(n).ok()),
-        ) {
-            if !SUPPORTED_CRS.contains(&s) || !SUPPORTED_CRS.contains(&t) {
-                findings.push(Finding::new(
-                    "UNSUPPORTED_TARGET_CRS",
-                    "Source or target CRS is outside the approved profile.",
-                    None,
+                member["reason"]
+                    .as_str()
+                    .unwrap_or("Selected member is not supported."),
+            );
+        } else {
+            let data = &decoded["parsed"];
+            if data["member_name"].as_str() != Some(name) {
+                return Err(invalid_report());
+            }
+            let features = data["features"].as_array().ok_or_else(invalid_report)?;
+            let wire_fields = data["fields"].as_array().ok_or_else(invalid_report)?;
+            if features.len() > MAX_TRANSFER_FEATURES || wire_fields.len() > MAX_TRANSFER_FIELDS {
+                return Err(TransferError::coded(
+                    413,
+                    "FEATURE_LIMIT_EXCEEDED",
+                    "Binary dataset exceeds the safe transfer limits.",
                 ));
-            } else if s != t {
-                match Transform::resolve(s, t) {
-                    Ok(Some(profile)) => conversions.push(Conversion::new(
-                        "CRS_TRANSFORMATION",
-                        format!("Transform EPSG:{s} to EPSG:{t} ({}).", profile.operation_id),
+            }
+            count = features.len();
+            family = data["geometry_family"].clone();
+            dims = data["dimensions"].clone();
+            extent = data["extent"].clone();
+            fields.clone_from(wire_fields);
+            encoding = data["detected_encoding"].as_str().map(str::to_owned);
+            requires_encoding = data["requires_encoding_resolution"]
+                .as_bool()
+                .ok_or_else(invalid_report)?;
+            for finding in data["findings"].as_array().ok_or_else(invalid_report)? {
+                if first_error.is_none() && finding["severity"].as_str() == Some("error") {
+                    first_error = Some((
+                        finding_code(finding["code"].as_str().unwrap_or("")),
+                        finding["message"]
+                            .as_str()
+                            .ok_or_else(invalid_report)?
+                            .to_owned(),
+                    ));
+                }
+                findings.push(finding.clone());
+            }
+            if let Some(detected) = data["detected_crs"].as_i64() {
+                if opts
+                    .declared_source_crs
+                    .is_some_and(|declared| declared != detected)
+                {
+                    add_finding(
+                        &mut findings,
+                        &mut first_error,
+                        "CRS_DECLARATION_CONFLICT",
+                        format!(
+                            "Declared CRS EPSG:{} conflicts with file CRS EPSG:{detected}.",
+                            opts.declared_source_crs.unwrap_or_default()
+                        ),
+                    );
+                }
+                source = Some(detected);
+            } else if let Some(declared) = opts.declared_source_crs {
+                if !i32::try_from(declared).is_ok_and(|c| SUPPORTED_CRS.contains(&c)) {
+                    add_finding(
+                        &mut findings,
+                        &mut first_error,
+                        "UNSUPPORTED_CRS",
+                        format!("Declared CRS EPSG:{declared} is unsupported."),
+                    );
+                } else {
+                    conversions.push(Conversion::new(
+                        "EXPLICIT_CRS_ASSIGNMENT",
+                        format!("Missing file CRS resolved explicitly to EPSG:{declared}."),
                         false,
-                    )),
-                    _ => findings.push(Finding::new(
-                        "UNSUPPORTED_TRANSFORMATION",
-                        "No approved CRS transformation.",
-                        None,
-                    )),
+                    ));
+                }
+            } else {
+                requires_crs = true;
+                add_finding(
+                    &mut findings,
+                    &mut first_error,
+                    "MISSING_CRS",
+                    "Source CRS is missing or unrecognized; select an approved EPSG profile.",
+                );
+            }
+            if requires_encoding {
+                add_finding(
+                    &mut findings,
+                    &mut first_error,
+                    "AMBIGUOUS_ENCODING",
+                    "Text encoding is ambiguous; select an approved encoding explicitly.",
+                );
+            }
+            if let Some(source_code) = source {
+                let target_code = opts.target_crs.filter(|t| *t != 0).unwrap_or(source_code);
+                target = Some(target_code);
+                let stored = i32::try_from(source_code).unwrap_or_default();
+                let dest = i32::try_from(target_code).unwrap_or_default();
+                if !SUPPORTED_CRS.contains(&dest) {
+                    add_finding(
+                        &mut findings,
+                        &mut first_error,
+                        "UNSUPPORTED_TARGET_CRS",
+                        format!("Target CRS EPSG:{target_code} is unsupported."),
+                    );
+                } else if stored != dest {
+                    match Transform::resolve(stored, dest) {
+                        Ok(Some(profile)) => conversions.push(Conversion::new(
+                            "CRS_TRANSFORMATION",
+                            format!(
+                                "Transform coordinates from EPSG:{stored} to EPSG:{dest} ({}).",
+                                profile.operation_id
+                            ),
+                            false,
+                        )),
+                        _ => add_finding(
+                            &mut findings,
+                            &mut first_error,
+                            "UNSUPPORTED_TRANSFORMATION",
+                            format!(
+                                "No verified transformation from EPSG:{stored} to EPSG:{dest}."
+                            ),
+                        ),
+                    }
+                }
+                let renamed: Vec<String> = wire_fields
+                    .iter()
+                    .filter_map(|field| {
+                        let original = field["source_name"].as_str()?;
+                        let canonical = field["field_id"].as_str()?;
+                        (original != canonical).then(|| format!("{original}->{canonical}"))
+                    })
+                    .collect();
+                if !renamed.is_empty() {
+                    let mut conversion = Conversion::new(
+                        "FIELD_ID_NORMALIZATION",
+                        "Source field names mapped to canonical stable field identities.",
+                        false,
+                    );
+                    conversion.affected_fields = renamed;
+                    conversions.push(conversion);
                 }
             }
-            if !data.is_null() && !requires_encoding && findings.is_empty() {
-                if data["crs"].as_i64() != Some(i64::from(s)) || data["dimensions"] != "XY" {
-                    return Err(invalid());
+            if first_error.is_none() && !requires_crs && !requires_encoding {
+                let geometry_family = match family.as_str() {
+                    Some("Point") => "Point",
+                    Some("LineString") => "LineString",
+                    Some("Polygon") => "Polygon",
+                    _ => return Err(invalid_report()),
+                };
+                if dims.as_str() != Some("XY") {
+                    return Err(TransferError::validation(
+                        "UNSUPPORTED_DIMENSIONS",
+                        "Only XY geometry is supported.",
+                    ));
                 }
-                for f in data["findings"].as_array().ok_or_else(invalid)? {
-                    if f["severity"] == "error" {
-                        findings.push(Finding::new(
-                            "INVALID_VECTOR_MEMBER",
-                            format!(
-                                "{}: {}",
-                                f["code"].as_str().unwrap_or("validation"),
-                                f["message"].as_str().unwrap_or("invalid record")
-                            ),
-                            None,
-                        ));
-                    }
-                }
-                if findings.is_empty() {
-                    let family = match data["family"].as_str() {
-                        Some("Point") => "Point",
-                        Some("LineString") => "LineString",
-                        Some("Polygon") => "Polygon",
-                        _ => return Err(invalid()),
+                let mut typed_fields = Vec::with_capacity(wire_fields.len());
+                for field in wire_fields {
+                    let text = |key: &str| {
+                        field[key]
+                            .as_str()
+                            .map(str::to_owned)
+                            .ok_or_else(invalid_report)
                     };
-                    let mut fields = Vec::new();
-                    let mut field_ids = std::collections::HashSet::new();
-                    let raw_fields = data["fields"].as_array().ok_or_else(invalid)?;
-                    if raw_fields.len() > MAX_TRANSFER_FIELDS {
-                        return Err(invalid());
-                    }
-                    for (ordinal, f) in raw_fields.iter().enumerate() {
-                        let field_id = f["field_id"]
-                            .as_str()
-                            .filter(|v| valid_field_id(v))
-                            .ok_or_else(invalid)?
-                            .to_owned();
-                        if !field_ids.insert(field_id.clone())
-                            || f["ordinal"].as_u64() != Some(ordinal as u64)
-                        {
-                            return Err(invalid());
-                        }
-                        let field_type = match f["type"].as_str() {
-                            Some("text") => "text",
-                            Some("integer") => "integer",
-                            Some("decimal") => "decimal",
-                            Some("boolean") => "boolean",
-                            Some("timestamp") => "timestamp",
-                            _ => return Err(invalid()),
-                        };
-                        fields.push(Field {
-                            field_id,
-                            name: f["name"].as_str().ok_or_else(invalid)?.to_owned(),
-                            field_type,
-                            nullable: f["nullable"].as_bool().ok_or_else(invalid)?,
-                            ordinal,
-                            source_name: f["source_name"].as_str().ok_or_else(invalid)?.to_owned(),
-                        });
-                    }
-                    let raw_records = data["records"].as_array().ok_or_else(invalid)?;
-                    if raw_records.len() > MAX_TRANSFER_FEATURES
-                        || m["feature_count"].as_u64() != Some(raw_records.len() as u64)
-                    {
-                        return Err(invalid());
-                    }
-                    let mut ids = std::collections::HashSet::new();
-                    let mut records = Vec::with_capacity(raw_records.len());
-                    let mut bounds: Option<[f64; 4]> = None;
-                    for r in raw_records {
-                        let id = r["id"]
-                            .as_str()
-                            .filter(|v| is_feature_id(v))
-                            .ok_or_else(invalid)?
-                            .to_owned();
-                        if !ids.insert(id.clone()) || r["geometry"]["type"] != family {
-                            return Err(invalid());
-                        }
-                        let coords: J =
-                            serde_json::from_value(r["geometry"]["coordinates"].clone())
-                                .map_err(|_| invalid())?;
-                        let depth = match family {
-                            "Point" => 0,
-                            "LineString" => 1,
-                            _ => 2,
-                        };
-                        if check_coords_native(Some(&coords), depth, matches!(s, 4326 | 4756))
-                            != (true, false)
-                        {
-                            return Err(invalid());
-                        }
-                        let geom = to_geom(&coords, family)
-                            .filter(|g| is_ready(g, Some(family), s, false))
-                            .ok_or_else(invalid)?;
-                        let attrs = r["attrs"].as_object().ok_or_else(invalid)?;
-                        if attrs.len() != fields.len() {
-                            return Err(invalid());
-                        }
-                        let values = fields
-                            .iter()
-                            .map(|f| {
-                                let value = attrs.get(&f.field_id)?;
-                                if f.field_type == "timestamp"
-                                    && !value.is_null()
-                                    && !value
-                                        .as_str()
-                                        .is_some_and(|v| is_iso_ts(v) && valid_timestamp(v))
-                                {
-                                    return None;
-                                }
-                                canonical_attribute(f, value)
-                            })
-                            .collect::<Option<Vec<_>>>()
-                            .ok_or_else(invalid)?;
-                        for [x, y] in geom.positions() {
-                            bounds = Some(match bounds {
-                                None => [x, y, x, y],
-                                Some(b) => [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)],
-                            });
-                        }
-                        records.push(Record {
-                            feature_id: id,
-                            attrs: values,
-                            geom,
-                        });
-                    }
-                    if fields.iter().any(|f| f.source_name != f.field_id) {
-                        conversions.push(Conversion::new(
-                            "FIELD_ID_NORMALIZATION",
-                            "Source field names mapped to canonical identities.",
-                            false,
-                        ));
-                    }
-                    if fields.iter().any(|f| f.field_type == "timestamp") {
-                        conversions.push(Conversion::new(
-                            "TIMESTAMP_SECONDS",
-                            "Timestamp values normalized to UTC second precision.",
-                            true,
-                        ));
-                    }
-                    parsed = Some(Parsed {
-                        family,
-                        dims: "XY",
-                        fields,
-                        records,
-                        findings: vec![],
-                        extent: bounds.map(|b| extent_value(b, s)),
+                    let field_type = match field["type"].as_str() {
+                        Some("text") => "text",
+                        Some("integer") => "integer",
+                        Some("decimal") => "decimal",
+                        Some("boolean") => "boolean",
+                        Some("timestamp") => "timestamp",
+                        _ => return Err(invalid_report()),
+                    };
+                    typed_fields.push(Field {
+                        field_id: text("field_id")?,
+                        name: text("name")?,
+                        source_name: text("source_name")?,
+                        field_type,
+                        nullable: field["nullable"].as_bool().ok_or_else(invalid_report)?,
+                        ordinal: field["ordinal"]
+                            .as_u64()
+                            .and_then(|n| usize::try_from(n).ok())
+                            .ok_or_else(invalid_report)?,
                     });
                 }
+                let mut records = Vec::with_capacity(features.len());
+                for feature in features {
+                    let geometry = &feature["geometry"];
+                    if geometry["type"].as_str() != Some(geometry_family) {
+                        return Err(invalid_report());
+                    }
+                    let coordinates: J = serde_json::from_value(geometry["coordinates"].clone())
+                        .map_err(|_| invalid_report())?;
+                    let geom = to_geom(&coordinates, geometry_family).ok_or_else(invalid_report)?;
+                    let attributes = feature["attributes"]
+                        .as_object()
+                        .ok_or_else(invalid_report)?;
+                    records.push(Record {
+                        feature_id: feature["feature_id"]
+                            .as_str()
+                            .ok_or_else(invalid_report)?
+                            .to_owned(),
+                        attrs: typed_fields
+                            .iter()
+                            .map(|f| attributes.get(&f.field_id).cloned().unwrap_or(Value::Null))
+                            .collect(),
+                        geom,
+                    });
+                }
+                parsed_result = Some(Parsed {
+                    family: geometry_family,
+                    dims: "XY",
+                    fields: typed_fields,
+                    records,
+                    findings: Vec::new(),
+                    extent: (!extent.is_null()).then(|| extent.clone()),
+                });
             }
         }
-    } else {
-        findings.push(Finding::new(
-            "MEMBER_SELECTION_REQUIRED",
-            "Select an eligible dataset member.",
-            None,
-        ));
+    } else if eligible.is_empty() {
+        add_finding(
+            &mut findings,
+            &mut first_error,
+            "NO_ELIGIBLE_MEMBERS",
+            "Dataset contains no supported vector layer members.",
+        );
     }
-    let confirmable = parsed.is_some() && findings.is_empty();
-    let fp = fingerprint(
-        &json!({"kind":"import","asset_id":opts.asset_id,"asset_sha256":opts.asset_sha256,"format":format,"member":selected,"source_crs":source,"target_crs":target,"encoding":encoding,"codec":"native-vector-v1"}),
-    );
-    let wire = json!({"asset_sha256":opts.asset_sha256,"detected_format":format,"members":members,"selected_member":selected,
-        "requires_member_selection":selected.is_none()&&eligible_count>1,"requires_crs_resolution":source.is_none()&&selected.is_some(),
-        "requires_encoding_resolution":requires_encoding,"resolved_source_crs":source,"target_crs":target,"resolved_encoding":encoding,
-        "sample_only":false,"feature_count":parsed.as_ref().map_or(0,|p|p.records.len()),"geometry_family":parsed.as_ref().map(|p|p.family),
-        "dimensions":parsed.as_ref().map(|p|p.dims),"extent":parsed.as_ref().and_then(|p|p.extent.clone()),
-        "fields":parsed.as_ref().map_or(vec![],|p|p.fields.iter().map(Field::wire).collect()),
-        "findings":findings.iter().map(Finding::wire).collect::<Vec<_>>(),"conversions":conversions.iter().map(Conversion::wire).collect::<Vec<_>>(),
-        "confirmable":confirmable,"inspection_fingerprint":fp});
+    let confirmable = selected.is_some()
+        && !requires_selection
+        && !requires_crs
+        && !requires_encoding
+        && source.is_some()
+        && target.is_some()
+        && first_error.is_none()
+        && parsed_result.is_some();
+    let fp = fingerprint(&json!({
+        "kind": "import",
+        "asset_id": opts.asset_id.to_string(),
+        "asset_sha256": opts.asset_sha256,
+        "format": format,
+        "member": selected,
+        "source_crs": source,
+        "target_crs": target,
+        "encoding": encoding,
+    }));
+    let wire = json!({
+        "asset_sha256": opts.asset_sha256,
+        "detected_format": format,
+        "members": members,
+        "selected_member": selected,
+        "requires_member_selection": requires_selection,
+        "requires_crs_resolution": requires_crs,
+        "requires_encoding_resolution": requires_encoding,
+        "resolved_source_crs": source,
+        "target_crs": target,
+        "resolved_encoding": encoding,
+        "sample_only": false,
+        "feature_count": count,
+        "geometry_family": family,
+        "dimensions": dims,
+        "extent": extent,
+        "fields": fields,
+        "findings": findings,
+        "conversions": conversions.iter().map(Conversion::wire).collect::<Vec<_>>(),
+        "confirmable": confirmable,
+        "inspection_fingerprint": fp,
+    });
     Ok(Inspection {
         wire,
         fingerprint: fp,
         confirmable,
-        first_error: findings.first().map(|f| (f.code, f.message.clone())),
+        first_error,
         conversions,
         target_crs: target,
         resolved_encoding: encoding,
         selected_member: selected,
-        parsed,
+        parsed: parsed_result,
     })
 }
 

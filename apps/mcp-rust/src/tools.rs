@@ -21,7 +21,7 @@ impl Registry {
         ]);
         for t in &mut tools {
             if t["name"]!="gis_workspaces" {
-                t["inputSchema"]["properties"]["session_id"]=json!({"type":"string","format":"uuid","description":"Exact connected workspace ID; required if multiple are connected."});
+                t["inputSchema"]["properties"]["session_id"]=json!({"anyOf":[{"type":"string","format":"uuid"},{"type":"null"}],"default":null,"description":"Exact connected workspace ID; required if multiple are connected."});
             }
             t["inputSchema"]["additionalProperties"]=json!(false);
         }
@@ -158,5 +158,6 @@ pub fn validate_result(method:&str,result:&Value)->Result<(),Error>{
 }
 #[cfg(test)]mod tests{use super::*;
 #[test]fn registry_and_validation(){let r=Registry::new();assert_eq!(r.list().len(),39);assert_eq!(r.call("gis_layers",&json!({"request":{}})).unwrap().1,json!({"limit":50}));assert!(r.call("gis_layers",&json!({"request":{"limit":101}})).is_err());assert!(r.call("gis_live_navigate",&json!({"longitude":181,"latitude":0,"zoom":2})).is_err());assert!(r.call("gis_overlay",&json!({"request":{"title":"a","geometries":[{"type":"Point","coordinates":[181,0]}]}})).is_err());}
+#[test]fn oversized_result_is_rejected(){assert!(clean_result("gis_layers",&json!({"payload":"x".repeat(crate::MAX_PAYLOAD)})).is_err());}
 #[test]fn strict_required_and_uuid(){let r=Registry::new();assert!(r.call("gis_processing_job",&json!({"request":{"job_id":"not-uuid"}})).is_err());assert!(r.call("gis_layers",&json!({"request":{"raw_sql":"select *"}})).is_err());assert!(r.call("gis_live_view",&json!({"unexpected":true})).is_err());}
 }

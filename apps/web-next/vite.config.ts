@@ -20,7 +20,7 @@ const retired=fileURLToPath(new URL("../web/",import.meta.url));
 const port=process.env.OPENVIETGIS_API_PROXY_PORT??"8000";
  if(!/^\d{1,5}$/.test(port)||Number(port)<1||Number(port)>65535)throw Error("Invalid loopback API port");
  const proxy={"/api":{target:"http://127.0.0.1:"+Number(port),changeOrigin:false}};
-export default defineConfig({worker:{format:"es"},server:{proxy},preview:{proxy},
+export default defineConfig({worker:{format:"es"},build:{manifest:true},server:{proxy},preview:{proxy},
  plugins:[{name:"canonical-frontend-boundary",load(id){
   if(id.split("?")[0].startsWith(retired))throw new Error("Retired frontend dependency: "+id);
  }}]

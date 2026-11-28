@@ -50,6 +50,7 @@ SCALE_MAP: dict[str, int] = {
 }
 
 DEFAULT_ADMIN_PG_URL = "postgresql://openvietgis:openvietgis@127.0.0.1:54330/postgres"
+SAFE_LOOPBACK_PG_PORTS = frozenset({54330, 54331})
 DEFAULT_BENCH_DB_NAME = "openvietgis_bench_064"
 DEFAULT_RUNTIME_USER = "openvietgis_runtime"
 DEFAULT_RUNTIME_PASS = "openvietgis-runtime-dev"
@@ -63,12 +64,12 @@ def assert_safe_admin_url(db_url: str) -> None:
     if (
         parsed.scheme != "postgresql"
         or parsed.hostname not in ("127.0.0.1", "localhost", "::1")
-        or parsed.port != 54330
+        or parsed.port not in SAFE_LOOPBACK_PG_PORTS
         or parsed.path != "/postgres"
         or parsed.query
         or parsed.fragment
     ):
-        raise RuntimeError("Benchmark admin must use dedicated loopback PostGIS port 54330")
+        raise RuntimeError("Benchmark admin must use a dedicated loopback PostGIS port (54330 or 54331)")
 
 
 def assert_safe_bench_db(db_url: str, *, isolated_port: int = 54330) -> str:

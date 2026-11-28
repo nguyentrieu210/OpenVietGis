@@ -34,4 +34,4 @@ export async function incrementalLayerRows(client:ApiClient,org:string,pid:strin
   return updated;
 }
 
-export function isPermissionError(e:unknown){return e instanceof ApiError&&(e.status===401||e.status===403);}
+export function isPermissionError(e:unknown){return e instanceof ApiError&&(e.status===401||e.status===403||e.status===404);}

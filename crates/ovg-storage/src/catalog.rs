@@ -42,6 +42,55 @@ pub struct ProjectRead<'a> {
     service_display_name: Option<String>,
 }
 
+/// Proof that an unscoped actor can currently read one active layer.
+/// Cache keys are intentionally constructed only from this proof so an
+/// authorization/RLS check must happen before any cache lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TileCacheScope {
+    organization_id: Uuid,
+    project_id: Uuid,
+    actor_id: Uuid,
+    layer_id: Uuid,
+    source_id: Uuid,
+}
+
+impl TileCacheScope {
+    pub(crate) fn from_validated_read(
+        read: &ProjectRead<'_>,
+        layer_id: Uuid,
+        source_id: Uuid,
+    ) -> Self {
+        Self {
+            organization_id: read.organization_id(),
+            project_id: read.project_id(),
+            actor_id: read.actor_id(),
+            layer_id,
+            source_id,
+        }
+    }
+    #[must_use]
+    pub fn source_id(self) -> Uuid {
+        self.source_id
+    }
+
+    #[must_use]
+    pub fn organization_id(self) -> Uuid {
+        self.organization_id
+    }
+    #[must_use]
+    pub fn project_id(self) -> Uuid {
+        self.project_id
+    }
+    #[must_use]
+    pub fn actor_id(self) -> Uuid {
+        self.actor_id
+    }
+    #[must_use]
+    pub fn layer_id(self) -> Uuid {
+        self.layer_id
+    }
+}
+
 impl<'a> ProjectRead<'a> {
     pub async fn begin(
         pool: &'a DbPool,

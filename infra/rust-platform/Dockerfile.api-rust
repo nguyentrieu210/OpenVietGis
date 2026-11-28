@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM rust:1.85.1-slim-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
@@ -7,6 +8,7 @@ COPY apps/api/openvietgis_api/adapters/formats/persistent_raster_worker.py apps/
 COPY apps/api/openvietgis_api/adapters/formats/terrain_worker.py apps/api/openvietgis_api/adapters/formats/terrain_worker.py
 COPY crates crates
 COPY modules/house_numbering/rust modules/house_numbering/rust
+COPY modules/house_numbering/manifest.json modules/house_numbering/manifest.json
 COPY apps/api/openvietgis_api/domains/platform_errors.py apps/api/openvietgis_api/domains/platform_errors.py
 COPY apps/api/openvietgis_api/domains/tenancy/domain.py apps/api/openvietgis_api/domains/tenancy/domain.py
 COPY apps/api/openvietgis_api/domains/authorization/context.py apps/api/openvietgis_api/domains/authorization/context.py
@@ -33,12 +35,22 @@ COPY apps/api/openvietgis_api/domains/external_sources/tile_provider.py apps/api
 COPY apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py apps/api/openvietgis_api/domains/external_sources/geotiff_provider.py
 COPY apps/api/openvietgis_api/domains/external_sources/cog_provider.py apps/api/openvietgis_api/domains/external_sources/cog_provider.py
 COPY apps/api/openvietgis_api/adapters/http/external_provider_transport.py apps/api/openvietgis_api/adapters/http/external_provider_transport.py
-RUN cargo build --locked --release --no-default-features -p openvietgis-api-rust
+# Preserve the existing core-only staging profile; the full candidate enables
+# the same house-numbering feature as the observed live Rust service.
+ARG OVG_RUST_PROFILE=core
+RUN --mount=type=cache,id=ovg-cargo-registry-rust185,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=ovg-cargo-git-rust185,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,id=ovg-cargo-target-rust185-${OVG_RUST_PROFILE},target=/src/target,sharing=locked \
+    case "$OVG_RUST_PROFILE" in \
+      core) cargo build --locked --release --no-default-features -p openvietgis-api-rust ;; \
+      full) cargo build --locked --release -p openvietgis-api-rust ;; \
+      *) echo "Unsupported Rust profile" >&2; exit 1 ;; \
+    esac && install -D -m 0755 /src/target/release/openvietgis-api-rust /out/openvietgis-api-rust
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil python3-venv \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl openssl sqlite3 python3-gdal python3-numpy python3-pil python3-pyshp python3-qrcode fonts-dejavu-core python3-venv \
     && rm -rf /var/lib/apt/lists/* \
-    && python3 -m venv /opt/ovg-cad-venv \
+    && python3 -m venv --system-site-packages /opt/ovg-cad-venv \
     && /opt/ovg-cad-venv/bin/pip install --no-cache-dir "ezdxf>=1.4.5" "pyshp==3.1.9" \
     && useradd --system --uid 10001 --create-home openvietgis \
     && install -d -o openvietgis -g openvietgis -m 0700 /var/lib/openvietgis/artifacts

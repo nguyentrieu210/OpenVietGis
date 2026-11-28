@@ -261,6 +261,40 @@ class Ctx:
         self.data["r"][key] = r.json()[field] if field else r.json()
 
 
+@case
+def check_progress_workbook(label: str, ctx: Ctx) -> None:
+    import io
+    import zipfile
+    from xml.etree import ElementTree
+
+    def cells(response):
+        req(response.status_code == 200, "progress XLSX unavailable")
+        req("spreadsheetml.sheet" in response.headers["content-type"], "wrong XLSX media type")
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            req(archive.testzip() is None, "progress XLSX CRC failure")
+            tree = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+        namespace = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+        rows = []
+        for row in tree.iter(namespace + "row"):
+            values = []
+            for cell in row:
+                req(cell.find(namespace + "f") is None, "unexpected spreadsheet formula")
+                value = cell.find(namespace + "v")
+                text = cell.find(".//" + namespace + "t")
+                if value is not None:
+                    values.append(float(value.text))
+                else:
+                    values.append(norm(text.text or "") if text is not None else "")
+            rows.append(values)
+        return rows
+
+    oracle = cells(ctx.call("o", "GET", "/progress/report.xlsx", headers=ctx.h))
+    rust = cells(ctx.call("r", "GET", "/progress/report.xlsx", headers=ctx.h))
+    req(oracle == rust, f"{label}: logical cells differ")
+    PASSED.append(label)
+    print(f"PASS {label}", flush=True)
+
+
 def batch_hierarchy(ctx: Ctx) -> None:
     for side in SIDES:
         d = ctx.data[side]
@@ -989,6 +1023,7 @@ def batch_proposals(ctx: Ctx) -> None:
     move("E15 proposal reject", "p1", 2, "reject", comment="sai số nhà", status=200)
     move("E15 proposal resubmit", "p1", 3, "submit", status=200)
     move("E15 proposal approve", "p1", 4, "approve", comment="đồng ý", status=200)
+    check_file_contracts("E15 documents and proposal packets", ctx)
     move("E15 proposal approve twice", "p1", 5, "approve")
     move("E15 proposal p2 submit", "p2", 1, "submit", status=200)
     move("E15 proposal approve draft rule", "p2", 2, "approve")
@@ -1048,6 +1083,109 @@ def batch_proposals(ctx: Ctx) -> None:
             "feature_id": "pt-1",
         },
     )
+
+
+@case
+def check_file_contracts(label: str, ctx: Ctx) -> None:
+    import hashlib
+    import io
+    import zipfile
+
+    for side in SIDES:
+        d = ctx.data[side]
+        proposal = d["p1"]["id"]
+        for kind, magic in (
+            ("decision", b"%PDF"),
+            ("register", b"PK"),
+            ("appendix", b"%PDF"),
+            ("plates", b"%PDF"),
+        ):
+            result = ctx.call(side, "GET", f"/proposals/{proposal}/packets/{kind}")
+            req(result.status_code == 200 and result.content.startswith(magic),
+                f"{side} proposal {kind}: {result.status_code}")
+            if kind == "register":
+                with zipfile.ZipFile(io.BytesIO(result.content)) as archive:
+                    req(archive.testzip() is None, "register ZIP invalid")
+        empty = ctx.call(side, "GET", f"/proposals/{proposal}/packets/plates",
+                         params={"offset": 9999})
+        req(empty.status_code == 422, "empty plates page must be rejected")
+        request = {
+            "building_id": d["b1"]["id"],
+            "doc_type": "certificate",
+            "output_format": "pdf",
+            "template_revision": "parity-v1",
+            "template_verified": True,
+        }
+        response = ctx.call(side, "POST", "/documents", json=request)
+        req(response.status_code == 201, f"{side} document: {response.text[:300]}")
+        document = response.json()
+        req(document["status"] == "official", "approved authoritative document must be official")
+        download = ctx.call(side, "GET", f"/documents/{document['id']}/download")
+        req(download.status_code == 200 and download.content.startswith(b"%PDF"), "PDF download failed")
+        req(hashlib.sha256(download.content).hexdigest() == document["artifact"]["sha256"], "PDF digest mismatch")
+        batch = dict(request)
+        del batch["building_id"]
+        batch["building_ids"] = [d["b1"]["id"], d["b2"]["id"]]
+        batch["output_format"] = "docx"
+        batch["template_verified"] = False
+        response = ctx.call(side, "POST", "/documents/batch", json=batch)
+        req(response.status_code == 201, f"{side} document batch: {response.text[:300]}")
+        items = response.json()["items"]
+        req(len(items) == 2 and all(item["status"] == "draft" for item in items), "batch draft state")
+        for item in items:
+            download = ctx.call(side, "GET", f"/documents/{item['id']}/download")
+            req(download.status_code == 200, "DOCX download failed")
+            with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
+                req(archive.testzip() is None and "word/document.xml" in archive.namelist(), "DOCX invalid")
+        forbidden = ctx.call(side, "POST", "/documents",
+                             json={**request, "building_id": d["b4"]["id"]})
+        req(forbidden.status_code == 409, "unapproved certificate must be denied")
+    PASSED.append(label)
+    print(f"PASS {label}", flush=True)
+
+
+@case
+def check_import_export_contracts(label: str, ctx: Ctx) -> None:
+    import hashlib
+
+    for side in SIDES:
+        data = {
+            "source_format": "csv",
+            "origin": "manual",
+            "mapping_json": json.dumps({"raw_number": "number"}),
+            "default_source_reference": "parity",
+        }
+        # Each side shares a database: use different immutable bytes to test
+        # its own creation, then repeat the exact request to test replay.
+        payload = f"number,source\\n123,{side}\\n,invalid\\n".replace("\\n", "\n").encode()
+        files = {"file": ("parity.csv", payload, "text/csv")}
+        first = ctx.call(side, "POST", "/imports", data=data, files=files)
+        req(first.status_code == 201, f"{side} import: {first.text[:300]}")
+        body = first.json()
+        req(not body["replayed"] and body["batch"]["accepted_count"] == 1
+            and body["batch"]["rejected_count"] == 1, "import count mismatch")
+        second = ctx.call(side, "POST", "/imports", data=data, files=files)
+        req(second.status_code == 201 and second.json()["replayed"]
+            and second.json()["batch"]["id"] == body["batch"]["id"], "import replay failed")
+        for fmt in ("csv", "geojson", "dxf", "shapefile_zip"):
+            exported = ctx.call(side, "POST", "/exports", json={
+                "fields": ["building_id", "house_number"], "output_format": fmt,
+            })
+            req(exported.status_code == 201, f"{side} {fmt} export: {exported.text[:300]}")
+            meta = exported.json()
+            downloaded = ctx.call(side, "GET", f"/exports/{meta['artifact_id']}/download")
+            req(downloaded.status_code == 200, "export download failed")
+            req(hashlib.sha256(downloaded.content).hexdigest() == meta["sha256"], "export digest mismatch")
+        denied = ctx.call(side, "POST", "/exports", json={
+            "fields": ["chu_ho"], "output_format": "csv",
+        })
+        req(denied.status_code == 422, "public export must reject private fields")
+        denied = ctx.call(side, "POST", "/exports", json={
+            "fields": ["chu_ho"], "output_format": "csv", "include_private": True,
+        })
+        req(denied.status_code == 422, "private export must require purpose")
+    PASSED.append(label)
+    print(f"PASS {label}", flush=True)
 
 
 def batch_field(ctx: Ctx) -> None:
@@ -1258,6 +1396,7 @@ def batch_field(ctx: Ctx) -> None:
         lambda d: [op(d, "c5", building_id=d["b2"]["id"], condition="vacant")],
     )
     ctx.pair("E15 progress", "GET", "/progress", headers=ctx.h)
+    check_progress_workbook("E15 progress XLSX", ctx)
 
     attrs = {
         "s-1": {"ap": "Ấp 1", "ten_duong": "Đường A", "xu_ly": "da_xu_ly", "trang_thai": "lech"},
@@ -3087,6 +3226,7 @@ def main() -> int:
                     batch_building_assignment(ctx)
                     batch_route_import(ctx)
                     batch_integration(ctx)
+                    check_import_export_contracts("E15 file import and export", ctx)
             finally:
                 get_engine().dispose()
 
