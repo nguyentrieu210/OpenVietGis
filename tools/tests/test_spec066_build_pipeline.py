@@ -120,3 +120,20 @@ def test_native_postgis_qualification_runs_for_rust_source_changes() -> None:
             assert "apps/api-rust/**" in paths, (name, event)
             assert "crates/**" in paths, (name, event)
         assert "main" in triggers["push"]["branches"], name
+
+
+def test_spec065_processing_reference_runs_for_integrated_qualification_branch() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/rust-platform.yml").read_text())
+    branch_guard = "github.head_ref == '066-t039-integrated-qualification'"
+    for job in ("qgis-reference", "spec065-processing-comparison"):
+        condition = workflow["jobs"][job]["if"]
+        assert "startsWith(github.head_ref, '065-')" in condition
+        assert "startsWith(github.ref_name, '065-')" in condition
+        assert branch_guard in condition
+        assert "github.ref_name == '066-t039-integrated-qualification'" in condition
+    processing = next(
+        step for step in workflow["jobs"]["postgis-parity"]["steps"]
+        if step.get("name") == "Spec 065 measured Rust processing reference"
+    )
+    assert branch_guard in processing["if"]
+    assert "github.ref_name == '066-t039-integrated-qualification'" in processing["if"]
