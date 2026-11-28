@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
@@ -71,6 +72,17 @@ class WorkspaceController extends ChangeNotifier{
   Future<String> exportGeojson()async{
     final w=_workspace;if(w==null||busy||!ready)throw StateError('WORKSPACE_UNAVAILABLE');
     return w.exportGeojson();
+  }
+  NativeWorkspace get local{final w=_workspace;if(w==null||!ready)throw StateError('NO_WORKSPACE');return w;}
+  Future<String> draw(String kind,List<double> xy,Map<String,dynamic> attributes)async{
+    if(busy)throw StateError('BUSY');final w=local;busy=true;_notify();
+    try{final id=await w.commitDrawing(kind:kind,xy:Float64List.fromList(xy),attributesJson:jsonEncode(attributes));dataEpoch++;return id;}
+    finally{busy=false;_notify();}
+  }
+  Future<void> history(bool redo)async{
+    if(busy)return;final w=local;busy=true;_notify();
+    try{if(await w.undoRedo(redo:redo))dataEpoch++;}
+    finally{busy=false;_notify();}
   }
   Future<void> toggleLanguage()async{vi=!vi;_notify();await _prefs?.setBool('vi',vi);}
   @override

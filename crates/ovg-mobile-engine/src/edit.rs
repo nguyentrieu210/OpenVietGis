@@ -57,7 +57,7 @@ pub struct Snap{pub x:f64,pub y:f64,pub distance_m:f64,pub vertex:bool}
 pub fn snap(wkb:&[u8],x:f64,y:f64,tolerance_m:f64)->Result<Option<Snap>,Error>{
     if !valid_xy(x,y)||y.abs()>85.||!tolerance_m.is_finite()||tolerance_m<=0.||tolerance_m>100.{return Err(Error::InvalidBatch);}
     let g=parse_xy_wkb(wkb,&ValidationLimits::default()).map_err(|_|Error::InvalidBatch)?.geometry;
-    use geo::{CoordsIter,LinesIter};
+    use geo::CoordsIter;
     let scale_x=111319.49079327357*y.to_radians().cos();let scale_y=111132.0;
     let mut best:Option<Snap>=None;
     let mut consider=|c:Coord<f64>,vertex:bool|{
@@ -65,7 +65,11 @@ pub fn snap(wkb:&[u8],x:f64,y:f64,tolerance_m:f64)->Result<Option<Snap>,Error>{
         if d<=tolerance_m&&best.is_none_or(|b|d<b.distance_m-1e-9||((d-b.distance_m).abs()<=1e-9&&vertex&&!b.vertex)){best=Some(Snap{x:c.x,y:c.y,distance_m:d,vertex});}
     };
     for c in g.coords_iter(){consider(c,true);}
-    for line in g.lines_iter(){
+    let mut lines=Vec::new();
+    fn add_line(l:&LineString<f64>,out:&mut Vec<geo::Line<f64>>){out.extend(l.lines());}
+    fn add_poly(p:&geo::Polygon<f64>,out:&mut Vec<geo::Line<f64>>){add_line(p.exterior(),out);for r in p.interiors(){add_line(r,out);}}
+    match &g{Geometry::LineString(l)=>add_line(l,&mut lines),Geometry::MultiLineString(m)=>for l in &m.0{add_line(l,&mut lines)},Geometry::Polygon(p)=>add_poly(p,&mut lines),Geometry::MultiPolygon(m)=>for p in &m.0{add_poly(p,&mut lines)},Geometry::Point(_)|Geometry::MultiPoint(_)=>{},_=>return Err(Error::InvalidBatch)}
+    for line in lines{
         if (line.end.x-line.start.x).abs()>=180.{continue;}
         let ax=(line.start.x-x)*scale_x;let ay=(line.start.y-y)*scale_y;
         let dx=(line.end.x-line.start.x)*scale_x;let dy=(line.end.y-line.start.y)*scale_y;

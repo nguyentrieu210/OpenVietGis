@@ -5,6 +5,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'native_map.dart';
+import 'survey_page.dart';
+import 'attribute_page.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,7 +26,9 @@ final controllerProvider=ChangeNotifierProvider<WorkspaceController>((ref){
 });
 final router=GoRouter(routes:[
   GoRoute(path:'/',builder:(context,state)=>const MapPage()),
-  GoRoute(path:'/workspaces',builder:(context,state)=>const WorkspacePage())
+  GoRoute(path:'/workspaces',builder:(context,state)=>const WorkspacePage()),
+  GoRoute(path:'/survey',builder:(context,state)=>const SurveyRoute()),
+  GoRoute(path:'/attributes',builder:(context,state)=>const AttributesRoute())
 ]);
 void main(){
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +68,8 @@ class MapPage extends ConsumerWidget{
           ListTile(leading:const Icon(Icons.folder),title:Text(tr(vi,'Không gian làm việc local','Local workspaces')),onTap:(){Navigator.pop(sheet);context.push('/workspaces');}),
           ListTile(leading:const Icon(Icons.file_open),title:Text(tr(vi,'Nhập GeoJSON','Import GeoJSON')),subtitle:Text(tr(vi,'WGS84 XY · tối đa 16 MiB / 4096 đối tượng','WGS84 XY · max 16 MiB / 4096 features')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);unawaited(importFile(context,c));}),
           ListTile(leading:const Icon(Icons.share),title:Text(tr(vi,'Xuất GeoJSON','Export GeoJSON')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);unawaited(exportFile(context,c));}),
+          ListTile(leading:const Icon(Icons.table_chart),title:Text(tr(vi,'Bảng thuộc tính','Attribute table')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/attributes');}),
+          ListTile(leading:const Icon(Icons.gps_fixed),title:Text(tr(vi,'Khảo sát GPS','GPS survey')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/survey');}),
           ListTile(leading:const Icon(Icons.cloud_off),title:Text(tr(vi,'Kết nối máy chủ','Connect server')),subtitle:Text(tr(vi,'Chưa đủ điều kiện xác thực Mobile','Mobile authentication not qualified')),enabled:false),
           ListTile(leading:const Icon(Icons.extension),title:Text(tr(vi,'Plugin','Plugins')),subtitle:Text(tr(vi,'Chưa có runtime đã nghiệm thu','Runtime not qualified')),enabled:false),
         ]))),
@@ -132,4 +138,13 @@ Future<void> exportFile(BuildContext context,WorkspaceController c)async{
     await Share.shareXFiles([XFile(f.path,mimeType:'application/geo+json')]);
   }catch(_){if(context.mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(tr(vi,'Không thể xuất bộ dữ liệu này','Unable to export this dataset'))));}
   // Do not delete while the share target may still be reading; OS cache cleanup.
+}
+
+class SurveyRoute extends ConsumerWidget{
+ const SurveyRoute({super.key});
+ @override Widget build(BuildContext context,WidgetRef ref)=>SurveyPage(controller:ref.watch(controllerProvider));
+}
+class AttributesRoute extends ConsumerWidget{
+ const AttributesRoute({super.key});
+ @override Widget build(BuildContext context,WidgetRef ref)=>AttributePage(controller:ref.watch(controllerProvider));
 }

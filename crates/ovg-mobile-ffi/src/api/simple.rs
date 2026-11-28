@@ -90,8 +90,8 @@ impl NativeWorkspace {
     pub fn snap_local(&self,x:f64,y:f64,tolerance_m:f64)->Result<String,String>{
         self.with_state(|s|s.store.snap_local(x,y,tolerance_m).map_err(|e|e.to_string()))
     }
-    pub fn attribute_page(&self,after:i64,limit:u32,contains:String)->Result<String,String>{
-        self.with_state(|s|s.store.attribute_page(after,limit,&contains).map_err(|e|e.to_string()))
+    pub fn attribute_page(&self,after:String,limit:u32,contains:String)->Result<String,String>{
+        self.with_state(|s|s.store.attribute_page(after.parse().map_err(|_|"INVALID_CURSOR".to_owned())?,limit,&contains).map_err(|e|e.to_string()))
     }
     pub fn feature_json(&self,feature_id:String)->Result<String,String>{
         self.with_state(|s|s.store.feature_json(id(&feature_id)?).map_err(|e|e.to_string()))
