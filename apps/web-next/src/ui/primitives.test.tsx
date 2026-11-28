@@ -1,7 +1,7 @@
 import React from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import {describe,expect,it} from "vitest";
-import {Actions,Button,Input,Select,Textarea} from "./primitives";
+import {Actions,Button,Input,Select,Textarea,Tabs} from "./primitives";
 describe("shared UI primitives",()=>{
  it("keeps native button semantics and opt-in variants",()=>{
   const html=renderToStaticMarkup(<Actions><Button className="legacy" disabled>Cancel</Button><Button type="submit" variant="primary">Save</Button></Actions>);
@@ -22,4 +22,14 @@ describe("shared UI primitives",()=>{
   expect(html).toContain(">Survey</textarea>");
   expect(html.match(/ovg-ui-input/g)).toHaveLength(3);
  });
+});
+
+it("renders oriented tabs with exactly one tabbable selected control and decorative icons",()=>{
+ const html=renderToStaticMarkup(<Tabs label="Layer" orientation="vertical" tabs={[["a","Info"],["b","Style"]]} tab="b" set={()=>{}} icons={["ⓘ","◩"]}/>);
+ expect(html).toContain('aria-orientation="vertical"');
+ expect(html.match(/tabindex="0"/g)).toHaveLength(1);
+ expect(html.match(/tabindex="-1"/g)).toHaveLength(1);
+ expect(html.match(/aria-selected="true"/g)).toHaveLength(1);
+ expect(html).toContain('aria-label="Style"');
+ expect(html.match(/aria-hidden="true"/g)).toHaveLength(2);
 });
