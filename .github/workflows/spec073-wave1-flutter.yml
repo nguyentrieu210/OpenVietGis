@@ -68,6 +68,7 @@ jobs:
           text+='\n[patch."https://github.com/nguyentrieu210/OpenVietGis"]\n'+'\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage","ovg-spatial"])+'\n'
           p.write_text(text)
           PY
+          python3 "$GITHUB_WORKSPACE/infra/mobile/install-media-provider.py" "$GITHUB_WORKSPACE" "$PWD"
           flutter pub get
           flutter_rust_bridge_codegen generate
           python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
