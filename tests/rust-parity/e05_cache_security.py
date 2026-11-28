@@ -70,7 +70,7 @@ def exercise(url, owner_url, fixture):
         # Retirement and explicit revocation are distinct from revision and
         # expiry; neither may be hidden by the warmed cache entry.
         with psycopg.connect(owner_url) as conn:
-            conn.execute("UPDATE spatial.layers SET lifecycle='retired', retired_at=now() WHERE id=%s",
+            conn.execute("UPDATE spatial.layers SET lifecycle='retired', retired_at=now(), updated_at=now() WHERE id=%s",
                          (layer["layer_id"],))
         try:
             results["retired_layer_denied_on_warm_entry"] = client.get(
@@ -78,7 +78,7 @@ def exercise(url, owner_url, fixture):
             ).status_code == 404
         finally:
             with psycopg.connect(owner_url) as conn:
-                conn.execute("UPDATE spatial.layers SET lifecycle='active', retired_at=NULL WHERE id=%s",
+                conn.execute("UPDATE spatial.layers SET lifecycle='active', retired_at=NULL, updated_at=now() WHERE id=%s",
                              (layer["layer_id"],))
         results["reactivated_layer_authorized"] = client.get(
             path, params=pins, headers=owner,
@@ -97,7 +97,7 @@ def exercise(url, owner_url, fixture):
                 conn.execute("UPDATE identity.web_sessions SET revoked_at=NULL WHERE id=%s",
                              (session_id,))
         with psycopg.connect(owner_url) as conn:
-            conn.execute("UPDATE identity.web_sessions SET expires_at=now()-interval '1 second' WHERE id=%s",
+            conn.execute("UPDATE identity.web_sessions SET expires_at=issued_at WHERE id=%s",
                          (session_id,))
         results["expired_session_denied_on_warm_entry"] = client.get(
             path, params=pins, headers=owner,

@@ -57,7 +57,11 @@ EDITING_ENGINE_OWNERS = {
 RETAINED_MARKER_OWNERS = {
     "geoserver": {"apps/web-next/src/DsmPanes.tsx"},
     "house-number": {"apps/api-rust/Cargo.toml"},
-    "house_number": {"apps/web-next/src/AppMarket.tsx"},
+    # E15 byte-format adapter is owned by the feature-gated vertical, not core.
+    "house_number": {
+        "apps/web-next/src/AppMarket.tsx",
+        "apps/api-rust/src/house_numbering/file_codec.py",
+    },
 }
 # These two existing R022 references are not renderer imports: a UI label
 # and an internal type-only contract. Remove only the exact allowed text.
