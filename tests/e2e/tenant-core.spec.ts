@@ -1,22 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signInOwner } from "./frontend-auth-helpers";
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
-  ).toBeVisible();
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await signInOwner(page);
   await expect(
     page.locator(".ovg-account-name").filter({ hasText: "Owner Alpha" })
   ).toBeVisible();
