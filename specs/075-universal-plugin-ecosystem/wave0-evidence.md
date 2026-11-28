@@ -104,3 +104,7 @@ F001 full 150 reuse/extend/new mapping; F002 Dart/JS cross-language vectors and 
 - Refreshed 073/074 branch tips, inspected mobile transport/release and desktop CSP/transport file inventory and built-in module manifests. Both native runtime gates remain closed. No merge/deploy. F001–F012 stay open. Checkout signature history relies on trusted immutable DB; older binaries cannot read signed quote JSON, deployment requires coordinated upgrade. Webhook and outbox migration blocked in preceding slice remain open; no claim of completion.
 
 - Final slice 13 checks: Rust API 112/112, HTTP gates 3/3, TypeScript SDK typecheck PASS (Node24; Node26 qualification remains).
+
+## Fourteenth implementation slice (parent 7c72a1918ab7cfec9e35bad2c0e282d543a0a37c)
+- Invocation authorization snapshot (grant revision, dependency lock, epoch), fingerprint binding, receipt reservation before command dispatch, signed timeout, catalog admission before scoped transaction. Own-project audit listing with bounded cursor, Web export, SDK contract. No migration.
+- VPS connection initially interrupted build; reconnected and rebuilt successfully. Rust API 113/113, HTTP gate 4/4, TypeScript SDK/Web typecheck and focused 3/3 SDK tests PASS. No authenticated HTTP/database audit integration test or whole-Wave acceptance. Successful replay can still execute a read; quota is not a complete attempt limiter. No native qualification, webhook/outbox, production rollout or merge.

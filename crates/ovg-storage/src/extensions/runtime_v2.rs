@@ -272,3 +272,34 @@ pub async fn minimum_approved_epoch(read: &mut ProjectRead<'_>) -> Result<i64, A
     .map_err(db_error)?;
     Ok(v.unwrap_or(0))
 }
+
+/// Actor-owned immutable fingerprints. No document, input, output or
+/// cross-actor query. Available even when the plugin is disabled.
+pub async fn list_own_receipts(
+    read: &mut ProjectRead<'_>,
+    after_id: Option<Uuid>,
+    limit: u32,
+) -> Result<Value, AppError> {
+    if read.is_gis_scoped() || read.actor_type() != "human" || !(1..=100).contains(&limit) {
+        return Err(AppError::forbidden("invalid receipt export scope"));
+    }
+    let org = read.organization_id();
+    let project = read.project_id();
+    let actor = read.actor_id();
+    let mut rows=sqlx::query_scalar::<_,Value>("SELECT jsonb_build_object('id',id,'request_id',request_id,'activation_id',activation_id,
+        'activation_revision',activation_revision::text,'manifest_id',manifest_id,'release_digest',release_digest,'request_digest',request_digest,'command_id',command_id,'created_at',created_at)
+        FROM extensions.plugin_v2_receipts WHERE organization_id=$1 AND project_id=$2 AND actor_id=$3 AND ($4::uuid IS NULL OR id>$4)
+        ORDER BY id LIMIT $5")
+        .bind(org).bind(project).bind(actor).bind(after_id).bind(i64::from(limit)+1)
+        .fetch_all(&mut **read.transaction()).await.map_err(db_error)?;
+    let more = rows.len() > limit as usize;
+    rows.truncate(limit as usize);
+    let cursor = if more {
+        rows.last()
+            .and_then(|r| r["id"].as_str())
+            .map(str::to_owned)
+    } else {
+        None
+    };
+    Ok(json!({"items":rows,"next_after_id":cursor,"limit":limit,"scope":"own_project_receipts"}))
+}

@@ -1,3 +1,4 @@
+import {PluginAuditPanel} from "./PluginAuditPanel";
 import {PluginLicensePanel} from "./PluginLicensePanel";
 import {PluginGraphPanel} from "./PluginGraphPanel";
 import {DeclarativePluginPanel} from "./DeclarativePluginPanel";
@@ -160,14 +161,17 @@ export function ExternalPluginHub({client,org,projectId,canRegister,canManage,re
   const [declarative,setDeclarative]=useState("");
   const [graph,setGraph]=useState<{root:string;version:string}|null>(null);
   const [v2Eligible,setV2Eligible]=useState<string[]>([]);
+  const [auditOpen,setAuditOpen]=useState(false);
   const [licensed,setLicensed]=useState<Record<string,string>>({}),[license,setLicense]=useState("");
   useEffect(()=>{let live=true;const refreshV2=()=>void listMarketplaceV2(client,"web","1.0.0").then(r=>{if(live){setV2Eligible(r.web_read_only_enabled?r.items.map(x=>x.envelope.extension_key+":"+x.envelope.version):[]);setLicensed(Object.fromEntries(r.items.filter(x=>x.license_required).map(x=>[x.envelope.extension_key+":"+x.envelope.version,x.release_digest])))}}).catch(()=>{if(live){setV2Eligible([]);setLicensed({});setLicense("")}});refreshV2();const timer=window.setInterval(refreshV2,15000);return()=>{live=false;clearInterval(timer)}},[client]);
   const selectedV2=items.find(m=>m.id===declarative&&activePartner(m,activations)&&v2Eligible.includes(m.extension_key+":"+m.version));
-  useEffect(()=>{setDeclarative("");setGraph(null);setLicense("")},[org,projectId]);
+  useEffect(()=>{setDeclarative("");setGraph(null);setLicense("");setAuditOpen(false)},[org,projectId]);
   const marketTerms=marketQuery.toLocaleLowerCase("vi").trim().split(/\s+/).filter(Boolean);
   const visibleMarket=market.filter(r=>{const fields=[r.publisher_id,r.publisher_name,r.manifest.extension_key,r.manifest.display_name,r.manifest.description,r.manifest.version].map(x=>x.toLocaleLowerCase("vi"));return marketTerms.every(term=>fields.some(x=>x.includes(term)))});
   if(restricted)return <section className="partner-hub"><h3>Kho plugin đối tác</h3><p className="live-note">Không mở plugin bên ngoài trong dự án có giới hạn truy cập.</p></section>;
   return <section className="partner-hub"><div className="partner-heading"><div><h3>Kho plugin đối tác</h3><p className="live-note">Danh mục riêng của tổ chức · HTTPS · chạy trong khung cô lập.</p></div>{canRegister&&<button onClick={()=>setRegister(x=>!x)} disabled={busy}>{register?"Đóng biểu mẫu":"Đăng ký plugin"}</button>}</div>
+    <button onClick={()=>setAuditOpen(v=>!v)}>{auditOpen?"Đóng lịch sử":"Lịch sử thực thi của tôi"}</button>
+    {auditOpen&&<PluginAuditPanel key={org+":"+projectId} client={client} org={org} project={projectId} onClose={()=>setAuditOpen(false)}/>}
     {register&&canRegister&&<form className="partner-form" onSubmit={e=>{e.preventDefault();void execute(async()=>{await registerPartnerPlugin(client,org,{extension_key:"partner_"+key,version,display_name:name,description,url,capabilities:caps},await loadCsrfToken(client));setRegister(false);setName("");setKey("");setUrl("");setDescription("")})}}>
       <label>Tên plugin<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)}/></label><label>Mã plugin (partner_)<input required pattern="[a-z0-9_]+(?:-[a-z0-9_]+)*" maxLength={92} value={key} onChange={e=>setKey(e.target.value)}/></label>
       <label>Phiên bản<input required pattern="[0-9]+[.][0-9]+[.][0-9]+" value={version} onChange={e=>setVersion(e.target.value)}/></label><label>URL HTTPS phiên bản đã duyệt<input required type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://plugins.example.com/v1/index.html"/></label>

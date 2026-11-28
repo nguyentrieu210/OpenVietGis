@@ -7,7 +7,7 @@ export function DeclarativePluginPanel({client,org,project,manifest,canManage,on
  const active=useRef<AbortController|null>(null),flight=useRef(false),generation=useRef(0),runtimeIdentity=useRef("");
  useEffect(()=>{
   const ctrl=new AbortController();active.current=ctrl;setRuntime(null);setProposal(null);setValues({});setOutput("");setError("");setBusy(false);flight.current=false;runtimeIdentity.current="";
-  const refresh=()=>{if(flight.current)return;const revision=++generation.current;void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){const identity=r.release_digest+":"+r.lock_digest+":"+r.grant_revision;if(runtimeIdentity.current!==identity||!r.granted){setOutput("");setProposal(null)}runtimeIdentity.current=identity;setRuntime(r);setError("")}}).catch(()=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){setRuntime(null);setProposal(null);setOutput("");setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")}})};
+  const refresh=()=>{if(flight.current)return;const revision=++generation.current;void getPluginV2Runtime(client,org,project,manifest,ctrl.signal).then(r=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){const identity=r.release_digest+":"+r.lock_digest+":"+r.grant_revision+":"+r.catalog_epoch;if(runtimeIdentity.current!==identity||!r.granted){setOutput("");setProposal(null)}runtimeIdentity.current=identity;setRuntime(r);setError("")}}).catch(()=>{if(!ctrl.signal.aborted&&!flight.current&&revision===generation.current){setRuntime(null);setProposal(null);setOutput("");setError("Plugin khai báo chưa được bật hoặc không còn đủ quyền.")}})};
   refresh();const timer=window.setInterval(refresh,15000);
   return()=>{window.clearInterval(timer);ctrl.abort();active.current=null};
  },[client,org,project,manifest]);
@@ -42,7 +42,7 @@ export function DeclarativePluginPanel({client,org,project,manifest,canManage,on
   ++generation.current;flight.current=true;setBusy(true);setError("");setOutput("");setProposal(null);
   try{await loadCsrfToken(client);if(ctrl.signal.aborted)return;
    const result=await setPluginV2Grant(client,org,project,runtime,enabled,ctrl.signal);
-   if(!ctrl.signal.aborted){runtimeIdentity.current=runtime.release_digest+":"+runtime.lock_digest+":"+result.grant_revision;setRuntime({...runtime,granted:result.granted,grant_revision:result.grant_revision})}
+   if(!ctrl.signal.aborted){runtimeIdentity.current=runtime.release_digest+":"+runtime.lock_digest+":"+result.grant_revision+":"+runtime.catalog_epoch;setRuntime({...runtime,granted:result.granted,grant_revision:result.grant_revision})}
   }catch{if(!ctrl.signal.aborted)setError("Không thể cập nhật quyền. Hãy mở lại plugin.")}
   finally{if(!ctrl.signal.aborted){flight.current=false;setBusy(false)}}
  };

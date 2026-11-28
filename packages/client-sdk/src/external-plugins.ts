@@ -104,7 +104,7 @@ export function getPluginV2Runtime(client:ApiClient,org:string,project:string,ma
  return client.request<unknown>(pluginV2Path(org,project,manifest),{signal:signal??null,cache:"no-store"}).then(r=>parsePluginV2Runtime(r,manifest));
 }
 export function invokePluginV2(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,actionId:string,input:Record<string,unknown>,requestId:string,signal?:AbortSignal){
- return client.request<{receipt_id:string;command_id:string;output:unknown}>(pluginV2Path(org,project,runtime.manifest_id)+"/invoke",{method:"POST",signal:signal??null,body:JSON.stringify({request_id:requestId,release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,action_id:actionId,input})});
+ return client.request<{receipt_id:string;command_id:string;output:unknown}>(pluginV2Path(org,project,runtime.manifest_id)+"/invoke",{method:"POST",signal:signal??null,body:JSON.stringify({request_id:requestId,release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,grant_revision:runtime.grant_revision,lock_digest:runtime.lock_digest,catalog_epoch:runtime.catalog_epoch,action_id:actionId,input})});
 }
 
 export function setPluginV2Grant(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,enabled:boolean,signal?:AbortSignal){
@@ -174,4 +174,11 @@ export function previewSandboxPriceOffer(client:ApiClient,offer:SignedSandboxPri
 
 export function acceptSandboxPriceOffer(client:ApiClient,offer:SignedSandboxPriceOffer,signature:string){
  return client.request<{sandbox:true;checkout_created:true;provider_session_created:false;replayed:boolean;order_id:string;offer_digest:string;expires_at:string}>("/organizations/"+encodeURIComponent(offer.quote.organization_id)+"/marketplace/sandbox/offers/accept",{method:"POST",body:JSON.stringify({offer,signature})});
+}
+
+
+export type PluginAuditReceipt={id:string;request_id:string;activation_id:string;activation_revision:string;manifest_id:string;release_digest:string;request_digest:string;command_id:string;created_at:string};
+export function listOwnPluginAudit(client:ApiClient,org:string,project:string,afterId?:string,limit=50,signal?:AbortSignal){
+ const q=new URLSearchParams({limit:String(limit)});if(afterId)q.set("after_id",afterId);
+ return client.request<{items:PluginAuditReceipt[];next_after_id:string|null;limit:number;scope:"own_project_receipts"}>("/organizations/"+encodeURIComponent(org)+"/projects/"+encodeURIComponent(project)+"/extensions/v2-audit?"+q.toString(),{cache:"no-store",signal:signal??null});
 }

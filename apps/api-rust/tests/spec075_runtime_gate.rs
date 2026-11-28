@@ -133,3 +133,27 @@ async fn graph_routes_disabled_by_default() {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
+
+#[tokio::test]
+async fn audit_is_not_public_and_rejects_unbounded_page() {
+    let app = Router::new()
+        .nest("/api/v1", routes::api_v1_router())
+        .with_state(AppState::new(AppConfig::default(), None).unwrap());
+    let base="/api/v1/organizations/11000000-0000-0000-0000-000000000001/projects/31000000-0000-0000-0000-000000000001/extensions/v2-audit";
+    let invalid = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("{base}?limit=101"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(!invalid.status().is_success());
+    let denied = app
+        .oneshot(Request::builder().uri(base).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert!(!denied.status().is_success());
+}

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::AppState;
 use axum::{
-    extract::{Path, Request, State},
+    extract::{Path, Query, Request, State},
     http::header,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -41,12 +41,50 @@ fn hash(bytes: &[u8]) -> String {
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route(BASE, get(document))
+        .route(
+            "/organizations/{organization_id}/projects/{project_id}/extensions/v2-audit",
+            get(audit_receipts),
+        )
         .route(&format!("{BASE}/invoke"), post(invoke))
         .route(&format!("{BASE}/grant"), post(change_grant))
         .route(
             &format!("{BASE}/processing/confirm"),
             post(confirm_processing),
         )
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AuditQuery {
+    after_id: Option<Uuid>,
+    limit: Option<u32>,
+}
+async fn audit_receipts(
+    State(state): State<AppState>,
+    Path((org, project)): Path<(String, String)>,
+    Query(q): Query<AuditQuery>,
+    req: Request,
+) -> Result<Response, ExtensionError> {
+    let limit = q.limit.unwrap_or(50);
+    if !(1..=100).contains(&limit) || q.after_id.is_some_and(|id| id.is_nil()) {
+        return Err(ExtensionError::InvalidRequest);
+    }
+    let (mut parts, _) = req.into_parts();
+    let actor = authenticate_actor(&state, &mut parts, &org).await?;
+    check_human(&actor)?;
+    let mut read = open_project_scope(
+        &state,
+        &actor,
+        parse_uuid(&org)?,
+        parse_uuid(&project)?,
+        ProjectReadPolicy::Unrestricted,
+    )
+    .await?;
+    let result =
+        ovg_storage::extensions::runtime_v2::list_own_receipts(&mut read, q.after_id, limit)
+            .await
+            .map_err(ExtensionError::Domain)?;
+    read.commit().await.map_err(ExtensionError::Domain)?;
+    Ok(no_store(result))
 }
 struct Ready {
     doc: Document,
@@ -236,6 +274,7 @@ async fn document(
     let (mut parts, _) = request.into_parts();
     let actor = authenticate_actor(&state, &mut parts, &org).await?;
     check_human(&actor)?;
+    let catalog = releases(&state).await?;
     let mut read = open_project_scope(
         &state,
         &actor,
@@ -247,7 +286,6 @@ async fn document(
     let pin = active_pin(&mut read, parse_uuid(&manifest)?)
         .await
         .map_err(ExtensionError::Domain)?;
-    let catalog = releases(&state).await?;
     let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
@@ -291,6 +329,11 @@ async fn change_grant(
     check_human(&actor)?;
     require_actor_csrf(&state, &actor, &headers)?;
     let body: GrantBody = decode_body(body)?;
+    let catalog = if body.enabled {
+        Some(releases(&state).await?)
+    } else {
+        None
+    };
     let mut read = open_project_scope(
         &state,
         &actor,
@@ -310,8 +353,7 @@ async fn change_grant(
     }
     // Approval requires the exact lock previewed by the manager. Revocation
     // still works when a dependency or the root has been removed from the catalog.
-    let lock = if body.enabled {
-        let catalog = releases(&state).await?;
+    let lock = if let Some(catalog) = catalog {
         let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
         if ready.digest != body.release_digest {
             return Err(ExtensionError::Domain(AppError::conflict(
@@ -368,17 +410,32 @@ struct InvokeBody {
     activation_revision: i64,
     action_id: String,
     input: Value,
+    grant_revision: String,
+    lock_digest: String,
+    catalog_epoch: i64,
+}
+/// Bind replay identity to the authorization snapshot, not just raw input.
+fn invocation_digest(
+    body: &InvokeBody,
+    lock: &ApprovedLock,
+    grant_sequence: i64,
+) -> Result<String, AppError> {
+    let payload = json!({"schema":"openvietgis.invocation.v2","action_id":body.action_id,"input":body.input,
+        "dependency_lock_digest":lock.digest,"grant_revision":grant_sequence,"catalog_epoch":lock.epoch});
+    Ok(hash(
+        &marketplace_canonical(&payload).map_err(|_| invalid("invalid invocation fingerprint"))?,
+    ))
 }
 /// Allowlisted metadata only; never return source URLs, features, coordinates, attributes or credentials.
 fn layer_summary(layer: &Value) -> Value {
     json!({"id":layer["id"],"name":layer["name"],"lifecycle":layer["lifecycle"],"layer_revision":layer["layer_revision"],
         "geometry_family":layer["source"]["schema"]["geometry_family"],"feature_count":layer["source"]["feature_count"]})
 }
-async fn run(
-    read: &mut ProjectRead<'_>,
-    ready: &Ready,
+fn authorize_invocation<'a>(
+    read: &ProjectRead<'_>,
+    ready: &'a Ready,
     body: &InvokeBody,
-) -> Result<(String, Value), AppError> {
+) -> Result<&'a ovg_module_sdk::declarative::Action, AppError> {
     let scope = TenantScope {
         organization_id: read.organization_id(),
         workspace_id: None,
@@ -406,8 +463,14 @@ async fn run(
         input: &body.input,
         human_confirmed: false,
     };
-    let a = authorize(&ready.doc, &scope, &grant, &request, &ready.policies)?;
-    let output = match a.command_id.as_str() {
+    authorize(&ready.doc, &scope, &grant, &request, &ready.policies)
+}
+async fn run(
+    read: &mut ProjectRead<'_>,
+    command: &str,
+    body: &InvokeBody,
+) -> Result<Value, AppError> {
+    let output = match command {
         "host_context" => json!({"locale":"vi-VN","sdk_version":"2.0","profile":"web_read_only"}),
         "gis_layers" => {
             let cursor = body
@@ -451,7 +514,7 @@ async fn run(
         }
         _ => return Err(invalid("command unavailable")),
     };
-    Ok((a.command_id.clone(), output))
+    Ok(output)
 }
 async fn invoke(
     State(state): State<AppState>,
@@ -478,6 +541,7 @@ async fn invoke(
     let _slot = INVOCATIONS
         .try_acquire()
         .map_err(|_| ExtensionError::Domain(AppError::rate_limited(Some(1))))?;
+    let catalog = releases(&state).await?;
     let mut read = open_project_scope(
         &state,
         &actor,
@@ -495,7 +559,6 @@ async fn invoke(
             "activation changed",
         )));
     }
-    let catalog = releases(&state).await?;
     let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
@@ -511,13 +574,19 @@ async fn invoke(
             "current dependency lock approval required",
         )));
     }
-    let (command, mut output) = run(&mut read, &ready, &body)
-        .await
-        .map_err(ExtensionError::Domain)?;
-    let digest = hash(
-        &marketplace_canonical(&json!({"action_id":body.action_id,"input":body.input}))
-            .map_err(|_| ExtensionError::InvalidRequest)?,
-    );
+    if body.grant_revision.parse::<i64>().ok() != Some(grant.sequence)
+        || body.lock_digest != lock.digest
+        || body.catalog_epoch != lock.epoch
+    {
+        return Err(ExtensionError::Domain(AppError::conflict(
+            "STALE_PLUGIN_AUTHORIZATION",
+            "plugin approval or catalog changed; reload",
+        )));
+    }
+    let action = authorize_invocation(&read, &ready, &body).map_err(ExtensionError::Domain)?;
+    let command = action.command_id.clone();
+    let deadline = std::time::Duration::from_millis(u64::from(action.timeout_ms));
+    let digest = invocation_digest(&body, &lock, grant.sequence).map_err(ExtensionError::Domain)?;
     let id = receipt(
         &mut read,
         &pin,
@@ -530,6 +599,17 @@ async fn invoke(
     )
     .await
     .map_err(ExtensionError::Domain)?;
+    // Reserve the successful-invocation receipt before touching GIS data.
+    // The same transaction rolls back this receipt on failure or timeout.
+    let mut output = tokio::time::timeout(deadline, run(&mut read, &command, &body))
+        .await
+        .map_err(|_| {
+            ExtensionError::Domain(AppError::service_unavailable(
+                "PLUGIN_COMMAND_TIMEOUT",
+                "plugin command timed out",
+            ))
+        })?
+        .map_err(ExtensionError::Domain)?;
     if command == "gis_processing_plan" {
         let digest =
             hash(&ovg_module_sdk::release_v2::canonical(&output).map_err(ExtensionError::Domain)?);
@@ -585,6 +665,7 @@ async fn confirm_processing(
     let _slot = INVOCATIONS
         .try_acquire()
         .map_err(|_| ExtensionError::Domain(AppError::rate_limited(Some(1))))?;
+    let catalog = releases(&state).await?;
     let mut read = open_project_scope(
         &state,
         &actor,
@@ -596,7 +677,6 @@ async fn confirm_processing(
     let pin = active_pin(&mut read, parse_uuid(&manifest)?)
         .await
         .map_err(ExtensionError::Domain)?;
-    let catalog = releases(&state).await?;
     let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
     let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
         .await
@@ -682,6 +762,35 @@ mod tests {
                 manifest: manifest.clone(),
             }],
         )
+    }
+    #[test]
+    fn invocation_replay_is_bound_to_grant_and_lock() {
+        let mut body = InvokeBody {
+            request_id: Uuid::new_v4(),
+            release_digest: "a".repeat(64),
+            activation_revision: 1,
+            action_id: "read".into(),
+            input: json!({"x":"y"}),
+            grant_revision: "1".into(),
+            lock_digest: "b".repeat(64),
+            catalog_epoch: 2,
+        };
+        let mut lock = ApprovedLock {
+            pins: json!([]),
+            digest: "b".repeat(64),
+            epoch: 2,
+        };
+        let initial = invocation_digest(&body, &lock, 1).unwrap();
+        assert_eq!(initial, invocation_digest(&body, &lock, 1).unwrap());
+        assert_ne!(initial, invocation_digest(&body, &lock, 2).unwrap());
+        lock.epoch = 3;
+        assert_ne!(initial, invocation_digest(&body, &lock, 1).unwrap());
+        lock.epoch = 2;
+        lock.digest = "c".repeat(64);
+        assert_ne!(initial, invocation_digest(&body, &lock, 1).unwrap());
+        lock.digest = "b".repeat(64);
+        body.input = json!({"x":"z"});
+        assert_ne!(initial, invocation_digest(&body, &lock, 1).unwrap());
     }
     #[test]
     fn lock_approval_rejects_changed_dependency_and_epoch_rollback() {
