@@ -314,3 +314,31 @@ mod unified_bridge_tests{
   assert_eq!(list_local_workspaces(l).unwrap(),vec![legacy_id]);
  }
 }
+
+#[cfg(test)]
+mod unified_map_tests{
+ use super::*;
+ #[test]fn viewport_edit_delete_and_stale_revision(){
+  let dir=std::env::temp_dir().join(format!("ovg-unified-map-{}",Uuid::new_v4()));
+  let root=dir.to_string_lossy().to_string();
+  let p=create_unified_project(root.clone()).unwrap();let w=open_unified_project(root,p).unwrap();
+  let c:serde_json::Value=serde_json::from_str(&w.catalog().unwrap()).unwrap();
+  let l=c["layers"][0]["id"].as_str().unwrap().to_owned();let f=Uuid::new_v4().to_string();
+  let op=||Uuid::new_v4().to_string();
+  w.commit_geometry(l.clone(),f.clone(),op(),"1".into(),"0".into(),"line".into(),vec![106.,11.,106.1,11.1],"{}".into()).unwrap();
+  let view=|r:&str|w.viewport(l.clone(),105.,10.,108.,12.,r.into());
+  let a:serde_json::Value=serde_json::from_str(&view("2").unwrap()).unwrap();
+  assert_eq!(a["data"]["features"][0]["geometry"]["type"],"LineString");
+  assert!(view("1").is_err());
+  let detail:serde_json::Value=serde_json::from_str(&w.feature_detail(l.clone(),f.clone(),"2".into()).unwrap()).unwrap();
+  assert_eq!(detail["revision"],"1");
+  assert!(w.edit_attributes(l.clone(),f.clone(),op(),"2".into(),"0".into(),"{}".into()).is_err());
+  assert_eq!(w.edit_attributes(l.clone(),f.clone(),op(),"2".into(),"1".into(),r#"{"name":"road"}"#.into()).unwrap(),"3");
+  assert!(w.delete_feature(l.clone(),f.clone(),op(),"3".into(),"1".into()).is_err());
+  w.delete_feature(l.clone(),f.clone(),op(),"3".into(),"2".into()).unwrap();
+  let empty:serde_json::Value=serde_json::from_str(&view("4").unwrap()).unwrap();assert_eq!(empty["data"]["features"].as_array().unwrap().len(),0);
+  w.compensate(op(),"4".into()).unwrap();
+  let restored:serde_json::Value=serde_json::from_str(&view("5").unwrap()).unwrap();assert_eq!(restored["data"]["features"][0]["properties"]["attributes"]["name"],"road");
+  assert!(w.integrity().unwrap());w.close().unwrap();drop(w);fs::remove_dir_all(dir).unwrap();
+ }
+}
