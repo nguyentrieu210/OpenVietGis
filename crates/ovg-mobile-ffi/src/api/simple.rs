@@ -93,6 +93,9 @@ impl NativeWorkspace {
     pub fn close(&self)->Result<(),String>{
         self.state.lock().map_err(|_|"SESSION_FAILED".to_owned())?.take();Ok(())
     }
+    pub fn migrate_unified_copy(&self,unified_root:String,layer_id:String,name:String)->Result<String,String>{
+        self.with_state(|s|ovg_project_store::mobile::migrate_local_store(Path::new(&unified_root),&s.store,id(&layer_id)?,&name).map_err(unified_error))
+    }
     pub fn apply_local(&self,operation_id:String,feature_id:String,expected_revision:u64,wkb:Option<Vec<u8>>,attributes_json:String)->Result<u64,String>{
         if attributes_json.len()>256*1024 || wkb.as_ref().is_some_and(|b|b.len()>4*1024*1024){return Err("RESOURCE_LIMIT".into());}
         let m=Mutation{operation_id:id(&operation_id)?,feature_id:id(&feature_id)?,expected_revision,wkb,attributes:serde_json::from_str(&attributes_json).map_err(|_|"INVALID_ATTRIBUTES".to_owned())?};
@@ -266,6 +269,12 @@ impl NativeUnifiedProject{
  }
  pub fn edit_attributes(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,attributes_json:String)->Result<String,String>{
   self.inner.edit_attributes(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&attributes_json).map_err(unified_error)
+ }
+ pub fn survey_tracks(&self,layer_id:String,after:String,expected:String)->Result<String,String>{
+  self.inner.survey_tracks(&layer_id,&after,&expected).map_err(unified_error)
+ }
+ pub fn survey_fixes(&self,layer_id:String,track_id:String,after:String,expected:String)->Result<String,String>{
+  self.inner.survey_fixes(&layer_id,&track_id,&after,&expected).map_err(unified_error)
  }
  pub fn commit_geojson(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,geometry_json:String,attributes_json:String)->Result<String,String>{
   self.inner.commit_geojson(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&geometry_json,&attributes_json).map_err(unified_error)
