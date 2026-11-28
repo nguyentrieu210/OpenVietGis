@@ -16,7 +16,9 @@
 - [x] T201b Isolated TypeScript, Vite build and Chromium Playwright 9/9; focus/keyboard/portal/overflow checks.
 - [ ] T201c Activate workspace dependency and facade re-exports after W0/W1 gates; integrate pnpm lock, app-wide visual/accessibility and map lifecycle tests, final license review.
 ## W3 workbench
-- [ ] T301 Compare Dockview adapter with DockLayout; tab/split/dock/resize/restore, versioned persistence, map lifecycle, IPC window capability; rollback.
+- [x] T301a Dockview 8.10.0 OSS adapter, registered panels, tabs/split/dock/float/resize/maximize/reset and scoped versioned persistence; window capabilities fail closed.
+- [x] T301b TypeScript, production demo build, 4 W3 browser tests plus 9 W2 regression tests; synthetic canvas lifecycle and restore checks.
+- [ ] T301c Real MapLibre/Cesium/CAD lifecycle, keyboard drag/accessibility, layout performance, native IPC window qualification and application integration/rollback after W0/W1 gates.
 ## W4 GIS/CAD
 - [ ] T401 Layer tree/legend/CRS/symbol/property/CAD controls; map event and edit-state parity; isolate renderer and print styling.
 ## W5 data

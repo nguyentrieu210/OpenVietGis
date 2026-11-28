@@ -15,7 +15,8 @@
     "test": "playwright test"
   },
   "dependencies": {
-    "@base-ui/react": "1.9.0"
+    "@base-ui/react": "1.9.0",
+    "dockview-react": "8.10.0"
   },
   "peerDependencies": {
     "react": "^19.3.1",

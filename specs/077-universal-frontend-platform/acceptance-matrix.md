@@ -26,3 +26,12 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | TypeScript and Vite production demo build | PASS |
 | Playwright Chromium 9/9: dialog focus, controls, dark portal, six viewports | PASS |
 | Root pnpm integration, existing app facade switch, map interactions, final visual/accessibility and distribution review | pending T201c |
+
+## W3 workbench
+| Gate | Status |
+|---|---|
+| Dockview React/core 8.10.0 exact installed lock, MIT notices | PASS candidate |
+| Tab/split/float/redock, resize, scoped storage, malformed/unknown/popout fallback | PASS isolated browser |
+| Canvas state and mount ID during tested moves | PASS synthetic only |
+| Reset default recovery and host veto contract | recovery PASS; host integration pending |
+| Native window IPC, real renderer lifecycle, keyboard DnD, performance and integrated rollback | pending T301c |

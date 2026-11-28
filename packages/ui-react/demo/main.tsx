@@ -1,3 +1,4 @@
+import {WorkbenchDemo} from './workbench-demo';
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Button,Input,Select,Textarea,Field,Actions,TableScroll,Dialog,Menu,Popover,Tooltip,Checkbox,Switch,Tabs} from '../src';
@@ -17,4 +18,4 @@ function App(){
  <TableScroll><table style={{minWidth:900}}><tbody><tr><td>Wide attribute data</td></tr></tbody></table></TableScroll>
  </div></Dialog></main>;
 }
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(location.search.includes('workbench')?<WorkbenchDemo/>:<App/>);
