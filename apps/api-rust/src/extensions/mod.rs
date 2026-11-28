@@ -8,6 +8,7 @@ pub mod partner_platform;
 pub mod records;
 pub mod validation;
 pub mod mobile_v2;
+pub mod mobile_entitlement;
 
 use axum::body::to_bytes;
 use axum::extract::FromRequestParts;

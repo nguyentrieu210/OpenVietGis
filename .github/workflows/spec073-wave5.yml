@@ -55,5 +55,6 @@ jobs:
           persist-credentials: false
       - name: V1 unchanged and V2 independent fixture
         run: |
+          cargo test --locked -p openvietgis-api-rust --lib extensions::mobile_entitlement::tests
           cargo test --locked -p openvietgis-api-rust --lib extensions::mobile_v2::tests
           cargo test --locked -p openvietgis-api-rust --lib extensions::validation::tests
