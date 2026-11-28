@@ -76,3 +76,63 @@ impl Store{
   }Ok(SurveyPage{revision:expected.to_string(),rows:out,next})
  }
 }
+
+#[derive(Clone,Debug,Serialize)]
+pub struct SurveyReceipt{pub revision:String,pub track:Uuid,pub state:String,pub segment:u64,pub seq:Option<u64>}
+fn state(db:&Connection,l:Uuid,t:Uuid)->Result<(String,u64)>{
+ db.query_row("SELECT state,segment FROM survey_track WHERE layer=?1 AND id=?2",params![l.to_string(),t.to_string()],|r|Ok((r.get(0)?,r.get(1)?))).optional()?.ok_or(Error::Invalid)
+}
+impl Store{
+ pub fn create_survey(&self,l:Uuid,t:Uuid,name:&str,expected:u64)->Result<SurveyReceipt>{
+  if t.is_nil()||!name_ok(name){return Err(Error::Invalid)}
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  known_layer(&tx,l)?;
+  if tx.query_row("SELECT count(*) FROM survey_track WHERE layer=?1",[l.to_string()],|r|r.get::<_,u64>(0))?>=10_000{return Err(Error::Limit)}
+  let n=next(&tx,expected)?;
+  tx.execute("INSERT INTO survey_track VALUES(?1,?2,?3,'paused',0)",params![l.to_string(),t.to_string(),name])?;
+  tx.commit()?;Ok(SurveyReceipt{revision:n.to_string(),track:t,state:"paused".into(),segment:0,seq:None})
+ }
+ pub fn survey_state(&self,l:Uuid,t:Uuid,action:&str,expected:u64)->Result<SurveyReceipt>{
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let (old,segment)=state(&tx,l,t)?;
+  let (new,seg)=match (old.as_str(),action){
+   ("paused","resume")=>{
+    if tx.query_row("SELECT EXISTS(SELECT 1 FROM survey_track WHERE state='recording')",[],|r|r.get::<_,bool>(0))?{return Err(Error::Conflict)}
+    ("recording",segment.checked_add(1).filter(|v|*v<=i64::MAX as u64).ok_or(Error::Limit)?)
+   },
+   ("recording","pause")=>("paused",segment),
+   ("recording"|"paused","finish")=>("finished",segment),
+   _=>return Err(Error::Conflict)
+  };
+  let n=next(&tx,expected)?;
+  tx.execute("UPDATE survey_track SET state=?1,segment=?2 WHERE layer=?3 AND id=?4",params![new,seg,l.to_string(),t.to_string()])?;
+  tx.commit()?;Ok(SurveyReceipt{revision:n.to_string(),track:t,state:new.into(),segment:seg,seq:None})
+ }
+ /// Explicit recovery only. Never restart a location subscription automatically.
+ pub fn recover_surveys(&self,expected:u64)->Result<u64>{
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  if rev(&tx)?!=expected{return Err(Error::Conflict)}
+  let count=tx.execute("UPDATE survey_track SET state='paused' WHERE state='recording'",[])?;
+  let n=if count>0{next(&tx,expected)?}else{expected};tx.commit()?;Ok(n)
+ }
+ /// A fix is acknowledged only after commit; last sequence and UTC are strictly
+ /// increasing. An exact replay of the last fix is safe at the current revision.
+ pub fn append_survey(&self,l:Uuid,t:Uuid,fix:&Fix,expected:u64)->Result<SurveyReceipt>{
+  validate_fix(fix).map_err(|_|Error::Invalid)?;
+  let raw=json(fix)?;if raw.len()>4096{return Err(Error::Limit)}
+  let mut db=self.db.lock().map_err(lock_err)?;let tx=db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  if rev(&tx)?!=expected{return Err(Error::Conflict)}
+  let (s,seg)=state(&tx,l,t)?;if s!="recording"||seg==0{return Err(Error::Conflict)}
+  let prev:Option<(u64,u64,i64,String)>=tx.query_row("SELECT seq,segment,utc_ms,fix_json FROM survey_fix WHERE layer=?1 AND track_id=?2 ORDER BY seq DESC LIMIT 1",params![l.to_string(),t.to_string()],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional()?;
+  if let Some((seq,prev_seg,utc,old))=&prev{
+   if *prev_seg==seg&&*utc==fix.utc_ms&&decode::<Fix>(old)?==*fix{
+    return Ok(SurveyReceipt{revision:expected.to_string(),track:t,state:s,segment:seg,seq:Some(*seq)})
+   }
+  }
+  let prior=prev.map(|(a,b,c,_)|(a,b,c)).unwrap_or((0,0,0));
+  let seq=prior.0+1;validate_sample(seq,seg,fix.utc_ms,&raw,prior,seg)?;
+  let n=next(&tx,expected)?;
+  tx.execute("INSERT INTO survey_fix VALUES(?1,?2,?3,?4,?5,?6)",params![l.to_string(),t.to_string(),seq,seg,fix.utc_ms,raw])?;
+  tx.commit()?;Ok(SurveyReceipt{revision:n.to_string(),track:t,state:s,segment:seg,seq:Some(seq)})
+ }
+}
