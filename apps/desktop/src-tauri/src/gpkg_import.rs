@@ -52,17 +52,16 @@ fn layers(c:&Connection)->Result<Vec<Layer>>{
  Ok(rows)
 }
 pub struct Catalog {file:tempfile::NamedTempFile,pub layers:Vec<Layer>}
-impl Catalog{
- pub fn open(path:&Path)->Result<Self>{
+pub fn sqlite_snapshot(path:&Path,max:u64)->Result<tempfile::NamedTempFile>{
    let m=std::fs::symlink_metadata(path).map_err(|_|"STORAGE_UNAVAILABLE")?;
-   if !m.file_type().is_file()||m.len()>256*1024*1024{return Err("RESOURCE_LIMIT")}
+   if !m.file_type().is_file()||m.len()>max{return Err("RESOURCE_LIMIT")}
    let src=sql(Connection::open_with_flags(path,OpenFlags::SQLITE_OPEN_READ_ONLY|OpenFlags::SQLITE_OPEN_NO_MUTEX))?;
    sql(src.pragma_update(None,"trusted_schema","OFF"))?;sql(src.pragma_update(None,"query_only","ON"))?;
    sql(src.busy_timeout(std::time::Duration::from_secs(2)))?;
    let file=tempfile::NamedTempFile::new().map_err(|_|"STORAGE_UNAVAILABLE")?;
    let pages:i64=sql(src.pragma_query_value(None,"page_count",|r|r.get(0)))?;
    let size:i64=sql(src.pragma_query_value(None,"page_size",|r|r.get(0)))?;
-   if pages<=0||size<=0||pages.saturating_mul(size)>256*1024*1024{return Err("RESOURCE_LIMIT")}
+   if pages<=0||size<=0||(pages.saturating_mul(size) as u64)>max{return Err("RESOURCE_LIMIT")}
    let mut dst=sql(Connection::open(file.path()))?;
    {let backup=sql(rusqlite::backup::Backup::new(&src,&mut dst))?;
     let until=std::time::Instant::now()+std::time::Duration::from_secs(10);
@@ -71,8 +70,16 @@ impl Catalog{
     }
    }
    sql(dst.pragma_update(None,"trusted_schema","OFF"))?;
-   let layers=layers(&dst)?;drop(dst);
-   Ok(Self{file,layers})
+   let actual:i64=sql(dst.pragma_query_value(None,"page_count",|r|r.get(0)))?;
+   if actual<=0||(actual.saturating_mul(size) as u64)>max{return Err("RESOURCE_LIMIT")}
+   drop(dst);Ok(file)
+}
+impl Catalog{
+ pub fn open(path:&Path)->Result<Self>{
+   let file=sqlite_snapshot(path,256*1024*1024)?;
+   let db=sql(Connection::open_with_flags(file.path(),OpenFlags::SQLITE_OPEN_READ_ONLY|OpenFlags::SQLITE_OPEN_NO_MUTEX))?;
+   sql(db.pragma_update(None,"trusted_schema","OFF"))?;
+   let layers=layers(&db)?;drop(db);Ok(Self{file,layers})
  }
  pub fn import(&self,store:&LocalStore,table:&str)->Result<u32>{import_layer(store,self.file.path(),Some(table))}
 }
