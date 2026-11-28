@@ -67,6 +67,7 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
             )
         total_expanded = 0
         files: dict[str, bytes] = {}
+        seen_names: set[str] = set()
         for info in infos:
             if info.is_dir():
                 continue
@@ -104,10 +105,11 @@ def _extract_safe_zip(data: bytes) -> dict[str, bytes]:
                         )
                     chunks.append(chunk)
             lower_key = name.lower()
-            if lower_key in files:
+            if lower_key in seen_names:
                 raise TransferFormatError(
                     "ARCHIVE_DUPLICATE_ENTRY", "Archive contains duplicate member names."
                 )
+            seen_names.add(lower_key)
             files[name] = b"".join(chunks)
         return files
 
@@ -399,6 +401,9 @@ def parse_shapefile_member(
                 ValidationFinding("error", "NULL_GEOMETRY", "Feature has null/empty geometry.", idx)
             )
             continue
+        if shp.shapeType != reader.shapeType:
+            findings.append(ValidationFinding("error", "UNSUPPORTED_GEOMETRY", "Shape type disagrees with member.", idx))
+            continue
         for pt in shp.points:
             if not (math.isfinite(pt[0]) and math.isfinite(pt[1])):
                 findings.append(
@@ -461,7 +466,7 @@ def parse_shapefile_member(
             elif fld.type == FieldType.INTEGER:
                 attrs[fld.field_id] = int(raw_v)
             elif fld.type == FieldType.DECIMAL:
-                attrs[fld.field_id] = str(Decimal(str(raw_v)).normalize())
+                attrs[fld.field_id] = format(Decimal(str(raw_v)), "f")
             elif isinstance(raw_v, dt.date):
                 attrs[fld.field_id] = raw_v.isoformat()
             else:

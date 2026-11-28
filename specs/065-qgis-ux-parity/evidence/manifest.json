@@ -754,9 +754,16 @@
         "tests/spec065/run-attribute-query.sh",
         "apps/web-next/src/transfer-verification.ts",
         "apps/web-next/src/transfer-verification.test.ts",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/api-rust/src/transfers/codec.rs",
+        "apps/api-rust/src/transfers/mod.rs",
+        "apps/api-rust/src/connectors/transfer_worker.rs",
+        "apps/api/openvietgis_api/adapters/formats/geopackage.py",
+        "apps/api/openvietgis_api/adapters/formats/shapefile_zip.py",
+        "tests/spec065/native_import.py",
+        "infra/rust-platform/Dockerfile.api-rust"
       ],
-      "blocker": "Actual Rust Integration Hub GeoPackage, DXF UTM and PostGIS SQL export pass; GeoJSON general import/export roundtrip pass. Browser checks digest/revision and refuses incomplete whole-layer CSV/KML. General new-layer GPKG/SHP imports remain unsupported; no paired desktop, full format/CRS matrix or precise view intersection."
+      "blocker": "Authenticated direct GeoJSON/GPKG/ZIP SHP import and GeoJSON adapter export pass; native EPSG:3857 to 4326, multi-member selection, explicit encoding, stale/replay and unsafe archives verified. New import is bounded XY single-part with recognized file CRS; Rust control plane uses Python codec worker. General binary export confirmation, full field/CRS/geometry matrix, worker retry and resource exhaustion, runtime image rebuild and paired QGIS remain."
     },
     {
       "id": "OUTPUT-08",

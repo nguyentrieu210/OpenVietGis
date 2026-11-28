@@ -1,10 +1,9 @@
 //! E07 import/export and durable transfer job routes (R005), matching the FastAPI wire
 //! in `apps/api/openvietgis_api/adapters/http/transfers.py`.
 //!
-//! GeoJSON is migrated end to end; exports stream rows from PostGIS in keyset pages
-//! into the artifact file (bounded memory). GeoPackage and ZIP Shapefile bodies are
-//! deferred (see `evidence/e07-implementation.md`): their previews work, their
-//! uploads and confirmations answer `FORMAT_NOT_MIGRATED`.
+//! GeoJSON is native end to end; GeoPackage and ZIP Shapefile imports use a
+//! bounded codec worker with Rust confirmation and PostGIS validation. General
+//! export confirmation still supports only GeoJSON (Integration Hub has GPKG export).
 
 mod codec;
 pub(crate) mod store;
@@ -28,7 +27,7 @@ use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use self::codec::{
-    build_geojson_inspection, canonical_attribute, content_digest, detect_format, extent_value,
+    build_geojson_inspection, build_native_inspection, canonical_attribute, content_digest, detect_format, extent_value,
     fingerprint, is_ready, plan_export_mapping, push_geojson_feature, sanitize_filename,
     schema_digest, sorted_unique, Field, InspectOptions, Inspection, Mapping, SchemaField,
     Transform, GEOJSON_HEAD, GEOJSON_TAIL, MAX_TRANSFER_FEATURES, MAX_UPLOAD_BYTES,
@@ -228,15 +227,15 @@ fn py_strip(value: &str) -> &str {
 }
 
 fn require_geojson(format: &str) -> Result<(), TransferError> {
-    if format == "geojson" {
-        return Ok(());
-    }
-    // shortcut: GPKG needs SQLite and Shapefile needs ZIP/DBF codecs that are not in
-    // Cargo.lock; FastAPI keeps serving them until those adapters are ported.
-    Err(TransferError::validation(
-        "FORMAT_NOT_MIGRATED",
-        "GeoPackage and ZIP Shapefile transfers are not yet available on the native API.",
-    ))
+    if format == "geojson" { return Ok(()); }
+    Err(TransferError::validation("FORMAT_NOT_MIGRATED","General export confirmation currently supports GeoJSON only. Use Integration Hub for GeoPackage."))
+}
+
+async fn inspect_payload(payload: &[u8], format: &str, opts: &InspectOptions<'_>) -> Result<Inspection, TransferError> {
+    if format == "geojson" { return build_geojson_inspection(payload, opts); }
+    let decoded = crate::connectors::transfer_worker::run_import(payload,json!({"action":"inspect_import","format":format,"member":opts.selected_member,"encoding":opts.declared_encoding})).await
+        .map_err(|e| TransferError::coded(e.status.as_u16(),"VECTOR_CODEC_FAILED", if e.status.is_server_error() {"Vector decoder unavailable or resource budget exceeded.".into()} else {e.message}))?;
+    build_native_inspection(decoded,format,opts)
 }
 
 fn too_large() -> TransferError {
@@ -299,7 +298,6 @@ async fn upload_import_asset(
         return Err(TransferError::validation("EMPTY_UPLOAD", "Uploaded file is empty.").into());
     }
     let format = detect_format(payload)?;
-    require_geojson(format)?;
     let raw_name = filename.filter(|n| !n.is_empty()).unwrap_or("upload.bin");
     let asset_id = Uuid::new_v4();
     let storage_key = format!(
@@ -319,6 +317,7 @@ async fn upload_import_asset(
         uploaded_by_display: scope.display_name().to_string(),
         created_at: now_micros(),
     };
+    let inspection=match inspect_payload(payload,format,&inspect_options(&asset,None,None,None,None)).await {Ok(v)=>v,Err(e)=>{store.delete(&storage_key).await;return Err(e.into())}};
     let wire = scope.asset_wire(&asset);
     let persisted = match scope.create_source_asset(&asset).await {
         Ok(()) => scope.commit().await,
@@ -328,8 +327,7 @@ async fn upload_import_asset(
         store.delete(&storage_key).await;
         return Err(error.into());
     }
-    let inspection =
-        build_geojson_inspection(payload, &inspect_options(&asset, None, None, None, None))?;
+
     Ok((
         StatusCode::CREATED,
         Json(json!({"asset": wire, "inspection": inspection.wire})),
@@ -367,7 +365,6 @@ async fn load_asset(
     let payload = Store::new(state)
         .read_verified(&asset.storage_key, &asset.sha256)
         .await?;
-    require_geojson(&asset.detected_format)?;
     Ok((asset, payload))
 }
 
@@ -388,8 +385,8 @@ async fn inspect_import_asset(
         "Source asset not found.",
     )
     .await?;
-    let inspection = build_geojson_inspection(
-        &payload,
+    let inspection = inspect_payload(
+        &payload, &asset.detected_format,
         &inspect_options(
             &asset,
             request.selected_member.as_deref(),
@@ -397,7 +394,7 @@ async fn inspect_import_asset(
             request.target_crs,
             request.declared_encoding.as_deref(),
         ),
-    )?;
+    ).await?;
     Ok(
         Json(json!({"asset": scope.asset_wire(&asset), "inspection": inspection.wire}))
             .into_response(),
@@ -429,8 +426,8 @@ async fn confirm_import(
         "Source asset not found.",
     )
     .await?;
-    let inspection = build_geojson_inspection(
-        &payload,
+    let inspection = inspect_payload(
+        &payload, &asset.detected_format,
         &inspect_options(
             &asset,
             Some(&request.selected_member),
@@ -438,7 +435,7 @@ async fn confirm_import(
             request.target_crs,
             request.declared_encoding.as_deref(),
         ),
-    )?;
+    ).await?;
     if inspection.fingerprint != request.inspection_fingerprint {
         return Err(TransferError::conflict(
             "STALE_INSPECTION",
@@ -623,6 +620,7 @@ async fn run_import(
     layer_name: &str,
 ) -> Result<Value, TransferError> {
     let spatial = || TransferError::internal("imported value failed spatial domain validation");
+    let native = inspection.wire["resolved_source_crs"].as_i64().and_then(|v|i32::try_from(v).ok()).ok_or_else(||TransferError::internal("confirmed import has no source CRS"))?;
     let target = inspection
         .target_crs
         .and_then(|t| i32::try_from(t).ok())
@@ -648,24 +646,24 @@ async fn run_import(
     let family = parsed.family;
     let mut scope = reopen(state, auth, ids, true).await?;
     for (index, record) in parsed.records.iter().enumerate() {
-        if !is_ready(&record.geom, Some(family), 4326, false) {
+        if !is_ready(&record.geom, Some(family), native, false) {
             return Err(TransferError::validation(
                 "INVALID_GEOMETRY",
                 format!("Feature at index {index} failed geometry validation."),
             ));
         }
     }
-    let transform = Transform::resolve(4326, target).map_err(|_| {
+    let transform = Transform::resolve(native, target).map_err(|_| {
         TransferError::validation(
             "UNSUPPORTED_TRANSFORMATION",
-            format!("No approved transformation from EPSG:4326 to EPSG:{target}."),
+            format!("No approved transformation from EPSG:{native} to EPSG:{target}."),
         )
     })?;
     let steps = transform.as_ref().map_or(&[][..], |t| t.steps.as_slice());
     let mut geometries = Vec::with_capacity(parsed.records.len());
     for (batch, chunk) in parsed.records.chunks(2000).enumerate() {
         let wkts: Vec<String> = chunk.iter().map(|r| r.geom.wkt()).collect();
-        let rows = scope.check_and_transform(&wkts, 4326, steps).await?;
+        let rows = scope.check_and_transform(&wkts, native, steps).await?;
         if rows.len() != chunk.len() {
             return Err(TransferError::internal("geometry batch size mismatch"));
         }
@@ -719,21 +717,21 @@ async fn run_import(
         features.push((record.feature_id.clone(), attrs, geom));
     }
     let schema_revision = schema_digest(&fields, family);
-    let content_revision = content_digest(&fields, &features, 4326, target, family);
+    let content_revision = content_digest(&fields, &features, native, target, family);
     let source_id = Uuid::new_v4();
     let layer_id = Uuid::new_v4();
     let short = |id: Uuid| id.simple().to_string()[..12].to_string();
     let result_report = json!({
         "asset_id": asset.id.to_string(),
         "asset_sha256": asset.sha256,
-        "format": "geojson",
+        "format": asset.detected_format,
         "selected_member": member,
         "source_id": source_id.to_string(),
         "layer_id": layer_id.to_string(),
         "content_revision": content_revision,
         "schema_revision": schema_revision,
         "feature_count": features.len(),
-        "source_crs": 4326,
+        "source_crs": native,
         "stored_crs": target,
         "transformation_operation_id": transform.as_ref().map(|t| t.operation_id),
         "encoding": inspection.resolved_encoding,
@@ -767,9 +765,9 @@ async fn run_import(
         id: source_id,
         name: source_name.to_string(),
         reference_key: format!("imp_{}_{}", short(asset.id), short(source_id)),
-        fixture_version: format!("geojson:{member}").chars().take(100).collect(),
+        fixture_version: format!("{}:{member}",asset.detected_format).chars().take(100).collect(),
         manifest_digest: asset.sha256.clone(),
-        source_crs: 4326,
+        source_crs: native,
         stored_crs: target,
         geometry_family: family,
         feature_count: i64::try_from(features.len()).unwrap_or(i64::MAX),
@@ -1370,8 +1368,8 @@ async fn retry_transfer_job(
     drop(scope);
     let opts = &job.options;
     let text = |key: &str| opts.get(key).and_then(Value::as_str);
-    let inspection = build_geojson_inspection(
-        &payload,
+    let inspection = inspect_payload(
+        &payload, &asset.detected_format,
         &inspect_options(
             &asset,
             text("selected_member"),
@@ -1379,7 +1377,7 @@ async fn retry_transfer_job(
             opts.get("target_crs").and_then(Value::as_i64),
             text("declared_encoding"),
         ),
-    )?;
+    ).await?;
     let source_name = text("source_name").unwrap_or_default().to_string();
     let layer_name = text("layer_name").unwrap_or_default().to_string();
     let job = execute_import(

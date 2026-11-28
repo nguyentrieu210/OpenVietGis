@@ -232,7 +232,7 @@ def check(c,f,second,fixtures,directory):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster","topology"],default="integrated");args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster","topology","native-import"],default="integrated");args=p.parse_args()
     baseline.assert_safe_bench_db(OWNER,isolated_port=54332)
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT to_regclass('spatial.reference_features')").fetchone()[0] is None,"refusing nonfresh DB"
@@ -249,12 +249,25 @@ def main():
         # Only the disposable copied binary and scratch directory are accessible to nobody.
         binary=directory/"candidate";shutil.copyfile(args.candidate,binary);binary.chmod(0o755)
         wrapper=directory/"candidate-unprivileged"
-        wrapper.write_text("#!/bin/sh\nexec /usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups "+str(binary)+"\n")
+        codec_env=""
+        if args.suite=="native-import":
+            import shapefile
+            # Fixture-only module copy: system Python stays unmodified.
+            codec=directory/"codec";codec.mkdir();codec.chmod(0o755)
+            shutil.copyfile(shapefile.__file__,codec/"shapefile.py");(codec/"shapefile.py").chmod(0o644)
+            launcher=codec/"python"
+            launcher.write_text("#!/bin/sh\nexec /usr/bin/python3 -c 'import sys,runpy,os;sys.path.insert(0,"+repr(str(codec)).replace("'","\"")+");sys.argv=sys.argv[4:];sys.path.insert(0,os.path.dirname(sys.argv[0]));runpy.run_path(sys.argv[0],run_name=\"__main__\")' \"$@\"\n")
+            launcher.chmod(0o755)
+            codec_env="export OPENVIETGIS_VECTOR_CODEC_PYTHON="+str(launcher)+"\n"
+        wrapper.write_text("#!/bin/sh\n"+codec_env+"exec /usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups "+str(binary)+"\n")
         wrapper.chmod(0o755);os.chown(directory,65534,65534);directory.chmod(0o700)
         with rust_client(wrapper,RUNTIME,directory) as c:
             try:
                 if args.suite=="integrated":
                     check(c,f,second,fixtures,directory)
+                elif args.suite=="native-import":
+                    from native_import import check_native_import
+                    check_native_import(c,f)
                 elif args.suite=="topology":
                     from topology import check_topology
                     check_topology(c,f)

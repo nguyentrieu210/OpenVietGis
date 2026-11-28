@@ -20,6 +20,7 @@ case "${1:-attribute}" in
   collaboration) suite=edit_processing; extra=(--suite collaboration) ;;
   raster) suite=edit_processing; extra=(--suite raster) ;;
   topology) suite=edit_processing; extra=(--suite topology) ;;
+  native-import) suite=edit_processing; extra=(--suite native-import) ;;
   *) echo "Unknown fixture suite" >&2; exit 2 ;;
 esac
 PYTHONPATH="$PWD/apps/api:$PWD" "$OVG_SPEC065_PYTHON" "tests/spec065/$suite.py" --candidate "$OVG_SPEC065_BINARY" "${extra[@]}"
