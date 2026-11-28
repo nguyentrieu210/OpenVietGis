@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 
 [features]
 remote-range = ["ovg-native-providers/remote-range"]
+remote-copc = ["remote-range", "ovg-native-providers/remote-copc"]
 default = []
 native-ogr = ["ovg-native-providers/ogr"]
 native-analytics = ["ovg-native-providers/analytics"]
