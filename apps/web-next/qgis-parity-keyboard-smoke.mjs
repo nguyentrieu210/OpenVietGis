@@ -384,7 +384,7 @@ try{
  await properties.getByRole("button",{name:"Hủy",exact:true}).click();await properties.waitFor({state:"detached"});
  console.log("PASS synthetic Chromium: expression validation and cancel");
  await page.keyboard.press("Control+k");await command.fill("ATTR");await command.press("Enter");
- const table=page.getByRole("region",{name:"Bảng thuộc tính"}).or(page.locator("section.qgis-table"));await table.waitFor();
+ const table=page.getByRole("region",{name:"Bảng thuộc tính",exact:true}).or(page.locator("section.qgis-table"));await table.waitFor();
  await table.getByLabel("Layer bảng thuộc tính").selectOption("layer1");
  const dataRow=table.locator("tbody tr").first();await dataRow.click();
  assert.ok(await dataRow.getByRole("checkbox").isChecked());
