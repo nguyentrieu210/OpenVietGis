@@ -1,9 +1,11 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import DesktopProject from "./DesktopProject";
+import UnifiedWorkbench from "./UnifiedWorkbench";
 import {desktop,type Capabilities,type Project,type Opened} from "./transport";
 import "./desktop.css";
 
 export default function DesktopEntry(){
+  const [unifiedMode,setUnifiedMode]=useState(false);
   const [caps,setCaps]=useState<Capabilities>();
   const [projects,setProjects]=useState<Project[]>([]);
   const [opened,setOpened]=useState<Opened>();
@@ -65,7 +67,8 @@ export default function DesktopEntry(){
     <header><strong>OpenVietGIS Desktop</strong><span>Standalone · Wave 2</span></header>
     <div className="ovg-desktop-body">
       <aside aria-label="Không gian làm việc">
-        <h2>Dự án cục bộ</h2>
+        <button disabled={!caps||busy} aria-pressed={unifiedMode} onClick={()=>void execute(async()=>{await close();setUnifiedMode(v=>!v)})}>{unifiedMode?"Quay về GeoPackage":"Kho ACID thống nhất (thử nghiệm)"}</button>
+        {!unifiedMode&&<><h2>Dự án cục bộ</h2>
         <button disabled={!caps||busy} onClick={()=>void execute(create)}>Tạo dự án</button>
         <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreSnapshot();if(p){await refresh();await open(p.id)}})}>Khôi phục bản sao GPKG</button>
         <button disabled={!caps||busy} onClick={()=>void execute(async()=>{const p=await desktop.restoreProject();if(p){await refresh();await open(p.id)}})}>Khôi phục dự án nhiều lớp</button>
@@ -78,9 +81,9 @@ export default function DesktopEntry(){
         <p>Cloud và đồng bộ chưa kích hoạt. Local MVT/raster ở chế độ thử nghiệm.</p>
         <button disabled={!opened||busy||!caps?.transform} onClick={()=>void transform()}>Thử chuyển CRS 4326 → 3857</button>
         <button disabled={!jobActive} onClick={()=>void cancel()}>Hủy tác vụ</button>
-        {result&&<output>{result}</output>}
+        {result&&<output>{result}</output>}</>}
       </aside>
-      <main>{opened&&caps?.local_edit&&caps.viewport?<DesktopProject key={opened.handle} rootHandle={opened.handle}/>:<p>Chọn hoặc tạo dự án để mở bản đồ cục bộ.</p>}</main>
+      <main>{unifiedMode?<UnifiedWorkbench/>:opened&&caps?.local_edit&&caps.viewport?<DesktopProject key={opened.handle} rootHandle={opened.handle}/>:<p>Chọn hoặc tạo dự án để mở bản đồ cục bộ.</p>}</main>
     </div>
     <footer role="status">{message|| (busy?"Đang xử lý…":opened? "Đang mở "+opened.id:"Chọn hoặc tạo dự án, không cần tài khoản.")}</footer>
   </div>;
