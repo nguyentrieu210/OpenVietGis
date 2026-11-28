@@ -11,6 +11,7 @@ pub mod mobile;
 pub mod mvt;
 pub mod tile_archive;
 pub mod survey;
+pub mod media;
 pub mod asset_store;
 pub mod bulk_import;
 pub mod migration;
@@ -25,7 +26,8 @@ type Result<T>=std::result::Result<T,Error>;
 fn json<T:Serialize>(v:&T)->Result<String>{serde_json::to_string(v).map_err(|_|Error::Invalid)}
 fn decode<T:serde::de::DeserializeOwned>(v:&str)->Result<T>{serde_json::from_str(v).map_err(|_|Error::Invalid)}
 const APP:i64=0x4f564750;
-const VERSION:i64=4;
+const VERSION:i64=5;
+const V5_MARKER:&str="-- V5 additive encrypted media";
 const V4_MARKER:&str="-- V4 additive survey records";
 const V3_MARKER:&str="-- V3 additive assets and bulk import";
 const QUOTA:u64=8*1024*1024*1024;
@@ -111,11 +113,12 @@ impl Store{
   db.pragma_update(None,"trusted_schema","OFF")?;
   let app:i64=db.pragma_query_value(None,"application_id",|r|r.get(0))?;
   let version:i64=db.pragma_query_value(None,"user_version",|r|r.get(0))?;
-  if app!=APP||!matches!(version,2|3|VERSION){return Err(Error::Unsupported)}
+  if app!=APP||!matches!(version,2|3|4|VERSION){return Err(Error::Unsupported)}
   let schema=include_str!("schema.sql");
-  let (v3,v4)=schema.split_once(V4_MARKER).ok_or(Error::Unsupported)?;
+  let (v4,v5_addition)=schema.split_once(V5_MARKER).ok_or(Error::Unsupported)?;
+  let (v3,v4_addition)=v4.split_once(V4_MARKER).ok_or(Error::Unsupported)?;
   let (v2,v3_addition)=v3.split_once(V3_MARKER).ok_or(Error::Unsupported)?;
-  let oracle=Connection::open_in_memory()?;oracle.execute_batch(match version{2=>v2,3=>v3,_=>schema})?;
+  let oracle=Connection::open_in_memory()?;oracle.execute_batch(match version{2=>v2,3=>v3,4=>v4,_=>schema})?;
   if schema_signature(&db)?!=schema_signature(&oracle)?{return Err(Error::Unsupported)}
   db.pragma_update(None,"trusted_schema","ON")?;
   let check:String=db.pragma_query_value(None,"quick_check",|r|r.get(0))?;
@@ -124,7 +127,8 @@ impl Store{
   if version<VERSION{
    let tx=db.unchecked_transaction()?;
    if version==2{tx.execute_batch(v3_addition)?;}
-   tx.execute_batch(v4)?;tx.pragma_update(None,"user_version",VERSION)?;tx.commit()?;
+   if version<=3{tx.execute_batch(v4_addition)?;}
+   tx.execute_batch(v5_addition)?;tx.pragma_update(None,"user_version",VERSION)?;tx.commit()?;
   }
   Ok(Self{db:Mutex::new(db)})
  }
@@ -244,7 +248,7 @@ impl Store{
   let fk:i64=db.query_row("SELECT count(*) FROM pragma_foreign_key_check",[],|r|r.get(0))?;
   let bad:i64=db.query_row("SELECT count(*) FROM feature f LEFT JOIN feature_index i ON i.fid=f.fid WHERE i.fid IS NULL OR i.minx>f.minx OR i.maxx<f.maxx OR i.miny>f.miny OR i.maxy<f.maxy",[],|r|r.get(0))?;
   let orphan:i64=db.query_row("SELECT count(*) FROM feature_index i LEFT JOIN feature f ON f.fid=i.fid WHERE f.fid IS NULL",[],|r|r.get(0))?;
-  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0&&asset_store::verify_assets(&db)?&&survey::verify(&db)?)
+  Ok(v=="ok"&&fk==0&&bad==0&&orphan==0&&asset_store::verify_assets(&db)?&&survey::verify(&db)?&&media::verify(&db)?)
  }
 }
 
