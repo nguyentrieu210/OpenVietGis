@@ -232,7 +232,7 @@ def check(c,f,second,fixtures,directory):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster"],default="integrated");args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("--candidate",type=Path,required=True);p.add_argument("--suite",choices=["integrated","collaboration","raster","topology"],default="integrated");args=p.parse_args()
     baseline.assert_safe_bench_db(OWNER,isolated_port=54332)
     with psycopg.connect(OWNER) as conn:
         assert conn.execute("SELECT to_regclass('spatial.reference_features')").fetchone()[0] is None,"refusing nonfresh DB"
@@ -255,6 +255,9 @@ def main():
             try:
                 if args.suite=="integrated":
                     check(c,f,second,fixtures,directory)
+                elif args.suite=="topology":
+                    from topology import check_topology
+                    check_topology(c,f)
                 elif args.suite=="raster":
                     from raster_reports import check_raster_reports
                     check_raster_reports(c,f,directory)

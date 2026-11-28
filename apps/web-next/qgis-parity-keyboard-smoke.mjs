@@ -35,6 +35,7 @@ try{
   else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
   else if(p.includes("/raster/layers/")&&p.endsWith(".png"))return route.fulfill({contentType:"image/png",body:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==","base64")});
   else if(p.endsWith("/layers"))body={items:[layer,{...layer,id:"layer2",source_id:"source2",name:"Second layer",source:{...layer.source,feature_count:1001}}],next_after_id:null};
+  else if(p.endsWith("/pro/topology")&&m==="POST"){const q=route.request().postDataJSON();assert.equal(q.primary.layer_id,"layer1");body={source_id:"source1",content_revision:layer.source.content_revision,schema_revision:layer.source.schema_revision,requested_count:1,scanned_count:0,skipped_count:1,truncated:false,complete:false,secondary_pin:null,items:[]}}
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Buffer",required_inputs:["input_layer_id"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Clip",required_inputs:["input_layer_id","overlay_layer_id"],parameters_schema:{}}]};
   else if(p.endsWith("/processing/jobs")&&m==="GET")body={items:[]};
   else if(p.endsWith("/processing/jobs")&&m==="POST"){const payload=route.request().postDataJSON();processingRequests.push(payload);if(processingRequests.length===1||processingRequests.length===4)return route.fulfill({status:503,json:{}});body={id:processingRequests.length<=2?"job-test":"job-batch-"+processingRequests.length,operation_id:payload.operation_id,algorithm_id:payload.algorithm_id,output_name:payload.output_name,status:"queued",feature_count:null};}
@@ -55,7 +56,38 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_RASTER_ONLY==="1"){
+ if(process.env.OVG_TOPOLOGY_ONLY==="1"){
+  await first.click();
+  const invoke=async(alias)=>{await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill(alias);await command.press("Enter")};
+  await invoke("TOPOLOGY");
+  const topo=page.getByRole("dialog",{name:"Topology · kiểm tra chất lượng"});await topo.waitFor();
+  await topo.getByRole("button",{name:"Chạy kiểm tra"}).click();
+  await topo.getByText("Chưa thể kết luận sạch lỗi").waitFor();
+  await topo.getByText(/0\/1 đối tượng có hình học đã quét · 1 bỏ qua/).waitFor();
+  await topo.getByRole("button",{name:"Đóng công cụ",exact:true}).click();
+  const props=page.getByRole("dialog",{name:/Thuộc tính layer/});
+  async function editRules(){
+   await invoke("LAYER");await props.waitFor();
+   await props.getByRole("tab",{name:"Ký hiệu",exact:true}).click();
+   await props.getByLabel("Kiểu ký hiệu").selectOption("rules");
+   await props.getByRole("button",{name:"＋ Thêm quy tắc",exact:true}).click();
+   await props.getByLabel("Tên quy tắc 1").fill("Cao hơn 20");
+   await props.getByLabel("Điều kiện quy tắc 1").selectOption("gt");
+   await props.getByLabel("Giá trị quy tắc 1").fill("20");
+   await props.getByText("Quy tắc 1 · 1 đối tượng đã tải").waitFor();
+   await props.getByLabel(/Xem trước màu ký hiệu trên bản đồ/).check();
+   await props.getByRole("button",{name:"Xuất QML (QGIS)"}).waitFor();
+   assert.equal(await props.getByRole("button",{name:"Xuất QML (QGIS)"}).isEnabled(),false);
+  }
+  const savedView=()=>page.evaluate(()=>JSON.parse(localStorage.getItem("ovg-workspace:v1:fixture:fixture-org:fixture-project")??"{}").layerViews?.layer1?.renderer??"default");
+  await editRules();await page.waitForTimeout(400);assert.notEqual(await savedView(),"rules");
+  await props.getByRole("button",{name:"Hủy",exact:true}).click();await props.waitFor({state:"detached"});assert.notEqual(await savedView(),"rules");
+  await editRules();await props.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();await props.waitFor({state:"detached"});
+  assert.equal(await savedView(),"rules");
+  await page.getByRole("button",{name:"Mở ký hiệu Buildings"}).click();
+  await page.getByLabel("Hiển thị nhóm Cao hơn 20").waitFor();
+  console.log("PASS synthetic topology skipped-count review and rule styling preview/cancel/apply/legend");
+ }else if(process.env.OVG_RASTER_ONLY==="1"){
   await page.getByRole("button",{name:"Chi tiết raster QA DEM"}).click();
   await page.getByText(/NoData 1/).waitFor();
   await page.getByLabel("Nội suy QA DEM").selectOption("linear");

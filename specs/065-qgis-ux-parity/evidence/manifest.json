@@ -223,13 +223,18 @@
     {
       "id": "STYLE-03",
       "task": "T033",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/graduated.ts",
-        "apps/web-next/src/style-io.ts"
+        "apps/web-next/src/style-io.ts",
+        "apps/web-next/src/rule-style.ts",
+        "apps/web-next/src/rule-style.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/layout-legend.ts"
       ],
-      "blocker": "Rule-based renderer and multi-symbol layers not demonstrated; existing renderer sources are candidates only."
+      "blocker": "Ordered first-match typed single-field rules, fallback color, max 12 rules, loaded vector render and legend; browser preview/apply and unit checks. No multi-symbol layers, arbitrary expressions, server tile rule evaluation, QML/SLD rule exchange or QGIS pairing."
     },
     {
       "id": "STYLE-04",
@@ -287,13 +292,14 @@
     {
       "id": "STYLE-09",
       "task": "T039",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/LiveApp.tsx",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/CoreMapTools.tsx"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Temporary loaded-feature symbol preview with explicit apply/cancel; no persistence until apply. Does not preview layer filter, zoom or all label settings; no paired QGIS or pixel comparison."
     },
     {
       "id": "TABLE-01",
@@ -428,7 +434,7 @@
         "apps/web-next/src/digitizing.test.ts",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Explicit polygon closure no duplicate final point; typed create and identical retry synthetic Chromium PASS. No paired QGIS or actual backend edit acceptance."
+      "blocker": "Structural checks plus bounded local ring self-intersection/repeated vertex checks; PostGIS authoritative. Large rings and hole relationships not checked by client; QGIS pairing remains."
     },
     {
       "id": "EDIT-03",
@@ -464,20 +470,26 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/digitizing.ts",
-        "apps/web-next/src/AdvancedEditor.tsx"
+        "apps/web-next/src/AdvancedEditor.tsx",
+        "crates/ovg-storage/src/professional.rs",
+        "apps/web-next/src/topology-review.ts",
+        "apps/web-next/src/topology-review.test.ts",
+        "apps/web-next/src/ProfessionalTools.tsx",
+        "tests/spec065/topology.py"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; structural draft checks only; cross-feature topology not added"
+      "blocker": "Actual Rust/PostGIS topology duplicate, selected overlap, gap/outside, dangling, omitted geometry and boundary pins verified. No auto-fix; source cap 50k, output 200, EPSG:4326 only. Shared-boundary editing and avoid-overlap transactions, paired QGIS remain."
     },
     {
       "id": "EDIT-06",
       "task": "T057",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/AdvancedEditor.tsx",
         "apps/api-rust/src/professional.rs",
-        "apps/api-rust/src/editing.rs"
+        "apps/api-rust/src/editing.rs",
+        "tests/spec065/topology.py"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Actual authenticated split/merge preview and changeset commit/replay with golden planar area, retained keeper FID and attributes; disconnected/noncrossing rejected. Reshape, multipart editing, ring create/delete and paired QGIS remain."
     },
     {
       "id": "EDIT-07",
@@ -680,9 +692,10 @@
         "apps/web-next/core-toolkit-smoke.mjs",
         "apps/web-next/layout-smoke.mjs",
         "apps/web-next/src/layout-legend.ts",
-        "apps/web-next/src/layout-legend.test.ts"
+        "apps/web-next/src/layout-legend.test.ts",
+        "apps/web-next/src/rule-style.ts"
       ],
-      "blocker": "Classified legend uses currently loaded features, renderer, hidden categories and first-frame zoom; unit tests pass. Independent per-frame layer/style snapshots and paired QGIS still missing."
+      "blocker": "Legend includes ordered-rule symbols and fallback for loaded vector features; independent per-frame style snapshots, full-source counts and paired QGIS still missing."
     },
     {
       "id": "OUTPUT-04",

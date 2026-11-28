@@ -11,13 +11,26 @@ export function snapLayerAllowed(scope:SnapScope|undefined,id:string,active:stri
  return scope==="active"?!!active&&active===id:scope==="selected"?!!selected?.includes(id):true;
 }
 const equal=(a:readonly number[],b:readonly number[])=>a[0]===b[0]&&a[1]===b[1];
+// Bounded planar ring check for small, local drafts; backend still validates all topology.
+function ringCrosses(p:number[][]){
+ const n=p.length-1;if(n>512||Math.max(...p.map(v=>v[0]!))-Math.min(...p.map(v=>v[0]!))>180)return false;
+ const orient=(a:number[],b:number[],c:number[])=>(b[0]!-a[0]!)*(c[1]!-a[1]!)-(b[1]!-a[1]!)*(c[0]!-a[0]!);
+ const on=(a:number[],b:number[],c:number[])=>Math.min(a[0]!,b[0]!)<=c[0]!&&c[0]!<=Math.max(a[0]!,b[0]!)&&Math.min(a[1]!,b[1]!)<=c[1]!&&c[1]!<=Math.max(a[1]!,b[1]!);
+ for(let i=0;i<n;i++)for(let j=i+2;j<n;j++){
+  if(i===0&&j===n-1)continue;
+  const a=p[i]!,b=p[i+1]!,c=p[j]!,d=p[j+1]!,x=orient(a,b,c),y=orient(a,b,d),z=orient(c,d,a),w=orient(c,d,b);
+  if((x*y<0&&z*w<0)||(x===0&&on(a,b,c))||(y===0&&on(a,b,d))||(z===0&&on(c,d,a))||(w===0&&on(c,d,b)))return true;
+ }
+ return false;
+}
+
 // Cheap, non-mutating structural preflight; PostGIS remains authoritative for topology.
 export function draftError(g:Geometry):string|null{
  const line=(p:number[][],ring:boolean)=>{
   if(p.length<(ring?4:2)||p.some(q=>!validXY(q)))return "Tọa độ hoặc số đỉnh không hợp lệ.";
   if(ring&&!equal(p[0]!,p.at(-1)!))return "Vòng chưa khép kín.";
   if(p.some((q,i)=>i>0&&equal(q,p[i-1]!)))return "Hai đỉnh liên tiếp trùng nhau.";
-  if(ring){const unique=new Set(p.slice(0,-1).map(q=>q.join(",")));if(unique.size<3)return "Vùng cần ít nhất ba đỉnh khác nhau.";
+  if(ring){const unique=new Set(p.slice(0,-1).map(q=>q.join(",")));if(unique.size<3)return "Vùng cần ít nhất ba đỉnh khác nhau.";if(unique.size!==p.length-1||ringCrosses(p))return "Vòng có đỉnh trùng hoặc tự giao.";
    // Local shoelace with translated origin avoids cancellation at large longitudes.
    const o=p[0]!,area=p.slice(1).reduce((sum,q,i)=>sum+(p[i]![0]!-o[0]!)*(q[1]!-o[1]!)-(q[0]!-o[0]!)*(p[i]![1]!-o[1]!),0);
    if(area===0)return "Vùng có diện tích bằng 0 hoặc vòng tự giao."; }

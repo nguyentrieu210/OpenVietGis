@@ -9,6 +9,7 @@ describe("digitizing safeguards",()=>{
   expect(draftError({type:"LineString",coordinates:[[1,2],[1,2]]})).toBeTruthy();
   expect(draftError({type:"Polygon",coordinates:[[[1,1],[2,2],[3,3],[1,1]]]})).toBeTruthy();
   expect(draftError({type:"Polygon",coordinates:[[[1,1],[2,1],[2,2],[1,1]]]})).toBeNull();
+  expect(draftError({type:"Polygon",coordinates:[[[0,0],[3,3],[3,0],[0,2],[0,0]]]})).toContain("tự giao");
  });
  it("explicit snap scopes and ortho",()=>{
   expect(snapLayerAllowed("active","a","b",[])).toBe(false);
