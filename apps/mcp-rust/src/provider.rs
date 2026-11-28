@@ -28,6 +28,7 @@ fn valid_model(p:Provider,s:&str)->bool{
     !s.is_empty()&&s.len()<=160&&s.bytes().all(|b|b.is_ascii_alphanumeric()||b"._-:".contains(&b)||(p!=Provider::Gemini&&b==b'/'))
 }
 /// No Debug/Serialize implementation: credentials must never enter a transcript.
+#[derive(Clone)]
 pub struct Config { provider:Provider, model:String, key:String }
 impl Config {
     pub fn from_env(p:Provider)->Option<Self>{
@@ -51,6 +52,8 @@ impl Gateway {
         let http=reqwest::Client::builder().no_proxy().redirect(reqwest::redirect::Policy::none()).timeout(Duration::from_secs(60)).build().map_err(|_|ProviderError::Fatal)?;
         Ok(Self{cfg,http,native:Mutex::new(HashMap::new())})
     }
+    /// Isolated native replay state for each delegated conversation; same consented model and transport.
+    pub fn fork(&self)->Self{Self{cfg:self.cfg.clone(),http:self.http.clone(),native:Mutex::new(HashMap::new())}}
     pub async fn complete(&self,req:ModelRequest)->Result<Reply,ProviderError>{
         let index=req.turns.len();
         let body={let history=self.native.lock().map_err(|_|ProviderError::Fatal)?;encode(self.cfg.provider,&self.cfg.model,&req,&history)?};

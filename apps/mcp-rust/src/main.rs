@@ -225,7 +225,7 @@ fn provider_allowed(subject:&str)->bool{
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool}
+struct AgentInput {provider:String, expected_model:String, user:String, skill:Option<String>, consent:bool, allow_writes:bool, #[serde(default)] multi_agent:bool}
 async fn provider_list(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
     let v=parse(&body,&h)?;if v!=json!({}){return Err(Failure::new(422,"Invalid provider request"))}
     let(owner,_)=browser_identity(&app,&h,id).await?;
@@ -271,8 +271,51 @@ async fn agent_job_action(State(app):State<App>,Path((id,action)):Path<(Uuid,Str
         _=>Err(Failure::new(404,"Unknown agent action"))
     }
 }
+// Wave 4: shared pacing and scope. The lock covers dispatch and its acknowledgement,
+// not model inference. Children never receive asynchronous raster or mutation tools.
+struct TeamHost<'a>{app:&'a App,headers:&'a HeaderMap,owner:&'a Owner,session:Uuid,deadline:u64,pace:tokio::sync::Mutex<tokio::time::Instant>}
+impl TeamHost<'_>{
+    async fn model(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,request:openvietgis_mcp_rust::agent::ModelRequest)->Result<openvietgis_mcp_rust::agent::Reply,openvietgis_mcp_rust::agent::ProviderError>{
+        use openvietgis_mcp_rust::agent::ProviderError;
+        if unix_now()>=self.deadline||!provider_allowed(&self.owner.subject){return Err(ProviderError::Fatal)}
+        match browser_identity(self.app,self.headers,self.session).await{Ok((fresh,_)) if fresh==*self.owner=>gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
+    }
+    async fn dispatch(&self,call:openvietgis_mcp_rust::agent::ToolCall)->openvietgis_mcp_rust::agent::ToolOutcome{
+        use openvietgis_mcp_rust::agent::{ToolOutcome,from_dispatch};
+        let mut next=self.pace.lock().await;
+        if call.arguments["session_id"]!=json!(self.session){return ToolOutcome::Failed}
+        if call.name!="gis_operation_status"{tokio::time::sleep_until(*next).await;*next=tokio::time::Instant::now()+Duration::from_millis(2050);}
+        if unix_now()>=self.deadline||!provider_allowed(&self.owner.subject){return ToolOutcome::Failed}
+        match browser_identity(self.app,self.headers,self.session).await{
+            Ok((fresh,_)) if fresh==*self.owner=>match operate_subject(self.app,&self.owner.subject,self.deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
+            _=>ToolOutcome::Failed
+        }
+    }
+    async fn child(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,budget:Arc<openvietgis_mcp_rust::team::Budget>,parent:&[String],task:Option<openvietgis_mcp_rust::team::Task>,cancel:tokio::sync::watch::Receiver<bool>)->Option<Value>{
+        use openvietgis_mcp_rust::{agent::Agent,team};
+        let task=task?;
+        let child_gateway=gateway.fork();
+        let allowed=task.role.allowed(&self.app.registry,parent);
+        let agent=Agent::new(&self.app.registry,self.session,allowed,Duration::from_secs(self.deadline.saturating_sub(unix_now()))).with_team(budget,false).with_skill(task.role.skill()).ok()?;
+        let g=&child_gateway;
+        let report=agent.run(task.task,cancel,|request|self.model(g,request),|call|self.dispatch(call)).await;
+        Some(team::summary(task.role,&report))
+    }
+    async fn delegate(&self,gateway:&openvietgis_mcp_rust::provider::Gateway,budget:Arc<openvietgis_mcp_rust::team::Budget>,parent:&[String],call:openvietgis_mcp_rust::agent::ToolCall,cancel:tokio::sync::watch::Receiver<bool>,reports:&Mutex<Vec<Value>>)->openvietgis_mcp_rust::agent::ToolOutcome{
+        use openvietgis_mcp_rust::{agent::ToolOutcome,team};
+        let Some(tasks)=team::tasks(&call.arguments)else{return ToolOutcome::Failed};
+        if !budget.children(tasks.len()){return ToolOutcome::Failed}
+        let mut it=tasks.into_iter();
+        let (a,b,c)=tokio::join!(self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget.clone(),parent,it.next(),cancel.clone()),self.child(gateway,budget,parent,it.next(),cancel));
+        let batch:Vec<Value>=[a,b,c].into_iter().flatten().collect();
+        let ok=!batch.is_empty()&&batch.iter().all(|r|r["complete"]==true&&r["uncertain_call"].is_null()&&r["unresolved_ticket"].is_null());
+        if let Ok(mut r)=reports.lock(){r.extend(batch.clone());}
+        if ok{ToolOutcome::Completed(json!({"untrusted_agent_reports":batch}))}else{ToolOutcome::Failed}
+    }
+}
+
 async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,body:Bytes)->Result<Response,Failure>{
-    use openvietgis_mcp_rust::{agent::{Agent,ProviderError,ToolOutcome,from_dispatch},provider::{Provider,Config,Gateway}};
+    use openvietgis_mcp_rust::{agent::Agent,provider::{Provider,Config,Gateway}};
     let v=parse(&body,&h)?;let input:AgentInput=serde_json::from_value(v).map_err(|_|Failure::new(422,"Invalid agent request"))?;
     if !input.consent||input.user.trim().is_empty()||input.user.len()>16000{return Err(Failure::new(422,"Explicit provider consent and request required"))}
     let(owner,_)=browser_identity(&app,&h,id).await?;
@@ -304,25 +347,25 @@ async fn browser_agent(State(app):State<App>,Path(id):Path<Uuid>,h:HeaderMap,bod
     tokio::spawn(async move{
         let _slot=_slot;
         let _job_guard=AgentJobGuard(run_id);
-        let mut agent=Agent::new(&app.registry,id,allowed,Duration::from_secs(300));
+        let budget=Arc::new(openvietgis_mcp_rust::team::Budget::default());
+        let reports=Mutex::new(Vec::new());
+        let mut agent=Agent::new(&app.registry,id,allowed.clone(),Duration::from_secs(300)).with_team(budget.clone(),input.multi_agent);
         if let Some(skill)=input.skill.as_deref(){
             match agent.with_skill(skill){
                 Ok(a)=>agent=a,
                 Err(_)=>{if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(json!({"stop":"invalid_input","calls":0,"model_steps":0}));}}return}
             }
         }
-        let app_ref=&app;let headers=&h;let expected=&owner;let model_gateway=&gateway;
-        let report=agent.run(input.user,cancel,|request|async move{
-            if unix_now()>=deadline||!provider_allowed(&expected.subject){return Err(ProviderError::Fatal)}
-            match browser_identity(app_ref,headers,id).await{Ok((fresh,_)) if fresh==*expected=>model_gateway.complete(request).await,_=>Err(ProviderError::Fatal)}
-        },|call|async move{
-            if unix_now()>=deadline||!provider_allowed(&expected.subject){return ToolOutcome::Failed}
-            match browser_identity(app_ref,headers,id).await{
-                Ok((fresh,_)) if fresh==*expected=>match operate_subject(app_ref,&expected.subject,deadline,&call.name,&call.arguments).await{Ok(value)=>from_dispatch(&call,value),Err(_)=>ToolOutcome::Failed},
-                _=>ToolOutcome::Failed
-            }
+        let host=TeamHost{app:&app,headers:&h,owner:&owner,session:id,deadline,pace:tokio::sync::Mutex::new(tokio::time::Instant::now())};
+        let host_ref=&host;let g=&gateway;let b=&budget;let parent=&allowed;let child_cancel=&cancel;let logs=&reports;
+        let report=agent.run(input.user,cancel.clone(),|request|host_ref.model(g,request),|call|async move{
+            if call.name==openvietgis_mcp_rust::team::DELEGATE{
+                host_ref.delegate(g,b.clone(),parent,call,child_cancel.clone(),logs).await
+            }else{host_ref.dispatch(call).await}
         }).await;
-        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":report.model_steps,"calls":report.calls,"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
+        let totals=budget.snapshot();
+        let children=reports.lock().map(|r|r.clone()).unwrap_or_default();
+        let value=json!({"stop":report.stop,"answer":report.answer,"model_steps":totals["model_steps"],"calls":totals["calls"],"model_attempts":totals["model_attempts"],"children":children,"child_count":totals["children"],"unresolved_ticket":report.unresolved_ticket,"uncertain_call":report.uncertain_call});
         if let Ok(mut jobs)=agent_jobs().lock(){if let Some(job)=jobs.get_mut(&run_id){job.result=Some(value);}}
     });
     Ok(respond(202,json!({"run_id":run_id,"state":"running"})))
