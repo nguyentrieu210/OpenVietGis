@@ -11,6 +11,8 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
   const [rows,setRows]=useState<FeatureRow[]>([]),[cursor,setCursor]=useState("0"),[filter,setFilter]=useState("");
   const [selected,setSelected]=useState<FeatureRecord>(),[attrs,setAttrs]=useState("{}");
+  const [raster,setRaster]=useState<{id:string;attribution:string}>();
+  const styleReady=useRef(false);
   const [kind,setKind]=useState<Kind>(),[count,setCount]=useState(0);
   const draft=useRef<number[]>([]),mode=useRef<Kind|undefined>(undefined),alive=useRef(true);
   const sequence=useRef(0),pending=useRef(false),dirty=useRef(false),working=useRef(false);
@@ -23,7 +25,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
     try{
       while(dirty.current&&alive.current){
         dirty.current=false;const id=sequence.current;
-        const m=map.current;if(!m||!m.isStyleLoaded())return;
+        const m=map.current;if(!m||!styleReady.current)return;
         const b=m.getBounds();
         const west=Math.max(-180,b.getWest()),east=Math.min(180,b.getEast());
         const south=Math.max(-90,b.getSouth()),north=Math.min(90,b.getNorth());
@@ -57,7 +59,13 @@ export default function LocalWorkbench({handle}:{handle:string}){
   const begin=(k:Kind)=>{clearDraft();mode.current=k;setKind(k)};
   const afterMutation=async()=>{setSelected(undefined);setAttrs("{}");await page("0",filter);invalidate()};
   useEffect(()=>{
-    alive.current=true;
+    alive.current=true;styleReady.current=false;
+    maplibregl.addProtocol("ovg",async(params,abort)=>{
+      if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");
+      const data=await desktop.resource(params.url);
+      if(abort.signal.aborted)throw new DOMException("Aborted","AbortError");
+      return {data};
+    });
     if(!canvas.current)return;
     let m:maplibregl.Map|undefined;
     try{
@@ -72,11 +80,11 @@ export default function LocalWorkbench({handle}:{handle:string}){
           m.addLayer({id:src+"-line",source:src,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":2}});
           m.addLayer({id:src+"-point",source:src,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":5,"circle-stroke-color":"#fff","circle-stroke-width":1}});
         }
-        setReady(true);invalidate();
+        styleReady.current=true;setReady(true);invalidate();
       });
       m.on("moveend",invalidate);
       m.on("click",e=>{
-        if(!m||!m.isStyleLoaded()||working.current)return;
+        if(!m||!styleReady.current||working.current)return;
         const k=mode.current;
         if(k){
           if(draft.current.length>=8190||(k==="point"&&draft.current.length))return;
@@ -92,8 +100,22 @@ export default function LocalWorkbench({handle}:{handle:string}){
       m.on("error",e=>{if(alive.current)setNotice(String(e.error))});
       void run(()=>page());
     }catch(e){setNotice(String(e))}
-    return()=>{alive.current=false;sequence.current++;dirty.current=false;map.current=undefined;m?.remove()};
+    return()=>{alive.current=false;sequence.current++;dirty.current=false;styleReady.current=false;map.current=undefined;m?.remove();maplibregl.removeProtocol("ovg")};
   },[handle,invalidate,page,run,select]);
+  const openRaster=()=>run(async()=>{
+    const m=map.current;if(!m||!styleReady.current)return;
+    const a=await desktop.openRaster(handle);if(!a)return;
+    if(m.getLayer("offline-raster"))m.removeLayer("offline-raster");
+    if(m.getSource("offline-raster"))m.removeSource("offline-raster");
+    m.addSource("offline-raster",{type:"raster",tiles:[`ovg://v1/workspaces/${handle}/rasters/${a.id}/revisions/0/tiles/{z}/{x}/{y}.png`],tileSize:256,minzoom:0,maxzoom:22});
+    m.addLayer({id:"offline-raster",type:"raster",source:"offline-raster"},"local-fill");setRaster(a);
+  });
+  const closeRaster=()=>run(async()=>{
+    const m=map.current;
+    if(m?.getLayer("offline-raster"))m.removeLayer("offline-raster");
+    if(m?.getSource("offline-raster"))m.removeSource("offline-raster");
+    await desktop.closeRaster(handle);setRaster(undefined);
+  });
   const commit=()=>run(async()=>{
     const k=mode.current;if(!k)return;
     await desktop.edit(handle,{command:crypto.randomUUID(),id:crypto.randomUUID(),revision:"0",kind:k,xy:[...draft.current],attributes:{}});
@@ -112,6 +134,8 @@ export default function LocalWorkbench({handle}:{handle:string}){
   });
   return <section className="ovg-local-workbench">
     <div className="ovg-local-tools" role="toolbar" aria-label="Công cụ GIS cục bộ">
+      <button disabled={busy||!ready} onClick={()=>void openRaster()}>Mở MBTiles PNG</button>
+      <button disabled={busy||!raster} onClick={()=>void closeRaster()}>Đóng raster</button>
       <button disabled={busy} onClick={()=>void run(async()=>{const n=await desktop.importGeoJSON(handle);if(n!==null)await afterMutation()})}>Nhập GeoJSON</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.exportFile(handle,"gpkg")})}>Lưu bản sao GPKG</button>
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.exportFile(handle,"geojson")})}>Xuất GeoJSON</button>
@@ -123,7 +147,7 @@ export default function LocalWorkbench({handle}:{handle:string}){
       <button disabled={busy} onClick={()=>void run(async()=>{await desktop.history(handle,true);await afterMutation()})}>Redo</button>
     </div>
     <div ref={canvas} className="ovg-local-map" aria-label="Bản đồ dữ liệu cục bộ"/>
-    <div role="status" className="ovg-local-status">{notice}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
+    <div role="status" className="ovg-local-status">{notice}{raster&&" · Nguồn: "+raster.attribution}{kind&&" · Nhấp bản đồ để vẽ: "+count+" đỉnh"}</div>
     <div className="ovg-local-table">
       <div><label>Tìm thuộc tính <input value={filter} maxLength={128} onChange={e=>setFilter(e.target.value)}/></label>
       <button disabled={busy} onClick={()=>void run(()=>page("0",filter))}>Trang đầu</button>
