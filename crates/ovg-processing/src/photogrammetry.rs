@@ -34,6 +34,7 @@ pub mod exif;
 pub mod jpeg_source;
 pub mod image_cache;
 pub mod checkpoint;
+pub mod mosaic_export;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

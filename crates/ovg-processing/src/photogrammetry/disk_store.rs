@@ -59,6 +59,11 @@ impl Store{
   if !publish_new(&dir,&key,bytes)?{self.verify(&key,bytes.len() as u64)?;}
   Ok((key,bytes.len() as u64))
  }
+ /// Trusted internal export path, never returned to an untrusted frontend.
+ pub(super) fn verified_path(&self,key:&str,len:u64)->Result<PathBuf,Error>{
+  self.verify(key,len)?;let p=self.root.join("objects").join(key);
+  let m=fs::symlink_metadata(&p)?;if !m.is_file()||m.file_type().is_symlink(){return Err(Error::Corrupt);}Ok(p)
+ }
  pub fn verify(&self,key:&str,len:u64)->Result<(),Error>{
   if !super::digest(key)||len==0||len>MAX_ARTIFACT{return Err(Error::Invalid);}
   let p=self.root.join("objects").join(key);
