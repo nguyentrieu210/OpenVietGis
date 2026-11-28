@@ -9,6 +9,8 @@ pub mod admission;
 pub mod images;
 pub mod octree;
 pub mod dag;
+pub mod scheduler;
+pub mod manifest;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
