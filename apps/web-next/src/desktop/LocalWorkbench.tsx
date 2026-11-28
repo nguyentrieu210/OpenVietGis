@@ -68,7 +68,7 @@ export default function LocalWorkbench({handle,overlays=[],initialView,onView,la
         dataSource()?.setData(v.data);
         setNotice(v.truncated?"Khung nhìn vượt giới hạn 512 đối tượng/1 MiB; hãy phóng to.":"Dữ liệu cục bộ · EPSG:4326");
       }
-    }catch(e){if(alive.current)setNotice(String(e))}
+    }catch(e){if(alive.current){if(String(e).includes("SOURCE_CHANGED"))(map.current?.getSource("direct") as GeoJSONSource|undefined)?.setData(empty());setNotice(String(e))}}
     finally{pending.current=false}
   },[handle]);
   const invalidate=useCallback(()=>{sequence.current++;void refreshMap()},[refreshMap]);
