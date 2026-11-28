@@ -103,6 +103,9 @@ impl NativeWorkspace {
             s.store.set_attribute_schema(&fields).map_err(|e|e.to_string())
         })
     }
+    pub fn list_tracks(&self)->Result<String,String>{
+        self.with_state(|s|s.store.list_tracks().map_err(|e|e.to_string()))
+    }
     pub fn create_track(&self,name:String)->Result<String,String>{
         self.with_state(|s|s.store.create_track(&name).map(|v|v.to_string()).map_err(|e|e.to_string()))
     }

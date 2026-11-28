@@ -42,6 +42,7 @@ pub mod vector;
 pub mod mbtiles;
 pub mod editing;
 pub mod survey;
+pub mod media;
 const SCHEMA: &str = include_str!("schema.sql");
 fn parse_geometry(blob: &[u8]) -> Result<(Vec<u8>,BBox),Error> {
     if blob.len()>MAX_GEOMETRY {return Err(Error::Limit);}

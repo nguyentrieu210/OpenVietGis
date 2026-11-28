@@ -4,6 +4,12 @@ use ovg_mobile_engine::survey::{Fix,validate_fix};
 use rusqlite::{params,OptionalExtension,TransactionBehavior};
 use uuid::Uuid;
 impl LocalStore{
+ pub fn list_tracks(&self)->Result<String,Error>{
+  let db=self.lock()?;let mut stmt=db.prepare("SELECT id,name,state,segment FROM ovg_survey_track ORDER BY rowid DESC LIMIT 200")?;
+  let mut rows=stmt.query([])?;let mut list=Vec::new();
+  while let Some(r)=rows.next()?{list.push(serde_json::json!({"id":r.get::<_,String>(0)?,"name":r.get::<_,String>(1)?,"state":r.get::<_,String>(2)?,"segments":r.get::<_,u64>(3)?}));}
+  Ok(serde_json::to_string(&list).map_err(|_|Error::Invalid)?)
+ }
  pub fn create_track(&self,name:&str)->Result<Uuid,Error>{
   if name.trim().is_empty()||name.len()>128||name.chars().any(char::is_control){return Err(Error::Invalid);}
   let id=Uuid::new_v4();let db=self.lock()?;
