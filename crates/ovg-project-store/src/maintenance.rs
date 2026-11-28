@@ -81,3 +81,52 @@ impl Store{
   std::fs::hard_link(&candidate,dest).map_err(|_|Error::Storage)?;Ok(())
  }
 }
+
+impl Store{
+ /// Backup a coherent revision, including all receipts, relationships and journals.
+ pub fn backup_copy(&self,dest:&Path,expected:u64,cancel:&AtomicBool)->Result<()>{
+  if dest.exists(){return Err(Error::Invalid)}
+  let stage=tempfile::tempdir_in(dest.parent().ok_or(Error::Invalid)?).map_err(|_|Error::Storage)?;
+  let p=stage.path().join("backup.sqlite");
+  {let db=self.db.lock().map_err(lock_err)?;
+   if rev(&db)?!=expected{return Err(Error::Conflict)}
+   let mut target=Connection::open(&p)?;
+   let backup=rusqlite::backup::Backup::new(&db,&mut target)?;
+   let deadline=std::time::Instant::now()+std::time::Duration::from_secs(120);
+   loop{if cancel.load(Ordering::Acquire)||std::time::Instant::now()>deadline{return Err(Error::Conflict)}
+    match backup.step(256)?{rusqlite::backup::StepResult::Done=>break,_=>std::thread::sleep(std::time::Duration::from_millis(2))}
+   }
+  }
+  {let s=Store::reopen(&p)?;if s.revision()?!=expected||!s.integrity()?{return Err(Error::Invalid)}s.checkpoint()?;}
+  if cancel.load(Ordering::Acquire){return Err(Error::Conflict)}
+  std::fs::File::open(&p).and_then(|f|f.sync_all()).map_err(|_|Error::Storage)?;
+  std::fs::hard_link(&p,dest).map_err(|_|Error::Storage)?;Ok(())
+ }
+ /// Import only a checkpointed, exact-schema backup into a new file.
+ /// Never open the external file with write privileges.
+ pub fn restore_copy(source:&Path,dest:&Path,cancel:&AtomicBool)->Result<u64>{
+  use std::io::{Read,Write};
+  if dest.exists(){return Err(Error::Invalid)}
+  let meta=std::fs::symlink_metadata(source).map_err(|_|Error::Storage)?;
+  if !meta.file_type().is_file()||meta.len()>QUOTA{return Err(Error::Limit)}
+  for suffix in ["-wal","-shm","-journal"]{let mut n=source.as_os_str().to_os_string();n.push(suffix);
+   match std::fs::symlink_metadata(n){Err(e) if e.kind()==std::io::ErrorKind::NotFound=>{},_=>return Err(Error::Unsupported)}
+  }
+  let stage=tempfile::tempdir_in(dest.parent().ok_or(Error::Invalid)?).map_err(|_|Error::Storage)?;
+  let p=stage.path().join("restore.sqlite");
+  let mut from=std::fs::File::open(source).map_err(|_|Error::Storage)?;
+  let mut to=std::fs::OpenOptions::new().create_new(true).write(true).open(&p).map_err(|_|Error::Storage)?;
+  let mut size=0u64;let mut b=vec![0u8;256*1024];
+  loop{if cancel.load(Ordering::Acquire){return Err(Error::Conflict)}
+   let n=from.read(&mut b).map_err(|_|Error::Storage)?;if n==0{break}size+=n as u64;
+   if size>QUOTA{return Err(Error::Limit)}to.write_all(&b[..n]).map_err(|_|Error::Storage)?;
+  }
+  let end=std::fs::symlink_metadata(source).map_err(|_|Error::Storage)?;
+  if size!=meta.len()||end.len()!=meta.len()||end.modified().ok()!=meta.modified().ok(){return Err(Error::Conflict)}
+  to.sync_all().map_err(|_|Error::Storage)?;drop(to);
+  let revision={let s=Store::reopen(&p)?;if !s.integrity()?{return Err(Error::Invalid)}s.checkpoint()?;s.revision()?};
+  if cancel.load(Ordering::Acquire){return Err(Error::Conflict)}
+  std::fs::File::open(&p).and_then(|f|f.sync_all()).map_err(|_|Error::Storage)?;
+  std::fs::hard_link(&p,dest).map_err(|_|Error::Storage)?;Ok(revision)
+ }
+}
