@@ -113,7 +113,7 @@ def upgrade():
           ELSE
             org:=NEW.organization_id; project:=NEW.project_id; source:=NEW.source_id;
           END IF;
-          -- Let row-level policy checks reject writes outside the bound project.
+          -- Preserve RLS SQLSTATE 42501 for writes outside the bound project.
           -- BEFORE triggers run before WITH CHECK, so the relation guard must not
           -- replace the authorization SQLSTATE with a relation conflict.
           IF current_user='openvietgis_runtime' AND (
