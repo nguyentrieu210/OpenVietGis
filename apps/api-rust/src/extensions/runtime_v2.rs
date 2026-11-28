@@ -43,6 +43,10 @@ pub(crate) fn router() -> Router<AppState> {
         .route(BASE, get(document))
         .route(&format!("{BASE}/invoke"), post(invoke))
         .route(&format!("{BASE}/grant"), post(change_grant))
+        .route(
+            &format!("{BASE}/processing/confirm"),
+            post(confirm_processing),
+        )
 }
 struct Ready {
     doc: Document,
@@ -423,6 +427,15 @@ async fn run(
             .map_err(|_| invalid("invalid layer id"))?;
             layer_summary(&read.get_layer(id).await?)
         }
+        "gis_processing_plan" => {
+            super::processing_plan::preview(
+                read,
+                body.input["request"]
+                    .as_str()
+                    .ok_or_else(|| invalid("processing request required"))?,
+            )
+            .await?
+        }
         "host_notice" => {
             let text = body.input["text"]
                 .as_str()
@@ -489,7 +502,7 @@ async fn invoke(
             "current dependency lock approval required",
         )));
     }
-    let (command, output) = run(&mut read, &ready, &body)
+    let (command, mut output) = run(&mut read, &ready, &body)
         .await
         .map_err(ExtensionError::Domain)?;
     let digest = hash(
@@ -508,9 +521,131 @@ async fn invoke(
     )
     .await
     .map_err(ExtensionError::Domain)?;
+    if command == "gis_processing_plan" {
+        let digest =
+            hash(&ovg_module_sdk::release_v2::canonical(&output).map_err(ExtensionError::Domain)?);
+        output = ovg_storage::extensions::processing::propose(
+            &mut read,
+            &pin,
+            id,
+            ovg_storage::extensions::processing::ProposalBinding {
+                release: &ready.digest,
+                lock: &lock.digest,
+                grant_revision: grant.sequence,
+                epoch: lock.epoch,
+            },
+            &output,
+            &digest,
+        )
+        .await
+        .map_err(ExtensionError::Domain)?;
+    }
     read.commit().await.map_err(ExtensionError::Domain)?;
     Ok(no_store(
         json!({"receipt_id":id,"command_id":command,"output":output}),
+    ))
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ConfirmProcessing {
+    proposal_id: Uuid,
+    plan_digest: String,
+}
+/// Dedicated trusted-host confirmation. Not a command callable from the plugin
+/// document; requires current manager session, CSRF, same actor and exact proposal.
+async fn confirm_processing(
+    State(state): State<AppState>,
+    Path((org, project, manifest)): Path<(String, String, String)>,
+    request: Request<axum::body::Body>,
+) -> Result<Response, ExtensionError> {
+    use ovg_storage::extensions::processing::{self, ProposalBinding};
+    check_enabled(&state)?;
+    let (parts, body) = request.into_parts();
+    let bytes = axum::body::to_bytes(body, 4096)
+        .await
+        .map_err(|_| ExtensionError::InvalidRequest)?;
+    let (actor, headers, body) = authenticate_json(
+        &state,
+        Request::from_parts(parts, axum::body::Body::from(bytes)),
+        &org,
+    )
+    .await?;
+    check_human(&actor)?;
+    require_actor_csrf(&state, &actor, &headers)?;
+    let body: ConfirmProcessing = decode_body(body)?;
+    let _slot = INVOCATIONS
+        .try_acquire()
+        .map_err(|_| ExtensionError::Domain(AppError::rate_limited(Some(1))))?;
+    let mut read = open_project_scope(
+        &state,
+        &actor,
+        parse_uuid(&org)?,
+        parse_uuid(&project)?,
+        ProjectReadPolicy::UnrestrictedManage,
+    )
+    .await?;
+    let pin = active_pin(&mut read, parse_uuid(&manifest)?)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    let catalog = releases(&state).await?;
+    let ready = qualify(&pin, &catalog).map_err(ExtensionError::Domain)?;
+    let lock = dependency_lock(&mut read, &pin, &ready, &catalog)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    let grant = grant_status(&mut read, &pin, &ready.digest)
+        .await
+        .map_err(ExtensionError::Domain)?;
+    if !lock_matches(&grant, &lock)
+        || !ready.doc.actions.iter().any(|a| {
+            a.command_id == "gis_processing_plan" && ready.permissions.contains(&a.permission)
+        })
+    {
+        return Err(ExtensionError::Domain(AppError::forbidden(
+            "processing plan permission required",
+        )));
+    }
+    let plan = processing::proposal(
+        &mut read,
+        body.proposal_id,
+        &pin,
+        ProposalBinding {
+            release: &ready.digest,
+            lock: &lock.digest,
+            grant_revision: grant.sequence,
+            epoch: lock.epoch,
+        },
+        &body.plan_digest,
+    )
+    .await
+    .map_err(ExtensionError::Domain)?;
+    if hash(&ovg_module_sdk::release_v2::canonical(&plan).map_err(ExtensionError::Domain)?)
+        != body.plan_digest
+    {
+        return Err(ExtensionError::InvalidRequest);
+    }
+    let job = if let Some(id) = processing::approved_job(&mut read, body.proposal_id)
+        .await
+        .map_err(ExtensionError::Domain)?
+    {
+        ovg_storage::processing_jobs::get_job(&mut read, id)
+            .await
+            .map_err(ExtensionError::Domain)?
+    } else {
+        let job = super::processing_plan::queue(&mut read, body.proposal_id, &plan)
+            .await
+            .map_err(ExtensionError::Domain)?;
+        let id = job["id"]
+            .as_str()
+            .and_then(|v| Uuid::parse_str(v).ok())
+            .ok_or(ExtensionError::InvalidRequest)?;
+        processing::approve(&mut read, body.proposal_id, id)
+            .await
+            .map_err(ExtensionError::Domain)?;
+        job
+    };
+    read.commit().await.map_err(ExtensionError::Domain)?;
+    Ok(no_store(
+        json!({"proposal_id":body.proposal_id,"job":job,"execution":"manual_core_job"}),
     ))
 }
 #[cfg(test)]

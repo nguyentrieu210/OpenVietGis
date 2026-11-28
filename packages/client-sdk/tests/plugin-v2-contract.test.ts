@@ -3,9 +3,10 @@ import {parseReadOnlyPluginDocument} from "../src/plugin-v2-contract";
 import context from "../../plugin-sdk/examples/v2/host-context.json";
 import notice from "../../plugin-sdk/examples/v2/host-notice.json";
 import layers from "../../plugin-sdk/examples/v2/host-layers.json";
+import processing from "../../plugin-sdk/examples/v2/host-processing.json";
 describe("shared universal declarative contract",()=>{
- const cases=[["context","host_context",context],["notice","host_notice",notice],["layers","map_view",layers]] as const;
- it("accepts all three Python-signed reference documents",()=>{
+ const cases=[["context","host_context",context],["notice","host_notice",notice],["layers","map_view",layers],["processing","processing_plan",processing]] as const;
+ it("accepts all four Python-signed reference documents",()=>{
   for(const [name,cap,doc] of cases){
    const key="partner_fixture_"+name;
    expect(parseReadOnlyPluginDocument(doc,["ext."+key+"."+cap],key)).toEqual(doc);

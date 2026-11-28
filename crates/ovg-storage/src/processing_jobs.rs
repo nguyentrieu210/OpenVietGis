@@ -12,7 +12,7 @@ use ovg_core::crs::{
     WEB_MERCATOR_MAX_LATITUDE,
 };
 use ovg_core::AppError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sqlx::postgres::PgRow;
 use sqlx::{Acquire, Row};
@@ -447,7 +447,7 @@ pub struct SubmitJobResult {
     pub already_existed: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExpectedSource {
     pub source_id: Uuid,
@@ -481,6 +481,21 @@ impl ExpectedSource {
                 .and_then(Value::as_str)
                 == Some(self.schema_revision.as_str())
     }
+}
+
+/// Read current ready-source pins for the human review, without reading geometry or attributes.
+pub async fn plugin_source_pin(read:&mut ProjectRead<'_>,layer_id:Uuid)->Result<Value,EditError>{
+    if read.is_gis_scoped()||read.actor_type()!="human"{return Err(EditError::forbidden("FORBIDDEN","unrestricted human project required"));}
+    let org=read.organization_id();let project=read.project_id();
+    let source=resolve_layer(read.transaction(),org,project,layer_id).await?;
+    if source.feature_count>5000{return Err(EditError::validation("PLUGIN_PROCESSING_LIMIT","plugin preview limited to 5000 features per source"));}
+    Ok(json!({"source_id":source.id,"content_revision":source.content_revision,"schema_revision":source.schema_revision,
+      "feature_count":source.feature_count,"stored_crs":source.stored_crs,"geometry_family":source.geometry_family}))
+}
+pub async fn plugin_queue_capacity(read:&mut ProjectRead<'_>)->Result<(),EditError>{
+    let n:i64=sqlx::query_scalar("SELECT count(*) FROM processing.jobs WHERE organization_id=$1 AND project_id=$2 AND status IN ('queued','running')")
+        .bind(read.organization_id()).bind(read.project_id()).fetch_one(&mut **read.transaction()).await.map_err(edit_db_error)?;
+    if n>=10{return Err(EditError::conflict("PLUGIN_QUEUE_FULL","project processing queue at capacity"));}Ok(())
 }
 
 /// Persist a new queued processing job (or return idempotent replay) inside scope.
@@ -520,6 +535,28 @@ pub async fn submit_job_pinned(
     expected_input: Option<&ExpectedSource>,
     expected_overlay: Option<&ExpectedSource>,
 ) -> Result<SubmitJobResult, EditError> {
+    let org_id=scope.organization_id();let project_id=scope.project_id();
+    let actor_id=scope.actor_id();let actor_type=scope.actor_kind();
+    submit_job_tx(scope.tx_mut(),org_id,project_id,actor_id,actor_type,algorithm_id,input_layer_id,overlay_layer_id,clean_params,output_name,operation_id,expected_input,expected_overlay).await
+}
+
+/// Reuse the exact Core job submission transaction after a verified human manager approval.
+pub async fn submit_plugin_job(
+    read:&mut ProjectRead<'_>,algorithm_id:&str,input_layer_id:Uuid,overlay_layer_id:Option<Uuid>,clean_params:Value,
+    output_name:&str,operation_id:&str,expected_input:&ExpectedSource,expected_overlay:Option<&ExpectedSource>,
+)->Result<SubmitJobResult,EditError>{
+    if !read.is_project_manager()||read.is_gis_scoped()||read.actor_type()!="human"{
+        return Err(EditError::forbidden("FORBIDDEN","human project manager required"));
+    }
+    let org=read.organization_id();let project=read.project_id();let actor=read.actor_id();
+    submit_job_tx(read.transaction(),org,project,actor,"human",algorithm_id,input_layer_id,overlay_layer_id,clean_params,output_name,operation_id,Some(expected_input),expected_overlay).await
+}
+#[allow(clippy::too_many_arguments)]
+async fn submit_job_tx(
+    tx:&mut sqlx::Transaction<'_,sqlx::Postgres>,org_id:Uuid,project_id:Uuid,actor_id:Uuid,actor_type:&str,
+    algorithm_id:&str,input_layer_id:Uuid,overlay_layer_id:Option<Uuid>,clean_params:Value,
+    output_name:&str,operation_id:&str,expected_input:Option<&ExpectedSource>,expected_overlay:Option<&ExpectedSource>,
+)->Result<SubmitJobResult,EditError>{
     if expected_input.is_some_and(|p| !p.valid())
         || expected_overlay.is_some_and(|p| !p.valid())
         || expected_overlay.is_some()
@@ -531,8 +568,6 @@ pub async fn submit_job_pinned(
             "invalid or incomplete expected source pins",
         ));
     }
-    let org_id = scope.organization_id();
-    let project_id = scope.project_id();
     let clean_op_id = validate_operation_id(operation_id)?;
     let stripped_name = py_strip(output_name);
     let clean_out_name: String = if stripped_name.is_empty() {
@@ -555,7 +590,7 @@ pub async fn submit_job_pinned(
     .bind(org_id)
     .bind(project_id)
     .bind(&clean_op_id)
-    .fetch_optional(&mut **scope.tx_mut())
+    .fetch_optional(&mut **tx)
     .await
     .map_err(edit_db_error)?;
 
@@ -589,7 +624,7 @@ pub async fn submit_job_pinned(
         });
     }
 
-    let input_source = resolve_layer(scope.tx_mut(), org_id, project_id, input_layer_id).await?;
+    let input_source = resolve_layer(tx, org_id, project_id, input_layer_id).await?;
     if input_source.feature_count>MAX_PROCESSING_FEATURES {return Err(EditError::validation("PROCESSING_LIMIT","processing input exceeds feature bounds"));}
     if algorithm_id!="reproject" && u32::try_from(input_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){
         return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 layers currently support only Reproject; convert to an existing analysis CRS first"));
@@ -620,7 +655,7 @@ pub async fn submit_job_pinned(
                 "polygon overlay algorithm requires overlay_layer_id",
             ));
         };
-        let overlay_source = resolve_layer(scope.tx_mut(), org_id, project_id, ov_layer_id).await?;
+        let overlay_source = resolve_layer(tx, org_id, project_id, ov_layer_id).await?;
         if u32::try_from(overlay_source.stored_crs).ok().is_some_and(ovg_core::crs::is_extended_native_vn2000){return Err(EditError::validation("UNSUPPORTED_TRANSFORMATION","Extended native VN-2000 overlay must be reprojected first"));}
         if expected_overlay.is_some_and(|p| !p.matches_source(&overlay_source)) {
             return Err(EditError::conflict(
@@ -657,7 +692,7 @@ pub async fn submit_job_pinned(
     }
 
     let pg_ver: String = sqlx::query_scalar("SELECT PostGIS_Lib_Version()")
-        .fetch_one(&mut **scope.tx_mut())
+        .fetch_one(&mut **tx)
         .await
         .map_err(edit_db_error)?;
     let engine_version = format!("PostGIS/{pg_ver}");
@@ -669,7 +704,7 @@ pub async fn submit_job_pinned(
             .filter(|v|u32::try_from(*v).ok().is_some_and(ovg_core::crs::is_processing_crs))
             .ok_or_else(|| EditError::validation("INVALID_PARAMETERS", "unsupported target CRS"))?;
         approved_reproject(
-            scope.tx_mut(),
+            tx,
             org_id,
             project_id,
             input_source.id,
@@ -683,8 +718,6 @@ pub async fn submit_job_pinned(
     };
     let now = now_micros();
     let job_id = Uuid::new_v4();
-    let actor_type = scope.actor_kind();
-    let actor_id = scope.actor_id();
 
     let row = sqlx::query(
         "INSERT INTO processing.jobs (
@@ -710,7 +743,7 @@ pub async fn submit_job_pinned(
     .bind(output_crs)
     .bind(&engine_version)
     .bind(now)
-    .fetch_one(&mut **scope.tx_mut())
+    .fetch_one(&mut **tx)
     .await
     .map_err(edit_db_error)?;
 

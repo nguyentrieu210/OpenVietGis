@@ -145,6 +145,9 @@ fn verified_items(
         // V1 partner capabilities are deliberately not extension permissions.
         // Derive only reviewed read-only capabilities; GIS reads additionally require manager approval.
         if let Some(caps) = legacy.manifest["capabilities"].as_array() {
+            if caps.iter().any(|v| v.as_str() == Some("map_view")) {
+                allowed.insert(format!("ext.{}.processing_plan", e.extension_key));
+            }
             for cap in ["host_context", "host_notice", "map_view"] {
                 if caps.iter().any(|v| v.as_str() == Some(cap)) {
                     allowed.insert(format!("ext.{}.{cap}", e.extension_key));
@@ -365,7 +368,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(rows.len(), 3);
+        assert_eq!(rows.len(), 4);
         for row in rows {
             let doc = ovg_module_sdk::declarative::Document::parse(&row.document).unwrap();
             assert!(!doc.actions.is_empty());

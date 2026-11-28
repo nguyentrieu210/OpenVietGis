@@ -53,7 +53,12 @@ async fn runtime_default_disabled_and_catalog_does_not_advertise_execution() {
         assert_eq!(v["host_availability"]["offline_execution"], false);
         assert_eq!(v["host_availability"]["reason"], reason);
     }
-    for (method, suffix) in [("GET", ""), ("POST", "/invoke"), ("POST", "/grant")] {
+    for (method, suffix) in [
+        ("GET", ""),
+        ("POST", "/invoke"),
+        ("POST", "/grant"),
+        ("POST", "/processing/confirm"),
+    ] {
         let response = app
             .clone()
             .oneshot(

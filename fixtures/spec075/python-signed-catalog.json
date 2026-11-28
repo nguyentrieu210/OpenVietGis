@@ -93,14 +93,42 @@
           },
           "publisher_id": "fixture",
           "signature": "BDxfnhXvbm8VNPbqFhLscOVZVHM7l2TiGKDMVkDQK/3bGaPcnFJWXHzSPOOAX+RiZwJ3iFmZfw2Vs8S8SblLCA=="
+        },
+        {
+          "manifest": {
+            "api_compatibility": "1.x",
+            "capabilities": [
+              "map_view"
+            ],
+            "commands": [],
+            "description": "Synthetic test only",
+            "display_name": "Fixture processing",
+            "entity_schemas": {},
+            "extension_key": "partner_fixture_processing",
+            "permissions": [],
+            "ui_contributions": [
+              {
+                "id": "partner_panel",
+                "label": "Fixture processing",
+                "route_suffix": "/partner",
+                "runtime": "sandboxed_iframe",
+                "sdk_version": "1.0",
+                "slot": "project_panel",
+                "url": "https://example.com/processing/"
+              }
+            ],
+            "version": "1.0.0"
+          },
+          "publisher_id": "fixture",
+          "signature": "/s54Ukj870g1L5Br34wJOovnBQtx8Sm8M/PLnK4gdW0dJMQHPCprWJF3G6dXzPGJvu79LGzv9R4tvqAEt+BWAw=="
         }
       ],
       "schema": "openvietgis.marketplace.v1"
     },
-    "signature": "wHhnt2nsAf8qmRk9t3ZaucTPjR6GY6eAytTIFifNtrKeoUCOuFJZ9//7/fnbfg551G0ma6wdOI/aryUoLqESCA=="
+    "signature": "UBvsoiriZfNSzJhlAvha6pqUL/5gHkY6EsBYCvVHgaAT6NuyAvW5iVhGwafIgqsiy+AyGWs/ujURqq2eZry8DA=="
   },
   "v2": {
-    "catalog_signature": "AKMv75SQlwtAkKjZ1KzGhUK5ipA0VuRZUepIVROTLrwBKOlPLiJadC6raIj05lgXTMKY/C0X/blIPdpDfPDSDQ==",
+    "catalog_signature": "0DXUp8e9LO+rDNGZHzmpEKiQsah+iCKSJT6+3qDzpb1wYwTMVMw8TW+sxPw6uZs1sHwcltSFAclqPAmeT9sMDg==",
     "epoch": 2,
     "releases": [
       {
@@ -180,6 +208,30 @@
         },
         "operator_signature": "HBoRMZcnCB5Hf7qwp3Gr5Ahhkc8NHZlhvzkiuJSHKFNJMaWpxs6if73TM2VwFez8IrJ2vEeiuDBobHlDC5pvDQ==",
         "publisher_signature": "5MK6jelyNvn4+yBrsvRcFwyPWvxbOKnAmtduiowLzb+xrZ+uErvv44Pv2MIBxu/x6mSLu7gdDTbzehNaIuPNCg=="
+      },
+      {
+        "assets": {},
+        "contribution": "eyJzbG90Ijoid29ya3NwYWNlIiwid2lkZ2V0cyI6W3sia2luZCI6InRleHQiLCJpZCI6InRpdGxlIiwidGV4dCI6IsSQ4buBIHh14bqldCB44butIGzDvSBHSVMuIE5o4bqtcCBKU09OIHnDqnUgY+G6p3UsIHhlbSB0csaw4bubYyB2w6AgeMOhYyBuaOG6rW4gdOG6oWkgaG9zdC4ifSx7ImtpbmQiOiJpbnB1dCIsImlkIjoicmVxdWVzdCIsImZpZWxkIjoicmVxdWVzdCIsImxhYmVsIjoiWcOqdSBj4bqndSB0aHXhuq10IHRvw6FuIEpTT04ifSx7ImtpbmQiOiJidXR0b24iLCJpZCI6InByZXZpZXciLCJsYWJlbCI6IlhlbSB0csaw4bubYyB44butIGzDvSIsImFjdGlvbiI6InByZXZpZXcifV0sImFjdGlvbnMiOlt7ImlkIjoicHJldmlldyIsImNvbW1hbmRfaWQiOiJnaXNfcHJvY2Vzc2luZ19wbGFuIiwicGVybWlzc2lvbiI6ImV4dC5wYXJ0bmVyX2ZpeHR1cmVfcHJvY2Vzc2luZy5wcm9jZXNzaW5nX3BsYW4iLCJjb25zZW50IjoicmVhZCIsInRpbWVvdXRfbXMiOjMwMDAwLCJpbnB1dCI6eyJyZXF1ZXN0Ijp7ImtpbmQiOiJ0ZXh0IiwicmVxdWlyZWQiOnRydWV9fX1dfQo=",
+        "envelope": {
+          "assets": [],
+          "contribution_digest": "4420d57cf6bbb913555a2bb00696a873e99202b6dccfc77749f01a79b9d4634c",
+          "extension_key": "partner_fixture_processing",
+          "host_api_range": "^1",
+          "issued_at": "2026-11-29T00:00:00Z",
+          "key_id": "f31f5d967197f8859f3fb184cee0857fd4c36bf520b4389b1cbc6b4e1b14ab04",
+          "manifest_digest": "a3e0d4585d657d1a40e397a448f04c72e2d436103049f86f790df09dffa49a52",
+          "permissions": [
+            "ext.partner_fixture_processing.processing_plan"
+          ],
+          "platforms": [
+            "web"
+          ],
+          "publisher_id": "fixture",
+          "schema_version": 2,
+          "version": "1.0.0"
+        },
+        "operator_signature": "wH6dy71oiOiNU/27wRPNu4/u8nVVU+5Qirp8EryPoye6AC5kn/ZpE5Uu/8bXZtAlqnzgS/xEewQ8goUP6mT+Dg==",
+        "publisher_signature": "uyMVDnc9W2lc+WdJ40vGQNed5YtnFS48aHWSPI8ftIjqFSeJQD269sYXKryAGnmjZpmAdtK5XiJfO5j56v/eCQ=="
       }
     ],
     "schema": "openvietgis.marketplace.v2"

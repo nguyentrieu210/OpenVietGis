@@ -66,18 +66,21 @@ pub fn availability(platform: Platform, api: &str, web_enabled: bool) -> HostAva
         reason,
     }
 }
-pub const READ_COMMANDS: [(&str, &str); 4] = [
+pub const READ_COMMANDS: [(&str, &str); 5] = [
     ("host_context", "host_context"),
     ("host_notice", "host_notice"),
     ("gis_layers", "map_view"),
     ("gis_layer", "map_view"),
+    ("gis_processing_plan", "processing_plan"),
 ];
 /// Same reviewed capability mapping for all hosts. This validates the document,
 /// but only a currently qualified host can obtain authorization to execute.
 pub fn read_only_policies(key: &str, caps: &BTreeSet<String>) -> BTreeMap<String, CommandPolicy> {
     READ_COMMANDS
         .iter()
-        .filter(|(_, cap)| caps.contains(*cap))
+        .filter(|(_, cap)| {
+            caps.contains(*cap) || (*cap == "processing_plan" && caps.contains("map_view"))
+        })
         .map(|(command, cap)| {
             (
                 (*command).to_owned(),
@@ -120,6 +123,7 @@ pub fn validate_read_only(
             "host_notice" => field("text", true),
             "gis_layers" => input.is_empty() || field("after_id", false),
             "gis_layer" => field("layer_id", true),
+            "gis_processing_plan" => field("request", true),
             _ => false,
         };
         if !valid {

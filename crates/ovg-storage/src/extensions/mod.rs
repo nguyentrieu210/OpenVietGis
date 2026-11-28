@@ -3,6 +3,7 @@
 pub mod marketplace;
 pub mod commerce;
 pub mod installation;
+pub mod processing;
 pub mod partner;
 pub mod runtime_v2;
 pub mod records;

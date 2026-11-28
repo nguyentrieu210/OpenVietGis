@@ -5,6 +5,7 @@ pub mod manifests;
 pub mod marketplace;
 pub mod commerce;
 pub mod installation;
+mod processing_plan;
 pub mod marketplace_v2;
 pub mod runtime_v2;
 pub mod marketplace_developers;

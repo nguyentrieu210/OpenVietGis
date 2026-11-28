@@ -11,7 +11,7 @@ const uuid=(v:unknown)=>{const s=str(v,36);return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9
 const hex=(v:unknown)=>{const s=str(v,64);return /^[0-9a-f]{64}$/.test(s)?s:bad()};
 const arr=(v:unknown,max:number):unknown[]=>Array.isArray(v)&&v.length<=max?v:bad();
 const integer=(v:unknown,min:number,max:number):number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>=min&&v<=max?v:bad();
-const policy:Record<string,string>={host_context:"host_context",host_notice:"host_notice",gis_layers:"map_view",gis_layer:"map_view"};
+const policy:Record<string,string>={host_context:"host_context",host_notice:"host_notice",gis_layers:"map_view",gis_layer:"map_view",gis_processing_plan:"processing_plan"};
 export function parseReadOnlyPluginDocument(value:unknown,permissions:readonly string[],extensionKey:string):PluginV2Document{
  if(new TextEncoder().encode(JSON.stringify(value)).length>256*1024)bad();
  const d=obj(value);exact(d,["slot","widgets","actions"]);
@@ -25,8 +25,8 @@ export function parseReadOnlyPluginDocument(value:unknown,permissions:readonly s
   if(actions.has(id)||!Object.hasOwn(policy,command)||a.consent!=="read"||a.permission!=="ext."+extensionKey+"."+policy[command]||!permissions.includes(a.permission as string))bad();
   actions.add(id);integer(a.timeout_ms,1,30000);
   const input=obj(a.input),keys=Object.keys(input);
-  const expected:Record<string,boolean>={host_context:false,host_notice:true,gis_layer:true,gis_layers:false};
-  const field=command==="host_notice"?"text":command==="gis_layer"?"layer_id":command==="gis_layers"?"after_id":null;
+  const expected:Record<string,boolean>={host_context:false,host_notice:true,gis_layer:true,gis_layers:false,gis_processing_plan:true};
+  const field=command==="host_notice"?"text":command==="gis_layer"?"layer_id":command==="gis_layers"?"after_id":command==="gis_processing_plan"?"request":null;
   if(keys.length===0){if(expected[command])bad()}
   else{
    if(field===null||keys.length!==1||keys[0]!==field)bad();

@@ -137,3 +137,8 @@ export function applyPluginGraph(client:ApiClient,org:string,project:string,sele
  if(!preview.plan.expected)throw new Error("PROJECT_PREVIEW_REQUIRED");
  return client.request<{request_id:string;plan_digest:string;before:PluginActivationPin[];after:PluginActivationPin[];rollback_of:string|null;grants_created:false}>(graphPath(org,project)+"/apply",{method:"POST",body:JSON.stringify({selection,request_id:requestId,plan_digest:preview.plan_digest,expected:preview.plan.expected})});
 }
+
+export type PluginProcessingProposal={proposal_id:string;plan_digest:string;plan:unknown;requires_human_confirmation:true};
+export function confirmPluginProcessing(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,proposal:PluginProcessingProposal,signal?:AbortSignal){
+ return client.request<{proposal_id:string;job:{id:string;status:string};execution:"manual_core_job"}>(pluginV2Path(org,project,runtime.manifest_id)+"/processing/confirm",{method:"POST",signal:signal??null,body:JSON.stringify({proposal_id:proposal.proposal_id,plan_digest:proposal.plan_digest})});
+}

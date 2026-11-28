@@ -29,7 +29,7 @@ def generate():
             path.write_bytes(key.private_bytes(Encoding.PEM,PrivateFormat.PKCS8,NoEncryption()))
             path.chmod(0o600)
         (d/"pub.key").write_text(public_key(pk))
-        for name, cap in (("context","host_context"),("notice","host_notice"),("layers","map_view")):
+        for name, cap in (("context","host_context"),("notice","host_notice"),("layers","map_view"),("processing","map_view")):
             key="partner_fixture_"+name
             manifest={"extension_key":key,"version":"1.0.0","api_compatibility":"1.x",
                       "display_name":"Fixture "+name,"description":"Synthetic test only","permissions":[],"commands":[],
@@ -41,7 +41,7 @@ def generate():
             doc=ROOT/"packages/plugin-sdk/examples/v2"/("host-"+name+".json")
             envelope={"schema_version":2,"publisher_id":"fixture","extension_key":key,"version":"1.0.0",
                       "manifest_digest":sha(canonical(manifest)),"host_api_range":"^1","platforms":["web"],
-                      "permissions":["ext."+key+"."+cap],"contribution_digest":sha(doc.read_bytes()),"assets":[],
+                      "permissions":["ext."+key+"."+("processing_plan" if name=="processing" else cap)],"contribution_digest":sha(doc.read_bytes()),"assets":[],
                       "issued_at":"2026-11-29T00:00:00Z","key_id":sha(pk.public_key().public_bytes(Encoding.Raw,PublicFormat.Raw))}
             if name=="layers":
                 envelope["dependencies"]=[{"key":"partner_fixture_context","range":"^1.0.0"}]
