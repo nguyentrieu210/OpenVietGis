@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
+import 'ai_platform.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -76,6 +78,7 @@ class MapPage extends ConsumerWidget{
           ListTile(leading:const Icon(Icons.table_chart),title:Text(tr(vi,'Bảng thuộc tính','Attribute table')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/attributes');}),
           ListTile(leading:const Icon(Icons.gps_fixed),title:Text(tr(vi,'Khảo sát GPS','GPS survey')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/survey');}),
           ListTile(leading:const Icon(Icons.account_tree),title:Text(tr(vi,'Xử lý không gian','Spatial processing')),enabled:c.ready&&!c.busy,onTap:(){Navigator.pop(sheet);context.push('/processing');}),
+          ListTile(leading:const Icon(Icons.auto_awesome),title:Text(tr(vi,'AI Copilot','AI Copilot')),subtitle:Text(AiPlatform.status(vi)),onTap:(){Navigator.pop(sheet);unawaited(showAiCloud(context,vi));}),
           ListTile(leading:const Icon(Icons.cloud_off),title:Text(tr(vi,'Kết nối máy chủ','Connect server')),subtitle:Text(tr(vi,'Chưa đủ điều kiện xác thực Mobile','Mobile authentication not qualified')),enabled:false),
           ListTile(leading:const Icon(Icons.extension),title:Text(tr(vi,'Plugin','Plugins')),subtitle:Text(tr(vi,'Chưa có runtime đã nghiệm thu','Runtime not qualified')),enabled:false),
         ]))),
@@ -162,4 +165,12 @@ class ProcessingRoute extends ConsumerWidget{
 class SearchRoute extends ConsumerWidget{
  const SearchRoute({super.key});
  @override Widget build(BuildContext context,WidgetRef ref)=>SearchPage(controller:ref.watch(controllerProvider));
+}
+
+Future<void> showAiCloud(BuildContext context,bool vi)async{
+  await showDialog<void>(context:context,builder:(d)=>AlertDialog(
+    title:const Text('AI Copilot · Cloud'),
+    content:Text(AiPlatform.status(vi)+'\n\n'+AiPlatform.cloudUrl),
+    actions:[TextButton(onPressed:()=>Navigator.pop(d),child:Text(tr(vi,'Đóng','Close'))),
+      TextButton(onPressed:()async{await Clipboard.setData(const ClipboardData(text:AiPlatform.cloudUrl));if(d.mounted)Navigator.pop(d);},child:Text(tr(vi,'Sao chép liên kết','Copy link')))]));
 }
