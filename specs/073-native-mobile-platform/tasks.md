@@ -101,3 +101,7 @@ Each implementation evidence record includes target platform/profile, exact SHA,
 
 ## W0 execution status (2026-11-28)
 See [execution ledger](evidence/execution-ledger.md) and [W0 baseline evidence](evidence/w0-baseline-checkpoint.md). Candidate graph and matrix audit passed on db2ef12; T001 remains in progress pending complete inventory/review. No acceptance checkbox changed.
+
+
+### W0 continued evidence
+See [execution ledger](evidence/execution-ledger.md), [auth/sync/plugin inventory](evidence/w0-auth-sync-plugin-inventory.md), and [threat model](evidence/w0-threat-model.md). Candidate qualification workflow and baseline auth/signature tests implemented; no mandatory parent accepted. Device/FFI proof, independent review and A0 remain open.

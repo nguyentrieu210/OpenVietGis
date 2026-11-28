@@ -3,14 +3,14 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 
 | Engine | Wave | Task | Owner role | Dependencies | Leaves | Status | Commit / evidence | Next action / blocker |
 |---|---:|---|---|---|---:|---|---|---|
-| E01 | 0 | T001 | Architecture / native build | none | 3 | IN PROGRESS | db2ef12; graph job passed | Finish symbol/route/fixture review and independent acceptance |
-| E01 | 0 | T002 | Architecture / native build | T001 | 3 | WAITING | — | Await accepted dependencies |
-| E01 | 0 | T003 | Architecture / native build | T002 | 4 | WAITING | — | Await accepted dependencies |
-| E01 | 0 | T004 | Architecture / native build | T002 | 3 | WAITING | — | Await accepted dependencies |
-| E16 | 0 | T005 | Security/QA/release | T001 | 4 | WAITING | — | Await accepted dependencies |
-| E10 | 0 | T006 | Dart SDK/auth/sync | T001 | 4 | WAITING | — | Await accepted dependencies |
-| E11 | 0 | T007 | Plugin runtime | T001 | 3 | WAITING | — | Await accepted dependencies |
-| E01 | 0 | T008 | Architecture / native build | T003, T004, T005, T006, T007 | 3 | WAITING | — | Await accepted dependencies |
+| E01 | 0 | T001 | Architecture / native build | none | 3 | IN PROGRESS | db2ef12 PASS graph; 07b6ae9 route tests queued | Complete inventory coverage and independent review |
+| E01 | 0 | T002 | Architecture / native build | T001 | 3 | SPIKE IN PROGRESS | 08daa37; c366b9d setup PASS | Freeze complete provenance; exact SDK and locks |
+| E01 | 0 | T003 | Architecture / native build | T002 | 4 | SPIKE IN PROGRESS | 46167470966 native job | Build/link, then device 4K/16K and iOS feasibility |
+| E01 | 0 | T004 | Architecture / native build | T002 | 3 | SPIKE IN PROGRESS | 46167470966 map job | APK and device render/FFI/copy proof remain |
+| E16 | 0 | T005 | Security/QA/release | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 threat model | Freeze physical devices, fixtures, SBOM/license review |
+| E10 | 0 | T006 | Dart SDK/auth/sync | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 route/auth regression | Verify existing negative cases; freeze mobile auth/lease contract |
+| E11 | 0 | T007 | Plugin runtime | T001 | 3 | SPIKE IN PROGRESS | 07b6ae9 signature regression | Run v1 golden and freeze separate v2 envelope |
+| E01 | 0 | T008 | Architecture / native build | T003, T004, T005, T006, T007 | 3 | BLOCKED | A0 not accepted | Requires all mandatory A0 evidence |
 | E02 | 1 | T009 | Portable kernel / FFI | T008 | 4 | WAITING | — | Await accepted dependencies |
 | E02 | 1 | T010 | Portable kernel / FFI | T009 | 3 | WAITING | — | Await accepted dependencies |
 | E02 | 1 | T011 | Portable kernel / FFI | T010 | 3 | WAITING | — | Await accepted dependencies |
@@ -88,3 +88,9 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 - Existing unrelated workflows also report failure on the initial SPEC-only head. Investigate before full integrated acceptance; no check waived.
 - VPS1 deploy-only, no verified coding agent process. GitHub-hosted runner used for audit. No production changes. No mobile toolchain/ABI/runtime or device qualification.
 - Next after T001 acceptance: T002/T005/T006/T007; A0 remains open.
+
+## W0 continued execution
+- 08daa37 adds pinned candidate native and MapLibre qualification probes; initial job 46167398953 failed because sdkmanager was absent (ELF unit tests passed).
+- c366b9d fixes runner SDK bootstrap. [Qualification run 46167470966](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167470966) passed SDK/NDK setup for both jobs; native build and Flutter build in progress at snapshot.
+- 07b6ae9 adds actual baseline auth and signature regression tests; [contract run 46167557596](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167557596) queued at snapshot.
+- Independent feasibility spikes allowed before A0; not a waiver of parent dependencies. No acceptance checkbox changed. No verified device, signed A0 review or release APK.
