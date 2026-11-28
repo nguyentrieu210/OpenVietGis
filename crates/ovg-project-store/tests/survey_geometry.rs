@@ -44,3 +44,33 @@ fn multipart_commit_keeps_holes_and_rejects_z_and_open_ring(){
  assert_eq!(w.commit_geojson(l,&f,&Uuid::new_v4().to_string(),"2","1",&bad.to_string(),"{}"),Err(Error::Invalid));
  assert!(w.integrity().unwrap());
 }
+
+#[test]
+fn active_survey_recovery_replay_and_backup(){
+ let d=tempfile::tempdir().unwrap();let path=d.path().join("active.sqlite");
+ let l=Uuid::new_v4();let t=Uuid::new_v4();let second=Uuid::new_v4();
+ let f=Fix{lon:106.,lat:11.,accuracy_m:Some(4.),altitude_m:None,utc_ms:1700000000000,provider:"os".into(),quality:"unknown".into(),satellites:None};
+ let s=Store::create(&path).unwrap();s.add_layer(l,"survey",0).unwrap();
+ assert_eq!(s.create_survey(l,t,"Track",1).unwrap().revision,"2");
+ assert_eq!(s.create_survey(l,second,"Other",2).unwrap().revision,"3");
+ assert!(s.append_survey(l,t,&f,3).is_err());
+ assert_eq!(s.survey_state(l,t,"resume",3).unwrap().segment,1);
+ assert!(s.survey_state(l,second,"resume",4).is_err());
+ let first=s.append_survey(l,t,&f,4).unwrap();assert_eq!(first.seq,Some(1));assert_eq!(first.revision,"5");
+ assert_eq!(s.append_survey(l,t,&f,5).unwrap().revision,"5");
+ let altered=Fix{lon:106.001,..f.clone()};assert!(s.append_survey(l,t,&altered,5).is_err());
+ assert!(s.append_survey(l,t,&f,4).is_err());
+ s.checkpoint().unwrap();drop(s);
+ let s=Store::reopen(&path).unwrap();
+ assert_eq!(s.recover_surveys(5).unwrap(),6);assert_eq!(s.recover_surveys(6).unwrap(),6);
+ assert!(s.append_survey(l,t,&f,6).is_err());
+ assert_eq!(s.survey_state(l,t,"resume",6).unwrap().segment,2);
+ let later=Fix{utc_ms:f.utc_ms+1000,..f.clone()};
+ assert_eq!(s.append_survey(l,t,&later,7).unwrap().seq,Some(2));
+ assert_eq!(s.survey_state(l,t,"finish",8).unwrap().revision,"9");
+ assert!(s.survey_state(l,t,"resume",9).is_err());
+ let p=s.survey_fixes(l,t,0,100,9).unwrap();assert_eq!(p.rows.len(),2);assert_eq!(p.rows[0].segment,1);assert_eq!(p.rows[1].segment,2);assert_eq!(p.rows[1].fix,later);
+ let b=d.path().join("backup.sqlite");s.backup_copy(&b,9,&AtomicBool::new(false)).unwrap();
+ let out=d.path().join("restored.sqlite");Store::restore_copy(&b,&out,&AtomicBool::new(false)).unwrap();let r=Store::reopen(&out).unwrap();
+ assert_eq!(r.survey_fixes(l,t,0,100,9).unwrap().rows.len(),2);assert!(r.integrity().unwrap());
+}
