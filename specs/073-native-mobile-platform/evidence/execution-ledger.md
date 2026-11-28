@@ -3,13 +3,13 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 
 | Engine | Wave | Task | Owner role | Dependencies | Leaves | Status | Commit / evidence | Next action / blocker |
 |---|---:|---|---|---|---:|---|---|---|
-| E01 | 0 | T001 | Architecture / native build | none | 3 | IN PROGRESS | db2ef12 PASS graph; 07b6ae9 route tests queued | Complete inventory coverage and independent review |
+| E01 | 0 | T001 | Architecture / native build | none | 3 | IN PROGRESS | db2ef12 PASS graph; 07b6ae9 mounted inventory PASS | Complete inventory coverage and independent review |
 | E01 | 0 | T002 | Architecture / native build | T001 | 3 | SPIKE IN PROGRESS | 08daa37; c366b9d setup PASS | Freeze complete provenance; exact SDK and locks |
 | E01 | 0 | T003 | Architecture / native build | T002 | 4 | SPIKE IN PROGRESS | 46167470966 native job | Build/link, then device 4K/16K and iOS feasibility |
-| E01 | 0 | T004 | Architecture / native build | T002 | 3 | SPIKE IN PROGRESS | 46167470966 map job | APK and device render/FFI/copy proof remain |
+| E01 | 0 | T004 | Architecture / native build | T002 | 3 | SPIKE IN PROGRESS | ff52556 map retry; f3f032a FRB job | APK and device render/FFI/copy proof remain |
 | E16 | 0 | T005 | Security/QA/release | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 threat model | Freeze physical devices, fixtures, SBOM/license review |
-| E10 | 0 | T006 | Dart SDK/auth/sync | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 route/auth regression | Verify existing negative cases; freeze mobile auth/lease contract |
-| E11 | 0 | T007 | Plugin runtime | T001 | 3 | SPIKE IN PROGRESS | 07b6ae9 signature regression | Run v1 golden and freeze separate v2 envelope |
+| E10 | 0 | T006 | Dart SDK/auth/sync | T001 | 4 | SPIKE IN PROGRESS | 07b6ae9 existing route/auth tests PASS | Verify existing negative cases; freeze mobile auth/lease contract |
+| E11 | 0 | T007 | Plugin runtime | T001 | 3 | SPIKE IN PROGRESS | 07b6ae9 marketplace v1 tests PASS | Run v1 golden and freeze separate v2 envelope |
 | E01 | 0 | T008 | Architecture / native build | T003, T004, T005, T006, T007 | 3 | BLOCKED | A0 not accepted | Requires all mandatory A0 evidence |
 | E02 | 1 | T009 | Portable kernel / FFI | T008 | 4 | WAITING | — | Await accepted dependencies |
 | E02 | 1 | T010 | Portable kernel / FFI | T009 | 3 | WAITING | — | Await accepted dependencies |
@@ -94,3 +94,9 @@ Snapshot based on implementation commit db2ef12c08a9943ee805cec1ebb78725665f4a34
 - c366b9d fixes runner SDK bootstrap. [Qualification run 46167470966](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167470966) passed SDK/NDK setup for both jobs; native build and Flutter build in progress at snapshot.
 - 07b6ae9 adds actual baseline auth and signature regression tests; [contract run 46167557596](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167557596) queued at snapshot.
 - Independent feasibility spikes allowed before A0; not a waiver of parent dependencies. No acceptance checkbox changed. No verified device, signed A0 review or release APK.
+
+## Latest W0 evidence
+- [Existing contract regression 46167557596](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167557596) SUCCESS: mounted route inventory 1/1, credential isolation 2/2, extension validation 2/2. These are baseline contracts, not proof of mobile auth/lease or v2 runtime.
+- Native compilation in run 46167470966 still active. MapLibre dependency resolution passed but analyzer failed for missing flutter_lints and deprecated Material import; ff52556 addresses both with explicit dependencies and new Material API. [Retry 46167650890](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167650890) active.
+- f3f032a implements real generated FRB qualification source with shared ovg-spatial transform, bounded batches, Rust and Dart tests; [FRB run 46167755969](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46167755969) queued. No bridge acceptance or native APK claimed.
+- A0 remains blocked on native/bridge/device results, complete locked provenance and independent review. Physical Android 4KB/16KB and macOS device environment not verified. No task checkbox changed; qualification code and baseline tests are real partial progress.
