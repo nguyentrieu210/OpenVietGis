@@ -1,7 +1,12 @@
-export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean};
+export type Capabilities = {protocol_version:number; standalone:boolean; managed:boolean; cloud:boolean; local_tiles:boolean; transform:boolean;local_edit:boolean;viewport:boolean};
 export type Project = {id:string};
 export type Opened = {id:string; handle:string};
 export type Poll = {status:"pending"} | {status:"complete";xy:number[]};
+export type Attributes = Record<string,unknown>;
+export type FeatureRow = {fid:string;id:string;revision:string;attributes:Attributes};
+export type FeatureRecord = {id:string;revision:string;attributes:Attributes;geometry:unknown};
+export type Viewport = {generation:string;data:GeoJSON.FeatureCollection;truncated:boolean};
+export type EditInput = {command:string;id:string;revision:string;kind:"point"|"line"|"polygon"|null;xy:number[];attributes:Attributes};
 type Unlisten = () => void;
 type Host = {core:{invoke:<T>(command:string,args?:Record<string,unknown>)=>Promise<T>};event?:{listen:<T>(event:string,fn:(event:{payload:T})=>void)=>Promise<Unlisten>}};
 function host():Host {
@@ -22,5 +27,21 @@ export const desktop={
   },
   poll:(handle:string,id:string)=>host().core.invoke<Poll>("desktop_poll",{handle,id}),
   cancel:(handle:string,id:string)=>host().core.invoke<void>("desktop_cancel",{handle,id}),
+  viewport:async(handle:string,bbox:[number,number,number,number]):Promise<Viewport>=>{
+    const raw=await host().core.invoke<ArrayBuffer|number[]>("desktop_viewport",{handle,bbox});
+    const bytes=raw instanceof ArrayBuffer?new Uint8Array(raw):new Uint8Array(raw);
+    if(bytes.byteLength>2*1024*1024)throw new Error("RESOURCE_LIMIT");
+    const v=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes)) as Viewport;
+    if(v.data?.type!=="FeatureCollection"||!Array.isArray(v.data.features)||v.data.features.length>512||typeof v.generation!=="string"||typeof v.truncated!=="boolean")throw new Error("INVALID_VIEWPORT");
+    return v;
+  },
+  attributes:(handle:string,after="0",limit=100,contains="")=>host().core.invoke<{generation:string;rows:FeatureRow[]}>("desktop_attributes",{handle,after,limit,contains}),
+  feature:(handle:string,id:string)=>host().core.invoke<FeatureRecord>("desktop_feature",{handle,id}),
+  edit:(handle:string,edit:EditInput)=>host().core.invoke<void>("desktop_edit",{handle,edit}),
+  updateAttributes:(handle:string,id:string,revision:string,attributes:Attributes)=>host().core.invoke<void>("desktop_update_attributes",{handle,id,revision,attributes}),
+  history:(handle:string,redo:boolean)=>host().core.invoke<boolean>("desktop_history",{handle,redo}),
+  checkpoint:(handle:string)=>host().core.invoke<void>("desktop_checkpoint",{handle}),
+  importGeoJSON:(handle:string)=>host().core.invoke<number|null>("desktop_import_geojson",{handle}),
+  exportFile:(handle:string,format:"geojson"|"gpkg")=>host().core.invoke<boolean>("desktop_export",{handle,format}),
   menu:(fn:(id:string)=>void)=>host().event?.listen<string>("desktop-menu",e=>fn(e.payload))??Promise.resolve(()=>{}),
 };
