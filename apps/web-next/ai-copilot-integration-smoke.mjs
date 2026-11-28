@@ -15,7 +15,7 @@ try{
  await page.route("**/ai-copilot/sessions**",route=>{
    const r=route.request(),path=new URL(r.url()).pathname;
    assert.equal(r.headers()["x-ovg-ai"],"1");
-   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2});return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}})}
+   if(path.endsWith("/sessions")){sessionCalls++;assert.deepEqual(r.postDataJSON(),{organization_id:org,project_id:pid,workspace_version:2,workspace_mode:"gis"});return route.fulfill({status:201,json:{session_id:"session-fixture",browser_token:"browser-secret",expires_in:900}})}
    assert.equal(r.headers()["x-ovg-bridge"],"browser-secret");
    if(path.endsWith("/poll")){const item=command;command=null;return route.fulfill({json:{command:item}})}
    if(path.endsWith("/ping"))return route.fulfill({json:{alive:true}});
@@ -49,7 +49,7 @@ try{
  available=true;restricted=true;await open();await page.waitForTimeout(1800);assert.equal(metadataChecks,1);assert.equal(await button.count(),0);
  restricted=false;await open();await button.waitFor({timeout:25000});assert.equal(metadataChecks,2);if(new URL(url).pathname.endsWith("/copilot.html"))assert.equal(new URL(page.url()).pathname,"/rewrite/copilot.html");const bounds=await button.boundingBox();assert.ok(bounds&&bounds.x>=0&&bounds.y>=0&&bounds.x+bounds.width<=page.viewportSize().width&&bounds.y+bounds.height<=page.viewportSize().height,"AI Copilot toggle must be within viewport");await button.click();await page.getByRole("button",{name:"Kết nối AI",exact:true}).click();await page.getByText(/Đã kết nối phiên này/).waitFor();
  const review=page.getByRole("region",{name:"Xác nhận lệnh AI"});
- command={id:"one",method:"map_navigate",params:{longitude:105.8,latitude:21,zoom:12},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Từ chối",exact:true}).click();await page.getByText(/Đã từ chối/).waitFor();assert.deepEqual(acks[0],{ok:false,result:null});
+ command={id:"one",method:"map_navigate",params:{longitude:105.8,latitude:21,zoom:12},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Từ chối",exact:true}).click();await page.getByText(/Đã từ chối/).waitFor();assert.deepEqual(acks[0],{ok:false,result:null,workspace_mode:"gis"});
  command={id:"two",method:"map_navigate",params:{longitude:105.8,latitude:21,zoom:12},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.getByText(/Đã thực hiện lệnh AI/).waitFor();await page.waitForTimeout(650);assert.equal(acks[1].ok,true);
  command={id:"three",method:"map_view",params:{},expires_in:40};await review.waitFor();await page.getByRole("button",{name:"Cho phép lần này",exact:true}).click();await page.waitForFunction(()=>document.querySelector("[data-ai=review]").hidden);assert.equal(acks[2].ok,true);assert.ok(Math.abs(acks[2].result.center[0]-105.8)<.001);assert.ok(Math.abs(acks[2].result.center[1]-21)<.001);assert.ok(Math.abs(acks[2].result.zoom-12)<.01);
  await page.getByRole("button",{name:"Ngắt kết nối",exact:true}).click();await page.waitForTimeout(300);assert.equal(closing,1);

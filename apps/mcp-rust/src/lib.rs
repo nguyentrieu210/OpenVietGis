@@ -163,7 +163,12 @@ impl Store {
     }
     pub fn set_mode(&mut self,id:Uuid,token:&str,owner:&Owner,mode:&str,now:u64)->Result<(),Error>{
         if !["gis","cad","3d"].contains(&mode){return Err(Error::Invalid)}
-        self.browser(id,token,owner,now)?.mode=mode.into();Ok(())
+        let s=self.browser(id,token,owner,now)?;Self::expire(s,now);
+        if s.mode!=mode {
+            if let Some(c)=s.command.as_mut().filter(|c|c.state.pending()){c.state=CommandState::Denied;c.result=None;}
+            s.mode=mode.into();
+        }
+        Ok(())
     }
     fn mode_allows(mode:&str,method:&str)->bool{if method.starts_with("cad_"){mode=="cad"}else if method.starts_with("map_"){mode=="gis"}else{mode!="cad"}}
     pub fn ping(&mut self,id:Uuid,token:&str,owner:&Owner,now:u64)->Result<(),Error> {
@@ -225,6 +230,16 @@ mod tests {
     use super::*;
     use serde_json::json;
     fn owner(subject:&str)->Owner{Owner{user_id:Uuid::new_v4(),subject:subject.into(),organization_id:Uuid::new_v4(),project_id:Uuid::new_v4()}}
+    #[test] fn mode_change_invalidates_pending_ticket(){
+        let mut s=Store::default();let a=owner("alice");
+        let x=s.open(a.clone(),2,0).unwrap();
+        let (_,cid)=s.submit("alice",Some(x.session_id),"map_view",json!({}),0,40_000,90_000,0).unwrap();
+        assert_eq!(s.poll(x.session_id,&x.browser_token,&a,1).unwrap().unwrap().id,cid);
+        s.set_mode(x.session_id,&x.browser_token,&a,"cad",2).unwrap();
+        s.set_mode(x.session_id,&x.browser_token,&a,"gis",3).unwrap();
+        assert_eq!(s.prepare(x.session_id,&x.browser_token,&a,cid,4),Err(Error::CommandUnavailable));
+        assert_eq!(s.result("alice",x.session_id,cid,4).unwrap().state,CommandState::Denied);
+    }
     #[test] fn multi_project_explicit_target_and_isolation(){
         let mut s=Store::default();let a=owner("alice");let mut b=a.clone();b.project_id=Uuid::new_v4();
         let sa=s.open(a.clone(),2,0).unwrap();let sb=s.open(b.clone(),2,0).unwrap();let mallory=s.open(owner("mallory"),2,0).unwrap();
