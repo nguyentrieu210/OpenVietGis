@@ -1,5 +1,5 @@
 /** Bounded CDF-1/CDF-2 reader for CF-style scalar node time series.
- * No HDF5, record-variable arrays, compression, or inferred node identity.
+ * Supports fixed and interleaved record arrays; no HDF5 or inferred node identity.
  * NetCDF classic is big endian; offsets and lengths are checked before reads.
  */
 import {parseMeshDataset,DATASET_MAX_BYTES,type MeshDataset} from "./mesh-dataset";
@@ -45,13 +45,34 @@ export function parseClassicNetcdf(bytes:ArrayBuffer,mesh:LocalMesh,variableName
  });
  if(new Set(vars.map(v=>v.name)).size!==vars.length)throw Error("Duplicate NetCDF variable");
  const header=p;
- // The supported subset uses fixed arrays. Explicitly reject record interleaving.
- if(records!==0||dims.some(x=>x.length===0))throw Error("Unlimited/record dimensions are not supported");
+ const unlimited=dims.findIndex(x=>x.length===0);
+ if(unlimited<0&&records!==0)throw Error("Unexpected NetCDF records");
+ const recordVars=vars.filter(v=>v.dims[0]===unlimited&&unlimited>=0);
+ if(vars.some(v=>unlimited>=0&&v.dims.slice(1).includes(unlimited)))throw Error("Unlimited dimension must be first");
+ if(unlimited>=0&&(!recordVars.length||records<1))throw Error("Empty NetCDF record dimension");
+ const count=(v:Variable,record:boolean)=>v.dims.slice(record?1:0).reduce((s,i)=>s*dims[i]!.length,1);
+ const layout=(v:Variable,record:boolean)=>{
+  const n=count(v,record),w=width[v.type]!,sz=n*w;
+  if(!Number.isSafeInteger(n)||n<1||n>1000000||v.offset<header||v.offset%4||v.size!==padded(sz))throw Error("Invalid NetCDF variable extent: "+v.name);
+  return {n,w,sz};
+ };
+ const fixed=vars.filter(v=>!recordVars.includes(v)).map(v=>{layout(v,false);return [v.offset,v.offset+v.size] as const}).sort((a,b)=>a[0]-b[0]);
+ if(fixed.some((r,i)=>r[1]>d.byteLength||i>0&&fixed[i-1]![1]>r[0]))throw Error("Overlapping or truncated NetCDF fixed variables");
+ const ordered=[...recordVars].sort((a,b)=>a.offset-b.offset);
+ const base=ordered[0]?.offset??d.byteLength;
+ let stride=0;
+ for(const v of ordered){
+  const {sz}=layout(v,true);
+  if(v.offset!==base+stride)throw Error("Invalid NetCDF record interleave");
+  stride+=ordered.length===1?sz:v.size;
+ }
+ if(ordered.length&&(fixed.some(r=>r[1]>base)||base+stride*records>d.byteLength))throw Error("Overlapping or truncated NetCDF records");
+ if(unlimited>=0)dims[unlimited]!.length=records;
  const byName=(name:string)=>{const v=vars.find(x=>x.name===name);if(!v)throw Error("Missing NetCDF variable: "+name);return v};
  function values(v:Variable){
-  const n=v.dims.reduce((s,i)=>s*dims[i]!.length,1),w=width[v.type]??0,sz=n*w;
-  if(v.type===2||!Number.isSafeInteger(n)||n<1||n>1000000||v.offset<header||v.offset%4||v.size!==padded(sz)||v.offset+v.size>d.byteLength)throw Error("Invalid NetCDF variable extent: "+v.name);
-  return Array.from({length:n},(_,i)=>numeric(v.type,v.offset+i*w));
+  const record=recordVars.includes(v),{n,w}=layout(v,record),total=n*(record?records:1);
+  if(v.type===2||total>1000000)throw Error("Unsupported NetCDF numeric array: "+v.name);
+  return Array.from({length:total},(_,i)=>numeric(v.type,v.offset+(record?Math.floor(i/n)*stride+i%n*w:i*w)));
  }
  const node=byName("node_id"),time=byName("time"),data=byName(variableName.trim());
  if(node.dims.length!==1||time.dims.length!==1||data.dims.length!==2||data.dims[0]!==time.dims[0]||data.dims[1]!==node.dims[0]||node.dims[0]===time.dims[0])throw Error("Dataset must have dimensions [time,node] and explicit node_id");
