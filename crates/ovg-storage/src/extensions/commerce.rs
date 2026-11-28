@@ -40,6 +40,9 @@ impl OrgExtensionScope<'_> {
         }
         Ok(())
     }
+    pub async fn check_sandbox_admin(&mut self) -> Result<(), AppError> {
+        self.sandbox_admin().await
+    }
     pub async fn create_sandbox_order(
         &mut self,
         quote: &Quote,
@@ -136,6 +139,26 @@ impl OrgExtensionScope<'_> {
         Ok(
             json!({"sandbox":true,"order_id":id,"release_digest":digest,"entitlement":ledger.entitlement(now),"outstanding_minor":ledger.outstanding_minor(),"event_count":ledger.event_count(),"receipts":receipts}),
         )
+    }
+    pub async fn sandbox_settlement(
+        &mut self,
+        id: Uuid,
+        key: &VerifyingKey,
+        now: DateTime<Utc>,
+    ) -> Result<ovg_module_sdk::settlement::Settlement, AppError> {
+        self.sandbox_admin().await?;
+        let (ledger, _, receipts) = self.replay_sandbox(id, key, now).await?;
+        let receipts = receipts
+            .into_iter()
+            .map(serde_json::from_value)
+            .collect::<Result<Vec<ovg_module_sdk::commerce::LedgerReceipt>, _>>()
+            .map_err(|_| corrupt())?;
+        let report =
+            ovg_module_sdk::settlement::Settlement::from_receipts(ledger.currency(), &receipts)?;
+        if report.clearing_minor != ledger.outstanding_minor() {
+            return Err(corrupt());
+        }
+        Ok(report)
     }
     pub async fn record_sandbox_event(
         &mut self,

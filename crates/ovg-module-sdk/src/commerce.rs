@@ -151,6 +151,9 @@ impl OrderLedger {
             events: BTreeMap::new(),
         })
     }
+    pub fn currency(&self) -> &str {
+        &self.quote.currency
+    }
     pub fn event_count(&self) -> usize {
         self.events.len()
     }

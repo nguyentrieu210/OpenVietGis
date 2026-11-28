@@ -8,6 +8,8 @@ pub mod trust;
 pub mod declarative;
 pub mod host_profile;
 pub mod commerce;
+pub mod settlement;
+pub mod payment_offer;
 pub mod license;
 pub mod entitlement;
 

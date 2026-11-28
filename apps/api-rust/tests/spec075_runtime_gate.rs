@@ -85,8 +85,12 @@ async fn sandbox_commerce_disabled_without_dedicated_key() {
         "/api/v1/organizations/11000000-0000-0000-0000-000000000001/marketplace/sandbox/orders";
     for (method, path) in [
         ("POST", base.to_owned()),
+        ("POST", "/api/v1/organizations/11000000-0000-0000-0000-000000000001/marketplace/sandbox/offers/preview".into()),
         ("GET", format!("{base}/order")),
         ("POST", format!("{base}/order/events")),
+        ("GET", format!("{base}/order/settlement")),
+        ("POST", format!("{base}/order/reconcile")),
+        ("POST", format!("{base}/order/reconcile-signed")),
     ] {
         let response = app
             .clone()

@@ -153,3 +153,21 @@ export function importPluginLicense(client:ApiClient,org:string,body:unknown){
 export function getPluginLicense(client:ApiClient,org:string,digest:string){
  return client.request<{release_digest:string;state:PluginLicenseState;allowed:boolean}>(licensePath(org)+"/"+encodeURIComponent(digest),{cache:"no-store"});
 }
+
+export type SandboxSettlement={currency:string;event_count:number;event_digest:string;clearing_minor:number;publisher_payable_minor:number;platform_revenue_minor:number;tax_payable_minor:number};
+export function getSandboxSettlement(client:ApiClient,org:string,order:string){
+ return client.request<{sandbox:true;report:SandboxSettlement}>(sandboxOrderPath(org)+"/"+encodeURIComponent(order)+"/settlement",{cache:"no-store"});
+}
+export function reconcileSandboxSettlement(client:ApiClient,org:string,order:string,statement:SandboxSettlement){
+ return client.request<{sandbox:true;statement_verified:false;report:SandboxSettlement;comparison:{matched:boolean;mismatches:string[]}}>(sandboxOrderPath(org)+"/"+encodeURIComponent(order)+"/reconcile",{method:"POST",body:JSON.stringify(statement)});
+}
+
+export type SandboxSignedStatement={schema:"openvietgis.settlement.sandbox.statement.v1";organization_id:string;order_id:string;observed_at:string;report:SandboxSettlement};
+export function reconcileSignedSandboxSettlement(client:ApiClient,statement:SandboxSignedStatement,signature:string){
+ return client.request<{sandbox:true;statement_verified:true;report:SandboxSettlement;comparison:{matched:boolean;mismatches:string[]}}>(sandboxOrderPath(statement.organization_id)+"/"+encodeURIComponent(statement.order_id)+"/reconcile-signed",{method:"POST",body:JSON.stringify({statement,signature})});
+}
+
+export type SignedSandboxPriceOffer={schema:"openvietgis.checkout.sandbox.offer.v1";audience:string;release_digest:string;publisher_id:string;quote:PluginSandboxQuote;issued_at:string;expires_at:string};
+export function previewSandboxPriceOffer(client:ApiClient,offer:SignedSandboxPriceOffer,signature:string){
+ return client.request<{sandbox:true;offer:SignedSandboxPriceOffer;offer_digest:string;checkout_created:false}>("/organizations/"+encodeURIComponent(offer.quote.organization_id)+"/marketplace/sandbox/offers/preview",{method:"POST",body:JSON.stringify({offer,signature})});
+}

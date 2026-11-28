@@ -43,6 +43,12 @@ async fn persistent_replay_refund_and_tenant_denial() {
         .unwrap();
     tx.create_sandbox_order(&quote, &digest).await.unwrap();
     tx.create_sandbox_order(&quote, &digest).await.unwrap();
+    let empty = tx
+        .sandbox_settlement(order, &pubkey, Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(empty.clearing_minor, 0);
+    assert_eq!(empty.event_count, 0);
     tx.commit().await.unwrap();
     let make = |name: &str, kind, amount| {
         let e = SandboxEvent {
@@ -101,6 +107,18 @@ async fn persistent_replay_refund_and_tenant_denial() {
     tx.record_sandbox_event(e, &s, &pubkey, Utc::now())
         .await
         .unwrap();
+    let report = tx
+        .sandbox_settlement(order, &pubkey, Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(report.clearing_minor, 60);
+    assert_eq!(report.publisher_payable_minor, 39);
+    assert_eq!(report.platform_revenue_minor, 16);
+    assert_eq!(report.tax_payable_minor, 5);
+    assert!(report.reconcile(&report).matched);
+    let mut changed = report.clone();
+    changed.platform_revenue_minor += 1;
+    assert!(!report.reconcile(&changed).matched);
     tx.commit().await.unwrap();
     let mut tx = OrgExtensionScope::begin_human(&pool, org, user, session)
         .await
@@ -125,6 +143,20 @@ async fn persistent_replay_refund_and_tenant_denial() {
     assert_eq!(v["entitlement"], "revoked");
     assert_eq!(v["event_count"], 3);
     assert_eq!(v["outstanding_minor"], 0);
+    let report = tx
+        .sandbox_settlement(order, &pubkey, Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(report.event_count, 3);
+    assert_eq!(
+        (
+            report.clearing_minor,
+            report.publisher_payable_minor,
+            report.platform_revenue_minor,
+            report.tax_payable_minor
+        ),
+        (0, 0, 0, 0)
+    );
     tx.commit().await.unwrap();
     let mut tx = OrgExtensionScope::begin_human(&pool, other, user, session)
         .await
