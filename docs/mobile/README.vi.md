@@ -1,0 +1,8 @@
+# OpenVietGIS Mobile — hướng dẫn ứng viên thử nghiệm
+Trạng thái: chưa phát hành 1.0. Cài APK debug ARM64 chỉ trên thiết bị thử nghiệm. Kiểm tra SHA-256 và fingerprint từ artifact CI đúng commit. Không dùng khóa debug cho dữ liệu vận hành. Không cung cấp dữ liệu cá nhân/production cho fixture.
+## Sử dụng local
+Mở ứng dụng offline; tạo kho GeoPackage, nhập GeoJSON WGS84 XY tối đa 16 MiB/4096 đối tượng, ID UUID hoặc không ID. Nguồn bản đồ trống nếu chưa có dữ liệu local. Chạm đối tượng để lấy ID; bảng thuộc tính hỗ trợ chỉnh JSON; vẽ điểm/đường/vùng, snap, undo/redo. GPS foreground cần quyền vị trí; xuất GPX không mang đầy đủ metadata RTK. Tìm kiếm tọa độ theo thứ tự kinh độ, vĩ độ hoặc thuộc tính/UUID. Spatial processing nhập ID đối tượng và tham số JSON; chọn thuật toán; kết quả WGS84 lưu workspace mới, CRS chiếu xuất WKB JSON riêng. Buffer trong EPSG:3857 không phải khoảng cách trắc địa. Không xuất toàn bộ lịch sử/schema trong GeoJSON.
+## Giới hạn
+Chưa có bảo đảm hiệu năng 1M đối tượng, RTK, MVT lớn, driver đầy đủ, CRS vùng VN-2000, camera/QR, địa chỉ số nhà trên thiết bị, connected login/sync, plugin activation và chat trực tiếp. SDK, repository và các adapter chưa đồng nghĩa đã tích hợp UI end-to-end. Không dùng kho local cho dữ liệu managed cần mã hóa.
+## Build & nghiệm thu
+Workflow spec073-wave1-flutter.yml tạo host bằng FRB 2.11.1, Flutter 3.50.0 và Rust 1.85.1; workflow spec073-wave7-integrated.yml chạy lại suite cùng commit. Kiểm tra APK và partial SBOM trong artifact. Không có release key trong repo. Xem infra/mobile/release/android/README.md và tools/benchmark/mobile/README.md. Mã nguồn và LICENSE nằm ở commit tương ứng; nghĩa vụ phân phối, third-party notices và source offer cần được phê duyệt trước khi phát hành. 

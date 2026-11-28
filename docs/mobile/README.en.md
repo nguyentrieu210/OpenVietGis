@@ -1,0 +1,8 @@
+# OpenVietGIS Mobile — experimental candidate guide
+Not a 1.0 release. Use the debug ARM64 APK only on a disposable test device. Verify candidate SHA-256 and signer fingerprint from the matching CI artifact. Never use debug keys or real operational data in fixtures.
+## Standalone
+Launch offline, create a GeoPackage workspace, import WGS84 XY GeoJSON (16 MiB/4096 features maximum; UUID or absent IDs). Empty canvas until data is present. Tap a feature to inspect its ID, edit JSON attributes, draw point/line/polygon, snap and undo/redo. Foreground GPS requires permission; GPX export omits advanced accuracy/RTK metadata. Search longitude,latitude or UUID/attributes. Processing accepts feature IDs and JSON parameters; publish WGS84 results to a new workspace, export projected results as CRS-tagged WKB JSON. Web Mercator buffer is not geodesic distance. GeoJSON does not preserve edit history or system rules.
+## Limits
+No qualified large MVT/1M feature rendering, complete vector drivers, regional VN-2000 transformations, RTK, camera/QR or connected mobile workflows. SDK and repository tests are not end-to-end connected app evidence. Never put protected managed data into the independent plaintext local workspace.
+## Build and acceptance
+The Flutter integration workflow pins candidate Flutter 3.50.0, FRB 2.11.1 and Rust 1.85.1. The W7 integrated workflow reruns the candidate suite on one SHA. APK evidence and partial Cargo/Pub SBOM are test artifacts only. See Android release and benchmark instructions. Source and LICENSE are available at the matching commit; distribution, third-party notices and source obligations require review. No store approval or release signature is asserted.

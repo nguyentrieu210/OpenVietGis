@@ -52,7 +52,7 @@ class _ProcessingPageState extends State<ProcessingPage>{
   final result=_result;if(result==null||_busy||_resultScope!=widget.controller.selected)return;
   final confirm=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Export processing result'),content:const Text('Share CRS-tagged WKB JSON with attributes and lineage. This is not GeoJSON or a GeoPackage.'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),TextButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Share'))]));
   if(confirm!=true||!mounted||_resultScope!=widget.controller.selected)return;
-  try{final dir=await(await getTemporaryDirectory()).createTemp('ovg-result-');final f=await File(dir.path+'/result.ovg.json').writeAsString(result,flush:true);await Share.shareXFiles([XFile(f.path,mimeType:'application/json')]);}
+  try{final dir=await(await getTemporaryDirectory()).createTemp('ovg-result-');final f=await File('${dir.path}/result.ovg.json').writeAsString(result,flush:true);await Share.shareXFiles([XFile(f.path,mimeType:'application/json')]);}
   catch(_){if(mounted)setState(()=>_error='Export failed');}
  }
  @override Widget build(BuildContext context){
@@ -67,8 +67,8 @@ class _ProcessingPageState extends State<ProcessingPage>{
    if(_busy)...[LinearProgressIndicator(value:_progress/100),TextButton(onPressed:(){_cancel=true;final j=_job;if(j!=null){unawaited(j.cancel());}},child:const Text('Cancel'))],
    if(_error!=null)Text(_error!),
    if(r!=null)...[
-     Text('EPSG: '+r['epsg'].toString()+' · '+(r['rows'] as List).length.toString()+' features'),
-     Text('Dropped empty: '+r['dropped_empty'].toString()),
+     Text('EPSG: ${r['epsg']} · ${(r['rows'] as List).length} features'),
+     Text('Dropped empty: ${r['dropped_empty']}'),
      FilledButton(onPressed:_busy||r['epsg']!=4326?null:_publish,child:Text(vi?'Lưu workspace mới':'Publish new workspace')),
      TextButton(onPressed:_busy?null:_export,child:const Text('Export WKB JSON')),
    ],
