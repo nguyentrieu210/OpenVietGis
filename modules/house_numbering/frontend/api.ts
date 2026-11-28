@@ -1056,7 +1056,7 @@ export function getHouseNumberingLifecycleKpi(client:ApiClient,org:string,projec
 }
 
 export type EntranceState="observed"|"confirmed"|"rejected"|"retired";
-export type BuildingEntrance={id:string;building_id:string;route_id:string;route_name:string;source_id:string;feature_id:string;evidence_ref:string;observed_number:string|null;state:EntranceState;revision:number;geometry_ready:boolean};
+export type BuildingEntrance={id:string;building_id:string;route_id:string;route_name:string;source_id:string;feature_id:string;evidence_ref:string;observed_number:string|null;state:EntranceState;revision:number;geometry_ready:boolean;choice_revision:number;primary_selected:boolean;primary_valid:boolean};
 export type EntranceInput={route_id:string;source_id:string;feature_id:string;evidence_ref:string;observed_number:string|null};
 export function listBuildingEntrances(client:ApiClient,org:string,project:string,id:string){
  return client.request<{items:BuildingEntrance[]}>(base(org,project)+"/buildings/"+encodeURIComponent(id)+"/entrances");
@@ -1078,4 +1078,8 @@ export function getHouseNumberingLifecycleBreakdown(client:ApiClient,org:string,
 }
 export function getHouseNumberingSurveyStaffKpi(client:ApiClient,org:string,project:string,start:string,endExclusive:string){
  return client.request<SurveyStaffKpi>(base(org,project)+"/survey-staff-kpi?"+new URLSearchParams({start_date:start,end_date_exclusive:endExclusive}).toString());
+}
+
+export function chooseBuildingPrimaryEntrance(client:ApiClient,org:string,project:string,building:string,input:{entrance_id:string;expected_revision:number;reason:string}){
+ return jsonMutation<{items:BuildingEntrance[]}>(client,base(org,project)+"/buildings/"+encodeURIComponent(building)+"/primary-entrance","POST",input);
 }

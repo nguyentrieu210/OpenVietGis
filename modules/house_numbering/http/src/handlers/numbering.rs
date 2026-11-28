@@ -115,6 +115,11 @@ async fn inspect_location(
     body: &InspectBody,
     crs_code: i32,
 ) -> Result<Value, AppError> {
+    if let Some(id)=body.existing_building_id {
+        if !store::entrance_blockers(read,&[id]).await?.is_empty(){
+            return Err(AppError::conflict("ENTRANCE_REVIEW_REQUIRED","resolve entrance evidence before inspecting a numbering candidate"));
+        }
+    }
     let route = store::route_geometry(read, body.route_id).await?;
     let rule = domain_rule(&store::get_rule(read, body.rule_id).await?)?;
     let context = store::inspection_context(read, body.existing_building_id, body.route_id).await?;
@@ -489,7 +494,7 @@ async fn preview_assignment(
         );
     }
     let mut base = serde_json::Map::new();
-    base.insert("numbering_policy".into(),json!("collision-v2"));
+    base.insert("numbering_policy".into(),json!("collision-v3-primary"));
     base.insert("rule_revision".into(),rule_row["revision"].clone());
     let mut changes: Vec<Value> = Vec::new();
     for plan in plans

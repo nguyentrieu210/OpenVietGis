@@ -461,7 +461,9 @@ async fn submission_digest(edit:&mut ProjectRead<'_>,proposal_id:Uuid,revision_o
                  LEFT JOIN LATERAL (SELECT revision,state FROM house_numbering.entrance_reviews er WHERE (er.organization_id,er.project_id,er.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) er ON true
                  LEFT JOIN extensions.spatial_features_v1 ef ON (ef.organization_id,ef.project_id,ef.source_id,ef.feature_id)=(e.organization_id,e.project_id,e.source_id,e.feature_id)
                  LEFT JOIN extensions.spatial_sources_v1 es ON (es.organization_id,es.project_id,es.id)=(ef.organization_id,ef.project_id,ef.source_id)
-                 WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)),'[]'::jsonb) AS pin,
+                 WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)),'[]'::jsonb)
+              || coalesce((SELECT jsonb_build_array(jsonb_build_array(d.selected_entrance_id,d.choice_revision,d.choice_valid,d.evidence_digest))
+                FROM house_numbering.entrance_decisions_v1 d WHERE (d.organization_id,d.project_id,d.building_id)=(b.organization_id,b.project_id,b.id) AND d.choice_revision>0),'[]'::jsonb) AS pin,
             line.geometry IS NOT NULL AND f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready' AS ready
           FROM house_numbering.proposal_items i JOIN house_numbering.buildings b
             ON (b.organization_id,b.project_id,b.id)=(i.organization_id,i.project_id,i.building_id)

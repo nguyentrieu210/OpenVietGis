@@ -10,6 +10,7 @@ use super::{audit_actor,csrf,decode,module_read,module_survey,module_approve,pat
 pub(super) fn router()->Router<AppState>{
     Router::new().route(&format!("{BASE}/buildings/{{building_id}}/entrances"),get(list).post(observe))
       .route(&format!("{BASE}/entrances/{{entrance_id}}/review"),post(review))
+      .route(&format!("{BASE}/buildings/{{building_id}}/primary-entrance"),post(choose_primary))
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -36,5 +37,18 @@ async fn review(State(state):State<AppState>,auth:HumanSession,headers:HeaderMap
     if input.expected_revision<1||!matches!(input.state.as_str(),"confirmed"|"rejected"|"retired")||!text_len(input.reason.trim(),1,500){return Err(HouseNumberingError::InvalidRequest);}
     let mut edit=module_approve(&state,&auth,org,project).await?;
     let result=store::review_entrance(&mut edit,audit_actor(&auth),id,input.expected_revision,&input.state,input.reason.trim()).await?;
+    edit.commit().await?;Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PrimaryChoice{entrance_id:Uuid,expected_revision:i64,reason:String}
+async fn choose_primary(State(state):State<AppState>,auth:HumanSession,headers:HeaderMap,Path(params):Path<HashMap<String,String>>,body:Bytes)->HnResult<Json<Value>>{
+    csrf(&state,&auth,&headers)?;
+    let (org,project)=scope_ids(&params)?;let building=path_id(&params,"building_id")?;
+    let input:PrimaryChoice=decode(&body)?;
+    if input.expected_revision<0||!text_len(input.reason.trim(),1,500){return Err(HouseNumberingError::InvalidRequest);}
+    let mut edit=module_approve(&state,&auth,org,project).await?;
+    let result=store::choose_primary_entrance(&mut edit,audit_actor(&auth),building,input.entrance_id,input.expected_revision,input.reason.trim()).await?;
     edit.commit().await?;Ok(Json(result))
 }

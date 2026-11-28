@@ -127,7 +127,12 @@ pub async fn route_snapshot(
          LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.route_id=$3 AND b.state='active' ORDER BY e.id"
     ).bind(edit.organization_id()).bind(edit.project_id()).bind(route_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
-    let payload = if entrances.is_empty(){json!([buildings,numbers])}else{json!([buildings,numbers,entrances])};
+    let choices:Vec<Value>=sqlx::query_scalar(
+      "SELECT jsonb_build_array(d.building_id,d.selected_entrance_id,d.choice_revision,d.choice_valid,d.evidence_digest)
+       FROM house_numbering.entrance_decisions_v1 d JOIN house_numbering.buildings b ON (b.organization_id,b.project_id,b.id)=(d.organization_id,d.project_id,d.building_id)
+       WHERE d.organization_id=$1 AND d.project_id=$2 AND b.route_id=$3 AND b.state='active' AND d.choice_revision>0 ORDER BY d.building_id"
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(route_id).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?;
+    let payload = if !choices.is_empty(){json!([buildings,numbers,entrances,choices])}else if entrances.is_empty(){json!([buildings,numbers])}else{json!([buildings,numbers,entrances])};
     Ok(format!(
         "{:x}",
         Sha256::digest(py_json_dumps(&payload).as_bytes())
@@ -247,9 +252,11 @@ pub async fn building_points(
                 ST_X(ST_Transform(ST_PointOnSurface(f.geometry),$4)) AS x,
                 ST_Y(ST_Transform(ST_PointOnSurface(f.geometry),$4)) AS y
          FROM house_numbering.buildings b
+         LEFT JOIN house_numbering.entrance_decisions_v1 d ON (d.organization_id,d.project_id,d.building_id)=(b.organization_id,b.project_id,b.id)
+         LEFT JOIN house_numbering.building_entrances chosen ON d.choice_valid AND (chosen.organization_id,chosen.project_id,chosen.id)=(d.organization_id,d.project_id,d.selected_entrance_id)
          JOIN extensions.spatial_features_v1 f
            ON f.organization_id=b.organization_id AND f.project_id=b.project_id
-          AND f.source_id=b.linked_source_id AND f.feature_id=b.linked_feature_id
+          AND f.source_id=coalesce(chosen.source_id,b.linked_source_id) AND f.feature_id=coalesce(chosen.feature_id,b.linked_feature_id)
          JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
          LEFT JOIN LATERAL (
              SELECT * FROM house_numbering.address_numbers n
@@ -262,6 +269,10 @@ pub async fn building_points(
          ) n ON true
          WHERE b.organization_id=$1 AND b.project_id=$2
            AND b.route_id=$3 AND b.state='active' AND f.geometry_state='present'
+           AND (d.building_id IS NULL OR (NOT d.pending AND NOT coalesce(d.invalid_confirmed,false) AND
+             (d.choice_valid OR (d.choice_revision=0 AND d.confirmed_count<=1 AND NOT EXISTS(
+                SELECT 1 FROM house_numbering.entrance_context_v1 e WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)
+                  AND e.state='confirmed' AND e.route_id IS DISTINCT FROM b.route_id)))))
            AND s.lifecycle='active' AND s.validation_state='ready'
            AND ST_SRID(f.geometry)>0 AND NOT ST_IsEmpty(f.geometry)
            AND ST_GeometryType(f.geometry) IN ('ST_Point','ST_Polygon','ST_MultiPolygon')",
@@ -555,7 +566,7 @@ pub async fn apply_preview(
     }
     let rule_id: Uuid = preview.try_get("rule_id").map_err(db_error)?;
     let base: Value = preview.try_get("base_revisions").map_err(db_error)?;
-    if base["numbering_policy"]!="collision-v2" {
+    if base["numbering_policy"]!="collision-v3-primary" {
         return Err(stale("numbering policy changed; create a new preview"));
     }
     let rule=super::get_rule(edit,rule_id).await?;

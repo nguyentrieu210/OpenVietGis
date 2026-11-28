@@ -104,6 +104,8 @@ def main():
                     params[2]=[building['id']]
                     order=[int(x)-1 for x in re.findall(r'\$(\d+)',blocker)]
                     return db.execute(re.sub(r'\$\d+','%s',blocker).replace('ANY(%s)','ANY(%s::uuid[])'),[params[i] for i in order]).fetchall()
+                alternate_source=seed_source(owner,fx,'LineString',{'r2':'LINESTRING(0 0,0 100)'})
+                alternate=expect(api.post(root+'/routes',json={'name':'Other access road','status':'confirmed','source_id':alternate_source,'feature_id':'r2'},headers=h),201)
                 with psycopg.connect(runtime) as db:
                     scoped(db)
                     with db.transaction(force_rollback=True):
@@ -123,6 +125,50 @@ def main():
                         review(2,'confirmed',reviewer['id'])
                         assert not blocked(db)
                         assert len(run(db,queries[0]))==3
+                        # A confirmed secondary access on another route requires
+                        # explicit primary selection, not deletion of the observation.
+                        with db.transaction(force_rollback=True):
+                            other=uuid4()
+                            db.execute("""INSERT INTO house_numbering.building_entrances(id,organization_id,project_id,building_id,route_id,source_id,feature_id,evidence_ref,created_by)
+                               VALUES(%s,%s,%s,%s,%s,%s,'p1','secondary access',%s)""",(other,org,project,building['id'],alternate['id'],points,actor))
+                            for rev,state,who in [(1,'observed',actor),(2,'confirmed',reviewer['id'])]:
+                                db.execute("INSERT INTO house_numbering.entrance_reviews(organization_id,project_id,entrance_id,revision,state,reason,actor_id) VALUES(%s,%s,%s,%s,%s,'secondary evidence',%s)",(org,project,other,rev,state,who))
+                            assert blocked(db)
+                            choose_sql=re.search(r'"(INSERT INTO house_numbering.primary_entrance_choices.*?d.choice_revision=\$4-1)"',entrance_source,re.S).group(1)
+                            def choose(rev,selected,who):
+                                params=[org,project,building['id'],rev,selected,'fixture primary decision',who]
+                                order=[int(x)-1 for x in re.findall(r'\$(\d+)',choose_sql)]
+                                return db.execute(re.sub(r'\$\d+','%s',choose_sql),[params[i] for i in order]).rowcount
+                            for selected,who in [(eid,actor),(other,reviewer['id'])]:
+                                try:
+                                    with db.transaction():choose(1,selected,who)
+                                except psycopg.Error as e:assert e.sqlstate=='OV409'
+                                else:raise AssertionError('invalid primary choice accepted')
+                            digest_before=run(db,queries[1])[0][0]
+                            assert choose(1,eid,reviewer['id'])==1
+                            assert not blocked(db)
+                            assert run(db,queries[1])[0][0]!=digest_before
+                            assert choose(1,eid,reviewer['id'])==0
+                            numbering=(ROOT/'modules/house_numbering/storage/src/persistence/numbering.rs').read_text()
+                            point_sql=re.search(r'"(SELECT b.id,n.id AS number_id.*?ST_MultiPolygon\x27\))"',numbering,re.S).group(1)
+                            def selected_points():
+                                params=[org,project,route['id'],3857]
+                                order=[int(x)-1 for x in re.findall(r'\$(\d+)',point_sql)]
+                                return db.execute(re.sub(r'\$\d+','%s',point_sql),[params[i] for i in order]).fetchall()
+                            assert len(selected_points())==1 and selected_points()[0][-2:]==(20.0,10.0)
+                            # Retiring the secondary evidence invalidates the pinned choice.
+                            db.execute("INSERT INTO house_numbering.entrance_reviews(organization_id,project_id,entrance_id,revision,state,reason,actor_id) VALUES(%s,%s,%s,3,'retired','changed evidence',%s)",(org,project,other,reviewer['id']))
+                            assert blocked(db) and not selected_points()
+                            assert choose(2,eid,reviewer['id'])==1 and not blocked(db)
+                            db.execute("UPDATE house_numbering.address_numbers SET kind='submitted' WHERE id=%s",(number,))
+                            try:
+                                with db.transaction():choose(3,eid,reviewer['id'])
+                            except psycopg.Error as e:assert e.sqlstate=='OV409'
+                            else:raise AssertionError('submitted number allowed primary change')
+                            assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.primary_entrance_choices','UPDATE')").fetchone()[0]
+                            db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                            assert db.execute("SELECT count(*) FROM house_numbering.primary_entrance_choices").fetchone()[0]==0
+                        print('PASS primary entrance SQL: cross-route choice, independent reviewer, selected geometry, stale choice, submitted number gate, RLS')
                         review(3,'retired',reviewer['id'])
                         assert not blocked(db)
                         assert not db.execute("SELECT has_table_privilege(current_user,'house_numbering.entrance_reviews','UPDATE')").fetchone()[0]

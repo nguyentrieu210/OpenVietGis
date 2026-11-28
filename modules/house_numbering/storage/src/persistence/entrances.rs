@@ -55,12 +55,14 @@ pub async fn list_entrances(read:&mut ProjectRead<'_>,building:Uuid)->Result<Val
     get_building(read,building,false).await?;
     let items:Vec<Value>=sqlx::query_scalar(
       "SELECT to_jsonb(e)||jsonb_build_object('state',r.state,'revision',r.revision,'route_name',route.name,
+       'choice_revision',coalesce(d.choice_revision,0),'primary_selected',coalesce(d.selected_entrance_id=e.id,false),'primary_valid',coalesce(d.choice_valid AND d.selected_entrance_id=e.id,false),
        'geometry_ready',coalesce(f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready' AND ST_GeometryType(f.geometry)='ST_Point',false))
        FROM house_numbering.building_entrances e
        JOIN LATERAL (SELECT state,revision FROM house_numbering.entrance_reviews r WHERE (r.organization_id,r.project_id,r.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) r ON true
        JOIN house_numbering.routes route ON (route.organization_id,route.project_id,route.id)=(e.organization_id,e.project_id,e.route_id)
        LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(e.organization_id,e.project_id,e.source_id,e.feature_id)
        LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
+       LEFT JOIN house_numbering.entrance_decisions_v1 d ON (d.organization_id,d.project_id,d.building_id)=(e.organization_id,e.project_id,e.building_id)
        WHERE e.organization_id=$1 AND e.project_id=$2 AND e.building_id=$3 ORDER BY e.created_at,e.id")
        .bind(read.organization_id()).bind(read.project_id()).bind(building).fetch_all(&mut **read.transaction()).await.map_err(db_error)?;
     Ok(json!({"items":items}))
@@ -90,16 +92,38 @@ pub async fn review_entrance(edit:&mut ProjectRead<'_>,actor:AuditActor<'_>,id:U
 pub async fn entrance_blockers(read:&mut ProjectRead<'_>,buildings:&[Uuid])->Result<Vec<Uuid>,AppError>{
     sqlx::query_scalar(
         "SELECT DISTINCT b.id FROM house_numbering.buildings b
-         JOIN house_numbering.building_entrances e ON (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)
-         LEFT JOIN LATERAL (SELECT state FROM house_numbering.entrance_reviews r WHERE (r.organization_id,r.project_id,r.entrance_id)=(e.organization_id,e.project_id,e.id) ORDER BY revision DESC LIMIT 1) r ON true
-         LEFT JOIN extensions.spatial_features_v1 f ON (f.organization_id,f.project_id,f.source_id,f.feature_id)=(e.organization_id,e.project_id,e.source_id,e.feature_id)
-         LEFT JOIN extensions.spatial_sources_v1 s ON (s.organization_id,s.project_id,s.id)=(f.organization_id,f.project_id,f.source_id)
-         JOIN house_numbering.routes route ON (route.organization_id,route.project_id,route.id)=(e.organization_id,e.project_id,e.route_id)
+         JOIN house_numbering.entrance_decisions_v1 d ON (d.organization_id,d.project_id,d.building_id)=(b.organization_id,b.project_id,b.id)
          WHERE b.organization_id=$1 AND b.project_id=$2 AND b.id=ANY($3)
-           AND (r.state IS NULL OR r.state='observed' OR (r.state='confirmed' AND (
-             b.route_id IS DISTINCT FROM e.route_id OR route.status<>'confirmed'
-             OR NOT coalesce(f.geometry_state='present' AND s.lifecycle='active' AND s.validation_state='ready' AND ST_GeometryType(f.geometry)='ST_Point',false))))
+           AND (d.pending OR coalesce(d.invalid_confirmed,false)
+             OR (d.choice_revision>0 AND NOT d.choice_valid)
+             OR (NOT d.choice_valid AND (d.confirmed_count>1 OR EXISTS(
+               SELECT 1 FROM house_numbering.entrance_context_v1 e
+               WHERE (e.organization_id,e.project_id,e.building_id)=(b.organization_id,b.project_id,b.id)
+                 AND e.state='confirmed' AND e.route_id IS DISTINCT FROM b.route_id))))
          ORDER BY b.id"
     ).bind(read.organization_id()).bind(read.project_id()).bind(buildings)
       .fetch_all(&mut **read.transaction()).await.map_err(db_error)
+}
+
+/// An independent reviewer explicitly resolves the primary point on the already
+/// assigned route. This does not reassign the building or allocate a new number.
+pub async fn choose_primary_entrance(edit:&mut ProjectRead<'_>,actor:AuditActor<'_>,building:Uuid,entrance:Uuid,expected:i64,reason:&str)->Result<Value,AppError>{
+    let current=get_building(edit,building,true).await?;
+    if current["state"]!="active"{return Err(AppError::conflict("BUILDING_INACTIVE","building is not active"));}
+    let refs:Vec<SpatialFeatureRef>=sqlx::query_as::<_,(Uuid,String)>(
+       "SELECT source_id,feature_id FROM house_numbering.entrance_context_v1 WHERE organization_id=$1 AND project_id=$2 AND building_id=$3 AND state='confirmed' ORDER BY source_id,feature_id"
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(building).fetch_all(&mut **edit.transaction()).await.map_err(db_error)?
+       .into_iter().map(|(source_id,feature_id)|SpatialFeatureRef{source_id,feature_id}).collect();
+    let locked=lock_linked_features(edit,&refs,true).await?;
+    if refs.iter().any(|r|!locked.contains(r)){return Err(AppError::conflict("ENTRANCE_GEOMETRY_MISSING","confirmed entrance geometry is missing"));}
+    let next=expected.checked_add(1).ok_or_else(||AppError::internal("choice revision overflow"))?;
+    let inserted=sqlx::query(
+       "INSERT INTO house_numbering.primary_entrance_choices(organization_id,project_id,building_id,revision,entrance_id,evidence_digest,reason,actor_id)
+        SELECT $1,$2,$3,$4,$5,d.evidence_digest,$6,$7 FROM house_numbering.entrance_decisions_v1 d
+        WHERE d.organization_id=$1 AND d.project_id=$2 AND d.building_id=$3 AND d.choice_revision=$4-1"
+    ).bind(edit.organization_id()).bind(edit.project_id()).bind(building).bind(next).bind(entrance).bind(reason).bind(actor.id)
+      .execute(&mut **edit.transaction()).await.map_err(db_error)?;
+    if inserted.rows_affected()!=1{return Err(AppError::conflict("STALE_PRIMARY_CHOICE","entrance evidence or selection revision changed"));}
+    append_audit(edit,actor,"house_numbering.entrance.primary","house_numbering_building",building,json!({"entrance_id":entrance,"choice_revision":next})).await?;
+    list_entrances(edit,building).await
 }
