@@ -69,7 +69,7 @@ export interface SavedQuery {
 }
 
 export interface ProcessingAlgorithm {
-  id: "buffer" | "clip" | "dissolve";
+  id: "buffer" | "clip" | "dissolve" | "difference" | "intersection";
   /** Provider and capability tags come from the authenticated project registry; they are not permission grants. */
   provider_id: string;
   provider_name: string;
@@ -83,7 +83,7 @@ export interface ProcessingAlgorithm {
 
 export interface ProcessingJob {
   id: string;
-  algorithm_id: "buffer" | "clip" | "dissolve";
+  algorithm_id: "buffer" | "clip" | "dissolve" | "difference" | "intersection";
   operation_id: string;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
   output_name: string;

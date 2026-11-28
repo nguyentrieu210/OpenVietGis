@@ -1,5 +1,5 @@
 import type {ProcessingJob,SpatialLayer} from "@openvietgis/client-sdk";
-import {processingRequest,readPendingProcessing,sourcePin,verifyProcessingReceipt,type Algorithm,type ProcessingRequest,type ProcessingSourcePin} from "./workbenches/features/platform/processing-request";
+import {processingRequest,readPendingProcessing,sourcePin,overlayAlgorithm,verifyProcessingReceipt,type Algorithm,type ProcessingRequest,type ProcessingSourcePin} from "./workbenches/features/platform/processing-request";
 export type ModelRef={type:"layer"|"step";id:string};
 export type VectorStep={id:string;algorithm:Algorithm;name:string;a:ModelRef|null;b:ModelRef|null;parameters:Record<string,unknown>};
 type Entry={step:string;request:ProcessingRequest;jobId?:string};
@@ -13,7 +13,7 @@ export function graphPin(steps:readonly VectorStep[]){
 export function newModelRun(steps:readonly VectorStep[],layers:readonly SpatialLayer[],runId:string):ModelRun{
  if(!uuid(runId))throw Error("Mã lần chạy không hợp lệ.");
  const sources:Record<string,ProcessingSourcePin>=Object.create(null);
- for(const n of steps)for(const ref of [n.a,n.algorithm==="clip"?n.b:null])if(ref?.type==="layer"){
+ for(const n of steps)for(const ref of [n.a,overlayAlgorithm(n.algorithm)?n.b:null])if(ref?.type==="layer"){
   const layer=layers.find(l=>l.id===ref.id);if(!layer)throw Error("Thiếu layer đầu vào.");
   sources[ref.id]=sourcePin(layer);
  }
@@ -27,7 +27,7 @@ export function readModelRun(raw:string|null):ModelRun|null{
  const sources:Record<string,ProcessingSourcePin>=Object.create(null);
  for(const [id,p] of Object.entries(r.sources)){if(!id||!object(p)||typeof p.source_id!=="string"||!p.source_id||typeof p.content_revision!=="string"||!/^[a-f0-9]{64}$/.test(p.content_revision)||typeof p.schema_revision!=="string"||!/^[a-f0-9]{64}$/.test(p.schema_revision))throw Error("Pin nguồn không hợp lệ.");sources[id]={source_id:p.source_id,content_revision:p.content_revision,schema_revision:p.schema_revision}}
  const entries:Entry[]=[],seen=new Set<string>(),ops=new Set<string>();
- for(const e of r.entries){if(!object(e)||typeof e.step!=="string"||!e.step||seen.has(e.step)||e.jobId!==undefined&&(typeof e.jobId!=="string"||!e.jobId))throw Error("Bước nhật ký không hợp lệ.");const request=readPendingProcessing(JSON.stringify(e.request));if(!request||!request.expected_input||request.algorithm_id==="clip"&&!request.expected_overlay||ops.has(request.operation_id))throw Error("Yêu cầu nhật ký không hợp lệ.");seen.add(e.step);ops.add(request.operation_id);entries.push({step:e.step,request,...(typeof e.jobId==="string"?{jobId:e.jobId}:{})})}
+ for(const e of r.entries){if(!object(e)||typeof e.step!=="string"||!e.step||seen.has(e.step)||e.jobId!==undefined&&(typeof e.jobId!=="string"||!e.jobId))throw Error("Bước nhật ký không hợp lệ.");const request=readPendingProcessing(JSON.stringify(e.request));if(!request||!request.expected_input||overlayAlgorithm(request.algorithm_id)&&!request.expected_overlay||ops.has(request.operation_id))throw Error("Yêu cầu nhật ký không hợp lệ.");seen.add(e.step);ops.add(request.operation_id);entries.push({step:e.step,request,...(typeof e.jobId==="string"?{jobId:e.jobId}:{})})}
  return {version:1,graph:r.graph,runId:r.runId,sources,entries};
 }
 type Runner={current:()=>Promise<void>;layer:(id:string)=>Promise<SpatialLayer>;submit:(r:ProcessingRequest)=>Promise<ProcessingJob>;job:(id:string)=>Promise<ProcessingJob>;persist:(r:ModelRun)=>void;progress:(step:string,job?:ProcessingJob)=>void;stopped:()=>boolean;operation:()=>string};
@@ -38,8 +38,8 @@ export async function executeVectorModel(initial:ModelRun,steps:readonly VectorS
  const outputs=new Map<string,string>(),resolve=(r:ModelRef|null)=>r?(r.type==="layer"?r.id:outputs.get(r.id)):undefined;
  for(const n of steps){
   if(io.stopped())break;await io.current();if(io.stopped())break;io.progress(n.id);
-  const a=resolve(n.a),b=n.algorithm==="clip"?resolve(n.b):undefined;
-  if(!a||n.algorithm==="clip"&&!b)throw Error("Không có đầu vào "+n.name);
+  const a=resolve(n.a),b=overlayAlgorithm(n.algorithm)?resolve(n.b):undefined;
+  if(!a||overlayAlgorithm(n.algorithm)&&!b)throw Error("Không có đầu vào "+n.name);
   const outputName=n.name.trim()+" · "+run.runId.slice(0,8);
   let entry=run.entries.find(e=>e.step===n.id);
   if(!entry){

@@ -10,7 +10,9 @@ export interface ProcessingToolboxEntry {
 const commandByAlgorithm: Readonly<Record<ProcessingAlgorithm["id"], string>> = {
   buffer: "BUFFER",
   clip: "CLIP",
-  dissolve: "DISSOLVE"
+  dissolve: "DISSOLVE",
+  difference: "DIFFERENCE",
+  intersection: "INTERSECTION"
 };
 
 const normalize = (value: string) =>

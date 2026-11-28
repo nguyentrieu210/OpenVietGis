@@ -616,9 +616,24 @@
         "apps/web-next/command-search.test.mjs",
         "apps/web-next/workspace-preferences.test.mjs",
         "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
-        "apps/web-next/src/workbenches/features/platform/processing-request.ts"
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "apps/api-rust/src/processing_models.rs",
+        "tests/spec065/edit_processing.py"
       ],
-      "blocker": "Paired QGIS and authenticated Rust/PostGIS acceptance not executed; server registry applied in vector workbench only; provider-aware toolbox remains"
+      "blocker": "Paired QGIS and authenticated Rust/PostGIS acceptance not executed; server registry applied in vector workbench only; provider-aware toolbox remains Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-02",
@@ -644,9 +659,23 @@
         "fixtures/qgis-parity/vector-oracle.sql",
         "tests/spec065/edit_processing.py",
         "tests/spec065/run-attribute-query.sh",
-        "fixtures/qgis-parity/qgis_oracle.py"
+        "fixtures/qgis-parity/qgis_oracle.py",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/ProcessingModeler.tsx",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "apps/api-rust/src/processing_models.rs"
       ],
-      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain. Independent QGIS 3.44 native clip/dissolve/buffer engine oracle and map reference runner added; not executed."
+      "blocker": "Authenticated Rust jobs on EPSG:3857 golden synthetic data: Buffer, Clip, Dissolve output counts and areas verified against analytical oracle. QGIS pairing and other spatial algorithms remain. Independent QGIS 3.44 native clip/dissolve/buffer engine oracle and map reference runner added; not executed. Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-04",
@@ -682,9 +711,22 @@
         "apps/web-next/src/model-run-journal.ts",
         "apps/web-next/src/model-run-journal.test.ts",
         "apps/web-next/src/LiveApp.tsx",
-        "apps/web-next/src/workbenches/features/platform/processing-request.ts"
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts",
+        "packages/client-sdk/src/platform.ts",
+        "apps/web-next/src/workbenches/features/platform/ProcessingWorkbenchPage.tsx",
+        "apps/web-next/src/processing-toolbox-registry.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/src/CoreWorkbench.tsx",
+        "apps/web-next/src/workbench-contract.ts",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/workbenches/features/platform/processing-request.test.ts",
+        "apps/api/migrations/versions/0047_processing_overlay.py",
+        "crates/ovg-processing/src/registry.rs",
+        "crates/ovg-storage/src/processing_jobs.rs",
+        "apps/api-rust/src/processing.rs",
+        "tests/spec065/edit_processing.py"
       ],
-      "blocker": "Persisted graph definitions and bounded DAG validation. Vector-only runs now have account/project-scoped durable browser journal, cross-tab lock, source pins, stable per-step request before POST, verified server job replay and partial resume, explicit journal export/discard. Mixed/raster graph execution retains legacy non-resumable path; no server-owned graph scheduler or raster idempotency/cancellation; new tests not executed."
+      "blocker": "Persisted graph definitions and bounded DAG validation. Vector-only runs now have account/project-scoped durable browser journal, cross-tab lock, source pins, stable per-step request before POST, verified server job replay and partial resume, explicit journal export/discard. Mixed/raster graph execution retains legacy non-resumable path; no server-owned graph scheduler or raster idempotency/cancellation; new tests not executed. Difference (subtract union mask) and Intersection (pairwise polygon overlay with input/overlay FID lineage) now have native PostGIS jobs, registry, schema migration, canonical UI and vector modeler integration. XY single-part output, no full attribute join, union, reprojection or arbitrary CRS. New fixtures not executed."
     },
     {
       "id": "PROC-07",

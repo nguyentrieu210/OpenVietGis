@@ -13,7 +13,7 @@ import { useEffect,useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { apiClient } from "../../app/api";
 import { ProjectToolbar } from "./ProjectToolbar";
-import {processingLayer,processingRequest,readPendingProcessing,supportedAlgorithm,verifyProcessingReceipt,type ProcessingRequest} from "./processing-request";
+import {processingLayer,processingRequest,readPendingProcessing,supportedAlgorithm,verifyProcessingReceipt,overlayAlgorithm,type Algorithm,type ProcessingRequest} from "./processing-request";
 
 import {appendBatch,readBatch,receivedBatch,nextBatchRow,MAX_BATCH,type BatchRow} from "./processing-batch";
 
@@ -42,7 +42,9 @@ function algorithmLabel(id: string): string {
   const labels: Record<string, string> = {
     buffer: "Vùng đệm",
     clip: "Cắt lớp",
-    dissolve: "Gộp vùng"
+    dissolve: "Gộp vùng",
+    difference: "Hiệu hình học",
+    intersection: "Giao hình học"
   };
   return labels[id] ?? id;
 }
@@ -52,7 +54,7 @@ export function ProcessingWorkbenchPage() {
   const qc = useQueryClient();
   const [search] = useSearchParams();
   const requested = search.get("algorithm");
-  const [algo, setAlgo] = useState<"buffer" | "clip" | "dissolve">(requested === "clip" || requested === "dissolve" ? requested : "buffer");
+  const [algo, setAlgo] = useState<Algorithm>(supportedAlgorithm(requested)?requested:"buffer");
   const [inputLayerId, setInputLayerId] = useState("");
   const [overlayLayerId, setOverlayLayerId] = useState("");
   const [distance, setDistance] = useState("500");
@@ -179,7 +181,7 @@ export function ProcessingWorkbenchPage() {
           <h2>Tham số phân tích không gian ({algorithms.length} thuật toán)</h2>
           <div className="ovg-algorithm-picker" aria-label="Chọn thuật toán">{algorithms.map(a=><button type="button" key={a.id} className="ovg-algorithm-choice" aria-pressed={algo===a.id} disabled={busy||!!pending} onClick={()=>{setAlgo(a.id);setOverlayLayerId("");setGroupField("")}}><b>{algorithmLabel(a.id)}</b><small>{a.name}</small></button>)}</div>
           {algosQuery.isError&&<p role="alert">Không tải được danh mục. <button type="button" onClick={()=>void algosQuery.refetch()}>Thử lại</button></p>}
-          {descriptor&&<p className="ovg-processing-description">{algo==="buffer"?"Tạo vùng đệm theo khoảng cách. Đầu vào địa lý được xử lý trong Web Mercator; không phải phép đo trắc địa chính xác.":algo==="clip"?"Cắt đối tượng theo vùng phủ polygon.":"Gộp hình học toàn lớp hoặc theo trường thuộc tính."}</p>}
+          {descriptor&&<p className="ovg-processing-description">{algo==="buffer"?"Tạo vùng đệm theo khoảng cách. Đầu vào địa lý được xử lý trong Web Mercator; không phải phép đo trắc địa chính xác.":algo==="clip"?"Cắt theo hợp các vùng phủ polygon.":algo==="difference"?"Trừ hợp các vùng phủ polygon; giữ ID nguồn.":algo==="intersection"?"Giao từng cặp đối tượng với vùng phủ polygon; giữ hai ID, không nối toàn bộ thuộc tính.":"Gộp hình học toàn lớp hoặc theo trường thuộc tính."}</p>}
           {pending&&<p role="status">Chưa xác minh phản hồi: {pending.algorithm_id} · {pending.output_name} · mã {pending.operation_id}. Gửi lại cùng yêu cầu, không tạo tác vụ mới.</p>}
           <fieldset disabled={busy||!!pending} className="ovg-form-row">
             <label>
@@ -202,7 +204,7 @@ export function ProcessingWorkbenchPage() {
                 ))}
               </select>
             </label>
-            {algo === "clip" && (
+            {overlayAlgorithm(algo) && (
               <label>
                 Lớp phủ cắt (Overlay)
                 <select aria-label="Lớp phủ cắt" value={overlayLayerId} onChange={(e) => setOverlayLayerId(e.target.value)}>
