@@ -7,6 +7,15 @@ export function parseXY(raw:string):XY|null{
 }
 export const orthoPoint=(p:XY,last:XY):XY=>Math.abs(p[0]-last[0])*Math.cos(last[1]*Math.PI/180)>=Math.abs(p[1]-last[1])?[p[0],last[1]]:[last[0],p[1]];
 export type SnapScope="all"|"active"|"selected";
+export function cleanSnapTolerances(value:unknown):Record<string,number>{
+ if(!value||typeof value!=="object"||Array.isArray(value))return {};
+ return Object.fromEntries(Object.entries(value).filter(([id,n])=>/^[A-Za-z0-9_-]{1,128}$/.test(id)&&!["__proto__","constructor","prototype"].includes(id)&&typeof n==="number"&&Number.isInteger(n)&&n>=4&&n<=25).slice(0,100));
+}
+export function snapToleranceFor(defaultPixels:number,overrides:Record<string,number>|undefined,layerId:string){
+ const n=overrides&&Object.hasOwn(overrides,layerId)?overrides[layerId]:undefined;
+ return typeof n==="number"&&Number.isInteger(n)&&n>=4&&n<=25?n:defaultPixels;
+}
+
 export function snapLayerAllowed(scope:SnapScope|undefined,id:string,active:string|undefined,selected:readonly string[]|undefined){
  return scope==="active"?!!active&&active===id:scope==="selected"?!!selected?.includes(id):true;
 }
