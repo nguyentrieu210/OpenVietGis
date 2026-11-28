@@ -1,0 +1,3 @@
+:root[data-ovg-contrast=high]{--ovg-ui-line:var(--ovg-ui-ink);--ovg-ui-line-strong:var(--ovg-ui-ink);--ovg-ui-muted:var(--ovg-ui-ink)}
+:root[data-ovg-motion=reduce]{--ovg-ui-motion-fast:0ms;--ovg-ui-motion-normal:0ms;--ovg-ui-motion-slow:0ms}
+@media (forced-colors:active){.ovg-v2-button:focus-visible,.ovg-v2-input:focus-visible,.ovg-grid button:focus-visible{outline:2px solid Highlight}}
