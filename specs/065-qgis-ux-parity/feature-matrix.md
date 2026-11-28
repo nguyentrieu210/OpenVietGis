@@ -31,7 +31,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | DOCK-06 | Chọn nhiều layer Ctrl/Shift, menu ngữ cảnh | D | QgisLayerDock | Chọn bằng bàn phím, thao tác batch, menu lớp/nhóm đúng capability | P1 |
 | DOCK-07 | Legend cây lớp, lọc lớp, scale range | D | QgisLayerDock, LayerProperties | Legend đúng style; trạng thái ngoài tỷ lệ, lọc chỉ đổi view | P1 |
 | DOCK-08 | Map themes / nhóm hiển thị độc quyền | D | QgisLayerDock, LayerProperties | Lưu, đổi, xóa theme; xác định cấu hình cá nhân/chia sẻ rõ ràng | P2 |
-| DOCK-09 | Layer order riêng / map view nhiều khung | U | Không xác nhận qua inventory hiện tại | Đặc tả render order độc lập; thêm secondary view chỉ khi adapter hỗ trợ | P2 |
+| DOCK-09 | Layer order riêng / map view nhiều khung | P | SecondaryMapView: independent order, visibility and camera; temporal raster frame subset | Đặc tả render order độc lập; thêm secondary view chỉ khi adapter hỗ trợ | P2 |
 | DOCK-10 | Remove khỏi map vs xóa layer/source | P | QgisLayerDock, CatalogManager | Phân biệt hành động và hậu quả; chặn xóa trái quyền, có xác nhận | P1 |
 
 ## Layer Properties, Symbology, Labels (STYLE)
@@ -40,12 +40,12 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 |---|---|---|---|---|---|
 | STYLE-01 | Information / Source / Fields / Display | D | LayerProperties 7 tab | Thông tin nguồn/storage/display CRS, fields, rendering; Apply/OK/Cancel nhất quán | P1 |
 | STYLE-02 | Single symbol / categorized / graduated | D | LayerProperties, graduated.ts | So khớp fixture phân loại null, breaks, màu, legend, export | P1 |
-| STYLE-03 | Rule-based / symbol layers / data-defined overrides | U | Chưa xác nhận bộ renderer tương ứng | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
+| STYLE-03 | Rule-based / symbol layers / data-defined overrides | P | rule-style: first-match typed rules; line casing; no general data-defined expression renderer | Cấu trúc rule, nhiều symbol layer, kiểm tra biểu thức và render có bằng chứng | P2 |
 | STYLE-04 | Labels theo trường/biểu thức, vị trí, buffer | P | LayerProperties, label-expr.ts | Preview, placement theo geometry, ưu tiên/collision, font/halo; giới hạn rõ | P1 |
 | STYLE-05 | Expression Builder dùng chung | P | label-expr.ts, Field Calculator, filter | AST typed, autocomplete field/function, preview, null, báo lỗi; không eval/SQL tùy ý | P1 |
 | STYLE-06 | Styles QML/SLD, import/export, style presets | P | style-io.ts, LayerProperties | Round-trip tập con được hỗ trợ; cảnh báo thuộc tính không tương thích | P2 |
 | STYLE-07 | Joins / relations / constraints / form layout | P | ExcelJoin.ts, ProfessionalTools, RelationInspector, RelationValuePicker, editing.relations/changesets và deferred DB triggers; có code chọn khóa và ràng buộc dùng chung, chờ nghiệm thu; personal form designer + typed Value Map + atomic multi-field editor | Join có cardinality, relation widget, constraint phía server, form thiết kế có scope | P2 |
-| STYLE-08 | Metadata, diagrams, actions, map tips | U | Metadata cơ bản; phần còn lại chưa xác nhận | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
+| STYLE-08 | Metadata, diagrams, actions, map tips | P | LayerProperties metadata, MapTips plain text, FeatureDiagrams signed per-feature bars, allowlisted clipboard actions | Tách tab theo capability, không dựng nút giả; action sandbox allowlist | P2 |
 | STYLE-09 | Layer styling panel live preview | P | LayerProperties modal, LayerLabels | Panel styling preview và apply rõ ràng; cancel không ghi đè dữ liệu | P2 |
 
 ## Attribute Table, Form & Selection (TABLE)
@@ -88,7 +88,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | PROC-07 | Raster properties, band, nodata, rendering | P | ProjectRaster, RasterWorkbench | Band metadata, stretch, palette, opacity, nodata, CRS; capability từng provider | P2 |
 | PROC-08 | Raster Calculator, NDVI/NDWI, DEM terrain | D | RasterWorkbench, RasterReportWorkbench, TerrainEngineering | Kết quả theo fixture, nodata/CRS/extent, lưu output có lineage | P2 |
 | PROC-09 | Georeferencer raster/vector GCP | P | Raster affine GCP + north-up nearest/bilinear cho TIFF giới hạn; vector XY GeoJSON affine WGS84, RMS và xuất tệp | Kiểm thử mới, topology vector, mask/palette raster mở rộng, nhập vào project và QGIS acceptance còn thiếu | P2 |
-| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView: vector and raster UTC series; Spatial3DSettings/Cesium: bounded LAS 1.2–1.4, EPT binary, 2DM mesh, JSON and SMS DAT temporal node datasets, RGB/height/intensity rendering | Local session preview only; no LAZ/COPC/NetCDF or remote EPT streaming; QGIS acceptance pending | P3 |
+| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView: vector and raster UTC series; Spatial3DSettings/Cesium: bounded LAS 1.2–1.4, EPT binary, 2DM mesh, JSON and SMS DAT temporal node datasets, RGB/height/intensity rendering | Bounded local/remote LAS, LAZ, COPC, EPT; CDF1/2 and NetCDF4/HDF5 node datasets; zoom and camera-window LOD, parallel range downloads, bounded cache; no full frustum/terrain occlusion or independent acceptance | P3 |
 
 ## Print Layout, CRS & interoperability (OUTPUT)
 
@@ -99,7 +99,7 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | OUTPUT-03 | Legend, north arrow, scale bar, label | D | LayoutDesigner, LayoutRender | Liên kết đúng map item, scale và legend; không sai đơn vị/CRS | P1 |
 | OUTPUT-04 | Atlas / report nhiều trang | P | LayoutDesigner, layout-atlas, LayoutRender: pinned coverage selection and multi-page PDF (8 pages, 20 visible vector layers, 2 map frames) | Browser and QGIS evidence pending; full atlas expressions and arbitrary report layouts not claimed | P3 |
 | OUTPUT-05 | PDF/PNG/SVG export, print preview | P | LayoutDesigner, PrintDesigner | Kiểm tra PDF/PNG, font VN, DPI, clipping; SVG chỉ khi engine hỗ trợ | P1 |
-| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust regional_crs: fixture/lineage verification for approved Quang Ninh edges, native feature/viewport/reproject; unverified provinces fail closed | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
+| OUTPUT-06 | Project/source/display CRS, reprojection, VN-2000 | P | CrsPicker, crs-display.ts; Rust native projection: 20 VN-2000 projected EPSG codes; regional controls Quang Ninh, Da Nang, Hai Phong, Dong Nai; bounded provenance replay, feature/viewport/MVT, native changesets and GPKG/SHP; nationwide datum acceptance pending | Phân biệt display/transform, xác nhận hệ VN-2000 theo tỉnh/kinh tuyến, control points | P1 |
 | OUTPUT-07 | Import/export GeoJSON/GPKG/SHP/CSV/DXF/raster | P | TransferTool, ExportDialog, Rust transfers | Kiểm tra từng format thực, CRS, schema/null/encoding, geometry, round-trip; không đoán parity | P1 |
 | OUTPUT-08 | Đồng bộ QGIS desktop & style/project exchange | P | QgisBindingManager, QgisConnectPage | Sync hai chiều, revision, conflict; QGZ/QGS/QML subset rõ ràng; plugin Python QGIS ngoài scope | P2 |
 
