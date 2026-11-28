@@ -70,3 +70,57 @@ export async function queryRelation(source:StudioRow,target:SpatialLayer,spec:Re
  if(!current()||matches.length!==total)throw Error("Kết quả liên kết không đầy đủ.");
  return matches;
 }
+
+export type RelationAudit={sourceRows:number;targetRows:number;nullSource:number;nullTarget:number;matched:number;missing:number;ambiguous:number;duplicateTargetKeys:number;examples:{missing:string[];ambiguous:string[];duplicate:string[]}};
+/** Exact scalar key identity, preserving large decimals and sub-ms timestamp strings. */
+function auditKey(value:unknown,type:string):string|null{
+ const v=scalar(value,type);if(v===null)return null;
+ if(type==="decimal"||type==="integer"){
+  const s=String(v),[w,f=""]=s.replace(/^-/,"").split("."),whole=w!.replace(/^0+/,"")||"0",fraction=f.replace(/0+$/,"");
+  return (s.startsWith("-")&&(whole!=="0"||fraction)?"-":"")+whole+(fraction?"."+fraction:"");
+ }
+ return JSON.stringify(v);
+}
+/** Read-only whole-source audit. Both populations must remain revision-pinned.
+ * NULL never refers to a target. A duplicate target key is a cardinality violation
+ * for many-to-one even when no source row currently references it. */
+export async function auditRelation(source:SpatialLayer,target:SpatialLayer,spec:RelationSpec,execute:(layer:SpatialLayer,body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean,progress:(scanned:number,total:number)=>void):Promise<RelationAudit>{
+ if(target.id!==spec.target||!queryableRelationLayer(source)||!queryableRelationLayer(target))throw Error("Không đủ quyền truy vấn hai nguồn.");
+ const a=field(source,spec.localField),b=field(target,spec.targetField);
+ if(!a||!b||a.type!==b.type)throw Error("Hai trường liên kết phải cùng kiểu.");
+ const size=(l:SpatialLayer)=>{const n=l.source.feature_count;if(n===null||!Number.isSafeInteger(n)||n<0||n>RELATION_LIMIT)throw Error("Kiểm tra quan hệ tối đa 5.000 bản ghi mỗi nguồn.");return n};
+ const sourceRows=size(source),targetRows=size(target),total=sourceRows+targetRows;
+ const ensure=()=>{if(!current())throw Error("Nguồn, quyền hoặc quan hệ đã thay đổi.")};
+ const result:RelationAudit={sourceRows,targetRows,nullSource:0,nullTarget:0,matched:0,missing:0,ambiguous:0,duplicateTargetKeys:0,examples:{missing:[],ambiguous:[],duplicate:[]}};
+ const targets=new Map<string,{count:number;first:string}>();let scanned=0,keyBytes=0;
+ const scan=async(l:SpatialLayer,id:string,type:string,expected:number,visit:(key:string|null,fid:string)=>void)=>{
+  const seen=new Set<string>();let fp:string|undefined;
+  for(let offset=0;;offset+=TABLE_QUERY_LIMIT){
+   ensure();const body=tableQueryBody(l,{field:"",op:"eq",value:"",negate:false},"","asc",offset,fp);
+   const page=verifyTableQuery(l,await execute(l,body),offset,fp);ensure();
+   if(page.total_count!==expected)throw Error("Số lượng nguồn đã đổi.");
+   fp=page.query_fingerprint;
+   for(const r of page.items){
+    if(seen.has(r.feature_id))throw Error("Trùng FID giữa các trang.");
+    seen.add(r.feature_id);const key=auditKey(Object.hasOwn(r.attributes,id)?r.attributes[id]:null,type);
+    keyBytes+=(key?.length??0)*2;if(keyBytes>16*1024*1024)throw Error("Khóa quan hệ vượt 16 MiB.");
+    visit(key,r.feature_id);
+   }
+   scanned+=page.items.length;progress(scanned,total);if(!page.has_more)break;
+  }
+  if(seen.size!==expected)throw Error("Chưa đọc đủ nguồn.");ensure();
+ };
+ await scan(target,b.field_id,b.type,targetRows,(key,fid)=>{
+  if(key===null){result.nullTarget++;return}
+  const found=targets.get(key);if(!found){targets.set(key,{count:1,first:fid});return}
+  found.count++;if(found.count===2){result.duplicateTargetKeys++;if(result.examples.duplicate.length<20)result.examples.duplicate.push(found.first)}
+ });
+ await scan(source,a.field_id,a.type,sourceRows,(key,fid)=>{
+  if(key===null){result.nullSource++;return}
+  const n=targets.get(key)?.count??0;
+  if(n===0){result.missing++;if(result.examples.missing.length<20)result.examples.missing.push(fid)}
+  else if(spec.cardinality==="one"&&n>1){result.ambiguous++;if(result.examples.ambiguous.length<20)result.examples.ambiguous.push(fid)}
+  else result.matched++;
+ });
+ ensure();return result;
+}

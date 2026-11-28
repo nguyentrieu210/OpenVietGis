@@ -1,7 +1,7 @@
 import {describe,it,expect} from "vitest";
 import type {SpatialLayer} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
-import {relationMatches,readRelationSpec,queryRelation} from "./relation-inspector";
+import {relationMatches,readRelationSpec,queryRelation,auditRelation} from "./relation-inspector";
 const layer=(id:string,n:number)=>({id,source_id:id,lifecycle:"active",capabilities:["feature_read","query"].map(name=>({name,available:true,technical_supported:true,actor_authorized:true})),source:{content_revision:"c",schema_revision:"s",feature_count:n,schema:{fields:[{field_id:"k",type:"integer"}]}}} as unknown as SpatialLayer);
 const a=layer("a",1),b=layer("b",2);
 const row=(l:SpatialLayer,id:string,k:unknown)=>({key:l.id+":"+id,layer:l,feature:{feature_id:id,attributes:{k}},geometry:null} as unknown as StudioRow);
@@ -28,5 +28,18 @@ describe("remote relations",()=>{
   await expect(queryRelation(source,y,spec,async()=>({...page,items:[{...page.items[0]!,attributes:{k:"9007199254740992.01"}}]}),()=>true)).rejects.toThrow();
   await expect(queryRelation(source,y,spec,async()=>page,()=>false)).rejects.toThrow();
   await expect(queryRelation(source,{...y,capabilities:y.capabilities.filter(c=>c.name!=="query")},spec,async()=>page,()=>true)).rejects.toThrow();
+ });
+});
+
+describe("whole-source relation audit",()=>{
+ it("reports orphan, null and ambiguous references using exact numeric identity",async()=>{
+  const x=layer("a",4),y=layer("b",3);
+  const make=(l:SpatialLayer,keys:unknown[])=>({attribute_only:true,layer_id:l.id,source_id:l.source_id,content_revision:"c",schema_revision:"s",offset:0,limit:100,total_count:keys.length,has_more:false,query_fingerprint:"pin-"+l.id,items:keys.map((k,i)=>({feature_id:String(i),geometry:null,geometry_state:"absent",attributes:{k}}))}) as unknown as import("@openvietgis/client-sdk").LayerQueryResponse;
+  const execute=async(l:SpatialLayer)=>l.id==="a"?make(x,["9007199254740993","8","9",null]):make(y,["9007199254740993","09007199254740993","8"]);
+  const result=await auditRelation(x,y,spec,execute,()=>true,()=>{});
+  expect(result).toMatchObject({sourceRows:4,targetRows:3,nullSource:1,nullTarget:0,matched:1,missing:1,ambiguous:1,duplicateTargetKeys:1,examples:{missing:["2"],ambiguous:["0"],duplicate:["0"]}});
+  expect((await auditRelation(x,y,{...spec,cardinality:"many"},execute,()=>true,()=>{})).matched).toBe(2);
+  await expect(auditRelation(x,y,spec,execute,()=>false,()=>{})).rejects.toThrow();
+  await expect(auditRelation(x,y,spec,async l=>({...await execute(l),content_revision:"old"}),()=>true,()=>{})).rejects.toThrow();
  });
 });
