@@ -157,3 +157,35 @@ async fn audit_is_not_public_and_rejects_unbounded_page() {
         .unwrap();
     assert!(!denied.status().is_success());
 }
+
+#[tokio::test]
+async fn paginated_catalog_disabled_and_snapshot_conflict() {
+    let app = Router::new()
+        .nest("/api/v1", routes::api_v1_router())
+        .with_state(AppState::new(AppConfig::default(), None).unwrap());
+    let base = "/api/v1/marketplace/v2/search?host=web&api=1.0.0";
+    for (query, expected) in [
+        ("", StatusCode::OK),
+        ("&limit=101", StatusCode::UNPROCESSABLE_ENTITY),
+        ("&snapshot=obsolete", StatusCode::CONFLICT),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("{base}{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
+        if expected == StatusCode::OK {
+            let value: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap())
+                    .unwrap();
+            assert_eq!(value["total"], 0);
+            assert_eq!(value["snapshot"], "disabled");
+        }
+    }
+}

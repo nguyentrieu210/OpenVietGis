@@ -39,10 +39,7 @@ fn denied() -> AppError {
     AppError::forbidden("commercial entitlement required")
 }
 fn policy(row: &VerifiedRelease) -> Result<Option<CommercialPolicy>, AppError> {
-    row.metadata
-        .get("commercial_policy")
-        .map(|p| serde_json::from_value(p.clone()).map_err(|_| denied()))
-        .transpose()
+    Ok(row.commercial_policy.as_deref().cloned())
 }
 fn authority(state: &AppState, p: &CommercialPolicy) -> Result<VerifyingKey, AppError> {
     let key = decode_ed25519_public_key(

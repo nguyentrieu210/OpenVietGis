@@ -72,7 +72,7 @@ def publisher(args):
                         "contribution":base64.b64encode(data).decode("ascii"),"assets":assets})
 
 def signed_catalog(operator, epoch, releases):
-    if not 0 < epoch <= 9007199254740991 or len(releases) > 100:
+    if not 0 < epoch <= 9007199254740991 or len(releases) > 1000:
         raise ValueError("invalid catalog limits")
     members = [{"envelope_digest": sha(canonical(r["envelope"])),
                 "publisher_signature":r["publisher_signature"],

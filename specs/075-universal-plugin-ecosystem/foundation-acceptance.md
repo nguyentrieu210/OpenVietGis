@@ -23,3 +23,6 @@ SC-005 remains OPEN: catalog V2 accepts at most 100 releases; existing V1 valida
 
 ## Current component checks
 Rust module SDK 21/21, API 115/115 (no-default-features, non-root execution), HTTP gates 4/4, synthetic resolver load 1/1. Prior slice 17: House Numbering 45/45, storage lib 59/59, QGIS stdlib regression 4/4. Prior slice 16: TS 15/15, SDK/Web typecheck, four signature vectors. These are not a single integrated CI run. Previous isolated DB tests remain scoped to their respective migration fixtures.
+
+## Slice 19 progress — snapshot design
+Implemented per-AppState single-flight verified snapshot, file-stamp invalidation, policy time check and durable DB admission on every read. Count bounds raised to 1000 for V1/V2 and signing tools; previous file-size bounds remain. New bounded search endpoint and SDK, with policy digest pagination token. The actual 1000 signed-release/100-reader integrated router test command was blocked by the tool safety check; not executed. Synthetic 1000-row search test is distinct from signed catalog and HTTP qualification. SC-005 remains OPEN.

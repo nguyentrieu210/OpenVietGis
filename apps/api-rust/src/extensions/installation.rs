@@ -352,6 +352,7 @@ mod tests {
     #[test]
     fn graph_plan_pins_dependencies_and_preview() {
         let mk = |key: &str, deps: Value| VerifiedRelease {
+            commercial_policy: None,
             metadata: json!({"release_digest":if key.ends_with("_a"){"a".repeat(64)}else{"b".repeat(64)},"catalog_epoch":4,
             "envelope":{"extension_key":key,"version":"1.0.0","dependencies":deps,"permissions":[],"assets":[]}}),
             document: br#"{"slot":"workspace","widgets":[],"actions":[]}"#.to_vec(),

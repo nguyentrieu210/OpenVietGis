@@ -95,6 +95,12 @@ export function listMarketplaceV2(client: ApiClient, host: "web"|"android"|"ios"
   return client.request<{items:MarketplaceV2Metadata[];profile:"metadata_only";web_read_only_enabled?:boolean;host_availability?:{platform:string;profile:"web_read_only"|"metadata_only";online_execution:boolean;offline_execution:false;reason:string}}>("/marketplace/v2/catalog?" + new URLSearchParams({host,api}).toString(), {cache:"no-store"});
 }
 
+export function searchMarketplaceV2(client:ApiClient,host:"web"|"android"|"ios"|"windows"|"macos"|"linux"|"server",api:string,options:{q?:string;offset?:number;limit?:number;snapshot?:string}={}){
+ const q=new URLSearchParams({host,api,q:options.q??"",offset:String(options.offset??0),limit:String(options.limit??50)});
+ if(options.snapshot)q.set("snapshot",options.snapshot);
+ return client.request<{items:MarketplaceV2Metadata[];total:number;next_offset:number|null;snapshot:string}>("/marketplace/v2/search?"+q.toString(),{cache:"no-store"});
+}
+
 export type PluginV2Field = {kind:"text"|"number"|"integer"|"boolean";required:boolean};
 export type PluginV2Widget = {kind:"text";id:string;text:string} | {kind:"input";id:string;label:string;field:string} | {kind:"button";id:string;label:string;action:string} | {kind:"group";id:string;children:PluginV2Widget[]};
 export type PluginV2Document = {slot:"workspace"|"map_tool"|"form"|"dashboard";widgets:PluginV2Widget[];actions:{id:string;command_id:string;permission:string;consent:"read";timeout_ms:number;input:Record<string,PluginV2Field>}[]};

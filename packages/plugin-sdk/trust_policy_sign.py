@@ -33,7 +33,7 @@ def sign_policy(args):
     op=Ed25519PublicKey.from_public_bytes(op_raw)
     catalog=load_json(args.catalog,16*1024*1024)
     epoch=catalog["epoch"]
-    if catalog["schema"]!="openvietgis.marketplace.v2" or type(epoch) is not int or not 1<=epoch<=MAX_SAFE or len(catalog["releases"])>100:
+    if catalog["schema"]!="openvietgis.marketplace.v2" or type(epoch) is not int or not 1<=epoch<=MAX_SAFE or len(catalog["releases"])>1000:
         raise ValueError("invalid catalog")
     members=[]
     for r in catalog["releases"]:

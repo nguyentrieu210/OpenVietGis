@@ -757,6 +757,7 @@ mod tests {
                 manifest: manifest.clone(),
             },
             vec![VerifiedRelease {
+                commercial_policy: None,
                 metadata: json!({"release_digest":"a".repeat(64),"envelope":{"manifest_digest":md,"extension_key":"partner_pub_demo","version":"1.0.0","assets":[],"permissions":[format!("ext.partner_pub_demo.{cap}")]}}),
                 document: serde_json::to_vec(&doc).unwrap(),
                 manifest: manifest.clone(),

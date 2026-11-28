@@ -101,7 +101,7 @@ pub fn validate_catalog(payload: &Value) -> Result<Vec<CatalogRelease>, AppError
     }
     let publishers_raw = obj["publishers"].as_array().ok_or_else(invalid)?;
     let releases_raw = obj["releases"].as_array().ok_or_else(invalid)?;
-    if publishers_raw.len() > 100 || releases_raw.len() > 500 {
+    if publishers_raw.len() > 100 || releases_raw.len() > 1000 {
         return Err(invalid());
     }
 

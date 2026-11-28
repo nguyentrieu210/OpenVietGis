@@ -15,6 +15,7 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use ed25519_dalek::Signature;
 use ovg_core::AppError;
+use ovg_module_sdk::entitlement::CommercialPolicy;
 use ovg_module_sdk::release_v2::{
     verify_bundle_integrity, Bundle, ContributionEnvelope, ReleaseTrust,
 };
@@ -26,6 +27,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::Read;
+use std::sync::Arc;
 
 const MAX_FILE: u64 = 16 * 1024 * 1024;
 static VERIFY_SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(4);
@@ -59,13 +61,17 @@ pub(super) struct Profile {
     pub api: String,
 }
 
+#[derive(Clone)]
 pub(super) struct VerifiedRelease {
     pub metadata: Value,
     pub document: Vec<u8>,
     pub manifest: Value,
+    pub commercial_policy: Option<Arc<CommercialPolicy>>,
 }
 pub(crate) fn router() -> Router<AppState> {
-    Router::new().route("/marketplace/v2/catalog", get(catalog))
+    Router::new()
+        .route("/marketplace/v2/catalog", get(catalog))
+        .route("/marketplace/v2/search", get(search))
 }
 fn bytes(s: &str, max: usize) -> Result<Vec<u8>, AppError> {
     if s.len() > max.div_ceil(3) * 4 {
@@ -91,29 +97,20 @@ fn catalog_membership(c: &Catalog) -> Result<Vec<u8>, AppError> {
         &json!({"schema":"openvietgis.marketplace.membership.v2","epoch":c.epoch,"members":members}),
     )
 }
-fn verified_items(
+fn verified_all(
     c: Catalog,
     existing: &[CatalogRelease],
     operator: &str,
     epoch: u64,
-    profile: &Profile,
 ) -> Result<Vec<VerifiedRelease>, AppError> {
     if c.schema != "openvietgis.marketplace.v2"
         || c.epoch != epoch
         || epoch == 0
         || epoch > 9_007_199_254_740_991
-        || c.releases.len() > 100
+        || c.releases.len() > 1000
     {
         return Err(invalid());
     }
-    if !matches!(
-        profile.host.as_str(),
-        "web" | "android" | "ios" | "windows" | "macos" | "linux" | "server"
-    ) || profile.api.len() > 64
-    {
-        return Err(invalid());
-    }
-    let api = Version::parse(&profile.api).map_err(|_| invalid())?;
     let operator = decode_ed25519_public_key(operator).map_err(|_| invalid())?;
     operator
         .verify_strict(&catalog_membership(&c)?, &signature(&c.catalog_signature)?)
@@ -206,17 +203,10 @@ fn verified_items(
         // Authenticate all members before admitting the global checkpoint,
         // even when the requested host cannot run a particular release.
         let digest = verify_bundle_integrity(&b, &trust)?;
-        if !e.platforms.contains(&profile.host)
-            || !VersionReq::parse(&e.host_api_range)
-                .map_err(|_| invalid())?
-                .matches(&api)
-        {
-            continue;
-        }
         // A signature is not runtime qualification. Only expose metadata;
         // contribution and assets remain server-side until broker/host integration.
         items.push(VerifiedRelease { metadata: json!({"envelope":e,"release_digest":digest,"catalog_epoch":epoch,"runtime_available":false,
-            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}), document: contribution, manifest:legacy.manifest.clone() });
+            "publisher_signature":r.publisher_signature,"operator_signature":r.operator_signature}), document: contribution, manifest:legacy.manifest.clone(), commercial_policy:None });
     }
     items.sort_by(|a, b| {
         a.metadata["envelope"]["extension_key"]
@@ -229,6 +219,40 @@ fn verified_items(
             })
     });
     Ok(items)
+}
+fn profile_api(profile: &Profile) -> Result<Version, AppError> {
+    if !matches!(
+        profile.host.as_str(),
+        "web" | "android" | "ios" | "windows" | "macos" | "linux" | "server"
+    ) || profile.api.len() > 64
+    {
+        return Err(invalid());
+    }
+    Version::parse(&profile.api).map_err(|_| invalid())
+}
+fn compatible(row: &VerifiedRelease, profile: &Profile, api: &Version) -> bool {
+    let e = &row.metadata["envelope"];
+    e["platforms"]
+        .as_array()
+        .is_some_and(|a| a.iter().any(|v| v.as_str() == Some(&profile.host)))
+        && e["host_api_range"]
+            .as_str()
+            .and_then(|r| VersionReq::parse(r).ok())
+            .is_some_and(|r| r.matches(api))
+}
+#[cfg(test)]
+fn verified_items(
+    c: Catalog,
+    existing: &[CatalogRelease],
+    operator: &str,
+    epoch: u64,
+    profile: &Profile,
+) -> Result<Vec<VerifiedRelease>, AppError> {
+    let api = profile_api(profile)?;
+    Ok(verified_all(c, existing, operator, epoch)?
+        .into_iter()
+        .filter(|r| compatible(r, profile, &api))
+        .collect())
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -248,10 +272,7 @@ fn bounded_file(path: &str, max: u64) -> Result<Vec<u8>, AppError> {
     }
     Ok(raw)
 }
-fn load(
-    config: &AppConfig,
-    p: &Profile,
-) -> Result<(Vec<VerifiedRelease>, Option<VerifiedTrust>), AppError> {
+fn load_all(config: &AppConfig) -> Result<(Vec<VerifiedRelease>, Option<VerifiedTrust>), AppError> {
     let Some(path) = config.marketplace_v2_catalog_path.as_deref() else {
         if config.marketplace_v2_runtime_enabled {
             return Err(invalid());
@@ -300,7 +321,7 @@ fn load(
     }) {
         return Err(invalid());
     }
-    let mut items = verified_items(c, &legacy, key, epoch, p)?;
+    let mut items = verified_all(c, &legacy, key, epoch)?;
     items.retain(|r| {
         trust.permits(
             r.metadata["release_digest"].as_str().unwrap_or_default(),
@@ -318,34 +339,186 @@ fn load(
         }) {
             return Err(invalid());
         }
+        let policy = Arc::new(policy.clone());
         for item in &mut items {
             if policy.requires(item.metadata["release_digest"].as_str().unwrap_or_default()) {
-                item.metadata["commercial_policy"] =
-                    serde_json::to_value(policy).map_err(|_| invalid())?;
+                item.commercial_policy = Some(Arc::clone(&policy));
             }
         }
     }
     Ok((items, Some(trust)))
 }
-pub(super) async fn load_verified(
-    state: &AppState,
-    profile: Profile,
-) -> Result<Vec<VerifiedRelease>, ExtensionError> {
-    // The bounded slot spans verification and admission, including when a
-    // caller holds its existing project transaction. No plugin-controlled
-    // global lock is held across the scoped command.
-    let slot = VERIFY_SLOTS.try_acquire().map_err(|_| {
-        ExtensionError::Domain(AppError::service_unavailable(
-            "PLUGIN_CATALOG_BUSY",
-            "catalog verification capacity exhausted",
-        ))
-    })?;
-    let config = state.config.clone();
-    let (result, slot) = tokio::task::spawn_blocking(move || (load(&config, &profile), slot))
+#[cfg(test)]
+fn load(
+    config: &AppConfig,
+    p: &Profile,
+) -> Result<(Vec<VerifiedRelease>, Option<VerifiedTrust>), AppError> {
+    let api = profile_api(p)?;
+    let (items, trust) = load_all(config)?;
+    Ok((
+        items
+            .into_iter()
+            .filter(|r| compatible(r, p, &api))
+            .collect(),
+        trust,
+    ))
+}
+/// Files are local operator-owned inputs. Unix inode/ctime/mtime/size stamps
+/// detect replacement and edits. Other targets bypass cache rather than
+/// relying on weaker file timestamps.
+#[derive(Debug, PartialEq, Eq)]
+struct FileStamp {
+    path: String,
+    size: u64,
+    identity: (u64, u64, i64, i64, i64, i64),
+}
+#[cfg(unix)]
+fn stamp(path: &str) -> Result<FileStamp, AppError> {
+    use std::os::unix::fs::MetadataExt;
+    let m = std::fs::metadata(path).map_err(|_| invalid())?;
+    if !m.is_file() {
+        return Err(invalid());
+    }
+    Ok(FileStamp {
+        path: path.into(),
+        size: m.len(),
+        identity: (
+            m.dev(),
+            m.ino(),
+            m.mtime(),
+            m.mtime_nsec(),
+            m.ctime(),
+            m.ctime_nsec(),
+        ),
+    })
+}
+#[derive(PartialEq, Eq)]
+struct SnapshotKey {
+    files: Vec<FileStamp>,
+    epoch: u64,
+    operator: String,
+    root: String,
+}
+#[cfg(unix)]
+fn snapshot_key(config: &AppConfig) -> Result<Option<SnapshotKey>, AppError> {
+    if config.marketplace_v2_catalog_path.is_none() {
+        return Ok(None);
+    }
+    let files = [
+        &config.marketplace_catalog_path,
+        &config.marketplace_v2_catalog_path,
+        &config.marketplace_trust_policy_path,
+    ]
+    .into_iter()
+    .map(|p| stamp(p.as_deref().ok_or_else(invalid)?))
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some(SnapshotKey {
+        files,
+        epoch: config.marketplace_v2_epoch.ok_or_else(invalid)?,
+        operator: config
+            .marketplace_operator_public_key
+            .clone()
+            .ok_or_else(invalid)?,
+        root: config
+            .marketplace_trust_root_public_key
+            .clone()
+            .ok_or_else(invalid)?,
+    }))
+}
+#[cfg(not(unix))]
+fn snapshot_key(_config: &AppConfig) -> Result<Option<SnapshotKey>, AppError> {
+    Ok(None)
+}
+struct Snapshot {
+    items: Vec<VerifiedRelease>,
+    search: Vec<String>,
+    trust: Option<VerifiedTrust>,
+}
+impl Snapshot {
+    fn new(items: Vec<VerifiedRelease>, trust: Option<VerifiedTrust>) -> Self {
+        let search = items
+            .iter()
+            .map(|r| {
+                ["extension_key", "display_name", "description", "version"]
+                    .into_iter()
+                    .filter_map(|f| r.manifest[f].as_str())
+                    .chain(r.metadata["envelope"]["publisher_id"].as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .to_lowercase()
+            })
+            .collect();
+        Self {
+            items,
+            search,
+            trust,
+        }
+    }
+    fn current(&self) -> Result<(), AppError> {
+        if let Some(t) = &self.trust {
+            let now = chrono::Utc::now();
+            let p = t.policy();
+            let start =
+                chrono::DateTime::parse_from_rfc3339(&p.issued_at).map_err(|_| invalid())?;
+            let end = chrono::DateTime::parse_from_rfc3339(&p.expires_at).map_err(|_| invalid())?;
+            if now < start || now >= end {
+                return Err(invalid());
+            }
+        }
+        Ok(())
+    }
+}
+#[derive(Clone, Default)]
+pub(crate) struct SnapshotCache(Arc<tokio::sync::Mutex<Option<(SnapshotKey, Arc<Snapshot>)>>>);
+impl SnapshotCache {
+    async fn get(&self, config: Arc<AppConfig>) -> Result<Arc<Snapshot>, AppError> {
+        // Single-flight cold verification. Cancelled requests do not release
+        // the guard while a blocking verification is still running.
+        let mut guard = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            self.0.clone().lock_owned(),
+        )
         .await
-        .map_err(|_| ExtensionError::Domain(invalid()))?;
-    let (items, trust) = result.map_err(ExtensionError::Domain)?;
-    if let Some(trust) = trust {
+        .map_err(|_| {
+            AppError::service_unavailable("PLUGIN_CATALOG_BUSY", "catalog snapshot pending")
+        })?;
+        tokio::task::spawn_blocking(move || {
+            let key = snapshot_key(&config)?;
+            if let (Some(k), Some((prior, s))) = (&key, guard.as_ref()) {
+                if k == prior {
+                    s.current()?;
+                    return Ok(Arc::clone(s));
+                }
+            }
+            *guard = None;
+            let _slot = VERIFY_SLOTS.try_acquire().map_err(|_| {
+                AppError::service_unavailable(
+                    "PLUGIN_CATALOG_BUSY",
+                    "catalog verification capacity exhausted",
+                )
+            })?;
+            let (items, trust) = load_all(&config)?;
+            if key != snapshot_key(&config)? {
+                return Err(invalid());
+            }
+            let s = Arc::new(Snapshot::new(items, trust));
+            s.current()?;
+            if let Some(k) = key {
+                *guard = Some((k, Arc::clone(&s)));
+            }
+            Ok(s)
+        })
+        .await
+        .map_err(|_| invalid())?
+    }
+}
+async fn admitted_snapshot(state: &AppState) -> Result<Arc<Snapshot>, ExtensionError> {
+    let s = state
+        .plugin_catalog_snapshot
+        .get(state.config.clone())
+        .await
+        .map_err(ExtensionError::Domain)?;
+    if let Some(t) = &s.trust {
         let pool = state.db_pool.as_ref().ok_or_else(|| {
             ExtensionError::Domain(AppError::service_unavailable(
                 "PLUGIN_TRUST_UNAVAILABLE",
@@ -354,7 +527,7 @@ pub(super) async fn load_verified(
         })?;
         tokio::time::timeout(
             std::time::Duration::from_secs(5),
-            ovg_storage::extensions::trust::admit_policy(pool, &trust),
+            ovg_storage::extensions::trust::admit_policy(pool, t),
         )
         .await
         .map_err(|_| {
@@ -365,8 +538,86 @@ pub(super) async fn load_verified(
         })?
         .map_err(ExtensionError::Domain)?;
     }
-    drop(slot);
-    Ok(items)
+    s.current().map_err(ExtensionError::Domain)?;
+    Ok(s)
+}
+pub(super) async fn load_verified(
+    state: &AppState,
+    profile: Profile,
+) -> Result<Vec<VerifiedRelease>, ExtensionError> {
+    let api = profile_api(&profile).map_err(ExtensionError::Domain)?;
+    let snapshot = admitted_snapshot(state).await?;
+    Ok(snapshot
+        .items
+        .iter()
+        .filter(|r| compatible(r, &profile, &api))
+        .cloned()
+        .collect())
+}
+fn public_metadata(r: &VerifiedRelease) -> Value {
+    let mut m = r.metadata.clone();
+    m["license_required"] = json!(r.commercial_policy.is_some());
+    m
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SearchQuery {
+    host: String,
+    api: String,
+    #[serde(default)]
+    q: String,
+    #[serde(default)]
+    offset: usize,
+    limit: Option<usize>,
+    snapshot: Option<String>,
+}
+async fn search(
+    State(state): State<AppState>,
+    Query(q): Query<SearchQuery>,
+) -> Result<Response, ExtensionError> {
+    let limit = q.limit.unwrap_or(50);
+    if q.q.chars().count() > 200 || limit == 0 || limit > 100 || q.offset > 1000 {
+        return Err(ExtensionError::InvalidRequest);
+    }
+    let profile = Profile {
+        host: q.host,
+        api: q.api,
+    };
+    let api = profile_api(&profile).map_err(ExtensionError::Domain)?;
+    let s = admitted_snapshot(&state).await?;
+    let id = s.trust.as_ref().map(|t| t.digest()).unwrap_or("disabled");
+    if q.snapshot.as_deref().is_some_and(|v| v != id) {
+        return Err(ExtensionError::Domain(AppError::conflict(
+            "CATALOG_SNAPSHOT_CHANGED",
+            "catalog changed; restart search",
+        )));
+    }
+    let result = search_page(&s, &profile, &api, &q.q, q.offset, limit, id);
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(result)).into_response())
+}
+fn search_page(
+    s: &Snapshot,
+    profile: &Profile,
+    api: &Version,
+    query: &str,
+    offset: usize,
+    limit: usize,
+    id: &str,
+) -> Value {
+    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let mut total = 0usize;
+    let mut items = Vec::new();
+    for (row, text) in s.items.iter().zip(&s.search) {
+        if !compatible(row, profile, api) || !terms.iter().all(|t| text.contains(t)) {
+            continue;
+        }
+        if total >= offset && items.len() < limit {
+            items.push(public_metadata(row));
+        }
+        total += 1;
+    }
+    let next = (offset + items.len() < total).then_some(offset + items.len());
+    json!({"items":items,"total":total,"next_offset":next,"snapshot":id})
 }
 async fn catalog(
     State(state): State<AppState>,
@@ -380,18 +631,13 @@ async fn catalog(
         state.config.marketplace_v2_runtime_enabled,
     );
     let runtime_enabled = availability.online_execution;
-    let items: Vec<Value> = load_verified(&state, profile)
-        .await?
-        .into_iter()
-        .map(|r| {
-            let mut m = r.metadata;
-            let required = m
-                .as_object_mut()
-                .and_then(|v| v.remove("commercial_policy"))
-                .is_some();
-            m["license_required"] = json!(required);
-            m
-        })
+    let api = profile_api(&profile).map_err(ExtensionError::Domain)?;
+    let snapshot = admitted_snapshot(&state).await?;
+    let items: Vec<Value> = snapshot
+        .items
+        .iter()
+        .filter(|r| compatible(r, &profile, &api))
+        .map(public_metadata)
         .collect();
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
@@ -496,8 +742,8 @@ mod tests {
             assert_eq!(row.metadata["runtime_available"], false);
         }
     }
-    #[test]
-    fn configured_catalog_requires_trust_and_filters_revoked_release_and_key() {
+    #[tokio::test]
+    async fn configured_catalog_requires_trust_and_filters_revoked_release_and_key() {
         let fixture: Value = serde_json::from_str(include_str!(
             "../../../../fixtures/spec075/python-signed-catalog.json"
         ))
@@ -548,6 +794,13 @@ mod tests {
         save(&policy);
         let (rows, proof) = load(&cfg, &p).unwrap();
         assert_eq!(rows.len(), 3);
+        let cache = SnapshotCache::default();
+        let config = Arc::new(cfg.clone());
+        let cached = cache.get(config.clone()).await.unwrap();
+        let warm = cache.get(config.clone()).await.unwrap();
+        #[cfg(unix)]
+        assert!(Arc::ptr_eq(&cached, &warm));
+        assert_eq!(warm.items.len(), 3);
         let old = proof.unwrap();
         let license_key = SigningKey::from_bytes(&[104; 32]);
         policy.sequence = 2;
@@ -558,11 +811,21 @@ mod tests {
             revocation_floors: vec![],
         });
         save(&policy);
+        let refreshed = cache.get(config.clone()).await.unwrap();
+        assert!(!Arc::ptr_eq(&warm, &refreshed));
+        assert_eq!(
+            refreshed
+                .items
+                .iter()
+                .filter(|r| r.commercial_policy.is_some())
+                .count(),
+            1
+        );
         let (licensed, proof) = load(&cfg, &p).unwrap();
         assert_eq!(
             licensed
                 .iter()
-                .filter(|r| r.metadata.get("commercial_policy").is_some())
+                .filter(|r| r.commercial_policy.is_some())
                 .count(),
             1
         );
@@ -586,7 +849,44 @@ mod tests {
         policy.catalog_membership_digest = "a".repeat(64);
         save(&policy);
         assert!(load(&cfg, &p).is_err());
+        assert!(cache.get(config.clone()).await.is_err());
+        std::fs::write(&trust, b"invalid policy").unwrap();
+        assert!(cache.get(config).await.is_err());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn bounded_search_pages_over_1000_synthetic_metadata_rows() {
+        // Search projection only; these synthetic metadata rows are NOT signed
+        // catalog members and are never inserted into a live cache.
+        let (c, existing, key, p) = fixture();
+        let seed = verified_items(c, &existing, &key, 2, &p)
+            .unwrap()
+            .pop()
+            .unwrap();
+        let rows = (0..1000)
+            .map(|i| {
+                let mut row = seed.clone();
+                let k = format!("partner_fixture_{i:04}");
+                row.metadata["envelope"]["extension_key"] = json!(k);
+                row.manifest["extension_key"] = json!(k);
+                row.manifest["display_name"] = json!(format!("Load {i:04}"));
+                row
+            })
+            .collect();
+        let snapshot = Snapshot::new(rows, None);
+        let api = profile_api(&p).unwrap();
+        let first = search_page(&snapshot, &p, &api, "", 0, 100, "fixture");
+        assert_eq!(first["total"], 1000);
+        assert_eq!(first["next_offset"], 100);
+        let last = search_page(&snapshot, &p, &api, "", 900, 100, "fixture");
+        assert_eq!(last["items"].as_array().unwrap().len(), 100);
+        assert_eq!(
+            last["items"][0]["envelope"]["extension_key"],
+            "partner_fixture_0900"
+        );
+        assert!(last["next_offset"].is_null());
+        let filtered = search_page(&snapshot, &p, &api, "LOAD 0123", 0, 25, "fixture");
+        assert_eq!(filtered["total"], 1);
     }
     #[test]
     fn incompatible_release_is_still_verified_before_checkpoint() {
