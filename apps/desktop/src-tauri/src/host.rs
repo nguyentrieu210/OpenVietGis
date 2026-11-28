@@ -51,6 +51,11 @@ impl Host {
         self.state.lock().map_err(|_|"SESSION_FAILED")
     }
     fn project_path(&self,id:Uuid)->PathBuf { self.root.join(id.to_string()).join("workspace.gpkg") }
+    pub fn shutdown(&self)->Result<()> {
+        let mut s=self.lock()?;
+        self.engine.close_session(s.session).map_err(err)?;
+        s.jobs.clear();s.open.clear();Ok(())
+    }
     pub fn list(&self)->Result<Vec<Project>> {
         real_dir(&self.root)?;
         let mut out=Vec::new();
