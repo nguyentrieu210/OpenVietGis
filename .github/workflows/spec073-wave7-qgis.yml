@@ -1,0 +1,46 @@
+name: SPEC 073 W7 mobile QGIS differential
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Frozen synthetic QGIS fixtures
+        run: |
+          mkdir -p dist/w7-qgis dist/w7-rust
+          python3 fixtures/qgis-parity/generate.py --out dist/w7-qgis/fixtures
+          (cd dist/w7-qgis/fixtures && sha256sum -c SHA256SUMS.txt)
+          git rev-parse HEAD | tee dist/w7-qgis/candidate-sha.txt > dist/w7-rust/candidate-sha.txt
+      - name: Independent pinned QGIS reference
+        run: |
+          set -euo pipefail
+          image=qgis/qgis:3.44.16-noble@sha256:ddb8e114854ddeae75923a10e807aebe6895a144f1c9504416f4cc7bf813e07c
+          docker pull "$image"
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+            --user "$(id -u):$(id -g)" --read-only --tmpfs /tmp:rw,nosuid,nodev,size=256m \
+            --env HOME=/tmp --env QT_QPA_PLATFORM=offscreen --env PROJ_NETWORK=OFF \
+            --env PYTHONDONTWRITEBYTECODE=1 --env QGIS_CUSTOM_CONFIG_PATH=/tmp/qgis-profile \
+            --mount "type=bind,source=$PWD/fixtures/qgis-parity,target=/oracle,readonly" \
+            --mount "type=bind,source=$PWD/dist/w7-qgis/fixtures,target=/evidence/fixtures,readonly" \
+            --mount "type=bind,source=$PWD/dist/w7-qgis,target=/evidence" \
+            --entrypoint /usr/bin/python3 "$image" /oracle/qgis_oracle.py --fixtures /evidence/fixtures --out /evidence/reference
+      - name: Actual mobile adapter differential
+        run: |
+          set -euo pipefail
+          digest=$(sha256sum dist/w7-qgis/fixtures/SHA256SUMS.txt | cut -d' ' -f1)
+          cargo run --manifest-path crates/ovg-mobile-engine/Cargo.toml --example qgis_oracle -- "$PWD/dist/w7-qgis/fixtures" "$digest" > dist/w7-rust/processing.json
+          python3 fixtures/qgis-parity/compare_processing.py --qgis dist/w7-qgis --rust dist/w7-rust | tee dist/w7-rust/comparison.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: w7-mobile-qgis-oracle
+          path: |
+            dist/w7-qgis/
+            dist/w7-rust/

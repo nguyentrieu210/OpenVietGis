@@ -1,6 +1,9 @@
 name: SPEC 073 W7 integrated candidate
 on:
   workflow_dispatch:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["specs/073-native-mobile-platform/evidence/w7-implementation-checkpoint.md"]
 permissions:
   contents: read
 jobs:
@@ -22,9 +25,11 @@ jobs:
     uses: ./.github/workflows/spec073-wave5.yml
   android:
     uses: ./.github/workflows/spec073-wave1-flutter.yml
+  qgis:
+    uses: ./.github/workflows/spec073-wave7-qgis.yml
   evidence:
     if: always()
-    needs: [baseline, contract, native, raster, managed, identity, sdk, plugin, android]
+    needs: [baseline, contract, native, raster, managed, identity, sdk, plugin, android, qgis]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
