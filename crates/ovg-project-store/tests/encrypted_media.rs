@@ -42,3 +42,22 @@ fn authenticated_media_atomic_migration_backup_and_wrong_key(){
  let db=rusqlite::Connection::open(&dst).unwrap();db.execute("UPDATE encrypted_media SET feature=?1",[other.to_string()]).unwrap();drop(db);
  let restored=Store::reopen(&dst).unwrap();assert!(restored.read_encrypted_media(id,4,&keys).is_err());
 }
+
+#[test]
+fn native_capture_is_encrypted_and_owner_bound(){
+ let d=tempfile::tempdir().unwrap();let s=Store::create(&d.path().join("p.sqlite")).unwrap();
+ let scope=Uuid::new_v4();let keys=Keys(HashMap::from([(scope,[5;32])]));
+ let layer=Uuid::new_v4();let feature=Uuid::new_v4();let id=Uuid::new_v4();
+ s.add_layer(layer,"Survey",0).unwrap();
+ s.apply(&Batch{operation:Uuid::new_v4(),expected_project:1,edits:vec![Edit{layer,feature,expected:0,image:Some(Image{wkb:ovg_mobile_engine::edit::draft("point",&[106.,11.]).unwrap(),attributes:serde_json::json!({})})}],links:vec![]}).unwrap();
+ // Framing fixture only: platform decoder tests require a real device JPEG.
+ let mut jpeg=vec![255,216,255];jpeg.extend(b"native capture fixture");jpeg.extend([255,217]);
+ assert!(s.capture_jpeg(scope,layer,feature,id,b"invalid",2,&keys).is_err());
+ assert!(s.capture_jpeg(scope,layer,Uuid::new_v4(),id,&jpeg,2,&keys).is_err());
+ let(r,m)=s.capture_jpeg(scope,layer,feature,id,&jpeg,2,&keys).unwrap();assert_eq!(r,3);assert_eq!(m.id,id);assert_eq!(m.source_scope,scope);
+ assert_eq!(&**s.read_encrypted_media(id,3,&keys).unwrap(),&jpeg);
+ assert!(s.capture_jpeg(scope,layer,feature,id,&jpeg,3,&keys).is_err());
+ assert!(s.integrity().unwrap());
+ let b=d.path().join("b.sqlite");s.backup_copy(&b,3,&AtomicBool::new(false)).unwrap();
+ assert!(!std::fs::read(&b).unwrap().windows(jpeg.len()).any(|w|w==jpeg.as_slice()));
+}
