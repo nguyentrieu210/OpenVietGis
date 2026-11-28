@@ -203,6 +203,9 @@ impl NativeProject{
  pub fn vector_tile(&self,layer:&str,z:u8,x:u32,y:u32,expected:&str)->Result<Vec<u8>>{
   self.with(|s|mvt::unified_tile(s,id(layer)?,revision(expected)?,z,x,y,&AtomicBool::new(false)).map_err(|e|match e{"STALE_REVISION"=>Error::Conflict,"TILE_DENSITY_LIMIT"|"RESOURCE_LIMIT"=>Error::Limit,_=>Error::Invalid}))
  }
+ pub fn capture_jpeg_native(&self,scope:Uuid,layer:Uuid,feature:Uuid,attachment:Uuid,data:&[u8],expected:&str,keys:&impl media::MediaKeys)->Result<String>{
+  self.with(|s|{let (r,m)=s.capture_jpeg(scope,layer,feature,attachment,data,revision(expected)?,keys)?;encode(&serde_json::json!({"revision":r.to_string(),"attachment":m.id}))})
+ }
  pub fn media_inventory(&self,layer:&str,after:&str,expected:&str)->Result<String>{
   self.with(|s|encode(&serde_json::json!({"scope":s.media_domain()?,"locked":true,"items":s.media_list(id(layer)?,after,100,revision(expected)?)?})))
  }
