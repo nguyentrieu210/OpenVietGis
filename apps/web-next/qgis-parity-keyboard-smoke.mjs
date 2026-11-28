@@ -268,8 +268,11 @@ try{
   await page.waitForFunction(()=>document.activeElement?.closest('[aria-label="Hiệu năng GIS · phiên hiện tại"]')!==null);
   await menuTrigger.evaluate(e=>e.focus());
   assert.ok(await perf.evaluate(e=>e.contains(document.activeElement)));
-  const firstControl=perf.getByRole("button",{name:"Đóng",exact:true}).first(),lastControl=perf.getByRole("button",{name:"Đóng",exact:true}).last();
+  // Resizable dialogs also expose keyboard-operable separators.
+  const firstControl=perf.getByRole("button",{name:"Phóng to cửa sổ",exact:true});
+  const lastControl=perf.getByRole("separator",{name:"Chiều cao cửa sổ thuộc tính",exact:true});
   await firstControl.focus();await page.keyboard.press("Shift+Tab");assert.ok(await lastControl.evaluate(e=>document.activeElement===e));
+  await page.keyboard.press("Tab");assert.ok(await firstControl.evaluate(e=>document.activeElement===e));
   await page.keyboard.press("Escape");await perf.waitFor({state:"detached"});
   await page.waitForFunction(()=>document.activeElement?.getAttribute("aria-label")==="Xem hiệu năng GIS");
   const sizes=[];
