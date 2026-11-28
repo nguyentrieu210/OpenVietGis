@@ -23,3 +23,5 @@ ovg-spatial = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2a
 geo = { version = "=0.31.0", default-features = false }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 tempfile = "3"
+las = { version = "=0.9.11", features = ["laz"] }
+copc-rs = "=0.5.0"
