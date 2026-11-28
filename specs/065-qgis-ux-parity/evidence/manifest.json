@@ -317,7 +317,7 @@
         "apps/web-next/src/RelationInspector.tsx",
         "apps/web-next/src/LiveApp.tsx"
       ],
-      "blocker": "Spreadsheet exact-key join and new read-only relation inspector with project/layer scoped personal settings, exact typed keys, one/many lookup and complete revision-pinned authorized target population. Shared durable relational schema, server-side constraint enforcement, form design and paired QGIS acceptance remain. New tests not executed."
+      "blocker": "Exact spreadsheet join, local relation inspector and now revision-pinned server-side exact attribute relation lookup (up to 200 matches, 1/n cardinality check and navigation to unloaded FIDs). Configuration remains personal; shared durable relational schema, server write constraints, form design and paired QGIS acceptance remain. New tests not executed."
     },
     {
       "id": "STYLE-08",

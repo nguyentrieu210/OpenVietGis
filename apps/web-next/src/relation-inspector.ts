@@ -1,6 +1,7 @@
-import type {SpatialLayer} from "@openvietgis/client-sdk";
+import type {SpatialLayer,LayerQueryResponse} from "@openvietgis/client-sdk";
 import type {StudioRow} from "./studio-contract";
 import {compareTableValue} from "./table-columns";
+import {tableQueryBody,verifyTableQuery,TABLE_QUERY_LIMIT} from "./table-query";
 export type RelationSpec={target:string;localField:string;targetField:string;cardinality:"one"|"many"};
 export const RELATION_LIMIT=5000;
 export const RELATION_MATCH_LIMIT=200;
@@ -36,5 +37,35 @@ export function relationMatches(source:StudioRow,layers:readonly SpatialLayer[],
  const matches=all.filter(r=>{const candidate=scalar(Object.hasOwn(r.feature.attributes,spec.targetField)?r.feature.attributes[spec.targetField]:null,b.type);return candidate!==null&&(a.type==="integer"||a.type==="decimal"?compareTableValue(value,candidate,a.type,"asc")===0:value===candidate)});
  if(spec.cardinality==="one"&&matches.length>1)throw Error("Khóa đích không duy nhất đối với giá trị đang chọn.");
  if(matches.length>RELATION_MATCH_LIMIT)throw Error("Kết quả vượt 200 đối tượng; chọn khóa cụ thể hơn.");
+ return matches;
+}
+
+export type RelatedRecord={feature_id:string;attributes:Record<string,unknown>};
+export async function queryRelation(source:StudioRow,target:SpatialLayer,spec:RelationSpec,execute:(body:Record<string,unknown>)=>Promise<LayerQueryResponse>,current:()=>boolean):Promise<RelatedRecord[]>{
+ if(target.id!==spec.target||!readableRelationLayer(source.layer)||!readableRelationLayer(target))throw Error("Không có quyền đọc lớp liên kết.");
+ const a=field(source.layer,spec.localField),b=field(target,spec.targetField);
+ if(!a||!b||a.type!==b.type)throw Error("Hai trường liên kết phải cùng kiểu.");
+ const value=scalar(Object.hasOwn(source.feature.attributes,spec.localField)?source.feature.attributes[spec.localField]:null,a.type);
+ if(!current())throw Error("Nguồn hoặc quan hệ đã thay đổi.");
+ if(value===null)return [];
+ const matches:RelatedRecord[]=[],seen=new Set<string>();let fingerprint:string|undefined,total:number|undefined;
+ for(let offset=0;;offset+=TABLE_QUERY_LIMIT){
+  if(!current())throw Error("Nguồn hoặc quan hệ đã thay đổi.");
+  const body=tableQueryBody(target,{field:b.field_id,op:"eq",value:String(value),negate:false},"","asc",offset,fingerprint);
+  const page=verifyTableQuery(target,await execute(body),offset,fingerprint);
+  if(!current()||total!==undefined&&page.total_count!==total)throw Error("Nguồn hoặc quan hệ đã thay đổi.");
+  fingerprint=page.query_fingerprint;total=page.total_count;
+  if(total>RELATION_MATCH_LIMIT||spec.cardinality==="one"&&total>1)throw Error(spec.cardinality==="one"?"Khóa đích không duy nhất.":"Kết quả vượt 200 đối tượng.");
+  for(const row of page.items){
+   if(seen.has(row.feature_id))throw Error("Trùng FID giữa các trang.");
+   const candidate=scalar(row.attributes[b.field_id],b.type);
+   // Timestamp keys are server-normalized; compare canonical wire values rather than
+   // millisecond-rounded JavaScript dates (server retains sub-ms precision).
+   if(candidate===null||(a.type==="decimal"||a.type==="integer"?compareTableValue(value,candidate,a.type,"asc")!==0:value!==candidate))throw Error("Khóa trả về không khớp.");
+   seen.add(row.feature_id);matches.push({feature_id:row.feature_id,attributes:row.attributes});
+  }
+  if(!page.has_more)break;
+ }
+ if(!current()||matches.length!==total)throw Error("Kết quả liên kết không đầy đủ.");
  return matches;
 }
