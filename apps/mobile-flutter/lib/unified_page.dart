@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import 'src/rust/api/simple.dart';
 import 'unified_map.dart';
 import 'unified_mvt_map.dart';
+import 'unified_ondemand_map.dart';
 import 'unified_survey.dart';
 
 String _uuid(){
@@ -126,6 +127,19 @@ class _UnifiedPageState extends State<UnifiedPage>{
     if(track==null||!mounted)return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_SurveyReadPage(project:p,layer:l,track:track,revision:r)));
   }
+  Future<void> _openOnDemandMvt()async{
+    final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
+    final selected=<String>{l};
+    final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,update)=>AlertDialog(
+      title:const Text('MVT theo yêu cầu · tối đa 8 lớp'),
+      content:SizedBox(width:320,child:ListView(shrinkWrap:true,children:[
+        const Text('Bản đồ đọc tile qua bridge loopback riêng của phiên. Không dùng cho dữ liệu managed.'),
+        for(final item in _layers)CheckboxListTile(title:Text(item['name'].toString()),value:selected.contains(item['id'].toString()),onChanged:(v)=>update((){final id=item['id'].toString();if(v==true&&selected.length<8)selected.add(id);else if(v==false&&selected.length>1)selected.remove(id);}))
+      ])),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Hủy')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Mở'))])));
+    if(ok!=true||!mounted)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedOnDemandMap(project:p,revision:r,layers:selected.toList())));
+    if(mounted)await _refresh();
+  }
   Future<void> _openMvt()async{
     final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedMvtMap(project:p,revision:r,layers:List.unmodifiable(_layers),initialLayer:l)));
@@ -203,6 +217,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
           Text('Revision ${_revision??"?"}'),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMvt)):null,icon:const Icon(Icons.layers),label:const Text('Bản đồ MVT thử nghiệm')),
+          FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openOnDemandMvt)):null,icon:const Icon(Icons.map_outlined),label:const Text('MVT theo yêu cầu · thử nghiệm')),
           OutlinedButton(onPressed:edit?()=>unawaited(_run(_survey)):null,child:const Text('GPS Survey đã lưu')),
           OutlinedButton(onPressed:edit?()=>unawaited(_run(_mediaInventory)):null,child:const Text('Media mã hóa · danh mục')),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_captureSurvey)):null,icon:const Icon(Icons.gps_fixed),label:const Text('Khảo sát GPS Unified')),
