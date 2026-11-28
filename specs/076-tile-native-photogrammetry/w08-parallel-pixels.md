@@ -1,0 +1,2 @@
+# W08 bounded CPU parallel rendering
+Dedicated reusable Rayon thread pool, 1–32 threads, shared immutable images and DEM, disjoint RGBA chunks, identical per-pixel arithmetic/order to serial path, cooperative cancellation inside render. Integrated optional run_parallel pipeline with existing checkpoint and atomic publication. Tiles still admitted one at a time; no multi-tile concurrent cache admission, thread stack accounting, explicit SIMD or measured speedup. Caller must reserve thread budget. Tests written, not executed.

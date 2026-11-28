@@ -6,7 +6,7 @@ pub struct Camera {pub world_to_camera:[[f64;3];3],pub center:[f64;3],pub fx:f64
 pub struct Grid {pub origin_x:f64,pub origin_y:f64,pub gsd:f64,pub width:u32,pub height:u32}
 pub struct Image<'a>{pub camera:Camera,pub width:u32,pub height:u32,pub rgb:&'a [u8]}
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
-pub enum Error{Invalid,Limit}
+pub enum Error{Invalid,Limit,Cancelled}
 fn dot(a:[f64;3],b:[f64;3])->f64{a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
 impl Camera{
     pub(crate) fn valid(self)->bool{
@@ -40,10 +40,43 @@ fn sample(im:&Image<'_>,uv:[f64;2])->Option<[u8;3]>{
     }
     Some(out)
 }
+/// Reusable dedicated pool, no global Rayon thread-count changes.
+pub struct Renderer{pool:rayon::ThreadPool}
+impl Renderer{
+ pub fn new(threads:usize)->Result<Self,Error>{
+  if threads==0||threads>32{return Err(Error::Limit);}
+  let pool=rayon::ThreadPoolBuilder::new().num_threads(threads).build().map_err(|_|Error::Limit)?;
+  Ok(Self{pool})
+ }
+ pub fn render(&self,grid:Grid,dem:&[f32],images:&[Image<'_>],max_output_bytes:u64,max_samples:u64,
+ cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>,Error>{
+  use rayon::prelude::*;
+  use std::sync::atomic::Ordering;
+  let bytes=validate(grid,dem,images,max_output_bytes,max_samples)?;
+  if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+  let mut out=vec![0;bytes];
+  self.pool.install(||out.par_chunks_mut(4096).enumerate().try_for_each(|(chunk,buf)|{
+   if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+   for(i,pixel)in buf.chunks_exact_mut(4).enumerate(){
+    let index=chunk*1024+i;
+    if i%128==0&&cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}
+    render_pixel(grid,dem[index],images,index,pixel);
+   }
+   Ok(())
+  }))?;
+  if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}Ok(out)
+ }
+}
 /// Output RGBA in row-major order, alpha=0 on missing surface or image support.
 /// Pixel centers use north-up grid origin. Finite DEM elevations in the same
 /// metric frame as cameras are required; NaN means no data.
 pub fn render(grid:Grid,dem:&[f32],images:&[Image<'_>],max_output_bytes:u64,max_samples:u64)->Result<Vec<u8>,Error>{
+    let bytes=validate(grid,dem,images,max_output_bytes,max_samples)?;
+    let mut out=vec![0u8;bytes];
+    for(i,pixel)in out.chunks_exact_mut(4).enumerate(){render_pixel(grid,dem[i],images,i,pixel);}
+    Ok(out)
+}
+fn validate(grid:Grid,dem:&[f32],images:&[Image<'_>],max_output_bytes:u64,max_samples:u64)->Result<usize,Error>{
     if grid.width==0||grid.height==0||!grid.gsd.is_finite()||grid.gsd<=0.||!grid.origin_x.is_finite()||
         !grid.origin_y.is_finite()||images.is_empty()||images.len()>256{return Err(Error::Invalid);}
     let n=u64::from(grid.width)*u64::from(grid.height);
@@ -55,19 +88,18 @@ pub fn render(grid:Grid,dem:&[f32],images:&[Image<'_>],max_output_bytes:u64,max_
         let expected=u64::from(im.width).checked_mul(u64::from(im.height)).and_then(|n|n.checked_mul(3));
         if im.width==0||im.height==0||expected!=Some(im.rgb.len() as u64)||!im.camera.valid(){return Err(Error::Invalid);}
     }
-    let mut out=vec![0u8;bytes as usize];
-    for (i,&height) in dem.iter().enumerate(){
-        if !height.is_finite(){continue;}
-        let x=i%grid.width as usize;let y=i/grid.width as usize;
-        let p=[grid.origin_x+(x as f64+0.5)*grid.gsd,grid.origin_y-(y as f64+0.5)*grid.gsd,f64::from(height)];
-        let mut best=-1.;
-        for im in images{
-            if let Some((uv,score))=im.camera.project(p){
-                if score>best{if let Some(rgb)=sample(im,uv){out[i*4..i*4+3].copy_from_slice(&rgb);out[i*4+3]=255;best=score;}}
-            }
+    Ok(bytes as usize)
+}
+fn render_pixel(grid:Grid,height:f32,images:&[Image<'_>],i:usize,out:&mut[u8]){
+    if !height.is_finite(){return;}
+    let x=i%grid.width as usize;let y=i/grid.width as usize;
+    let p=[grid.origin_x+(x as f64+0.5)*grid.gsd,grid.origin_y-(y as f64+0.5)*grid.gsd,f64::from(height)];
+    let mut best=-1.;
+    for im in images{
+        if let Some((uv,score))=im.camera.project(p){
+            if score>best{if let Some(rgb)=sample(im,uv){out[..3].copy_from_slice(&rgb);out[3]=255;best=score;}}
         }
     }
-    Ok(out)
 }
 #[cfg(test)]mod tests{
     use super::*;
@@ -76,6 +108,16 @@ pub fn render(grid:Grid,dem:&[f32],images:&[Image<'_>],max_output_bytes:u64,max_
         let im=Image{camera:camera(),width:2,height:2,rgb:&[0,0,0,100,0,0,0,100,0,100,100,0]};
         let grid=Grid{origin_x:0.,origin_y:0.,gsd:1.,width:1,height:1};
         assert_eq!(render(grid,&[0.],&[im],4,1).unwrap(),vec![50,50,0,255]);
+    }
+    #[test]fn parallel_pixels_match_serial_and_cancel(){
+      use std::sync::atomic::{AtomicBool,Ordering};
+      let rgb=vec![100;64*64*3];let im=Image{camera:camera(),width:64,height:64,rgb:&rgb};
+      let grid=Grid{origin_x:0.,origin_y:0.,gsd:0.25,width:64,height:64};
+      let mut dem=vec![0.;4096];dem[2000]=f32::NAN;
+      let cancel=AtomicBool::new(false);let r=Renderer::new(2).unwrap();
+      assert_eq!(r.render(grid,&dem,&[Image{..im}],16384,4096,&cancel).unwrap(),render(grid,&dem,&[Image{..im}],16384,4096).unwrap());
+      cancel.store(true,Ordering::Release);
+      assert_eq!(r.render(grid,&dem,&[im],16384,4096,&cancel),Err(Error::Cancelled));
     }
     #[test]fn nodata_and_limits(){
         let im=Image{camera:camera(),width:1,height:1,rgb:&[1,2,3]};

@@ -25,17 +25,24 @@ fn subgrid(g:ortho::Grid,w:tiles::Window)->ortho::Grid{
 /// objects may remain on disk until a future lease-aware garbage collector.
 pub fn run(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
- run_inner(source,store,expected,grid_id,grid,epsg,p,None,cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,None,None,cancelled)
 }
 /// The host supplies a trusted digest covering actual source imagery, camera poses,
 /// DEM, alignment, renderer/provider build and immutable input revision.
 pub fn run_resumable(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
  grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:&str,cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::digest(input_sha256){return Err(Error::Invalid);}
- run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),cancelled)
+ run_inner(source,store,expected,grid_id,grid,epsg,p,Some(input_sha256),None,cancelled)
+}
+/// Parallel pixel rendering inside one admitted tile; source/cache and disk publication remain sequential.
+pub fn run_parallel(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,threads:usize,cancel:&std::sync::atomic::AtomicBool)->Result<ResultSummary,Error>{
+ if input_sha256.is_some_and(|h|!super::digest(h)){return Err(Error::Invalid);}
+ let renderer=ortho::Renderer::new(threads).map_err(Error::Render)?;
+ run_inner(source,store,expected,grid_id,grid,epsg,p,input_sha256,Some((&renderer,cancel)),||cancel.load(std::sync::atomic::Ordering::Acquire))
 }
 fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_id:&str,
- grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
+ grid:ortho::Grid,epsg:u16,p:Policy,input_sha256:Option<&str>,parallel:Option<(&ortho::Renderer,&std::sync::atomic::AtomicBool)>,mut cancelled:impl FnMut()->bool)->Result<ResultSummary,Error>{
  if !super::valid_id(grid_id)||epsg==0||epsg>=32767||grid.width==0||grid.height==0||!grid.gsd.is_finite()||
  grid.gsd<=0.||!grid.origin_x.is_finite()||!grid.origin_y.is_finite()||
  p.source_bytes==0||p.source_bytes>2*1024*1024*1024||p.tile_bytes<308||p.output_bytes==0||
@@ -76,6 +83,9 @@ fn run_inner(source:&mut impl Source,store:&disk_store::Store,expected:u64,grid_
  let views:Vec<_>=imgs.iter().map(|im|ortho::Image{camera:im.camera,width:im.width,height:im.height,rgb:&im.rgb}).collect();
  let rgba=if views.is_empty(){
    if expected_rgba>256*1024*1024{return Err(Error::Limit);}vec![0;expected_rgba as usize]
+ }else if let Some((renderer,cancel))=parallel{
+   renderer.render(subgrid(grid,h),&dem,&views,expected_rgba,p.max_samples,cancel)
+    .map_err(|e|if e==ortho::Error::Cancelled{Error::Cancelled}else{Error::Render(e)})?
  }else{ortho::render(subgrid(grid,h),&dem,&views,expected_rgba,p.max_samples).map_err(Error::Render)?};
  let mut core=Vec::with_capacity(core_bytes as usize);
  for row in 0..c.height as usize{
@@ -169,6 +179,13 @@ impl Source for RawSource{
  let imgs=source.images(tiles::Window{x:0,y:0,width:3,height:3},1024).unwrap();
  let views:Vec<_>=imgs.iter().map(|im|ortho::Image{camera:im.camera,width:im.width,height:im.height,rgb:&im.rgb}).collect();
  assert_eq!(assembled,ortho::render(g,&[0.;9],&views,36,1000).unwrap());
+ }
+ #[test]fn parallel_pipeline_matches_serial_digests(){
+ let(t,mut source,g)=fixture();let a=disk_store::Store::open(&t.0.join("a")).unwrap();let b=disk_store::Store::open(&t.0.join("b")).unwrap();
+ let ra=run(&mut source,&a,0,"grid",32648,g,policy(),||false).unwrap();
+ let cancel=std::sync::atomic::AtomicBool::new(false);
+ let rb=run_parallel(&mut source,&b,0,"grid",32648,g,policy(),None,2,&cancel).unwrap();
+ assert_eq!(ra,rb);assert_eq!(a.revision(1).unwrap().tiles,b.revision(1).unwrap().tiles);
  }
  #[test]fn resumes_verified_tile_after_cancel(){
  let(t,mut source,g)=fixture();let s=disk_store::Store::open(&t.0.join("store")).unwrap();
