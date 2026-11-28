@@ -18,6 +18,8 @@ on:
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
+      - "tests/spec065/**"
+      - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
   pull_request:
     paths:
@@ -34,6 +36,8 @@ on:
       - "modules/*/rust/**"
       - ".github/workflows/rust-platform.yml"
       - "tests/rust-parity/**"
+      - "tests/spec065/**"
+      - "fixtures/qgis-parity/**"
       - "tools/benchmark/rust-platform/**"
 
 concurrency:
@@ -312,6 +316,18 @@ jobs:
           uv run --project apps/api python tests/rust-parity/e10_cad_dxf.py \
             --candidate target/debug/openvietgis-api-rust \
             2>&1 | tee dist/parity/e10-cad-dxf.log
+
+      - name: Spec 065 measured Rust processing reference
+        if: ${{ !cancelled() && hashFiles('target/debug/openvietgis-api-rust') != '' && (startsWith(github.head_ref, '065-') || startsWith(github.ref_name, '065-')) }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist/parity/spec065
+          sudo env OVG_SPEC065_PYTHON="$PWD/apps/api/.venv/bin/python" \
+            OVG_SPEC065_BINARY="$PWD/target/debug/openvietgis-api-rust" \
+            OVG_SPEC065_IMAGE=postgis/postgis@sha256:fe440a27c6567aefa932e988962e5827bb2c29e4b97dac2ca5268f5eafe10262 \
+            OVG_SPEC065_EVIDENCE="$PWD/dist/parity/spec065/processing.json" \
+            bash tests/spec065/run-attribute-query.sh processing 2>&1 | tee dist/parity/spec065/processing.log
+          git rev-parse HEAD > dist/parity/spec065/candidate-sha.txt
 
       - name: Record PostGIS version
         if: always()
