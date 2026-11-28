@@ -40,8 +40,8 @@ export function parseLas(bytes:ArrayBuffer,crs:4326|3857):LasCloud{
  for(let i=0;i<count;i++){
   const at=offset+i*length,xyz=[0,4,8].map((o,j)=>d.getInt32(at+o,true)*scales[j]!+origins[j]!);
   let [longitude,latitude,height]=xyz as [number,number,number];
-  if(crs===3857){longitude=longitude/R*180/Math.PI;latitude=Math.atan(Math.sinh(latitude/R))*180/Math.PI}
-  if(![longitude,latitude,height].every(Number.isFinite)||Math.abs(longitude)>180||Math.abs(latitude)>85.051129||height< -12000||height>100000)throw Error("LAS coordinate outside supported range");
+  if(crs===3857){if(Math.abs(longitude)>Math.PI*R||Math.abs(latitude)>Math.PI*R)throw Error("Projected LAS coordinate outside domain");longitude=longitude/R*180/Math.PI;latitude=Math.atan(Math.sinh(latitude/R))*180/Math.PI}
+  if(![longitude,latitude,height].every(Number.isFinite)||Math.abs(longitude)>180||Math.abs(latitude)>85||height< -12000||height>100000)throw Error("LAS coordinate outside supported range");
   west=Math.min(west,longitude);east=Math.max(east,longitude);south=Math.min(south,latitude);north=Math.max(north,latitude);
   if(i%step===0)points.push({longitude,latitude,height,intensity:d.getUint16(at+12,true)});
  }

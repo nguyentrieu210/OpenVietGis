@@ -1,4 +1,5 @@
 """Authenticated topology and split/merge golden fixture for Spec 065."""
+import hashlib
 import json
 import math
 from uuid import UUID
@@ -75,6 +76,38 @@ def check_topology(c, f):
         assert math.isclose(sum(map(area,split["geometries"])),.0001,abs_tol=1e-10)
         assert math.isclose(area(merge["geometries"][0]),.0002,abs_tol=1e-10)
     print("PASS actual split/merge preview golden area, disconnected merge and noncrossing split rejection",flush=True)
+    layout=post("/cartography/layouts",{
+        "name":"Spec065 Atlas","title":"Atlas test","paper_size":"A4",
+        "orientation":"landscape","crs_code":4326,
+        "layer_ids":[parcels["layer_id"]],
+    },201)
+    export_endpoint="/cartography/layouts/"+layout["id"]+"/exports"
+    atlas_body={"output_format":"pdf","dpi":150,"atlas":{
+        "coverage_layer_id":parcels["layer_id"],"feature_ids":["b","a"],
+    }}
+    atlas_preview=post(export_endpoint+"/preview",atlas_body)
+    atlas_manifest=atlas_preview["revision_manifest"]["atlas"]
+    assert atlas_manifest["page_count"]==2
+    assert [p["feature_id"] for p in atlas_manifest["pages"]]==["a","b"]
+    post(export_endpoint+"/preview",{
+        **atlas_body,"atlas":{"coverage_layer_id":boundary["layer_id"]},
+    },422)
+    post(export_endpoint+"/preview",{
+        **atlas_body,"atlas":{"coverage_layer_id":parcels["layer_id"],"feature_ids":["a","a"]},
+    },422)
+    post(export_endpoint,{
+        **atlas_body,"expected_revision_fingerprint":"f"*64,
+    },409)
+    export=post(export_endpoint,{
+        **atlas_body,"expected_revision_fingerprint":atlas_preview["revision_fingerprint"],
+    },201)
+    download=path+"/cartography/exports/"+export["id"]+"/download"
+    pdf=c.get(download,headers=auth,timeout=40)
+    assert pdf.status_code==200 and pdf.content.startswith(b"%PDF-")
+    assert b"/Kids [3 0 R 6 0 R] /Count 2" in pdf.content
+    assert hashlib.sha256(pdf.content).hexdigest()==export["sha256"]
+    assert c.get(download,headers=foreign).status_code==404
+    print("PASS authenticated multi-page Atlas, revision guard and artifact checksum",flush=True)
     sid=parcels["source_id"]
     with psycopg.connect(OWNER) as conn:
         attrs=conn.execute("SELECT attributes FROM spatial.reference_features WHERE source_id=%s AND feature_id='a'",(sid,)).fetchone()[0]
@@ -101,6 +134,9 @@ def check_topology(c, f):
              {"op_type":"create","feature_id":"a_split","geometry":split["geometries"][1],"properties":attrs}]
     cut=save("spec065-cut",parcels["content_revision"],cut_ops)
     assert cut["status"]=="committed" and cut["operation_count"]==2
+    post(export_endpoint,{
+        **atlas_body,"expected_revision_fingerprint":atlas_preview["revision_fingerprint"],
+    },409)
     assert save("spec065-cut",parcels["content_revision"],cut_ops)["id"]==cut["id"]
     save("spec065-cut",parcels["content_revision"],cut_ops,guard=False,expected=409)
     new=post(endpoint,{"action":"merge","content_revision":cut["resulting_content_revision"],"schema_revision":parcels["schema_revision"],"feature_ids":["a","a_split","b"]})

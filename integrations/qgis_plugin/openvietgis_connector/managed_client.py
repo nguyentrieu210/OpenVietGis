@@ -605,8 +605,7 @@ def iter_managed_events(response, cancelled=lambda: False):
         if size > 262144:
             raise ApiError("SSE event exceeds limit.")
         field, _, value = line.partition(":")
-        if value.startswith(" "):
-            value = value[1:]
+        value = value.removeprefix(" ")
         if field == "event":
             event = value
         elif field == "data":

@@ -793,9 +793,10 @@
         "apps/api-rust/src/cartography/mod.rs",
         "apps/api-rust/src/cartography/renderer.rs",
         "apps/web-next/src/workbenches/features/platform/CartographyWorkbenchPage.tsx",
-        "packages/client-sdk/src/platform.ts"
+        "packages/client-sdk/src/platform.ts",
+        "tests/spec065/topology.py"
       ],
-      "blocker": "Client Atlas plus new server-side PDF Atlas on existing authorized print preview/export: locked source/style/layout snapshot, coverage layer from layout, optional FID filter, deterministic per-feature extent and page scale, revision fingerprint, artifact storage/checksum, up to 16 pages and 40M total pixels at 150 DPI. Multi-page xref test written, not executed. Large-source streaming, multi-frame designer server parity, authenticated browser/QGIS acceptance remain."
+      "blocker": "Client Atlas plus new server-side PDF Atlas on existing authorized print preview/export: locked source/style/layout snapshot, coverage layer from layout, optional FID filter, deterministic per-feature extent and page scale, revision fingerprint, artifact storage/checksum, up to 16 pages and 40M total pixels at 150 DPI. Multi-page xref test written, not executed. Large-source streaming, multi-frame designer server parity, authenticated browser/QGIS acceptance remain. Authenticated Atlas integration fixture added for ordered page IDs, invalid coverage, duplicate IDs, stale source revision, PDF page tree, artifact SHA256 and tenant denial; not yet executed."
     },
     {
       "id": "OUTPUT-05",
