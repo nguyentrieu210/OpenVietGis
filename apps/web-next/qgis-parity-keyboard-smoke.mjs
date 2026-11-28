@@ -13,6 +13,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:850}}),errors=[];
  // Spatial-mode coverage must not depend on the unrelated chat pane covering map controls.
  await page.addInitScript(()=>{localStorage.setItem("ovg:chat-open","0");localStorage.setItem("ovg:chat-rail-min","1")});
+ if(process.env.OVG_SHELL_ONLY==="1")await page.addInitScript(()=>{const key="ovg-workspace:v1:fixture:fixture-org:fixture-project:camera";if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({center:[106.66,10.76],zoom:14,bearing:20,pitch:30}))});
  page.setDefaultTimeout(12000);page.on("pageerror",e=>{errors.push(e.message);console.error("PAGE ERROR",e.message)});
  const org="fixture-org",pid="fixture-project",id="drawing-id",feature={feature_id:"building",geometry_state:"present",attributes:{height_m:25},geometry:{type:"Polygon",coordinates:[[[106.66,10.76],[106.662,10.76],[106.662,10.762],[106.66,10.762],[106.66,10.76]]],coordinate_reference:{code:4326}}};
  const layer={id:"layer1",source_id:"source1",name:"Buildings",lifecycle:"active",capabilities:[{name:"export",available:true,actor_authorized:true},{name:"feature_read",available:true,actor_authorized:true},{name:"query",available:true,technical_supported:true,actor_authorized:true},{name:"edit",available:true,technical_supported:true,actor_authorized:true}],source:{lifecycle:"active",validation_state:"ready",feature_count:1,content_revision:"a".repeat(64),schema_revision:"b".repeat(64),stored_crs:{code:4326},schema:{geometry_family:"Polygon",fields:[{field_id:"height_m",name:"Height",type:"integer",nullable:true}]}}};
@@ -29,7 +30,7 @@ try{
   else if(p.endsWith("/me/organizations"))body=[{id:org,name:"Fixture",status:"active"}];
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Spatial project",status:"active"}];
   else if(p.endsWith("/access/mine"))body={restricted};
-  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
+  else if(p.endsWith("/map"))body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:process.env.OVG_SHELL_ONLY==="1"?{longitude:105,latitude:20,zoom:7,bearing:0,pitch:0,crs:4326}:null}};
   else if(p.endsWith("/extensions/activations"))body={items:pluginActive?[{id:"activation",manifest_id:"manifest",extension_key:"house_numbering",manifest_version:pluginCompatible?"2.0.0":"1.0.0",runtime_compatible:pluginCompatible,status:"active"}]:[]};
   else if(p.endsWith("/effective-permissions"))body={permissions:["project.read","project.edit","project.manage"]};
   else if(p.endsWith("/raster/layers")){if(m==="POST"){rasterPosts++;return route.fulfill({status:503,json:{}})}body={items:[raster]};}
@@ -56,7 +57,58 @@ try{
 
  const first=page.locator('[data-layer-id="layer1"] .qgis-layer-name'), second=page.locator('[data-layer-id="layer2"] .qgis-layer-name');
  await first.waitFor();await second.waitFor();
- if(process.env.OVG_TOPOLOGY_ONLY==="1"){
+ if(process.env.OVG_SHELL_ONLY==="1"){
+  const cameraKey="ovg-workspace:v1:fixture:fixture-org:fixture-project:camera";
+  const canvas=page.locator(".maplibregl-canvas").first();
+  await canvas.waitFor();await page.waitForTimeout(400);
+  const camera=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),cameraKey);
+  assert.equal((await camera()).zoom,14);assert.equal((await camera()).bearing,20);assert.equal((await camera()).pitch,30);
+  const menuTrigger=page.locator(".core-ribbon").getByRole("button",{name:"Lớp",exact:true});await menuTrigger.click();
+  const menu=page.getByRole("region",{name:"Menu Lớp",exact:true});await menu.waitFor();
+  await page.waitForFunction(()=>!!document.activeElement?.closest(".core-ribbon-menu-fixed"));
+  await page.keyboard.press("ArrowDown");
+  assert.ok(await menu.locator(".core-menu-items button:focus").count());
+  await page.keyboard.press("Escape");await menu.waitFor({state:"detached"});
+  assert.equal(await menuTrigger.evaluate(e=>document.activeElement===e),true);
+  const grip=page.getByRole("button",{name:"Di chuyển bộ công cụ Điều hướng",exact:true});
+  await grip.focus();await grip.press("ArrowDown");
+  await page.locator('[data-tool-slot="dock:1"] [data-toolgroup="map"]').waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[data-toolgroup="map"]')!==null);
+  await grip.press("Enter");await page.locator('.qgis-floating-palette [data-toolgroup="map"]').waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[data-toolgroup="map"]')!==null);
+  await grip.press("Enter");await page.locator('[data-tool-slot="dock:0"] [data-toolgroup="map"]').waitFor();
+  await page.getByRole("button",{name:"Khôi phục thanh công cụ"}).click();
+  const status=page.getByRole("button",{name:"Xem hiệu năng GIS"});
+  await status.focus();await status.press("Enter");
+  const perf=page.getByRole("dialog",{name:"Hiệu năng GIS · phiên hiện tại"});await perf.waitFor();
+  await page.waitForFunction(()=>document.activeElement?.closest('[aria-label="Hiệu năng GIS · phiên hiện tại"]')!==null);
+  await menuTrigger.evaluate(e=>e.focus());
+  assert.ok(await perf.evaluate(e=>e.contains(document.activeElement)));
+  const firstControl=perf.getByRole("button",{name:"Đóng",exact:true}).first(),lastControl=perf.getByRole("button",{name:"Đóng",exact:true}).last();
+  await firstControl.focus();await page.keyboard.press("Shift+Tab");assert.ok(await lastControl.evaluate(e=>document.activeElement===e));
+  await page.keyboard.press("Escape");await perf.waitFor({state:"detached"});
+  await page.waitForFunction(()=>document.activeElement?.getAttribute("aria-label")==="Xem hiệu năng GIS");
+  const sizes=[];
+  for(const width of [1280,1440,1920,390,1280]){
+   const start=performance.now();await page.setViewportSize({width,height:width===390?844:850});
+   await page.waitForFunction(()=>{const c=document.querySelector(".maplibregl-canvas"),p=c?.closest(".maplibregl-map");if(!c||!p)return false;const r=c.getBoundingClientRect();return r.width>=100&&r.height>=100&&Math.abs(r.width-p.clientWidth)<2&&Math.abs(r.height-p.clientHeight)<2});
+   const rect=await canvas.boundingBox();sizes.push({viewport:width,canvas:[Math.round(rect.width),Math.round(rect.height)],settle_ms:Math.round(performance.now()-start)});console.log("RESIZE",JSON.stringify(sizes.at(-1)));
+  }
+  console.log("SHELL_RESIZE "+JSON.stringify(sizes));
+  await page.reload({waitUntil:"domcontentloaded",timeout:45000});await first.waitFor({timeout:45000});await canvas.waitFor();await page.waitForTimeout(400);
+  assert.equal((await camera()).zoom,14);assert.equal((await camera()).bearing,20);assert.equal((await camera()).pitch,30);
+  console.log("PASS shell camera resume beats default view, ribbon and toolbar keyboard, modal focus, responsive canvas resize");
+  const shared=page.locator(".ovg-shared-tools");await shared.waitFor();
+  await shared.evaluate(el=>el.dataset.qaIdentity="same");
+  const modes=page.getByRole("group",{name:"Không gian làm việc"});
+  await modes.getByRole("button",{name:"CAD",exact:true}).click();
+  await page.getByRole("heading",{name:"Kho bản vẽ CAD của dự án"}).waitFor();
+  assert.equal(await shared.getAttribute("data-qa-identity"),"same");
+  await modes.getByRole("button",{name:"GIS",exact:true}).click();await canvas.waitFor();
+  assert.equal(await shared.getAttribute("data-qa-identity"),"same");
+  console.log("PASS synthetic shared header survives GIS/CAD mode switching");
+
+ }else if(process.env.OVG_TOPOLOGY_ONLY==="1"){
   await first.click();
   const invoke=async(alias)=>{await page.keyboard.press("Control+k");const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});await command.fill(alias);await command.press("Enter")};
   await invoke("TOPOLOGY");

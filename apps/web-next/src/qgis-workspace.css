@@ -180,3 +180,20 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .attribute-column-picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:6px 8px;max-height:100px;overflow:auto;border-bottom:1px solid #d0dcd2}.attribute-column-picker label{display:inline-flex;align-items:center;gap:3px}
 
 .attribute-form-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px}.qgis-table th>button{font:inherit;color:inherit;background:transparent;border:0;padding:2px;cursor:pointer}.attribute-form .feature-info{padding:8px}
+
+/* Keyboard navigation and small field devices: keep focused controls identifiable. */
+.qgis-studio :is(button,input,select,textarea,a,[tabindex]):focus-visible,
+.core-ribbon-menu-fixed :is(button,input):focus-visible {
+ outline:2px solid #1765ad;outline-offset:2px;
+}
+.qgis-studio .qgis-tool-grip:focus-visible,.qgis-studio .qgis-palette-grip:focus-visible{outline-offset:-2px;background:#e1edff}
+@media(max-width:600px){
+ .qgis-studio .core-ribbon{overflow-x:auto;overflow-y:hidden;max-width:100%;scrollbar-width:thin}
+ .qgis-studio .core-ribbon-group{flex:none}
+ .qgis-studio .qgis-toolrow{max-width:100%;overflow-x:auto}
+ .qgis-studio .qgis-table header{flex-wrap:wrap}
+ .qgis-studio .qgis-map-region{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){
+ .qgis-studio :is(.core-ribbon-menu,.qgis-floating-palette,.qgis-dock){transition:none!important;scroll-behavior:auto}
+}

@@ -5,23 +5,26 @@
     {
       "id": "SHELL-01",
       "task": "T009",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/CoreCommandBar.tsx",
         "apps/web-next/src/LiveApp.tsx",
-        "apps/web-next/core-toolkit-smoke.mjs"
+        "apps/web-next/core-toolkit-smoke.mjs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Menu groups share command aliases with locator and toolbar; Chromium keyboard navigation and Escape focus restoration passed. Full command inventory/capability mapping and paired QGIS remain."
     },
     {
       "id": "SHELL-02",
       "task": "T010",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/QgisWorkspace.tsx",
-        "apps/web-next/spatial-mode-smoke.mjs"
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/qgis-workspace.css",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Keyboard move to another row, float, redock, focus retention and reset tested in Chromium. Pointer drag, profile restore on every viewport and paired QGIS still need evidence."
     },
     {
       "id": "SHELL-03",
@@ -72,14 +75,18 @@
     {
       "id": "SHELL-07",
       "task": "T015",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/SpatialWorkspace.tsx",
         "apps/web-next/src/route-compat.test.ts",
-        "apps/web-next/spatial-mode-smoke.mjs"
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/src/map-render-plan.ts",
+        "apps/web-next/src/map-render-plan.test.ts",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Scoped camera including bearing and pitch restored over conflicting server default in synthetic F5 test. CAD document version and 3D scene-specific restoration, permissions/revocation and paired QGIS not fully accepted."
     },
     {
       "id": "SHELL-08",
@@ -793,13 +800,14 @@
     {
       "id": "COLLAB-03",
       "task": "T087",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/LiveApp.tsx",
         "apps/web-next/src/SpatialWorkspace.tsx",
-        "apps/web-next/spatial-mode-smoke.mjs"
+        "apps/web-next/spatial-mode-smoke.mjs",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Chromium verifies same shared header DOM node survives GIS/CAD/GIS transition and retained map canvas; no live external CAD relay or all shared chat/task/AI actions in 3D tested."
     },
     {
       "id": "COLLAB-04",
@@ -848,21 +856,29 @@
       "status": "partial",
       "candidate_paths": [
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
-        "apps/web-next/src/QgisWorkspace.tsx"
+        "apps/web-next/src/QgisWorkspace.tsx",
+        "apps/web-next/src/studio-ui.tsx",
+        "apps/web-next/src/CoreCommandBar.tsx",
+        "apps/web-next/src/qgis-workspace.css"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed"
+      "blocker": "Modal focus containment, Shift+Tab wrap and Escape restore, keyboard toolbar/ribbon, visible focus and reduced-motion adjustments tested. No complete WCAG contrast/screen-reader/keyboard audit or paired QGIS acceptance."
     },
     {
       "id": "COLLAB-08",
       "task": "T092",
-      "status": "unverified",
+      "status": "partial",
       "candidate_paths": [
         "apps/web-next/src/SpatialPerformance.ts",
         "apps/web-next/src/SpatialCache.ts",
         "apps/web-next/src/SpatialIncremental.ts",
-        "apps/web-next/spatial-performance.test.mjs"
+        "apps/web-next/spatial-performance.test.mjs",
+        "apps/web-next/src/map-render-plan.ts",
+        "apps/web-next/src/map-render-plan.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/CoreMapTools.tsx",
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
       ],
-      "blocker": "Acceptance evidence not collected"
+      "blocker": "Indexed layer order and grouped rows, minimal MapLibre structure reconciliation, coalesced nonzero-size resize. Synthetic Chromium at 390/1280/1440/1920 reports canvas size/settle times; no large-source p95 baseline or physical-device field workflow yet."
     },
     {
       "id": "COLLAB-09",
