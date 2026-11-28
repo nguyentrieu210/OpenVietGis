@@ -267,6 +267,9 @@ impl NativeUnifiedProject{
  pub fn edit_attributes(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,attributes_json:String)->Result<String,String>{
   self.inner.edit_attributes(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&attributes_json).map_err(unified_error)
  }
+ pub fn commit_geojson(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,geometry_json:String,attributes_json:String)->Result<String,String>{
+  self.inner.commit_geojson(&layer_id,&feature_id,&operation_id,&expected,&feature_revision,&geometry_json,&attributes_json).map_err(unified_error)
+ }
  pub fn commit_geometry(&self,layer_id:String,feature_id:String,operation_id:String,expected:String,feature_revision:String,kind:String,xy:Vec<f64>,attributes_json:String)->Result<String,String>{
   if attributes_json.len()>256*1024||xy.len()>8192{return Err("RESOURCE_LIMIT".into())}
   let layer=id(&layer_id)?;let feature=id(&feature_id)?;let operation=id(&operation_id)?;
