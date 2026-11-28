@@ -74,6 +74,45 @@ impl NativeProject{
    encode(&serde_json::json!({"revision":p.revision.to_string(),"rows":rows,"next":next.map(|n|n.to_string())}))
   })
  }
+ /// Bounded GeoJSON viewport using the same RTree and WKB conversion as Desktop.
+ pub fn viewport(&self,layer:&str,bbox:[f64;4],expected:&str)->Result<String>{
+  const MAX:usize=1024*1024;
+  if bbox[0]< -180.||bbox[2]>180.||bbox[1]< -90.||bbox[3]>90.{return Err(Error::Invalid)}
+  self.with(|s|{
+   let l=id(layer)?;let r=revision(expected)?;let mut cursor=0;let mut features=Vec::new();let mut size=0usize;let mut truncated=false;
+   'pages:loop{
+    let p=s.query(l,bbox,cursor,100,r)?;
+    for row in p.rows{
+     let g=parse_xy_wkb(&row.image.wkb,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
+     let f=serde_json::json!({"type":"Feature","id":row.id,"geometry":ovg_spatial::to_geojson(&g.geometry),"properties":{"revision":row.revision.to_string(),"attributes":row.image.attributes}});
+     let n=json(&f)?.len()+1;
+     if features.len()>=512||size+n>MAX-1024{truncated=true;break 'pages}
+     size+=n;features.push(f);
+    }
+    match p.next{Some(n) if n>cursor=>cursor=n,Some(_)=>return Err(Error::Invalid),None=>break}
+   }
+   encode(&serde_json::json!({"revision":expected,"data":{"type":"FeatureCollection","features":features},"truncated":truncated}))
+  })
+ }
+ /// Exact feature revision checked by the shared ACID transaction. WKB
+ /// stays Rust-owned; attribute edits do not roundtrip geometry through UI.
+ pub fn feature(&self,layer:&str,feature:&str,expected:&str)->Result<String>{
+  self.with(|s|{
+   let (r,img)=s.feature(id(layer)?,id(feature)?,revision(expected)?)?;
+   let g=parse_xy_wkb(&img.wkb,&ValidationLimits::default()).map_err(|_|Error::Invalid)?;
+   encode(&serde_json::json!({"id":feature,"revision":r.to_string(),"geometry":ovg_spatial::to_geojson(&g.geometry),"attributes":img.attributes}))
+  })
+ }
+ pub fn edit_attributes(&self,layer:&str,feature:&str,operation:&str,expected_project:&str,expected_feature:&str,attributes_json:&str)->Result<String>{
+  if attributes_json.len()>256*1024{return Err(Error::Limit)}
+  let (l,f,o,r,fr)=(id(layer)?,id(feature)?,id(operation)?,revision(expected_project)?,revision(expected_feature)?);
+  let a:Value=decode(attributes_json)?;
+  self.with(|s|{
+   let (actual,mut image)=s.feature(l,f,r)?;if actual!=fr{return Err(Error::Conflict)}image.attributes=a;
+   let batch=Batch{operation:o,expected_project:r,edits:vec![Edit{layer:l,feature:f,expected:fr,image:Some(image)}],links:vec![]};
+   let result=s.apply(&batch)?;Ok(result.revision.to_string())
+  })
+ }
  pub fn integrity(&self)->Result<bool>{self.with(|s|s.integrity())}
  /// Backup into private exchange directory, never caller path or cloud.
  pub fn backup(&self,exchange:&Path,expected:&str)->Result<String>{
