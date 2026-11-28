@@ -41,6 +41,23 @@ void main(){
   await c.activateManifest(uid,consent:true);expect(jsonDecode(t.request!.body),{'manifest_id':uid});
   await c.disableExtension('partner_demo_test',consent:true);expect(t.request!.url.path.endsWith('/partner_demo_test/disable'),true);
  });
+ test('processing and collaboration routes, pinned inputs, consent',()async{
+  final s=scope(),t=FixtureTransport(scope());final c=ManagedClient(s,t);
+  await c.algorithms();expect(t.request!.url.path.endsWith('/processing/algorithms'),true);
+  final expected={'source_id':uid,'content_revision':List.filled(64,'a').join(),'schema_revision':List.filled(64,'b').join()};
+  await c.submitJob(algorithm:'buffer',inputLayer:uid,expectedInput:expected,parameters:{'distance_meters':10},outputName:'buffer',operationId:'op1',consent:true);
+  expect(jsonDecode(t.request!.body)['expected_input'],expected);
+  await c.cancelJob(uid);expect(t.request!.url.path.endsWith('/processing/jobs/$uid/cancel'),true);
+  await c.roomMessages(uid);expect(t.request!.url.path.endsWith('/chat/rooms/$uid/messages'),true);
+  await c.sendRoomMessage(uid,'test',replyTo:uid,mentions:[uid]);expect(jsonDecode(t.request!.body)['reply_to_id'],uid);
+  await c.tasks();expect(t.request!.url.path.endsWith('/collaboration/tasks'),true);
+  await c.changeTask(uid,3,'done');expect(t.request!.method,'PATCH');expect(jsonDecode(t.request!.body),{'revision':3,'status':'done'});
+  expect(()=>c.changeTask(uid,0,'done'),throwsArgumentError);
+  expect(()=>c.geocode('address',consent:false),throwsArgumentError);
+  await c.geocode('address',consent:true);expect(t.request!.url.path,'/api/v1/geocode');
+  await c.route(106,10,107,11,consent:true);expect(t.request!.url.path,'/api/v1/routing/route');
+  t.status=503;await expectLater(c.geocode('address',consent:true),throwsA(isA<ProtocolError>()));
+ });
  test('refresh single flight and fail closed',()async{
   final gate=RefreshGate<int>();var calls=0;final completer=Completer<int>();
   final a=gate.run((){calls++;return completer.future;});final b=gate.run(()async{calls++;return 2;});
