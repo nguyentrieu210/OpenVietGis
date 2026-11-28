@@ -244,3 +244,26 @@ where I:IntoIterator<Item=Result<(String,Value,Value)>>{
  fs::File::open(&path).and_then(|f|f.sync_all()).map_err(|_|"STORAGE_UNAVAILABLE")?;
  fs::hard_link(&path,dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;Ok(count)
 }
+
+#[cfg(test)]
+mod window_tests{
+ use super::*;
+ #[test]fn geotiff_window_and_bounds(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("sample.tif");
+  let driver=gdal::DriverManager::get_driver_by_name("GTiff").unwrap();
+  let mut ds=driver.create_with_band_type::<f32,_>(&p,16,16,1).unwrap();
+  ds.set_geo_transform(&[106.,0.001,0.,11.,0.,-0.001]).unwrap();
+  ds.set_spatial_ref(&SpatialRef::from_epsg(4326).unwrap()).unwrap();
+  {let mut b=ds.rasterband(1).unwrap();b.fill(7.,None).unwrap();}
+  ds.flush_cache().unwrap();drop(ds);
+  let s=RasterSource::open(&p).unwrap();let bytes=s.window(1,[0,0,4,4],[2,2]).unwrap();
+  assert_eq!(bytes.len(),16);assert_eq!(f32::from_le_bytes(bytes[..4].try_into().unwrap()),7.);
+  assert!(s.window(1,[15,15,2,2],[2,2]).is_err());assert!(s.window(1,[0,0,2,2],[513,1]).is_err());
+ }
+ #[test]fn parquet_driver_gated_roundtrip(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("test.parquet");
+  let rows=||vec![Ok(("00000000-0000-4000-8000-000000000001".into(),json!({"type":"Point","coordinates":[106.,11.]}),json!({"name":"A"})))];
+  if gdal::DriverManager::get_driver_by_name("Parquet").is_err(){assert!(export_parquet(&p,rows()).is_err());assert!(!p.exists());return}
+  assert_eq!(export_parquet(&p,rows()).unwrap(),1);assert_eq!(read_atomic(&p,0).unwrap().len(),1);assert!(export_parquet(&p,rows()).is_err());
+ }
+}
