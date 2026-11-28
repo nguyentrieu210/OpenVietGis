@@ -1,0 +1,30 @@
+name: SPEC 073 existing contract regression
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths:
+      - "apps/api-rust/tests/spec073_mobile_contract_baseline.rs"
+      - "apps/api-rust/src/extensions/validation.rs"
+      - ".github/workflows/spec073-contract-baseline.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check existing toolchain
+        run: rustc --version && cargo --version
+      - name: Verify mounted route inventory
+        run: cargo test --locked -p openvietgis-api-rust --test spec066_route_inventory
+      - name: Verify existing credential separation
+        run: cargo test --locked -p openvietgis-api-rust --test spec073_mobile_contract_baseline
+      - name: Verify marketplace v1 canonical signature
+        run: cargo test --locked -p openvietgis-api-rust --lib extensions::validation::tests

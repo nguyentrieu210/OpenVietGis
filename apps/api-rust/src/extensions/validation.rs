@@ -265,6 +265,23 @@ mod tests {
     }
 
     #[test]
+    fn spec073_marketplace_v1_unicode_golden_signature_is_unchanged() {
+        // Public RFC 8032 test key; signature generated independently with Python
+        // using the existing developer CLI canonicalization. No production key.
+        let public = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=";
+        let signature = "UHI02kNJlIHgIL/EnbUTKpbzZG+xOB8eQqf6Y3tYOzXrVtrQ9lhkwHggr5oRq1kfH42pOpNa5jVPk+NhjsWyCw==";
+        let canonical = r#"{"manifest":{"api_compatibility":"1.x","capabilities":[],"commands":[],"description":"","display_name":"Số nhà Việt Nam","entity_schemas":{},"extension_key":"partner_demo_tool","permissions":[],"ui_contributions":[],"version":"1.0.0"},"publisher_id":"demo"}"#;
+        let mut payload: Value = serde_json::from_str(canonical).unwrap();
+        assert_eq!(marketplace_canonical(&payload).unwrap(), canonical.as_bytes());
+        assert!(verify_ed25519(public, &payload, signature).is_ok());
+        payload["manifest"]["display_name"] = json!("Changed");
+        assert!(verify_ed25519(public, &payload, signature).is_err());
+        payload["manifest"]["display_name"] = json!("Số nhà Việt Nam");
+        payload["manifest"]["mobile"] = json!({"schema_version": 2});
+        assert!(verify_ed25519(public, &payload, signature).is_err());
+    }
+
+    #[test]
     fn generic_manifest_and_partner_contract_isolated() {
         let current = manifest("demo", "1.0.0");
         assert!(validate_generic(&current));
