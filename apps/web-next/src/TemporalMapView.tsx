@@ -7,7 +7,7 @@ import type {ComparisonLayer} from "./secondary-map-plan";
 import {SecondaryMapView} from "./SecondaryMapView";
 import {temporalFields,temporalReadable,temporalPopulation,temporalCollection} from "./temporal-plan";
 const empty:FeatureCollection={type:"FeatureCollection",features:[]};
-const date=(t:number)=>new Date(t).toISOString().slice(0,10);
+const date=(t:number)=>new Date(t).toISOString().split("T")[0]!;
 export function TemporalMapView({storageKey,primary,layers,rows,collection,templates,close}:{storageKey:string;primary:RefObject<ml.Map|null>;layers:SpatialLayer[];rows:StudioRow[];collection:FeatureCollection;templates:ml.LayerSpecification[];close:()=>void}){
  const eligible=useMemo(()=>layers.filter(l=>temporalReadable(l)&&temporalFields(l).length>0),[layers]);
  const [id,setId]=useState(""),[field,setField]=useState(""),[index,setIndex]=useState(0),[playing,setPlaying]=useState(false);

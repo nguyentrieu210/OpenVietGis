@@ -29,7 +29,13 @@ try {
 
 const matrixIds = [...matrix.matchAll(/^\|\s*([A-Z][A-Z0-9]*-\d{2})\s*\|/gm)].map((match) => match[1]);
 const taskById = new Map();
+const taskDone = new Map();
 for (const line of tasks.split(/\r?\n/)) {
+  const status = line.match(/^\s*-\s*\[([ xX])\]\s+(T\d{3})\b/);
+  if (status) {
+    if (taskDone.has(status[2])) errors.push("tasks.md contains duplicate task " + status[2]);
+    taskDone.set(status[2], status[1].toLowerCase() === "x");
+  }
   const match = line.match(/^\s*-\s*\[[ xX]\]\s+(T\d{3})\s+\[US\d+\]\s+\[([A-Z][A-Z0-9]*-\d{2})\]/);
   if (match) {
     if (taskById.has(match[2])) errors.push("tasks.md contains duplicate mapping for " + match[2]);
@@ -111,7 +117,8 @@ for (const [id, row] of rowsById) {
   if (row.status === "accepted") {
     const evidence = row.evidence;
     const required = ["qgis_version", "fixture", "steps", "expected", "actual", "reviewer"];
-    if (!evidence || required.some((key) => evidence[key] === undefined || String(evidence[key]).trim() === "")) {
+    const hasEvidence = (value) => typeof value === "string" ? value.trim().length > 0 : Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === "string" && item.trim().length > 0);
+    if (!evidence || required.some((key) => !hasEvidence(evidence[key]))) {
       errors.push(id + " accepted status requires QGIS version, fixture, steps, expected/actual results, and reviewer evidence");
     }
     if (!Array.isArray(row.test_ids) || row.test_ids.length === 0) {
@@ -128,8 +135,11 @@ console.log(
 );
 console.log("This structural check does not certify QGIS parity or mark any row accepted.");
 
-if (process.argv.includes("--require-accepted") && accepted !== matrixIds.length) {
-  errors.push("release gate requires all " + matrixIds.length + " rows accepted; currently " + accepted + " are accepted");
+if (process.argv.includes("--require-accepted")) {
+  if (accepted !== matrixIds.length) errors.push("release gate requires all " + matrixIds.length + " rows accepted; currently " + accepted + " are accepted");
+  // T100/T101 are release and deployment evidence, so they cannot precede this gate.
+  const unfinished = Array.from({length:99}, (_, i) => "T" + String(i + 1).padStart(3, "0")).filter(id => taskDone.get(id) !== true);
+  if (unfinished.length) errors.push("release gate requires pre-release tasks completed: " + unfinished.join(", "));
 }
 if (errors.length) {
   console.error("Spec 065 manifest validation failed:");

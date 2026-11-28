@@ -9,13 +9,16 @@ const rows=[row("a","2026-11-28T00:30:00+07:00"),row("b","2026-11-28T00:00:00Z")
 describe("temporal vector frames",()=>{
  it("uses strict timezone-aware timestamps and rejects invalid calendar dates",()=>{
   expect(timestampMs("2026-11-28T00:30:00+07:00")).toBe(Date.parse("2026-11-27T17:30:00Z"));
-  for(const x of ["2026-02-30T00:00:00Z","2026-11-28","2026-11-28T01:00:00","2026-11-28T24:00:00Z",null,123])expect(timestampMs(x)).toBeNull();
+  for(const x of ["2026-02-30T00:00:00Z","2026-11-28","2026-11-28T01:00:00","2026-11-28T24:00:00Z","2026-11-28T00:00:00+24:00","2026-11-28T00:00:00+00:60",null,123])expect(timestampMs(x)).toBeNull();
  });
  it("counts invalid timestamps, splits UTC days and fails closed on changed sources or missing rows",()=>{
   const p=temporalPopulation(layer,rows,"time");
   expect(p.days).toEqual([Date.parse("2026-11-27T00:00:00Z"),Date.parse("2026-11-28T00:00:00Z")]);
   expect(p.invalid).toBe(1);expect([...p.byDay.get(p.days[0]!)!]).toEqual(["l:a"]);
   expect(()=>temporalPopulation(layer,rows.slice(0,2),"time")).toThrow();
+  expect(()=>temporalPopulation(layer,[rows[0]!,{...rows[1]!,key:rows[0]!.key},rows[2]!],"time")).toThrow();
+  expect(()=>temporalPopulation(layer,[{...rows[0]!,key:""},rows[1]!,rows[2]!],"time")).toThrow();
+  expect(()=>temporalPopulation(layer,[rows[0]!,{...rows[1]!,feature:{...rows[1]!.feature,feature_id:rows[0]!.feature.feature_id}},rows[2]!],"time")).toThrow();
   expect(()=>temporalPopulation({...layer,source:{...layer.source,content_revision:"changed"}},rows,"time")).toThrow();
   expect(()=>temporalPopulation({...layer,capabilities:[]} as SpatialLayer,rows,"time")).toThrow();
  });
