@@ -29,7 +29,7 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
    try{
      if(!await Geolocator.isLocationServiceEnabled())throw StateError('GPS_DISABLED');
      var permission=await Geolocator.checkPermission();
-     if(permission==LocationPermission.denied)permission=await Geolocator.requestPermission();
+     if(permission==LocationPermission.denied){permission=await Geolocator.requestPermission();}
      if(permission!=LocationPermission.whileInUse&&permission!=LocationPermission.always)throw StateError('LOCATION_PERMISSION_DENIED');
      final p=await Geolocator.getCurrentPosition(locationSettings:const LocationSettings(accuracy:LocationAccuracy.high,timeLimit:Duration(seconds:20)));
      if(mounted)setState(()=>_fix=p);
@@ -64,7 +64,7 @@ class _SurveyPageState extends State<SurveyPage> with WidgetsBindingObserver{
  Future<bool> _permission()async{
    if(!await Geolocator.isLocationServiceEnabled())return false;
    var p=await Geolocator.checkPermission();
-   if(p==LocationPermission.denied)p=await Geolocator.requestPermission();
+   if(p==LocationPermission.denied){p=await Geolocator.requestPermission();}
    return p==LocationPermission.whileInUse||p==LocationPermission.always;
  }
  Future<void> _start(String? id)async{

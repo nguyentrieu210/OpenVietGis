@@ -20,7 +20,7 @@ class _AttributePageState extends State<AttributePage>{
    try{
      final v=jsonDecode(await widget.controller.local.attributePage(after:_cursor,limit:100,contains:_query)) as List;
      if(!mounted)return;
-     setState((){_rows.addAll(v.cast<Map<String,dynamic>>());if(v.isNotEmpty)_cursor=v.last['fid'].toString();else _end=true;});
+     setState((){_rows.addAll(v.cast<Map<String,dynamic>>());if(v.isNotEmpty){_cursor=v.last['fid'].toString();}else{_end=true;}});
    }catch(e){if(mounted)setState(()=>_error=e.toString());}
    finally{if(mounted)setState(()=>_busy=false);}
  }

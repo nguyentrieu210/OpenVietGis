@@ -38,7 +38,7 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
   @override void dispose(){_epoch++;_timer?.cancel();widget.controller.removeListener(_changed);WidgetsBinding.instance.removeObserver(this);super.dispose();}
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     _foreground=state==AppLifecycleState.resumed;_epoch++;
-    if(_foreground)_schedule();else _timer?.cancel();
+    if(_foreground){_schedule();}else{_timer?.cancel();}
   }
   void _changed(){
     final c=widget.controller;
@@ -109,7 +109,7 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
         if(hit is Map)p=LatLng((hit['y'] as num).toDouble(),(hit['x'] as num).toDouble());
       }
       if(!mounted||epoch!=_draftEpoch)return;
-      setState((){if(_drawing=='point')_vertices.clear();_vertices.add(p);});
+      setState((){if(_drawing=='point'){_vertices.clear();}_vertices.add(p);});
       await _preview();
     }catch(_){if(mounted)setState(()=>_failed=true);}
     finally{if(mounted)setState(()=>_editingBusy=false);}
@@ -133,7 +133,7 @@ class _NativeLocalMapState extends State<NativeLocalMap> with WidgetsBindingObse
       ListTile(title:Text(vi?'Undo / Hoàn tác':'Undo'),onTap:(){Navigator.pop(sheet);unawaited(widget.controller.history(false));}),
       ListTile(title:Text(vi?'Redo / Làm lại':'Redo'),onTap:(){Navigator.pop(sheet);unawaited(widget.controller.history(true));}),
     ])));
-    if(kind!=null&&mounted)setState(()=>_drawing=kind);
+    if(kind!=null&&mounted){setState(()=>_drawing=kind);}
   }
   @override Widget build(BuildContext context){
     final vi=widget.controller.vi;
