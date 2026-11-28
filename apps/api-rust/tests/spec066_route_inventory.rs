@@ -23,7 +23,7 @@ fn sample_path(mut path: &str) -> String {
         let (parameter, suffix) = rest.split_once('}').expect("closed route parameter");
         assert!(!parameter.is_empty(), "empty route parameter");
         result.push_str(prefix);
-        result.push_str("1");
+        result.push('1');
         path = suffix;
     }
     result.push_str(path);
@@ -118,7 +118,11 @@ async fn frozen_api_inventory_is_mounted_on_full_profile() {
     );
 
     let expected = baseline_operations();
-    assert!(expected.len() >= 300, "unexpectedly incomplete inventory");
+    assert_eq!(
+        expected.len(),
+        364,
+        "unexpected baseline inventory drift; reconcile the frozen contracts"
+    );
     let mut missing = Vec::new();
     for (method, route) in &expected {
         let status = probe(&app, method, &sample_path(route)).await;
