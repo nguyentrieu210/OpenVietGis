@@ -115,3 +115,6 @@ See [W4 checkpoint](w4-implementation-checkpoint.md). Dart SDK targeted tests pa
 
 ## W5 source implementation
 See [W5 checkpoint](w5-implementation-checkpoint.md). SDK/host Rust v1/v2 and house-numbering facade tests passed; renderer, actual signed installation and A3 pending. No parent or leaf closure.
+
+## W6 source implementation
+See [W6 checkpoint](w6-implementation-checkpoint.md). Scoped SDK and entitlement server tests passed. Local Rust and Flutter candidate builds still pending. No parent or leaf accepted.

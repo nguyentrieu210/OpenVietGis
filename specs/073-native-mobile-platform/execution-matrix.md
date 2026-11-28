@@ -503,3 +503,7 @@ See [W4 checkpoint](evidence/w4-implementation-checkpoint.md). Candidate scoped 
 
 ### W5 implementation evidence
 See [W5 checkpoint](evidence/w5-implementation-checkpoint.md). Candidate signed v2 SDK/Rust and official facade tests passed. Actual installed plugin, connected workflow and A3 gate remain open.
+
+
+### W6 implementation evidence
+See [W6 checkpoint](evidence/w6-implementation-checkpoint.md). Local algorithm/Job/Flutter candidate and connected SDK source implemented; host format screening recorded; no formal task closure.
