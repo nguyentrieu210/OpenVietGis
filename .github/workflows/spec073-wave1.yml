@@ -1,0 +1,41 @@
+name: SPEC 073 Wave 1 targeted native tests
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", ".github/workflows/spec073-wave1.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [ovg-mobile-engine, ovg-local-storage]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Targeted native tests and graph guard
+        run: |
+          set -euxo pipefail
+          manifest="crates/${{ matrix.crate }}/Cargo.toml"
+          cargo test --manifest-path "$manifest"
+          mkdir -p "$RUNNER_TEMP/w1"
+          for target in aarch64-linux-android aarch64-apple-ios; do
+            cargo tree --locked --manifest-path "$manifest" --target "$target" --edges normal,build --prefix none --format '{p}' > "$RUNNER_TEMP/w1/$target.txt"
+            if grep -E '^(axum|sqlx|postgres|tokio-postgres|ovg-storage|openvietgis-api|ovg-module-house-numbering)([- ]|$)' "$RUNNER_TEMP/w1/$target.txt"; then exit 1; fi
+          done
+          cp "crates/${{ matrix.crate }}/Cargo.lock" "$RUNNER_TEMP/w1/"
+          git rev-parse HEAD > "$RUNNER_TEMP/w1/commit.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: wave1-${{ matrix.crate }}
+          path: ${{ runner.temp }}/w1
+          if-no-files-found: warn
