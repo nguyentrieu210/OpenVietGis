@@ -58,7 +58,8 @@ export function parsePluginV2Runtime(value:unknown,expectedManifest:string):Plug
  exact(r,["document","release_digest","activation_revision","manifest_id","profile","granted","grant_revision","permissions","dependency_lock","lock_digest","catalog_epoch"]);
  if(uuid(r.manifest_id)!==expectedManifest||r.profile!=="web_read_only"||typeof r.granted!=="boolean")bad();
  hex(r.release_digest);hex(r.lock_digest);integer(r.activation_revision,1,Number.MAX_SAFE_INTEGER);integer(r.catalog_epoch,1,Number.MAX_SAFE_INTEGER);
- if(!/^(0|[1-9][0-9]{0,18})$/.test(str(r.grant_revision,19)))bad();
+ const grant=str(r.grant_revision,19);
+ if(!/^(0|[1-9][0-9]{0,18})$/.test(grant)||BigInt(grant)>9223372036854775807n||(r.granted&&grant==="0"))bad();
  const pins=arr(r.dependency_lock,100),seen=new Set<string>();
  if(!pins.length)bad();
  for(const v of pins){
@@ -73,4 +74,22 @@ export function parsePluginV2Runtime(value:unknown,expectedManifest:string):Plug
  if(new Set(permissions).size!==permissions.length)bad();
  parseReadOnlyPluginDocument(r.document,permissions,root.key as string);
  return r as unknown as PluginV2Runtime;
+}
+
+// Transport-neutral wire builder for the trusted Web/Desktop host. The
+// request contains no credentials, endpoint override or claimed host role.
+export type PluginV2InvocationBody={request_id:string;release_digest:string;activation_revision:number;grant_revision:string;lock_digest:string;catalog_epoch:number;action_id:string;input:Record<string,unknown>};
+export function buildPluginV2Invocation(runtime:PluginV2Runtime,actionId:string,input:Record<string,unknown>,requestId:string):PluginV2InvocationBody{
+ const r=parsePluginV2Runtime(runtime,runtime.manifest_id);
+ if(!r.granted)bad();
+ const action=r.document.actions.find(a=>a.id===actionId);
+ if(!action)throw new Error("INVALID_PLUGIN_V2_CONTRACT");
+ const values=obj(input);
+ for(const [key,value] of Object.entries(values)){
+  if(!Object.hasOwn(action.input,key)||typeof value!=="string"||[...value].length>4096)bad();
+ }
+ for(const [key,field] of Object.entries(action.input))if(field.required&&!Object.hasOwn(values,key))bad();
+ if(new TextEncoder().encode(JSON.stringify(values)).length>256*1024)bad();
+ return {request_id:uuid(requestId),release_digest:r.release_digest,activation_revision:r.activation_revision,
+ grant_revision:r.grant_revision,lock_digest:r.lock_digest,catalog_epoch:r.catalog_epoch,action_id:action.id,input:{...values}};
 }

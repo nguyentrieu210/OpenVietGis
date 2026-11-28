@@ -9,14 +9,15 @@ UniversalDocument fixture(String name,String cap){
   final key='partner_fixture_$name';
   return UniversalDocument.parse(json,extensionKey:key,permissions:{'ext.$key.$cap'});
 }
-UniversalScope scope({bool granted=true,bool qualified=true,String project='p'})=>UniversalScope(
+UniversalScope scope({bool granted=true,bool qualified=true,String project='p',String grantRevision='1'})=>UniversalScope(
   issuer:'fixture',organization:'o',project:project,subject:'u',session:'s',manifest:'m',
-  release:'r',lock:'l',activationRevision:1,catalogEpoch:2,qualified:qualified,online:true,granted:granted);
+  release:'r',lock:'l',activationRevision:1,catalogEpoch:2,grantRevision:grantRevision,qualified:qualified,online:true,granted:granted);
 void main(){
   test('same reference documents as Rust and TypeScript',(){
     expect(fixture('context','host_context').actions.length,1);
     expect(fixture('notice','host_notice').actions.length,1);
     expect(fixture('layers','map_view').actions.length,2);
+    expect(fixture('processing','processing_plan').actions.length,1);
   });
   test('reject unknown widget and ungranted permission',(){
     final raw=jsonDecode(File('../plugin-sdk/examples/v2/host-context.json').readAsStringSync()) as Map<String,dynamic>;

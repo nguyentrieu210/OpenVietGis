@@ -1,0 +1,766 @@
+{
+  "schema": "openvietgis.fixture.runtime-wire.v1",
+  "valid": [
+    {
+      "name": "context",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      },
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "action": "context",
+      "input": {},
+      "request_id": "30000000-0000-0000-0000-000000000001",
+      "expected": {
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "grant_revision": "12",
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "request_id": "30000000-0000-0000-0000-000000000001",
+        "action_id": "context",
+        "input": {}
+      }
+    },
+    {
+      "name": "notice",
+      "runtime": {
+        "document": {
+          "slot": "form",
+          "widgets": [
+            {
+              "kind": "input",
+              "id": "notice",
+              "label": "Nội dung thông báo",
+              "field": "text"
+            },
+            {
+              "kind": "button",
+              "id": "show",
+              "label": "Hiển thị",
+              "action": "notice"
+            }
+          ],
+          "actions": [
+            {
+              "id": "notice",
+              "command_id": "host_notice",
+              "permission": "ext.partner_fixture_notice.host_notice",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {
+                "text": {
+                  "kind": "text",
+                  "required": true
+                }
+              }
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000002",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000002",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_notice.host_notice"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_notice",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000002",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000002",
+            "activation_id": "20000000-0000-0000-0000-000000000002",
+            "activation_revision": 5
+          }
+        ]
+      },
+      "manifest": "10000000-0000-0000-0000-000000000002",
+      "action": "notice",
+      "input": {
+        "text": "fixture"
+      },
+      "request_id": "30000000-0000-0000-0000-000000000001",
+      "expected": {
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000002",
+        "activation_revision": 5,
+        "grant_revision": "12",
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "request_id": "30000000-0000-0000-0000-000000000001",
+        "action_id": "notice",
+        "input": {
+          "text": "fixture"
+        }
+      }
+    },
+    {
+      "name": "layers",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Danh mục lớp GIS của dự án"
+            },
+            {
+              "kind": "input",
+              "id": "cursor",
+              "label": "Mã lớp cuối trang trước (không bắt buộc)",
+              "field": "after_id"
+            },
+            {
+              "kind": "button",
+              "id": "list",
+              "label": "Tải danh mục lớp",
+              "action": "list"
+            },
+            {
+              "kind": "input",
+              "id": "layer",
+              "label": "Mã lớp cần xem",
+              "field": "layer_id"
+            },
+            {
+              "kind": "button",
+              "id": "detail",
+              "label": "Xem thông tin lớp",
+              "action": "detail"
+            }
+          ],
+          "actions": [
+            {
+              "id": "list",
+              "command_id": "gis_layers",
+              "permission": "ext.partner_fixture_layers.map_view",
+              "consent": "read",
+              "timeout_ms": 30000,
+              "input": {
+                "after_id": {
+                  "kind": "text",
+                  "required": false
+                }
+              }
+            },
+            {
+              "id": "detail",
+              "command_id": "gis_layer",
+              "permission": "ext.partner_fixture_layers.map_view",
+              "consent": "read",
+              "timeout_ms": 30000,
+              "input": {
+                "layer_id": {
+                  "kind": "text",
+                  "required": true
+                }
+              }
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000003",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000003",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_layers.map_view"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_layers",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000003",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000003",
+            "activation_id": "20000000-0000-0000-0000-000000000003",
+            "activation_revision": 5
+          }
+        ]
+      },
+      "manifest": "10000000-0000-0000-0000-000000000003",
+      "action": "list",
+      "input": {},
+      "request_id": "30000000-0000-0000-0000-000000000001",
+      "expected": {
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000003",
+        "activation_revision": 5,
+        "grant_revision": "12",
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "request_id": "30000000-0000-0000-0000-000000000001",
+        "action_id": "list",
+        "input": {}
+      }
+    },
+    {
+      "name": "processing",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Đề xuất xử lý GIS. Nhập JSON yêu cầu, xem trước và xác nhận tại host."
+            },
+            {
+              "kind": "input",
+              "id": "request",
+              "field": "request",
+              "label": "Yêu cầu thuật toán JSON"
+            },
+            {
+              "kind": "button",
+              "id": "preview",
+              "label": "Xem trước xử lý",
+              "action": "preview"
+            }
+          ],
+          "actions": [
+            {
+              "id": "preview",
+              "command_id": "gis_processing_plan",
+              "permission": "ext.partner_fixture_processing.processing_plan",
+              "consent": "read",
+              "timeout_ms": 30000,
+              "input": {
+                "request": {
+                  "kind": "text",
+                  "required": true
+                }
+              }
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000004",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000004",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_processing.processing_plan"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_processing",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000004",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000004",
+            "activation_id": "20000000-0000-0000-0000-000000000004",
+            "activation_revision": 5
+          }
+        ]
+      },
+      "manifest": "10000000-0000-0000-0000-000000000004",
+      "action": "preview",
+      "input": {
+        "request": "{\"algorithm_id\":\"buffer\"}"
+      },
+      "request_id": "30000000-0000-0000-0000-000000000001",
+      "expected": {
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000004",
+        "activation_revision": 5,
+        "grant_revision": "12",
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "request_id": "30000000-0000-0000-0000-000000000001",
+        "action_id": "preview",
+        "input": {
+          "request": "{\"algorithm_id\":\"buffer\"}"
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "unqualified_profile",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "native",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "zero_granted_revision",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "0",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "overflow_revision",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "9223372036854775808",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "noncanonical_revision",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "012",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate_permission",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context",
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "duplicate_dependency",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          },
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "wrong_root_release",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ]
+      }
+    },
+    {
+      "name": "unexpected_field",
+      "manifest": "10000000-0000-0000-0000-000000000001",
+      "runtime": {
+        "document": {
+          "slot": "workspace",
+          "widgets": [
+            {
+              "kind": "text",
+              "id": "title",
+              "text": "Thông tin môi trường GIS"
+            },
+            {
+              "kind": "button",
+              "id": "run",
+              "label": "Xem thông tin SDK",
+              "action": "context"
+            }
+          ],
+          "actions": [
+            {
+              "id": "context",
+              "command_id": "host_context",
+              "permission": "ext.partner_fixture_context.host_context",
+              "consent": "read",
+              "timeout_ms": 1000,
+              "input": {}
+            }
+          ]
+        },
+        "manifest_id": "10000000-0000-0000-0000-000000000001",
+        "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+        "activation_revision": 5,
+        "profile": "web_read_only",
+        "granted": true,
+        "grant_revision": "12",
+        "permissions": [
+          "ext.partner_fixture_context.host_context"
+        ],
+        "lock_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "catalog_epoch": 2,
+        "dependency_lock": [
+          {
+            "key": "partner_fixture_context",
+            "version": "1.0.0",
+            "manifest_id": "10000000-0000-0000-0000-000000000001",
+            "release_digest": "0000000000000000000000000000000000000000000000000000000000000001",
+            "activation_id": "20000000-0000-0000-0000-000000000001",
+            "activation_revision": 5
+          }
+        ],
+        "credential": "not-a-real-credential"
+      }
+    }
+  ]
+}

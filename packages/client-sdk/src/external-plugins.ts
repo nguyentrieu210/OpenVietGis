@@ -1,4 +1,4 @@
-import {parsePluginV2Runtime} from "./plugin-v2-contract";
+import {parsePluginV2Runtime,buildPluginV2Invocation} from "./plugin-v2-contract";
 import type { ApiClient } from "./http";
 import type { ExtensionManifest } from "./platform";
 
@@ -104,7 +104,7 @@ export function getPluginV2Runtime(client:ApiClient,org:string,project:string,ma
  return client.request<unknown>(pluginV2Path(org,project,manifest),{signal:signal??null,cache:"no-store"}).then(r=>parsePluginV2Runtime(r,manifest));
 }
 export function invokePluginV2(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,actionId:string,input:Record<string,unknown>,requestId:string,signal?:AbortSignal){
- return client.request<{receipt_id:string;command_id:string;output:unknown}>(pluginV2Path(org,project,runtime.manifest_id)+"/invoke",{method:"POST",signal:signal??null,body:JSON.stringify({request_id:requestId,release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,grant_revision:runtime.grant_revision,lock_digest:runtime.lock_digest,catalog_epoch:runtime.catalog_epoch,action_id:actionId,input})});
+ return client.request<{receipt_id:string;command_id:string;output:unknown}>(pluginV2Path(org,project,runtime.manifest_id)+"/invoke",{method:"POST",signal:signal??null,body:JSON.stringify(buildPluginV2Invocation(runtime,actionId,input,requestId))});
 }
 
 export function setPluginV2Grant(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,enabled:boolean,signal?:AbortSignal){

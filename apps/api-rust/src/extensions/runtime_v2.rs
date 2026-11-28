@@ -764,6 +764,64 @@ mod tests {
         )
     }
     #[test]
+    fn shared_host_wire_vectors_match_broker_contract() {
+        let f: Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/spec075/runtime-wire-vectors.json"
+        ))
+        .unwrap();
+        for c in f["valid"].as_array().unwrap() {
+            let runtime = &c["runtime"];
+            let request: InvokeBody = serde_json::from_value(c["expected"].clone()).unwrap();
+            assert_eq!(
+                request.release_digest,
+                runtime["release_digest"].as_str().unwrap()
+            );
+            assert_eq!(
+                request.activation_revision,
+                runtime["activation_revision"].as_i64().unwrap()
+            );
+            assert_eq!(
+                request.grant_revision,
+                runtime["grant_revision"].as_str().unwrap()
+            );
+            assert_eq!(
+                request.lock_digest,
+                runtime["lock_digest"].as_str().unwrap()
+            );
+            assert_eq!(
+                request.catalog_epoch,
+                runtime["catalog_epoch"].as_i64().unwrap()
+            );
+            let doc = Document::parse(&serde_json::to_vec(&runtime["document"]).unwrap()).unwrap();
+            let permissions: std::collections::BTreeSet<String> =
+                serde_json::from_value(runtime["permissions"].clone()).unwrap();
+            let key = runtime["dependency_lock"][0]["key"].as_str().unwrap();
+            let caps = permissions
+                .iter()
+                .map(|p| p.rsplit('.').next().unwrap().to_owned())
+                .collect();
+            let policies = ovg_module_sdk::host_profile::read_only_policies(key, &caps);
+            ovg_module_sdk::host_profile::validate_read_only(&doc, &permissions, &policies)
+                .unwrap();
+            let action = doc
+                .actions
+                .iter()
+                .find(|a| a.id == request.action_id)
+                .unwrap();
+            for (k, v) in request.input.as_object().unwrap() {
+                assert!(action.input.contains_key(k) && v.is_string());
+            }
+            for (k, v) in &action.input {
+                if v.required {
+                    assert!(request.input.get(k).is_some());
+                }
+            }
+            let mut missing = c["expected"].clone();
+            missing.as_object_mut().unwrap().remove("grant_revision");
+            assert!(serde_json::from_value::<InvokeBody>(missing).is_err());
+        }
+    }
+    #[test]
     fn invocation_replay_is_bound_to_grant_and_lock() {
         let mut body = InvokeBody {
             request_id: Uuid::new_v4(),

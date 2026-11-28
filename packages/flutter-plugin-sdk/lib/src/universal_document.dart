@@ -16,7 +16,7 @@ String _token(Object? v) {
 }
 List<dynamic> _list(Object? v,int max) => v is List && v.length<=max ? v : _deny();
 int _integer(Object? v,int min,int max) => v is int && v>=min && v<=max ? v : _deny();
-const _policy={'host_context':'host_context','host_notice':'host_notice','gis_layers':'map_view','gis_layer':'map_view'};
+const _policy={'host_context':'host_context','host_notice':'host_notice','gis_layers':'map_view','gis_layer':'map_view','gis_processing_plan':'processing_plan'};
 
 final class UniversalAction {
   final String id,command,permission;
@@ -27,7 +27,7 @@ final class UniversalAction {
     final result=<String,dynamic>{};
     for(final entry in requiredFields.entries){
       final v=values[entry.key];
-      if(v==null||v.isEmpty){if(entry.value)_deny();continue;}
+      if(v==null){if(entry.value)_deny();continue;}
       if(v.runes.length>4096)_deny();
       result[entry.key]=v;
     }
@@ -61,8 +61,8 @@ final class UniversalDocument {
       if(actions.containsKey(id)||!_policy.containsKey(command)||a['consent']!='read'||permission!='ext.$extensionKey.${_policy[command]}'||!permissions.contains(permission))_deny();
       final timeout=_integer(a['timeout_ms'],1,30000);
       final input=_object(a['input']);
-      final field=switch(command){'host_notice'=>'text','gis_layer'=>'layer_id','gis_layers'=>'after_id',_=>null};
-      final required=command=='host_notice'||command=='gis_layer';
+      final field=switch(command){'host_notice'=>'text','gis_layer'=>'layer_id','gis_layers'=>'after_id','gis_processing_plan'=>'request',_=>null};
+      final required=command=='host_notice'||command=='gis_layer'||command=='gis_processing_plan';
       if(input.isEmpty){if(required)_deny();}
       else {
         if(field==null||input.length!=1||!input.containsKey(field))_deny();
