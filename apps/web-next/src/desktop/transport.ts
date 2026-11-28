@@ -205,3 +205,9 @@ export const remoteCopc={
  },
  cancel:remoteTiff.cancel
 };
+
+export const nativeCad={
+ status:()=>host().core.invoke<{available:boolean;source_revision:string;mode:string}>("native_cad_status"),
+ convert:(handle:string,requestId:string)=>host().core.invoke<{bytes:number;sha256:string;format:"dwg"|"dxf"}|null>("native_cad_convert",{handle,requestId}),
+ cancel:remoteTiff.cancel
+};
