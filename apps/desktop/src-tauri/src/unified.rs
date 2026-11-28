@@ -54,6 +54,7 @@ impl Unified{
   let store=Store::reopen(&p).map_err(err)?;if !store.integrity().map_err(err)?{return Err("INVALID_STORAGE")}
   let handle=Uuid::new_v4();s.insert(handle,(id,store));Ok(Opened{id,handle})
  }
+ pub fn shutdown(&self)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;for (_,store) in s.values(){store.checkpoint().map_err(err)?;}s.clear();Ok(())}
  pub fn close(&self,h:Uuid)->UResult<()>{let mut s=self.open.lock().map_err(|_|"SESSION_FAILED")?;s.get(&h).ok_or("STALE_HANDLE")?.1.checkpoint().map_err(err)?;s.remove(&h);Ok(())}
  pub fn with<T>(&self,h:Uuid,f:impl FnOnce(&Store)->UResult<T>)->UResult<T>{let s=self.open.lock().map_err(|_|"SESSION_FAILED")?;f(&s.get(&h).ok_or("STALE_HANDLE")?.1)}
  pub fn apply(&self,h:Uuid,input:Input)->UResult<Value>{
@@ -100,3 +101,21 @@ async fn work<T:Send+'static>(window:WebviewWindow,u:Unified,f:impl FnOnce(Unifi
 }
 #[tauri::command]pub async fn unified_compensate(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,operation:Uuid,expected:String)->Reply<String>{work(window,u.inner().clone(),move|s|s.with(handle,|s|Ok(s.compensate_latest(operation,number(&expected)?).map_err(err)?.revision.to_string()))).await}
 #[tauri::command]pub async fn unified_schema(window:WebviewWindow,u:State<'_,Unified>,handle:Uuid,layer:Uuid,fields:Vec<ovg_mobile_engine::attributes::Field>,expected:String)->Reply<String>{work(window,u.inner().clone(),move|s|s.with(handle,|s|Ok(s.set_schema(layer,&fields,number(&expected)?).map_err(err)?.to_string()))).await}
+
+#[cfg(test)]
+mod tests{
+ use super::*;
+ #[test]fn new_project_atomic_multi_layer_and_stale_handle(){
+  let d=tempfile::tempdir().unwrap();let u=Unified::new(d.path().to_path_buf()).unwrap();let p=u.create().unwrap();let w=u.open(p.id).unwrap();
+  let c=u.with(w.handle,|s|s.catalog().map_err(err)).unwrap();let a=c.layers[0].id;let b=Uuid::new_v4();
+  u.with(w.handle,|s|s.add_layer(b,"B",1).map_err(err)).unwrap();
+  let x=Uuid::new_v4();let y=Uuid::new_v4();
+  let edits=|revision:&str|vec![GeometryEdit{layer:a,feature:x,expected:"0".into(),geometry:Some(serde_json::json!({"type":"Point","coordinates":[106,11]})),attributes:serde_json::json!({})},GeometryEdit{layer:b,feature:y,expected:revision.into(),geometry:Some(serde_json::json!({"type":"Point","coordinates":[107,12]})),attributes:serde_json::json!({})}];
+  assert!(u.apply(w.handle,Input{operation:Uuid::new_v4(),expected_project:"2".into(),edits:edits("7"),links:vec![]}).is_err());
+  assert_eq!(u.with(w.handle,|s|s.revision().map_err(err)).unwrap(),2);
+  u.apply(w.handle,Input{operation:Uuid::new_v4(),expected_project:"2".into(),edits:edits("0"),links:vec![]}).unwrap();
+  u.close(w.handle).unwrap();assert!(u.with(w.handle,|s|s.catalog().map_err(err)).is_err());
+  let w=u.open(p.id).unwrap();assert_eq!(u.with(w.handle,|s|s.feature(b,y,3).map_err(err)).unwrap().0,1);
+  u.shutdown().unwrap();
+ }
+}
