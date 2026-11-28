@@ -1,0 +1,2 @@
+# W11 multi-band blend candidate
+Per-channel linear-light Gaussian/Laplacian pyramids with odd-sized levels, weighted band reconstruction, bounded owned-buffer estimate, cancellation, scalar reference behavior. Requires fully valid rectangular overlap, rejects nodata rather than introducing black halos. Not a global multiband mosaic solver; no measured visual/throughput evidence. Two tests authored, not executed.

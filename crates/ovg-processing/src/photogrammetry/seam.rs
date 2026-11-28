@@ -24,8 +24,8 @@ pub fn median_offset(reference:&[u8],candidate:&[u8],min_samples:usize,max_abs:u
  Ok(out)
 }
 /// Convert sRGB code values to linear light before feather blending.
-fn linear(v:u8)->f64{let x=f64::from(v)/255.;if x<=0.04045{x/12.92}else{((x+0.055)/1.055).powf(2.4)}}
-fn srgb(x:f64)->u8{let x=x.clamp(0.,1.);let v=if x<=0.0031308{12.92*x}else{1.055*x.powf(1./2.4)-0.055};(v*255.).round() as u8}
+pub(super) fn linear(v:u8)->f64{let x=f64::from(v)/255.;if x<=0.04045{x/12.92}else{((x+0.055)/1.055).powf(2.4)}}
+pub(super) fn srgb(x:f64)->u8{let x=x.clamp(0.,1.);let v=if x<=0.0031308{12.92*x}else{1.055*x.powf(1./2.4)-0.055};(v*255.).round() as u8}
 /// weights are candidate preference [0,1] in overlap; preserve valid-only pixels.
 pub fn blend(a:&[u8],b:&[u8],weights:&[f32],offset:[i16;3],max_bytes:usize)->Result<Vec<u8>,Error>{
  let n=validate(a,b)?;
