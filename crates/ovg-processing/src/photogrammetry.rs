@@ -18,6 +18,7 @@ pub mod alignment3d;
 pub mod gcp;
 pub mod control_network;
 pub mod bundle;
+pub mod schur;
 pub mod gnss;
 pub mod ortho;
 pub mod depth;
