@@ -6,6 +6,7 @@ mod resource_files;
 mod compressed_points;
 mod snapshot_restore;
 mod project_backup;
+mod project_state;
 #[cfg(test)]
 mod recovery_tests;
 #[path="../../../../infra/desktop/wave0/protocol.rs"]
@@ -303,6 +304,19 @@ async fn desktop_restore_project(window:WebviewWindow,host:State<'_,Host>)->Repl
         h.restore_project(&path).map(Some)
     }).await
 }
+#[tauri::command]
+async fn desktop_project_state(window:WebviewWindow,host:State<'_,Host>,handle:Uuid)->Reply<project_state::ProjectState>{
+    run(window,host.inner().clone(),move|h|h.project_state(handle)).await
+}
+#[tauri::command]
+async fn desktop_save_project_state(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,state:project_state::ProjectState,expected:u64)->Reply<project_state::ProjectState>{
+    run(window,host.inner().clone(),move|h|h.save_project_state(handle,state,expected)).await
+}
+#[tauri::command]
+async fn desktop_set_schema(window:WebviewWindow,host:State<'_,Host>,handle:Uuid,fields:Vec<ovg_mobile_engine::attributes::Field>,confirmed:bool)->Reply<()>{
+    if !confirmed{return Err("SCHEMA_HISTORY_RESET_REQUIRES_CONFIRMATION".into())}
+    run(window,host.inner().clone(),move|h|h.set_schema(handle,fields)).await
+}
 fn main(){
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -338,6 +352,6 @@ fn main(){
                 if let Some(host)=window.try_state::<Host>(){let _=host.shutdown();}
             }
         })
-        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project])
+        .invoke_handler(tauri::generate_handler![desktop_capabilities,desktop_list,desktop_create,desktop_open,desktop_close,desktop_start_transform,desktop_poll,desktop_cancel,desktop_viewport,desktop_attributes,desktop_feature,desktop_edit,desktop_update_attributes,desktop_history,desktop_checkpoint,desktop_import_geojson,desktop_export,desktop_open_raster,desktop_close_raster,desktop_resource,desktop_import_gpkg,desktop_generation,desktop_reshape,desktop_open_asset,desktop_close_asset,desktop_cad_viewport,desktop_cancel_resource,desktop_restore_snapshot,desktop_inspect_gpkg,desktop_import_layer,desktop_copc_query,desktop_list_layers,desktop_create_layer,desktop_open_layer,desktop_backup_project,desktop_restore_project,desktop_project_state,desktop_save_project_state,desktop_set_schema])
         .run(tauri::generate_context!()).expect("Desktop host failed");
 }
