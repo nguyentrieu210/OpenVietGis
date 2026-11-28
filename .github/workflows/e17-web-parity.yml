@@ -24,6 +24,12 @@ on:
       - 'tests/rust-parity/hybrid_gateway_smoke.py'
       - '.github/workflows/e17-web-parity.yml'
   workflow_dispatch:
+    inputs:
+      spec066_soak:
+        description: "Run the 60-minute Spec 066 browser lab qualification"
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 # Cancel superseded PR revisions, not main/release or manual qualification runs.
@@ -35,7 +41,7 @@ jobs:
   frontend:
     # Keep browser/font rendering deterministic for parity evidence.
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.spec066_soak && 120 || 30 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,6 +79,15 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - name: Isolated browser consumer smoke
         run: pnpm validate:canonical-smoke
+      - name: Spec 066 pinned browser qualification
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.spec066_soak }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate="$(git rev-parse HEAD)"
+          mkdir -p dist/e17/spec066
+          node tools/benchmark/spec066/browser-runtime.mjs apps/web-next/dist candidate "$candidate" 30 3600 > dist/e17/spec066/browser-runtime.json
+          python3 tools/benchmark/spec066/qualification_gate.py dist/e17/spec066/browser-runtime.json --candidate "$candidate" --require-soak | tee dist/e17/spec066/qualification.json
       - name: Evidence
         if: always()
         uses: actions/upload-artifact@v4

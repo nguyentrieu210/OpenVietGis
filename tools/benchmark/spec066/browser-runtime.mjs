@@ -5,7 +5,7 @@ import {resolve,extname,sep} from "node:path";
 import {performance} from "node:perf_hooks";
 
 const [distArg,label,sha,countArg="30",soakArg="0"]=process.argv.slice(2);
-if(!distArg||!label||!/^[0-9a-f]{40}$/.test(sha||""))throw Error("usage: browser-runtime.mjs DIST LABEL SHA [COUNT]");
+if(!distArg||!label||!/^[0-9a-f]{40}$/.test(sha||""))throw Error("usage: browser-runtime.mjs DIST LABEL SHA [COUNT] [SOAK_SECONDS]");
 const dist=resolve(distArg),count=Number(countArg),soakSeconds=Number(soakArg);
 if(!Number.isInteger(soakSeconds)||soakSeconds<0||soakSeconds>7200)throw Error("invalid soak duration");
 if(!Number.isInteger(count)||count<1||count>100)throw Error("invalid count");
