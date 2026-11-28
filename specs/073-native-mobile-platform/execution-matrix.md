@@ -475,3 +475,7 @@ Depends: T076. Owner paths: `specs/073*/evidence/release`.
 - [ ] T078.3 Verify: A4 Android release decision, I1 tracked separately. Attach evidence.
 
 Total: 238 execution leaves across 78 parent tasks. Parent dependencies apply to each leaf; no implied acceptance from task generation.
+
+
+## W0 execution status (2026-11-28)
+See [execution ledger](evidence/execution-ledger.md) and [W0 baseline evidence](evidence/w0-baseline-checkpoint.md). Candidate graph and matrix audit passed on db2ef12; T001 remains in progress pending complete inventory/review. No acceptance checkbox changed.

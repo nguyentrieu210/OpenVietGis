@@ -97,3 +97,7 @@ Revision 2: 78 stable parent tasks and 238 execution leaves in [execution-matrix
 
 ## Evidence and task close rules
 Each implementation evidence record includes target platform/profile, exact SHA, command, input/fixture digest, expected/observed result, negative cases, device details and review. Map SC-001–010 to gates A0–A4 and separate iOS I1 using [acceptance-matrix.md](acceptance-matrix.md). T039 RTK, advanced features and T077 iOS have separate qualification; no implied Android dependency on T077. Parent close requires all required leaves, exact evidence and reviewed disposition of optional leaves. Optional research may close with reviewed rejection; required supported capabilities may not be waived silently. No merge/release claim without actual gate results.
+
+
+## W0 execution status (2026-11-28)
+See [execution ledger](evidence/execution-ledger.md) and [W0 baseline evidence](evidence/w0-baseline-checkpoint.md). Candidate graph and matrix audit passed on db2ef12; T001 remains in progress pending complete inventory/review. No acceptance checkbox changed.
