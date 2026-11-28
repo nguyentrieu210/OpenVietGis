@@ -8,7 +8,9 @@ dependencies:
   flutter:
     sdk: flutter
   maplibre_gl: 0.28.1
+  material_ui: 1.11.1
 dev_dependencies:
+  flutter_lints: 6.0.0
   flutter_test:
     sdk: flutter
 flutter:
