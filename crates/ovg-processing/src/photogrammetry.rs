@@ -26,6 +26,7 @@ pub mod ortho;
 pub mod simd;
 pub mod depth;
 pub mod surface;
+pub mod cloud_dsm;
 pub mod seam;
 pub mod seam_graph;
 pub mod multiband;

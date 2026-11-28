@@ -16,7 +16,11 @@ fn line(r:&mut impl BufRead,b:&mut Vec<u8>,remaining:&mut usize)->Result<(),Erro
  if end{return Ok(());}
  }
 }
-pub fn verify(reader:impl Read,p:Policy,mut cancelled:impl FnMut()->bool)->Result<Summary,Error>{
+pub fn verify(reader:impl Read,p:Policy,cancelled:impl FnMut()->bool)->Result<Summary,Error>{
+ visit(reader,p,cancelled,|_|Ok(()))
+}
+/// Visits verified rows in stream order. Caller must discard partial products on failure.
+pub fn visit(reader:impl Read,p:Policy,mut cancelled:impl FnMut()->bool,mut point:impl FnMut([f64;3])->Result<(),Error>)->Result<Summary,Error>{
  if p.max_points==0||p.max_points>1_000_000_000||p.max_bytes<64||!p.max_abs_coordinate.is_finite()||p.max_abs_coordinate<=0.{return Err(Error::Invalid);}
  let mut r=BufReader::with_capacity(64*1024,reader);let mut b=Vec::new();let mut left=64*1024usize;
  line(&mut r,&mut b,&mut left)?;if b.strip_suffix(b"\n").map(|v|v.strip_suffix(b"\r").unwrap_or(v))!=Some(b"ply".as_slice()){return Err(Error::Invalid);}
@@ -50,11 +54,13 @@ pub fn verify(reader:impl Read,p:Policy,mut cancelled:impl FnMut()->bool)->Resul
  for i in 0..count{
  if i%4096==0&&cancelled(){return Err(Error::Cancelled);}
  r.read_exact(&mut row[..stride])?;
+ let mut xyz=[0.;3];
  for k in 0..if normals{6}else{3}{
  let j=k*4;let v=f64::from(f32::from_le_bytes([row[j],row[j+1],row[j+2],row[j+3]]));
  if !v.is_finite(){return Err(Error::Invalid);}
- if k<3{if v.abs()>p.max_abs_coordinate{return Err(Error::Invalid);}lo[k]=lo[k].min(v);hi[k]=hi[k].max(v);}
+ if k<3{if v.abs()>p.max_abs_coordinate{return Err(Error::Invalid);}lo[k]=lo[k].min(v);hi[k]=hi[k].max(v);xyz[k]=v;}
  }
+ point(xyz)?;
  }
  let mut tail=[0];if r.read(&mut tail)?!=0{return Err(Error::Invalid);}
  if cancelled(){return Err(Error::Cancelled);}
