@@ -3,6 +3,8 @@
 pub mod colmap;
 pub mod governor;
 pub mod quality;
+pub mod hardware;
+pub mod tiles;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
