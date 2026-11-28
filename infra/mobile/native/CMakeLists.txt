@@ -11,3 +11,12 @@ target_link_libraries(ovg_native_probe PRIVATE GDAL::GDAL PROJ::proj GEOS::geos_
 if(ANDROID)
   target_link_options(ovg_native_probe PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384)
 endif()
+
+add_library(ovg_raster_window STATIC raster_window.cpp)
+target_link_libraries(ovg_raster_window PRIVATE GDAL::GDAL)
+target_include_directories(ovg_raster_window PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(ovg_raster_test raster_window_test.cpp)
+target_link_libraries(ovg_raster_test PRIVATE ovg_raster_window GDAL::GDAL)
+if(ANDROID)
+  target_link_options(ovg_raster_test PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384)
+endif()

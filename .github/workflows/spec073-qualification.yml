@@ -52,14 +52,14 @@ jobs:
           set -euxo pipefail
           out="$RUNNER_TEMP/native-evidence"
           mkdir -p "$out"
-          cp "$RUNNER_TEMP/native-build/ovg_native_probe" "$out/"
+          cp "$RUNNER_TEMP/native-build/ovg_native_probe" "$RUNNER_TEMP/native-build/ovg_raster_test" "$out/"
           cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$out/"
           cp -a "$RUNNER_TEMP/ovg-installed/arm64-ovg-android/share/proj" "$out/proj"
           test -f "$out/proj/proj.db"
           cp "$RUNNER_TEMP/ovg-installed/vcpkg/status" "$out/vcpkg-status"
           cp infra/mobile/toolchain/qualification.json "$out/"
           git rev-parse HEAD > "$out/commit.txt"
-          python3 infra/mobile/native/verify_elf.py "$out/ovg_native_probe" "$out/libc++_shared.so" > "$out/elf.json"
+          python3 infra/mobile/native/verify_elf.py "$out/ovg_native_probe" "$out/ovg_raster_test" "$out/libc++_shared.so" > "$out/elf.json"
           (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

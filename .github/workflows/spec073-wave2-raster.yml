@@ -1,0 +1,26 @@
+name: SPEC 073 W2 GDAL raster window
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["infra/mobile/native/raster_window*", ".github/workflows/spec073-wave2-raster.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  raster-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install independent host GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev gdal-bin
+          gdal-config --version
+      - name: Compile and run bounded local raster fixture
+        run: |
+          set -euxo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror $(gdal-config --cflags) infra/mobile/native/raster_window.cpp infra/mobile/native/raster_window_test.cpp $(gdal-config --libs) -o "$RUNNER_TEMP/ovg_raster_test"
+          "$RUNNER_TEMP/ovg_raster_test" "$RUNNER_TEMP/raster-test.tif"
