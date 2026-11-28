@@ -211,3 +211,29 @@ def test_reopen_changed_cache_uses_delta_and_revalidates(monkeypatch):
     delta.next_cursor = 3
     delta.reset_required = True
     assert client.catch_up_cached_layer(None, sess, probe, record, lambda: False) is None
+
+
+def test_managed_commit_diff_and_layer_count_bounds(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    with pytest.raises(ApiError,match="1000"):
+        client.commit_managed_changes(None,session_id="s",source_id="src",base_content_revision="a"*64,
+            base_schema_revision="b"*64,operation_id="op",operations=[{}]*1001)
+    current={f"f{i}":feature(i) for i in range(1001)}
+    with pytest.raises(ApiError,match="1000"):
+        client.diff_managed_snapshots({},current)
+    with pytest.raises(ApiError,match="100"):
+        client.load_managed_layers(None,[f"l{i}" for i in range(101)],None)
+
+
+def test_managed_http_response_is_byte_bounded(monkeypatch):
+    from integrations.qgis_plugin.openvietgis_connector import managed_client as client
+    from integrations.qgis_plugin.openvietgis_connector.client import OpenVietGisConfig
+    class Response:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def read(self,n): return b"x"*n
+    monkeypatch.setattr(client,"MAX_MANAGED_RESPONSE_BYTES",8)
+    monkeypatch.setattr(client.urllib.request,"urlopen",lambda *a,**k:Response())
+    cfg=OpenVietGisConfig(base_url="https://example.com",bearer_token="fixture-token-1234567890",organization_id="00000000-0000-4000-8000-000000000001",project_id="00000000-0000-4000-8000-000000000002")
+    with pytest.raises(ApiError,match="32 MiB"):
+        client._json_request(cfg,"GET","https://example.com/test")

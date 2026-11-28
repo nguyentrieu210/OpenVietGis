@@ -48,6 +48,7 @@ pub mod state;
 pub(crate) mod team;
 pub(crate) mod tenancy;
 pub(crate) mod three_d;
+pub mod tile_cache;
 pub(crate) mod tilesets;
 pub(crate) mod tilesets_codec;
 pub(crate) mod transfers;
@@ -253,6 +254,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            res.headers().get(header::CACHE_CONTROL).unwrap(),
+            "private, no-store"
+        );
         let body = json_body(res).await;
         assert_eq!(body["code"], "NOT_FOUND");
         assert_eq!(body["request_id"], "req-404");

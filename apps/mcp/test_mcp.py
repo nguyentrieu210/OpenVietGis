@@ -4,11 +4,10 @@ from uuid import UUID
 
 import httpx
 import pytest
-from mcp import Client
-from mcp.client.stdio import StdioServerParameters
-
 import server
 from gis_client import GisClient, Settings
+from mcp import Client
+from mcp.client.stdio import StdioServerParameters
 
 ORG = UUID("00000000-0000-4000-8000-000000000001")
 PROJECT = UUID("00000000-0000-4000-8000-000000000002")
@@ -99,3 +98,15 @@ def test_stdio_discovery():
             result = await client.list_tools()
             assert {tool.name for tool in result.tools} == TOOLS
     asyncio.run(run())
+
+
+def test_cad_command_and_result_bounds():
+    from uuid import uuid4
+
+    from live_bridge import BridgeError, clean_result, command_params
+    doc=str(uuid4())
+    assert command_params("cad_select_handle",{"document_id":doc,"version":2,"handle":"aF"})["handle"]=="AF"
+    state={"document_id":doc,"filename":"x.dxf","version":2,"dirty":False,"saving":False,"writable":True,"selected_handle":"af"}
+    assert clean_result("cad_state",state)["selected_handle"]=="AF"
+    assert clean_result("cad_select_handle",{"requested":True,"document_id":doc,"version":2,"handle":"af"})["handle"]=="AF"
+    with pytest.raises(BridgeError): command_params("cad_select_handle",{"document_id":doc,"version":0,"handle":"0"})

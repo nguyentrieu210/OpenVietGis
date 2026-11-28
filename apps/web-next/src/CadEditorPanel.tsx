@@ -35,7 +35,8 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
   void (async()=>{
    let valid=await getLinks(revision);
    if(!valid.length&&revision>1&&current.current.format==="dxf"&&permit.current&&!abort.signal.aborted){
-    valid=(await getLinks(revision-1)).filter(l=>l.original_revision&&supportsCadDraft(l));
+    try{valid=(await getLinks(revision-1)).filter(l=>l.original_revision&&supportsCadDraft(l));}
+    catch(e){if(e instanceof ApiError&&e.status===404)valid=[];else throw e;}
    }
    if(abort.signal.aborted||selectionSerial.current!==serial||revision!==current.current.version)return;
    setLinks(valid);setLookupMessage(valid.length?"Đã tìm thấy "+valid.length+" liên kết GIS.":"Handle này chưa được định vị thành đối tượng GIS.");
@@ -83,7 +84,7 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  const toolbar=<div className="ovg-cad-inline-toolbar"><button disabled={saving} onClick={async ()=>{if(!dirty||(await uiConfirm("Thoát và bỏ phần chỉnh sửa chưa lưu?")))close(current.current.id||undefined)}}>Bản vẽ</button>{version===0?<input aria-label="Tên bản vẽ" value={filename} maxLength={175} disabled={saving} onChange={e=>setFilename(e.target.value)}/>:<strong>{filename}</strong>}<small>{version?"v"+version:"Bản nháp"}</small><span className="ovg-cad-status" role="status" title={message}>{saving?"Đang lưu…":dirty?"Chưa lưu":!ready?message:message.startsWith("Đã lưu")?message:!writable?"Chỉ đọc":message.startsWith("Có thể chỉnh sửa")?"Sẵn sàng":message}</span><button disabled={!ready||!writable||!canEdit||saving||version>=20} onClick={()=>handle.current?.requestSave()}>Lưu</button><details className="ovg-cad-about"><summary>⋯</summary><div><strong>Giới thiệu CAD</strong><small>OpenVietGIS CAD · OpenVietCAD</small>{origin==="https://cad.gpcds.site"&&<a href={origin+"/ovg-cad-2bc3537/NOTICE.txt"} target="_blank" rel="noopener noreferrer">Giấy phép GPL / mã nguồn</a>}</div></details></div>;
  const slot=window.document.getElementById("ovg-workspace-topbar")??window.document.getElementById("ovg-cad-toolbar-slot");
  return <section className="ovg-cad-editor" data-ovg-cad-dirty={dirty||saving?true:undefined} data-ovg-cad-saving={saving?true:undefined}>{slot?createPortal(toolbar,slot):toolbar}<div className="ovg-cad-engine"><div ref={mount} style={{width:"100%",height:"100%"}}/>{!ready&&<div className="ovg-cad-loading" role="status"><b>{failed?"Không thể mở CAD":"Đang mở CAD"}</b><small>{message}</small>{!failed&&<><progress aria-label="Đang tải CAD"/><small>{elapsed} giây · Lần mở đầu tiên cần tải engine WASM.</small></>}{failed&&<button onClick={()=>setAttempt(v=>v+1)}>Thử lại</button>}<button onClick={()=>close(current.current.id||undefined)}>Về bản vẽ</button></div>}</div>
- {supported&&<aside className="ovg-cad-selection" aria-label="Lựa chọn CAD trực tiếp"><strong>CAD ↔ GIS ↔ 3D</strong>
+ <aside className="ovg-cad-selection" aria-label="Lựa chọn CAD trực tiếp"><strong>CAD ↔ GIS ↔ 3D</strong>
  {!ready?<small>Đang kiểm tra engine…</small>:!supported?<small>Bản OpenCAD Studio này chưa phát lựa chọn CAD trực tiếp. Về kho CAD để tra handle thủ công.</small>:
  <small>{selectedHandle?"Handle đã chọn: "+selectedHandle:"Chọn một đối tượng trên bản vẽ CAD để tra liên kết GIS."}</small>}
  {lookupMessage&&<small role="status">{lookupMessage}</small>}
@@ -92,5 +93,5 @@ export function CadEditorPanel({client,path,document,origin,writable,canEdit,clo
  <button disabled={dirty||saving||!ready||version!==l.version||!l.original_revision} onClick={()=>onNavigate?.(l,"3d")}>Mở trên 3D</button>{canEdit&&ready&&!dirty&&!saving&&version===l.version&&current.current.format==="dxf"&&supportsCadDraft(l)&&<CadDraftExport key={[l.conversion_id,l.content_revision,l.schema_revision].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}
  {canEdit&&ready&&!dirty&&!saving&&version===l.version+1&&current.current.format==="dxf"&&l.original_revision&&supportsCadDraft(l)&&<CadDraftImport key={[l.conversion_id,current.current.sha256].join(":")} client={client} path={path} document={current.current} link={l} expire={expire}/>}</div>)}
  {(dirty||saving)&&!!links.length&&<small>Cần lưu hoặc hủy thay đổi CAD trước khi chuyển chế độ.</small>}
- </aside>}</section>
+ </aside></section>
 }

@@ -1,17 +1,19 @@
 import React,{useEffect,useRef} from "react";
+import {clampSize} from "./dock-sizing";
+export {clampSize} from "./dock-sizing";
 
 // Spec 057: QGIS-style resizable panels. The splitter sets a CSS variable on its parent panel
 // (width for side docks, height for bottom/stacked docks) and remembers it per browser.
 type Props={storageKey:string;cssVar:string;axis:"x"|"y";edge:"start"|"end";min:number;max:number;label:string;defaultSize?:number};
 const read=(key:string)=>{try{const v=Number(localStorage.getItem(key));return Number.isFinite(v)&&v>0?v:null}catch{return null}};
 const write=(key:string,v:number|null)=>{try{if(v===null)localStorage.removeItem(key);else localStorage.setItem(key,String(Math.round(v)))}catch{/* storage unavailable */}};
-export const clampSize=(v:number,min:number,max:number)=>Math.max(min,Math.min(max,v));
+
 
 export function Splitter({storageKey,cssVar,axis,edge,min,max,label,defaultSize}:Props){
  const ref=useRef<HTMLDivElement>(null);
  const limit=()=>Math.min(max,(axis==="x"?innerWidth:innerHeight)*.8);
  const apply=(v:number|null)=>{const panel=ref.current?.parentElement;if(!panel)return;if(v===null)panel.style.removeProperty(cssVar);else panel.style.setProperty(cssVar,clampSize(v,min,limit())+"px")};
- useEffect(()=>{apply(read(storageKey))},[storageKey]);
+ useEffect(()=>{const resize=()=>apply(read(storageKey));resize();window.addEventListener("resize",resize);return()=>window.removeEventListener("resize",resize)},[storageKey,cssVar,axis,min,max]);
  const size=()=>{const r=ref.current?.parentElement?.getBoundingClientRect();return r?(axis==="x"?r.width:r.height):defaultSize??min};
  const start=(e:React.PointerEvent<HTMLDivElement>)=>{e.preventDefault();const el=e.currentTarget,from=axis==="x"?e.clientX:e.clientY,base=size(),sign=edge==="start"?-1:1;el.setPointerCapture(e.pointerId);let last=base,moved=false;
   // QGIS-style: a ghost line follows the pointer and the panel resizes once on release (no live re-layout flicker).

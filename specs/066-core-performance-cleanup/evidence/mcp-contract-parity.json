@@ -1,0 +1,22 @@
+{
+  "python_tools": 39,
+  "rust_registry_tools": 39,
+  "workspace_contract_tools": 32,
+  "workspace_schema_mismatches": [],
+  "shared_optional_scope_field": "session_id",
+  "extra_shared_tools": [
+    "cad_select_handle",
+    "cad_state",
+    "gis_live_navigate",
+    "gis_live_selection",
+    "gis_live_view",
+    "gis_operation_status",
+    "gis_workspaces"
+  ],
+  "protocols": {
+    "current": "2026-07-28",
+    "legacy": "2025-11-25"
+  },
+  "method": "In-process retained Python MCP tools/list with signed fixture OAuth; compared to checked-in Rust workspace contract after removing the shared optional root session_id field.",
+  "live_network": false
+}

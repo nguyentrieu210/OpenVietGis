@@ -5,20 +5,17 @@ export async function signInOwner(
   startPath = "/app"
 ): Promise<void> {
   await page.goto(startPath);
-  await expect.poll(() => page.url()).toContain("/login?return_to=");
+  await expect(page.locator(".landing-page")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe(startPath);
 
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  const auth = await popupPromise;
+  await auth.locator("#username").fill("owner-a");
+  await auth.locator("#password").fill("openvietgis-test-owner-a");
+  await auth.locator("#kc-login").click();
 
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await expect(page.locator(".live-studio")).toBeVisible({timeout:20_000});
 }
 
 export async function createOrganization(

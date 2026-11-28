@@ -1,0 +1,8 @@
+# 066 implementation slice 06 — geometry encoding and incremental render
+Parent candidate: 2aa7680673906a9f142a7b98a6f3c57cf06562cb.
+- T026 partial: borrow multipart line and polygon children during WKB encoding rather than cloning coordinate arrays. Keep WKB/EWKB header, child order, rings, SRID and non-finite coordinate rejection.
+- T029 partial: avoid JSON string allocation for equal plain scalar render properties, retain previous serialization comparison for nontrivial values. Preserve updateData patch contract and fallback on duplicate or missing IDs.
+- Rust release microbenchmark (100 measured samples each): 90k-vertex multiline p95 0.754292 -> 0.511459 ms; 90,003-vertex multipolygon 0.645500 -> 0.388243 ms. Fixture byte lengths and FNV checksums match baseline; independent unit tests cover multipart exact child bytes, SRID, roundtrip and non-finite rejection. See wkb-benchmark.json.
+- Node microbenchmark (20 measured samples each): 30k point render diff p95 170.668 -> 109.398 ms; 100k points 679.757 -> 383.521 ms. Identical delta verified, synthetic regenerated scalar styles with one changed selection. See render-diff-benchmark.json. No claim of full frame timing.
+- Tests: Rust 8 unit + 2 CRS controls PASS, web 75 Vitest + 27 Node tests PASS, production web build/typecheck PASS, git diff check PASS. rustfmt component unavailable in pinned image; offline install attempt failed. Formatting and full workspace lint remain CI gates.
+- T033/T044 partial: comparable microbenchmarks only. No actual PostGIS query/index change, no representative load/soak, no live performance or 1m-feature result. The current whole-source validation and safety bounds are unchanged. No merge/deploy.

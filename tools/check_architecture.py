@@ -22,7 +22,6 @@ SKIP_DIRS = {
 # never import a named business module.
 MODULE_GATEWAYS = {
     "apps/api/openvietgis_api/adapters/http/official_modules.py",
-    "apps/web/src/features/extensions/registry.ts",
     "apps/web-next/src/official-module-registry.ts",
 }
 

@@ -12,6 +12,11 @@ on:
         required: false
         default: false
 
+# Cancel superseded PR revisions, not main/release or manual qualification runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   backend:
     if: ${{ !inputs.browser_only }}
@@ -42,9 +47,6 @@ jobs:
         with:
           toolchain: 1.85.1
       - uses: Swatinem/rust-cache@v2
-      - name: Build native E08 backend for integration and browser tests
-        run: cargo build --locked -p openvietgis-api-rust
-
       - name: Install system GDAL runtime for raster fixtures
         run: |
           sudo apt-get update
@@ -60,6 +62,9 @@ jobs:
           uv run --project apps/api python tools/check_scope.py
           uv run --project apps/api python tools/check_architecture.py
           uv run --project apps/api python tools/check_docs.py
+
+      - name: Build native E08 backend for integration and browser tests
+        run: cargo build --locked -p openvietgis-api-rust
 
       - name: Start dedicated test database and reference identity provider
         run: >-

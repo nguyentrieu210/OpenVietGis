@@ -343,6 +343,27 @@ mod tests {
         tokio::fs::remove_dir_all(root).await.unwrap();
     }
 
+    #[tokio::test]
+    async fn file_stream_is_chunk_bounded_and_exact() {
+        use futures_util::StreamExt;
+        let path = std::env::temp_dir().join(format!("ovg-transfer-stream-{}", Uuid::new_v4()));
+        let payload = vec![0x5a_u8; CHUNK * 2 + 17];
+        tokio::fs::write(&path, &payload).await.unwrap();
+        let file = File::open(&path).await.unwrap();
+        let chunks: Vec<Bytes> = file_stream(file)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            chunks.iter().map(Bytes::len).collect::<Vec<_>>(),
+            vec![CHUNK, CHUNK, 17]
+        );
+        assert_eq!(chunks.concat(), payload);
+        tokio::fs::remove_file(path).await.unwrap();
+    }
+
     #[test]
     fn multipart_ignores_boundary_prefix_inside_payload() {
         let body = b"--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"data.geojson\"\r\n\r\nfirst\r\n--Bprefix\r\nlast\r\n--B--\r\n";

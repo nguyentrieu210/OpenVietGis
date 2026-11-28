@@ -1,0 +1,53 @@
+{
+  "node": "v26.13.1",
+  "total_switches": 5000,
+  "activated": 5000,
+  "disposed": 5000,
+  "max_active_engines": 2,
+  "baseline": {
+    "heapUsed": 8176344,
+    "arrayBuffers": 137907,
+    "rss": 64471040
+  },
+  "phases": [
+    {
+      "heapUsed": 8771168,
+      "arrayBuffers": 137907,
+      "rss": 101249024
+    },
+    {
+      "heapUsed": 8744568,
+      "arrayBuffers": 137907,
+      "rss": 131395584
+    },
+    {
+      "heapUsed": 8741840,
+      "arrayBuffers": 137907,
+      "rss": 131657728
+    },
+    {
+      "heapUsed": 8737752,
+      "arrayBuffers": 137907,
+      "rss": 131919872
+    },
+    {
+      "heapUsed": 8738112,
+      "arrayBuffers": 137907,
+      "rss": 134934528
+    }
+  ],
+  "final": {
+    "heapUsed": 8273832,
+    "arrayBuffers": 137907,
+    "rss": 134934528
+  },
+  "phase_heap_delta_bytes": [
+    594824,
+    568224,
+    565496,
+    561408,
+    561768
+  ],
+  "final_heap_delta_bytes": 97488,
+  "method": "ModeCoordinator soak with 5 phases x 1000 sequential CAD/3D switches; each prepared engine allocates 8192 object records; explicit GC at phase boundaries; fails on double/missed disposal, !=1 active engine after a completed switch, >2 during synchronous handoff, >12MiB phase retained heap or >8MiB final retained heap."
+}

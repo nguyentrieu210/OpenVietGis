@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import sys
 from pathlib import Path
@@ -76,18 +77,9 @@ def test_r029_migration_0041_chains_from_0040() -> None:
     assert mod.down_revision == "0040_r027_pairing_and_conflicts"
 
 
-class _FakeResp:
+class _FakeResp(io.BytesIO):
     def __init__(self, payload: dict) -> None:
-        self._raw = json.dumps(payload).encode("utf-8")
-
-    def read(self) -> bytes:
-        return self._raw
-
-    def __enter__(self) -> _FakeResp:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        return None
+        super().__init__(json.dumps(payload).encode("utf-8"))
 
 
 def test_managed_client_session_bootstrap_delta_commit_and_commands() -> None:

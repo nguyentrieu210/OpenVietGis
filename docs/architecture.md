@@ -6,8 +6,8 @@ lives in source code.
 
 ## Ownership boundaries
 
-- `apps/web-next`: canonical public/live frontend (`/` and `/app`) in the current release; production Docker builds this app.
-- `apps/web`: legacy/compatibility shell and development/preview entrypoints. Keep until feature parity and migration tests authorize retirement.
+- apps/web-next: the single canonical public/live frontend (/ and /app); production Docker, Playwright and pnpm workspace build this app.
+- apps/web: retired by Spec 066 after route/offline/OIDC parity gates. Historical specs and QA reports keep the old path as immutable evidence; see archive/legacy-frontend-history.md.
 - `apps/api`: application backend and HTTP adapter.
 - `packages/*`: reusable public or cross-application contracts with explicit ownership.
 - `modules/*`: vertical domain modules downstream of platform contracts.
@@ -66,11 +66,11 @@ remain available; the retired sample data is not a product domain or a migration
 
 ## Core boundary standardization (Spec 033)
 
-The canonical frontend is web-next; legacy workbench access is restricted to
-its legacy-workbench-bridge.ts. The bridge is transitional and retains lazy
-loading until parity is independently demonstrated. Shared snap and projected
-survey calculations belong to the spatial-workspace package; they do not
-replace authoritative backend CRS/geometry validation.
+The canonical frontend is web-next. The former parallel apps/web implementation
+has been retired; application-specific workbench code remains in web-next while
+reusable snap, CRS/session and engine contracts live in spatial-workspace or
+client-sdk. Shared browser calculations do not replace authoritative backend
+CRS/geometry validation.
 
 Official module discovery is an adapter responsibility: HTTP router discovery
 lives under adapters/http/official_modules.py, and generic browser discovery

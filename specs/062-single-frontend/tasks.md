@@ -5,10 +5,10 @@
 - [x] T004 Remove cross-app bridge; enforce Vite and architecture boundary; canonical build PASS
 - [ ] T005 API client consolidated; protected-query unit tests PASS; authenticated lifecycle acceptance pending
 - [ ] T006 Native UI modernization for migrated workbenches: forms, tables, tool search, status and dialog behavior
-- [ ] T007 Preserve standalone offline routes, worker, existing drafts and sync; verify
+- [x] T007 Preserve standalone offline routes, worker, existing drafts and sync; verify
 - [ ] T008 Map historical routes and replace legacy end-to-end tests with equivalent canonical tests
-- [ ] T009 Consolidate pnpm manifest/lockfile/dev scripts/Docker/CI/architecture checks
-- [ ] T010 Retire apps/web after independent build and parity gate
+- [x] T009 Consolidate pnpm manifest/lockfile/dev scripts/Docker/CI/architecture checks
+- [x] T010 Retire apps/web after independent build and parity gate
 - [ ] T011 GIS: QGIS-grade editing, snap, selection, attributes, layer and navigation improvements
 - [ ] T012 CAD: verify engine capabilities, align command/Osnap/Ortho/Polar/layers/open-save controls
 - [ ] T013 Processing: searchable algorithms, parameter validation, job lifecycle/output/Model Builder
@@ -32,3 +32,10 @@
 - Canonical processing deep-link and modal browser fixture PASS.
 - Historical logout-switch test uses a different host and failed on an old login selector; no authenticated DEV logout acceptance.
 - 23 legacy E2E spec files still require migration and acceptance. Old package/workspace retained; no claim of complete retirement or production readiness.
+
+
+## Retirement evidence inherited from Spec 066
+- T007: canonical offline client suite PASS 8/8 after removing apps/web; service-worker upgrade preserves unrelated cache/IndexedDB draft state and offline outbox survives reload/sync.
+- T009: pnpm workspace/lockfile, production Dockerfile, E17 path filters, Playwright web server cwd and architecture/scope inventory were moved to apps/web-next; fresh offline frozen install, typecheck, unit tests and production build PASS with no legacy workspace importer.
+- T010: apps/web removed after canonical web-next unit/build gates, architecture/scope checks, offline Chromium 8/8 and real OIDC auth-navigation 4/4 on isolated PostGIS/Keycloak fixtures. Runtime grep has no active apps/web consumer; synthetic architecture tests retain only strings used to reject legacy imports.
+- Historical E2E modernization is not declared complete here: T008 remains open until the wider 49-test canonical suite is qualified.

@@ -12,25 +12,25 @@ def test_scope_checker_accepts_product_neutral_runtime(tmp_path: Path) -> None:
 
 
 def test_scope_checker_rejects_gis_or_vertical_runtime_markers(tmp_path: Path) -> None:
-    source = tmp_path / "apps" / "web" / "src" / "bad.ts"
+    source = tmp_path / "apps" / "web-next" / "src" / "bad.ts"
     source.parent.mkdir(parents=True)
     source.write_text('import "maplibre-gl"; // house-number\n', encoding="utf-8")
 
     violations = find_scope_violations(tmp_path)
 
     assert len(violations) == 2
-    assert any("map rendering engine" in item for item in violations)
+    assert any("outside an accepted renderer owner" in item for item in violations)
     assert any("house-numbering vertical" in item for item in violations)
 
 
-def test_accepted_renderer_stays_inside_map_engine_adapter(tmp_path: Path) -> None:
-    map_root = tmp_path / "apps/web/src/features/map"
-    map_root.mkdir(parents=True)
-    (map_root / "maplibre-engine.ts").write_text(
-        'import { Map } from "maplibre-gl";\\n', encoding="utf-8"
+def test_accepted_renderer_stays_inside_canonical_adapter(tmp_path: Path) -> None:
+    root = tmp_path / "apps/web-next/src"
+    root.mkdir(parents=True)
+    (root / "map-surface.ts").write_text(
+        'export { Map } from "maplibre-gl";\n', encoding="utf-8"
     )
-    (map_root / "MapWorkspace.tsx").write_text(
-        'import { createEngine } from "./maplibre-engine";\\n', encoding="utf-8"
+    (root / "MapWorkspace.tsx").write_text(
+        'import { Map } from "./map-surface";\n', encoding="utf-8"
     )
     assert find_scope_violations(tmp_path) == []
 
@@ -38,7 +38,7 @@ def test_accepted_renderer_stays_inside_map_engine_adapter(tmp_path: Path) -> No
 def test_business_map_ui_cannot_import_renderer_types_or_dynamic_api(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "apps/web/src/features/map/MapWorkspace.tsx"
+    source = tmp_path / "apps/web-next/src/MapWorkspace.tsx"
     source.parent.mkdir(parents=True)
     for content in (
         'import type { Map } from "maplibre-gl";',
@@ -48,7 +48,7 @@ def test_business_map_ui_cannot_import_renderer_types_or_dynamic_api(
         source.write_text(content, encoding="utf-8")
         violations = find_scope_violations(tmp_path)
         assert len(violations) == 1
-        assert "outside the MapEngine adapter" in violations[0]
+        assert "outside an accepted renderer owner" in violations[0]
 
 
 def test_studio_renderer_adapter_is_narrowly_scoped(tmp_path: Path) -> None:

@@ -106,14 +106,13 @@ def audit(
         "WARN" if nonmerged else "PASS",
         f"{len(nonmerged)} cached remote branches not merged into main; review, do not delete",
     )
+    canonical_web = (repo / "apps/web-next").is_dir()
+    legacy_web = (repo / "apps/web").exists()
     record(
-        "duplicate_frontends",
-        "WARN"
-        if (repo / "apps/web").is_dir() and (repo / "apps/web-next").is_dir()
-        else "PASS",
-        "apps/web and apps/web-next present"
-        if (repo / "apps/web").is_dir() and (repo / "apps/web-next").is_dir()
-        else "single frontend directory",
+        "canonical_frontend",
+        "PASS" if canonical_web and not legacy_web else "FAIL",
+        "apps/web-next only" if canonical_web and not legacy_web
+        else f"canonical={canonical_web}, retired_apps_web_present={legacy_web}",
     )
 
     link = public_root / "rewrite"

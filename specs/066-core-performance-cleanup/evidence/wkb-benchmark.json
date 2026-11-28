@@ -1,0 +1,34 @@
+{
+  "baseline_sha": "2aa7680673906a9f142a7b98a6f3c57cf06562cb",
+  "rust": "1.85.1",
+  "profile": "release",
+  "method": "100 samples per geometry, 10 warmup iterations, synthetic geometry encode only; 2 CPU, 2 GB isolated Docker container; baseline geometry source hash matches parent. Fixture checksum not cryptographic verification.",
+  "baseline": {
+    "multiline_90000": {
+      "bytes": 1440040,
+      "fixture_checksum_fnv1a64": "5aaa0a332610c01d",
+      "p50_ms": 0.478635,
+      "p95_ms": 0.754292
+    },
+    "multipolygon_90003": {
+      "bytes": 1440100,
+      "fixture_checksum_fnv1a64": "79c34e88869121ba",
+      "p50_ms": 0.438859,
+      "p95_ms": 0.6455
+    }
+  },
+  "candidate": {
+    "multiline_90000": {
+      "bytes": 1440040,
+      "fixture_checksum_fnv1a64": "5aaa0a332610c01d",
+      "p50_ms": 0.359685,
+      "p95_ms": 0.511459
+    },
+    "multipolygon_90003": {
+      "bytes": 1440100,
+      "fixture_checksum_fnv1a64": "79c34e88869121ba",
+      "p50_ms": 0.303214,
+      "p95_ms": 0.388243
+    }
+  }
+}
