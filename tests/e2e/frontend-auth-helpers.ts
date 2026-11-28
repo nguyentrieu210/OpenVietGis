@@ -7,16 +7,13 @@ export async function signInIdentity(
   startPath = "/app"
 ): Promise<void> {
   await page.goto(startPath);
-  await expect(page.locator(".landing-page")).toBeVisible();
-  expect(new URL(page.url()).pathname).toBe(startPath);
+  await page.getByRole("link", { name: /Đăng nhập với/ }).waitFor();
+  await page.getByRole("link", { name: /Đăng nhập với/ }).click();
+  await page.locator("#username").fill(username);
+  await page.locator("#password").fill(password);
+  await page.locator("#kc-login").click();
 
-  const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
-  const auth = await popupPromise;
-  await auth.locator("#username").fill(username);
-  await auth.locator("#password").fill(password);
-  await auth.locator("#kc-login").click();
-
+  await expect(page.getByText("Owner Alpha", { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".live-studio")).toBeVisible({ timeout: 20_000 });
 }
 
