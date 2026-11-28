@@ -95,14 +95,16 @@ fn field(v:Option<FieldValue>)->Result<Value>{
  })
 }
 /// Small atomic import profile. Refuses truncation and geometry dimensional loss.
-pub fn read_atomic(path:&Path,index:usize)->Result<Vec<Value>>{
+fn visit_features(path:&Path,index:usize,max:usize,max_bytes:usize,mut visit:impl FnMut(Value)->Result<()>)->Result<usize>{
  let _guard=Offline::new()?;let src=Source::vector(path)?;let ds=src.dataset()?;
  let mut l=ds.layer(index).map_err(|_|"OGR_LAYER_FAILED")?;
  let mut s=l.spatial_ref().ok_or("SOURCE_CRS_REQUIRED")?;if s.auth_name().is_none(){s.auto_identify_epsg().map_err(|_|"EXPLICIT_2D_EPSG_REQUIRED")?;}let code=epsg(&s)?;
  let tx=if code==4326{None}else{Some(transformer(s,SpatialRef::from_epsg(4326).map_err(|_|"UNSUPPORTED_CRS")?)?)};
- let mut rows=Vec::new();let mut bytes=0usize;
+ let expected=l.feature_count();
+ if expected==0||expected>max as u64{return Err("IMPORT_LIMIT")}
+ let mut count=0usize;let mut bytes=0usize;
  for f in l.features(){
-  if rows.len()>=MAX_BATCH||f.field_count()>128{return Err("ATOMIC_IMPORT_LIMIT")}
+  if count>=max||f.field_count()>128{return Err("IMPORT_LIMIT")}
   let g=f.geometry().ok_or("INVALID_GEOMETRY")?;
   if g.is_empty()||geometry_type_has_z(g.geometry_type())||geometry_type_has_m(g.geometry_type()){return Err("UNSUPPORTED_DIMENSIONS")}
   let g=match &tx{Some(t)=>g.transform(t).map_err(|_|"PROJ_TRANSFORM_FAILED")?,None=>g.clone()};
@@ -110,10 +112,35 @@ pub fn read_atomic(path:&Path,index:usize)->Result<Vec<Value>>{
   let mut props=Map::new();
   for (name,value) in f.fields(){if name.len()>128||props.insert(name,field(value)?).is_some(){return Err("INVALID_ATTRIBUTE")}}
   let v=json!({"type":"Feature","geometry":geom,"properties":props});
-  bytes=bytes.saturating_add(v.to_string().len());if bytes>1024*1024{return Err("RESOURCE_LIMIT")}
-  rows.push(v);
+  let n=v.to_string().len();
+  bytes=bytes.saturating_add(n+1);if n>2*1024*1024-1||bytes>max_bytes{return Err("RESOURCE_LIMIT")}
+  visit(v)?;count+=1;
  }
- if rows.is_empty(){return Err("EMPTY_LAYER")}Ok(rows)
+ if count as u64!=expected{return Err("INCOMPLETE_OGR_READ")}
+ Ok(count)
+}
+pub fn read_atomic(path:&Path,index:usize)->Result<Vec<Value>>{
+ let mut rows=Vec::new();visit_features(path,index,MAX_BATCH,1024*1024,|v|{rows.push(v);Ok(())})?;Ok(rows)
+}
+/// Stage a bounded line stream to disk; no full layer materialization.
+/// The destination must be private and absent; publish only after a complete read.
+pub fn stage_ndjson(path:&Path,index:usize,dest:&Path,cancel:&std::sync::atomic::AtomicBool)->Result<usize>{
+ use std::io::{Write,BufWriter};
+ use std::sync::atomic::Ordering;
+ let mut tmp=tempfile::NamedTempFile::new_in(dest.parent().ok_or("INVALID_FILE")?).map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let count={
+  let mut out=BufWriter::new(tmp.as_file_mut());
+  let count=visit_features(path,index,100_000,128*1024*1024,|v|{
+   if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
+   serde_json::to_writer(&mut out,&v).map_err(|_|"STORAGE_UNAVAILABLE")?;
+   out.write_all(b"\n").map_err(|_|"STORAGE_UNAVAILABLE")?;Ok(())
+  })?;
+  out.flush().map_err(|_|"STORAGE_UNAVAILABLE")?;count
+ };
+ if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
+ tmp.as_file().sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;
+ tmp.persist_noclobber(dest).map_err(|_|"DESTINATION_UNAVAILABLE")?;
+ Ok(count)
 }
 #[cfg(test)]mod tests{
  use super::*;
@@ -265,5 +292,51 @@ mod window_tests{
   let rows=||vec![Ok(("00000000-0000-4000-8000-000000000001".into(),json!({"type":"Point","coordinates":[106.,11.]}),json!({"name":"A"})))];
   if gdal::DriverManager::get_driver_by_name("Parquet").is_err(){assert!(export_parquet(&p,rows()).is_err());assert!(!p.exists());return}
   assert_eq!(export_parquet(&p,rows()).unwrap(),1);assert_eq!(read_atomic(&p,0).unwrap().len(),1);assert!(export_parquet(&p,rows()).is_err());
+ }
+}
+
+impl RasterSource{
+ /// Exact nearest-neighbour web mercator tile, north-up EPSG:4326/3857 only.
+ /// Fixed stretch across all tiles, nodata transparent. Reject large source
+ /// footprints rather than allocate an unbounded native pixel buffer.
+ pub fn map_tile(&self,band:usize,z:u8,x:u32,y:u32,stretch:[f64;2],cancel:&std::sync::atomic::AtomicBool)->Result<Vec<u8>>{
+  use std::sync::atomic::Ordering;
+  if z>22||x>=(1u32<<z)||y>=(1u32<<z)||band==0||band>self.info.bands||stretch.iter().any(|v|!v.is_finite())||stretch[0]>=stretch[1]||!(stretch[1]-stretch[0]).is_finite(){return Err("INVALID_TILE")}
+  let [ox,dx,rx,oy,ry,dy]=self.info.geotransform;
+  let epsg=self.info.epsg.ok_or("RASTER_CRS_REQUIRED")?;
+  if !matches!(epsg,4326|3857)||rx!=0.||ry!=0.||dx<=0.||dy>=0.{return Err("MAP_TILE_REQUIRES_NORTH_UP_4326_OR_3857")}
+  const N:usize=256;const R:f64=6378137.;let pi=std::f64::consts::PI;let scale=f64::from(1u32<<z)*N as f64;
+  let mut cols=[None;N];let mut rows=[None;N];
+  for i in 0..N{
+   let u=(x as f64*N as f64+i as f64+0.5)/scale;let v=(y as f64*N as f64+i as f64+0.5)/scale;
+   let mx=(2.*u-1.)*pi*R;let my=(1.-2.*v)*pi*R;
+   let (px,py)=if epsg==4326{(u*360.-180.,(my/R).sinh().atan().to_degrees())}else{(mx,my)};
+   let c=((px-ox)/dx).floor();let r=((py-oy)/dy).floor();
+   if c>=0.&&c<self.info.width as f64{cols[i]=Some(c as usize)}
+   if r>=0.&&r<self.info.height as f64{rows[i]=Some(r as usize)}
+  }
+  let mut rgba=vec![0u8;N*N*4];
+  if let (Some(x0),Some(x1),Some(y0),Some(y1))=(cols.iter().flatten().min(),cols.iter().flatten().max(),rows.iter().flatten().min(),rows.iter().flatten().max()){
+   let (x0,x1,y0,y1)=(*x0,*x1,*y0,*y1);let w=x1-x0+1;let h=y1-y0+1;
+   if w.checked_mul(h).is_none_or(|n|n>4*1024*1024){return Err("RASTER_TILE_FOOTPRINT_LIMIT_ZOOM_IN")}
+   if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
+   let _offline=Offline::new()?;let ds=Self::dataset(&self.path)?;
+   let b=ds.rasterband(band).map_err(|_|"INVALID_BAND")?;
+   let nodata=b.no_data_value();
+   let data=b.read_as::<f64>((x0 as isize,y0 as isize),(w,h),(w,h),None).map_err(|_|"GDAL_RASTER_READ")?;
+   for (j,r) in rows.iter().enumerate(){
+    if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
+    if let Some(r)=r{for (i,c) in cols.iter().enumerate(){if let Some(c)=c{
+     let v=data.data()[(*r-y0)*w+*c-x0];if !v.is_finite()||Some(v)==nodata{continue}
+     let g=((v-stretch[0])/(stretch[1]-stretch[0])).clamp(0.,1.);
+     let g=(g*255.).round()as u8;let at=(j*N+i)*4;rgba[at..at+4].copy_from_slice(&[g,g,g,255]);
+    }}}
+   }
+  }
+  if cancel.load(Ordering::Acquire){return Err("CANCELLED")}
+  let mut bytes=Vec::new();{
+   let mut enc=png::Encoder::new(&mut bytes,N as u32,N as u32);enc.set_color(png::ColorType::Rgba);enc.set_depth(png::BitDepth::Eight);
+   let mut writer=enc.write_header().map_err(|_|"PNG_ENCODE_FAILED")?;writer.write_image_data(&rgba).map_err(|_|"PNG_ENCODE_FAILED")?;
+  }Ok(bytes)
  }
 }
