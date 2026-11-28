@@ -19,3 +19,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # Temporary exact source pin until PR 103 is merged; switch to local path deps at convergence.
 ovg-mobile-engine = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
 ovg-local-storage = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
+ovg-spatial = { git = "https://github.com/nguyentrieu210/OpenVietGis", rev = "2acf58d897bb093966f18639d087ef904a72a720" }
+geo = { version = "=0.31.0", default-features = false }
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
