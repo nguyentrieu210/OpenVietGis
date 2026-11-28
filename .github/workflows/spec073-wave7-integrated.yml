@@ -14,7 +14,7 @@ on:
       - "tools/benchmark/mobile/**"
       - "tests/mobile/**"
       - "specs/073-native-mobile-platform/**"
-      - ".github/workflows/spec073-*.yml"
+      - ".github/workflows/**"
       - "Cargo.toml"
       - "Cargo.lock"
 concurrency:
