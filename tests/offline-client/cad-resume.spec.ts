@@ -78,12 +78,25 @@ test("session expiry clears the previous actor spatial cache before returning to
      r.onerror=()=>reject(r.error);
    });
  });
+ await page.evaluate(async()=>{
+   await new Promise<void>((resolve,reject)=>{
+     const r=indexedDB.open("ovg-cad-drafts-v1",1);
+     r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains("drafts"))r.result.createObjectStore("drafts",{keyPath:"key"})};
+     r.onsuccess=()=>{const tx=r.result.transaction("drafts","readwrite");tx.objectStore("drafts").put({key:JSON.stringify(["actor1","org1","prj1","doc-x",1]),scope:{accountId:"actor1",organizationId:"org1",projectId:"prj1"},documentId:"doc-x",version:1,sha256:"a".repeat(64),text:"fixture",saved:Date.now(),bytes:7});tx.oncomplete=()=>{r.result.close();resolve()};tx.onerror=()=>reject(tx.error)};
+     r.onerror=()=>reject(r.error);
+   });
+ });
  state.denyMe=true;
  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await expect(page.locator(".landing-page")).toBeVisible();
  await expect.poll(()=>page.evaluate(async()=>await new Promise<number>((resolve,reject)=>{
    const r=indexedDB.open("ovg-spatial-cache-v1");
    r.onsuccess=()=>{const tx=r.result.transaction("layers","readonly"),q=tx.objectStore("layers").count();q.onsuccess=()=>{r.result.close();resolve(q.result)};q.onerror=()=>reject(q.error)};
+   r.onerror=()=>reject(r.error);
+ }))).toBe(0);
+ await expect.poll(()=>page.evaluate(async()=>await new Promise<number>((resolve,reject)=>{
+   const r=indexedDB.open("ovg-cad-drafts-v1");
+   r.onsuccess=()=>{const tx=r.result.transaction("drafts","readonly"),q=tx.objectStore("drafts").count();q.onsuccess=()=>{r.result.close();resolve(q.result)};q.onerror=()=>reject(q.error)};
    r.onerror=()=>reject(r.error);
  }))).toBe(0);
 });
