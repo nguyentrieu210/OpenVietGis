@@ -18,3 +18,17 @@ ffb6fb7a9ae25159e7c08b755dba9e80a38f0b38:specs/064-rust-platform/evidence/baseli
 # accept-key test vector ("s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") in unit test.
 beafc1c20db8709a8dde044675f77a37efba1e20:apps/api-rust/src/presence.rs:generic-api-key:578
 
+# Exact historical false positives verified against workflow run 46152589070:
+# DeveloperPortal line 46 is a variable-backed API credential example, preflight values are image digests,
+# benchmark keys are fixture identifiers, recovery text describes negative cases, and R015 values are synthetic.
+# These exact fingerprints only; production-secret scanning and all other commits/paths remain active.
+a58db74e41e9601efd843e3397487da26683436e:apps/web-next/src/DeveloperPortal.tsx:curl-auth-header:46
+e20b5932a8d914acf01d4f34490cf6995bf54768:apps/web-next/src/DeveloperPortal.tsx:curl-auth-header:46
+8536d7c46d9050a4fc4ebf4db80862bc87391cc1:apps/web-next/src/DeveloperPortal.tsx:curl-auth-header:46
+c4337e290266fa9a5c44848c4112748785668618:apps/web-next/src/DeveloperPortal.tsx:curl-auth-header:46
+d5f58da3b9285a0fbeef15f714a9489680812d43:apps/web-next/src/DeveloperPortal.tsx:curl-auth-header:46
+442120ee16fc883d65faa84c0f2a864b947490ee:specs/018-full-product-audit/remediation/v1-preflight-20261123.md:generic-api-key:84
+7a3a2f0c495cbc014cf43c566659790c9b4afc3b:modules/house_numbering/tests/performance/run_benchmark.py:generic-api-key:189
+7a3a2f0c495cbc014cf43c566659790c9b4afc3b:modules/house_numbering/tests/performance/run_benchmark.py:generic-api-key:205
+ed4b80d265ca91a50c84461c596b64f93ea865b1:specs/018-full-product-audit/remediation/G010-recoverable-backup/authenticated-recovery.md:generic-api-key:78
+1ba643db60a8f52a4cd9f08c4bdcc351482e3802:tools/r015_synthetic_drill.py:generic-api-key:128
