@@ -1,0 +1,2 @@
+# Mosaic export checkpoint
+Verifies immutable tile SHA256 and exact canonical GeoTIFF header against grid/CRS, uses bounded sweep-line exact coverage checks, then stages a relative-path RGBA GDAL VRT. No raster-size memory allocation. Fixed GDAL COG translation arguments with DEFLATE/BigTIFF/overviews are provided, not executed. Requires isolated qualified GDAL, read-only staging links, output quotas, independent COG structural validation and atomic export publication. VRT is not a COG. Tests authored, unexecuted.

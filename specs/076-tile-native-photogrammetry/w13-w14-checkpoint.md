@@ -1,0 +1,3 @@
+# W13–W14 checkpoint (partial)
+W13: bounded visible tile selection, center-first priority, optional bounded prefetch, stale tile set, authenticated-principal/asset/revision/generation/expiry scoped byte range checks. Not wired to Tauri or renderer; actual OS reads, cancellation, host ACL and project assets remain open.
+W14: conservative full-rebuild decision on missing or excessive pose drift evidence; DAG dirty closure; uncertainty-aware repeat-flight height differences under independent errors. Host must validate grid, actual camera covariance/controls and artifact hashes. No local alignment, persistent revision graph, temporal UI, rollback or real benchmark. No acceptance or tests executed.

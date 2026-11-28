@@ -1,0 +1,2 @@
+# W09–W10 checkpoint (partial)
+Reference CPU depth backprojection uses calibrated camera Z and confidence filtering, bounded sampled points, and optional RGB. No actual stereo depth estimation or GPU execution. Rasterization aggregates streamed point samples to DSM maximum height and DTM minimum of externally classified ground, preserves nodata and point counts, bounds cells and input count. No ground classifier, interpolation, georeferenced file export, fusion, COPC writing or real-data validation. Tests not executed; no capability enabled.

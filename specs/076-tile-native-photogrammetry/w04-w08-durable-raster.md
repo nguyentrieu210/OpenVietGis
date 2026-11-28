@@ -1,0 +1,2 @@
+# W04/W08 file-backed raster checkpoint
+Adds baseline uncompressed RGBA GeoTIFF tiles with pixel scale, tiepoint, projected CRS code and alpha. Not COG, no independent-reader qualification yet. File-backed immutable SHA256-addressed objects with checked readback, revision CAS via hard link, bounded manifests, retained history, fsync on Unix. Trusted host root only; Windows power-loss qualification, persistent index (currently manifest materialization), concurrency/fault tests, GC, quotas and signed provenance remain open. No completed wave claimed.

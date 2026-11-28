@@ -1,0 +1,4 @@
+# W01/W03 implementation checkpoint
+W01: pure resource policy and existing resource accounting available in source, tests not run. Physical RAM and available RAM distinct; disk floor and output reservation separate; unified GPU pool not double counted; explicit GPU qualification. Still missing real probes, per-GPU atomic aggregate accounting, OS containment, telemetry feedback, process execution and platform qualification.
+W03: eight layer tags, deterministic adaptive 2D partition, halo clipping, checked grid bounds, split by axes, working set and count cap, local dirty halo query. Still missing global CRS grid identity, image footprint indexing, Octree, sparse graph clustering, persistent manifests, streaming and real dataset qualification.
+W00 remains open. No engine pack or desktop capability enabled.

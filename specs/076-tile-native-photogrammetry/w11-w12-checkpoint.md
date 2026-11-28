@@ -1,0 +1,3 @@
+# W11–W12 checkpoint (partial)
+W11 reference robust median additive radiometric correction on aligned overlaps (not global exposure optimization), clipped-pixel exclusion, linear-light feather blending with alpha nodata, size/weight bounds. Host must supply aligned overlap and meaningful seam weights. No global seamline, graph-cut, moving-object mask, color calibration or real-data acceptance.
+W12 reference terrain-grid triangular mesh with local origin, UV mapping, nodata holes, height-discontinuity filter and bounded vertex/triangle count. Not arbitrary 3D mesh reconstruction, Poisson, decimation, atlas, GLB/3D Tiles export or textured product. No integration or tests executed. No provider enabled.
