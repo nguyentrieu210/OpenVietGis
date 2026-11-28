@@ -1,5 +1,5 @@
 # Tasks — 066
-Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md evidence/implementation-11.md and evidence/implementation-12.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
+Implementation in progress; only fully verified tasks checked. See evidence/implementation-01.md evidence/implementation-02.md evidence/implementation-03.md evidence/implementation-04.md evidence/implementation-05.md evidence/implementation-06.md evidence/implementation-07.md evidence/implementation-08.md evidence/implementation-09.md and evidence/implementation-10.md evidence/implementation-11.md and evidence/implementation-12.md and evidence/implementation-13.md for partial work. W1 precedes W2–W7. W2 retirement depends on 062/064 parity/ADR acceptance; W3/W4 share cache/session contract; W5/W6 depend on W4 revision contract; W7 may start in parallel after W1; W8 depends on all mandatory work. P0 = hard gate, P1 = optimization. Each task requires exact file list (expand directory references during audit), commit, tests and evidence. No marks until verification.
 
 ## W1 audit
 - [x] T001 [P0] Reconcile main and active 065; record accepted ADRs and contract dependency matrix — paths: `CLAUDE.md; ROADMAP.md; docs/adr; specs/062*,064*,065*`. Acceptance: No dirty branch touched; pinned SHA + prerequisites.
@@ -24,14 +24,14 @@ Implementation in progress; only fully verified tasks checked. See evidence/impl
 - [x] T016 [P0] Scope bootstrap and protected-query dedup, cancellation, session epochs — paths: `apps/web-next/src/workbenches/app; SessionBoundary.tsx`. Acceptance: No stale cross-project response; request counts recorded.
 - [ ] T017 [P0] Restore CAD route and dirty state accurately — paths: `apps/web-next/src/CadTool.tsx; LayoutDesigner.tsx`. Acceptance: Untouched document no warning; changed draft recovered.
 - [x] T018 [P1] Analyze bundles, split optional workbench/styles/assets, prefetch selectively — paths: `apps/web-next/vite.config.ts; package.json; style.css`. Acceptance: Measured compressed JS and waterfall improvement.
-- [ ] T019 [P1] Lifecycle cleanup of listeners, workers, map and render loops — paths: `apps/web-next/src; packages/spatial-workspace`. Acceptance: Repeated module switch soak: no unbounded memory growth.
+- [x] T019 [P1] Lifecycle cleanup of listeners, workers, map and render loops — paths: `apps/web-next/src; packages/spatial-workspace`. Acceptance: Repeated module switch soak: no unbounded memory growth.
 
 ## W4 cache
 - [x] T020 [P0] Unify cache classification and scoped keys — paths: `SpatialCache.ts; SpatialCacheStorage.ts; protected-query.ts`. Acceptance: Two-tenant, revocation and logout tests PASS.
 - [x] T021 [P0] Integrate revision invalidation and gap recovery — paths: `SpatialIncremental.ts; SpatialSyncCore.ts; crates/ovg-sync`. Acceptance: Mutation visible without full layer reload.
 - [x] T022 [P0] Version assets, safe SW migration, public-only edge policy — paths: `apps/web-next/src/main.tsx; offline shell service worker; infra/prod/nginx.conf`. Acceptance: No protected cache entry; offline draft preservation.
 - [ ] T023 [P1] Add bounded cache/singleflight only for profiled paths — paths: `apps/api-rust/src/state.rs; map_render.rs; crates/ovg-storage`. Acceptance: Memory cap, stampede, auth-before-hit tests.
-- [ ] T024 [P1] Cache hit/miss, bytes, invalidation and startup metrics — paths: `apps/api-rust/src/metrics.rs; apps/web-next/src/SpatialPerformance.ts`. Acceptance: Scoped aggregate telemetry without sensitive data.
+- [x] T024 [P1] Cache hit/miss, bytes, invalidation and startup metrics — paths: `apps/api-rust/src/metrics.rs; apps/web-next/src/SpatialPerformance.ts`. Acceptance: Scoped aggregate telemetry without sensitive data.
 - [ ] T025 [P1] Verify cache headers/ETag/304, provider restrictions and versioning — paths: `infra/prod; CDN configuration inventory`. Acceptance: Public hash immutable; private no-store as classified.
 
 ## W5 engines

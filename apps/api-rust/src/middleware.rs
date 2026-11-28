@@ -5,6 +5,7 @@ use axum::http::HeaderName;
 use axum::middleware::Next;
 use axum::response::Response;
 use uuid::Uuid;
+use std::time::Instant;
 
 use crate::state::AppState;
 
@@ -29,8 +30,9 @@ pub async fn request_id_and_metrics(
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
     req.extensions_mut().insert(RequestId(req_id.clone()));
+    let started = Instant::now();
     let mut response = next.run(req).await;
-    state.metrics.record_request(response.status().as_u16());
+    state.metrics.record_request(response.status().as_u16(), started.elapsed());
 
     if let Ok(val) = req_id.parse() {
         response
