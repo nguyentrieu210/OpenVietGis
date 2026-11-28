@@ -7,6 +7,7 @@ impl MediaKeys for PlatformKeys{
  fn key_for(&self,scope:Uuid)->Result<Zeroizing<[u8;32]>,Error>{platform::get(scope,false)}
 }
 impl PlatformKeys{
+ pub fn install(scope:Uuid,raw:&[u8;32])->Result<(),Error>{if scope.is_nil()||raw.iter().all(|&x|x==0){return Err(Error::Invalid)}platform::install(scope,raw)}
  pub fn provision(scope:Uuid)->Result<(),Error>{platform::get(scope,true).map(drop)}
  pub fn available()->bool{platform::available()}
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{platform::capture_preview()}
@@ -28,6 +29,19 @@ mod platform{
   match result{Ok(p)=>{let _=PROVIDER.set(p);1},Err(_)=>0}
  }
  pub fn available()->bool{PROVIDER.get().is_some()}
+ pub fn install(scope:Uuid,raw:&[u8;32])->Result<(),Error>{
+  let p=PROVIDER.get().ok_or(Error::Unsupported)?;
+  let mut e=p.vm.attach_current_thread().map_err(|_|Error::Storage)?;
+  let r=e.with_local_frame(4,|env|{
+   let name=env.new_string(scope.to_string())?;
+   let a=env.byte_array_from_slice(raw)?;
+   let result=env.call_method(p.object.as_obj(),"putScopedKey","(Ljava/lang/String;[B)Z",&[JValue::Object(name.as_ref()),JValue::Object(a.as_ref())]);
+   let wipe=env.set_byte_array_region(&a,0,&[0i8;32]);
+   let ok=result?.z()?;wipe?;Ok::<_,jni::errors::Error>(ok)
+  });
+  if e.exception_check().unwrap_or(false){let _=e.exception_clear();return Err(Error::Storage)}
+  if r.map_err(|_|Error::Storage)?{Ok(())}else{Err(Error::Conflict)}
+ }
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{
   let p=PROVIDER.get().ok_or(Error::Unsupported)?;
   let mut e=p.vm.attach_current_thread().map_err(|_|Error::Storage)?;
@@ -129,6 +143,15 @@ mod platform{
   unsafe{ptr::copy_nonoverlapping(bytes,k.as_mut_ptr(),32)};Ok(Some(k))
  }
  pub fn available()->bool{true}
+ pub fn install(scope:Uuid,raw:&[u8;32])->Result<(),Error>{
+  let service=string("org.openvietgis.media.v1")?;let account=string(&scope.to_string())?;
+  let base=unsafe{[(kSecClass,kSecClassGenericPassword),(kSecAttrService,service.0),(kSecAttrAccount,account.0)]};
+  if let Some(k)=lookup(&base)?{return if k[..]==raw[..]{Ok(())}else{Err(Error::Conflict)}}
+  let data=Owned::new(unsafe{CFDataCreate(ptr::null(),raw.as_ptr(),32)})?;
+  let mut pairs=base.to_vec();unsafe{pairs.extend([(kSecAttrAccessible,kSecAttrAccessibleWhenUnlockedThisDeviceOnly),(kSecValueData,data.0)]);}
+  let q=dict(&pairs)?;match unsafe{SecItemAdd(q.0,ptr::null_mut())}{
+   SUCCESS=>Ok(()),DUPLICATE=>if lookup(&base)?.is_some_and(|k|k[..]==raw[..]){Ok(())}else{Err(Error::Conflict)},_=>Err(Error::Storage)}
+ }
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
  pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
  pub fn get(scope:Uuid,create:bool)->Result<Zeroizing<[u8;32]>,Error>{
@@ -146,6 +169,7 @@ mod platform{
 mod platform{
  use super::*;
  pub fn available()->bool{false}
+ pub fn install(_:Uuid,_:&[u8;32])->Result<(),Error>{Err(Error::Unsupported)}
  pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
  pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
  pub fn get(_:Uuid,_:bool)->Result<Zeroizing<[u8;32]>,Error>{Err(Error::Unsupported)}
