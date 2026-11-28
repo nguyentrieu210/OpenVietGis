@@ -70,3 +70,30 @@ async fn runtime_default_disabled_and_catalog_does_not_advertise_execution() {
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
+
+#[tokio::test]
+async fn sandbox_commerce_disabled_without_dedicated_key() {
+    let app = Router::new()
+        .nest("/api/v1", routes::api_v1_router())
+        .with_state(AppState::new(AppConfig::default(), None).unwrap());
+    let base =
+        "/api/v1/organizations/11000000-0000-0000-0000-000000000001/marketplace/sandbox/orders";
+    for (method, path) in [
+        ("POST", base.to_owned()),
+        ("GET", format!("{base}/order")),
+        ("POST", format!("{base}/order/events")),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+}

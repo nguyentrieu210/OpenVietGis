@@ -78,6 +78,11 @@ struct SignedSandbox<'a> {
 /// Unforgeable proof constructed only by the pinned sandbox verification path.
 /// A production provider adapter requires a separate reviewed verification contract.
 pub struct VerifiedSandbox(SandboxEvent);
+impl VerifiedSandbox {
+    pub fn event(&self) -> &SandboxEvent {
+        &self.0
+    }
+}
 pub fn verify_sandbox(
     event: SandboxEvent,
     key: &VerifyingKey,
@@ -145,6 +150,9 @@ impl OrderLedger {
             reversed_minor: 0,
             events: BTreeMap::new(),
         })
+    }
+    pub fn event_count(&self) -> usize {
+        self.events.len()
     }
     pub fn entitlement(&self, now: DateTime<Utc>) -> EntitlementState {
         if !self.captured {

@@ -1102,8 +1102,10 @@ version = "0.2.0"
 dependencies = [
  "base64",
  "chrono",
+ "ed25519-dalek",
  "getrandom 0.2.17",
  "ovg-core",
+ "ovg-module-sdk",
  "ovg-spatial",
  "serde",
  "serde_json",

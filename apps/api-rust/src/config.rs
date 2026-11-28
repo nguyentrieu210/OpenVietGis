@@ -40,6 +40,7 @@ pub struct AppConfig {
     pub marketplace_v2_catalog_path: Option<String>,
     pub marketplace_v2_epoch: Option<u64>,
     pub marketplace_v2_runtime_enabled: bool,
+    pub plugin_sandbox_payment_public_key: Option<String>,
     pub marketplace_operator_public_key: Option<String>,
     pub marketplace_reviewer_user_ids: BTreeSet<Uuid>,
     pub service_version: String,
@@ -71,6 +72,7 @@ impl Default for AppConfig {
             marketplace_v2_catalog_path: None,
             marketplace_v2_epoch: None,
             marketplace_v2_runtime_enabled: false,
+            plugin_sandbox_payment_public_key: None,
             marketplace_operator_public_key: None,
             marketplace_reviewer_user_ids: BTreeSet::new(),
             service_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -156,6 +158,10 @@ impl AppConfig {
             .filter(|v| *v > 0 && *v <= 9_007_199_254_740_991);
         cfg.marketplace_v2_runtime_enabled =
             std::env::var("OPENVIETGIS_MARKETPLACE_V2_RUNTIME_ENABLED").as_deref() == Ok("true");
+        cfg.plugin_sandbox_payment_public_key =
+            std::env::var("OPENVIETGIS_PLUGIN_SANDBOX_PAYMENT_PUBLIC_KEY")
+                .ok()
+                .filter(|v| !v.is_empty());
         cfg.marketplace_operator_public_key =
             std::env::var("OPENVIETGIS_MARKETPLACE_OPERATOR_PUBLIC_KEY")
                 .ok()

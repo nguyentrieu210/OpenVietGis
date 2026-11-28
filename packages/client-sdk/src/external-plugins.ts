@@ -109,3 +109,16 @@ export function invokePluginV2(client:ApiClient,org:string,project:string,runtim
 export function setPluginV2Grant(client:ApiClient,org:string,project:string,runtime:PluginV2Runtime,enabled:boolean,signal?:AbortSignal){
  return client.request<{granted:boolean;grant_revision:string}>(pluginV2Path(org,project,runtime.manifest_id)+"/grant",{method:"POST",signal:signal??null,body:JSON.stringify({release_digest:runtime.release_digest,activation_revision:runtime.activation_revision,grant_revision:runtime.grant_revision,lock_digest:runtime.lock_digest,enabled})});
 }
+
+export type PluginSandboxQuote={order_id:string;organization_id:string;extension_key:string;currency:string;gross_minor:number;tax_minor:number;publisher_bps:number;access_until:string};
+export type PluginSandboxEvent={provider_event_id:string;order_id:string;organization_id:string;kind:"capture"|"refund"|"chargeback";currency:string;amount_minor:number;occurred_at:string};
+const sandboxOrderPath=(org:string)=>"/organizations/"+encodeURIComponent(org)+"/marketplace/sandbox/orders";
+export function createPluginSandboxOrder(client:ApiClient,quote:PluginSandboxQuote,releaseDigest:string){
+ return client.request<{sandbox:true;quote:PluginSandboxQuote;release_digest:string}>(sandboxOrderPath(quote.organization_id),{method:"POST",body:JSON.stringify({quote,release_digest:releaseDigest})});
+}
+export function getPluginSandboxOrder(client:ApiClient,org:string,id:string){
+ return client.request<{sandbox:true;order_id:string;release_digest:string;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number;event_count:number;receipts:unknown[]}>(sandboxOrderPath(org)+"/"+encodeURIComponent(id),{cache:"no-store"});
+}
+export function submitPluginSandboxEvent(client:ApiClient,event:PluginSandboxEvent,signature:string){
+ return client.request<{sandbox:true;replayed:boolean;receipt:unknown;entitlement:"pending"|"active"|"expired"|"revoked";outstanding_minor:number}>(sandboxOrderPath(event.organization_id)+"/"+encodeURIComponent(event.order_id)+"/events",{method:"POST",body:JSON.stringify({event,signature})});
+}

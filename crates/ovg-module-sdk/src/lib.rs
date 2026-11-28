@@ -7,6 +7,7 @@ pub mod release_v2;
 pub mod declarative;
 pub mod host_profile;
 pub mod commerce;
+pub mod license;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
