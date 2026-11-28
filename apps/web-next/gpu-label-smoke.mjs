@@ -1,0 +1,44 @@
+import {chromium} from "@playwright/test";
+import assert from "node:assert/strict";
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
+try {
+ const page=await browser.newPage({viewport:{width:1000,height:750}});
+ const errors=[];page.on("pageerror",e=>errors.push(e.message));
+ await page.goto(process.env.OVG_TEST_URL||"http://127.0.0.1:4186/",{waitUntil:"domcontentloaded"});
+ const result=await page.evaluate(async()=>{
+  const {Map,configureMapSurface}=await import("/src/map-surface.ts");
+  const {planGpuLabels,createGpuLabelRenderer}=await import("/src/gpu-labels.ts");
+  configureMapSurface();
+  const host=document.createElement("div");Object.assign(host.style,{position:"fixed",inset:"0",zIndex:"99999",background:"#fff"});document.body.append(host);
+  const m=new Map({container:host,style:{version:8,sources:{},layers:[{id:"bg",type:"background",paint:{"background-color":"#ffffff"}}]},center:[106.6,10.6],zoom:13,fadeDuration:0,attributionControl:false});
+  const errors=[];m.on("error",e=>errors.push(e.error?.message||String(e.error)));
+  const wait=(event)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error("timeout "+event)),12000);m.once(event,()=>{clearTimeout(timer);resolve()})});
+  await wait("load");
+  const v={labelField:"name",labelHidden:false,labelMinZoom:0,labelMaxZoom:22,minZoom:0,maxZoom:22,labelPriority:5,labelPlacement:"auto",labelSize:18,labelOffset:7,labelColor:"#112233",labelHalo:"#ffffff",labelHaloWidth:1,labelBold:true,labelBackground:true,labelOverlap:false,labelUnique:false};
+  const row=(key,geometry,layer)=>({key,geometry,layer:{id:layer},feature:{attributes:{name:key}}});
+  const rows=[row("Điểm thử",[106.64,10.62],"points"),row("Vùng thử",null,"polygons"),row("Đường thử",null,"lines")];
+  rows[0].geometry={type:"Point",coordinates:[106.64,10.62]};
+  rows[1].geometry={type:"Polygon",coordinates:[[[106.56,10.57],[106.6,10.57],[106.6,10.61],[106.56,10.61],[106.56,10.57]]]};
+  rows[2].geometry={type:"LineString",coordinates:[[106.61,10.56],[106.62,10.58],[106.63,10.60]]};
+  const plan=planGpuLabels(rows,{points:v,polygons:v,lines:{...v,labelPlacement:"line",labelBackground:false}},r=>r.key,()=>null);
+  const renderer=createGpuLabelRenderer(m);renderer.apply(plan);await wait("idle");
+  const visible=()=>m.queryRenderedFeatures({layers:m.getStyle().layers.filter(l=>l.type==="symbol").map(l=>l.id)}).map(f=>f.properties.text);
+  const initial=[...new Set(visible())];
+  m.jumpTo({center:[106.58,10.59],zoom:16});await wait("idle");
+  const zoomed=visible();
+  const source=m.getSource("ovg-gpu-labels");let writes=0;const original=source.setData.bind(source);source.setData=(...args)=>{writes++;return original(...args)};
+  m.easeTo({center:[106.58,10.59],zoom:17,duration:400});await wait("moveend");await wait("idle");
+  const animated=visible();
+  renderer.dispose();const removed=!m.getSource("ovg-gpu-labels");m.remove();host.remove();
+  return {initial,zoomed,animated,writes,removed,errors};
+ });
+ console.log(JSON.stringify(result));
+ assert.ok(result.initial.includes("Điểm thử"),"point label rendered");
+ assert.ok(result.initial.includes("Vùng thử"),"polygon label rendered");
+ assert.ok(result.initial.includes("Đường thử"),"line label rendered");
+ assert.equal(result.zoomed.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label across tiles");
+ assert.equal(result.animated.filter(v=>v==="Vùng thử").length,1,"polygon must have exactly one label during zoom");
+ assert.equal(result.writes,0,"camera must not update label geometry");
+ assert.equal(result.removed,true);assert.deepEqual(result.errors,[]);assert.deepEqual(errors,[]);
+ console.log("PASS native WebGL labels: Vietnamese, point, polygon, line, background, zoom and cleanup");
+} finally {await browser.close()}

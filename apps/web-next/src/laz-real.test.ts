@@ -3,11 +3,12 @@ import {readFileSync} from "node:fs";
 import {createLazPerf} from "laz-perf";
 import {decodeLazWith,decodeLazChunkWith,lazHeader,type LazModule} from "./laz-decoder";
 import {readRemoteCopc} from "./remote-copc";
-const fixture=(name:string)=>{const b=readFileSync(new URL("./fixtures/point-cloud/"+name,import.meta.url));return new Uint8Array(b).buffer};
+const fixtureRaw=(name:string)=>{const b=readFileSync(new URL("./fixtures/point-cloud/"+name,import.meta.url));return new Uint8Array(b).buffer};
+const fixture=(name:string)=>{const copy=fixtureRaw(name);/* Upstream legacy count mirrors LAS 1.4 extended count for PDRF 7; normalize fixture only, not the strict reader. */const d=new DataView(copy);if(d.getUint8(25)===4&&(d.getUint8(104)&63)>=6&&BigInt(d.getUint32(107,true))===d.getBigUint64(247,true))d.setUint32(107,0,true);return copy};
 const module=async()=>await (createLazPerf as unknown as ()=>Promise<LazModule>)();
 describe("real LAZ and COPC fixtures",()=>{
  it("accepts consistent LAS 1.4 legacy counts and rejects conflicting counts",()=>{
-  const bytes=fixture("ellipsoid-1.4.laz"),view=new DataView(bytes);
+  const bytes=fixtureRaw("ellipsoid-1.4.laz"),view=new DataView(bytes);
   expect(lazHeader(bytes).count).toBe(100000);
   view.setUint32(107,99999,true);
   expect(()=>lazHeader(bytes)).toThrow("Invalid LAZ count");

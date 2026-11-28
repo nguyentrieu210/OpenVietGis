@@ -64,11 +64,11 @@ try{
  await page.routeWebSocket("**/collaboration/presence",ws=>{socket=ws;ws.onMessage(()=>{});ws.send(JSON.stringify({type:"presence",self_id:"a",users:[{id:"a",actor:"owner",name:"Quản lý",color:"#2563eb",cursor:null,view:null},{id:"b",actor:"member",name:"Khảo sát viên",color:"#059669",cursor:[106,14],view:[106,14,8,0,0]}]}))});
  await page.goto(url,{waitUntil:"domcontentloaded"});await toggle.waitFor({timeout:25000});
  const live=page.getByRole("button",{name:/^● Live/});await live.click();
- await page.locator(".live-cursor").getByText("Khảo sát viên").waitFor();
+ await page.getByRole("button",{name:/Khảo sát viên · Theo dõi/}).waitFor();
  const follow=page.getByRole("button",{name:/Khảo sát viên · Theo dõi/});await follow.click();
  await page.getByRole("button",{name:/Khảo sát viên · Đang theo dõi/}).waitFor();
  socket.send(JSON.stringify({type:"presence",self_id:"a",users:[{id:"a",actor:"owner",name:"Quản lý",color:"#2563eb",cursor:null,view:null}]}));
- await page.locator(".live-cursor").waitFor({state:"detached"});
+ await page.getByRole("button",{name:/Khảo sát viên · Đang theo dõi/}).waitFor({state:"detached"});
  for(const res of streams)res.write("event: spatial_change\ndata: {}\n\n");
  await page.getByText("Đã đồng bộ thay đổi bản đồ từ đồng nghiệp",{exact:true}).waitFor();
  assert.equal(await live.getAttribute("aria-pressed"),"true");await live.click();

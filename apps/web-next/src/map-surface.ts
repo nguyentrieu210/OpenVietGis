@@ -13,13 +13,17 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 
 export { Map, Marker, LngLat, LngLatBounds, NavigationControl, ScaleControl };
 export type {
-  ErrorEvent, FillLayerSpecification, GeoJSONSource, LayerSpecification,
+  ErrorEvent, FillLayerSpecification, GeoJSONSource, LayerSpecification, SymbolLayerSpecification,
   LngLatBoundsLike, LngLatLike, MapMouseEvent, StyleSpecification,
 } from "maplibre-gl";
 
+export function adaptiveWorkerCount(cores: number): number {
+  return Number.isFinite(cores) ? Math.max(1, Math.min(4, Math.floor(cores / 2))) : 1;
+}
+
 export function configureMapSurface(): void {
   setWorkerUrl(workerUrl + "?mime=2");
-  setWorkerCount(1);
+  setWorkerCount(adaptiveWorkerCount(typeof navigator === "undefined" ? 1 : navigator.hardwareConcurrency));
 }
 
 /** The canvas DOM class is an implementation detail, not a command contract. */

@@ -50,7 +50,7 @@ try{
  await page.getByLabel("Kiểu nhãn").selectOption("expression");await page.getByLabel("Biểu thức nhãn").fill("{so_nha} · {ten_duong}");
  await page.getByLabel("Vị trí nhãn").selectOption("auto");await page.getByRole("spinbutton",{name:"Zoom tối thiểu"}).fill("0");
  await page.getByRole("button",{name:"Áp dụng kiểu trên bản đồ"}).click();
- assert.ok(await page.locator(".qgis-filter-indicator[title='Đang hiển thị nhãn']").count());await page.locator(".core-ribbon-group > button").filter({hasText:"Bản đồ"}).click();await menu.getByRole("button",{name:/Zoom toàn bản đồ/}).click();await page.locator(".qgis-layer-labels span").first().waitFor({timeout:15000});assert.match(await page.locator(".qgis-layer-labels span").first().innerText(),/\d+ · Đường/);
+ assert.ok(await page.locator(".qgis-filter-indicator[title='Đang hiển thị nhãn']").count());await page.locator(".core-ribbon-group > button").filter({hasText:"Bản đồ"}).click();await menu.getByRole("button",{name:/Zoom toàn bản đồ/}).click();await page.locator('[data-label-renderer="webgl"]:not([data-label-count="0"])').waitFor({state:"attached",timeout:15000});assert.match(await page.locator('[data-label-renderer="webgl"]').getAttribute("data-label-sample"),/\d+ · Đường/);
  console.log("PASS fixed menu, ZOOM command, label editing");
  const grip=page.getByLabel("Di chuyển bộ công cụ Dữ liệu");await grip.focus();await grip.press("ArrowDown");
  assert.equal(await page.locator(".qgis-toolrow").count(),2);await page.getByLabel("Di chuyển bộ công cụ Bản đồ").dragTo(page.locator(".qgis-toolrow").nth(1).locator("[data-toolgroup=data]"));assert.equal(await page.locator(".qgis-toolrow").nth(1).locator("[data-toolgroup=map]").count(),1);
