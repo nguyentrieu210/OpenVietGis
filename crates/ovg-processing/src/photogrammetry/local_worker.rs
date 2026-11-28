@@ -33,7 +33,6 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
  if !valid_limits(limits)||!root.is_absolute(){return Err(Error::Invalid);}
  #[cfg(not(target_os="linux"))]{let _=(pack,&mut cancelled);return Err(Error::Unsupported);}
  #[cfg(target_os="linux")]{
- use std::process::{Command,Stdio};
  let binary=verify(pack)?;let root=root.canonicalize()?;
  if root==Path::new("/")||binary.starts_with(&root)||!root.join("images").is_dir()||!root.join("sparse").is_dir()||
  root.join("database.db").exists(){return Err(Error::Invalid);}
@@ -50,8 +49,22 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
  if manifest!=approved_input_manifest_sha256{return Err(Error::HashMismatch);}
  let layout=colmap::Layout::from_host_root("/work".into()).map_err(Error::Plan)?;
  let plan=colmap::sparse_plan(&layout,config).map_err(Error::Plan)?;
+ execute(&root,&binary,plan,limits,Instant::now(),&mut cancelled)?;
+ // Exit status alone is not acceptance: require at least one sparse model.
+ let mut found=false;
+ for entry in fs::read_dir(root.join("sparse"))?{
+ let entry=entry?;if !entry.file_type()?.is_dir(){continue;}
+ let p=entry.path();
+ if ["cameras.bin","images.bin","points3D.bin"].iter().all(|name|fs::symlink_metadata(p.join(name)).is_ok_and(|m|m.is_file()&&m.len()>0)){found=true;break;}
+ }
+ if !found{return Err(Error::Invalid);}Ok(())
+ }
+}
+#[cfg(target_os="linux")]
+fn execute(root:&Path,binary:&Path,plan:Vec<colmap::Step>,limits:Limits,started:Instant,cancelled:&mut impl FnMut()->bool)->Result<(),Error>{
+ use std::process::{Command,Stdio};
  if !Path::new("/usr/bin/bwrap").is_file()||!Path::new("/usr/bin/prlimit").is_file(){return Err(Error::Unsupported);}
- let started=Instant::now();
+
  for step in plan{
  if cancelled(){return Err(Error::Cancelled);}if started.elapsed()>=limits.timeout{return Err(Error::Timeout);}
  let mut cmd=Command::new("/usr/bin/bwrap");
@@ -59,7 +72,7 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
  "--ro-bind-try","/lib","/lib","--ro-bind-try","/lib64","/lib64","--ro-bind-try","/etc/ld.so.cache","/etc/ld.so.cache",
  "--proc","/proc","--dev","/dev","--tmpfs","/tmp","--dir","/home","--setenv","HOME","/home",
  "--setenv","PATH","/usr/bin","--setenv","QT_QPA_PLATFORM","offscreen","--bind"])
- .arg(&root).arg("/work").arg("--ro-bind").arg(&binary).arg("/engine")
+ .arg(root).arg("/work").arg("--ro-bind").arg(root.join("images")).arg("/work/images").arg("--ro-bind").arg(binary).arg("/engine")
  .args(["--chdir","/work","--","/usr/bin/prlimit"])
  .arg(format!("--as={}:{}",limits.address_space_bytes,limits.address_space_bytes))
  .arg(format!("--fsize={}:{}",limits.max_file_bytes,limits.max_file_bytes))
@@ -74,16 +87,62 @@ pub fn sparse(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits
  std::thread::sleep(Duration::from_millis(25));
  }
  }
- // Exit status alone is not acceptance: require at least one sparse model.
- let mut found=false;
- for entry in fs::read_dir(root.join("sparse"))?{
- let entry=entry?;if !entry.file_type()?.is_dir(){continue;}
- let p=entry.path();
- if ["cameras.bin","images.bin","points3D.bin"].iter().all(|name|fs::symlink_metadata(p.join(name)).is_ok_and(|m|m.is_file()&&m.len()>0)){found=true;break;}
+
+ Ok(())
+}
+
+#[derive(Debug)]
+pub struct Prepared{pub images:PathBuf,pub views:Vec<super::colmap_model::View>}
+/// Run the two CPU preparation stages on an explicitly selected existing sparse model.
+/// Fresh output directories only. Host protects verified input and sparse model from mutation.
+pub fn prepare_ortho(root:&Path,pack:&ApprovedPack,config:&colmap::Config,limits:Limits,
+ approved_input_manifest_sha256:&str,model_index:u32,mut cancelled:impl FnMut()->bool)->Result<Prepared,Error>{
+ if config.device!=Device::Cpu||config.gpu_index.is_some(){return Err(Error::Unsupported);}
+ if !valid_limits(limits)||!root.is_absolute(){return Err(Error::Invalid);}
+ #[cfg(not(target_os="linux"))]{let _=(pack,approved_input_manifest_sha256,model_index,&mut cancelled);return Err(Error::Unsupported);}
+ #[cfg(target_os="linux")]{
+ let binary=verify(pack)?;let root=root.canonicalize()?;
+ if root==Path::new("/")||binary.starts_with(&root){return Err(Error::Invalid);}
+ for p in [root.join("images"),root.join("sparse"),root.join("sparse").join(model_index.to_string())]{
+ let m=fs::symlink_metadata(&p)?;if !m.is_dir()||m.file_type().is_symlink(){return Err(Error::Invalid);}
  }
- if !found{return Err(Error::Invalid);}Ok(())
+ let model=root.join("sparse").join(model_index.to_string());
+ for n in ["cameras.bin","images.bin","points3D.bin"]{
+ let m=fs::symlink_metadata(model.join(n))?;
+ if !m.is_file()||m.file_type().is_symlink()||m.len()==0||m.len()>limits.max_file_bytes{return Err(Error::Invalid);}
+ }
+ let manifest=super::ingest::verify_staged(&root,config.image_count,limits.input_bytes,&mut cancelled).map_err(Error::Ingest)?;
+ if manifest!=approved_input_manifest_sha256{return Err(Error::HashMismatch);}
+ let mut count=0u32;for e in fs::read_dir(root.join("images"))?{
+ let e=e?;if !e.file_type()?.is_file(){return Err(Error::Invalid);}
+ count=count.checked_add(1).ok_or(Error::Limit)?;if count>config.image_count{return Err(Error::Invalid);}
+ }
+ if count!=config.image_count{return Err(Error::Invalid);}
+ let layout=colmap::Layout::from_host_root("/work".into()).map_err(Error::Plan)?;
+ let plan=colmap::ortho_prepare_plan(&layout,config,model_index).map_err(Error::Plan)?;
+ fs::create_dir(root.join("dense"))?;fs::create_dir(root.join("model-text"))?;
+ execute(&root,&binary,plan,limits,Instant::now(),&mut cancelled)?;
+ let image_dir=root.join("dense/images");
+ let m=fs::symlink_metadata(&image_dir)?;if !m.is_dir()||m.file_type().is_symlink()||!image_dir.canonicalize()?.starts_with(&root){return Err(Error::Invalid);}
+ let txt=root.join("model-text");
+ let cameras=bounded_text(&txt.join("cameras.txt"),16*1024*1024)?;
+ let images=bounded_text(&txt.join("images.txt"),128*1024*1024)?;
+ let views=super::colmap_model::parse(&cameras,&images,config.image_count as usize).map_err(|_|Error::Invalid)?;
+ if views.len()<2{return Err(Error::Invalid);}
+ for v in &views{
+ let p=image_dir.join(&v.name);let m=fs::symlink_metadata(&p)?;
+ if !m.is_file()||m.file_type().is_symlink()||m.len()==0||m.len()>limits.max_file_bytes{return Err(Error::Invalid);}
+ }
+ Ok(Prepared{images:image_dir,views})
  }
 }
+#[cfg(target_os="linux")]
+fn bounded_text(p:&Path,max:u64)->Result<String,Error>{
+ let m=fs::symlink_metadata(p)?;if !m.is_file()||m.file_type().is_symlink()||m.len()>max{return Err(Error::Limit);}
+ let mut s=String::new();File::open(p)?.take(max+1).read_to_string(&mut s)?;
+ if s.len() as u64>max{return Err(Error::Limit);}Ok(s)
+}
+
 #[cfg(test)]mod tests{
  use super::*;
  #[test]fn rejects_bad_limits_and_unapproved_digest(){
