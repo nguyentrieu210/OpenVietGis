@@ -16,7 +16,7 @@ export function SecondaryMapView({storageKey,primary,collection,layers,templates
  const update=(patch:Partial<ComparisonPrefs>)=>setRaw(old=>({...comparisonPrefs(old,layers),...patch}));
  useEffect(()=>{writePreference(storageKey,prefs)},[storageKey,prefs]);
  const data=useMemo(()=>{try{return {collection:comparisonCollection(collection,layers),error:""}}catch(e){return {collection:empty,error:e instanceof Error?e.message:String(e)}}},[collection,layers]);
- const structural=JSON.stringify(prefs.order.map(id=>{const l=layers.find(x=>x.id===id)!;return {id,min:l.min,max:l.max}}));
+ const structural=JSON.stringify((data.error?[]:prefs.order).map(id=>{const l=layers.find(x=>x.id===id)!;return {id,min:l.min,max:l.max}}));
  useEffect(()=>{
   if(!host.current)return;let m:ml.Map;
   try{m=new ml.Map({container:host.current,style:{version:8,sources:{core:{type:"geojson",data:empty}},layers:[{id:"comparison-bg",type:"background",paint:{"background-color":"#e9eff3"}}]},...initial.current,attributionControl:false,maxPitch:60})}
@@ -45,13 +45,13 @@ export function SecondaryMapView({storageKey,primary,collection,layers,templates
  useEffect(()=>{const m=map.current;if(!m||!ready)return;const hidden=new Set<string>(JSON.parse(hiddenKey));
   for(const l of layers)for(const t of templates){const id=idFor(l.id,t.id);if(m.getLayer(id))m.setLayoutProperty(id,"visibility",hidden.has(l.id)?"none":"visible")}
  },[ready,structural,hiddenKey,templates]);
- useEffect(()=>{if(!ready)return;const source=map.current?.getSource("core") as ml.GeoJSONSource|undefined;if(source)void source.setData(data.collection)},[ready,data]);
+ useEffect(()=>{if(!ready)return;const source=map.current?.getSource("core") as ml.GeoJSONSource|undefined;if(source)void Promise.resolve(source.setData(data.collection)).catch(()=>setError("Không tải được dữ liệu vào khung phụ."))},[ready,data]);
  useEffect(()=>{const m=primary.current,second=map.current;if(!ready||!m||!second||!prefs.follow)return;
   const sync=()=>{const c=capture(m);if(c)second.jumpTo(c)};sync();m.on("moveend",sync);
   return()=>{m.off("moveend",sync)}
  },[ready,prefs.follow,primary]);
  const copyCamera=()=>{const c=capture(primary.current);if(c)map.current?.jumpTo(c)};
- const ordered=prefs.order.map(id=>layers.find(l=>l.id===id)!);
+ const ordered=data.error?[]:prefs.order.map(id=>layers.find(l=>l.id===id)!);
  return <aside className="ovg-secondary-map" aria-label="Khung bản đồ so sánh chỉ đọc"><header><b>Bản đồ so sánh</b><button type="button" aria-label="Đóng bản đồ so sánh" onClick={close}>×</button></header>
  <div className="ovg-secondary-actions"><button type="button" aria-expanded={controls} onClick={()=>setControls(v=>!v)}>Thứ tự lớp</button><button type="button" onClick={copyCamera}>Lấy góc nhìn chính</button><label><input type="checkbox" checked={prefs.follow} onChange={e=>update({follow:e.target.checked})}/>Theo góc nhìn chính</label></div>
  {controls&&<div className="ovg-secondary-order"><small>Trên cùng vẽ sau. Chỉ đổi khung phụ.</small>{ordered.map((l,i)=><div key={l.id}><label><input type="checkbox" checked={!prefs.hidden.includes(l.id)} onChange={e=>update({hidden:e.target.checked?prefs.hidden.filter(id=>id!==l.id):[...prefs.hidden,l.id]})}/>{l.name}</label><button type="button" aria-label={"Đưa "+l.name+" lên trong khung phụ"} disabled={i===0} onClick={()=>update({order:moveComparisonLayer(prefs.order,l.id,-1)})}>↑</button><button type="button" aria-label={"Đưa "+l.name+" xuống trong khung phụ"} disabled={i===ordered.length-1} onClick={()=>update({order:moveComparisonLayer(prefs.order,l.id,1)})}>↓</button></div>)}<button type="button" onClick={()=>update({order:layers.map(l=>l.id),hidden:[]})}>Đặt lại khung phụ</button></div>}
