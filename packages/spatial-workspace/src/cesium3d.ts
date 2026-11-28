@@ -1,4 +1,5 @@
 /** Cesium geographic viewer, using validated local scene inputs and no ion/CDN. */
+import {renderBudget} from "./render-budget";
 import type * as Cesium from "cesium";
 import type {FootprintView} from "./footprint3d";
 import type {GeographicCamera,NamedModel,SelectableFootprintEngine,SharedVector,CloudPoint} from "./maplibre3d";
@@ -57,7 +58,7 @@ function addNavigation(c:C,widget:Cesium.CesiumWidget,surface:HTMLElement,initia
  controller.tiltEventTypes=[E.MIDDLE_DRAG,E.PINCH,{eventType:E.LEFT_DRAG,modifier:M.CTRL},{eventType:E.LEFT_DRAG,modifier:M.SHIFT}];
  controller.lookEventTypes=undefined;controller.enableLook=false;
  controller.inertiaSpin=0;controller.inertiaTranslate=0;controller.inertiaZoom=.5;controller.zoomFactor=4;controller.minimumZoomDistance=3;controller.maximumTiltAngle=c.Math.toRadians(75);
- scene.globe.maximumScreenSpaceError=2;scene.globe.tileCacheSize=160;scene.globe.preloadAncestors=true;scene.globe.preloadSiblings=true;
+ const budget=renderBudget(navigator.hardwareConcurrency,(navigator as Navigator&{deviceMemory?:number}).deviceMemory);scene.globe.maximumScreenSpaceError=2;scene.globe.tileCacheSize=budget.globeTiles;scene.globe.preloadAncestors=true;scene.globe.preloadSiblings=true;
  const tools=document.createElement("div");tools.className="ovg-cesium-navigation";
  const buttons=document.createElement("div");buttons.className="ovg-earth-buttons";tools.append(buttons);
  const button=(label:string,content:string,action:()=>void)=>{const b=document.createElement("button");b.type="button";b.title=label;b.setAttribute("aria-label",label);b.textContent=content;b.onclick=()=>{action();scene.requestRender()};buttons.append(b);return b};
@@ -391,10 +392,12 @@ export async function prepareCesiumTiles3d(host:HTMLElement,root:Tile,manifestPa
   widget.scene.globe.baseColor=c.Color.fromCssColorString("#dce6e8");
   const base=await c.TileMapServiceImageryProvider.fromUrl((globalThis as typeof globalThis&{CESIUM_BASE_URL:string}).CESIUM_BASE_URL+"Assets/Textures/NaturalEarthII");
   if(signal.aborted)throw abortError();widget.imageryLayers.addImageryProvider(base);
-  tiles=await c.Cesium3DTileset.fromUrl(url.href,{maximumScreenSpaceError:24,cacheBytes:64*1024*1024,maximumCacheOverflowBytes:64*1024*1024});
+  const budget=renderBudget(navigator.hardwareConcurrency,(navigator as Navigator&{deviceMemory?:number}).deviceMemory);
+  tiles=await c.Cesium3DTileset.fromUrl(url.href,{maximumScreenSpaceError:budget.idleError,cacheBytes:budget.cacheBytes,maximumCacheOverflowBytes:budget.overflowBytes});
   if(signal.aborted)throw abortError();widget.scene.primitives.add(tiles);
   const r=root.region,longitude=c.Math.toDegrees((r[0]+r[2])/2),latitude=c.Math.toDegrees((r[1]+r[3])/2),span=Math.max(.0001,c.Math.toDegrees(r[2]-r[0]),c.Math.toDegrees(r[3]-r[1])/Math.max(.08,Math.cos(latitude*Math.PI/180)));
   const initial={longitude,latitude,zoom:clamp(Math.log2(180/span),0,19),bearing:0,pitch:45};setCamera(c,widget,initial);cleanupNav=addNavigation(c,widget,surface,initial,imagery,legacyImagery);
+  const navCleanup=cleanupNav,scene=widget.scene;const moving=scene.camera.moveStart.addEventListener(()=>{if(tiles&&!disposed){tiles.maximumScreenSpaceError=budget.movingError;scene.requestRender()}}),settled=scene.camera.moveEnd.addEventListener(()=>{if(tiles&&!disposed){tiles.maximumScreenSpaceError=budget.idleError;scene.requestRender()}});cleanupNav=()=>{moving();settled();navCleanup?.()};
   tiles.tileLoad.addEventListener(()=>{loaded++;if(active&&!disposed)status("CesiumJS · đã tải nội dung tile"+(failed?" · "+failed+" lỗi":""))});
   tiles.tileFailed.addEventListener((e:{message?:string})=>{failed++;console.warn("Cesium tile failed:",e.message?.slice(0,300)??"Unknown error");if(active&&!disposed)status("CesiumJS · "+failed+" tile lỗi hoặc không có quyền truy cập")});
   tiles.allTilesLoaded.addEventListener(()=>{if(active&&!disposed&&!failed)status("CesiumJS · 3D Tiles sẵn sàng")});

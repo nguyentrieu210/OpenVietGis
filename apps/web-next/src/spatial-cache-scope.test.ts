@@ -3,7 +3,7 @@ import type {SpatialLayer} from "@openvietgis/client-sdk";
 import {cacheAuthorized,cacheMatches,cacheScopeMatches,permissionFingerprint,type CacheEntry} from "./SpatialCache";
 const scope={account:"actor",org:"org",project:"project"};
 const permissions=["project.read","project.edit"];
-const layer={id:"layer",organization_id:"org",project_id:"project",source_id:"source",layer_revision:1,source:{feature_count:0,content_revision:"c1",schema_revision:"s1"},capabilities:[{name:"feature_read",available:true,actor_authorized:true}]} as unknown as SpatialLayer;
+const layer={id:"layer",lifecycle:"active",organization_id:"org",project_id:"project",source_id:"source",layer_revision:1,source:{feature_count:0,content_revision:"c1",schema_revision:"s1"},capabilities:[{name:"feature_read",available:true,actor_authorized:true}]} as unknown as SpatialLayer;
 const entry:CacheEntry={key:JSON.stringify(["actor","org","project","layer"]),scope,layer,rows:[],bytes:0,saved:Date.now(),permissionKey:permissionFingerprint(permissions)};
 describe("spatial cache authorization binding",()=>{
  it("allows only complete same-scope same-revision snapshots",()=>{
