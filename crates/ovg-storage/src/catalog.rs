@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use chrono::{DateTime, SecondsFormat, Utc};
-use ovg_core::crs::{reference_coordinate_wire, reference_profile_wire};
+use ovg_core::crs::{native_storage_coordinate_wire, native_storage_profile_wire, reference_profile_wire};
 use ovg_core::{ActorContext, ActorType, AppError, TenantScope};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -18,6 +18,7 @@ use crate::{DbPool, TenantTransaction};
 mod features;
 mod fixtures;
 mod map_write;
+pub(crate) mod regional_crs;
 mod write;
 pub use features::FeatureRequest;
 pub use map_write::MapSaveIntent;
@@ -873,6 +874,7 @@ impl<'a> ProjectRead<'a> {
         let count: Option<i64> = row.try_get("feature_count").map_err(db_error)?;
         let validation_state: &str = row.try_get("validation_state").map_err(db_error)?;
 
+        let extended_native=stored_crs.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_extended_native_vn2000);
         let render_supported = render_supported(
             kind,
             reference_key,
@@ -897,8 +899,8 @@ impl<'a> ProjectRead<'a> {
             "lifecycle": row.try_get::<&str, _>("lifecycle").map_err(db_error)?,
             "validation_state": validation_state,
             "validation_reason": row.try_get::<Option<Value>, _>("validation_reason").map_err(db_error)?,
-            "source_crs": profile_wire(source_crs)?,
-            "stored_crs": profile_wire(stored_crs)?,
+            "source_crs": profile_wire(source_crs,validation_state=="ready")?,
+            "stored_crs": profile_wire(stored_crs,validation_state=="ready")?,
             "schema": {
                 "schema_revision": schema_revision,
                 "fields": fields,
@@ -921,7 +923,8 @@ impl<'a> ProjectRead<'a> {
             wire,
             ready: validation_state == "ready",
             render_supported,
-            edit_supported: render_supported && kind != "reference_fixture",
+            edit_supported: render_supported && kind != "reference_fixture" && !extended_native,
+            extended_native,
         })
     }
 
@@ -995,6 +998,7 @@ pub(crate) struct SourceRecord {
     ready: bool,
     render_supported: bool,
     edit_supported: bool,
+    extended_native:bool,
 }
 
 impl SourceRecord {
@@ -1013,15 +1017,15 @@ impl SourceRecord {
             ("render", self.render_supported, self.ready, "project.read"),
             ("style", self.render_supported, self.ready, "project.read"),
             ("export", self.render_supported, self.ready, "project.read"),
-            ("query", self.render_supported, self.ready, "project.read"),
+            ("query", self.render_supported && !self.extended_native, self.ready, "project.read"),
             ("edit", self.edit_supported, self.ready, "project.edit"),
             (
                 "analysis",
-                self.render_supported,
+                self.render_supported && !self.extended_native,
                 self.ready,
                 "project.edit",
             ),
-            ("offline", self.render_supported, self.ready, "project.read"),
+            ("offline", self.render_supported && !self.extended_native, self.ready, "project.read"),
         ]
         .into_iter()
         .map(|(name, supported, ready, permission)| {
@@ -1111,11 +1115,16 @@ fn render_supported(
     feature_count: Option<i64>,
     extent: Option<&Value>,
 ) -> bool {
+    if crs.and_then(|v|u32::try_from(v).ok()).is_some_and(ovg_core::crs::is_extended_native_vn2000){
+        // Technical rendering support only; every WGS84 read independently
+        // verifies the complete immutable regional chain, or fails closed.
+        return kind=="derived_processing" && matches!(geometry_family,"Point"|"LineString"|"Polygon") && dimensions=="XY" && feature_count.is_some_and(|n|n<=50_000);
+    }
     let regional_provenance = kind == "imported_file"
         || !matches!(crs, Some(4756 | 5899))
         || matches!(
             reference_key,
-            Some("reference_points_4756" | "reference_points_4756_hvs" | "reference_points_5899")
+            Some("reference_points_4756" | "reference_points_4756_hvs" | "reference_points_5899" | "reference_points_4756_da_nang" | "reference_points_4756_hai_phong" | "reference_points_4756_dong_nai")
         );
     let display_extent = crs != Some(4326)
         || feature_count == Some(0)
@@ -1136,11 +1145,11 @@ fn render_supported(
         && display_extent
 }
 
-fn profile_wire(crs: Option<i32>) -> Result<Option<Value>, AppError> {
+fn profile_wire(crs: Option<i32>, ready:bool) -> Result<Option<Value>, AppError> {
     crs.map(|code| {
         u32::try_from(code)
             .ok()
-            .and_then(reference_profile_wire)
+            .and_then(|code|if ready {native_storage_profile_wire(code)}else{reference_profile_wire(code).or_else(||native_storage_profile_wire(code))})
             .ok_or_else(|| AppError::internal("unrecognized persisted CRS definition"))
     })
     .transpose()
@@ -1153,7 +1162,7 @@ fn extent_wire(extent: Option<Value>) -> Result<Option<Value>, AppError> {
                 .get("crs_code")
                 .and_then(Value::as_u64)
                 .and_then(|code| u32::try_from(code).ok())
-                .and_then(reference_coordinate_wire)
+                .and_then(native_storage_coordinate_wire)
                 .ok_or_else(|| AppError::internal("persisted extent has no readable CRS"))?;
             Ok(json!({
                 "min_x": e["min_x"],
