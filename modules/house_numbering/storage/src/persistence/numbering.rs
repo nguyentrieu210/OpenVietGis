@@ -388,11 +388,11 @@ pub async fn tree_occupancy(
     let active = sqlx::query(
         "SELECT route_id,number_text,building_id FROM house_numbering.address_numbers
          WHERE organization_id=$1 AND project_id=$2 AND retired_at IS NULL
-           AND number_text=ANY($3)",
+           AND translate(btrim(number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')=ANY($3)",
     )
     .bind(edit.organization_id())
     .bind(edit.project_id())
-    .bind(numbers)
+    .bind(numbers.iter().map(|n|n.trim_matches(' ').to_ascii_uppercase()).collect::<Vec<_>>())
     .fetch_all(&mut **edit.transaction())
     .await
     .map_err(db_error)?;
@@ -547,6 +547,13 @@ pub async fn apply_preview(
     }
     let rule_id: Uuid = preview.try_get("rule_id").map_err(db_error)?;
     let base: Value = preview.try_get("base_revisions").map_err(db_error)?;
+    if base["numbering_policy"]!="collision-v2" {
+        return Err(stale("numbering policy changed; create a new preview"));
+    }
+    let rule=super::get_rule(edit,rule_id).await?;
+    if base["rule_revision"].as_i64().is_none() || rule["revision"]!=base["rule_revision"] {
+        return Err(stale("numbering rule changed since preview"));
+    }
     let text = |value: &Value| match value {
         Value::String(text) => text.clone(),
         other => other.to_string(),
@@ -555,7 +562,7 @@ pub async fn apply_preview(
         changes.iter().map(|c| text(&c["building_id"])).collect();
     let slots: std::collections::HashSet<(String, String)> = changes
         .iter()
-        .map(|c| (text(&c["route_id"]), text(&c["number"])))
+        .map(|c| (text(&c["route_id"]), text(&c["number"]).trim_matches(' ').to_ascii_uppercase()))
         .collect();
     if buildings.len() != changes.len() || slots.len() != changes.len() {
         return Err(AppError::conflict(
@@ -645,7 +652,7 @@ pub async fn apply_preview(
             "SELECT 1 AS hit FROM house_numbering.address_numbers
              WHERE organization_id=$1 AND project_id=$2 AND retired_at IS NULL AND (
                  (building_id=$3 AND kind IN ('proposed','submitted','approved','reserved'))
-                 OR (route_id=$4 AND number_text=$5 AND building_id IS DISTINCT FROM $3)
+                 OR (route_id=$4 AND translate(btrim(number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')=translate(btrim($5),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ') AND building_id IS DISTINCT FROM $3)
              ) LIMIT 1",
         )
         .bind(edit.organization_id())

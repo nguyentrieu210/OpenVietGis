@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde_json::{json, Value};
 
 use crate::domain::{
-    locate_on_route, parse_number, route_prefix, suggest_number, Address, DomainError, Rule,
+    locate_on_route, number_collision_key, parse_number, route_prefix, suggest_number, Address, DomainError, Rule,
     SuggestOptions,
 };
 
@@ -111,7 +111,7 @@ pub fn build_route_plan(
     let mut numbers_by_building: HashMap<&str, Vec<&NumberRow>> = HashMap::new();
     for n in numbers {
         occupancy
-            .entry(n.number_text.clone())
+            .entry(number_collision_key(&n.number_text))
             .or_default()
             .insert(n.building_id.clone());
         if let Some(bid) = n.building_id.as_deref() {
@@ -141,11 +141,7 @@ pub fn build_route_plan(
     }
     for n in numbers {
         if !primary_ids.contains(&n.id) {
-            let side = n
-                .side
-                .as_deref()
-                .filter(|side| matches!(*side, "left" | "right"))
-                .unwrap_or("left");
+            let side = n.side.as_deref().filter(|side| matches!(*side, "left" | "right")).unwrap_or("left");
             addresses.push(Address::new(
                 &n.id,
                 &n.number_text,
@@ -229,7 +225,7 @@ pub fn build_route_plan(
             warnings.push(format!("building {bid}: {}", proposal.reason));
             continue;
         };
-        if occupancy.get(&number).is_some_and(|set| !set.is_empty()) {
+        if occupancy.get(&number_collision_key(&number)).is_some_and(|set| !set.is_empty()) {
             warnings.push(format!("building {bid}: number_occupied"));
             continue;
         }
@@ -241,7 +237,7 @@ pub fn build_route_plan(
             "proposed",
         )?);
         occupancy
-            .entry(number.clone())
+            .entry(number_collision_key(&number))
             .or_default()
             .insert(Some(bid.to_owned()));
         changes.push(Change {
@@ -309,7 +305,7 @@ pub fn audit_route_numbering(
 
     for n in numbers {
         occupied
-            .entry(n.number_text.clone())
+            .entry(number_collision_key(&n.number_text))
             .or_default()
             .push(json!({
                 "origin": "existing", "building_id": n.building_id, "number_id": n.id,
@@ -366,7 +362,7 @@ pub fn audit_route_numbering(
             continue;
         }
         occupied
-            .entry(change.number.clone())
+            .entry(number_collision_key(&change.number))
             .or_default()
             .push(json!({
                 "origin": "proposal", "building_id": change.building_id, "number_id": null,
@@ -516,7 +512,7 @@ pub fn find_tree_collisions(
     let mut groups: BTreeMap<(String, String), Vec<Value>> = BTreeMap::new();
     for occupant in occupants {
         groups
-            .entry((root(&occupant.route_id), occupant.number_text.clone()))
+            .entry((root(&occupant.route_id), number_collision_key(&occupant.number_text)))
             .or_default()
             .push(json!({
                 "route_id": occupant.route_id,
@@ -605,13 +601,13 @@ mod tests {
         let occupants = vec![
             Occupant {
                 route_id: "s".into(),
-                number_text: "2".into(),
+                number_text: " 2a ".into(),
                 building_id: None,
                 origin: "existing",
             },
             Occupant {
                 route_id: "a".into(),
-                number_text: "2".into(),
+                number_text: "2A".into(),
                 building_id: Some("b".into()),
                 origin: "proposal",
             },
@@ -619,5 +615,6 @@ mod tests {
         let issues = find_tree_collisions(&parents, &occupants);
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0]["root_route_id"], "s");
+        assert_eq!(issues[0]["number"],"2A");
     }
 }

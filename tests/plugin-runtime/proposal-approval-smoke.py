@@ -83,6 +83,19 @@ def main():
                 with psycopg.connect(runtime) as db:
                     scoped(db)
                     assert run(db,queries[2])[0][0] is True
+                duplicate_sql=re.search(r'"(SELECT translate\(btrim\(n.number_text\).*?HAVING count\(\*\) > 1\s+LIMIT 1)"',source,re.S).group(1)
+                occupied_sql=re.search(r'"(SELECT n.number_text\s+FROM house_numbering.proposal_items i.*?JOIN house_numbering.address_numbers existing.*?LIMIT 1)"',source,re.S).group(1)
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    assert not run(db,duplicate_sql)
+                    assert not run(db,occupied_sql)
+                # Disposable test transaction, intentionally rolled back.
+                with psycopg.connect(owner) as db:
+                    with db.transaction(force_rollback=True):
+                        db.execute("""INSERT INTO house_numbering.address_numbers(id,organization_id,project_id,building_id,route_id,number_text,kind,created_by_actor_id,updated_by_actor_id,created_at,updated_at)
+                        VALUES(%s,%s,%s,NULL,%s,' 1 ','reserved',%s,%s,now(),now())""",(uuid4(),org,project,route['id'],actor,actor))
+                        assert run(db,occupied_sql)==[('1',)]
+                print('PASS exact canonical occupancy SQL: historical raw value preserved and whitespace alias detected')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:

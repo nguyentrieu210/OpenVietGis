@@ -150,11 +150,13 @@ async fn inspect_location(
     let mut addresses = Vec::new();
     let mut located = Vec::new();
     let mut existing_address_id = None;
+    let mut primary_ids = BTreeSet::new();
     for row in &rows {
         let candidate = locate_on_route((row.x, row.y), &vertices, &crs).map_err(domain)?;
         let Some(candidate_side) = candidate.side else {
             continue;
         };
+        if candidate.distance > rule.max_distance {continue;}
         located.push((row, candidate.measure, candidate_side));
         if let Some(text) = row.number_text.as_deref().filter(|text| !text.is_empty()) {
             let kind = row.kind.as_deref().filter(|kind| !kind.is_empty());
@@ -174,6 +176,7 @@ async fn inspect_location(
                 })
                 .unwrap_or("proposed");
             let address_id = row.number_id.unwrap_or(row.id).to_string();
+            primary_ids.insert(address_id.clone());
             addresses.push(
                 Address::new(&address_id, text, candidate.measure, candidate_side, state)
                     .map_err(domain)?,
@@ -184,12 +187,11 @@ async fn inspect_location(
         }
     }
     for number in store::route_numbers(read, body.route_id).await? {
-        if number.kind != "reserved" || number.building_id.is_some() {
-            continue;
-        }
-        let (Some(number_side), Some(measure)) = (number.side.as_deref(), number.measure_m) else {
-            continue;
-        };
+        if primary_ids.contains(&number.id.to_string()) {continue;}
+        // All active numbers occupy a slot even if geometry is absent, too
+        // distant, or a lower-priority evidence value. Never invent an anchor.
+        let number_side=number.side.as_deref().filter(|v|matches!(*v,"left"|"right")).unwrap_or("left");
+        let measure=number.measure_m.unwrap_or(0.0);
         addresses.push(
             Address::new(
                 &number.id.to_string(),
@@ -485,6 +487,8 @@ async fn preview_assignment(
         );
     }
     let mut base = serde_json::Map::new();
+    base.insert("numbering_policy".into(),json!("collision-v2"));
+    base.insert("rule_revision".into(),rule_row["revision"].clone());
     let mut changes: Vec<Value> = Vec::new();
     for plan in plans
         .iter()

@@ -478,6 +478,62 @@ async fn check_quality(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<(),Ap
     Ok(())
 }
 
+// Repeat occupancy checks on approval; a newly imported alias must not bypass
+// a previously submitted proposal's duplicate check.
+async fn check_number_conflicts(edit:&mut ProjectRead<'_>,proposal_id:Uuid)->Result<(),AppError>{
+    let duplicate = sqlx::query(
+        "SELECT translate(btrim(n.number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ') AS number_text
+             FROM house_numbering.proposal_items i
+             JOIN house_numbering.address_numbers n
+               ON n.organization_id=i.organization_id AND n.project_id=i.project_id
+              AND n.id=i.source_number_id
+             WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+             GROUP BY n.route_id,translate(btrim(n.number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+             HAVING count(*) > 1
+             LIMIT 1",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(proposal_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    let occupied = sqlx::query(
+        "SELECT n.number_text
+             FROM house_numbering.proposal_items i
+             JOIN house_numbering.address_numbers n
+               ON n.organization_id=i.organization_id AND n.project_id=i.project_id
+              AND n.id=i.source_number_id
+             JOIN house_numbering.address_numbers existing
+               ON existing.organization_id=n.organization_id
+              AND existing.project_id=n.project_id
+              AND existing.route_id=n.route_id
+              AND translate(btrim(existing.number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')=translate(btrim(n.number_text),'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+              AND existing.id<>n.id
+              AND existing.retired_at IS NULL
+              AND (existing.kind IN ('submitted','approved','reserved') OR existing.building_id IS DISTINCT FROM n.building_id)
+             WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
+             LIMIT 1",
+    )
+    .bind(edit.organization_id())
+    .bind(edit.project_id())
+    .bind(proposal_id)
+    .fetch_optional(&mut **edit.transaction())
+    .await
+    .map_err(db_error)?;
+    if let Some(row) = duplicate.or(occupied) {
+        let number: String = row.try_get("number_text").map_err(db_error)?;
+        return Err(AppError::conflict(
+            "NUMBER_OCCUPIED",
+            format!(
+                "number {} is already occupied on this route",
+                py_repr(&number)
+            ),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn transition_proposal(
     edit: &mut ProjectRead<'_>,
     actor: AuditActor<'_>,
@@ -504,56 +560,7 @@ pub async fn transition_proposal(
     ) = match (action, state.as_str(), reviewer) {
         ("submit", "draft", _) => {
             validate_transition_items(edit, proposal_id, &proposal, "proposed", false).await?;
-            let duplicate = sqlx::query(
-                "SELECT n.number_text
-                     FROM house_numbering.proposal_items i
-                     JOIN house_numbering.address_numbers n
-                       ON n.organization_id=i.organization_id AND n.project_id=i.project_id
-                      AND n.id=i.source_number_id
-                     WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
-                     GROUP BY n.route_id,n.number_text
-                     HAVING count(*) > 1
-                     LIMIT 1",
-            )
-            .bind(edit.organization_id())
-            .bind(edit.project_id())
-            .bind(proposal_id)
-            .fetch_optional(&mut **edit.transaction())
-            .await
-            .map_err(db_error)?;
-            let occupied = sqlx::query(
-                "SELECT n.number_text
-                     FROM house_numbering.proposal_items i
-                     JOIN house_numbering.address_numbers n
-                       ON n.organization_id=i.organization_id AND n.project_id=i.project_id
-                      AND n.id=i.source_number_id
-                     JOIN house_numbering.address_numbers existing
-                       ON existing.organization_id=n.organization_id
-                      AND existing.project_id=n.project_id
-                      AND existing.route_id=n.route_id
-                      AND existing.number_text=n.number_text
-                      AND existing.id<>n.id
-                      AND existing.retired_at IS NULL
-                      AND existing.kind IN ('submitted','approved','reserved')
-                     WHERE i.organization_id=$1 AND i.project_id=$2 AND i.proposal_id=$3
-                     LIMIT 1",
-            )
-            .bind(edit.organization_id())
-            .bind(edit.project_id())
-            .bind(proposal_id)
-            .fetch_optional(&mut **edit.transaction())
-            .await
-            .map_err(db_error)?;
-            if let Some(row) = duplicate.or(occupied) {
-                let number: String = row.try_get("number_text").map_err(db_error)?;
-                return Err(AppError::conflict(
-                    "NUMBER_OCCUPIED",
-                    format!(
-                        "number {} is already occupied on this route",
-                        py_repr(&number)
-                    ),
-                ));
-            }
+            check_number_conflicts(edit,proposal_id).await?;
             move_numbers(edit, actor, proposal_id, "proposed", "submitted", now).await?;
             let digest=submission_digest(edit,proposal_id,0).await?;
             sqlx::query("INSERT INTO house_numbering.proposal_submission_pins(organization_id,project_id,proposal_id,submitted_revision,submitted_by,input_digest) VALUES($1,$2,$3,$4,$5,$6)")
@@ -587,6 +594,7 @@ pub async fn transition_proposal(
                 return Err(AppError::forbidden("proposal approver must be independent from creator and submitter"));
             }
             validate_transition_items(edit, proposal_id, &proposal, "submitted", true).await?;
+            check_number_conflicts(edit,proposal_id).await?;
             if proposal["rule_status"].as_str() != Some("authoritative")
                 || blank(proposal["authority_ref"].as_str())
             {
@@ -658,6 +666,7 @@ pub(super) async fn verify_approved_snapshot(edit:&mut ProjectRead<'_>,proposal_
         return Err(AppError::conflict("ISSUANCE_REQUIRES_APPROVAL","a verified approved proposal is required"));
     }
     validate_transition_items(edit,proposal_id,&proposal,"approved",true).await?;
+    check_number_conflicts(edit,proposal_id).await?;
     check_quality(edit,proposal_id).await?;
     let revision=proposal["revision"].as_i64().ok_or_else(||AppError::internal("missing proposal revision"))?;
     let pin:Option<(Uuid,String)>=sqlx::query_as("SELECT submitted_by,input_digest::text FROM house_numbering.proposal_submission_pins WHERE organization_id=$1 AND project_id=$2 AND proposal_id=$3 AND submitted_revision=$4")

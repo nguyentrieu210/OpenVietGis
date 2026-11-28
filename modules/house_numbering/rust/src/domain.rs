@@ -203,6 +203,14 @@ pub fn parse_number(number: &str, prefix: &str, style: &str) -> Option<(i64, i64
     Some((base.parse().ok()?, rank))
 }
 
+/// Collision identity only: preserve original evidence text, but do not
+/// allocate another number that differs only in ASCII case or outer spaces.
+pub fn number_collision_key(number: &str) -> String {
+    number.trim_matches(' ').to_ascii_uppercase()
+}
+
+const MAX_BASE: i64 = 999_999_999_999;
+
 pub fn format_number(base: i64, rank: i64, prefix: &str, style: &str) -> String {
     let suffix = if rank == 0 {
         String::new()
@@ -291,12 +299,12 @@ pub fn suggest_number(
         .iter()
         .find(|(row, _)| row.measure > measure)
         .map(|(_, value)| *value);
-    let occupied: BTreeSet<&str> = addresses.iter().map(|row| row.number.as_str()).collect();
+    let occupied: BTreeSet<String> = addresses.iter().map(|row| number_collision_key(&row.number)).collect();
     let style = rule.suffix_style.as_str();
     let free_base = |start: i64, stop: Option<i64>| -> Option<String> {
         let mut candidate = start;
         for _ in 0..=occupied.len() {
-            if candidate <= 0 || stop.is_some_and(|stop| candidate >= stop) {
+            if candidate <= 0 || candidate > MAX_BASE || stop.is_some_and(|stop| candidate >= stop) {
                 return None;
             }
             let number = format_number(candidate, 0, &prefix, style);
@@ -321,7 +329,8 @@ pub fn suggest_number(
                 return Ok(result(number, reason));
             }
             let mut candidate = following.0 - 2;
-            while candidate > 0 {
+            for _ in 0..=occupied.len() {
+                if candidate <= 0 { break; }
                 let number = format_number(candidate, 0, &prefix, style);
                 if !occupied.contains(number.as_str()) {
                     return Ok(result(Some(number), "before_first"));
@@ -330,7 +339,11 @@ pub fn suggest_number(
             }
             Ok(result(None, "no_number_before_first"))
         }
-        (Some(previous), None) => Ok(result(free_base(previous.0 + 2, None), "after_last")),
+        (Some(previous), None) => {
+            let number=free_base(previous.0 + 2, None);
+            let reason=if number.is_some(){"after_last"}else{"numbering_range_exhausted"};
+            Ok(result(number,reason))
+        },
         (Some(previous), Some(following)) => {
             if let Some(gap) = free_base(previous.0 + 2, Some(following.0)) {
                 return Ok(result(Some(gap), "unused_gap"));
@@ -341,6 +354,9 @@ pub fn suggest_number(
                     return Ok(result(None, "no_slot_between_anchors"));
                 }
                 let number = format_number(previous.0, rank, &prefix, style);
+                if parse_number(&number, &prefix, style).is_none() {
+                    return Ok(result(None, "numbering_range_exhausted"));
+                }
                 if !occupied.contains(number.as_str()) {
                     return Ok(result(Some(number), "subnumber"));
                 }
@@ -554,6 +570,46 @@ mod tests {
             (sub.number.as_deref(), sub.reason),
             (Some("1A"), "subnumber")
         );
+    }
+
+    #[test]
+    fn fills_numeric_gaps_then_suffixes_without_using_reserved_slots() {
+        let r=rule();
+        let mut rows=vec![Address::new("a","100",0.0,"right","certificate").unwrap(),
+                          Address::new("b","106",100.0,"right","approved").unwrap()];
+        let next=|rows:&[Address]|suggest_number(rows,50.0,"right",&r,SuggestOptions::default()).unwrap().number;
+        assert_eq!(next(&rows).as_deref(),Some("102"));
+        rows.push(Address::new("c","102",0.0,"right","reserved").unwrap());
+        assert_eq!(next(&rows).as_deref(),Some("104"));
+        rows.push(Address::new("d","104",0.0,"right","reserved").unwrap());
+        assert_eq!(next(&rows).as_deref(),Some("100A"));
+        rows.push(Address::new("e"," 100a ",0.0,"left","reserved").unwrap());
+        assert_eq!(next(&rows).as_deref(),Some("100B"));
+    }
+
+    #[test]
+    fn nested_alley_dash_and_reverse_parity() {
+        let r=Rule::new("v2",false,"dash",35.0,None).unwrap();
+        let rows=vec![Address::new("a","12/3A/100",1.0,"left","approved").unwrap(),
+                      Address::new("b","12/3A/102",20.0,"left","certificate").unwrap(),
+                      Address::new("c","12/3a/100-1",0.0,"right","reserved").unwrap()];
+        let s=suggest_number(&rows,10.0,"left",&r,SuggestOptions{prefix:"12/3a",..Default::default()}).unwrap();
+        assert_eq!(s.number.as_deref(),Some("12/3A/100-2"));
+        let rev=locate_on_route((20.0,10.0),&[(100.0,0.0),(0.0,0.0)],"EPSG:3857").unwrap();
+        assert_eq!(rev.side,Some("right"));assert_eq!(rev.measure,80.0);
+    }
+
+    #[test]
+    fn rejects_ambiguous_anchors_and_exhausted_range() {
+        let r=rule();
+        let rows=vec![Address::new("a","106",10.0,"right","approved").unwrap(),
+                      Address::new("b","100",20.0,"right","certificate").unwrap()];
+        assert_eq!(suggest_number(&rows,15.0,"right",&r,SuggestOptions::default()).unwrap().reason,"nonmonotonic_or_duplicate_anchor");
+        let rows=vec![Address::new("a","999999999999",1.0,"left","approved").unwrap()];
+        let s=suggest_number(&rows,2.0,"left",&r,SuggestOptions::default()).unwrap();
+        assert_eq!(s.number,None);assert_eq!(s.reason,"numbering_range_exhausted");
+        let rows=vec![Address::new("a","1ZZZZZZ",1.0,"left","approved").unwrap(),Address::new("b","3",3.0,"left","approved").unwrap()];
+        assert_eq!(suggest_number(&rows,2.0,"left",&r,SuggestOptions::default()).unwrap().number,None);
     }
 
     #[test]
