@@ -21,8 +21,8 @@ const changeset=(id:string,base:string,result:string,ops:ReturnType<typeof opera
 const c1=changeset("c1",rev0,rev1,[operation("o1",1,"update","f1")]);
 const c2=changeset("c2",rev1,rev2,[operation("o2",1,"delete","f2")]);
 const rows=[
- {key:source+":f1",layer:baseLayer,feature:{feature_id:"f1",attributes:{name:"old"},geometry_state:"present"},geometry:{type:"Point",coordinates:[105,21]},color:"#000"},
- {key:source+":f2",layer:baseLayer,feature:{feature_id:"f2",attributes:{name:"delete"},geometry_state:"present"},geometry:{type:"Point",coordinates:[106,22]},color:"#000"},
+ {key:source+":f1",layer:baseLayer,feature:{feature_id:"f1",attributes:{name:"old"},geometry_state:"present",geometry:{type:"Point",coordinates:[105,21],coordinate_reference:{code:4326}}},geometry:{type:"Point",coordinates:[105,21]},color:"#000"},
+ {key:source+":f2",layer:baseLayer,feature:{feature_id:"f2",attributes:{name:"delete"},geometry_state:"present",geometry:{type:"Point",coordinates:[106,22],coordinate_reference:{code:4326}}},geometry:{type:"Point",coordinates:[106,22]},color:"#000"},
 ] as unknown as StudioRow[];
 
 function client(history= [c2,c1]){
@@ -33,7 +33,7 @@ function client(history= [c2,c1]){
   else if(path.endsWith("/changesets/c1"))body=c1;
   else if(path.endsWith("/changesets/c2"))body=c2;
   else if(path.endsWith("/layers/"+layerId+"/features/f1"))body={
-   context:{organization_id:org,project_id:pid,layer_id:layerId,source_id:source,content_revision:rev2,schema_revision:schema,response_crs:{code:4326}},
+   context:{organization_id:org,project_id:pid,layer_id:layerId,source_id:source,content_revision:rev2,schema_revision:schema,geometry_included:true,response_crs:{code:4326},transformation:null},
    feature:{feature_id:"f1",attributes:{name:"new"},geometry_state:"present",geometry:{type:"Point",coordinates:[107,23],coordinate_reference:{code:4326}}}
   };
   else return new Response("unexpected "+path,{status:500});
@@ -55,6 +55,11 @@ describe("incremental reconnect convergence",()=>{
   expect(calls.filter(x=>x.includes("/features/"))).toHaveLength(1);
   expect(calls.some(x=>x.includes("/features/f2"))).toBe(false);
   expect(calls.findIndex(x=>x.includes("/changesets/c1"))).toBeLessThan(calls.findIndex(x=>x.includes("/changesets/c2")));
+ });
+ it("rejects an incomplete prior snapshot before reading reconnect history",async()=>{
+  const {api,fetchImpl}=client();
+  await expect(incrementalLayerRows(api,org,pid,baseLayer,nextLayer,rows.slice(0,1),"#123",()=>true)).resolves.toBeNull();
+  expect(fetchImpl).not.toHaveBeenCalled();
  });
  it("requires a full reload when the retained revision chain has a gap",async()=>{
   const {api,fetchImpl}=client([c2]);
