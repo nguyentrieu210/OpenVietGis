@@ -73,6 +73,24 @@ class MainActivity : FlutterActivity() {{
     dst = src / "org/openvietgis/secure/MediaKeys.kt"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(repo / "infra/mobile/native/media/MediaKeys.kt", dst)
+    shutil.copyfile(repo / "infra/mobile/native/media/CameraCaptureActivity.kt", dst.parent / "CameraCaptureActivity.kt")
+    import xml.etree.ElementTree as ET
+    ns="http://schemas.android.com/apk/res/android"
+    ET.register_namespace("android",ns)
+    m=host/"android/app/src/main/AndroidManifest.xml"
+    tree=ET.parse(m); manifest=tree.getroot(); app=manifest.find("application")
+    attr=lambda key: "{"+ns+"}"+key
+    if app is None: raise SystemExit("application missing")
+    if not any(x.get(attr("name"))=="android.permission.CAMERA" for x in manifest.findall("uses-permission")):
+        ET.SubElement(manifest,"uses-permission",{attr("name"):"android.permission.CAMERA"})
+    ET.SubElement(manifest,"uses-feature",{attr("name"):"android.hardware.camera",attr("required"):"false"})
+    ET.SubElement(app,"activity",{attr("name"):"org.openvietgis.secure.CameraCaptureActivity",attr("exported"):"false",attr("screenOrientation"):"portrait"})
+    tree.write(m,encoding="utf-8",xml_declaration=True)
+    gradle=host/"android/app/build.gradle.kts"
+    if not gradle.is_file(): raise SystemExit("expected Kotlin Gradle template")
+    deps=["androidx.activity:activity:1.9.3"]+["androidx.camera:camera-"+part+":1.4.2" for part in ("core","camera2","lifecycle","view")]
+    with gradle.open("a") as f:
+        f.write("\n dependencies {\n"+"\n".join(f\'    implementation("{d}")\' for d in deps)+"\n}\n")
 # JNI method is name-bound; keep in minified Android release.
 rules = host / "android/app/proguard-rules.pro"
 if rules.parent.exists():
