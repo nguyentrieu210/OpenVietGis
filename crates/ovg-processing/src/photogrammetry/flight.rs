@@ -3,9 +3,9 @@
 use super::{autotune,hardware,ingest,images,colmap,local_worker,colmap_model,jpeg_source,ortho,pipeline,disk_store};
 use sha2::{Digest,Sha256};
 use std::{fs::{self,File},io::Read,path::{Path,PathBuf},collections::{BTreeMap,BTreeSet},time::{Duration,Instant},sync::atomic::{AtomicBool,Ordering}};
-#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Unsupported,AmbiguousModel,Registration,Io(std::io::Error),Tune(autotune::Error),Ingest(ingest::Error),Worker(local_worker::Error),Render(pipeline::Error),Control(super::control_network::Error),Checkpoint,Surface(super::cloud_dsm::Error)}
+#[derive(Debug)]pub enum Error{Invalid,Limit,Cancelled,Unsupported,AmbiguousModel,Registration,Io(std::io::Error),Tune(autotune::Error),Ingest(ingest::Error),Worker(local_worker::Error),Render(pipeline::Error),Control(super::control_network::Error),Checkpoint,Surface(super::cloud_dsm::Error),Dense(super::cuda_candidate::Error)}
 impl From<std::io::Error> for Error{fn from(e:std::io::Error)->Self{Self::Io(e)}}
-#[derive(Debug,Clone,Copy,PartialEq,Eq)]pub enum Stage{Import,Sparse,Undistort,AwaitAlignment,Render,Complete}
+#[derive(Debug,Clone,Copy,PartialEq,Eq)]pub enum Stage{Import,Sparse,Undistort,AwaitAlignment,Dense,Surface,Render,Complete}
 pub struct PreparedFlight{root:PathBuf,model:local_worker::Prepared,plan:autotune::Plan,pub input_sha256:String,pub model_sha256:String,pub registered:usize,pub total:usize}
 fn digest(path:&Path,cap:u64,cancel:&AtomicBool)->Result<String,Error>{
  let m=fs::symlink_metadata(path)?;if !m.file_type().is_file()||m.len()==0||m.len()>cap{return Err(Error::Limit);}
@@ -28,6 +28,9 @@ fn model_digest(root:&Path,views:&[colmap_model::View],cancel:&AtomicBool)->Resu
  let mut h=Sha256::new();h.update(b"ovg-prepared-model-v1\0");
  for n in ["cameras.txt","images.txt","points3D.txt"]{
  h.update(n.as_bytes());h.update(digest(&root.join("model-text").join(n),256<<20,cancel)?.as_bytes());
+ }
+ for n in ["cameras.bin","images.bin","points3D.bin"]{
+ h.update(n.as_bytes());h.update(digest(&root.join("dense/sparse").join(n),512<<20,cancel)?.as_bytes());
  }
  let mut total=0u64;let mut names=BTreeSet::new();
  for v in views{
@@ -172,6 +175,73 @@ pub fn derive_dsm(flight:&PreparedFlight,aligned:&QualifiedAlignment,cloud:Cloud
  receipt,vertical_datum:aligned.vertical_datum.clone()})
  })();
  let _=fs::remove_dir_all(&stage);result
+}
+
+/// Copy a bounded immutable model artifact to a fresh worker snapshot and
+/// compare actual byte digests. No hardlinks into writable provider staging.
+fn copy_model(src:&Path,dst:&Path,remaining:u64,cancel:&AtomicBool)->Result<u64,Error>{
+ use std::io::Write;
+ let m=fs::symlink_metadata(src)?;
+ if !m.file_type().is_file()||m.len()==0||m.len()>remaining{return Err(Error::Limit);}
+ let mut f=File::open(src)?;let mut o=fs::OpenOptions::new().write(true).create_new(true).open(dst)?;
+ let(mut n,mut h)=(0u64,Sha256::new());let mut b=[0;65536];
+ loop{if cancel.load(Ordering::Acquire){return Err(Error::Cancelled);}let k=f.read(&mut b)?;if k==0{break;}
+ n=n.checked_add(k as u64).ok_or(Error::Limit)?;if n>m.len(){return Err(Error::Invalid);}
+ o.write_all(&b[..k])?;h.update(&b[..k]);}
+ o.sync_all()?;drop(o);
+ if n!=m.len()||format!("{:x}",h.finalize())!=digest(src,remaining,cancel)?{return Err(Error::Invalid);}Ok(n)
+}
+pub struct DenseProduct{pub dsm:DsmProduct,pub cloud:super::fused_ply::Summary,pub mosaic:pipeline::ResultSummary}
+/// Experimental host-only end-to-end GPU route after GCP qualification.
+/// All three output paths must be fresh, on host-quota-backed private storage.
+/// The caller owns partial-job cleanup. Successful intermediate DSM is retained
+/// if the subsequent orthomosaic stage fails; no final mosaic receipt is issued.
+pub fn reconstruct_dense(flight:&PreparedFlight,aligned:&QualifiedAlignment,worker:&Path,dem:&Path,output:&Path,
+ grid:ortho::Grid,gpu:&super::cuda_candidate::Policy,source_views:u16,cache_gib:u16,
+ surface_policy:super::cloud_dsm::Policy,cancel:&AtomicBool,mut progress:impl FnMut(Stage,u64,u64))->Result<DenseProduct,Error>{
+ if !cfg!(target_os="linux"){return Err(Error::Unsupported);}
+ if aligned.model_sha256!=flight.model_sha256||!worker.is_absolute()||worker.exists()||
+ !dem.is_absolute()||dem.exists()||!output.is_absolute()||output.exists()||dem==output||
+ worker.starts_with(&flight.root)||dem.starts_with(worker)||output.starts_with(worker)||
+ gpu.host_bytes>flight.plan.admission.budget.host_bytes||gpu.threads>flight.plan.admission.budget.threads||
+ gpu.max_input_bytes>flight.plan.admission.budget.scratch_bytes||
+ gpu.cloud.max_bytes>flight.plan.admission.budget.scratch_bytes||
+ surface_policy.max_work_bytes>flight.plan.admission.budget.host_bytes/2{return Err(Error::Invalid);}
+ if model_digest(&flight.root,&flight.model.views,cancel)?!=aligned.model_sha256{return Err(Error::Invalid);}
+ fs::create_dir(worker)?;
+ for n in ["images","sparse","dense","dense/images","dense/sparse"]{fs::create_dir(worker.join(n))?;}
+ let mut bytes=0u64;
+ let mut names=Vec::with_capacity(flight.registered);
+ for v in &flight.model.views{
+ let rel=PathBuf::from("dense/images").join(&v.name);
+ bytes+=copy_model(&flight.root.join(&rel),&worker.join(&rel),gpu.max_input_bytes-bytes,cancel)?;
+ names.push(v.name.clone());
+ }
+ for n in ["cameras.bin","images.bin","points3D.bin"]{
+ let rel=PathBuf::from("dense/sparse").join(n);
+ bytes+=copy_model(&flight.root.join(&rel),&worker.join(&rel),gpu.max_input_bytes-bytes,cancel)?;
+ }
+ if model_digest(&flight.root,&flight.model.views,cancel)?!=aligned.model_sha256{return Err(Error::Invalid);}
+ let cfg=colmap::Config{image_count:flight.registered as u32,max_image_side:flight.plan.sparse.max_image_side,
+ threads:gpu.threads,device:super::Device::Cuda,gpu_index:Some(0),
+ pairing:flight.plan.sparse.pairing.clone()};
+ progress(Stage::Dense,0,1);
+ let cloud=super::cuda_candidate::run_prepared(worker,&cfg,source_views,cache_gib,gpu,&names,
+ ||cancel.load(Ordering::Acquire)).map_err(Error::Dense)?;
+ // Recheck the worker input snapshot before trusting its output frame.
+ for v in &flight.model.views{
+ let rel=PathBuf::from("dense/images").join(&v.name);
+ if digest(&worker.join(&rel),gpu.max_input_bytes,cancel)?!=digest(&flight.root.join(&rel),gpu.max_input_bytes,cancel)?{return Err(Error::Invalid);}
+ }
+ for n in ["cameras.bin","images.bin","points3D.bin"]{
+ let rel=PathBuf::from("dense/sparse").join(n);
+ if digest(&worker.join(&rel),gpu.max_input_bytes,cancel)?!=digest(&flight.root.join(&rel),gpu.max_input_bytes,cancel)?{return Err(Error::Invalid);}
+ }
+ let ply=worker.join("dense/fused.ply");let sha=digest(&ply,gpu.cloud.max_bytes,cancel)?;
+ progress(Stage::Surface,0,1);
+ let dsm=derive_dsm(flight,aligned,CloudInput{path:&ply,sha256:&sha,model_sha256:&aligned.model_sha256},grid,surface_policy,dem,cancel)?;
+ let mosaic=render(flight,&dsm.surface,output,cancel,&mut progress)?;
+ Ok(DenseProduct{dsm,cloud,mosaic})
 }
 #[cfg(test)]mod tests{
  use super::*;
