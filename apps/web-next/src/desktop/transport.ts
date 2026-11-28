@@ -23,6 +23,8 @@ export const desktop={
   createLayer:(handle:string,name:string,grant:string|null=null,table:string|null=null)=>host().core.invoke<LayerInfo>("desktop_create_layer",{handle,name,grant,table}),
   openLayer:(handle:string,layer:string)=>host().core.invoke<Opened>("desktop_open_layer",{handle,layer}),
   list:()=>host().core.invoke<Project[]>("desktop_list"),
+  backupProject:(handle:string)=>host().core.invoke<boolean>("desktop_backup_project",{handle}),
+  restoreProject:()=>host().core.invoke<Project|null>("desktop_restore_project"),
   restoreSnapshot:()=>host().core.invoke<Project|null>("desktop_restore_snapshot"),
   create:()=>host().core.invoke<Project>("desktop_create"),
   open:(id:string)=>host().core.invoke<Opened>("desktop_open",{id}),
