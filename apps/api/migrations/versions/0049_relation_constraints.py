@@ -113,6 +113,20 @@ def upgrade():
           ELSE
             org:=NEW.organization_id; project:=NEW.project_id; source:=NEW.source_id;
           END IF;
+          -- Let row-level policy checks reject writes outside the bound project.
+          -- BEFORE triggers run before WITH CHECK, so the relation guard must not
+          -- replace the authorization SQLSTATE with a relation conflict.
+          IF current_user='openvietgis_runtime' AND (
+            org IS DISTINCT FROM NULLIF(
+              current_setting('openvietgis.organization_id',true),''
+            )::uuid
+            OR project IS DISTINCT FROM NULLIF(
+              current_setting('openvietgis.project_id',true),''
+            )::uuid
+          ) THEN
+            IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+            RETURN NEW;
+          END IF;
           PERFORM 1 FROM workspace.projects p
             WHERE p.organization_id=org AND p.id=project FOR UPDATE;
           IF NOT FOUND THEN
