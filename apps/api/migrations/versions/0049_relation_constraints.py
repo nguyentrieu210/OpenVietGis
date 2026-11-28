@@ -28,6 +28,23 @@ def upgrade():
         )
     """)
     op.execute("CREATE INDEX relations_target ON editing.relations(organization_id,project_id,target_source_id)")
+    # Relation-trigger functions run with a pinned pg_catalog search_path. Keep
+    # PostGIS calls in the RLS predicate schema-qualified so they still resolve
+    # when PostgreSQL inlines this SQL function from that restricted context.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION gis_access.feature_allowed(
+            o uuid,p uuid,s uuid,f text,attrs jsonb,g public.geometry,a text DEFAULT 'read'
+        ) RETURNS boolean
+        LANGUAGE sql STABLE SET search_path=pg_catalog AS $
+          SELECT NOT gis_access.scoped(o,p) OR EXISTS(
+            SELECT 1 FROM gis_access.subject_rules(o,p) r WHERE r.source_id=s AND a=ANY(r.actions)
+              AND (r.feature_ids IS NULL OR f=ANY(r.feature_ids))
+              AND (r.attribute_filter IS NULL OR attrs @> r.attribute_filter)
+              AND (r.region IS NULL OR CASE WHEN g IS NOT NULL AND public.ST_SRID(g)>0
+                THEN public.ST_CoveredBy(public.ST_Transform(g,4326),r.region) ELSE FALSE END)
+          )
+        $
+    """)
     op.execute("ALTER TABLE editing.relations ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE editing.relations FORCE ROW LEVEL SECURITY")
     op.execute("""
@@ -256,4 +273,19 @@ def downgrade():
     op.execute("DROP TRIGGER relation_definition_guard ON editing.relations")
     op.execute("DROP FUNCTION editing.guard_relation_definition()")
     op.execute("DROP TABLE editing.relations")
+    # Restore the pre-relation ACL predicate when rolling this migration back.
+    op.execute("""
+        CREATE OR REPLACE FUNCTION gis_access.feature_allowed(
+            o uuid,p uuid,s uuid,f text,attrs jsonb,g public.geometry,a text DEFAULT 'read'
+        ) RETURNS boolean
+        LANGUAGE sql STABLE AS $
+          SELECT NOT gis_access.scoped(o,p) OR EXISTS(
+            SELECT 1 FROM gis_access.subject_rules(o,p) r WHERE r.source_id=s AND a=ANY(r.actions)
+              AND (r.feature_ids IS NULL OR f=ANY(r.feature_ids))
+              AND (r.attribute_filter IS NULL OR attrs @> r.attribute_filter)
+              AND (r.region IS NULL OR CASE WHEN g IS NOT NULL AND ST_SRID(g)>0
+                THEN ST_CoveredBy(ST_Transform(g,4326),r.region) ELSE FALSE END)
+          )
+        $
+    """)
     op.execute("DROP FUNCTION editing.relation_key(jsonb,text)")
