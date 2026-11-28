@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState,type RefObject} from "react";
 import * as ml from "./map-surface";
+import {PRESENCE_SOURCE,syncPointLabels,removePointLabels} from "./gpu-collaboration";
 import "./live-presence.css";
 export type Peer={id:string;actor:string;name:string;color:string;cursor:number[]|null;view:number[]|null};
 type Props={org:string;pid:string;map:RefObject<ml.Map|null>;blocked:boolean;preserveView:()=>void;onPeers?:(peers:Peer[],self:string)=>void};
@@ -11,8 +12,8 @@ export function LivePresence({org,pid,map,blocked,preserveView,onPeers}:Props){
  useEffect(()=>{if(blocked)setFollow("")},[blocked]);
  useEffect(()=>{
   if(!enabled||!map.current)return;
-  const m=map.current,markers=new Map<string,ml.Marker>();let stopped=false,ws:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|undefined,timer:ReturnType<typeof setTimeout>|undefined,delay=1000,last=0,pending:Record<string,unknown>={},me="";
-  const clear=()=>{markers.forEach(x=>x.remove());markers.clear();setPeers([]);setSelf("");setFollow("");onPeersRef.current?.([],"")};
+  const m=map.current;let stopped=false,ws:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|undefined,timer:ReturnType<typeof setTimeout>|undefined,delay=1000,last=0,pending:Record<string,unknown>={},me="";
+  const clear=()=>{if(m.getStyle())removePointLabels(m,PRESENCE_SOURCE);setPeers([]);setSelf("");setFollow("");onPeersRef.current?.([],"")};
   const flush=()=>{timer=undefined;if(ws?.readyState!==WebSocket.OPEN)return;if(Object.keys(pending).length&&ws.bufferedAmount<16384){ws.send(JSON.stringify(pending));pending={};last=Date.now()}};
   const send=(patch:Record<string,unknown>)=>{Object.assign(pending,patch);if(timer===undefined)timer=setTimeout(flush,Math.max(0,110-(Date.now()-last)))};
   const view=()=>{if(followRef.current)return;const c=m.getCenter().wrap();send({view:[c.lng,Math.max(-85,Math.min(85,c.lat)),Math.max(0,Math.min(24,m.getZoom())),m.getBearing(),m.getPitch()]})};
@@ -27,10 +28,7 @@ export function LivePresence({org,pid,map,blocked,preserveView,onPeers}:Props){
    socket.onmessage=e=>{if(stopped)return;try{
     const packet=JSON.parse(e.data);if(packet.type!=="presence"||!Array.isArray(packet.users))return;
     const users:Peer[]=packet.users;me=packet.self_id;setSelf(me);setPeers(users);onPeersRef.current?.(users,me);
-    const visible=new Set<string>();
-    for(const p of users){if(p.id===me||!p.cursor)continue;visible.add(p.id);let marker=markers.get(p.id);
-     if(!marker){const el=document.createElement("div");el.className="live-cursor";el.style.setProperty("--peer-color",p.color);const arrow=document.createElement("span");arrow.textContent="➤";const label=document.createElement("b");label.textContent=p.name;el.append(arrow,label);marker=new ml.Marker({element:el,anchor:"top-left"}).setLngLat([p.cursor[0],p.cursor[1]]).addTo(m);markers.set(p.id,marker)}else marker.setLngLat([p.cursor[0],p.cursor[1]])}
-    for(const [id,marker] of markers)if(!visible.has(id)){marker.remove();markers.delete(id)}
+    if(m.getStyle())syncPointLabels(m,PRESENCE_SOURCE,users.filter(p=>p.id!==me&&p.cursor&&p.cursor.length===2).map(p=>({id:p.id,point:[p.cursor![0],p.cursor![1]],color:p.color,label:p.name})));
     const target=users.find(p=>p.id===followRef.current);if(followRef.current&&!target)setFollow("");
     if(target?.view&&!blockedRef.current){const [lng,lat,zoom,bearing,pitch]=target.view;const c=m.getCenter().wrap();if(Math.abs(c.lng-lng)+Math.abs(c.lat-lat)>0.000001||Math.abs(m.getZoom()-zoom)>0.0001||Math.abs(m.getBearing()-bearing)>0.01||Math.abs(m.getPitch()-pitch)>0.01){preserve.current();m.jumpTo({center:[lng,lat],zoom,bearing,pitch})}}
    }catch{/* ignore malformed frames */}};

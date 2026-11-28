@@ -16,3 +16,10 @@ it("queries a cached index without scanning 100000 vertices",()=>{
  const index=createSnapIndex({type:"LineString",coordinates:coords},p=>[p[0],p[1]],false);
  const near=index([50000,0],3);expect(near.vertices).toHaveLength(7);expect(near.segments).toHaveLength(8);
 });
+
+import {prepareSnapRecords,projectSnapRecords,queryPreparedSnapIndex,querySnapRecords} from "./snap-index-core";
+it("packed index and worker cold fallback return identical candidates and order",()=>{
+ const geometry={type:"LineString" as const,coordinates:Array.from({length:10000},(_,i)=>[Math.sin(i*.13)*1000,Math.cos(i*.17)*1000])};
+ const records=projectSnapRecords(geometry,p=>[p[0],p[1]],false),index=prepareSnapRecords(records);
+ for(let i=0;i<50;i++){const p:[number,number]=[Math.sin(i)*900,Math.cos(i)*900];expect(queryPreparedSnapIndex(index,p,25)).toEqual(querySnapRecords(records,p,25))}
+});
