@@ -116,3 +116,46 @@ pub fn read_atomic(path:&Path,index:usize)->Result<Vec<Value>>{
  use super::*;
  #[test]fn proj_axis_order_and_vn2000_gate(){let p=transform(4326,3857,&[[1.,0.]]).unwrap();assert!((p[0][0]-111319.490793).abs()<0.01);assert!(transform(3405,4326,&[[500000.,1200000.]]).is_err());}
 }
+
+#[derive(Serialize)]
+pub struct RasterPreview{pub width:usize,pub height:usize,pub bands:usize,pub epsg:Option<u32>,pub geotransform:[f64;6],pub sample_width:usize,pub sample_height:usize,pub values:Vec<Option<f32>>}
+/// Bounded local TIFF preview. No implicit reprojection, sidecars or full pixel transfer.
+pub fn raster_preview(path:&Path,band:usize)->Result<RasterPreview>{
+ let _guard=Offline::new()?;
+ let ext=path.extension().and_then(|s|s.to_str()).unwrap_or("").to_ascii_lowercase();
+ if !matches!(ext.as_str(),"tif"|"tiff"){return Err("UNSUPPORTED_FORMAT")}
+ let dir=tempfile::tempdir().map_err(|_|"STORAGE_UNAVAILABLE")?;
+ let p=dir.path().join("raster.tif");copy(path,&p)?;
+ let ds=Dataset::open_ex(&p,DatasetOptions{open_flags:GdalOpenFlags::GDAL_OF_RASTER|GdalOpenFlags::GDAL_OF_READONLY,allowed_drivers:Some(&["GTiff"]),..Default::default()}).map_err(|_|"GDAL_RASTER_OPEN")?;
+ let (width,height)=ds.raster_size();let bands=ds.raster_count();
+ if width==0||height==0||band==0||band>bands||bands>256{return Err("INVALID_RASTER")}
+ let geotransform=ds.geo_transform().map_err(|_|"RASTER_GEOREFERENCE_REQUIRED")?;
+ if geotransform.iter().any(|v|!v.is_finite()){return Err("INVALID_RASTER")}
+ let sample_width=width.min(128);let sample_height=height.min(128);
+ let r=ds.rasterband(band).map_err(|_|"INVALID_BAND")?;
+ let nodata=r.no_data_value().map(|n|n as f32);
+ let data=r.read_as::<f32>((0,0),(width,height),(sample_width,sample_height),None).map_err(|_|"GDAL_RASTER_READ")?;
+ let values=data.data().iter().map(|v|if v.is_finite()&&Some(*v)!=nodata{Some(*v)}else{None}).collect();
+ Ok(RasterPreview{width,height,bands,epsg:ds.spatial_ref().ok().and_then(|s|epsg(&s).ok()),geotransform,sample_width,sample_height,values})
+}
+#[cfg(test)]mod fixture_tests{
+ use super::*;
+ use gdal::DriverManager;
+ use gdal::vector::{Geometry,LayerOptions,OGRwkbGeometryType};
+ #[test]fn shapefile_fixture_with_approved_crs(){
+  let dir=tempfile::tempdir().unwrap();let path=dir.path().join("points.shp");
+  let driver=DriverManager::get_driver_by_name("ESRI Shapefile").unwrap();
+  let mut ds=driver.create_vector_only(&path).unwrap();
+  let sr=SpatialRef::from_epsg(4326).unwrap();
+  {let mut l=ds.create_layer(LayerOptions{name:"points",srs:Some(&sr),ty:OGRwkbGeometryType::wkbPoint,options:None}).unwrap();
+   l.create_feature(Geometry::from_wkt("POINT (106 11)").unwrap()).unwrap();}
+  drop(ds);
+  let layers=catalog(&path).unwrap();assert_eq!(layers.len(),1);
+  let f=read_atomic(&path,0).unwrap();assert_eq!(f.len(),1);
+  assert_eq!(f[0]["geometry"]["type"],"Point");
+ }
+ #[test]fn refuses_vrt_and_network_paths(){
+  assert!(Source::vector(Path::new("remote.vrt")).is_err());
+  assert!(Source::vector(Path::new("https://example.com/remote.fgb")).is_err());
+ }
+}
