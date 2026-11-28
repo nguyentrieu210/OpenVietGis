@@ -78,7 +78,7 @@ fn main(){
             Ok(())
         })
         .on_menu_event(|app,event|{
-            let id=event.id().as_ref();
+            let id: &str=event.id().as_ref();
             if matches!(id,"new"|"close-workspace"){
                 if let Some(w)=app.get_webview_window("main"){let _=w.emit("desktop-menu",id);}
             }
