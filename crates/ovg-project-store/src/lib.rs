@@ -1,4 +1,4 @@
-//! R3 single-domain transaction candidate. Not wired to Desktop or managed data.
+//! R3 single-domain transaction candidate; used by opt-in Desktop, not managed data.
 //! Do not open legacy GeoPackages with this kernel.
 use rusqlite::{params,Connection,OptionalExtension,TransactionBehavior};
 use serde::{Deserialize,Serialize};
@@ -7,6 +7,8 @@ use sha2::{Digest,Sha256};
 use std::{collections::HashSet,path::Path,sync::Mutex};
 use uuid::Uuid;
 pub mod catalog;
+pub mod asset_store;
+pub mod bulk_import;
 pub mod migration;
 pub mod maintenance;
 pub mod virtual_query;
@@ -19,7 +21,8 @@ type Result<T>=std::result::Result<T,Error>;
 fn json<T:Serialize>(v:&T)->Result<String>{serde_json::to_string(v).map_err(|_|Error::Invalid)}
 fn decode<T:serde::de::DeserializeOwned>(v:&str)->Result<T>{serde_json::from_str(v).map_err(|_|Error::Invalid)}
 const APP:i64=0x4f564750;
-const VERSION:i64=2;
+const VERSION:i64=3;
+const V3_MARKER:&str="-- V3 additive assets and bulk import";
 const QUOTA:u64=8*1024*1024*1024;
 fn configure(db:&Connection)->Result<()>{
  db.busy_timeout(std::time::Duration::from_secs(3))?;
@@ -103,13 +106,19 @@ impl Store{
   db.pragma_update(None,"trusted_schema","OFF")?;
   let app:i64=db.pragma_query_value(None,"application_id",|r|r.get(0))?;
   let version:i64=db.pragma_query_value(None,"user_version",|r|r.get(0))?;
-  if app!=APP||version!=VERSION{return Err(Error::Unsupported)}
-  let oracle=Connection::open_in_memory()?;oracle.execute_batch(include_str!("schema.sql"))?;
+  if app!=APP||!matches!(version,2|VERSION){return Err(Error::Unsupported)}
+  let schema=include_str!("schema.sql");
+  let (v2,addition)=schema.split_once(V3_MARKER).ok_or(Error::Unsupported)?;
+  let oracle=Connection::open_in_memory()?;oracle.execute_batch(if version==2{v2}else{schema})?;
   if schema_signature(&db)?!=schema_signature(&oracle)?{return Err(Error::Unsupported)}
   db.pragma_update(None,"trusted_schema","ON")?;
   let check:String=db.pragma_query_value(None,"quick_check",|r|r.get(0))?;
   if check!="ok"{return Err(Error::Invalid)}
   configure(&db)?;
+  if version==2{
+   let tx=db.unchecked_transaction()?;
+   tx.execute_batch(addition)?;tx.pragma_update(None,"user_version",VERSION)?;tx.commit()?;
+  }
   Ok(Self{db:Mutex::new(db)})
  }
  pub fn revision(&self)->Result<u64>{rev(&*self.db.lock().map_err(lock_err)?)}
@@ -144,6 +153,7 @@ impl Store{
   let old=tx.query_row("SELECT digest,reply FROM receipt WHERE operation=?1",[b.operation.to_string()],|r|Ok((r.get::<_,Vec<u8>>(0)?,r.get::<_,String>(1)?))).optional()?;
   if let Some((hash,reply))=old{if hash.as_slice()!=&digest[..]{return Err(Error::Reused)}return decode(&reply)}
   if tx.query_row("SELECT EXISTS(SELECT 1 FROM legacy_receipt WHERE operation=?1 UNION ALL SELECT 1 FROM legacy_command WHERE command=?1)",[b.operation.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}
+  if tx.query_row("SELECT EXISTS(SELECT 1 FROM bulk_import WHERE operation=?1)",[b.operation.to_string()],|r|r.get::<_,bool>(0))?{return Err(Error::Reused)}
   let n=next(&tx,b.expected_project)?;
   let mut seen=HashSet::new();let mut before=Vec::new();let mut features=Vec::new();
   let mut bytes=0usize;
