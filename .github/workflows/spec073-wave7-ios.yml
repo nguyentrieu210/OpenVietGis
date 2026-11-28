@@ -1,5 +1,8 @@
 name: SPEC 073 W7 independent iOS candidate
 on:
+  pull_request:
+    branches: ["073-native-mobile-platform"]
+    paths: ["apps/mobile-flutter/**", "crates/ovg-mobile-ffi/**", "infra/mobile/**", ".github/workflows/spec073-wave7-ios.yml"]
   workflow_dispatch:
 permissions:
   contents: read
