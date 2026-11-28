@@ -18,7 +18,7 @@ W0 compares existing MapLibre/Cesium rendering, native providers and platform tr
 ## Work waves
 W0: inventory current PR #103 head, main, native crates and API parity; agree ownership and freeze cross-platform contracts; Windows/macOS/Linux toolchain and WebView spikes.
 W1: Tauri shell, shared UI build, typed transport, local session lifecycle; cloud connection unchanged.
-W2: Standalone storage/files/editing, capability flags, standard-format interop, recovery.
+W2: Universal Local Data Engine (standalone). First integrate project state and shared schema controls in existing host. In parallel develop a portable single-domain transaction candidate behind tests, not an active second store. Align schema owner with 073, then qualify migration and switch all readers/editors/backup to the same authoritative store atomically. Add capability-driven providers, bounded queries and maintenance; additional native drivers are opt-in after qualification.
 W3: Local compute/CRS, rendering and desktop UX, import/export qualification.
 W4: Hybrid sync, identity, managed store and security parity with Mobile; isolated server integration.
 W5: Desktop plugin adapter, packaging, accessibility, signed update and platform acceptance.
