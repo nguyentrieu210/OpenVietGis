@@ -1,5 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from "react";
-import type {RefObject} from "react";
+import type {RefObject,ReactNode} from "react";
 import type {FeatureCollection} from "geojson";
 import * as ml from "./map-surface";
 import {readCamera,type CameraResume} from "./map-render-plan";
@@ -8,7 +8,7 @@ import {readPreference,writePreference} from "./spatial-resume";
 const empty:FeatureCollection={type:"FeatureCollection",features:[]};
 const capture=(m:ml.Map|null):CameraResume|null=>{if(!m)return null;const c=m.getCenter().wrap(),bearing=((m.getBearing()+180)%360+360)%360-180;return readCamera({center:[c.lng,c.lat],zoom:m.getZoom(),bearing,pitch:m.getPitch()})};
 const idFor=(id:string,template:string)=>"comparison:"+id+":"+template;
-export function SecondaryMapView({storageKey,primary,collection,layers,templates,close}:{storageKey:string;primary:RefObject<ml.Map|null>;collection:FeatureCollection;layers:ComparisonLayer[];templates:ml.LayerSpecification[];close:()=>void}){
+export function SecondaryMapView({storageKey,primary,collection,layers,templates,close,title="Bản đồ so sánh",headerContent}:{storageKey:string;primary:RefObject<ml.Map|null>;collection:FeatureCollection;layers:ComparisonLayer[];templates:ml.LayerSpecification[];close:()=>void;title?:string;headerContent?:ReactNode}){
  const host=useRef<HTMLDivElement>(null),map=useRef<ml.Map|null>(null),[ready,setReady]=useState(false),[error,setError]=useState(""),[controls,setControls]=useState(false);
  const [raw,setRaw]=useState<ComparisonPrefs>(()=>{try{return comparisonPrefs(JSON.parse(readPreference(storageKey)??"null"),layers)}catch{return comparisonPrefs(null,layers)}});
  const prefs=useMemo(()=>comparisonPrefs(raw,layers),[raw,layers]),current=useRef(prefs);current.current=prefs;
@@ -52,7 +52,7 @@ export function SecondaryMapView({storageKey,primary,collection,layers,templates
  },[ready,prefs.follow,primary]);
  const copyCamera=()=>{const c=capture(primary.current);if(c)map.current?.jumpTo(c)};
  const ordered=data.error?[]:prefs.order.map(id=>layers.find(l=>l.id===id)!);
- return <aside className="ovg-secondary-map" aria-label="Khung bản đồ so sánh chỉ đọc"><header><b>Bản đồ so sánh</b><button type="button" aria-label="Đóng bản đồ so sánh" onClick={close}>×</button></header>
+ return <aside className="ovg-secondary-map" aria-label={title+" chỉ đọc"}><header><b>{title}</b><button type="button" aria-label={"Đóng "+title} onClick={close}>×</button></header>{headerContent}
  <div className="ovg-secondary-actions"><button type="button" aria-expanded={controls} onClick={()=>setControls(v=>!v)}>Thứ tự lớp</button><button type="button" onClick={copyCamera}>Lấy góc nhìn chính</button><label><input type="checkbox" checked={prefs.follow} onChange={e=>update({follow:e.target.checked})}/>Theo góc nhìn chính</label></div>
  {controls&&<div className="ovg-secondary-order"><small>Trên cùng vẽ sau. Chỉ đổi khung phụ.</small>{ordered.map((l,i)=><div key={l.id}><label><input type="checkbox" checked={!prefs.hidden.includes(l.id)} onChange={e=>update({hidden:e.target.checked?prefs.hidden.filter(id=>id!==l.id):[...prefs.hidden,l.id]})}/>{l.name}</label><button type="button" aria-label={"Đưa "+l.name+" lên trong khung phụ"} disabled={i===0} onClick={()=>update({order:moveComparisonLayer(prefs.order,l.id,-1)})}>↑</button><button type="button" aria-label={"Đưa "+l.name+" xuống trong khung phụ"} disabled={i===ordered.length-1} onClick={()=>update({order:moveComparisonLayer(prefs.order,l.id,1)})}>↓</button></div>)}<button type="button" onClick={()=>update({order:layers.map(l=>l.id),hidden:[]})}>Đặt lại khung phụ</button></div>}
  <div className="ovg-secondary-canvas" ref={host}/>{(data.error||error)&&<p role="alert">{data.error||error}</p>}<small className="ovg-secondary-status">{data.error?"Không hiển thị dữ liệu vượt giới hạn.":data.collection.features.length.toLocaleString("vi-VN")+" đối tượng vector đang nạp"} · Chỉ đọc · Không gồm raster, nền ảnh, nhãn hoặc vector tiles.</small></aside>
