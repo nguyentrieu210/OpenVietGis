@@ -16,7 +16,7 @@ Uri cloudOrigin(String input) {
   final uri=Uri.parse(input.trim());
   if(uri.scheme!='https'||uri.host.isEmpty||uri.userInfo.isNotEmpty||
     uri.hasQuery||uri.hasFragment||uri.path.isNotEmpty&&uri.path!='/'||
-    uri.port!=443) throw ArgumentError('Expected canonical HTTPS origin');
+    uri.port!=443) { throw ArgumentError('Expected canonical HTTPS origin'); }
   return Uri.parse(uri.origin);
 }
 
@@ -86,7 +86,7 @@ final class CloudSession extends ChangeNotifier {
   void attachReviewedIdentity(MobileCredentials credentials,
       Future<MobileCredentials> Function(String) rotate){
     if(_disposed||busy||health==null||!health!.databaseReady||
-       health!.origin!=credentials.scope.origin)throw StateError('SERVER_NOT_READY');
+       health!.origin!=credentials.scope.origin){throw StateError('SERVER_NOT_READY');}
     _managed?.close();_managed=null;
     final client=_client();
     try{

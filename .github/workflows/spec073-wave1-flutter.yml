@@ -3,6 +3,9 @@ on:
   push:
     branches: ["073-native-mobile-platform"]
     paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
+  pull_request:
+    branches: ["073-native-mobile-platform"]
+    paths: ["apps/mobile-flutter/**", "packages/design-tokens/**", "packages/ui-flutter/**", ".github/workflows/spec073-wave1-flutter.yml"]
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -52,7 +55,9 @@ jobs:
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/pubspec.yaml" .
           mkdir -p vendor
           cp -R "$GITHUB_WORKSPACE/packages/dart-sdk" vendor/openvietgis_sdk
-          python3 -c 'from pathlib import Path; p=Path("pubspec.yaml"); p.write_text(p.read_text().replace("../../packages/dart-sdk","vendor/openvietgis_sdk"))'
+          cp -R "$GITHUB_WORKSPACE/packages/design-tokens" vendor/design-tokens
+          cp -R "$GITHUB_WORKSPACE/packages/ui-flutter" vendor/ui-flutter
+          python3 -c 'from pathlib import Path; p=Path("pubspec.yaml"); p.write_text(p.read_text().replace("../../packages/dart-sdk","vendor/openvietgis_sdk").replace("../../packages/ui-flutter","vendor/ui-flutter"))'
           cp "$GITHUB_WORKSPACE/apps/mobile-flutter/lib/"*.dart lib/
           cp "$GITHUB_WORKSPACE/crates/ovg-mobile-ffi/src/api/simple.rs" rust/src/api/simple.rs
           mkdir -p test

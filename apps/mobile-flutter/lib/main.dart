@@ -11,6 +11,7 @@ import 'attribute_page.dart';
 import 'processing_page.dart';
 import 'search_page.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:openvietgis_ui/openvietgis_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'workspaces.dart';
@@ -55,7 +56,7 @@ class OpenVietGis extends StatelessWidget {
   const OpenVietGis({super.key});
   @override
   Widget build(BuildContext context)=>MaterialApp.router(
-    title:'OpenVietGIS', theme:ThemeData(colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xff00695c)),useMaterial3:true),
+    title:'OpenVietGIS', theme:ovgNativeTheme(Brightness.light), darkTheme:ovgNativeTheme(Brightness.dark), themeMode:ThemeMode.system,
     routerConfig:router,
   );
 }
