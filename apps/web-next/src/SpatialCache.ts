@@ -62,9 +62,10 @@ export async function writeCache(scope:CacheScope,layer:SpatialLayer,rows:Studio
   await execute({kind:"write",scope,layer,permissionKey:permissionFingerprint(permissions),rows:rows.map(({feature,geometry})=>({feature,geometry}))});
 }
 export async function clearSpatialCache(account:string,scope?:CacheScope){
-  const result=await execute({kind:"clear",account,scope});
-  if(result!==true){
-    // Cleanup remains available even when the worker could not start.
-    const storage=await import("./SpatialCacheStorage");await storage.clearSpatialCache(account,scope);
-  }
+  // Revocation/logout must not wait behind stale worker reads or writes.
+  // Terminating the generation first prevents queued work from repopulating
+  // a cache after the security-critical clear has completed.
+  stopWorker(false);
+  const storage=await import("./SpatialCacheStorage");
+  await storage.clearSpatialCache(account,scope);
 }

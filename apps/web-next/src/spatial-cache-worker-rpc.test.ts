@@ -34,4 +34,20 @@ describe("spatial cache worker RPC bounds",()=>{
   await expect(restarted).resolves.toBeNull();
   expect(FakeWorker.instances[1]!.terminated).toBe(1);
  });
+ it("terminates queued work before a security clear so stale writes cannot repopulate cache",async()=>{
+  vi.useFakeTimers();
+  vi.stubGlobal("Worker",FakeWorker);
+  vi.stubGlobal("window",{setTimeout,clearTimeout,indexedDB:undefined});
+  const storage=await import("./SpatialCacheStorage");
+  const clear=vi.spyOn(storage,"clearSpatialCache").mockResolvedValue(undefined);
+  const {readCache,clearSpatialCache}=await import("./SpatialCache");
+  const scope={account:"a",org:"o",project:"p"};
+  const pending=readCache(scope,"layer");
+  expect(FakeWorker.instances[0]!.messages).toHaveLength(1);
+  await clearSpatialCache("a",scope);
+  await expect(pending).resolves.toBeNull();
+  expect(FakeWorker.instances[0]!.terminated).toBe(1);
+  expect(clear).toHaveBeenCalledWith("a",scope);
+ });
+
 });

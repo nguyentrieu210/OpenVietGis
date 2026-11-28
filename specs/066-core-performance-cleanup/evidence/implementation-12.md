@@ -13,6 +13,7 @@ Candidate parent: 7c77b75160add170bd3a7d4b14f2af22e99571d7.
 - Hydraulic terrain simulation now binds callbacks to the exact current worker generation. Results/errors from replaced or terminated generations are ignored; mode/grid/options changes terminate the current worker; unmount terminates the worker and aborts outstanding requests.
 - Targeted terrain worker tests verify stale-generation suppression and cancellation rejects late callbacks.
 - Current web-next suite: 22 Vitest files / 105 tests PASS plus 40 Node tests PASS. TypeScript passed in focused validation.
+- Security-critical spatial cache clears now terminate the cache-worker generation before direct IndexedDB deletion, so revocation/session expiry cannot wait behind or be repopulated by queued stale worker writes. Session UI clears the actor before awaiting the purge; focused browser acceptance returns to landing and confirms zero previous-actor cache rows.
 
 ## T033 — differential CRS / geometry / export / security
 - Current Rust parity evidence on 7c77b751 includes the 288-case core differential HTTP suite and E06/E07/E09/E10/E11/E12/E13/E14/E15/E18 parity suites.

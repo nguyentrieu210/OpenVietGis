@@ -5,9 +5,9 @@
     {
       "section": "worktrees",
       "worktree": "/opt/ovg-066-work",
-      "HEAD": "70a038c29d7c4a3f5c5dd202a2f55669b97c1c90",
+      "HEAD": "3715f04177a9fd339f57e059a2d87e72cde39d24",
       "branch": "refs/heads/066-core-performance-cleanup",
-      "bytes": 718332640,
+      "bytes": 769122021,
       "retention": "protect-active"
     },
     {
@@ -119,19 +119,19 @@
     {
       "section": "opt_candidates",
       "path": "/opt/openvietgis.new",
-      "bytes": 53098121,
+      "bytes": 54085663,
       "retention": "protect-active"
     },
     {
       "section": "opt_candidates",
       "path": "/opt/ovg-065-work",
-      "bytes": 393548320,
+      "bytes": 405349332,
       "retention": "protect-active"
     },
     {
       "section": "opt_candidates",
       "path": "/opt/ovg-066-work",
-      "bytes": 718332640,
+      "bytes": 769122021,
       "retention": "protect-active"
     }
   ],
@@ -150,6 +150,55 @@
       "HEAD": "d716ba7a67d094ae04d1a9226c832ff3db37421e",
       "detached": true,
       "bytes": 316360735,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/namviet-finance-db",
+      "status": "running",
+      "image_ref": "pgvector/pgvector:0.8.0-pg17@sha256:40b404964359299eefdd5f8518facf1886c562848cf4de13b6eaf91cb70c2b87",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/ovg067-events-fixture",
+      "status": "created",
+      "image_ref": "openvietgis-live-postgres:latest",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/namviet-auth",
+      "status": "running",
+      "image_ref": "quay.io/oauth2-proxy/oauth2-proxy:v7.8.1",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/nervous_goodall",
+      "status": "running",
+      "image_ref": "openvietgis-live-api:latest",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/namviet-auth-before-profile",
+      "status": "exited",
+      "image_ref": "quay.io/oauth2-proxy/oauth2-proxy:v7.8.1",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/ovg066-parity-postgis",
+      "status": "running",
+      "image_ref": "openvietgis-live-postgres:latest",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "containers",
+      "name": "/ovg066-api-postgis-2",
+      "status": "running",
+      "image_ref": "openvietgis-live-postgres:latest",
       "retention": "review-owner-before-delete"
     },
     {
@@ -224,9 +273,45 @@
     },
     {
       "section": "images",
+      "ref": "pgvector/pgvector:<none>",
+      "id": "sha256:9cfa957fae1dcb39badc31e50ab5827408e1e655f9fd1d5ab5b49c63322932db",
+      "size": "443MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "nginx:1.27-alpine",
+      "id": "sha256:6769dc3a703c719c1d2756bda113659be28ae16cf0da58dd5fd823d6b9a050ea",
+      "size": "48.2MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
       "ref": "rust:1.85.1-slim-bookworm",
       "id": "sha256:8573a005bfcb44d5f462a33f6ad6e85d231f51e759b60c8061777422becfcb94",
       "size": "807MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "images",
+      "ref": "quay.io/oauth2-proxy/oauth2-proxy:v7.8.1",
+      "id": "sha256:821f2581a1fb71cd4bc7de9562e13035b4f7670d6faed042139431af23f2bf61",
+      "size": "35.6MB",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "volumes",
+      "name": "9af5f459c3a13c660931ac1541fb83f5f3cd504d7f94654b0ecc898853f855fe",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "volumes",
+      "name": "af007bf252894abcd9d9fe80e0fbea6ff0c5c5ab9cdda1326c591abdf294027c",
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "volumes",
+      "name": "namviet-finance-pgdata",
       "retention": "review-owner-before-delete"
     },
     {
@@ -242,8 +327,62 @@
     },
     {
       "section": "opt_candidates",
+      "path": "/opt/ovg-065-rust-cache",
+      "bytes": 271002348,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-065-rust-target",
+      "bytes": 1571826954,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-api-pgdata-2",
+      "bytes": 99924378,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
       "path": "/opt/ovg-066-baseline",
       "bytes": 392995148,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-cargo-registry",
+      "bytes": 103728649,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-cargo-target-test",
+      "bytes": 1105916722,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-mcp-registry",
+      "bytes": 103260561,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-mcp-target",
+      "bytes": 377857005,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-nginx-dist",
+      "bytes": 16455720,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-066-parity-pgdata-3",
+      "bytes": 99907971,
       "retention": "review-owner-before-delete"
     },
     {
@@ -255,13 +394,19 @@
     {
       "section": "opt_candidates",
       "path": "/opt/ovg-066-rust-cache",
-      "bytes": 29009707,
+      "bytes": 135456295,
       "retention": "review-owner-before-delete"
     },
     {
       "section": "opt_candidates",
       "path": "/opt/ovg-066-rust-target",
-      "bytes": 144916427,
+      "bytes": 737942925,
+      "retention": "review-owner-before-delete"
+    },
+    {
+      "section": "opt_candidates",
+      "path": "/opt/ovg-067-068.PHgx6U",
+      "bytes": 1428631554,
       "retention": "review-owner-before-delete"
     },
     {
@@ -320,5 +465,5 @@
     "Manual-review entries require explicit owner approval and a fresh runtime inventory before any deletion.",
     "Reclaimable Docker bytes are not evidence that an object is safe to delete."
   ],
-  "inventory_sha256": "25a612e441ba45f969a82b032e982a1f2ec687b79e1090db54ee8d1072733b57"
+  "inventory_sha256": "11112e603e177d300af5e00ba74e1bcdf27d416d4bb70485cbfb7239b8a80d6a"
 }
