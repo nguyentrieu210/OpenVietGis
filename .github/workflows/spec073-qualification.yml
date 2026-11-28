@@ -1,0 +1,115 @@
+name: SPEC 073 W0 qualification
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["infra/mobile/**", ".github/workflows/spec073-qualification.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    env:
+      VCPKG_DISABLE_METRICS: "1"
+      VCPKG_MAX_CONCURRENCY: "2"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: ELF negative tests
+        run: cd infra/mobile/native && python3 -m unittest -v test_verify_elf
+      - name: Install exact Android NDK and CMake
+        run: |
+          sdkmanager 'ndk;28.2.13676358' 'cmake;3.22.1'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Build pinned native ports
+        run: |
+          set -euxo pipefail
+          git init "$RUNNER_TEMP/ovg-vcpkg"
+          git -C "$RUNNER_TEMP/ovg-vcpkg" remote add origin https://github.com/microsoft/vcpkg.git
+          git -C "$RUNNER_TEMP/ovg-vcpkg" fetch --depth=1 origin ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0
+          git -C "$RUNNER_TEMP/ovg-vcpkg" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/ovg-vcpkg" rev-parse HEAD)" = ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0
+          "$RUNNER_TEMP/ovg-vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          "$RUNNER_TEMP/ovg-vcpkg/vcpkg" install --triplet arm64-ovg-android --host-triplet x64-linux --x-manifest-root="$GITHUB_WORKSPACE/infra/mobile/native" --x-install-root="$RUNNER_TEMP/ovg-installed" --overlay-triplets="$GITHUB_WORKSPACE/infra/mobile/native/triplets"
+      - name: Link real native probe
+        run: |
+          set -euxo pipefail
+          cmake="$ANDROID_HOME/cmake/3.22.1/bin/cmake"
+          "$cmake" -S infra/mobile/native -B "$RUNNER_TEMP/native-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$RUNNER_TEMP/ovg-vcpkg/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=arm64-ovg-android -DVCPKG_HOST_TRIPLET=x64-linux -DVCPKG_OVERLAY_TRIPLETS="$GITHUB_WORKSPACE/infra/mobile/native/triplets" -DVCPKG_INSTALLED_DIR="$RUNNER_TEMP/ovg-installed" -DVCPKG_MANIFEST_INSTALL=OFF
+          "$cmake" --build "$RUNNER_TEMP/native-build" --parallel 2
+      - name: Collect binary, PROJ assets and static ABI evidence
+        run: |
+          set -euxo pipefail
+          out="$RUNNER_TEMP/native-evidence"
+          mkdir -p "$out"
+          cp "$RUNNER_TEMP/native-build/ovg_native_probe" "$out/"
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$out/"
+          cp -a "$RUNNER_TEMP/ovg-installed/arm64-ovg-android/share/proj" "$out/proj"
+          test -f "$out/proj/proj.db"
+          cp "$RUNNER_TEMP/ovg-installed/vcpkg/status" "$out/vcpkg-status"
+          cp infra/mobile/toolchain/qualification.json "$out/"
+          git rev-parse HEAD > "$out/commit.txt"
+          python3 infra/mobile/native/verify_elf.py "$out/ovg_native_probe" "$out/libc++_shared.so" > "$out/elf.json"
+          (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ovg073-native-arm64-qualification
+          path: |
+            ${{ runner.temp }}/native-evidence
+            ${{ runner.temp }}/ovg-vcpkg/buildtrees/*/*.log
+          if-no-files-found: warn
+  map:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pin Flutter source and Android tools
+        run: |
+          set -euxo pipefail
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin ab2912035e160d9cad6306df307576da6128ebdb
+          git -C "$RUNNER_TEMP/flutter" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Build offline MapLibre fixture
+        run: |
+          set -euxo pipefail
+          flutter config --no-analytics
+          flutter --version --machine > "$RUNNER_TEMP/flutter-version.json"
+          flutter create --platforms=android --project-name ovg_map_spike --org org.openvietgis.spike --no-pub "$RUNNER_TEMP/map-spike"
+          cp infra/mobile/map-spike/pubspec.yaml "$RUNNER_TEMP/map-spike/"
+          cp infra/mobile/map-spike/lib/main.dart "$RUNNER_TEMP/map-spike/lib/"
+          rm "$RUNNER_TEMP/map-spike/test/widget_test.dart"
+          cp infra/mobile/map-spike/test/style_test.dart "$RUNNER_TEMP/map-spike/test/"
+          cd "$RUNNER_TEMP/map-spike"
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build apk --debug --target-platform android-arm64
+      - name: Check APK 16KB alignment
+        run: |
+          set -euxo pipefail
+          apk="$RUNNER_TEMP/map-spike/build/app/outputs/flutter-apk/app-debug.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$apk"
+          mkdir -p "$RUNNER_TEMP/map-elf"
+          unzip -q "$apk" 'lib/arm64-v8a/*.so' -d "$RUNNER_TEMP/map-elf"
+          python3 infra/mobile/native/verify_elf.py "$RUNNER_TEMP/map-elf"/lib/arm64-v8a/*.so > "$RUNNER_TEMP/map-elf.json"
+          sha256sum "$apk" > "$RUNNER_TEMP/map-apk.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ovg073-map-qualification
+          path: |
+            ${{ runner.temp }}/map-spike/build/app/outputs/flutter-apk/app-debug.apk
+            ${{ runner.temp }}/map-spike/pubspec.lock
+            ${{ runner.temp }}/flutter-version.json
+            ${{ runner.temp }}/map-elf.json
+            ${{ runner.temp }}/map-apk.sha256
+          if-no-files-found: warn

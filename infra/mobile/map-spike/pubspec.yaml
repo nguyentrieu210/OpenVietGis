@@ -1,0 +1,15 @@
+name: ovg_map_spike
+description: OpenVietGIS SPEC 073 offline native source qualification
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ">=3.12.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  maplibre_gl: 0.28.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+flutter:
+  uses-material-design: true
