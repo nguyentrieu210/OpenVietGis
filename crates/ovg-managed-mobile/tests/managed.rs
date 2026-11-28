@@ -22,7 +22,7 @@ fn encrypted_snapshot_delta_receipt_and_unknown_recovery(){
  let (s,l,src,b)=fixture();let d=temp();let p=d.join("private.db");
  let mut db=open(&p,&s,&b);let c=clock();
  assert!(db.install_snapshot(&c,b"tampered").is_err());db.install_snapshot(&c,&b).unwrap();
- assert_eq!(db.cursor(&c).unwrap(),10);
+ assert_eq!(db.cursor(&c).unwrap(),10);assert!(db.feature(&c,l,"feature1").unwrap().is_some());
  let op=Commit{session_id:s.session,source_id:src,base_content_revision:"a".repeat(64),base_schema_revision:Some("b".repeat(64)),operation_id:"mobile-op1".into(),allow_deletes:false,operations:vec![json!({"op_type":"update","feature_id":"feature1","properties":{"name":"edited"}})]};
  db.enqueue(&c,&op).unwrap();db.enqueue(&c,&op).unwrap();let sent=db.begin_send(&c,&op.operation_id).unwrap();assert_eq!(sent,serde_json::to_vec(&op).unwrap());drop(db);
  let mut db=open(&p,&s,&b);assert_eq!(db.state(&c,&op.operation_id).unwrap(),"unknown");assert!(db.begin_send(&c,&op.operation_id).is_err());
@@ -31,7 +31,7 @@ fn encrypted_snapshot_delta_receipt_and_unknown_recovery(){
  let delta=Delta{reset_required:false,next_cursor:14,permission_epoch:1,has_more:false,changes:vec![Change{cursor:14,layer_id:l,source_id:src,content_revision:"c".repeat(64),upserts:vec![],removals:vec!["feature1".into()]}]};
  let data=serde_json::to_vec(&delta).unwrap();
  assert!(db.apply_delta(&c,11,&data).is_err());assert_eq!(db.cursor(&c).unwrap(),10);
- db.apply_delta(&c,10,&data).unwrap();db.apply_delta(&c,10,&data).unwrap();assert_eq!(db.cursor(&c).unwrap(),14);assert!(db.install_snapshot(&c,&b).is_err());
+ db.apply_delta(&c,10,&data).unwrap();db.apply_delta(&c,10,&data).unwrap();assert_eq!(db.cursor(&c).unwrap(),14);assert!(db.feature(&c,l,"feature1").unwrap().is_none());assert!(db.install_snapshot(&c,&b).is_err());
  for item in std::fs::read_dir(&d).unwrap(){let path=item.unwrap().path();let bytes=std::fs::read(path).unwrap();assert!(!bytes.windows(b"secret-fixture-xyz".len()).any(|w|w==b"secret-fixture-xyz"));}
  assert!(Store::open(&p,Zeroizing::new([8;32]),s.clone(),lease(&s,&b),&c).is_err());
  let mut reboot=c.clone();reboot.boot_id="boot2".into();assert!(db.cursor(&reboot).is_err());assert!(db.cursor(&c).is_err());

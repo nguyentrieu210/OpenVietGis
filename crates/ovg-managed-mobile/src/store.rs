@@ -5,7 +5,7 @@ use zeroize::Zeroizing;
 use std::path::Path;
 use uuid::Uuid;
 const MAX:usize=16*1024*1024;
-pub struct Store{db:Connection,scope:Scope,lease:Lease,locked:bool}
+pub struct Store{db:Option<Connection>,scope:Scope,lease:Lease,locked:bool}
 impl Store{
  pub fn open(path:&Path,key:Zeroizing<[u8;32]>,scope:Scope,lease:Lease,clock:&Clock)->Result<Self,Error>{
   lease.check(clock,&scope,lease.claims().permission_epoch,false)?;
@@ -31,13 +31,13 @@ impl Store{
   db.pragma_update(None,"journal_mode","WAL")?;db.pragma_update(None,"synchronous","FULL")?;
   db.pragma_update(None,"max_page_count",131072)?;
   db.execute("UPDATE outbox SET state='unknown' WHERE state='sending'",[])?;
-  Ok(Self{db,scope,lease,locked:false})
+  Ok(Self{db:Some(db),scope,lease,locked:false})
  }
  fn guard(&mut self,clock:&Clock,edit:bool)->Result<(),Error>{
   if self.locked{return Err(Error::Locked);}
-  if self.lease.check(clock,&self.scope,self.lease.claims().permission_epoch,edit).is_err(){self.locked=true;return Err(Error::Locked);}Ok(())
+  if self.lease.check(clock,&self.scope,self.lease.claims().permission_epoch,edit).is_err(){self.revoke();return Err(Error::Locked);}Ok(())
  }
- pub fn lock(mut self)->Result<(),Error>{self.locked=true;self.db.close().map_err(|(_,e)|Error::Db(e))}
+ pub fn lock(mut self)->Result<(),Error>{self.locked=true;match self.db.take(){Some(db)=>db.close().map_err(|(_,e)|Error::Db(e)),None=>Ok(())}}
  /// Candidate signed snapshot payload, exact bytes hash bound by verified lease.
  /// Complete bounded package only; partial pages never become ready.
  pub fn install_snapshot(&mut self,clock:&Clock,bytes:&[u8])->Result<(),Error>{
@@ -47,7 +47,7 @@ impl Store{
   let pages:Vec<Bootstrap>=serde_json::from_slice(bytes).map_err(|_|Error::Invalid)?;
   if pages.is_empty()||pages.len()>128{return Err(Error::Invalid);}
   let cursor=pages[0].cursor;let epoch=self.lease.claims().permission_epoch;
-  let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let tx=self.db.as_mut().ok_or(Error::Locked)?.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let (ready,old_cursor):(bool,i64)=tx.query_row("SELECT ready,cursor FROM meta WHERE id=1",[],|r|Ok((r.get(0)?,r.get(1)?)))?;
   if ready&&old_cursor!=cursor{return Err(Error::Conflict);}
   let pending:i64=tx.query_row("SELECT count(*) FROM outbox WHERE state!='acknowledged'",[],|r|r.get(0))?;
@@ -60,14 +60,19 @@ impl Store{
   }
   tx.execute("UPDATE meta SET cursor=?1,ready=1 WHERE id=1",[cursor])?;tx.commit()?;Ok(())
  }
- pub fn cursor(&mut self,clock:&Clock)->Result<i64,Error>{self.guard(clock,false)?;Ok(self.db.query_row("SELECT cursor FROM meta WHERE id=1 AND ready=1",[],|r|r.get(0)).map_err(|_|Error::Reset)?)}
+ pub fn feature(&mut self,clock:&Clock,layer:Uuid,id:&str)->Result<Option<super::sync::Feature>,Error>{
+  self.guard(clock,false)?;if !feature_id(id){return Err(Error::Invalid);}
+  let b:Option<Vec<u8>>=self.db.as_ref().ok_or(Error::Locked)?.query_row("SELECT body FROM features WHERE layer=?1 AND id=?2 AND EXISTS(SELECT 1 FROM meta WHERE ready=1)",params![layer.to_string(),id],|r|r.get(0)).optional()?;
+  b.map(|b|serde_json::from_slice(&b).map_err(|_|Error::Invalid)).transpose()
+ }
+ pub fn cursor(&mut self,clock:&Clock)->Result<i64,Error>{self.guard(clock,false)?;Ok(self.db.as_ref().ok_or(Error::Locked)?.query_row("SELECT cursor FROM meta WHERE id=1 AND ready=1",[],|r|r.get(0)).map_err(|_|Error::Reset)?)}
  pub fn apply_delta(&mut self,clock:&Clock,start:i64,bytes:&[u8])->Result<(),Error>{
   self.guard(clock,false)?;if bytes.len()>MAX{return Err(Error::Limit);}
   let d:Delta=serde_json::from_slice(bytes).map_err(|_|Error::Invalid)?;
-  if d.reset_required||d.permission_epoch!=self.lease.claims().permission_epoch{self.locked=true;return Err(Error::Reset);}
+  if d.reset_required||d.permission_epoch!=self.lease.claims().permission_epoch{self.revoke();return Err(Error::Reset);}
   if start<0||d.next_cursor<start||d.changes.len()>500||d.has_more&&d.next_cursor==start{return Err(Error::Invalid);}
   let current=self.cursor(clock)?;
-  let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let tx=self.db.as_mut().ok_or(Error::Locked)?.transaction_with_behavior(TransactionBehavior::Immediate)?;
   if current!=start{
    let old:Option<(i64,Vec<u8>)>=tx.query_row("SELECT end,digest FROM delta_pages WHERE start=?1",[start],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
    if old.is_some_and(|(end,h)|end==d.next_cursor&&h==hash(bytes)&&end<=current){return Ok(());}return Err(Error::Reset);
@@ -92,7 +97,7 @@ impl Store{
   self.guard(clock,true)?;commit.validate()?;
   if commit.session_id!=self.scope.session{return Err(Error::Scope);}
   let data=serde_json::to_vec(commit).map_err(|_|Error::Invalid)?;if data.len()>MAX{return Err(Error::Limit);}
-  let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let tx=self.db.as_mut().ok_or(Error::Locked)?.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let valid:i64=tx.query_row("SELECT count(*) FROM layers WHERE source=?1 AND content=?2 AND schema=?3",params![commit.source_id.to_string(),commit.base_content_revision,commit.base_schema_revision],|r|r.get(0))?;
   if valid==0{return Err(Error::Conflict);}
   let old:Option<Vec<u8>>=tx.query_row("SELECT digest FROM outbox WHERE id=?1",[&commit.operation_id],|r|r.get(0)).optional()?;
@@ -101,22 +106,22 @@ impl Store{
  }
  /// Mark sending before returning bytes. On process death open() changes sending to unknown.
  pub fn begin_send(&mut self,clock:&Clock,id:&str)->Result<Vec<u8>,Error>{
-  self.guard(clock,true)?;let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  self.guard(clock,true)?;let tx=self.db.as_mut().ok_or(Error::Locked)?.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let data:Vec<u8>=tx.query_row("SELECT payload FROM outbox WHERE id=?1 AND state='queued'",[id],|r|r.get(0)).optional()?.ok_or(Error::Unknown)?;
   tx.execute("UPDATE outbox SET state='sending' WHERE id=?1",[id])?;tx.commit()?;Ok(data)
  }
- pub fn revoke(&mut self){self.locked=true;}
+ pub fn revoke(&mut self){self.locked=true;drop(self.db.take());}
  pub fn state(&mut self,clock:&Clock,id:&str)->Result<String,Error>{
-  self.guard(clock,false)?;Ok(self.db.query_row("SELECT state FROM outbox WHERE id=?1",[id],|r|r.get(0))?)
+  self.guard(clock,false)?;Ok(self.db.as_ref().ok_or(Error::Locked)?.query_row("SELECT state FROM outbox WHERE id=?1",[id],|r|r.get(0))?)
  }
  pub fn conflict(&mut self,clock:&Clock,id:&str)->Result<(),Error>{
   self.guard(clock,false)?;
-  if self.db.execute("UPDATE outbox SET state='conflict' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())
+  if self.db.as_ref().ok_or(Error::Locked)?.execute("UPDATE outbox SET state='conflict' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())
  }
- pub fn unknown(&mut self,clock:&Clock,id:&str)->Result<(),Error>{self.guard(clock,false)?;if self.db.execute("UPDATE outbox SET state='unknown' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())}
+ pub fn unknown(&mut self,clock:&Clock,id:&str)->Result<(),Error>{self.guard(clock,false)?;if self.db.as_ref().ok_or(Error::Locked)?.execute("UPDATE outbox SET state='unknown' WHERE id=?1 AND state='sending'",[id])?!=1{return Err(Error::Conflict);}Ok(())}
  pub fn receipt(&mut self,clock:&Clock,r:&Receipt)->Result<(),Error>{
   self.guard(clock,false)?;if r.status!="accepted"||!rev(&r.resulting_content_revision)||r.event_cursor<0||r.changeset_id.is_nil(){return Err(Error::Invalid);}
-  let tx=self.db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+  let tx=self.db.as_mut().ok_or(Error::Locked)?.transaction_with_behavior(TransactionBehavior::Immediate)?;
   let (payload,state,old):(Vec<u8>,String,Option<Vec<u8>>)=tx.query_row("SELECT payload,state,receipt FROM outbox WHERE id=?1",[&r.operation_id],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?)))?;
   let c:Commit=serde_json::from_slice(&payload).map_err(|_|Error::Invalid)?;
   if c.source_id!=r.source_id||c.operations.len()!=r.operation_count as usize{return Err(Error::Conflict);}

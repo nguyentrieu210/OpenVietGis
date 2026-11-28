@@ -22,7 +22,7 @@ pub struct Commit{pub session_id:Uuid,pub source_id:Uuid,pub base_content_revisi
 impl Commit{
  pub fn validate(&self)->Result<(),Error>{
   if self.session_id.is_nil()||self.source_id.is_nil()||!rev(&self.base_content_revision)||self.base_schema_revision.as_ref().is_none_or(|s|!rev(s))||!(1..=128).contains(&self.operation_id.len())||!self.operation_id.bytes().all(|b|b.is_ascii_alphanumeric()||b"_.:-".contains(&b))||self.operation_id.starts_with("field-sync-")||self.operations.is_empty()||self.operations.len()>1000{return Err(Error::Invalid);}
-  for op in &self.operations{if !op.is_object()||!op["feature_id"].as_str().is_some_and(feature_id)||!matches!(op["op_type"].as_str(),Some("insert"|"update"|"delete"))||(op["op_type"]=="delete"&&!self.allow_deletes){return Err(Error::Invalid);}}
+  for op in &self.operations{if !op.is_object()||op.as_object().is_some_and(|m|m.keys().any(|k|!matches!(k.as_str(),"op_type"|"feature_id"|"geometry"|"properties")))||!op["feature_id"].as_str().is_some_and(feature_id)||!matches!(op["op_type"].as_str(),Some("create"|"update"|"delete"))||(op["op_type"]=="delete"&&!self.allow_deletes){return Err(Error::Invalid);}}
   Ok(())
  }
 }
