@@ -1,0 +1,73 @@
+//! Recovery and integration tests for the standalone shared store.
+use crate::host::Host;
+use ovg_local_storage::{LocalStore, Mutation};
+use serde_json::json;
+use uuid::Uuid;
+use std::path::PathBuf;
+fn point(x:f64,y:f64)->Vec<u8>{ovg_mobile_engine::edit::draft("point",&[x,y]).unwrap()}
+#[test]
+fn child_commits_then_exits_without_drop(){
+ let Some(root)=std::env::var_os("OVG_CRASH_TEST_ROOT")else{return};
+ let store=LocalStore::open(&PathBuf::from(root).join("crash.gpkg"),8*1024*1024).unwrap();
+ store.apply(&Mutation{operation_id:Uuid::new_v4(),feature_id:Uuid::from_u128(1),expected_revision:0,wkb:Some(point(106.,11.)),attributes:json!({"recovery":true})}).unwrap();
+ // Deliberately bypass Rust destructors, including LocalStore/SQLite close.
+ std::process::exit(77)
+}
+#[test]
+fn committed_edit_survives_process_exit(){
+ let dir=tempfile::tempdir().unwrap();
+ let status=std::process::Command::new(std::env::current_exe().unwrap())
+   .args(["--exact","recovery_tests::child_commits_then_exits_without_drop","--nocapture"])
+   .env("OVG_CRASH_TEST_ROOT",dir.path()).status().unwrap();
+ assert_eq!(status.code(),Some(77));
+ let store=LocalStore::open(&dir.path().join("crash.gpkg"),8*1024*1024).unwrap();
+ let rows=store.query([105.,10.,107.,12.],0,2).unwrap();
+ assert_eq!(rows.len(),1);assert_eq!(rows[0].1.attributes["recovery"],true);
+}
+#[test]
+fn corrupt_file_fails_closed(){
+ let dir=tempfile::tempdir().unwrap();let path=dir.path().join("bad.gpkg");
+ std::fs::write(&path,b"not SQLite").unwrap();
+ assert!(LocalStore::open(&path,4*1024*1024).is_err());
+ assert_eq!(std::fs::read(path).unwrap(),b"not SQLite");
+}
+#[test]
+fn quota_failure_does_not_commit_partial_feature(){
+ let dir=tempfile::tempdir().unwrap();let store=LocalStore::open(&dir.path().join("quota.gpkg"),4*1024*1024).unwrap();
+ let mut committed=0;let mut refused=false;
+ for _ in 0..128{
+   let id=Uuid::new_v4();let m=Mutation{operation_id:Uuid::new_v4(),feature_id:id,expected_revision:0,wkb:Some(point(106.,11.)),attributes:json!({"payload":"x".repeat(120_000)})};
+   match store.apply(&m){Ok(_)=>committed+=1,Err(_)=>{assert!(store.feature_json(id).is_err());refused=true;break}}
+ }
+ assert!(refused);assert!(committed>0);
+ let mut after=0;let mut rows=0;
+ loop{let page=store.query([105.,10.,107.,12.],after,10).unwrap();if page.is_empty(){break}after=page.last().unwrap().0;rows+=page.len();}
+ assert_eq!(rows,committed);
+}
+#[test]
+fn mvt_revision_cache_and_workspace_isolation(){
+ let dir=tempfile::tempdir().unwrap();let h=Host::new(dir.path().to_path_buf()).unwrap();let p=h.create().unwrap();let w=h.open(p.id).unwrap();let id=Uuid::new_v4();
+ h.edit(w.handle,Uuid::new_v4(),id,"0".into(),Some("point".into()),vec![106.,11.],json!({})).unwrap();
+ let tile=h.vector_tile(w.handle,w.handle,1,0,0,0).unwrap();
+ assert_eq!(tile,h.vector_tile(w.handle,w.handle,1,0,0,0).unwrap());
+ assert!(h.vector_tile(w.handle,Uuid::new_v4(),1,0,0,0).is_err());
+ let p=h.attributes(w.handle,"0".into(),100,"".into()).unwrap();
+ let cursor=p["next"].as_str().unwrap().to_string();
+ h.reshape(w.handle,id,"1".into(),json!({"type":"Point","coordinates":[107.,12.]})).unwrap();
+ assert!(h.vector_tile(w.handle,w.handle,1,0,0,0).is_err());
+ assert!(h.attributes(w.handle,cursor,100,"".into()).is_err());
+ assert_ne!(tile,h.vector_tile(w.handle,w.handle,2,0,0,0).unwrap());
+ h.close(w.handle).unwrap();assert!(h.vector_tile(w.handle,w.handle,2,0,0,0).is_err());
+}
+#[test]
+fn standard_external_gpkg_import_roundtrip(){
+ use rusqlite::{Connection,params};
+ let dir=tempfile::tempdir().unwrap();let src=dir.path().join("external.gpkg");
+ let db=Connection::open(&src).unwrap();
+ db.execute_batch("PRAGMA application_id=1196444487; CREATE TABLE gpkg_contents(table_name TEXT,data_type TEXT); CREATE TABLE gpkg_geometry_columns(table_name TEXT,column_name TEXT,srs_id INTEGER,z INTEGER,m INTEGER); CREATE TABLE survey(fid INTEGER PRIMARY KEY,geom BLOB,name TEXT); INSERT INTO gpkg_contents VALUES('survey','features'); INSERT INTO gpkg_geometry_columns VALUES('survey','geom',4326,0,0);").unwrap();
+ let mut blob=vec![b'G',b'P',0,1];blob.extend(4326_i32.to_le_bytes());blob.extend(point(106.,11.));
+ db.execute("INSERT INTO survey VALUES(1,?1,'sample')",params![blob]).unwrap();drop(db);
+ let target=LocalStore::open(&dir.path().join("target.gpkg"),8*1024*1024).unwrap();
+ assert_eq!(crate::gpkg_import::import(&target,&src).unwrap(),1);
+ let rows=target.query([105.,10.,107.,12.],0,2).unwrap();assert_eq!(rows.len(),1);assert_eq!(rows[0].1.attributes["name"],"sample");
+}
