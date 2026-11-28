@@ -26,9 +26,9 @@ impl ProjectState{
   if [v.lon,v.lat,v.zoom,v.bearing,v.pitch].iter().any(|n|!n.is_finite())||v.lon.abs()>180.||v.lat.abs()>85.051129||!(0.0..=24.).contains(&v.zoom)||v.bearing.abs()>360.||!(0.0..=85.).contains(&v.pitch){return Err("INVALID_VIEW")}
   let mut seen=HashSet::new();
   for l in &self.layers{
-    if !known.contains(&l.id)||!seen.insert(&l.id)||l.style.color.len()!=7||!l.style.color.starts_with('#')||!l.style.color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)||!l.style.opacity.is_finite()||!(0.0..=1.).contains(&l.style.opacity){return Err("INVALID_LAYER_VIEW")}
+    if !known.contains(&l.id)||!seen.insert(l.id.as_str())||l.style.color.len()!=7||!l.style.color.starts_with('#')||!l.style.color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)||!l.style.opacity.is_finite()||!(0.0..=1.).contains(&l.style.opacity){return Err("INVALID_LAYER_VIEW")}
   }
-  if !seen.contains(&"root".to_owned())||!self.layers.iter().any(|l|l.id==self.active&&l.visible){return Err("INVALID_ACTIVE_LAYER")}Ok(())
+  if !seen.contains("root")||!self.layers.iter().any(|l|l.id==self.active&&l.visible){return Err("INVALID_ACTIVE_LAYER")}Ok(())
  }
  pub fn reconcile(&mut self,ids:&[Uuid]){
    let known=known(ids);
