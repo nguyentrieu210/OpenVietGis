@@ -12,6 +12,8 @@ const MAX_PROJECTS: usize = 64;
 const MAX_OPEN: usize = 8;
 const MAX_JOBS: usize = 16;
 
+#[derive(Clone,Serialize,serde::Deserialize)]
+pub struct LayerInfo {pub id:Uuid,pub name:String,pub source_epsg:Option<i32>,pub source_table:Option<String>}
 #[derive(Clone, Serialize)]
 pub struct Project { pub id: Uuid }
 #[derive(Serialize)]
@@ -19,7 +21,7 @@ pub struct Opened { pub id: Uuid, pub handle: Uuid }
 #[derive(Serialize)]
 #[serde(tag="status", rename_all="snake_case")]
 pub enum Poll { Pending, Complete { xy: Vec<f64> } }
-struct Open { engine: Workspace, _store: LocalStore, project: Uuid, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive,tempfile::NamedTempFile)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
+struct Open { engine: Workspace, _store: LocalStore, project: Uuid, layer:Option<Uuid>, generation: u64, cache: ovg_mobile_engine::viewport::Cache, raster: Option<(Uuid,ovg_local_storage::mbtiles::Archive,tempfile::NamedTempFile)>, assets: HashMap<Uuid,Asset>, catalog:Option<(Uuid,crate::gpkg_import::Catalog)> }
 struct TrackedJob { handle: Uuid, job: Job }
 struct State { session: Session, open: HashMap<Uuid,Open>, jobs: HashMap<Uuid,TrackedJob> }
 #[derive(Clone)]
@@ -130,6 +132,90 @@ impl Host {
         let next=w.generation.checked_add(1).ok_or("RESOURCE_LIMIT")?;
         let n=c.import(&w._store,table)?;
         w.generation=next;w.cache.invalidate_layer(&handle.to_string(),&handle.to_string());Ok(n)
+    }
+    fn layers_dir(&self,project:Uuid)->PathBuf{self.root.join(project.to_string()).join("layers")}
+    fn layer_path(&self,project:Uuid,layer:Uuid)->PathBuf{self.layers_dir(project).join(layer.to_string()).join("workspace.gpkg")}
+    fn layer_info(&self,project:Uuid,layer:Uuid)->Result<LayerInfo>{
+        real_dir(&self.layers_dir(project))?;
+        let dir=self.layers_dir(project).join(layer.to_string());real_dir(&dir)?;
+        regular(&dir.join("layer.json"))?;regular(&dir.join("workspace.gpkg"))?;
+        let mut data=Vec::new();fs::File::open(dir.join("layer.json")).map_err(|_|"STORAGE_UNAVAILABLE")?.take(4097).read_to_end(&mut data).map_err(|_|"INVALID_LAYER")?;
+        if data.len()>4096{return Err("INVALID_LAYER")}
+        let info:LayerInfo=serde_json::from_slice(&data).map_err(|_|"INVALID_LAYER")?;
+        if info.id!=layer||info.name.is_empty()||info.name.len()>256{return Err("INVALID_LAYER")}
+        Ok(info)
+    }
+    pub fn list_layers(&self,handle:Uuid)->Result<Vec<LayerInfo>>{
+        self.read(handle,|w|{
+            let dir=self.layers_dir(w.project);match fs::symlink_metadata(&dir){
+              Err(e) if e.kind()==std::io::ErrorKind::NotFound=>return Ok(Vec::new()),
+              Err(_)=>return Err("STORAGE_UNAVAILABLE"),Ok(_)=>real_dir(&dir)?
+            }
+            let mut out=Vec::new();
+            for entry in fs::read_dir(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?{
+                let entry=entry.map_err(|_|"STORAGE_UNAVAILABLE")?;
+                let Some(name)=entry.file_name().to_str().map(str::to_owned)else{continue};
+                let Ok(id)=Uuid::parse_str(&name)else{continue};
+                if name!=id.to_string(){continue}
+                if out.len()>=32{return Err("RESOURCE_LIMIT")}
+                out.push(self.layer_info(w.project,id)?);
+            }
+            out.sort_by(|a,b|a.name.cmp(&b.name));Ok(out)
+        })
+    }
+    pub fn create_layer(&self,handle:Uuid,name:String,catalog:Option<(Uuid,String)>)->Result<LayerInfo>{
+        if name.trim().is_empty()||name.len()>256{return Err("INVALID_LAYER_NAME")}
+        let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
+        if w.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
+        let project=w.project;
+        let dir=self.layers_dir(project);fs::create_dir_all(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?;real_dir(&dir)?;
+        let n=fs::read_dir(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?.take(33).count();
+        if n>=32{return Err("RESOURCE_LIMIT")}
+        let (source_epsg,source_table)=if let Some((grant,table))=&catalog{
+            let (_,c)=w.catalog.as_ref().filter(|(id,_)|id==grant).ok_or("STALE_HANDLE")?;
+            let l=c.layers.iter().find(|l|&l.table==table).ok_or("LAYER_NOT_FOUND")?;
+            (Some(l.epsg),Some(l.table.clone()))
+        }else{(None,None)};
+        let info=LayerInfo{id:Uuid::new_v4(),name:name.trim().to_owned(),source_epsg,source_table};
+        let stage=tempfile::tempdir_in(&dir).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        let p=stage.path().join("workspace.gpkg");
+        {
+            let store=LocalStore::open(&p,QUOTA).map_err(store_err)?;
+            if let Some((grant,table))=&catalog{
+                let (_,c)=w.catalog.as_ref().filter(|(id,_)|id==grant).ok_or("STALE_HANDLE")?;
+                c.import(&store,table)?;
+            }
+            store.checkpoint().map_err(store_err)?;
+        }
+        let mut meta=fs::OpenOptions::new().write(true).create_new(true).open(stage.path().join("layer.json")).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        serde_json::to_writer(&mut meta,&info).map_err(|_|"INVALID_LAYER")?;
+        meta.sync_all().map_err(|_|"STORAGE_UNAVAILABLE")?;drop(meta);
+        fs::rename(stage.path(),dir.join(info.id.to_string())).map_err(|_|"STORAGE_UNAVAILABLE")?;
+        Ok(info)
+    }
+    pub fn open_layer(&self,root:Uuid,layer:Uuid)->Result<Opened>{
+        let mut s=self.lock()?;
+        let base=s.open.get(&root).ok_or("STALE_HANDLE")?;
+        if base.layer.is_some(){return Err("ROOT_WORKSPACE_REQUIRED")}
+        let project=base.project;
+        if s.open.len()>=MAX_OPEN{return Err("RESOURCE_LIMIT")}
+        if s.open.values().any(|w|w.project==project&&w.layer==Some(layer)){return Err("LAYER_ALREADY_OPEN")}
+        self.layer_info(project,layer)?;
+        let path=self.layer_path(project,layer);
+        for suffix in ["-wal","-shm","-journal"]{
+            let mut side=path.as_os_str().to_os_string();side.push(suffix);
+            match fs::symlink_metadata(side){
+                Ok(m) if !m.file_type().is_file()=>return Err("INVALID_STORAGE"),
+                Err(e) if e.kind()!=std::io::ErrorKind::NotFound=>return Err("INVALID_STORAGE"),
+                _=>{}
+            }
+        }
+        let store=LocalStore::open(&path,QUOTA).map_err(store_err)?;
+        let cache=ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?;
+        let workspace=self.engine.open_workspace(s.session).map_err(err)?;
+        let handle=Uuid::new_v4();
+        s.open.insert(handle,Open{engine:workspace,_store:store,project,layer:Some(layer),generation:0,cache,raster:None,assets:HashMap::new(),catalog:None});
+        Ok(Opened{id:project,handle})
     }
     pub fn import_gpkg(&self,handle:Uuid,path:&Path)->Result<u32>{
         self.mutate(handle,|s|crate::gpkg_import::import(s,path))
@@ -348,16 +434,22 @@ impl Host {
         let store=LocalStore::open(&path,QUOTA).map_err(|_|"STORAGE_UNAVAILABLE")?;
         let workspace=self.engine.open_workspace(s.session).map_err(err)?;
         let handle=Uuid::new_v4();
-        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new(),catalog:None});
+        s.open.insert(handle,Open{engine:workspace,_store:store,project:id,layer:None,generation:0,cache:ovg_mobile_engine::viewport::Cache::new(16*1024*1024).map_err(err)?,raster:None,assets:HashMap::new(),catalog:None});
         Ok(Opened{id,handle})
     }
     pub fn close(&self,handle:Uuid)->Result<()> {
         let mut s=self.lock()?;
         let open=s.open.get(&handle).ok_or("STALE_HANDLE")?;
-        open._store.checkpoint().map_err(|_|"STORAGE_UNAVAILABLE")?;
-        self.engine.close_workspace(open.engine).map_err(err)?;
-        s.open.remove(&handle);
-        s.jobs.retain(|_,j|j.handle!=handle);
+        let project=open.project;
+        let handles:Vec<_>=if open.layer.is_none(){s.open.iter().filter(|(_,w)|w.project==project).map(|(id,_)|*id).collect()}else{vec![handle]};
+        // Checkpoint every layer before changing lifecycle state.
+        for id in &handles{s.open.get(id).ok_or("STALE_HANDLE")?._store.checkpoint().map_err(store_err)?;}
+        for id in &handles{
+            let w=s.open.get(id).ok_or("STALE_HANDLE")?.engine;
+            self.engine.close_workspace(w).map_err(err)?;
+            s.open.remove(id);
+        }
+        s.jobs.retain(|_,j|!handles.contains(&j.handle));
         Ok(())
     }
     pub fn start(&self,handle:Uuid,source:u32,target:u32,xy:Vec<f64>)->Result<Uuid>{
