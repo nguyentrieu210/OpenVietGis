@@ -1,12 +1,13 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
+
 import pytest
-from starlette.testclient import TestClient
-from live_bridge import BridgeStore,BridgeError
-from workspace_tools import validate,METHODS
-from remote_workspace import OwnedBridge
+from live_bridge import BridgeError, BridgeStore
 from remote_server import create_remote
-from test_remote import CONFIG,VERIFIER,FakeIdentity,signed,ORIGIN,ORG,PROJECT
+from remote_workspace import OwnedBridge
+from starlette.testclient import TestClient
+from test_remote import CONFIG, ORG, ORIGIN, PROJECT, VERIFIER, FakeIdentity, signed
+from workspace_tools import METHODS, validate
 
 LAYER="00000000-0000-4000-8000-000000000004"
 OP="00000000-0000-4000-8000-000000000005"
@@ -22,6 +23,7 @@ def test_changeset_validation_and_legacy_isolation():
 
 def test_old_browser_cannot_receive_workspace_mutations():
     import asyncio
+
     from remote_workspace import Owner
     store=OwnedBridge(BridgeStore(allow_workspace=True))
     store.create(Owner(ORG,"alice",ORG,PROJECT))
@@ -37,7 +39,9 @@ def test_full_tool_discovery_and_approved_changeset_relay():
         listed=client.post("/mcp",json={"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":meta}},headers=rpc_headers|{"Mcp-Method":"tools/list"})
         assert listed.status_code==200,listed.text
         tools={t["name"]:t for t in listed.json()["result"]["tools"]}
-        assert set(tools)==METHODS|{"gis_live_view","gis_live_selection","gis_live_navigate","gis_operation_status"}
+        assert set(tools)==METHODS|{"gis_live_view","gis_live_selection","gis_live_navigate","gis_operation_status","gis_workspaces","cad_state","cad_select_handle"}
+        assert "session_id" in tools["gis_layers"]["inputSchema"]["properties"]
+        assert "session_id" in tools["cad_state"]["inputSchema"]["properties"]
         assert tools["gis_changeset"]["annotations"]["destructiveHint"] is True
         s=client.post("/ai-copilot/sessions",headers=browser,json={"organization_id":ORG,"project_id":PROJECT,"workspace_version":1}).json()
         base="/ai-copilot/sessions/"+s["session_id"]; headers=browser|{"X-OVG-Bridge":s["browser_token"]}
@@ -55,3 +59,25 @@ def test_full_tool_discovery_and_approved_changeset_relay():
             assert client.post(base+"/commands/"+cmd["id"]+"/ack",headers=headers,json={"ok":True,"result":{"id":OP}}).status_code==200
             r=future.result(timeout=10)
             assert r.json()["result"]["structuredContent"]=={"acknowledged":True,"result":{"id":OP}}
+
+
+def test_multi_workspace_resolution_and_mode_gating():
+    import asyncio
+
+    from remote_workspace import Owner
+    a=Owner(ORG,"alice",ORG,PROJECT)
+    b=Owner(ORG,"alice",ORG,"00000000-0000-4000-8000-000000000009")
+    store=OwnedBridge(BridgeStore(allow_workspace=True))
+    sa=store.create(a,2,"gis"); sb=store.create(b,2,"cad")
+    rows=store.list_subject("alice")
+    assert {r["session_id"] for r in rows}=={sa["session_id"],sb["session_id"]}
+    with pytest.raises(BridgeError) as ambiguous:
+        store.for_subject("alice")
+    assert ambiguous.value.status==409
+    assert store.for_subject("alice",sa["session_id"])[0]==sa["session_id"]
+    with pytest.raises(BridgeError) as wrong_mode:
+        asyncio.run(store.execute("alice","cad_state",{},time.time()+60,sa["session_id"]))
+    assert wrong_mode.value.status==409
+    with pytest.raises(BridgeError) as foreign:
+        store.for_subject("mallory",sb["session_id"])
+    assert foreign.value.status==404
