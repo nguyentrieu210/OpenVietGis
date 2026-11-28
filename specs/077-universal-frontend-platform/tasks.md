@@ -22,7 +22,8 @@
 - [x] T301a Dockview 8.10.0 OSS adapter, registered panels, tabs/split/dock/float/resize/maximize/reset and scoped versioned persistence; window capabilities fail closed.
 - [x] T301b TypeScript, production demo build, 4 W3 browser tests plus 9 W2 regression tests; synthetic canvas lifecycle and restore checks.
 - [x] T301c1 Real MapLibre lifecycle fixture: same map mount, camera, selected feature state across tab/split/float/redock.
-- [ ] T301c2 Actual Studio DockLayout replacement, Cesium/CAD lifecycle, keyboard drag/accessibility, performance, native IPC and rollback.
+- [x] T301c2a Actual Studio opt-in Dockview beta: lazy loaded existing layers/map/inspector/table, host-owned presence, focus maximization, blocked layout controls and classic rollback; production browser smoke PASS.
+- [ ] T301c2b Default adoption after Cesium/CAD lifecycle, unsaved edit/ACL parity, keyboard accessibility, performance and native IPC qualification.
 ## W4 GIS/CAD
 - [x] T401a Shared GIS/CAD UI: LayerTree, Legend, CrsSelector, SymbolEditor/Preview, ColorRamp, CoordinateInput, SnapToolbar and PropertyEditor with typed host intents and scoped styles.
 - [x] T401b Validate inputs, capabilities, revision-bound property updates; TypeScript, Vite and 18/18 isolated tests (5 W4 + 13 regressions).

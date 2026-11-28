@@ -1,0 +1,6 @@
+.ovg-studio-dockview{display:flex;flex:1;min-width:0;min-height:0;overflow:hidden}.ovg-studio-dockview>.ovg-workbench{flex:1;min-width:0}
+.ovg-studio-dock-slot{display:flex;flex-direction:column;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden}
+.ovg-studio-dock-slot>.qgis-map-region{flex:1;min-width:0;min-height:0}
+.ovg-studio-dock-slot>.qgis-dock,.ovg-studio-dock-slot>.live-inspector,.ovg-studio-dock-slot>.qgis-table{position:relative!important;inset:auto!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;min-width:0!important;min-height:0!important;flex:1;resize:none!important;box-shadow:none!important;border:0}
+.ovg-studio-dock-slot>.qgis-dock>.ovg-splitter,.ovg-studio-dock-slot>.live-inspector>.ovg-splitter,.ovg-studio-dock-slot>.qgis-table>.ovg-splitter{display:none}
+.ovg-studio-dock-slot>.live-inspector{display:flex;flex-direction:column;overflow:hidden}.ovg-studio-dock-slot>.live-inspector>.live-inspector-body{flex:1;min-height:0;overflow:auto}

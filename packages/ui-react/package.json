@@ -19,7 +19,8 @@
     "./primitives": "./src/primitives.tsx",
     "./data/window": "./src/data/window.ts",
     "./commands/discovery": "./src/commands/discovery.ts",
-    "./compat.css": "./src/compat.css"
+    "./compat.css": "./src/compat.css",
+    "./workbench": "./src/workbench.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

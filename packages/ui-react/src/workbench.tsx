@@ -52,12 +52,12 @@ export function initPreset(api:DockviewApi,specs:readonly PanelSpec[],preset:Pre
  for(const s of specs)if(s.persistent&&!api.getPanel(s.id))add(s.id,{referencePanel:'map',direction:'within'});
  api.getPanel('map')?.api.setActive();
 }
-export function Workbench({scope,panels,preset='qgis',children,onReady,onPersistence,canReset}:{scope:Scope;panels:readonly PanelSpec[];preset?:Preset;children?:ReactNode;onReady?:(api:DockviewApi)=>void;onPersistence?:(saved:boolean)=>void;canReset?:()=>boolean}){
+export function Workbench({scope,panels,preset='qgis',children,onReady,onPersistence,canReset,locked=false,managed=false,visiblePanels}:{scope:Scope;panels:readonly PanelSpec[];preset?:Preset;children?:ReactNode;onReady?:(api:DockviewApi)=>void;onPersistence?:(saved:boolean)=>void;canReset?:()=>boolean;locked?:boolean;managed?:boolean;visiblePanels?:readonly string[]}){
  const key=layoutKey(scope);
  // Changing the account/project/workspace remounts the isolated engine; never share old layout.
- return <ScopedWorkbench key={key} storageKey={key} panels={panels} preset={preset} onReady={onReady} onPersistence={onPersistence} canReset={canReset}>{children}</ScopedWorkbench>
+ return <ScopedWorkbench key={key} storageKey={key} panels={panels} preset={preset} onReady={onReady} onPersistence={onPersistence} canReset={canReset} locked={locked} managed={managed} visiblePanels={visiblePanels}>{children}</ScopedWorkbench>
 }
-function ScopedWorkbench({storageKey,panels,preset,children,onReady,onPersistence,canReset}:{storageKey:string;panels:readonly PanelSpec[];preset:Preset;children?:ReactNode;onReady?:(api:DockviewApi)=>void;onPersistence?:(saved:boolean)=>void;canReset?:()=>boolean}){
+function ScopedWorkbench({storageKey,panels,preset,children,onReady,onPersistence,canReset,locked=false,managed=false,visiblePanels}:{storageKey:string;panels:readonly PanelSpec[];preset:Preset;children?:ReactNode;onReady?:(api:DockviewApi)=>void;onPersistence?:(saved:boolean)=>void;canReset?:()=>boolean;locked?:boolean;managed?:boolean;visiblePanels?:readonly string[]}){
  validateRegistry(panels);
  const [api,setApi]=useState<DockviewApi|null>(null),[selected,setSelected]=useState('map');const disposables=useRef<{dispose:()=>void}[]>([]),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
  const live=useRef({panels,onReady,onPersistence});live.current={panels,onReady,onPersistence};
@@ -71,15 +71,17 @@ function ScopedWorkbench({storageKey,panels,preset,children,onReady,onPersistenc
   setApi(a);live.current.onReady?.(a);persist(a);
  };
  useEffect(()=>()=>{clearTimeout(timer.current);for(const d of disposables.current)d.dispose();disposables.current=[]},[]);
- const tab=({api:panelApi}:IDockviewPanelHeaderProps)=><span className="ovg-workbench-tab">{panelApi.title}<button type="button" hidden={panels.some(s=>s.id===panelApi.id&&s.persistent)} aria-label={'Close '+panelApi.title} onClick={e=>{e.stopPropagation();panelApi.close()}}>×</button></span>;
- const find=()=>api?.getPanel(selected);
- const open=()=>{if(!api)return;const existing=find(),s=panels.find(p=>p.id===selected);if(existing){existing.api.setActive();return}if(s)api.addPanel({id:s.id,component:s.id,title:s.title,renderer:'always',position:{referencePanel:'map',direction:'within'}})};
- const move=(direction:'left'|'right'|'bottom'|'center')=>{const p=find(),map=api?.getPanel('map');if(p&&map&&p.id!==map.id)p.api.moveTo({group:map.group,position:direction})};
- const float=()=>{const p=find();if(p&&api&&p.id!=='map')api.addFloatingGroup(p,{width:300,height:220,x:24,y:24})};
+ const tab=({api:panelApi}:IDockviewPanelHeaderProps)=><span className="ovg-workbench-tab">{panelApi.title}<button type="button" hidden={managed||panels.some(s=>s.id===panelApi.id&&s.persistent)} disabled={locked} aria-label={'Close '+panelApi.title} onClick={e=>{e.stopPropagation();if(!locked&&!managed)panelApi.close()}}>×</button></span>;
+ const options=managed&&visiblePanels?panels.filter(p=>visiblePanels.includes(p.id)):panels;
+ const activeSelection=options.some(p=>p.id===selected)?selected:'map';
+ const find=()=>api?.getPanel(activeSelection);
+ const open=()=>{if(!api||locked)return;const existing=find(),s=panels.find(p=>p.id===activeSelection);if(existing){existing.api.setActive();return}if(s&&!managed)api.addPanel({id:s.id,component:s.id,title:s.title,renderer:'always',position:{referencePanel:'map',direction:'within'}})};
+ const move=(direction:'left'|'right'|'bottom'|'center')=>{const p=find(),map=api?.getPanel('map');if(!locked&&p&&map&&p.id!==map.id)p.api.moveTo({group:map.group,position:direction})};
+ const float=()=>{const p=find();if(!locked&&p&&api&&p.id!=='map')api.addFloatingGroup(p,{width:300,height:220,x:24,y:24})};
  return <section className="ovg-workbench"><div className="ovg-workbench-tools">
- <select aria-label="Panel" value={selected} onChange={e=>setSelected(e.target.value)}>{panels.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select>
- <Button onClick={open}>Open panel</Button><Button onClick={()=>move('left')}>Dock left</Button><Button onClick={()=>move('right')}>Dock right</Button><Button onClick={()=>move('bottom')}>Dock bottom</Button><Button onClick={()=>move('center')}>Dock tab</Button><Button onClick={float}>Float panel</Button>
- <Button onClick={()=>{const p=find();if(p)p.api.isMaximized()?p.api.exitMaximized():p.api.maximize()}}>Maximize / restore</Button>
- <Button disabled={!canReset} onClick={()=>{if(api&&canReset?.()===true)initPreset(api,panels,preset)}}>Reset layout</Button>{children}</div>
- <div className="ovg-workbench-body"><DockviewReact components={registry} defaultTabComponent={tab} onReady={ready} theme={{name:'ovg',className:'dockview-theme-ovg'}} floatingGroupBounds="boundedWithinViewport" getTabContextMenuItems={()=>[]} /></div></section>
+ <select aria-label="Panel" value={activeSelection} onChange={e=>setSelected(e.target.value)}>{options.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select>
+ <Button disabled={locked} onClick={open}>Open panel</Button><Button disabled={locked} onClick={()=>move('left')}>Dock left</Button><Button disabled={locked} onClick={()=>move('right')}>Dock right</Button><Button disabled={locked} onClick={()=>move('bottom')}>Dock bottom</Button><Button disabled={locked} onClick={()=>move('center')}>Dock tab</Button><Button disabled={locked} onClick={float}>Float panel</Button>
+ <Button disabled={locked} onClick={()=>{const p=find();if(p)p.api.isMaximized()?p.api.exitMaximized():p.api.maximize()}}>Maximize / restore</Button>
+ <Button disabled={locked||!canReset} onClick={()=>{if(!locked&&api&&canReset?.()===true)initPreset(api,panels,preset)}}>Reset layout</Button>{children}</div>
+ <div className="ovg-workbench-body"><DockviewReact components={registry} defaultTabComponent={tab} onReady={ready} theme={{name:'ovg',className:'dockview-theme-ovg'}} floatingGroupBounds="boundedWithinViewport" getTabContextMenuItems={()=>[]} disableDnd={locked} /></div></section>
 }

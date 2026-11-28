@@ -71,3 +71,7 @@ Source checks alone are not runtime acceptance. Missing external branch objects 
 | Shared command discovery and exact dispatch, stale disabled/duplicate rejection | PASS unit and Web smoke |
 | SPEC072 compatibility CSS ownership moved into shared package | PASS build and smoke |
 | Remote SPEC077 dedicated Web and Flutter jobs at bcd4bb5 | PASS run 46184820249; newer commits require own qualification |
+
+| Actual Studio Dockview beta, retained MapLibre canvas, focus mode, CRUD and classic fallback | PASS production fixture with mocked server; default remains classic |
+| Web regression after Studio beta | 315 Vitest + 53 Node + 21 UI tests PASS local |
+| Dedicated CI at cdb6def | PASS Web + Flutter; E17 parity failed; later commits require qualification |

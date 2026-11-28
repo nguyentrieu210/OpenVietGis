@@ -75,8 +75,26 @@ try{
  await gridScroll.evaluate(el=>el.scrollTop=0);await firstRow.waitFor();assert.ok(await firstRow.isChecked());
  await table.getByRole("button",{name:"Đóng bảng thuộc tính",exact:true}).click();
  console.log("PASS shared TanStack row window and GIS selection across scrolling");
+ if(new URL(process.env.OVG_TEST_URL||page.url()).searchParams.get("dockview")==="1"){
+  const workbench=page.getByTestId("studio-dockview");
+  await workbench.waitFor();
+  const canvas=workbench.locator(".maplibregl-canvas").first();await canvas.waitFor();
+  const original=await canvas.elementHandle();
+  const panel=workbench.getByLabel("Panel",{exact:true});
+  await panel.selectOption("layers");await workbench.getByRole("button",{name:"Dock tab",exact:true}).click();
+  await panel.selectOption("map");await workbench.getByRole("button",{name:"Open panel",exact:true}).click();
+  await panel.selectOption("layers");await workbench.getByRole("button",{name:"Dock right",exact:true}).click();
+  await workbench.getByRole("button",{name:"Float panel",exact:true}).click();
+  await workbench.getByRole("button",{name:"Dock left",exact:true}).click();
+  assert.ok(await original.evaluate(el=>el.isConnected&&el===document.querySelector(".maplibregl-canvas")),"Studio map canvas must not remount");
+  const focusButton=page.getByRole("button",{name:"Tập trung bản đồ",exact:true});
+  await focusButton.click();await page.getByRole("button",{name:"Khôi phục khung",exact:true}).click();
+  assert.ok(await original.evaluate(el=>el.isConnected&&el===document.querySelector(".maplibregl-canvas")));
+  console.log("PASS actual Studio Dockview panel movement and map focus retain map canvas");
+ }
  await command("NEWLAYER");
  const d=page.getByRole("dialog",{name:"Tạo layer rỗng"});await d.waitFor();
+ if(await page.getByTestId("studio-dockview").count())assert.ok(await page.getByRole("button",{name:"Bố cục cổ điển",exact:true}).isDisabled());
  await d.getByLabel("Tên layer").fill("Test focus");
  await page.keyboard.press("Tab");
  assert.ok(await d.evaluate(el=>el.contains(document.activeElement)));
@@ -88,4 +106,10 @@ try{
  await d.getByRole("button",{name:"Tạo layer",exact:true}).click();await d.waitFor({state:"detached"});
  assert.equal(manual.geometry_family,"LineString");assert.deepEqual(errors,[]);
  console.log("PASS modal keyboard focus, Escape, reopen, create layer submit");
+ if(await page.getByTestId("studio-dockview").count()){
+  await page.getByRole("button",{name:"Bố cục cổ điển",exact:true}).click();
+  await page.getByRole("button",{name:"Bố cục mới (Beta)",exact:true}).waitFor();
+  assert.equal(await page.getByTestId("studio-dockview").count(),0);
+  console.log("PASS rollback to classic layout");
+ }
 }finally{await browser.close()}
