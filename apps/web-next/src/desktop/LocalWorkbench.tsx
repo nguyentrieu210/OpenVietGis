@@ -6,7 +6,8 @@ import {desktop,type FeatureRecord,type FeatureRow,type AssetInfo} from "./trans
 import {vertices,moveVertex} from "./vertices";
 type Kind="point"|"line"|"polygon";
 const empty=():GeoJSON.FeatureCollection=>({type:"FeatureCollection",features:[]});
-export default function LocalWorkbench({handle}:{handle:string}){
+type Overlay={id:string;handle:string;name:string};
+export default function LocalWorkbench({handle,overlays=[]}:{handle:string;overlays?:Overlay[]}){
   const canvas=useRef<HTMLDivElement>(null);
   const map=useRef<maplibregl.Map|undefined>(undefined);
   const [ready,setReady]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState("");
@@ -157,6 +158,35 @@ export default function LocalWorkbench({handle}:{handle:string}){
     return()=>{for(const marker of vertexMarkers.current)marker.remove();vertexMarkers.current=[];vertexGeometry.current=undefined;(m.getSource("draft") as GeoJSONSource|undefined)?.setData(empty())};
     // Geometry text updates on drag end, rebuilding marker coordinates.
   },[vertexMode,selected,geometryText,ready]);
+  useEffect(()=>{
+    const m=map.current;
+    if(!ready||!m||!styleReady.current)return;
+    let disposed=false;
+    const installed:string[]=[];
+    void (async()=>{
+      for(const [i,o] of overlays.entries()){
+        const generation=await desktop.generation(o.handle);
+        if(disposed||!alive.current)return;
+        const id="overlay-"+o.handle;
+        const url=`ovg://v1/workspaces/${o.handle}/layers/${o.handle}/revisions/${generation}/tiles/{z}/{x}/{y}.mvt`;
+        m.addSource(id,{type:"vector",tiles:[url],minzoom:0,maxzoom:22,promoteId:"stable_id"});
+        installed.push(id);
+        const color=["#6b7280","#22875e","#a254a1","#b68924"][i%4]!;
+        const l={source:id,"source-layer":"local"} as const;
+        m.addLayer({id:id+"-fill",...l,type:"fill",filter:["==",["geometry-type"],"Polygon"],paint:{"fill-color":color,"fill-opacity":0.16}},"local-fill");
+        m.addLayer({id:id+"-line",...l,type:"line",filter:["in",["geometry-type"],["literal",["LineString","Polygon"]]],paint:{"line-color":color,"line-width":1.5}},"local-fill");
+        m.addLayer({id:id+"-point",...l,type:"circle",filter:["==",["geometry-type"],"Point"],paint:{"circle-color":color,"circle-radius":4}},"local-fill");
+      }
+    })().catch(e=>{if(!disposed&&alive.current)setNotice(String(e))});
+    return()=>{
+      disposed=true;
+      if(map.current!==m)return;
+      for(const id of installed){
+        for(const suffix of ["fill","line","point"])if(m.getLayer(id+"-"+suffix))m.removeLayer(id+"-"+suffix);
+        if(m.getSource(id))m.removeSource(id);
+      }
+    };
+  },[ready,overlays]);
   const openAsset=(kind:"cad"|"las"|"laz"|"copc"|"glb")=>run(async()=>{
     if(asset)throw Error("Đóng tài nguyên hiện tại trước khi mở tài nguyên khác");
     const epsg=kind==="cad"?4326:kind==="glb"?null:Number(lasEpsg);
