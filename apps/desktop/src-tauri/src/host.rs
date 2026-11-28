@@ -50,7 +50,7 @@ const MAX_IMPORT:u64=16*1024*1024;
 const MAX_READ:usize=2*1024*1024;
 #[derive(Serialize)]
 pub struct Viewport { pub generation:String, pub data:Value, pub truncated:bool }
-enum Asset { Cad(crate::resource_files::Cad), Las(crate::resource_files::Las), Glb(crate::resource_files::Glb) }
+enum Asset { Cad(crate::resource_files::Cad), Las(crate::resource_files::Las), Compressed(crate::compressed_points::Cloud), Glb(crate::resource_files::Glb) }
 #[derive(Serialize)]
 pub struct AssetInfo {pub id:Uuid,pub kind:String,pub count:u64,pub epsg:Option<u32>}
 #[derive(Serialize)]
@@ -139,14 +139,20 @@ impl Host {
         let asset=match kind{
             "cad" if epsg==Some(4326)=>Asset::Cad(crate::resource_files::Cad::open(path)?),
             "las" if epsg.is_some_and(|n|n>0)=>Asset::Las(crate::resource_files::Las::open(path)?),
+            "laz"|"copc" if epsg.is_some_and(|n|n>0)=>Asset::Compressed(crate::compressed_points::Cloud::open(path,kind=="copc")?),
             "glb" if epsg.is_none()=>Asset::Glb(crate::resource_files::Glb::open(path)?),
             _=>return Err("EXPLICIT_CRS_OR_FORMAT_REQUIRED")
         };
-        let count=match &asset{Asset::Cad(a)=>a.count(),Asset::Las(a)=>a.count(),Asset::Glb(a)=>a.len()};
+        let count=match &asset{Asset::Cad(a)=>a.count(),Asset::Las(a)=>a.count(),Asset::Compressed(a)=>a.count(),Asset::Glb(a)=>a.len()};
         let mut s=self.lock()?;let w=s.open.get_mut(&handle).ok_or("STALE_HANDLE")?;
         if w.assets.len()>=3{return Err("RESOURCE_LIMIT")}
         let id=Uuid::new_v4();w.assets.insert(id,asset);
         Ok(AssetInfo{id,kind:kind.into(),count,epsg})
+    }
+    pub fn copc_query(&self,handle:Uuid,id:Uuid,bounds:[f64;6],level:i32)->Result<Vec<u8>>{
+        self.read(handle,|w|match w.assets.get(&id){
+            Some(Asset::Compressed(a))=>a.query(bounds,level),_=>Err("STALE_HANDLE")
+        })
     }
     pub fn cad_viewport(&self,handle:Uuid,id:Uuid,bbox:[f64;4])->Result<Vec<u8>>{
         self.read(handle,|w|match w.assets.get(&id){
@@ -163,6 +169,7 @@ impl Host {
         let b=match(a,resource){
             (Asset::Cad(a),crate::protocol::Resource::CadChunk(n))=>a.chunk(n)?,
             (Asset::Las(a),crate::protocol::Resource::PointNode(n))=>a.chunk(n)?,
+            (Asset::Compressed(a),crate::protocol::Resource::PointNode(n))=>a.chunk(n)?,
             (Asset::Glb(a),crate::protocol::Resource::Asset)=>a.bytes(),
             _=>return Err("UNSUPPORTED_RESOURCE")
         };
