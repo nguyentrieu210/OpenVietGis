@@ -136,3 +136,38 @@ impl TiledTiff{
  #[test]fn bounded_tile(){let b=fixture();let mut r=io::Cursor::new(&b);let t=TiledTiff::open(&mut r,b.len()as u64).unwrap();assert_eq!(t.tile(&mut r,0,0).unwrap(),vec![1,2,3,4]);assert!(t.tile(&mut r,1,0).is_err());}
  #[test]fn truncated_or_bad_offset(){let b=fixture();assert!(TiledTiff::open(&mut io::Cursor::new(&b[..258]),258).is_err());}
 }
+
+#[cfg(test)]
+mod extended_tests{
+ use super::*;
+ use std::io::Write;
+ fn directory(big:bool,tags:&[(u16,u16,u64)],next:u64)->Vec<u8>{
+  let mut b=Vec::new();
+  if big{b.extend((tags.len()as u64).to_le_bytes())}else{b.extend((tags.len()as u16).to_le_bytes())}
+  for &(tag,kind,v) in tags{b.extend(tag.to_le_bytes());b.extend(kind.to_le_bytes());
+   if big{b.extend(1u64.to_le_bytes());b.extend(v.to_le_bytes())}else{b.extend(1u32.to_le_bytes());b.extend((v as u32).to_le_bytes())}
+  }
+  if big{b.extend(next.to_le_bytes())}else{b.extend((next as u32).to_le_bytes())}b
+ }
+ fn tags(w:u64,h:u64,off:u64,bytes:u64,compression:u64,reduced:u64)->Vec<(u16,u16,u64)>{
+  vec![(254,4,reduced),(256,4,w),(257,4,h),(258,3,8),(259,3,compression),(262,3,1),(277,3,1),(317,3,2),(322,4,w),(323,4,h),(324,16,off),(325,16,bytes)]
+ }
+ #[test]fn bigtiff_deflate_and_predictor(){
+  let mut z=flate2::write::ZlibEncoder::new(Vec::new(),flate2::Compression::default());
+  z.write_all(&[10,10,30,10]).unwrap();let encoded=z.finish().unwrap();
+  let mut b=b"II\x2b\x00\x08\x00\x00\x00".to_vec();b.extend(16u64.to_le_bytes());b.extend(directory(true,&tags(2,2,512,encoded.len()as u64,8,0),0));b.resize(512,0);b.extend(encoded);
+  let mut r=io::Cursor::new(&b);let d=TiledTiff::open(&mut r,b.len()as u64).unwrap();
+  assert_eq!(d.tile(&mut r,0,0).unwrap(),vec![10,20,30,40]);
+ }
+ #[test]fn overview_chain_and_cycle(){
+  let mut b=b"II\x2b\x00\x08\x00\x00\x00".to_vec();b.extend(16u64.to_le_bytes());b.extend(directory(true,&tags(4,4,1024,16,1,0),512));b.resize(512,0);
+  b.extend(directory(true,&tags(2,2,1040,4,1,1),0));b.resize(1024,0);b.extend([1u8;20]);
+  let mut r=io::Cursor::new(&b);let d=TiledTiff::pyramid(&mut r,b.len()as u64).unwrap();assert_eq!(d.len(),2);assert_eq!(d[1].info.level,1);assert_eq!(d[1].tile(&mut r,0,0).unwrap().len(),4);
+  let end=512+8+12*20;b[end..end+8].copy_from_slice(&16u64.to_le_bytes());assert!(TiledTiff::pyramid(&mut io::Cursor::new(&b),b.len()as u64).is_err());
+ }
+ #[test]fn expansion_limit(){
+  let mut z=flate2::write::ZlibEncoder::new(Vec::new(),flate2::Compression::default());z.write_all(&[0;4096]).unwrap();let encoded=z.finish().unwrap();
+  let mut b=b"II\x2b\x00\x08\x00\x00\x00".to_vec();b.extend(16u64.to_le_bytes());b.extend(directory(true,&tags(2,2,512,encoded.len()as u64,8,0),0));b.resize(512,0);b.extend(encoded);
+  let mut r=io::Cursor::new(&b);let d=TiledTiff::open(&mut r,b.len()as u64).unwrap();assert!(d.tile(&mut r,0,0).is_err());
+ }
+}
