@@ -1067,14 +1067,16 @@ pub async fn lock_and_prepare_execution(
     let mut sp = scope.tx_mut().begin().await.map_err(edit_db_error)?;
     let outcome = prepare_inside_savepoint(
         &mut sp,
-        job_id,
-        org_id,
-        project_id,
-        algorithm_id,
-        input_refs,
-        parameters,
-        output_name,
-        engine_version,
+        ProcessingJobArgs {
+            job_id,
+            org_id,
+            project_id,
+            algorithm_id,
+            input_refs,
+            parameters,
+            output_name,
+            engine_version,
+        },
     )
     .await;
 
@@ -1093,8 +1095,18 @@ pub async fn lock_and_prepare_execution(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 type ProcessingField = (String, String, String, bool);
+
+struct ProcessingJobArgs {
+    job_id: Uuid,
+    org_id: Uuid,
+    project_id: Uuid,
+    algorithm_id: String,
+    input_refs: Value,
+    parameters: Value,
+    output_name: String,
+    engine_version: String,
+}
 
 async fn processing_source_fields(
     sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -1137,15 +1149,18 @@ fn processing_raw_row(
 
 async fn prepare_inside_savepoint(
     sp: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    job_id: Uuid,
-    org_id: Uuid,
-    project_id: Uuid,
-    algorithm_id: String,
-    input_refs: Value,
-    parameters: Value,
-    output_name: String,
-    engine_version: String,
+    args: ProcessingJobArgs,
 ) -> Result<ExecutionInputs, EditError> {
+    let ProcessingJobArgs {
+        job_id,
+        org_id,
+        project_id,
+        algorithm_id,
+        input_refs,
+        parameters,
+        output_name,
+        engine_version,
+    } = args;
     sqlx::query("SELECT set_config('statement_timeout', $1, true)")
         .bind(PROCESSING_STATEMENT_TIMEOUT)
         .execute(&mut **sp)
