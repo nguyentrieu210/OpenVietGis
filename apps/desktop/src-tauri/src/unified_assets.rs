@@ -135,3 +135,32 @@ pub async fn unified_import_ndjson(window:WebviewWindow,u:State<'_,Unified>,hand
   Ok(Some(serde_json::json!({"layer":r.layer,"revision":r.revision.to_string(),"count":r.count,"digest":r.digest})))
  }).await
 }
+
+#[cfg(test)]
+mod durable_tests{
+ use super::*;
+ #[test]fn persistent_asset_reopens_after_backup_and_source_deletion(){
+  let d=tempfile::tempdir().unwrap();let p=d.path().join("a.dxf");
+  std::fs::write(&p,"0\nSECTION\n2\nENTITIES\n0\nPOINT\n5\nAB\n8\nSurvey\n10\n106\n20\n11\n0\nENDSEC\n0\nEOF\n").unwrap();
+  let u=Unified::new(d.path().join("projects")).unwrap();let a=u.open(u.create().unwrap().id).unwrap();
+  let asset=u.attach_asset(a.handle,&p,"cad",Some(4326),1).unwrap();
+  std::fs::remove_file(&p).unwrap();
+  let backup=d.path().join("backup.sqlite");
+  u.with(a.handle,|s|s.backup_copy(&backup,2,&AtomicBool::new(false)).map_err(|_|"BACKUP_FAILED")).unwrap();
+  u.close(a.handle).unwrap();let b=u.open(u.restore(&backup).unwrap().id).unwrap();
+  let info=u.reopen_asset(b.handle,asset.id).unwrap();assert_eq!(info.count,1);
+  assert_eq!(u.detach_asset(b.handle,asset.id,2).unwrap(),3);
+  assert!(u.reopen_asset(b.handle,asset.id).is_err());u.shutdown().unwrap();
+ }
+ #[test]fn ndjson_stream_all_or_nothing(){
+  let d=tempfile::tempdir().unwrap();let u=Unified::new(d.path().join("projects")).unwrap();let a=u.open(u.create().unwrap().id).unwrap();
+  let path=d.path().join("features.ndjson");
+  let feature=serde_json::json!({"type":"Feature","geometry":{"type":"Point","coordinates":[106.,11.]},"properties":{"name":"A"}});
+  std::fs::write(&path,format!("{}\ninvalid\n",feature)).unwrap();
+  assert!(u.import_ndjson(a.handle,&path,"bulk",1).is_err());
+  assert_eq!(u.with(a.handle,|s|s.revision().map_err(|_|"FAILED")).unwrap(),1);
+  std::fs::write(&path,format!("{}\n{}\n",feature,feature)).unwrap();
+  let r=u.import_ndjson(a.handle,&path,"bulk",1).unwrap();assert_eq!(r.count,2);assert_eq!(r.revision,2);
+  u.shutdown().unwrap();
+ }
+}
