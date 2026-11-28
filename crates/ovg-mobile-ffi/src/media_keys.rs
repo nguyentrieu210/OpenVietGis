@@ -9,6 +9,9 @@ impl MediaKeys for PlatformKeys{
 impl PlatformKeys{
  pub fn provision(scope:Uuid)->Result<(),Error>{platform::get(scope,true).map(drop)}
  pub fn available()->bool{platform::available()}
+ pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{platform::capture_preview()}
+ pub fn show_preview(raw:&[u8])->Result<bool,Error>{platform::show_preview(raw)}
+ pub fn camera_available()->bool{cfg!(target_os="android")&&Self::available()}
 }
 #[cfg(target_os="android")]
 mod platform{
@@ -25,6 +28,34 @@ mod platform{
   match result{Ok(p)=>{let _=PROVIDER.set(p);1},Err(_)=>0}
  }
  pub fn available()->bool{PROVIDER.get().is_some()}
+ pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{
+  let p=PROVIDER.get().ok_or(Error::Unsupported)?;
+  let mut e=p.vm.attach_current_thread().map_err(|_|Error::Storage)?;
+  let r=e.with_local_frame(4,|env|{
+   let value=env.call_method(p.object.as_obj(),"capturePreview","()[B",&[])?.l()?;
+   if value.is_null(){return Ok::<_,jni::errors::Error>(None)}
+   let a=JByteArray::from(value);let n=env.get_array_length(&a)? as usize;
+   if n==0||n>16*1024*1024{return Ok(None)}
+   let mut signed=Zeroizing::new(vec![0i8;n]);let read=env.get_byte_array_region(&a,0,&mut signed[..]);
+   let wipe=env.set_byte_array_region(&a,0,&vec![0i8;n]);read?;wipe?;
+   Ok(Some(Zeroizing::new(signed.iter().map(|&v|v as u8).collect::<Vec<_>>())))
+  });
+  if e.exception_check().unwrap_or(false){let _=e.exception_clear();return Err(Error::Storage)}
+  r.map_err(|_|Error::Storage)?.ok_or(Error::Conflict)
+ }
+ pub fn show_preview(raw:&[u8])->Result<bool,Error>{
+  if raw.is_empty()||raw.len()>16*1024*1024{return Err(Error::Limit)}
+  let p=PROVIDER.get().ok_or(Error::Unsupported)?;
+  let mut e=p.vm.attach_current_thread().map_err(|_|Error::Storage)?;
+  let r=e.with_local_frame(4,|env|{
+   let a=env.byte_array_from_slice(raw)?;
+   let result=env.call_method(p.object.as_obj(),"showPreview","([B)Z",&[JValue::Object(a.as_ref())]);
+   let wipe=env.set_byte_array_region(&a,0,&vec![0i8;raw.len()]);
+   let shown=result?.z()?;wipe?;Ok::<_,jni::errors::Error>(shown)
+  });
+  if e.exception_check().unwrap_or(false){let _=e.exception_clear();return Err(Error::Storage)}
+  r.map_err(|_|Error::Storage)
+ }
  pub fn get(scope:Uuid,create:bool)->Result<Zeroizing<[u8;32]>,Error>{
   if scope.is_nil(){return Err(Error::Invalid)}
   let p=PROVIDER.get().ok_or(Error::Unsupported)?;
@@ -98,6 +129,8 @@ mod platform{
   unsafe{ptr::copy_nonoverlapping(bytes,k.as_mut_ptr(),32)};Ok(Some(k))
  }
  pub fn available()->bool{true}
+ pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
+ pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
  pub fn get(scope:Uuid,create:bool)->Result<Zeroizing<[u8;32]>,Error>{
   if scope.is_nil(){return Err(Error::Invalid)}
   let service=string("org.openvietgis.media.v1")?;let account=string(&scope.to_string())?;
@@ -113,6 +146,8 @@ mod platform{
 mod platform{
  use super::*;
  pub fn available()->bool{false}
+ pub fn capture_preview()->Result<Zeroizing<Vec<u8>>,Error>{Err(Error::Unsupported)}
+ pub fn show_preview(_:&[u8])->Result<bool,Error>{Err(Error::Unsupported)}
  pub fn get(_:Uuid,_:bool)->Result<Zeroizing<[u8;32]>,Error>{Err(Error::Unsupported)}
 }
 #[cfg(test)]mod tests{
