@@ -1,0 +1,2 @@
+# W11 local seamline checkpoint
+Adds bounded dynamic programming for a vertical two-image seam through aligned valid overlap, absolute color mismatch plus lateral step penalty, rolling cost rows and one-byte parent per pixel, optional feather blending in linear light, explicit no-path and cancellation. Does not solve global multi-image graph cuts or nonrectangular overlap routing; not connected to final mosaic pipeline. Test authored, not executed.
