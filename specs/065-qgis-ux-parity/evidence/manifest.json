@@ -283,9 +283,12 @@
         "apps/web-next/src/LayerProperties.tsx",
         "apps/web-next/src/query-selection.ts",
         "apps/web-next/src/query-selection.test.ts",
-        "apps/web-next/src/AttributeServerQuery.tsx"
+        "apps/web-next/src/AttributeServerQuery.tsx",
+        "apps/web-next/src/field-calculation-plan.ts",
+        "apps/web-next/src/field-calculation-plan.test.ts",
+        "apps/web-next/src/AdvancedEditor.tsx"
       ],
-      "blocker": "Typed AST subset integrated into labels and complete revision-pinned attribute selection, with fields/functions, preview, null logic and no arbitrary eval. Full QGIS expression library, shared field calculator/filter/server AST and paired browser acceptance remain. New tests not executed."
+      "blocker": "Typed AST subset integrated into labels and complete revision-pinned attribute selection, with fields/functions, preview, null logic and no arbitrary eval. Full QGIS expression library, shared field calculator/filter/server AST and paired browser acceptance remain. New tests not executed. Shared typed AST and exact rational field-calculation preview integrated into existing atomic attribute changeset for loaded revision-pinned rows. No new-field creation or server expression execution; tests not executed."
     },
     {
       "id": "STYLE-06",
