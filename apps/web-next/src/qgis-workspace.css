@@ -240,3 +240,17 @@ html[data-ovg-icons=large] .qgis-toolrow .qgis-icon-button svg{width:24px;height
 .ovg-plugin-submenu .ovg-menu-check{width:15px;flex:0 0 15px;color:#227347;text-align:center}
 .core-ribbon-menu-fixed:not(.is-dropdown) .core-menu-command b{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .core-ribbon-menu-fixed:not(.is-dropdown) code{max-width:95px;overflow:hidden;text-overflow:ellipsis;flex-shrink:1}
+
+/* Independent selectable, edit-session and lock columns. */
+.qgis-studio .qgis-tree{container-type:inline-size}
+.qgis-studio .qgis-layer-row[data-layer-id]{min-width:174px;gap:1px}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-layer-name{min-width:18px}
+.qgis-studio .qgis-layer-row[data-layer-id] .qgis-row-toggle{flex:0 0 22px!important;width:22px!important;min-width:22px!important;margin:0!important}
+.qgis-studio .qgis-layer-row .ovg-select-control:not(.on){color:#60717c!important;background:#f1f4f5!important;border-color:#cbd3d8!important;opacity:1!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control:not(.on):not(:disabled){color:#526e60!important;background:#f1f6f2!important;border-color:#cbd9cf!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control.on{color:#fff!important;background:#24834d!important;border-color:#24834d!important}
+.qgis-studio .qgis-layer-row .ovg-edit-control:disabled{color:#a6b0b5!important;opacity:.65}
+.qgis-studio .qgis-layer-row .ovg-row-lock.unlocked{color:#637a6a!important;background:#f2f6f3!important;border-color:#cbd9cf!important}
+.qgis-studio .qgis-layer-row .ovg-row-lock.locked{color:#95630b!important;background:#f8e6c0!important;border-color:#dec183!important}
+.qgis-studio .qgis-layer-row .ovg-row-lock.editing{color:#537a61!important;background:#e5f0e8!important}
+@container (max-width:280px){.qgis-layer-row[data-layer-id]>.qgis-layer-count,.qgis-layer-row[data-layer-id]>.qgis-filter-indicator,.qgis-layer-row[data-layer-id]>.ovg-layer-tasks,.qgis-layer-row[data-layer-id]>.ovg-editor-dot{display:none}.qgis-layer-row[data-layer-id]>span.qgis-tree-toggle{width:7px}}

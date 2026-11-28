@@ -125,7 +125,10 @@ try{
   assert.equal(await page.getByRole("group",{name:"Thao tác hàng loạt"}).count(),0);
   const rowLock=firstRow.getByRole("button",{name:"Khóa chỉnh sửa Buildings",exact:true});
   assert.equal(await rowLock.getAttribute("data-lock-state"),"unlocked");
-  await rowLock.click();assert.equal(await rowLock.getAttribute("data-lock-state"),"locked");
+  const edit=firstRow.getByRole("button",{name:"Chỉnh sửa Buildings",exact:true}),select=firstRow.getByRole("button",{name:"Cho phép chọn Buildings",exact:true});
+  await select.click();assert.equal(await select.getAttribute("aria-pressed"),"false");await select.click();
+  await edit.click();assert.equal(await edit.getAttribute("aria-pressed"),"true");assert.ok(await rowLock.isDisabled());await edit.click();assert.equal(await edit.getAttribute("aria-pressed"),"false");
+  await rowLock.click();assert.ok(await edit.isDisabled());assert.equal(await rowLock.getAttribute("data-lock-state"),"locked");
   await second.click({modifiers:["Control"]});
   const batch=page.getByRole("group",{name:"Thao tác hàng loạt"});
   await batch.getByRole("button",{name:"Cho phép chọn hàng loạt",exact:true}).click();
@@ -137,6 +140,7 @@ try{
   assert.equal(await secondRow.getByRole("button",{name:"Cho phép chọn Second layer"}).getAttribute("aria-pressed"),"false");
   await batch.getByRole("button",{name:"Cho phép chọn hàng loạt",exact:true}).click();
   await first.click();assert.equal(await batch.count(),0);
+  const narrowControls=await firstRow.evaluate(el=>{const b=el.getBoundingClientRect();return [...el.querySelectorAll(".qgis-row-toggle")].every(x=>{const r=x.getBoundingClientRect();return r.width>=20&&r.left>=b.left&&r.right<=b.right})});assert.ok(narrowControls);
   await firstRow.getByRole("button",{name:"Nhãn Buildings",exact:true}).click({button:"right"});
   const quick=page.getByRole("dialog",{name:"Nhãn nhanh",exact:true});await quick.waitFor();
   await quick.locator("select").selectOption({index:1});
