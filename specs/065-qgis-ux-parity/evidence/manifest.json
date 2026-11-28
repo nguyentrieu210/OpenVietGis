@@ -672,9 +672,13 @@
       "candidate_paths": [
         "apps/web-next/src/ProcessingModeler.tsx",
         "apps/api-rust/src/processing_models.rs",
-        "apps/web-next/qgis-parity-keyboard-smoke.mjs"
+        "apps/web-next/qgis-parity-keyboard-smoke.mjs",
+        "apps/web-next/src/model-run-journal.ts",
+        "apps/web-next/src/model-run-journal.test.ts",
+        "apps/web-next/src/LiveApp.tsx",
+        "apps/web-next/src/workbenches/features/platform/processing-request.ts"
       ],
-      "blocker": "Modeler registry and explicit input validation passed synthetic Chromium; durable graph execution and raster cancel/idempotent resume remain."
+      "blocker": "Persisted graph definitions and bounded DAG validation. Vector-only runs now have account/project-scoped durable browser journal, cross-tab lock, source pins, stable per-step request before POST, verified server job replay and partial resume, explicit journal export/discard. Mixed/raster graph execution retains legacy non-resumable path; no server-owned graph scheduler or raster idempotency/cancellation; new tests not executed."
     },
     {
       "id": "PROC-07",

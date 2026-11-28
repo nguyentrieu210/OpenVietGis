@@ -5,7 +5,7 @@ export type ProcessingRequest={algorithm_id:Algorithm;input_layer_id:string;over
 export const supportedAlgorithm=(id:unknown):id is Algorithm=>id==="buffer"||id==="clip"||id==="dissolve";
 export const processingLayer=(l:SpatialLayer)=>l.lifecycle==="active"&&l.source.lifecycle==="active"&&l.source.validation_state==="ready"&&!!l.source.stored_crs?.code&&l.source.feature_count!=null&&l.capabilities.some(c=>c.name==="feature_read"&&c.available&&c.actor_authorized);
 const revision=(v:unknown):v is string=>typeof v==="string"&&/^[a-f0-9]{64}$/.test(v);
-function sourcePin(l:SpatialLayer):ProcessingSourcePin{
+export function sourcePin(l:SpatialLayer):ProcessingSourcePin{
  if(!l.source_id||!revision(l.source.content_revision)||!revision(l.source.schema_revision))throw Error("Thiếu phiên bản nguồn; tải lại danh mục.");
  return {source_id:l.source_id,content_revision:l.source.content_revision,schema_revision:l.source.schema_revision};
 }
