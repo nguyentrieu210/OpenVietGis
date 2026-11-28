@@ -2,6 +2,7 @@
 //! authenticate browser identity and OAuth subject; this store never grants
 //! GIS permissions. All operations are scoped to the authenticated owner.
 pub mod tools;
+pub mod skills;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};

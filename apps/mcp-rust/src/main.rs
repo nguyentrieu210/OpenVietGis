@@ -210,8 +210,10 @@ async fn mcp(State(app):State<App>,h:HeaderMap,body:Bytes)->Response{
     let version=hdr(&h,"mcp-protocol-version");
     if !version.is_empty()&&!PROTOCOLS.contains(&version){return respond(400,json!({"error":"Unsupported MCP protocol version"}))}
     match method{
-        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false}},"instructions":"Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
+        "initialize"=>{let requested=v["params"]["protocolVersion"].as_str().unwrap_or("");let protocol=if PROTOCOLS.contains(&requested){requested}else{PROTOCOLS[3]};rpc(id,json!({"protocolVersion":protocol,"serverInfo":{"name":"OpenVietGIS Live Rust","version":"0.2.0"},"capabilities":{"tools":{"listChanged":false},"prompts":{"listChanged":false}},"instructions":"Discover built-in GIS workflows using prompts/list and prompts/get. Select an explicit workspace when several are connected. All persistent writes require browser approval; never retry a pending operation."}))},
         "ping"=>rpc(id,json!({})),
+        "prompts/list"=>{if v.get("params").is_some_and(|p| !p.as_object().is_some_and(|o| o.is_empty())){rpc_error(id,-32602,"Invalid prompt list parameters")}else{rpc(id,openvietgis_mcp_rust::skills::list())}},
+        "prompts/get"=>match openvietgis_mcp_rust::skills::get(&v["params"]){Some(p)=>rpc(id,p),None=>rpc_error(id,-32602,"Unknown prompt or invalid arguments")},
         "tools/list"=>rpc(id,json!({"tools":app.registry.list()})),
         "tools/call"=>{let name=v["params"]["name"].as_str().unwrap_or("");let args=v["params"].get("arguments").cloned().unwrap_or(json!({}));
             match operate(&app,&claims,name,&args).await{
@@ -304,6 +306,14 @@ async fn main()->Result<(),Box<dyn std::error::Error>>{
         assert_eq!(post_rpc(&client,&url,"invalid","tools/list",json!({})).await.status(),401);
         let init:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2026-07-28"})).await.json().await.unwrap();
         assert_eq!(init["result"]["protocolVersion"],"2026-07-28");
+        assert_eq!(init["result"]["capabilities"]["prompts"]["listChanged"],false);
+        let prompts:Value=post_rpc(&client,&url,&valid,"prompts/list",json!({})).await.json().await.unwrap();
+        assert_eq!(prompts["result"]["prompts"].as_array().unwrap().len(),6);
+        let skill:Value=post_rpc(&client,&url,&valid,"prompts/get",json!({"name":"explore-data"})).await.json().await.unwrap();
+        assert_eq!(skill["result"]["messages"][0]["content"]["type"],"text");
+        let invalid:Value=post_rpc(&client,&url,&valid,"prompts/get",json!({"name":"missing"})).await.json().await.unwrap();
+        assert_eq!(invalid["error"]["code"],-32602);
+        assert_eq!(post_rpc(&client,&url,"invalid","prompts/list",json!({})).await.status(),401);
         let legacy:Value=post_rpc(&client,&url,&valid,"initialize",json!({"protocolVersion":"2025-11-25"})).await.json().await.unwrap();
         assert_eq!(legacy["result"]["protocolVersion"],"2025-11-25");
         let listed:Value=post_rpc(&client,&url,&valid,"tools/list",json!({})).await.json().await.unwrap();
