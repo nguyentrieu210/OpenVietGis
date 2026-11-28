@@ -15,6 +15,9 @@ def compare(qgis_root: Path, rust_root: Path) -> dict:
     r = json.loads((rust_root / "processing.json").read_text())
     if not str(q["qgis_version"]).startswith("3.44.") or q["crs"] != "EPSG:3857" or r["crs"] != q["crs"]:
         raise ValueError("QGIS version or CRS mismatch")
+    fixture = q["fixture_sha256"]
+    if not re.fullmatch(r"[a-f0-9]{64}", fixture) or fixture != r["fixture_sha256"]:
+        raise ValueError("Fixture manifest digest mismatch")
     checks = []
     for alg in ("buffer", "clip", "dissolve_zone"):
         a, b = q["actual"][alg], r["actual"][alg]
@@ -30,7 +33,7 @@ def compare(qgis_root: Path, rust_root: Path) -> dict:
             if not math.isclose(x, y, rel_tol=0, abs_tol=1e-6):
                 raise ValueError(f"Area mismatch: {alg}/{key}: QGIS={x}, Rust={y}")
             checks.append({"algorithm": alg, "area": key, "qgis": x, "rust": y, "absolute_delta": abs(x-y)})
-    return {"candidate_commit": qsha, "qgis_version": q["qgis_version"], "checks": checks,
+    return {"candidate_commit": qsha, "qgis_version": q["qgis_version"], "fixture_sha256": fixture, "checks": checks,
             "scope": "Three planar vector algorithm fixtures, not full UI or QGIS feature parity"}
 
 
