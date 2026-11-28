@@ -4,7 +4,7 @@ pub mod geometry;
 pub mod transform;
 
 pub use geometry::{
-    compute_bbox, encode_wkb, parse_geojson, parse_wkb, to_geojson, validate_geometry, BBox,
+    compute_bbox, encode_wkb, parse_geojson, parse_wkb, parse_xy_wkb, to_geojson, validate_geometry, BBox,
     SpatialError, SpatialGeometry, ValidationLimits, ValidationReport,
 };
 pub use transform::{

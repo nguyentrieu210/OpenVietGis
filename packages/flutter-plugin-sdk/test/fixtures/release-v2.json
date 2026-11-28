@@ -1,0 +1,87 @@
+{
+  "manifest": {
+    "extension_key": "partner_demo_field",
+    "version": "1.0.0",
+    "api_compatibility": "1.x",
+    "display_name": "Khảo sát",
+    "description": "",
+    "permissions": [
+      "ext.demo.read"
+    ],
+    "commands": [],
+    "capabilities": [],
+    "entity_schemas": [],
+    "ui_contributions": []
+  },
+  "contribution": {
+    "slot": "form",
+    "nodes": [
+      {
+        "id": "title",
+        "kind": "text",
+        "label": "Khảo sát",
+        "children": []
+      },
+      {
+        "id": "name",
+        "kind": "input_text",
+        "label": "Tên",
+        "children": []
+      }
+    ],
+    "actions": [
+      {
+        "id": "read",
+        "command_id": "core.read",
+        "capability": "data.read",
+        "permission": "ext.demo.read",
+        "mode": "online",
+        "consent": "none",
+        "timeout_ms": 1000,
+        "input": {
+          "id": "text"
+        },
+        "output": {
+          "name": "text"
+        }
+      }
+    ]
+  },
+  "release": {
+    "schema_version": 2,
+    "publisher_id": "demo",
+    "extension_key": "partner_demo_field",
+    "version": "1.0.0",
+    "manifest_id": "12345678-1234-4234-8234-123456789abc",
+    "manifest_digest": "bf87feaf697a46580ac0637ae4cf82c0dfd83e603b0aa96d5bfd5f6080f81021",
+    "host_api_min": 2,
+    "host_api_max": 2,
+    "platforms": [
+      "android"
+    ],
+    "capabilities": [
+      "data.read"
+    ],
+    "permissions": [
+      "ext.demo.read"
+    ],
+    "contribution_digest": "eb59476826937035c2a69c4ffd707d27b2465bd7719fe3813685acea7e97ed84",
+    "assets": [],
+    "issued_at": 1700000000,
+    "key_id": "pub1"
+  },
+  "publisher_signature": "C4K5TxiOmR3n/OxfWL1iXo14kTP7Ahwf/QUl93+qqFv1NlyiIaRpJFw5qAQYVsGassNG0sXCVK7tbJVZFLzwCA==",
+  "review": {
+    "schema_version": 2,
+    "issuer": "fixture-instance",
+    "catalog_epoch": 4,
+    "issued_at": 1700000000,
+    "expires_at": 1700003600,
+    "publisher_key": "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=",
+    "publisher_key_id": "pub1",
+    "release_digest": "3a8c4370910b301179de4d3809bf23dab527ef461dc8a529356a8d47a9a48208",
+    "revoked": false
+  },
+  "operator_signature": "Mh/uT6vnXlc4TOTDr8SVuqTIthPaxxpX8YpgxAPRGm27xnU8+1maiufVirMydF3L9ZJ3OE07PVTbxbl3HwqECQ==",
+  "operator_key": "E5j2LG0aRXxRumpLXz29L2n8qTIWIY3ImX5Ba9F9k8o="
+}

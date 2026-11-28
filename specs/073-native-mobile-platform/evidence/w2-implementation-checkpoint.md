@@ -1,0 +1,13 @@
+# W2 implementation checkpoint
+Source candidate 67cc9ec170de967888387c4e24617976d7c764e5, earlier gates A0 and W1 not accepted. User requested early W2 source work; no release or parent/leaf acceptance.
+ 
+- 4310ef1: bounded vector import/export and local atomic mutation batches, GeographicLib measures, revision/epoch cache, ZIP extraction and companions, MBTiles range reader. Strict XY WGS84 GeoJSON profile, explicit CSV X/Y and source EPSG; foreign fields and unsupported dimensions fail rather than silently drop.
+- e560b60: local indexed viewport to MapLibre Native GeoJSON source; 512 features/1 MiB feature payload bound and explicit truncation; selection feature state; visibility; camera idle debounce and scoped epoch checks. No MVT/LOD, multi-layer product or physical GPU claim. GeoJSON picker/share UI uses explicit user confirmation and local data only. Candidate CargoKit Gradle 9 patch and rustfmt setup address observed W1 Android build failure.
+- de11161: source switch key, import/export scope guard, archive/atomic import tests and stricter metadata. 
+- 29380f4: bounded PMTiles v3 local ranges (none/gzip directory compression; raw tile bytes), Hilbert ID, explicit shared CRS registry/native VN2000 adapter. [Focused run 46169490774](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46169490774) SUCCESS: shared spatial 12 tests including 44 control observations; engine/batches/W2 9 tests; local storage/W2 4 tests. Total 25 tests, 8 new W2 tests. Android/iOS resolved dependency guard green; this is not Android/iOS native runtime proof.
+- 67cc9ec: GDAL local GTiff window C ABI, bounded blocks and caller capacity, nodata/geotransform, URL rejection, analytic fixture. Host runner test and Android native artifact not yet verified; no COG network range reader, Flutter integration or full raster decode security claim.
+ 
+## Outstanding
+Map lifecycle and hit tests, actual physical performance with 10k/100k/1M source features, MVT and LOD, licensed tile download/resume/eviction, renderer archive integration, OS share-in and import cancellation, external GPKG/GPX/SHP/TAB/MIF/KML/XLSX/DXF drivers/roundtrip, per-format loss report and independent GDAL/QGIS comparison, PROJ database and grid checksums, regional provenance, raster/COG and device tests. Local GeoJSON export only handles one bounded page; CSV native adapter not exposed in UI; no protected data or managed sync.
+ 
+Previous W1 run 46168304595: Flutter analyzer and 2 Dart host tests PASS; APK failed due to removed Gradle project.exec in CargoKit. Patch is candidate, not verified. W0 native feasibility and device acceptance remain open. No new server, production change, release or merge.

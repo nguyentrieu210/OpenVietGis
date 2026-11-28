@@ -1,0 +1,90 @@
+name: SPEC 073 Flutter Rust Bridge qualification
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["infra/mobile/bridge-spike/**", ".github/workflows/spec073-bridge.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CARGO_BUILD_JOBS: "2"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: "12266719"
+          packages: platform-tools
+      - name: Install exact toolchain
+        run: |
+          set -euxo pipefail
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          rustup toolchain install 1.85.1 --profile minimal
+          rustup target add --toolchain 1.85.1 aarch64-linux-android
+      - name: Generate actual FRB bindings
+        run: |
+          set -euxo pipefail
+          flutter config --no-analytics
+          cd "$RUNNER_TEMP"
+          rustup override set 1.85.1
+          cargo install --locked --version 1.0.104 cargo-expand
+          cargo install --locked --version 2.11.1 flutter_rust_bridge_codegen
+          flutter_rust_bridge_codegen create ovg_bridge_spike
+          cd ovg_bridge_spike
+          cp "$GITHUB_WORKSPACE/infra/mobile/bridge-spike/simple.rs" rust/src/api/simple.rs
+          cp "$GITHUB_WORKSPACE/infra/mobile/bridge-spike/main.dart" lib/main.dart
+          mkdir -p test
+          cp "$GITHUB_WORKSPACE/infra/mobile/bridge-spike/bridge_test.dart" test/bridge_test.dart
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path("rust/Cargo.toml")
+          text=p.read_text()
+          text=text.replace("[dependencies]", '[dependencies]\novg-spatial = { path = "'+os.environ["GITHUB_WORKSPACE"]+'/crates/ovg-spatial" }',1)
+          p.write_text(text)
+          PY
+          flutter pub add material_ui:1.11.1
+          flutter_rust_bridge_codegen generate
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-cargokit-gradle.py" rust_builder/cargokit/gradle/plugin.gradle
+      - name: Execute Rust and Dart native bridge tests
+        run: |
+          set -euxo pipefail
+          cd "$RUNNER_TEMP/ovg_bridge_spike"
+          cargo test --manifest-path rust/Cargo.toml
+          cargo build --release --manifest-path rust/Cargo.toml
+          flutter test test/bridge_test.dart
+      - name: Build Android ARM64 probe
+        run: |
+          set -euxo pipefail
+          cd "$RUNNER_TEMP/ovg_bridge_spike"
+          flutter build apk --debug --target-platform android-arm64
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$apk"
+          mkdir -p "$RUNNER_TEMP/bridge-elf"
+          unzip -q "$apk" 'lib/arm64-v8a/*.so' -d "$RUNNER_TEMP/bridge-elf"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/native/verify_elf.py" "$RUNNER_TEMP/bridge-elf"/lib/arm64-v8a/*.so > "$RUNNER_TEMP/bridge-elf.json"
+          sha256sum "$apk" > "$RUNNER_TEMP/bridge-apk.sha256"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ovg073-bridge-qualification
+          path: |
+            ${{ runner.temp }}/ovg_bridge_spike/rust/Cargo.lock
+            ${{ runner.temp }}/ovg_bridge_spike/pubspec.lock
+            ${{ runner.temp }}/ovg_bridge_spike/lib/src/rust
+            ${{ runner.temp }}/ovg_bridge_spike/build/app/outputs/flutter-apk/app-debug.apk
+            ${{ runner.temp }}/bridge-elf.json
+            ${{ runner.temp }}/bridge-apk.sha256
+          if-no-files-found: warn

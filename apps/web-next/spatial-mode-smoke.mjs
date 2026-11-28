@@ -1,4 +1,4 @@
-import {chromium} from "@playwright/test";
+import {chromium,expect} from "@playwright/test";
 import assert from "node:assert/strict";
 const browser=await chromium.launch({headless:true,args:["--no-sandbox","--use-angle=swiftshader","--enable-unsafe-swiftshader"]});
 try{
@@ -51,7 +51,9 @@ try{
  await search.waitFor();
  assert.ok(await search.evaluate(e=>e===document.activeElement));
  await search.fill("BUFFER");
- assert.equal(await page.locator(".core-menu-items button").count(),1);
+ const result=page.locator(".core-ribbon-menu-fixed .core-menu-items button");
+ await expect(result).toHaveCount(1);
+ await expect(result.locator("code")).toHaveText("BUFFER");
  await search.press("Escape");
  await page.locator(".core-ribbon-menu-fixed").waitFor({state:"detached"});
  assert.ok(await find.evaluate(e=>e===document.activeElement));

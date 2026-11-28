@@ -1,0 +1,118 @@
+name: SPEC 073 Wave 1 Flutter integration
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["apps/mobile-flutter/**", "packages/dart-sdk/**", "crates/ovg-mobile-ffi/**", "crates/ovg-mobile-engine/**", "crates/ovg-local-storage/**", "crates/ovg-spatial/**", ".github/workflows/spec073-wave1-flutter.yml"]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  mobile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407
+        with:
+          cmdline-tools-version: "12266719"
+          packages: platform-tools
+      - name: Install pinned toolchain
+        run: |
+          set -euxo pipefail
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          rustup toolchain install 1.85.1 --profile minimal --component rustfmt
+          rustup target add --toolchain 1.85.1 aarch64-linux-android
+      - name: Generate host integration and actual typed bindings
+        run: |
+          set -euxo pipefail
+          flutter config --no-analytics
+          flutter config --jdk-dir "$JAVA_HOME"
+          cd "$RUNNER_TEMP"
+          rustup override set 1.85.1
+          cargo install --locked --version 1.0.104 cargo-expand
+          cargo install --locked --version 2.11.1 flutter_rust_bridge_codegen
+          flutter_rust_bridge_codegen create openvietgis_mobile --org org.openvietgis
+          cd openvietgis_mobile
+          cp "$GITHUB_WORKSPACE/apps/mobile-flutter/pubspec.yaml" .
+          mkdir -p vendor
+          cp -R "$GITHUB_WORKSPACE/packages/dart-sdk" vendor/openvietgis_sdk
+          python3 -c 'from pathlib import Path; p=Path("pubspec.yaml"); p.write_text(p.read_text().replace("../../packages/dart-sdk","vendor/openvietgis_sdk"))'
+          cp "$GITHUB_WORKSPACE/apps/mobile-flutter/lib/"*.dart lib/
+          cp "$GITHUB_WORKSPACE/crates/ovg-mobile-ffi/src/api/simple.rs" rust/src/api/simple.rs
+          mkdir -p test
+          cp "$GITHUB_WORKSPACE/apps/mobile-flutter/test/"*.dart test/
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path("rust/Cargo.toml")
+          root=os.environ["GITHUB_WORKSPACE"]
+          deps='\n'.join(f'{n} = {{ path = "{root}/crates/{n}" }}' for n in ["ovg-mobile-engine","ovg-local-storage"])
+          text=p.read_text().replace("[dependencies]", "[dependencies]\n"+deps+'\nuuid = { version = "1", features = ["v4"] }\nserde_json = "1"',1)
+          p.write_text(text)
+          PY
+          flutter pub get
+          flutter_rust_bridge_codegen generate
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-frb-android-sdk.py" rust_builder/android/build.gradle
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-arm64-packaging.py" android/app/build.gradle.kts
+          python3 "$GITHUB_WORKSPACE/infra/mobile/enable-survey-permissions.py" android/app/src/main/AndroidManifest.xml
+          python3 "$GITHUB_WORKSPACE/infra/mobile/patch-cargokit-gradle.py" rust_builder/cargokit/gradle/plugin.gradle
+          # Remove only generated example tests; the checked-in real tests replace them.
+          find integration_test -maxdepth 1 -type f -name '*_test.dart' -delete || true
+      - name: Analyze and test Flutter shell and native bridge
+        run: |
+          set -euxo pipefail
+          cd "$RUNNER_TEMP/openvietgis_mobile"
+          cargo test --manifest-path rust/Cargo.toml
+          cargo build --release --manifest-path rust/Cargo.toml
+          flutter analyze lib test
+          flutter test
+      - name: Build candidate Android ARM64 debug APK
+        run: |
+          set -euxo pipefail
+          cd "$RUNNER_TEMP/openvietgis_mobile"
+          flutter build apk --debug --target-platform android-arm64
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 -v 4 "$apk"
+          mkdir -p "$RUNNER_TEMP/w1-elf"
+          unzip -q "$apk" 'lib/arm64-v8a/*.so' -d "$RUNNER_TEMP/w1-elf"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/native/verify_elf.py" "$RUNNER_TEMP/w1-elf"/lib/arm64-v8a/*.so > "$RUNNER_TEMP/w1-elf.json"
+          sha256sum "$apk" > "$RUNNER_TEMP/w1-apk.sha256"
+          mkdir -p "$RUNNER_TEMP/release-evidence"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/release/android/inspect_candidate.py" --apk "$apk" --tools "$ANDROID_HOME/build-tools/36.0.0" --commit "$GITHUB_SHA" --kind debug-candidate --out "$RUNNER_TEMP/release-evidence"
+          cargo metadata --locked --manifest-path rust/Cargo.toml --format-version 1 > "$RUNNER_TEMP/release-evidence/cargo-metadata.json"
+          dart pub deps --json > "$RUNNER_TEMP/release-evidence/pub-deps.json"
+          python3 "$GITHUB_WORKSPACE/infra/mobile/release/android/dependency_inventory.py" --cargo "$RUNNER_TEMP/release-evidence/cargo-metadata.json" --cargo-lock rust/Cargo.lock --dart "$RUNNER_TEMP/release-evidence/pub-deps.json" --pub-lock pubspec.lock --commit "$GITHUB_SHA" --out "$RUNNER_TEMP/release-evidence/partial-sbom.cdx.json"
+          flutter --version --machine > "$RUNNER_TEMP/release-evidence/flutter-version.json"
+          rustc --version --verbose > "$RUNNER_TEMP/release-evidence/rust-version.txt"
+          cp "$GITHUB_WORKSPACE/LICENSE" "$RUNNER_TEMP/release-evidence/LICENSE"
+          printf '%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_SHA" > "$RUNNER_TEMP/release-evidence/source.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: ovg073-wave1-android-candidate
+          path: |
+            ${{ runner.temp }}/openvietgis_mobile/rust/Cargo.lock
+            ${{ runner.temp }}/openvietgis_mobile/pubspec.lock
+            ${{ runner.temp }}/openvietgis_mobile/lib/src/rust
+            ${{ runner.temp }}/openvietgis_mobile/rust/src/frb_generated.rs
+            ${{ runner.temp }}/openvietgis_mobile/build/app/outputs/flutter-apk/app-debug.apk
+            ${{ runner.temp }}/w1-elf.json
+            ${{ runner.temp }}/w1-apk.sha256
+            ${{ runner.temp }}/release-evidence
+          if-no-files-found: warn

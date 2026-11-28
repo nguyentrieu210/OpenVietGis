@@ -579,11 +579,12 @@ const WKB_M_FLAG: u32 = 0x4000_0000;
 struct WkbReader<'a> {
     bytes: &'a [u8],
     offset: usize,
+    strict_xy: bool,
 }
 
 impl<'a> WkbReader<'a> {
     fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, offset: 0 }
+        Self { bytes, offset: 0, strict_xy: false }
     }
 
     fn read_u8(&mut self) -> Result<u8, SpatialError> {
@@ -678,6 +679,9 @@ impl<'a> WkbReader<'a> {
             }
         };
         let raw_type = self.read_u32(le)?;
+        if self.strict_xy && !(1..=7).contains(&raw_type) {
+            return Err(SpatialError::InvalidWkb("strict XY WKB requires plain 2D types and external CRS".into()));
+        }
         let has_srid = (raw_type & WKB_SRID_FLAG) != 0;
         let has_z = (raw_type & WKB_Z_FLAG) != 0
             || ((raw_type & 0xFFFF) / 1000 == 1)
@@ -835,6 +839,19 @@ pub fn parse_wkb(bytes: &[u8], limits: &ValidationLimits) -> Result<SpatialGeome
         return Err(SpatialError::InvalidWkb(
             "trailing bytes after WKB geometry".to_string(),
         ));
+    }
+    Ok(parsed)
+}
+
+/// Parse plain ISO XY WKB without silently discarding Z/M or nested SRIDs.
+/// CRS is supplied independently by the caller. Existing server WKB behavior is unchanged.
+pub fn parse_xy_wkb(bytes: &[u8], limits: &ValidationLimits) -> Result<SpatialGeometry, SpatialError> {
+    let mut reader = WkbReader::new(bytes);
+    reader.strict_xy = true;
+    let mut vertex_count = 0usize;
+    let parsed = reader.read_geometry(limits, 0, &mut vertex_count)?;
+    if reader.offset != bytes.len() {
+        return Err(SpatialError::InvalidWkb("trailing bytes after WKB geometry".into()));
     }
     Ok(parsed)
 }

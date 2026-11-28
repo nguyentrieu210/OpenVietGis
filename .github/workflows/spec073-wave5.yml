@@ -1,0 +1,61 @@
+name: SPEC 073 W5 plugin contracts
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["packages/flutter-plugin-sdk/**", "apps/api-rust/src/extensions/mobile_v2.rs", "modules/house_numbering/mobile/**", "modules/mobile_reference_sample/**", ".github/workflows/spec073-wave5.yml"]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  sdk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pinned Dart SDK
+        run: |
+          git init "$RUNNER_TEMP/flutter"
+          git -C "$RUNNER_TEMP/flutter" remote add origin https://github.com/flutter/flutter.git
+          git -C "$RUNNER_TEMP/flutter" fetch --depth=1 origin refs/tags/3.50.0:refs/tags/3.50.0
+          git -C "$RUNNER_TEMP/flutter" checkout --detach refs/tags/3.50.0
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = ab2912035e160d9cad6306df307576da6128ebdb
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Plugin SDK validation and adversarial tests
+        working-directory: packages/flutter-plugin-sdk
+        run: |
+          dart pub get
+          dart analyze lib test
+          dart test
+      - name: Official reference module tests
+        working-directory: modules/house_numbering/mobile
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Flutter renderer candidate analysis
+        working-directory: packages/flutter-plugin-sdk/renderer
+        run: |
+          flutter pub get
+          flutter analyze lib
+      - name: Generator and architecture guard
+        run: |
+          node packages/flutter-plugin-sdk/tools/verify_golden.mjs
+          node packages/flutter-plugin-sdk/tools/new_plugin.mjs demo inspection "$RUNNER_TEMP/ovg-plugin"
+          test -s "$RUNNER_TEMP/ovg-plugin/manifest.json"
+          test -s "$RUNNER_TEMP/ovg-plugin/contribution.json"
+          if grep -R -E 'package:(ovg_mobile|rust_lib|openvietgis_mobile)|dart:ffi' modules/house_numbering/mobile/lib modules/mobile_reference_sample; then exit 1; fi
+  server:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: V1 unchanged and V2 independent fixture
+        run: |
+          cargo test --locked -p openvietgis-api-rust --lib extensions::mobile_entitlement::tests
+          cargo test --locked -p openvietgis-api-rust --lib extensions::mobile_v2::tests
+          cargo test --locked -p openvietgis-api-rust --lib extensions::validation::tests

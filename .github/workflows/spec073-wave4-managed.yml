@@ -1,0 +1,36 @@
+name: SPEC 073 W4 managed encrypted store
+on:
+  push:
+    branches: ["073-native-mobile-platform"]
+    paths: ["crates/ovg-managed-mobile/**", ".github/workflows/spec073-wave4-managed.yml"]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  encrypted-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: SQLCipher and receipt crash recovery
+        run: |
+          rustup toolchain install 1.85.1 --profile minimal
+          cargo +1.85.1 test --manifest-path crates/ovg-managed-mobile/Cargo.toml
+          mkdir -p "$RUNNER_TEMP/w4"
+          cp crates/ovg-managed-mobile/Cargo.lock "$RUNNER_TEMP/w4/"
+          for target in aarch64-linux-android aarch64-apple-ios; do
+            cargo +1.85.1 tree --locked --manifest-path crates/ovg-managed-mobile/Cargo.toml --target "$target" --edges normal,build --prefix none --format '{p}' > "$RUNNER_TEMP/w4/$target.txt"
+            if grep -E '^(axum|sqlx|postgres|tokio-postgres|ovg-storage|openvietgis-api)([- ]|$)' "$RUNNER_TEMP/w4/$target.txt"; then exit 1; fi
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: w4-managed-lock-and-graph
+          path: ${{ runner.temp }}/w4
+          if-no-files-found: warn

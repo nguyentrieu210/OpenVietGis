@@ -1,0 +1,32 @@
+{
+  "name": "ovg-native-qualification",
+  "version": "0.1.0",
+  "builtin-baseline": "ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0",
+  "dependencies": [
+    {
+      "name": "gdal",
+      "default-features": false,
+      "features": [
+        "sqlite3",
+        "geos",
+        "expat",
+        "iconv"
+      ]
+    },
+    {
+      "name": "proj",
+      "default-features": false,
+      "features": [
+        "tiff"
+      ]
+    },
+    "geos",
+    {
+      "name": "sqlite3",
+      "default-features": false,
+      "features": [
+        "rtree"
+      ]
+    }
+  ]
+}

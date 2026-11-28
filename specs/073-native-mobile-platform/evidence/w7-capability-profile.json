@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "status": "candidate-not-release-qualified",
+  "default_profile": "standalone-candidate",
+  "capabilities": {
+    "local_geopackage": "candidate",
+    "local_geojson_xy": "candidate",
+    "local_edit": "candidate",
+    "foreground_gps": "candidate",
+    "local_processing": "bounded-candidate",
+    "local_search": "candidate",
+    "managed_connection": "disabled",
+    "managed_encrypted_store": "host-tests-only",
+    "plugin_activation": "disabled",
+    "house_numbering": "sdk-only",
+    "chat_tasks": "sdk-only",
+    "paid_entitlement": "candidate-not-mounted",
+    "gdal_raster": "host-spike-only",
+    "mvt_large": "not-qualified",
+    "projected_gpkg": "not-supported",
+    "vn2000_region": "not-qualified-on-device",
+    "rtk": "not-qualified",
+    "camera_qr": "not-qualified",
+    "arrow_geoarrow": "deferred",
+    "geoparquet": "deferred",
+    "flatgeobuf": "host-screening-only",
+    "datafusion": "deferred",
+    "sedonadb": "deferred",
+    "wgpu": "deferred",
+    "terrain_copc_3d": "deferred"
+  },
+  "release_authorized": false
+}

@@ -1,0 +1,12 @@
+# W1 implementation checkpoint
+Candidate source after 91bb6fdf87abedc752413852aa22cf98d86cbde9. W0 A0 remains open; owner-requested W1 source work proceeds at risk, no release or task acceptance.
+ 
+- fe7cef1 portable engine: reused existing core/spatial/processing/sync; session/workspace generation handles, bounded workers/results, cancellation, panic containment, WKB batch ownership.
+- cbc45a2 local SQLite/GeoPackage WGS84 XY store with RTree, stable UUIDs/revisions, one transaction with local journal, idempotent replay, WAL/checkpoint, DB page quota, atomic no-clobber snapshot. This is independent local only: no protected managed writes. Standard external roundtrip, migrations, recovery/kill/disk-full tests and aggregate WAL/attachment quota still pending. Internal app-managed workspace; external edits to journal/revision schema not supported.
+- e6a00ba targeted run [46168095743](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46168095743) SUCCESS: 3 engine unit tests, 1 WKB ownership/limit test, 1 local store durability/replay/index/snapshot test. Android/iOS resolved graphs exclude deny-listed server crates; no device/native cross-link claim. Artifacts 15271954143 and 15272721043 contain graph and candidate lockfiles; locks not committed yet.
+- bb6ca36 real host API and Flutter shell: map first (empty offline style), Riverpod, GoRouter, vi/en selection, local workspaces created/opened via Rust, persisted selection, disabled connected/plugin capabilities with explicit reason. No managed auth or fake backend.
+- 8f9c46d generated FRB workflow and shell/host tests. [Run 46168304595](https://github.com/nguyentrieu210/OpenVietGis/actions/runs/46168304595) in progress at snapshot. No APK or runtime evidence claimed. Generated platform project/bindings not checked in yet.
+- 91bb6fd additive strict XY WKB parser in existing spatial crate rejects Z/M and embedded SRIDs even in nested members, preserving legacy parser behavior. Exact RTree bbox filter before LIMIT avoids false-positive pagination starvation. Re-test required on latest candidate.
+- W0 map analyzer passed but Java compilation failed with invalid source release 21. bb6ca36 installs JDK 21 in qualification workflow. Native and FRB W0 jobs remain unqualified.
+ 
+No parent checkbox changed. T009–T018 source partial, A0 open. No new backend, no production deploy, no release claims. VPS1 deploy-only; tests on GitHub runners.

@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "status": "candidate-not-release-qualified",
+  "rust": "1.85.1",
+  "flutter": {
+    "version": "3.50.0",
+    "commit": "ab2912035e160d9cad6306df307576da6128ebdb",
+    "dart": "3.14.x (exact version recorded by runner)"
+  },
+  "android": {
+    "ndk": "28.2.13676358",
+    "compileSdk": 36,
+    "buildTools": "36.0.0",
+    "cmake": "3.22.1",
+    "minNativeApi": 28,
+    "abi": "arm64-v8a"
+  },
+  "maplibre": {
+    "flutter": "0.28.1",
+    "nativeAndroid": "13.7.1"
+  },
+  "flutterRustBridge": {
+    "candidate": "2.11.1",
+    "sourceCommit": "f19087cd0cac019b82d52cfa5153ce81b1b6e902",
+    "status": "requires generated bridge and runtime compatibility proof"
+  },
+  "nativeRegistry": {
+    "repository": "https://github.com/microsoft/vcpkg",
+    "commit": "ef7dbf94b9198bc58f45951adcf1f041fcbc5ea0",
+    "gdal": "3.11.0",
+    "proj": "9.6.2",
+    "geos": "3.13.0",
+    "sqlite": "3.49.2"
+  },
+  "constraints": [
+    "native source integrity from immutable registry port hashes",
+    "no production secrets",
+    "no remote basemap requests in offline spike",
+    "not a license approval",
+    "no SQLCipher qualification yet"
+  ]
+}
