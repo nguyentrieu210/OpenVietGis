@@ -522,8 +522,11 @@ try{
  await xp.getByRole("radio",{name:/GeoJSON/}).click();
  const exportFirst=xp.locator("header").getByRole("button",{name:"Đóng",exact:true});
  const exportLast=xp.getByRole("button",{name:/⬇ Xuất/});
- await exportFirst.focus();await page.keyboard.press("Shift+Tab");assert.ok(await exportLast.evaluate(e=>document.activeElement===e));
- await page.keyboard.press("Tab");assert.ok(await exportFirst.evaluate(e=>document.activeElement===e));
+ await exportFirst.focus();
+ for(let cycle=0;cycle<5;cycle++){
+  await page.keyboard.press("Shift+Tab");await exportLast.evaluate(e=>{if(document.activeElement!==e)throw Error("Reverse export focus escaped: "+document.activeElement?.outerHTML.slice(0,300))});
+  await page.keyboard.press("Tab");await exportFirst.evaluate(e=>{if(document.activeElement!==e)throw Error("Forward export focus escaped: "+document.activeElement?.outerHTML.slice(0,300))});
+ }
  const [download]=await Promise.all([page.waitForEvent("download"),xp.getByRole("button",{name:/⬇ Xuất/}).click()]);
  assert.ok(download.suggestedFilename().endsWith(".geojson"));
  await xp.getByText(/Đã tải 1 tệp/).waitFor();
