@@ -129,6 +129,34 @@ def main():
                         db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
                         assert db.execute("SELECT count(*) FROM house_numbering.building_entrances").fetchone()[0]==0
                 print('PASS exact entrance SQL: observed blocks, independent confirmation, digest change, feature lock references, retirement and RLS')
+                # Staff cohort: duplicate observations, different recorders,
+                # drafts and out-of-window rows. No production records touched.
+                from datetime import date
+                staff_source=(ROOT/'modules/house_numbering/storage/src/persistence/issuance.rs').read_text()
+                staff_sql='WITH cohort AS ('+staff_source.split('WITH cohort AS (',1)[1].split('"',1)[0]
+                def staff(db,start,end):
+                    params=[org,project,start,end]
+                    order=[int(x)-1 for x in re.findall(r'\$(\d+)',staff_sql)]
+                    return db.execute(re.sub(r'\$\d+','%s',staff_sql),[params[i] for i in order]).fetchone()[0]
+                with psycopg.connect(runtime) as db:
+                    scoped(db)
+                    with db.transaction(force_rollback=True):
+                        for who,state,day in [(actor,'accepted','2026-11-05'),(actor,'rejected','2026-11-06'),(reviewer['id'],'submitted','2026-11-07'),(actor,'draft','2026-11-08'),(actor,'submitted','2026-12-01')]:
+                            db.execute("""INSERT INTO house_numbering.surveys(id,organization_id,project_id,client_uuid,building_id,condition,state,recorded_by_actor_id,submitted_by_actor_id,revision,created_at,updated_at)
+                            VALUES(%s,%s,%s,%s,%s,'house',%s,%s,%s,1,%s::date::timestamp AT TIME ZONE 'UTC',now())""",
+                            (uuid4(),org,project,uuid4(),building['id'],state,who,actor,day))
+                        report=staff(db,date(2026,11,1),date(2026,12,1))
+                        assert report['distinct_observed_buildings']==report['distinct_accepted_buildings']==1
+                        assert len(report['items'])==2
+                        rows={r['actor_id']:r for r in report['items']}
+                        assert rows[actor]['submitted_forms']==2 and rows[actor]['observed_buildings']==1
+                        assert rows[actor]['accepted_forms']==rows[actor]['rejected_forms']==1
+                        assert rows[reviewer['id']]['pending_forms']==1
+                        assert rows[reviewer['id']]['display_name']=='Independent reviewer'
+                        assert staff(db,date(2026,10,1),date(2026,11,1))['items']==[]
+                        db.execute("SELECT set_config('openvietgis.project_id',%s,true)",(fx['project_b_id'],))
+                        assert staff(db,date(2026,11,1),date(2026,12,1))['items']==[]
+                print('PASS staff KPI SQL: distinct buildings, current review states, draft exclusion, UTC period, identity label and cross-project RLS')
                 # Old candidate supplies a real approved fixture via its ordinary
                 # transition API. New issuance SQL is checked separately.
                 with psycopg.connect(owner) as db:
@@ -199,6 +227,13 @@ def main():
             expect(api.post(issue+'/replace',json=replacement,headers=reviewer['csrf']),409)
             kpi=expect(api.get(root+'/lifecycle-kpi',headers=h),200)
             assert kpi['registered_buildings']==1 and kpi['installed_buildings']==0
+            breakdown=expect(api.get(root+'/lifecycle-breakdown',headers=h),200)
+            for dim in ('areas','routes'):
+                assert sum(r['active_buildings'] for r in breakdown[dim])==breakdown['total']['active_buildings']
+                assert sum(r['registered_buildings'] for r in breakdown[dim])==1
+            staff=root+'/survey-staff-kpi?start_date=2026-11-01&end_date_exclusive=2026-12-01'
+            expect(api.get(staff,headers=editor['csrf']),403)
+            assert expect(api.get(staff,headers=reviewer['csrf']),200)['items']==[]
             print('PASS replacement HTTP: failed replacement rollback, linked successor, old lookup denied and deduplicated KPI')
             assert len(expect(api.get(issue,headers=reviewer['csrf']),200)['history'])==5
             print('PASS issuance HTTP: external certificate registry, ordered plate states, permission, immutable history and revocation')

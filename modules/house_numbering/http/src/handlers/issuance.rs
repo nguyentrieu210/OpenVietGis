@@ -1,6 +1,6 @@
 //! Record external decisions, track plates and resolve authenticated QR references.
 use std::collections::HashMap;
-use axum::{body::Bytes,extract::{Path,State},http::{HeaderMap,StatusCode},routing::{get,post},Json,Router};
+use axum::{body::Bytes,extract::{Path,State,Query},http::{HeaderMap,StatusCode},routing::{get,post},Json,Router};
 use ovg_module_http::{ModuleHttpState as AppState,ModuleSession as HumanSession};
 use ovg_module_house_numbering_storage as store;
 use serde::Deserialize;
@@ -12,6 +12,8 @@ pub(super) fn router()->Router<AppState>{
     Router::new()
         .route(&format!("{BASE}/issuances"),post(record))
         .route(&format!("{BASE}/lifecycle-kpi"),get(kpi))
+        .route(&format!("{BASE}/lifecycle-breakdown"),get(breakdown))
+        .route(&format!("{BASE}/survey-staff-kpi"),get(staff_kpi))
         .route(&format!("{BASE}/issuances/{{issuance_id}}"),get(detail))
         .route(&format!("{BASE}/issuances/{{issuance_id}}/transition"),post(transition))
         .route(&format!("{BASE}/issuances/{{issuance_id}}/replace"),post(replace))
@@ -93,4 +95,22 @@ async fn kpi(State(state):State<AppState>,auth:HumanSession,Path(params):Path<Ha
     let (org,project)=scope_ids(&params)?;
     let mut read=module_read(&state,&auth,org,project).await?;
     let result=store::lifecycle_kpi(&mut read).await?;read.commit().await?;Ok(Json(result))
+}
+
+async fn breakdown(State(state):State<AppState>,auth:HumanSession,Path(params):Path<HashMap<String,String>>)->HnResult<Json<Value>>{
+    let (org,project)=scope_ids(&params)?;
+    let mut read=module_read(&state,&auth,org,project).await?;
+    let result=store::lifecycle_breakdown(&mut read).await?;read.commit().await?;Ok(Json(result))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StaffWindow{start_date:chrono::NaiveDate,end_date_exclusive:chrono::NaiveDate}
+async fn staff_kpi(State(state):State<AppState>,auth:HumanSession,Path(params):Path<HashMap<String,String>>,Query(window):Query<StaffWindow>)->HnResult<Json<Value>>{
+    let (org,project)=scope_ids(&params)?;
+    let days=(window.end_date_exclusive-window.start_date).num_days();
+    if !(1..=366).contains(&days){return Err(HouseNumberingError::InvalidRequest);}
+    let mut read=module_manage(&state,&auth,org,project).await?;
+    let result=store::survey_staff_kpi(&mut read,window.start_date,window.end_date_exclusive).await?;
+    read.commit().await?;Ok(Json(result))
 }

@@ -25,8 +25,9 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         def state():
             row=query(db,lookup,[org,project,iid]).fetchone()
             return row[0]['plate_state'] if row else None
-        kpi=re.search(r'"(WITH buildings AS \(.*?FROM buildings)"',src,re.S).group(1)
-        def counts():return query(db,kpi,[org,project]).fetchone()[0]
+        kpi=src.split('WITH buildings AS (',1)[1].split('"',1)[0]
+        kpi='WITH buildings AS ('+kpi
+        def counts():return query(db,kpi,[org,project]).fetchone()[0]["total"]
         assert counts()['registered_buildings']==1 and counts()['installed_buildings']==0
         assert state()=='recorded'
         try:
@@ -63,6 +64,11 @@ def check_issuance_sql(root, runtime, scoped, org, project, actor, proposal, num
         assert query(db,lookup,[org,project,replacement_id]).fetchone()[0]['plate_state']=='recorded'
         assert state() is None
         assert counts()['registered_buildings']==1 and counts()['installed_buildings']==0
+        grouped=query(db,kpi,[org,project]).fetchone()[0]
+        for dim in ('areas','routes'):
+            assert sum(r['active_buildings'] for r in grouped[dim])==grouped['total']['active_buildings']
+            assert sum(r['registered_buildings'] for r in grouped[dim])==1
+        assert grouped['areas'][0]['id'] is None and grouped['routes'][0]['id']==route
         fork=list(new_params);fork[3]=str(uuid4());fork[6]='TEST-CERT-3'
         assert query(db,replace,fork).fetchone() is None
         assert db.execute("SELECT count(*) FROM house_numbering.issuance_records WHERE number_id=%s",(number,)).fetchone()[0]==2

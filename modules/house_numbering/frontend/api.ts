@@ -1067,3 +1067,15 @@ export function observeBuildingEntrance(client:ApiClient,org:string,project:stri
 export function reviewBuildingEntrance(client:ApiClient,org:string,project:string,id:string,input:{expected_revision:number;state:Exclude<EntranceState,"observed">;reason:string}){
  return jsonMutation<unknown>(client,base(org,project)+"/entrances/"+encodeURIComponent(id)+"/review","POST",input);
 }
+
+export type LifecycleMetrics=LifecycleKpi&{surveyed_buildings:number;awaiting_review_buildings:number};
+export type LifecycleGroup=LifecycleMetrics&{id:string|null;name:string};
+export type LifecycleBreakdown={total:LifecycleMetrics;areas:LifecycleGroup[];routes:LifecycleGroup[]};
+export type SurveyStaffMetric={actor_id:string;display_name:string;submitted_forms:number;accepted_forms:number;rejected_forms:number;pending_forms:number;observed_buildings:number;accepted_buildings:number};
+export type SurveyStaffKpi={start_date:string;end_date_exclusive:string;distinct_observed_buildings:number;distinct_accepted_buildings:number;items:SurveyStaffMetric[]};
+export function getHouseNumberingLifecycleBreakdown(client:ApiClient,org:string,project:string){
+ return client.request<LifecycleBreakdown>(base(org,project)+"/lifecycle-breakdown");
+}
+export function getHouseNumberingSurveyStaffKpi(client:ApiClient,org:string,project:string,start:string,endExclusive:string){
+ return client.request<SurveyStaffKpi>(base(org,project)+"/survey-staff-kpi?"+new URLSearchParams({start_date:start,end_date_exclusive:endExclusive}).toString());
+}
