@@ -32,7 +32,8 @@ function decimalCompare(a:NonNullable<ReturnType<typeof decimalParts>>,b:NonNull
  return sign*(x<y?-1:x>y?1:0);
 }
 export function compareTableValue(a:unknown,b:unknown,type:string|undefined,direction:"asc"|"desc"):number{
- const value=(v:unknown):unknown=>v==null?null:type==="decimal"||type==="integer"?decimalParts(v):type==="timestamp"?typeof v==="string"&&Number.isFinite(Date.parse(v))?Date.parse(v):null:type==="boolean"?typeof v==="boolean"?Number(v):null:String(v);
+ const integerParts=(v:unknown)=>{const s=typeof v==="number"&&Number.isSafeInteger(v)?String(v):typeof v==="string"?v:"";return /^-?\d+$/.test(s)?decimalParts(s):null};
+ const value=(v:unknown):unknown=>v==null?null:type==="integer"?integerParts(v):type==="decimal"?decimalParts(v):type==="timestamp"?typeof v==="string"&&Number.isFinite(Date.parse(v))?Date.parse(v):null:type==="boolean"?typeof v==="boolean"?Number(v):null:String(v);
  const x=value(a),y=value(b);if(x===null||y===null)return x===y?0:x===null?1:-1;
  const cmp=type==="decimal"||type==="integer"?decimalCompare(x as NonNullable<ReturnType<typeof decimalParts>>,y as NonNullable<ReturnType<typeof decimalParts>>):typeof x==="number"&&typeof y==="number"?x-y:String(x).localeCompare(String(y),"vi",{numeric:false});
  return direction==="asc"?cmp:-cmp;

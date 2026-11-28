@@ -70,6 +70,11 @@ export interface SavedQuery {
 
 export interface ProcessingAlgorithm {
   id: "buffer" | "clip" | "dissolve";
+  /** Provider and capability tags come from the authenticated project registry; they are not permission grants. */
+  provider_id: string;
+  provider_name: string;
+  category: string;
+  capabilities: string[];
   name: string;
   description: string;
   required_inputs: string[];

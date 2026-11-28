@@ -1,0 +1,36 @@
+import {describe,expect,it} from "vitest";
+import type {Geometry} from "geojson";
+import {geometryPartCount,geometryRingCount,geometryVertices,segmentEditable,vertexEditable,withGeometryVertices} from "./advanced-geometry";
+
+describe("multipart vertex editing",()=>{
+ it("exposes editable multipart lines while keeping split and merge capability scoped",()=>{
+  const line:Extract<Geometry,{type:"MultiLineString"}>={type:"MultiLineString",coordinates:[[[0,0],[1,1]],[[4,4],[5,5],[6,6]]]};
+  expect(vertexEditable(line)).toBe(true);expect(segmentEditable(line)).toBe(false);
+  expect(geometryPartCount(line)).toBe(2);expect(geometryVertices(line,1)).toEqual([[4,4],[5,5],[6,6]]);
+  const changed=withGeometryVertices(line,1,0,[[4,4],[5,7],[6,6]]) as typeof line;
+  expect(changed.coordinates).toEqual([[[0,0],[1,1]],[[4,4],[5,7],[6,6]]]);
+  expect(line.coordinates[1]).toEqual([[4,4],[5,5],[6,6]]);
+ });
+
+ it("edits one selected multipart polygon ring and keeps it closed",()=>{
+  const polygon:Extract<Geometry,{type:"MultiPolygon"}>={type:"MultiPolygon",coordinates:[
+   [[[0,0],[2,0],[2,2],[0,0]],[[.5,.5],[1,.5],[.5,1],[.5,.5]]],
+   [[[5,5],[7,5],[7,7],[5,5]]]
+  ]};
+  expect(vertexEditable(polygon)).toBe(true);expect(segmentEditable(polygon)).toBe(false);
+  expect(geometryPartCount(polygon)).toBe(2);expect(geometryRingCount(polygon,0)).toBe(2);
+  expect(geometryVertices(polygon,0,1)).toEqual([[.5,.5],[1,.5],[.5,1]]);
+  const changed=withGeometryVertices(polygon,0,1,[[.5,.5],[1.2,.5],[.5,1]]) as typeof polygon;
+  expect(changed.coordinates[0]?.[1]).toEqual([[.5,.5],[1.2,.5],[.5,1],[.5,.5]]);
+  expect(changed.coordinates[1]).toEqual(polygon.coordinates[1]);
+  expect(polygon.coordinates[0]?.[1]?.[1]).toEqual([1,.5]);
+ });
+
+ it("keeps single polygon hole selection and excludes non-line/polygon geometry",()=>{
+  const polygon:Geometry={type:"Polygon",coordinates:[[[0,0],[2,0],[2,2],[0,0]],[[.5,.5],[1,.5],[.5,1],[.5,.5]]]};
+  expect(geometryPartCount(polygon)).toBe(1);expect(geometryRingCount(polygon)).toBe(2);
+  expect(geometryVertices(polygon,0,1)).toEqual([[.5,.5],[1,.5],[.5,1]]);
+  expect(withGeometryVertices(polygon,0,1,[[.5,.5],[1.2,.5],[.5,1]])).toMatchObject({type:"Polygon",coordinates:[polygon.coordinates[0],[[.5,.5],[1.2,.5],[.5,1],[.5,.5]]]});
+  expect(vertexEditable({type:"Point",coordinates:[0,0]})).toBe(false);
+ });
+});

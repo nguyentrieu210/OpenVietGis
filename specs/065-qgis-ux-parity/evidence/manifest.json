@@ -34,9 +34,13 @@
         "apps/web-next/command-search.test.mjs",
         "apps/web-next/qgis-parity-keyboard-smoke.mjs",
         "apps/web-next/src/locator.ts",
-        "apps/web-next/src/locator.test.ts"
+        "apps/web-next/src/locator.test.ts",
+        "apps/web-next/qgis-parity-shell-smoke.mjs"
       ],
-      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features"
+      "blocker": "Paired QGIS and authenticated browser acceptance not executed; feature search limited to loaded, authorized features",
+      "test_ids": [
+        "SHELL-CMD-001"
+      ]
     },
     {
       "id": "SHELL-04",
@@ -769,9 +773,13 @@
         "apps/web-next/src/LayoutDesigner.tsx",
         "apps/web-next/src/PrintDesigner.tsx",
         "apps/web-next/src/LayoutRender.ts",
-        "apps/web-next/layout-smoke.mjs"
+        "apps/web-next/layout-smoke.mjs",
+        "apps/web-next/qgis-parity-output-smoke.mjs"
       ],
-      "blocker": "Actual synthetic browser PDF/PNG/SVG and multi-page Atlas files verified; PDF flattened, SVG map embedded raster; no paired QGIS visual comparison or authenticated export."
+      "blocker": "Actual synthetic browser PDF/PNG/SVG and multi-page Atlas files verified; PDF flattened, SVG map embedded raster; no paired QGIS visual comparison or authenticated export.",
+      "test_ids": [
+        "OUTPUT-05-SMOKE-001"
+      ]
     },
     {
       "id": "OUTPUT-06",

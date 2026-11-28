@@ -92,6 +92,17 @@ try{
   await canvas.waitFor();await page.waitForTimeout(400);
   const camera=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),cameraKey);
   assert.equal((await camera()).zoom,14);assert.equal((await camera()).bearing,20);assert.equal((await camera()).pitch,30);
+  const command=page.getByRole("textbox",{name:"Dòng lệnh GIS"});
+  await page.keyboard.press("Control+k");
+  assert.equal(await command.evaluate(e=>e===document.activeElement),true);
+  await command.fill("layer: Second layer");
+  await command.press("Enter");
+  const locator=page.getByRole("dialog",{name:"Kết quả tra cứu"});
+  await locator.waitFor();
+  await locator.getByRole("button",{name:/Second layer · Layer/}).click();
+  await locator.waitFor({state:"detached"});
+  assert.ok(await second.evaluate(e=>e.closest("[data-layer-id]").classList.contains("active")));
+  console.log("PASS SHELL-CMD-001 synthetic command search selects the matching layer");
   const menuTrigger=page.locator(".core-ribbon").getByRole("button",{name:"Lớp",exact:true});await menuTrigger.click();
   const menu=page.getByRole("region",{name:"Menu Lớp",exact:true});await menu.waitFor();
   await page.waitForFunction(()=>!!document.activeElement?.closest(".core-ribbon-menu-fixed"));

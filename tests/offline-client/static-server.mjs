@@ -43,10 +43,21 @@ const server = createServer(async (req,res)=>{
   if (req.method==="POST" && path===project+"/field/packages/p1/sync") {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
-    try { submissions.push(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
-    catch { return send(res,400,{code:"BAD_FIXTURE"}); }
+    let payload;
+    try {
+      payload=JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      if(typeof payload.operation_id!=="string"||!Array.isArray(payload.operations))throw new Error("invalid sync payload");
+      submissions.push(payload);
+    } catch { return send(res,400,{code:"BAD_FIXTURE"}); }
     if(submissions.length===1) return send(res,503,{code:"ACK_LOST"});
-    return send(res,201,{id:"receipt1",status:"applied",applied_changeset_ids:["cs1"],conflicts:[]});
+    return send(res,201,{
+      id:"receipt1",package_id:"p1",operation_id:payload.operation_id,submitted_ops_count:payload.operations.length,
+      status:"applied",applied_changeset_ids:["cs1"],conflicts:[],
+      operation_receipts:payload.operations.map(operation=>({
+        client_operation_id:operation.client_operation_id,local_feature_id:operation.feature_id,status:"applied",
+        changeset_id:"cs1",core_feature_id:operation.op_type==="update"?operation.feature_id:"core-"+operation.feature_id
+      }))
+    });
   }
   const name = files.get(path) ?? (/^\/offline-field\/[^/]+\/[^/]+\/?$/.test(path) ? "index.html" : null);
   if (!name || req.method !== "GET") return send(res,path.startsWith("/api/") ? 503 : 404,{fixture:"No API forwarding"});

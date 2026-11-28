@@ -5,6 +5,12 @@ describe("digitizing safeguards",()=>{
   expect(parseXY("106.5, 10.5")).toEqual([106.5,10.5]);expect(parseXY("0 0")).toEqual([0,0]);expect(parseSketchPoints("1,2 3,4")).toEqual([[1,2],[3,4]]);expect(parseSketchPoints("1,,2 3,4")).toBeNull();
   for(const s of ["1,","1,,2","1e2,4","0,90","181,0"])expect(parseXY(s)).toBeNull();
  });
+ it("preflights multipart lines and polygon rings without flattening components",()=>{
+  expect(draftError({type:"MultiLineString",coordinates:[[[0,0],[1,1]],[[2,2],[3,3]]]})).toBeNull();
+  expect(draftError({type:"MultiLineString",coordinates:[[[0,0],[1,1]],[[2,2],[2,2]]]})).toContain("trùng");
+  expect(draftError({type:"MultiPolygon",coordinates:[[[[0,0],[2,0],[2,2],[0,0]],[[.5,.5],[1,.5],[.5,1],[.5,.5]]],[[[5,5],[7,5],[7,7],[5,5]]]]})).toBeNull();
+  expect(draftError({type:"MultiPolygon",coordinates:[[[[0,0],[2,0],[2,2],[0,0]],[[.5,.5],[1,1],[1,.5],[.5,1],[.5,.5]]]]})).toContain("tự giao");
+ });
  it("rejects degenerate drafts without changing coordinates",()=>{
   expect(draftError({type:"LineString",coordinates:[[1,2],[1,2]]})).toBeTruthy();
   expect(draftError({type:"Polygon",coordinates:[[[1,1],[2,2],[3,3],[1,1]]]})).toBeTruthy();

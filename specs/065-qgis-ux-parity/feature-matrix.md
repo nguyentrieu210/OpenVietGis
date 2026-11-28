@@ -2,7 +2,7 @@
 
 Baseline OpenVietGIS: `5bfc83826161acd83b98a925e85690cebde53ae1` (27/11/2026). Đối chiếu source và tài liệu, chưa phải audit bằng ảnh hoặc kiểm thử trình duyệt đăng nhập. Không lấy số lượng file/nút làm bằng chứng parity.
 
-**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Tổng 71 tiêu chí: D 19, P 46, U 6. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
+**Trạng thái:** D = có implementation nhận diện được; P = một phần hoặc cần kiểm tra độ sâu; U = chưa xác nhận được implementation phù hợp (không khẳng định tuyệt đối là không có). V = đã nghiệm thu end-to-end theo acceptance (chưa gán V cho bất kỳ dòng nào trong đợt baseline). Tổng 71 tiêu chí: D 19, P 48, U 4. Đây là số tiêu chí phân loại, không phải % hoàn thành toàn bộ QGIS.
 
 Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh QGIS/OVG và kết quả đo trong evidence. Chỉ đổi sang V khi đủ bằng chứng; U phải kiểm tra trước khi phát triển mới, tránh code trùng. P1 = ưu tiên nghiệp vụ nền tảng; P2 = nâng cao; P3 = khảo sát mở rộng. Nguồn QGIS theo chương tại research.md.
 
@@ -83,12 +83,12 @@ Mỗi dòng phải được gắn command ID/capability, fixture, test ID, ảnh
 | PROC-02 | Algorithm parameter form / preview | P | ProcessingToolbox, CoreWorkbench, RasterWorkbench | Typed inputs, CRS, extent, output, validation, chạy lại cùng tham số | P1 |
 | PROC-03 | Buffer/Clip/Dissolve, spatial joins & analysis | P | CoreMapTools, AdvancedEditor, Rust processing | Golden fixtures với QGIS; mở rộng intersect/union/difference/reproject theo coverage | P1 |
 | PROC-04 | Job progress, history, cancel, retry | P | CoreMapTools job controls, Rust processing | Durable job id, trạng thái queued/running/succeeded/failed/canceled, retry idempotent | P1 |
-| PROC-05 | Batch processing | U | Chưa xác nhận QGIS-style batch trong Toolbox | Bảng input/output nhiều lần chạy, preview, giới hạn, lỗi từng hàng, export history | P2 |
+| PROC-05 | Batch processing | P | ProcessingWorkbenchPage + processing-batch.ts: tối đa 20 hàng, chạy tuần tự, hiển thị đầu vào/tham số/trạng thái/lỗi từng hàng, phục hồi yêu cầu chưa xác minh, xuất lịch sử JSON | Chưa có xác nhận Rust/PostGIS có xác thực và đối chiếu QGIS; chưa phải parity batch đầy đủ | P2 |
 | PROC-06 | Model Designer | D | ProcessingModeler, Rust processing_models.rs | Graph DAG, parameter mapping, named outputs, revision, cancel/partial results | P2 |
 | PROC-07 | Raster properties, band, nodata, rendering | P | ProjectRaster, RasterWorkbench | Band metadata, stretch, palette, opacity, nodata, CRS; capability từng provider | P2 |
 | PROC-08 | Raster Calculator, NDVI/NDWI, DEM terrain | D | RasterWorkbench, RasterReportWorkbench, TerrainEngineering | Kết quả theo fixture, nodata/CRS/extent, lưu output có lineage | P2 |
 | PROC-09 | Georeferencer raster/vector GCP | P | CadGeorefPanel, native CAD georef; raster chưa xác nhận | GCP raster/vector, transform, residual, preview, xuất raster đã georef | P2 |
-| PROC-10 | Temporal controller / mesh / point clouds | U | Sentinel month không phải temporal controller tổng quát | Khảo sát adapter độc lập; chưa hỗ trợ thì ghi rõ, không tạo lớp giả | P3 |
+| PROC-10 | Temporal controller / mesh / point clouds | P | TemporalMapView + temporal-plan.ts: phát khung ngày UTC cho lớp vector đã tải đủ ≤5.000 đối tượng, có trường timestamp và quyền đọc; read-only secondary map | Raster temporal series, mesh providers và point cloud LAS/LAZ/COPC/EPT chưa hỗ trợ; acceptance QGIS pending | P3 |
 
 ## Print Layout, CRS & interoperability (OUTPUT)
 

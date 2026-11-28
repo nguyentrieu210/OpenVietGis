@@ -82,6 +82,8 @@ export function draftError(g:Geometry):string|null{
  if(g.type==="Point")return validXY(g.coordinates)?null:"Tọa độ ngoài phạm vi bản đồ.";
  if(g.type==="LineString")return line(g.coordinates,false);
  if(g.type==="Polygon"){if(!g.coordinates.length)return "Vùng không có vòng.";for(const r of g.coordinates){const e=line(r,true);if(e)return e}return null}
+ if(g.type==="MultiLineString"){if(!g.coordinates.length)return "Đường không có phần.";for(const part of g.coordinates){const e=line(part,false);if(e)return e}return null}
+ if(g.type==="MultiPolygon"){if(!g.coordinates.length)return "Vùng không có phần.";for(const polygon of g.coordinates){if(!polygon.length)return "Vùng không có vòng.";for(const r of polygon){const e=line(r,true);if(e)return e}}return null}
  return "Kiểu hình học chưa hỗ trợ trong công cụ này.";
 }
 

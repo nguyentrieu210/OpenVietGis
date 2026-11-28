@@ -23,6 +23,10 @@ pub enum AlgorithmId {
 #[derive(Debug, PartialEq, Serialize)]
 pub struct AlgorithmDescriptor {
     pub id: AlgorithmId,
+    pub provider_id: &'static str,
+    pub provider_name: &'static str,
+    pub category: &'static str,
+    pub capabilities: &'static [&'static str],
     pub name: &'static str,
     pub description: &'static str,
     pub required_inputs: &'static [&'static str],
@@ -35,6 +39,10 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 3] {
     [
         AlgorithmDescriptor {
             id: AlgorithmId::Buffer,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.buffer"],
             name: "Buffer",
             description: "Creates projected-distance buffers (Web Mercator for geographic inputs) and publishes a new Polygon layer.",
             required_inputs: &["input_layer_id"],
@@ -54,6 +62,10 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 3] {
         },
         AlgorithmDescriptor {
             id: AlgorithmId::Clip,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.clip", "vector.overlay"],
             name: "Clip",
             description: "Clips input layer features to an authorized overlay polygon layer.",
             required_inputs: &["input_layer_id", "overlay_layer_id"],
@@ -61,6 +73,10 @@ pub fn algorithm_registry() -> [AlgorithmDescriptor; 3] {
         },
         AlgorithmDescriptor {
             id: AlgorithmId::Dissolve,
+            provider_id: "openvietgis",
+            provider_name: "OpenVietGIS Core",
+            category: "vector",
+            capabilities: &["vector.read", "geometry.dissolve"],
             name: "Dissolve",
             description: "Unions features globally or grouped by an attribute field into a new layer.",
             required_inputs: &["input_layer_id"],
@@ -166,6 +182,10 @@ mod tests {
                 "items": [
                     {
                         "id": "buffer",
+                        "provider_id": "openvietgis",
+                        "provider_name": "OpenVietGIS Core",
+                        "category": "vector",
+                        "capabilities": ["vector.read", "geometry.buffer"],
                         "name": "Buffer",
                         "description": "Creates projected-distance buffers (Web Mercator for geographic inputs) and publishes a new Polygon layer.",
                         "required_inputs": ["input_layer_id"],
@@ -176,6 +196,10 @@ mod tests {
                     },
                     {
                         "id": "clip",
+                        "provider_id": "openvietgis",
+                        "provider_name": "OpenVietGIS Core",
+                        "category": "vector",
+                        "capabilities": ["vector.read", "geometry.clip", "vector.overlay"],
                         "name": "Clip",
                         "description": "Clips input layer features to an authorized overlay polygon layer.",
                         "required_inputs": ["input_layer_id", "overlay_layer_id"],
@@ -183,6 +207,10 @@ mod tests {
                     },
                     {
                         "id": "dissolve",
+                        "provider_id": "openvietgis",
+                        "provider_name": "OpenVietGIS Core",
+                        "category": "vector",
+                        "capabilities": ["vector.read", "geometry.dissolve"],
                         "name": "Dissolve",
                         "description": "Unions features globally or grouped by an attribute field into a new layer.",
                         "required_inputs": ["input_layer_id"],
