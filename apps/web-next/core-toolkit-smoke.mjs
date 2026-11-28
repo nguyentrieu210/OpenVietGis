@@ -18,7 +18,7 @@ try{
   else if(p.endsWith("/projects"))body=[{id:pid,organization_id:org,name:"Khảo sát số nhà xã Bình Hưng",status:"active"}];
   else if(p.endsWith("/map")&&method==="GET")body={configuration_revision:1,configuration:{layers:[],basemap:"grid",default_viewpoint:null}};
   else if(p.endsWith("/map")&&method==="PUT"){const payload=route.request().postDataJSON();mapSavePayload=payload;body={operation_id:payload.operation_id,configuration_revision:2};}
-  else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={operation_id:payload.operation_id};}
+  else if(p.endsWith("/changesets")&&method==="POST"){const payload=route.request().postDataJSON();body={id:"fixture-changeset",source_id:p.split("/").at(-2),operation_id:payload.operation_id,base_content_revision:payload.base_content_revision,status:"committed",operation_count:payload.operations.length,resulting_content_revision:"c".repeat(64)};}
   else if(p.endsWith("/projects/"+pid))body={id:pid,organization_id:org,name:"Bình Hưng",status:"active"};
   else if(p.endsWith("/layers"))body={items:[layer(1),layer(2)],next_after_id:null};
   else if(p.endsWith("/processing/algorithms"))body={items:[{id:"buffer",name:"Buffer",description:"Synthetic buffer",required_inputs:["input_layer"],parameters_schema:{}},{id:"clip",name:"Clip",description:"Synthetic clip",required_inputs:["input_layer","overlay_layer"],parameters_schema:{}},{id:"dissolve",name:"Dissolve",description:"Synthetic dissolve",required_inputs:["input_layer"],parameters_schema:{}}]};
