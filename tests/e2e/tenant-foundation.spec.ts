@@ -1,24 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { signInOwner } from "./frontend-auth-helpers";
 
 test("checks readiness and reloads a persisted real tenant project", async ({ page }) => {
   const readiness = await page.request.get("/api/v1/health/ready", { timeout: 5_000 });
   expect(readiness.status()).toBe(200);
   expect(await readiness.json()).toEqual({ status: "ready", database: "ready" });
 
-  await page.goto("/login");
-  await expect(
-    page.getByRole("heading", { name: "Đăng nhập OpenVietGIS" })
-  ).toBeVisible();
-  await page
-    .getByRole("link", {
-      name: "Đăng nhập với OpenVietGIS Development",
-      exact: true
-    })
-    .click();
-  await page.locator("#username").fill("owner-a");
-  await page.locator("#password").fill("openvietgis-test-owner-a");
-  await page.locator("#kc-login").click();
-  await expect(page.locator(".ovg-app-shell")).toBeVisible();
+  await signInOwner(page);
 
   const suffix = Date.now();
   const orgName = "Foundation tenant " + suffix;
