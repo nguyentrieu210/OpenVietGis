@@ -6,6 +6,8 @@
 
 use std::io::Write as _;
 
+use sha2::{Digest, Sha256};
+
 use ovg_core::crs::{
     reference_coordinate_wire, reference_transformation, FixtureRequirement, TransformationProfile,
     WEB_MERCATOR_MAX_COORDINATE_METRE, WEB_MERCATOR_MAX_LATITUDE,
@@ -19,6 +21,7 @@ use sqlx::{Postgres, Row};
 use uuid::Uuid;
 
 use crate::catalog::{db_error, ProjectRead};
+use crate::viewport_cache::{ViewportCacheKey, ViewportResponseCache};
 
 pub const MAX_VIEWPORT_FEATURES: i64 = 1000;
 pub const MAX_VIEWPORT_POSITIONS: i64 = 20_000;
@@ -31,6 +34,7 @@ const MAX_TILE_BYTES: usize = 4 * 1024 * 1024;
 const TILE_EXTENT: i32 = 4096;
 const TILE_BUFFER: i32 = 64;
 const MAP_STATEMENT_TIMEOUT: &str = "2000ms";
+const MIN_PROFILED_CACHE_SOURCE_FEATURES: i64 = 10_000;
 const WEB_MERCATOR_PIPELINE: &str =
     "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=webmerc +ellps=WGS84";
 
@@ -122,6 +126,71 @@ impl ProjectRead<'_> {
         build_viewport_json_bytes(&context, &features, limit)
     }
 
+    /// Cache only profiled, non-GIS-scoped viewport reads. The caller's
+    /// ProjectRead transaction and current source pins are checked before the
+    /// cache lookup; GIS-scoped feature visibility always goes to Postgres.
+    pub async fn viewport_json_cached(
+        &mut self,
+        layer_id: Uuid,
+        pins: &ReadPins<'_>,
+        bounds: ViewportBounds,
+        limit: i64,
+        cache: &ViewportResponseCache,
+    ) -> Result<Vec<u8>, AppError> {
+        if !(1..=MAX_VIEWPORT_FEATURES).contains(&limit) {
+            return Err(AppError::internal("viewport feature limit outside bounds"));
+        }
+        let snapshot = self
+            .render_snapshot(layer_id, pins, RenderRead::WholeSource)
+            .await?;
+
+        if self.gis_scoped
+            || snapshot.expected_count.unwrap_or_default() < MIN_PROFILED_CACHE_SOURCE_FEATURES
+        {
+            let (context, features) = self
+                .viewport_rows_from_snapshot(pins, bounds, limit, &snapshot)
+                .await?;
+            return build_viewport_json_bytes(&context, &features, limit);
+        }
+
+        let context = serde_json::to_vec(&snapshot.context)
+            .map_err(|_| AppError::internal("viewport cache context serialization failed"))?;
+        let mut hasher = Sha256::new();
+        hasher.update(context);
+        hasher.update(snapshot.source_id.as_bytes());
+        hasher.update(snapshot.native_srid.to_be_bytes());
+        hasher.update(snapshot.geometry_type.as_bytes());
+        hasher.update(snapshot.expected_count.unwrap_or_default().to_be_bytes());
+        if let Some(extent) = snapshot.extent {
+            for value in extent {
+                hasher.update(value.to_bits().to_be_bytes());
+            }
+        }
+        for value in [bounds.west, bounds.south, bounds.east, bounds.north] {
+            hasher.update(value.to_bits().to_be_bytes());
+        }
+        hasher.update(limit.to_be_bytes());
+        let query_fingerprint = hasher.finalize().into();
+        let key = ViewportCacheKey {
+            organization_id: self.tx.organization_id(),
+            actor_id: self.tx.actor_id(),
+            project_id: self.project_id,
+            layer_id,
+            content_revision: pins.content_revision.to_owned(),
+            schema_revision: pins.schema_revision.to_owned(),
+            query_fingerprint,
+        };
+
+        cache
+            .get_or_try_init(key, || async {
+                let (context, features) = self
+                    .viewport_rows_from_snapshot(pins, bounds, limit, &snapshot)
+                    .await?;
+                build_viewport_json_bytes(&context, &features, limit)
+            })
+            .await
+    }
+
     async fn viewport_rows(
         &mut self,
         layer_id: Uuid,
@@ -135,6 +204,17 @@ impl ProjectRead<'_> {
         let snapshot = self
             .render_snapshot(layer_id, pins, RenderRead::WholeSource)
             .await?;
+        self.viewport_rows_from_snapshot(pins, bounds, limit, &snapshot)
+            .await
+    }
+
+    async fn viewport_rows_from_snapshot(
+        &mut self,
+        pins: &ReadPins<'_>,
+        bounds: ViewportBounds,
+        limit: i64,
+        snapshot: &Snapshot,
+    ) -> Result<(Value, Vec<RenderRow>), AppError> {
         let expected_count = snapshot.expected_count.ok_or_else(read_unavailable)?;
         // One statement snapshot: the summary validates every source row
         // (count and display domain) and gates the bounded candidate prefix.
@@ -193,7 +273,7 @@ impl ProjectRead<'_> {
                 });
             }
         }
-        Ok((snapshot.context, features))
+        Ok((snapshot.context.clone(), features))
     }
 
     pub async fn display_extent(

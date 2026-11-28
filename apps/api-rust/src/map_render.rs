@@ -81,10 +81,29 @@ async fn viewport(
     }
     let bounds = ViewportBounds::new(query.west, query.south, query.east, query.north)
         .ok_or(RenderError::InvalidRequest)?;
-    let mut read = project_read(&state, &auth, organization_id, project_id).await?;
-    let body = read
-        .viewport_json(layer_id, &pins, bounds, query.limit)
-        .await?;
+    let mut read = match project_read(&state, &auth, organization_id, project_id).await {
+        Ok(read) => read,
+        Err(error) => {
+            state
+                .viewport_cache
+                .invalidate_actor(organization_id, auth.actor_id());
+            return Err(error.into());
+        }
+    };
+    let body = match read
+        .viewport_json_cached(layer_id, &pins, bounds, query.limit, &state.viewport_cache)
+        .await
+    {
+        Ok(body) => body,
+        Err(error) => {
+            if matches!(error.status_code(), 401 | 403 | 404) {
+                state
+                    .viewport_cache
+                    .invalidate_actor(organization_id, auth.actor_id());
+            }
+            return Err(error.into());
+        }
+    };
     read.commit().await?;
     Ok((
         [

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import psycopg
+
 WORLD = {"west": -180, "south": -85, "east": 180, "north": 85}
 # Seeded 1k polygons lie in lon [105.65, 106.05], lat [20.85, 21.15].
 HANOI = {"west": 105.75, "south": 20.92, "east": 105.95, "north": 21.08}
@@ -27,7 +29,7 @@ def _outcome(suite, label, check):
         print(f"PASS {label}", flush=True)
 
 
-def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor):
+def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor, owner_url):
     """Run while the surveyor's single-feature GIS rule on epsg4326_1k is active."""
     layers = fixture["layers"]
     polygons = layers["epsg4326_1k"]
@@ -77,6 +79,61 @@ def compare_render_reads(suite, fixture, layer_path, owner, outsider, surveyor):
     ):
         suite.get(f"E05 invalid viewport: {label}", viewport, 422, token=owner, params=params)
     suite.get("E05 unauthenticated viewport", viewport, 401, params=pins | HANOI)
+    if "epsg4326_10k" in layers:
+        profiled = layers["epsg4326_10k"]
+        profiled_viewport = f"{layer_path(profiled['layer_id'])}/viewport"
+        profiled_pins = _pins(profiled)
+        suite.get(
+            "E05 profiled viewport cache warm",
+            profiled_viewport,
+            token=owner,
+            params=profiled_pins | WORLD,
+        )
+        # The owner just warmed this exact 10k viewport. Authorization must
+        # still reject an anonymous request before any cached body is returned.
+        suite.get(
+            "E05 unauthenticated profiled viewport after cache warm",
+            profiled_viewport,
+            401,
+            params=profiled_pins | WORLD,
+        )
+        with psycopg.connect(owner_url) as conn:
+            membership = conn.execute(
+                """SELECT id FROM org.organization_memberships
+                   WHERE organization_id=%s AND user_id=%s AND status='active'""",
+                (fixture["org_a_id"], fixture["user_a_id"]),
+            ).fetchone()
+            _require(membership is not None, "owner membership fixture missing")
+            owner_membership_id = membership[0]
+            conn.execute(
+                """UPDATE org.organization_memberships
+                   SET status='revoked', revoked_at=now()
+                   WHERE id=%s""",
+                (owner_membership_id,),
+            )
+        try:
+            suite.get(
+                "E05 revoked membership after viewport cache warm",
+                profiled_viewport,
+                404,
+                token=owner,
+                params=profiled_pins | WORLD,
+            )
+        finally:
+            with psycopg.connect(owner_url) as conn:
+                conn.execute(
+                    """UPDATE org.organization_memberships
+                       SET status='active', revoked_at=NULL,
+                           activated_at=COALESCE(activated_at, now())
+                       WHERE id=%s""",
+                    (owner_membership_id,),
+                )
+        suite.get(
+            "E05 restored membership can read after cache invalidation",
+            profiled_viewport,
+            token=owner,
+            params=profiled_pins | WORLD,
+        )
     suite.get(
         "E05 tenant B cannot read tenant A viewport",
         viewport,

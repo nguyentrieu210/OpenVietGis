@@ -6,6 +6,7 @@ use std::sync::Arc;
 use ovg_module_house_numbering::HouseNumberingModule;
 use ovg_module_sdk::ModuleRegistry;
 use ovg_processing::{ExecutorConfig, JobExecutor};
+use ovg_storage::viewport_cache::ViewportResponseCache;
 use ovg_storage::DbPool;
 use ovg_sync::SyncBroadcaster;
 
@@ -18,6 +19,7 @@ pub struct AppState {
     pub db_pool: Option<DbPool>,
     pub modules: ModuleRegistry,
     pub metrics: MetricsRegistry,
+    pub viewport_cache: ViewportResponseCache,
     pub broadcaster: SyncBroadcaster,
     pub jobs: JobExecutor,
 }
@@ -37,6 +39,7 @@ impl AppState {
             db_pool,
             modules,
             metrics: MetricsRegistry::new(),
+            viewport_cache: ViewportResponseCache::new(),
             broadcaster: SyncBroadcaster::new(256),
             jobs,
         })

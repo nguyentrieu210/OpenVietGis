@@ -27,6 +27,7 @@ pub mod three_d;
 pub mod tilesets;
 pub mod transfers;
 pub mod viewport;
+pub mod viewport_cache;
 
 pub use pool::{DbHealth, DbPool, DbPoolConfig};
 pub use rls::{validate_extension_key, TenantGucBindings, TenantTransaction};

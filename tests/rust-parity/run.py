@@ -876,7 +876,13 @@ def compare(suite, owner_url, fixture, user_id, mid, surveyor, *, include_featur
 
     compare_queries(suite, difference, fixture, surveyor, baseline.DEFAULT_CSRF_SECRET)
     compare_render_reads(
-        suite, fixture, lambda layer_id: f"{layers_a}/{layer_id}", a, b, surveyor
+        suite,
+        fixture,
+        lambda layer_id: f"{layers_a}/{layer_id}",
+        a,
+        b,
+        surveyor,
+        owner_url,
     )
     response = suite.oracle.delete(
         f"{root_a}/access/rules/{rule}", headers=admin_headers
@@ -976,7 +982,7 @@ def main():
             fixture = baseline.seed_benchmark_database(
                 owner_url,
                 seed=SEED,
-                scales=["1k"],
+                scales=["1k", "10k"],
                 csrf_secret=baseline.DEFAULT_CSRF_SECRET,
             )
             verify_database_role(runtime_url)
