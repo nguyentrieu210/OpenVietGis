@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'src/rust/api/simple.dart';
 import 'unified_map.dart';
+import 'unified_mvt_map.dart';
 import 'unified_survey.dart';
 
 String _uuid(){
@@ -120,6 +121,11 @@ class _UnifiedPageState extends State<UnifiedPage>{
     if(track==null||!mounted)return;
     await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>_SurveyReadPage(project:p,layer:l,track:track,revision:r)));
   }
+  Future<void> _openMvt()async{
+    final p=_project,l=_layer,r=_revision;if(p==null||l==null||r==null)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>UnifiedMvtMap(project:p,revision:r,layers:List.unmodifiable(_layers),initialLayer:l)));
+    if(mounted)await _refresh();
+  }
   Future<void> _openMap()async{
     final p=_project,l=_layer,r=_revision;
     if(p==null||l==null||r==null)return;
@@ -191,6 +197,7 @@ class _UnifiedPageState extends State<UnifiedPage>{
         if(_project!=null)...[
           Text('Revision ${_revision??"?"}'),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMap)):null,icon:const Icon(Icons.map),label:const Text('Mở bản đồ Unified')),
+          FilledButton.icon(onPressed:edit?()=>unawaited(_run(_openMvt)):null,icon:const Icon(Icons.layers),label:const Text('Bản đồ MVT thử nghiệm')),
           OutlinedButton(onPressed:edit?()=>unawaited(_run(_survey)):null,child:const Text('GPS Survey đã lưu')),
           FilledButton.icon(onPressed:edit?()=>unawaited(_run(_captureSurvey)):null,icon:const Icon(Icons.gps_fixed),label:const Text('Khảo sát GPS Unified')),
           for(final l in _layers)ListTile(title:Text(l['name'].toString()),leading:Icon(l['id']==_layer?Icons.check_circle:Icons.layers),enabled:ready,onTap:()=>setState((){_layer=l['id'].toString();_rows=[];_cursor=null;})),
